@@ -1,26 +1,35 @@
 // app/login/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
 
-  const nextPath = useMemo(() => {
-    const raw = searchParams.get('next')
-    // Basic safety: only allow internal paths
-    if (!raw) return '/'
-    if (!raw.startsWith('/')) return '/'
-    return raw
-  }, [searchParams])
-
+  const [nextPath, setNextPath] = useState('/')
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const raw = params.get('next')
+
+      if (!raw) {
+        setNextPath('/')
+      } else if (!raw.startsWith('/')) {
+        setNextPath('/')
+      } else {
+        setNextPath(raw)
+      }
+    } catch {
+      setNextPath('/')
+    }
+  }, [])
 
   // ✅ If already logged in, skip login screen
   useEffect(() => {
