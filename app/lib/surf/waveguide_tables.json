@@ -1,0 +1,972 @@
+{
+  "direction_convention": "FROM_degrees (meteorological/oceanographic). 0=N, 90=E, 180=S, 270=W.",
+  "tolerance_pct_for_experience_match": 0.1,
+  "weights": {
+    "wave_dir": 6,
+    "wave_height": 5,
+    "wave_period": 4,
+    "wind_speed": 3,
+    "wind_dir": 2,
+    "base": 6
+  },
+  "score_scale_max": 126,
+  "score_to_label": [
+    {
+      "min": 0,
+      "max": 59,
+      "label": "Flat"
+    },
+    {
+      "min": 60,
+      "max": 99,
+      "label": "Poor"
+    },
+    {
+      "min": 100,
+      "max": 115,
+      "label": "Poor to fair"
+    },
+    {
+      "min": 115,
+      "max": 124,
+      "label": "Fair"
+    },
+    {
+      "min": 125,
+      "max": 126,
+      "label": "Go surf!"
+    }
+  ],
+  "spots": {
+    "Bolten": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 3 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 5 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 3 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 1 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Bore": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 5 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 2 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 3 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 6 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 3 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 1 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Brusand": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 3 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 5 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 3 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 1 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Byberg": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 3 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 2 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 3 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 4 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Ghost": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 4 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 4 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 6 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 5 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 4 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "HellestÃ¸": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 5 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 2 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 5 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 5 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 6 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 5 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 4 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 3 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 1 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Kvassheim": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 4 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 1 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 4 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 5 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Orre": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 5 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 3 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 3 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 5 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 4 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 3 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Orrepointet": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 4 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 3 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Point perfect": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 3 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 3 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 1 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 4 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 5 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "PrestegÃ¥rden": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 5 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 1 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 3 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 5 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Refsnes": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 4.0, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 3 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 5 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 3 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 1 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Reve Havn": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 4 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 5 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 1 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 4 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Sele": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 5 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 3 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 2 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 3 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 4 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 6 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 5 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 3 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Sola (Point Seldom)": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 3 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 3 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 4 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 6 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 4 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 1 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 1 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Steinen": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 4 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 4 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 3 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 3 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 5 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Svinestien": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 1 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 1 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 3 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 5 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Toveisbukta": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 4 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 1 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 1 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 1 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 1 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 1 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 1 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 1 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 1 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 1 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 1 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 3 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 4 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 5 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 6 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 5 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 4 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    },
+
+    "Vigdel": {
+      "wave_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wind_dir": [
+        { "label": "W", "dir_from_deg": 270, "score_1_6": 6 },
+        { "label": "NW", "dir_from_deg": 315, "score_1_6": 6 },
+        { "label": "N", "dir_from_deg": 0, "score_1_6": 6 },
+        { "label": "NE", "dir_from_deg": 45, "score_1_6": 6 },
+        { "label": "SW", "dir_from_deg": 225, "score_1_6": 6 },
+        { "label": "S", "dir_from_deg": 180, "score_1_6": 6 },
+        { "label": "SE", "dir_from_deg": 135, "score_1_6": 6 },
+        { "label": "E", "dir_from_deg": 90, "score_1_6": 6 }
+      ],
+      "wave_height": [
+        { "label": "0-0.3", "min": 0.0, "max": 0.3, "score_1_6": 6 },
+        { "label": "0.4-0.6", "min": 0.4, "max": 0.6, "score_1_6": 6 },
+        { "label": "0.7-0.9", "min": 0.7, "max": 0.9, "score_1_6": 6 },
+        { "label": "1.0-1.2", "min": 1.0, "max": 1.2, "score_1_6": 6 },
+        { "label": "1.3-1.5", "min": 1.3, "max": 1.5, "score_1_6": 6 },
+        { "label": "1.6-2.0", "min": 1.6, "max": 2.0, "score_1_6": 6 },
+        { "label": "2.1-3.0", "min": 2.1, "max": 3.0, "score_1_6": 6 },
+        { "label": "3+", "min": 3.0, "max": null, "score_1_6": 6 }
+      ],
+      "wind_speed": [
+        { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
+        { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 6 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 6 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 6 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 6 },
+        { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 6 },
+        { "label": "13+", "min": 13.0, "max": null, "score_1_6": 6 }
+      ],
+      "wave_period": [
+        { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 6 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 6 },
+        { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 6 },
+        { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 6 },
+        { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
+      ]
+    }
+  }
+}

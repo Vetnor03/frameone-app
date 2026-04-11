@@ -1,0 +1,642 @@
+{
+  "direction_convention": "FROM_degrees (meteorological/oceanographic). 0=N, 90=E, 180=S, 270=W.",
+  "tolerance_pct_for_match": 0.1,
+  "rating_map_1_6_to_label": [
+    {
+      "values": [
+        1
+      ],
+      "label": "Flat"
+    },
+    {
+      "values": [
+        2,
+        3
+      ],
+      "label": "Poor"
+    },
+    {
+      "values": [
+        4
+      ],
+      "label": "Poor to fair"
+    },
+    {
+      "values": [
+        5,
+        6
+      ],
+      "label": "Good"
+    }
+  ],
+  "spots": {
+    "Bolten": [],
+    "Bore": [
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 270.0,
+        "wave_height_m": 1.2,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 67.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.0,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 0.9,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 180.0,
+        "wave_height_m": 0.8,
+        "wave_period_s": 4.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 6.0,
+        "rating_1_6": 1
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 180.0,
+        "wave_height_m": 1.4,
+        "wave_period_s": 5.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 7.0,
+        "rating_1_6": 2
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 180.0,
+        "wave_height_m": 0.9,
+        "wave_period_s": 6.0,
+        "wind_dir_from_deg": 247.5,
+        "wind_speed_ms": 5.0,
+        "rating_1_6": 1
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 225.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 5.0,
+        "wind_dir_from_deg": 270.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 1
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.1,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.0,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 67.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.4,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 180.0,
+        "wave_height_m": 1.3,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 7.0,
+        "rating_1_6": 1
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.6,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 6.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.5,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 0.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.3,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 202.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 247.5,
+        "wave_height_m": 1.1,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 225.0,
+        "wave_height_m": 1.1,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 0.7,
+        "wave_period_s": 16.0,
+        "wind_dir_from_deg": 157.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 180.0,
+        "wave_height_m": 2.0,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 9.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 202.5,
+        "wave_height_m": 2.8,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 202.5,
+        "wind_speed_ms": 8.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 202.5,
+        "wave_height_m": 2.6,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 202.5,
+        "wind_speed_ms": 8.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 2.4,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 337.5,
+        "wind_speed_ms": 6.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.3,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 0.7,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 2
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.8,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.1,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 90.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 0.8,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 1
+      },
+      {
+        "spot": "Bore",
+        "wave_dir_from_deg": 303.0,
+        "wave_height_m": 1.5,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 157.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 4
+      }
+    ],
+    "Brusand": [],
+    "Byberg": [],
+    "Ghost": [],
+    "HellestÃ¸": [
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 0.7,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 247.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 0.6,
+        "wave_period_s": 12.0,
+        "wind_dir_from_deg": 270.0,
+        "wind_speed_ms": 1.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 270.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 0.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.1,
+        "wave_period_s": 4.0,
+        "wind_dir_from_deg": 315.0,
+        "wind_speed_ms": 8.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.1,
+        "wave_period_s": 6.0,
+        "wind_dir_from_deg": 0.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 67.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 2.0,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 225.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.4,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 45.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.2,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 225.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 202.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 247.5,
+        "wave_height_m": 1.1,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 5.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 247.5,
+        "wave_height_m": 1.1,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 202.5,
+        "wave_height_m": 2.5,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 180.0,
+        "wind_speed_ms": 12.0,
+        "rating_1_6": 2
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.0,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 180.0,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 2
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 0.7,
+        "wave_period_s": 16.0,
+        "wind_dir_from_deg": 157.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.1,
+        "wave_period_s": 16.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 6.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.3,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 0.7,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.8,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 67.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.3,
+        "wave_period_s": 11.0,
+        "wind_dir_from_deg": 90.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 6
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 0.9,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 2
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.7,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 67.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 6
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.2,
+        "wave_period_s": 7.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 5.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.3,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 3.0,
+        "rating_1_6": 6
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 315.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 9.0,
+        "wind_dir_from_deg": 135.0,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 328.0,
+        "wave_height_m": 1.4,
+        "wave_period_s": 11.0,
+        "wind_dir_from_deg": 148.0,
+        "wind_speed_ms": 5.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 234.0,
+        "wave_height_m": 1.4,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 190.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 287.0,
+        "wave_height_m": 1.3,
+        "wave_period_s": 14.0,
+        "wind_dir_from_deg": 155.0,
+        "wind_speed_ms": 7.0,
+        "rating_1_6": 4
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 288.0,
+        "wave_height_m": 1.1,
+        "wave_period_s": 13.0,
+        "wind_dir_from_deg": 205.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 287.0,
+        "wave_height_m": 1.0,
+        "wave_period_s": 13.0,
+        "wind_dir_from_deg": 141.0,
+        "wind_speed_ms": 2.0,
+        "rating_1_6": 5
+      },
+      {
+        "spot": "HellestÃ¸",
+        "wave_dir_from_deg": 289.0,
+        "wave_height_m": 1.1,
+        "wave_period_s": 13.0,
+        "wind_dir_from_deg": 166.0,
+        "wind_speed_ms": 6.0,
+        "rating_1_6": 3
+      }
+    ],
+    "Kvassheim": [],
+    "Orre": [],
+    "Orrepointet": [],
+    "Point perfect": [],
+    "PrestegÃ¥rden": [],
+    "Refsnes": [],
+    "Reve Havn": [],
+    "Sele": [
+      {
+        "spot": "Sele",
+        "wave_dir_from_deg": 292.5,
+        "wave_height_m": 1.3,
+        "wave_period_s": 8.0,
+        "wind_dir_from_deg": 22.5,
+        "wind_speed_ms": 4.0,
+        "rating_1_6": 4
+      }
+    ],
+    "Sola (Point Seldom)": [
+      {
+        "spot": "Sola (Point Seldom)",
+        "wave_dir_from_deg": 157.5,
+        "wave_height_m": 1.1,
+        "wave_period_s": 5.0,
+        "wind_dir_from_deg": 112.5,
+        "wind_speed_ms": 8.0,
+        "rating_1_6": 3
+      },
+      {
+        "spot": "Sola (Point Seldom)",
+        "wave_dir_from_deg": 225.0,
+        "wave_height_m": 3.1,
+        "wave_period_s": 10.0,
+        "wind_dir_from_deg": 225.0,
+        "wind_speed_ms": 13.0,
+        "rating_1_6": 4
+      }
+    ],
+    "Steinen": [],
+    "Svinestien": [],
+    "Toveisbukta": [],
+    "Vigdel": []
+  }
+}
