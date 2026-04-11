@@ -1,16 +1,25 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function FeedbackPage() {
   const router = useRouter()
-  const sp = useSearchParams()
-  const from = sp.get('from')
+  const [from, setFrom] = useState<string | null>(null)
 
   function goBack() {
     if (from === 'settings') router.replace('/?tab=settings')
     else router.back()
   }
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      setFrom(params.get('from'))
+    } catch {
+      setFrom(null)
+    }
+  }, [])
 
   return (
     <main className="min-h-screen bg-[#061b24] text-white flex justify-center">
