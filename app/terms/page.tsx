@@ -1,12 +1,20 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
 type AppLanguage = 'en' | 'no'
 
 export default function TermsPage() {
+  return (
+    <Suspense fallback={null}>
+      <TermsPageContent />
+    </Suspense>
+  )
+}
+
+function TermsPageContent() {
   const router = useRouter()
   const sp = useSearchParams()
   const from = sp.get('from')
