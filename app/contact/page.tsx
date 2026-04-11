@@ -1,22 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
 type AppLanguage = 'en' | 'no'
 
 export default function ContactPage() {
   const router = useRouter()
-  const sp = useSearchParams()
-  const from = sp.get('from')
 
   const [language, setLanguage] = useState<AppLanguage>('en')
+  const [from, setFrom] = useState<string | null>(null)
 
   function goBack() {
     if (from === 'settings') router.replace('/?tab=settings')
     else router.back()
   }
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      setFrom(params.get('from'))
+    } catch {
+      setFrom(null)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
