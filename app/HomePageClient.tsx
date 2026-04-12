@@ -975,7 +975,7 @@ useEffect(() => {
   if (!isLoadedRef.current) return
   if (!activeDeviceId) return
   if (!dirty) return
-  if (activeTab !== 'settings') return
+  if (activeTab === 'frame') return
 
   if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current)
 
@@ -1000,7 +1000,7 @@ async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
 
-  if (activeTab === 'settings' && k !== 'settings' && dirty) {
+  if (activeTab !== 'frame' && k !== activeTab && dirty) {
     await persistSettings(true)
   }
 
@@ -2246,6 +2246,7 @@ type ReminderUiItem = {
   id: string
   title: string
   date: string
+  time?: string | null
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
 }
@@ -2303,6 +2304,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
       const id = String(x.id ?? `reminder-${idx + 1}`).trim() || `reminder-${idx + 1}`
       const title = String(x.title ?? '').trim().slice(0, 120)
       const date = String(x.date ?? '').trim()
+      const time = normalizeReminderTime(x.time)
       const repeat = isReminderRepeatKey(x.repeat) ? x.repeat : 'none'
       const customRepeatDaysRaw = Number(x.customRepeatDays)
 
@@ -2310,6 +2312,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
         id,
         title,
         date,
+        time,
         repeat,
         customRepeatDays:
           Number.isFinite(customRepeatDaysRaw) && customRepeatDaysRaw > 0
@@ -2328,6 +2331,26 @@ function parseYmdToLocalDate(ymd: string) {
   const [y, m, d] = String(ymd || '').split('-').map(Number)
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null
   return new Date(y, m - 1, d)
+}
+function normalizeReminderTime(value: string | null | undefined) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return null
+
+  const hh = Number(m[1])
+  const mm = Number(m[2])
+
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+
+  return `${pad2(hh)}:${pad2(mm)}`
+}
+
+function formatReminderTitleWithTime(item: { title: string; time?: string | null }) {
+  const t = normalizeReminderTime(item.time)
+  return t ? `${item.title} ${t}` : item.title
 }
 
 function formatReminderDateLabel(language: AppLanguage, ymd: string) {
@@ -3337,10 +3360,11 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, repeat_type, custom_repeat_days, is_done')
+        .select('id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
+        .order('due_time', { ascending: true, nullsFirst: false })
         .order('title', { ascending: true })
 
       if (error) {
@@ -3350,17 +3374,18 @@ function RemindersModuleSettingsTab({
       }
 
       const items: ReminderUiItem[] = (data || [])
-        .map((row: any) => ({
-          id: String(row.id),
-          title: String(row.title ?? '').trim(),
-          date: String(row.due_date ?? '').trim(),
-          repeat: isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none',
-          customRepeatDays:
-            Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
-              ? Number(row.custom_repeat_days)
-              : null,
-        }))
-        .filter((x) => x.title && x.date)
+  .map((row: any) => ({
+    id: String(row.id),
+    title: String(row.title ?? '').trim(),
+    date: String(row.due_date ?? '').trim(),
+    time: normalizeReminderTime(row.due_time),
+    repeat: isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none',
+    customRepeatDays:
+      Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
+        ? Number(row.custom_repeat_days)
+        : null,
+  }))
+  .filter((x) => x.title && x.date)
 
       setReminders(items)
     } finally {
@@ -3543,44 +3568,62 @@ function RemindersModuleSettingsTab({
     return occurrences[0].occurrenceDate
   }
 
-  const sortedReminders = useMemo(() => {
-    if (selectedDayYmd) {
-      const matchingIds = new Set(
-        allListOccurrences
-          .filter((x) => x.occurrenceDate === selectedDayYmd)
-          .map((x) => x.sourceId)
-      )
+const sortedReminders = useMemo(() => {
+  function timeSortValue(time?: string | null) {
+    const t = normalizeReminderTime(time)
+    if (!t) return '99:99'
+    return t
+  }
 
-      return reminders
-        .filter((x) => matchingIds.has(x.id))
-        .map((x) => ({
-          ...x,
-          displayDate: selectedDayYmd,
-        }))
-        .sort((a, b) => {
-          if (a.displayDate < b.displayDate) return -1
-          if (a.displayDate > b.displayDate) return 1
-          return a.title.localeCompare(b.title)
-        })
-    }
+  if (selectedDayYmd) {
+    const matchingIds = new Set(
+      allListOccurrences
+        .filter((x) => x.occurrenceDate === selectedDayYmd)
+        .map((x) => x.sourceId)
+    )
 
     return reminders
-      .map((x) => {
-        const displayDate = getNextOccurrenceOnOrAfter(x, todayYmd)
-        if (!displayDate) return null
-
-        return {
-          ...x,
-          displayDate,
-        }
-      })
-      .filter(Boolean)
+      .filter((x) => matchingIds.has(x.id))
+      .map((x) => ({
+        ...x,
+        displayDate: selectedDayYmd,
+      }))
       .sort((a, b) => {
-        if (a!.displayDate < b!.displayDate) return -1
-        if (a!.displayDate > b!.displayDate) return 1
-        return a!.title.localeCompare(b!.title)
-      }) as Array<ReminderUiItem & { displayDate: string }>
-  }, [reminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
+        if (a.displayDate < b.displayDate) return -1
+        if (a.displayDate > b.displayDate) return 1
+
+        const at = timeSortValue(a.time)
+        const bt = timeSortValue(b.time)
+        if (at < bt) return -1
+        if (at > bt) return 1
+
+        return a.title.localeCompare(b.title)
+      })
+  }
+
+  return reminders
+    .map((x) => {
+      const displayDate = getNextOccurrenceOnOrAfter(x, todayYmd)
+      if (!displayDate) return null
+
+      return {
+        ...x,
+        displayDate,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a!.displayDate < b!.displayDate) return -1
+      if (a!.displayDate > b!.displayDate) return 1
+
+      const at = timeSortValue(a!.time)
+      const bt = timeSortValue(b!.time)
+      if (at < bt) return -1
+      if (at > bt) return 1
+
+      return a!.title.localeCompare(b!.title)
+    }) as Array<ReminderUiItem & { displayDate: string }>
+}, [reminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
 
   function toggleSelectedDay(ymd: string) {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
@@ -3774,7 +3817,7 @@ function RemindersModuleSettingsTab({
                     <div key={item.id} className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-[15px] leading-tight font-medium">
-                          {item.title}
+                        {formatReminderTitleWithTime(item)}
                         </div>
 
                         <div className="mt-0.5 text-[12px] text-[color:var(--fg-55)]">
@@ -3807,6 +3850,7 @@ function RemindersModuleSettingsTab({
                   id: '',
                   title: '',
                   date: addDate,
+                  time: null,
                   repeat: 'none',
                   customRepeatDays: null,
                 } as any)
@@ -3876,27 +3920,31 @@ function ReminderDraftSheet({
   onSaved: () => void | Promise<void>
   onDeleted: () => void | Promise<void>
 }) {
-  const [title, setTitle] = useState(editingReminder?.title ?? '')
-  const [date, setDate] = useState(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
-  const [repeat, setRepeat] = useState<ReminderRepeatKey>(editingReminder?.repeat ?? 'none')
-  const [customRepeatDays, setCustomRepeatDays] = useState<number | ''>(
-    Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
-      ? Number(editingReminder?.customRepeatDays)
-      : ''
-  )
+const [title, setTitle] = useState(editingReminder?.title ?? '')
+const [date, setDate] = useState(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
+const [time, setTime] = useState<string>(normalizeReminderTime(editingReminder?.time) ?? '')
+const [repeat, setRepeat] = useState<ReminderRepeatKey>(editingReminder?.repeat ?? 'none')
+const [customRepeatDays, setCustomRepeatDays] = useState<number | ''>(
+  Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
+    ? Number(editingReminder?.customRepeatDays)
+    : ''
+)
 
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
+const [saving, setSaving] = useState(false)
+const [deleting, setDeleting] = useState(false)
+const [status, setStatus] = useState<string | null>(null)
+const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
 
-  const [datePickerOpen, setDatePickerOpen] = useState(false)
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+const [datePickerOpen, setDatePickerOpen] = useState(false)
+const [timePickerOpen, setTimePickerOpen] = useState(false)
+const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
-  const normalizedCustomRepeatDays =
-    Number.isFinite(Number(customRepeatDays)) && Number(customRepeatDays) > 0
-      ? Number(customRepeatDays)
-      : null
+const normalizedCustomRepeatDays =
+  Number.isFinite(Number(customRepeatDays)) && Number(customRepeatDays) > 0
+    ? Number(customRepeatDays)
+    : null
+
+const normalizedTime = normalizeReminderTime(time)
 
   const canSave =
     title.trim().length > 0 &&
@@ -3938,33 +3986,34 @@ function ReminderDraftSheet({
 
       if (editingReminder) {
         const { error } = await supabase
-          .from('reminders')
-          .update({
-            title: cleanTitle,
-            due_date: cleanDate,
-            repeat_type: repeat,
-            custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
-            updated_by_user_id: userId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingReminder.id)
-          .eq('device_id', activeDeviceId)
+  .from('reminders')
+  .update({
+    title: cleanTitle,
+    due_date: cleanDate,
+    due_time: normalizedTime,
+    repeat_type: repeat,
+    custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
+    updated_by_user_id: userId,
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', editingReminder.id)
+  .eq('device_id', activeDeviceId)
 
         if (error) throw error
       } else {
         const { error } = await supabase
-          .from('reminders')
-          .insert({
-            device_id: activeDeviceId,
-            created_by_user_id: userId,
-            updated_by_user_id: userId,
-            title: cleanTitle,
-            due_date: cleanDate,
-            repeat_type: repeat,
-            custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
-            is_done: false,
-          })
-
+  .from('reminders')
+  .insert({
+    device_id: activeDeviceId,
+    created_by_user_id: userId,
+    updated_by_user_id: userId,
+    title: cleanTitle,
+    due_date: cleanDate,
+    due_time: normalizedTime,
+    repeat_type: repeat,
+    custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
+    is_done: false,
+  })
         if (error) throw error
       }
 
@@ -4041,6 +4090,37 @@ function ReminderDraftSheet({
               {date}
             </button>
           </div>
+
+          <div className="mt-4">
+  <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
+    {language === 'no' ? 'TID (VALGFRITT)' : 'TIME (OPTIONAL)'}
+  </div>
+
+  <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+    <button
+      type="button"
+      onClick={() => setTimePickerOpen(true)}
+      className="flex w-full h-12 items-center rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]"
+    >
+      {normalizedTime || (language === 'no' ? 'Ingen tid valgt' : 'No time selected')}
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setTime('')
+        setStatus(null)
+      }}
+      className={`h-12 px-4 rounded-2xl border tracking-widest text-xs ${
+        normalizedTime
+          ? 'border-[color:var(--bd-15)] text-[color:var(--fg-70)]'
+          : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
+      }`}
+    >
+      {language === 'no' ? 'FJERN' : 'CLEAR'}
+    </button>
+  </div>
+</div>
 
           <div className="mt-4">
             <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'GJENTAS' : 'REPEATS'}</div>
@@ -4157,6 +4237,26 @@ function ReminderDraftSheet({
           }}
         />
       )}
+
+      {timePickerOpen && (
+  <TimePickerSheet
+    language={language}
+    value={(() => {
+      const base = parseYmdToLocalDate(date) || new Date()
+      const t = normalizedTime || '12:00'
+      const [hh, mm] = t.split(':').map(Number)
+      base.setHours(Number.isFinite(hh) ? hh : 12, Number.isFinite(mm) ? mm : 0, 0, 0)
+      return base
+    })()}
+    onClose={() => setTimePickerOpen(false)}
+    onApply={(d) => {
+      const rounded = roundToNearest5Min(d)
+      setTime(`${pad2(rounded.getHours())}:${pad2(rounded.getMinutes())}`)
+      setStatus(null)
+      setTimePickerOpen(false)
+    }}
+  />
+)}
 
       {confirmDeleteOpen && (
         <DeleteReminderSheet
