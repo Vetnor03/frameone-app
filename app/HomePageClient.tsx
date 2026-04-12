@@ -4072,7 +4072,7 @@ const normalizedTime = normalizeReminderTime(time)
   
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+<div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
   <style jsx>{`
     .reminder-sheet-scroll {
       -ms-overflow-style: none;
@@ -4083,10 +4083,10 @@ const normalizedTime = normalizeReminderTime(time)
     }
   `}</style>
 
-  <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)]">
+  <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh]">
     <div
       ref={scrollRef}
-      className="reminder-sheet-scroll max-h-[88vh] overflow-y-auto px-5 pt-5 pb-8"
+      className="reminder-sheet-scroll flex-1 min-h-0 overflow-y-auto px-5 pt-5 pb-4"
     >
           <div className="flex items-center justify-between">
             <div className="tracking-widest text-sm text-[color:var(--fg-70)]">
@@ -4217,8 +4217,10 @@ const normalizedTime = normalizeReminderTime(time)
               <span> </span>
             )}
           </div>
+               </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-3">
+                           <div className="px-5 pt-4 pb-6 border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)]">
+                <div className="grid grid-cols-1 gap-3">
             <button
               onClick={saveReminder}
               disabled={!canSave}
@@ -4253,9 +4255,9 @@ const normalizedTime = normalizeReminderTime(time)
               {language === 'no' ? 'LUKK' : 'CLOSE'}
             </button>
           </div>
-               </div>
       </div>
     </div>
+  </div>
 
       {datePickerOpen && (
         <DatePickerSheet
