@@ -2336,7 +2336,7 @@ function normalizeReminderTime(value: string | null | undefined) {
   const raw = String(value ?? '').trim()
   if (!raw) return null
 
-  const m = raw.match(/^(\d{1,2}):(\d{2})$/)
+  const m = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
   if (!m) return null
 
   const hh = Number(m[1])
@@ -4068,10 +4068,26 @@ const normalizedTime = normalizeReminderTime(time)
     }
   }
 
+    const scrollRef = useRef<HTMLDivElement | null>(null)
+  
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
-        <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+  <style jsx>{`
+    .reminder-sheet-scroll {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .reminder-sheet-scroll::-webkit-scrollbar {
+      display: none;
+    }
+  `}</style>
+
+  <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)]">
+    <div
+      ref={scrollRef}
+      className="reminder-sheet-scroll max-h-[88vh] overflow-y-auto px-5 pt-5 pb-8"
+    >
           <div className="flex items-center justify-between">
             <div className="tracking-widest text-sm text-[color:var(--fg-70)]">
               {editingReminder ? (language === 'no' ? 'REDIGER PÅMINNELSE' : 'EDIT REMINDER') : (language === 'no' ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER')}
@@ -4237,8 +4253,9 @@ const normalizedTime = normalizeReminderTime(time)
               {language === 'no' ? 'LUKK' : 'CLOSE'}
             </button>
           </div>
-        </div>
+               </div>
       </div>
+    </div>
 
       {datePickerOpen && (
         <DatePickerSheet
