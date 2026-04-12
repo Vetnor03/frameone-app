@@ -22,6 +22,7 @@ type ReminderRow = {
   device_id: string
   title: string | null
   due_date: string | null
+  due_time: string | null
   repeat_type: ReminderRepeatKey | null
   custom_repeat_days: number | null
   is_done: boolean | null
@@ -35,14 +36,14 @@ type DeviceReminderItem = {
   days_until: number
   is_overdue: boolean
   repeat: ReminderRepeatKey
+  due_time: string | null
+  display_time: string | null
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 200
 
-// We expand occurrences far enough to cover current + next month and a decent
-// upcoming list for the frame.
 const DEFAULT_HORIZON_DAYS = 120
 const MAX_HORIZON_DAYS = 366
 
@@ -187,10 +188,47 @@ function getDatePartsInTimeZone(date: Date, timeZone: string) {
   return { year, month, day }
 }
 
+function getClockPartsInTimeZone(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+
+  const parts = formatter.formatToParts(date)
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value)
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value)
+
+  return { hour, minute }
+}
+
 function getTodayYmdInTimeZone(timeZone: string) {
   const now = new Date()
   const { year, month, day } = getDatePartsInTimeZone(now, timeZone)
   return `${year}-${pad2(month)}-${pad2(day)}`
+}
+
+function getNowHmInTimeZone(timeZone: string) {
+  const now = new Date()
+  const { hour, minute } = getClockPartsInTimeZone(now, timeZone)
+  return `${pad2(hour)}:${pad2(minute)}`
+}
+
+function normalizeReminderTime(raw: string | null | undefined) {
+  const value = String(raw ?? '').trim()
+  if (!value) return null
+
+  const m = value.match(/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/)
+  if (!m) return null
+
+  const hh = Number(m[1])
+  const mm = Number(m[2])
+
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+
+  return `${pad2(hh)}:${pad2(mm)}`
 }
 
 function formatDisplayDate(occurrenceYmd: string, todayYmd: string) {
@@ -248,14 +286,27 @@ function normalizeHorizonDays(raw: string | null) {
   return Math.min(MAX_HORIZON_DAYS, Math.floor(n))
 }
 
+function isTimedOccurrenceAlreadyPassed(
+  occurrenceYmd: string,
+  dueTime: string | null,
+  todayYmd: string,
+  nowHm: string
+) {
+  if (!dueTime) return false
+  if (occurrenceYmd !== todayYmd) return false
+  return dueTime < nowHm
+}
+
 function buildOccurrencesForRow(
   row: ReminderRow,
   todayYmd: string,
+  nowHm: string,
   horizonEndYmd: string,
   includeOverdue: boolean
 ): DeviceReminderItem[] {
   const title = String(row.title ?? '').trim()
   const dueDate = String(row.due_date ?? '').trim()
+  const dueTime = normalizeReminderTime(row.due_time)
   const repeat: ReminderRepeatKey = isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none'
   const customRepeatDays = Number(row.custom_repeat_days)
 
@@ -267,6 +318,10 @@ function buildOccurrencesForRow(
   const items: DeviceReminderItem[] = []
 
   const addOccurrence = (occurrenceYmd: string) => {
+    if (isTimedOccurrenceAlreadyPassed(occurrenceYmd, dueTime, todayYmd, nowHm)) {
+      return
+    }
+
     const days_until = diffDaysFromYmd(todayYmd, occurrenceYmd)
 
     if (!includeOverdue && days_until < 0) return
@@ -279,6 +334,8 @@ function buildOccurrencesForRow(
       days_until,
       is_overdue: days_until < 0,
       repeat,
+      due_time: dueTime,
+      display_time: dueTime,
     })
   }
 
@@ -317,6 +374,10 @@ function buildOccurrencesForRow(
   return items
 }
 
+function sortTimeValue(value: string | null) {
+  return value || '99:99'
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -337,9 +398,10 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from('reminders')
-      .select('id, device_id, title, due_date, repeat_type, custom_repeat_days, is_done')
+      .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
       .eq('device_id', device_id)
       .order('due_date', { ascending: true })
+      .order('due_time', { ascending: true, nullsFirst: false })
       .order('title', { ascending: true })
 
     if (error) {
@@ -347,6 +409,8 @@ export async function GET(req: Request) {
     }
 
     const todayYmd = getTodayYmdInTimeZone(timeZone)
+    const nowHm = getNowHmInTimeZone(timeZone)
+
     const today = parseYmdToLocalDate(todayYmd)
     if (!today) {
       return NextResponse.json({ error: 'Failed to compute local today date' }, { status: 500 })
@@ -356,11 +420,17 @@ export async function GET(req: Request) {
     const rows = Array.isArray(data) ? (data as ReminderRow[]) : []
 
     const items: DeviceReminderItem[] = rows
-      .flatMap((row) => buildOccurrencesForRow(row, todayYmd, horizonEndYmd, includeOverdue))
+      .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue))
       .sort((a, b) => {
         if (a.days_until !== b.days_until) return a.days_until - b.days_until
         if (a.occurrence_date < b.occurrence_date) return -1
         if (a.occurrence_date > b.occurrence_date) return 1
+
+        const at = sortTimeValue(a.display_time)
+        const bt = sortTimeValue(b.display_time)
+        if (at < bt) return -1
+        if (at > bt) return 1
+
         return a.title.localeCompare(b.title)
       })
       .slice(0, limit)
@@ -370,6 +440,7 @@ export async function GET(req: Request) {
       generated_at: new Date().toISOString(),
       timezone: timeZone,
       today_ymd: todayYmd,
+      now_hm: nowHm,
       horizon_end_ymd: horizonEndYmd,
       items,
     })
