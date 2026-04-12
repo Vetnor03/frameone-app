@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 
 // 🔧 Change this when you deploy a new firmware
-const LATEST_VERSION = 'v2.3.1'
+const LATEST_VERSION = 'v2.3.0'
 
 // 🔧 Where your .bin is hosted
-const FIRMWARE_BASE_URL = 'https://yourdomain.com/firmware'
+const FIRMWARE_BASE_URL = 'https://re-mind.no/firmware'
 
 function isNewer(current: string | null, latest: string) {
   if (!current) return true
