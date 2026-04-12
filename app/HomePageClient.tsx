@@ -3821,8 +3821,10 @@ const sortedReminders = useMemo(() => {
                         </div>
 
                         <div className="mt-0.5 text-[12px] text-[color:var(--fg-55)]">
-                          {`${formatReminderFullDateLabel(language, item.displayDate)} • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
-                        </div>
+  {`${formatReminderFullDateLabel(language, item.displayDate)}${
+    normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
+  } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+</div>
                       </div>
 
                       <div className="shrink-0 flex flex-col gap-1.5">
@@ -3945,6 +3947,19 @@ const normalizedCustomRepeatDays =
     : null
 
 const normalizedTime = normalizeReminderTime(time)
+
+  useEffect(() => {
+  setTitle(editingReminder?.title ?? '')
+  setDate(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
+  setTime(normalizeReminderTime(editingReminder?.time) ?? '')
+  setRepeat(editingReminder?.repeat ?? 'none')
+  setCustomRepeatDays(
+    Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
+      ? Number(editingReminder?.customRepeatDays)
+      : ''
+  )
+  setStatus(null)
+}, [editingReminder, initialDate])
 
   const canSave =
     title.trim().length > 0 &&
