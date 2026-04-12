@@ -2246,7 +2246,7 @@ type ReminderUiItem = {
   id: string
   title: string
   date: string
-  time?: string | null
+  time?: any
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
 }
@@ -2332,11 +2332,11 @@ function parseYmdToLocalDate(ymd: string) {
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null
   return new Date(y, m - 1, d)
 }
-function normalizeReminderTime(value: string | null | undefined) {
+function normalizeReminderTime(value: any) {
   const raw = String(value ?? '').trim()
   if (!raw) return null
 
-  const m = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  const m = raw.match(/^(\d{1,2}):(\d{2})/)
   if (!m) return null
 
   const hh = Number(m[1])
@@ -3373,12 +3373,12 @@ function RemindersModuleSettingsTab({
         return
       }
 
-      const items: ReminderUiItem[] = (data || [])
+const items: ReminderUiItem[] = (data || [])
   .map((row: any) => ({
     id: String(row.id),
     title: String(row.title ?? '').trim(),
     date: String(row.due_date ?? '').trim(),
-    time: normalizeReminderTime(row.due_time),
+    time: row.due_time ?? null,
     repeat: isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none',
     customRepeatDays:
       Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
@@ -3822,8 +3822,8 @@ const sortedReminders = useMemo(() => {
 
                         <div className="mt-0.5 text-[12px] text-[color:var(--fg-55)]">
   {`${formatReminderFullDateLabel(language, item.displayDate)}${
-    normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
-  } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+  normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
+} • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
 </div>
                       </div>
 
