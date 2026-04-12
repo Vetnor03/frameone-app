@@ -2,20 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
-// 🔧 Change this when you deploy a new firmware
 const LATEST_VERSION = 'v2.3.0'
-
-// 🔧 Where your .bin is hosted
 const FIRMWARE_BASE_URL = 'https://re-mind.no/firmware'
 
-function isNewer(current: string | null, latest: string) {
-  if (!current) return true
+function parseVersion(v: string): [number, number, number] {
+  const cleaned = v.trim().replace(/^v/i, '')
+  const parts = cleaned.split('.')
 
-  const parse = (v: string) =>
-    v.replace(/^v/, '').split('.').map((n) => parseInt(n || '0', 10))
+  return [
+    parseInt(parts[0] || '0', 10),
+    parseInt(parts[1] || '0', 10),
+    parseInt(parts[2] || '0', 10),
+  ]
+}
 
-  const [cMaj, cMin, cPat] = parse(current)
-  const [lMaj, lMin, lPat] = parse(latest)
+function isNewer(current: string | null, latest: string): boolean {
+  if (!current || !current.trim()) return true
+
+  const [cMaj, cMin, cPat] = parseVersion(current)
+  const [lMaj, lMin, lPat] = parseVersion(latest)
 
   if (lMaj !== cMaj) return lMaj > cMaj
   if (lMin !== cMin) return lMin > cMin
@@ -28,13 +33,13 @@ export async function GET(req: NextRequest) {
   const deviceId = searchParams.get('device_id')
   const currentVersion = searchParams.get('current_version')
 
-  // (optional) you can validate device here
-
   const updateAvailable = isNewer(currentVersion, LATEST_VERSION)
 
   return NextResponse.json({
     latest_version: LATEST_VERSION,
     update_available: updateAvailable,
-    url: `${FIRMWARE_BASE_URL}/frame-${LATEST_VERSION.replace('v', '')}.bin`,
+    url: `${FIRMWARE_BASE_URL}/frame-${LATEST_VERSION.replace(/^v/i, '')}.bin`,
+    device_id: deviceId,
+    current_version: currentVersion,
   })
 }
