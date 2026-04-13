@@ -128,7 +128,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'KONTAKT',
-            text: 'For spørsmål om personvern, kontakt post@test.com',
+            text: 'For spørsmål om personvern, kontakt support@re-mind.no',
           },
         ]
       : [
@@ -166,7 +166,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'CONTACT',
-            text: 'For any privacy-related questions, contact post@test.com',
+            text: 'For any privacy-related questions, contact support@re-mind.no',
           },
         ]
 
