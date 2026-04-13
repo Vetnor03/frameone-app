@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
-const LATEST_VERSION = 'v2.3.2'
+const LATEST_VERSION = 'v2.3.3'
 const FIRMWARE_BASE_URL = 'https://re-mind.no/firmware'
 
 function parseVersion(v: string): [number, number, number] {
