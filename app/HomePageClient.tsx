@@ -239,7 +239,11 @@ type SettingsJson = {
   modules?: Record<string, any>
 }
 
-type MemberRow = { device_id: string; role: string | null }
+type MemberRow = {
+  device_id: string
+  role: string | null
+  current_version?: string | null
+}
 
 function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
   if (layout === 'default') return { 0: null, 1: null, 2: null }
@@ -1812,24 +1816,55 @@ function MyFramesSection({
 
   async function reload() {
     setLoading(true)
-    const { data: sessionData } = await supabase.auth.getSession()
-    const session = sessionData.session
-    if (!session) {
-      onFramesChanged([])
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData.session
+
+      if (!session) {
+        onFramesChanged([])
+        return
+      }
+
+      const { data: members, error: membersError } = await supabase
+        .from('device_members')
+        .select('device_id, role')
+        .eq('user_id', session.user.id)
+        .order('device_id', { ascending: true })
+
+      if (membersError) {
+        onFramesChanged([])
+        return
+      }
+
+      const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+      const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+
+      let statusMap = new Map<string, string | null>()
+
+      if (deviceIds.length > 0) {
+        const { data: statuses } = await supabase
+          .from('device_status')
+          .select('device_id, current_version')
+          .in('device_id', deviceIds)
+
+        statusMap = new Map(
+          ((statuses || []) as Array<{ device_id: string; current_version: string | null }>).map((s) => [
+            s.device_id,
+            s.current_version ?? null,
+          ])
+        )
+      }
+
+      const merged: MemberRow[] = memberRows.map((m) => ({
+        device_id: m.device_id,
+        role: m.role,
+        current_version: statusMap.get(m.device_id) ?? null,
+      }))
+
+      onFramesChanged(merged)
+    } finally {
       setLoading(false)
-      return
     }
-
-    const { data, error } = await supabase
-      .from('device_members')
-      .select('device_id, role')
-      .eq('user_id', session.user.id)
-      .order('device_id', { ascending: true })
-
-    if (error) onFramesChanged([])
-    else onFramesChanged((data || []) as MemberRow[])
-
-    setLoading(false)
   }
 
   async function addFrame() {
@@ -1872,55 +1907,55 @@ function MyFramesSection({
     }
   }
 
-async function copyCode() {
-  if (!shareCode) return
+  async function copyCode() {
+    if (!shareCode) return
 
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(shareCode)
-    } else {
-      const ta = document.createElement('textarea')
-      ta.value = shareCode
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      ta.style.pointerEvents = 'none'
-      document.body.appendChild(ta)
-      ta.focus()
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareCode)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = shareCode
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        ta.style.pointerEvents = 'none'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+
+      setCopyDone(true)
+      window.setTimeout(() => setCopyDone(false), 1200)
+    } catch (e) {
+      setShareError(language === 'no' ? 'Klarte ikke kopiere koden' : 'Could not copy the code')
     }
-
-    setCopyDone(true)
-    window.setTimeout(() => setCopyDone(false), 1200)
-  } catch (e) {
-    setShareError(language === 'no' ? 'Klarte ikke kopiere koden' : 'Could not copy the code')
   }
-}
 
-async function nativeShare() {
-  if (!shareCode) return
+  async function nativeShare() {
+    if (!shareCode) return
 
-  const text =
-    language === 'no'
-      ? `Bruk denne koden for å legge til Frame i appen: ${shareCode}`
-      : `Use this code to add the Frame in the app: ${shareCode}`
+    const text =
+      language === 'no'
+        ? `Bruk denne koden for å legge til Frame i appen: ${shareCode}`
+        : `Use this code to add the Frame in the app: ${shareCode}`
 
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: language === 'no' ? 'Del Frame' : 'Share Frame',
-        text,
-      })
-      return
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: language === 'no' ? 'Del Frame' : 'Share Frame',
+          text,
+        })
+        return
+      }
+
+      await copyCode()
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return
+      await copyCode()
     }
-
-    await copyCode()
-  } catch (e: any) {
-    if (e?.name === 'AbortError') return
-    await copyCode()
   }
-}
 
   return (
     <>
@@ -1937,16 +1972,16 @@ async function nativeShare() {
             </button>
 
             <button
-  onClick={openShare}
-  disabled={!activeDeviceId}
-  className={`px-3 py-1 border rounded-lg text-xs tracking-widest ${
-    activeDeviceId
-      ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
-      : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
-  }`}
->
-  {language === 'no' ? '+ DEL FRAME' : '+ SHARE FRAME'}
-</button>
+              onClick={openShare}
+              disabled={!activeDeviceId}
+              className={`px-3 py-1 border rounded-lg text-xs tracking-widest ${
+                activeDeviceId
+                  ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
+                  : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
+              }`}
+            >
+              {language === 'no' ? '+ DEL FRAME' : '+ SHARE FRAME'}
+            </button>
           </div>
         </div>
 
@@ -1964,7 +1999,15 @@ async function nativeShare() {
                   selected ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
                 }`}
               >
-                <div className="tracking-widest text-sm">{f.device_id}</div>
+                <div className="min-w-0">
+                  <div className="tracking-widest text-sm">{f.device_id}</div>
+                  {!!f.current_version && (
+                    <div className="text-xs opacity-60 mt-1 normal-case tracking-normal">
+                      {f.current_version}
+                    </div>
+                  )}
+                </div>
+
                 <div className="text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>
               </button>
             )
