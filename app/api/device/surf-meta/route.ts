@@ -132,10 +132,9 @@ export async function GET(req: Request) {
       })
     }
 
-    // If your table is named differently, swap 'surf_experiences' here.
     const { data: expRow, error: expError } = await supabase
-.from('user_surf_experiences')
-.select('id, logged_at, spot_id')
+      .from('user_surf_experiences')
+      .select('id, logged_at, spot_id')
       .eq('user_id', user_id)
       .eq('spot_id', resolvedSpotId)
       .order('logged_at', { ascending: false })
@@ -148,11 +147,10 @@ export async function GET(req: Request) {
 
     const latestExperienceId = expRow?.id ?? null
     const latestLoggedAt = expRow?.logged_at ?? null
-    const latestRating = expRow?.rating_1_6 ?? null
 
     const surf_signature =
       latestExperienceId && latestLoggedAt
-        ? `${resolvedSpotId}|${latestExperienceId}|${latestLoggedAt}|${latestRating ?? ''}`
+        ? `${resolvedSpotId}|${latestExperienceId}|${latestLoggedAt}`
         : '__NO_MATCHED_EXPERIENCE__'
 
     return NextResponse.json({
@@ -161,7 +159,6 @@ export async function GET(req: Request) {
       resolved_spot_id: resolvedSpotId,
       latest_logged_at: latestLoggedAt,
       latest_experience_id: latestExperienceId,
-      latest_rating_1_6: latestRating,
       surf_signature,
     })
   } catch (e: any) {
