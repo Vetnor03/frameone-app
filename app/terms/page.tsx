@@ -124,7 +124,7 @@ function TermsPageContent() {
           },
           {
             title: 'KONTAKT',
-            text: 'For spørsmål, kontakt oss på post@test.com',
+            text: 'For spørsmål, kontakt oss på support@re-mind.no',
           },
         ]
       : [
@@ -158,7 +158,7 @@ function TermsPageContent() {
           },
           {
             title: 'CONTACT',
-            text: 'For any questions, contact us at post@test.com',
+            text: 'For any questions, contact us at support@re-mind.no',
           },
         ]
 
