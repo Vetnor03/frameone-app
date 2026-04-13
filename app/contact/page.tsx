@@ -82,7 +82,7 @@ export default function ContactPage() {
             <div className="text-white/60 text-xs tracking-widest">
               {language === 'no' ? 'E-POST' : 'EMAIL'}
             </div>
-            <div className="mt-1 text-white/80">post@test.com</div>
+            <div className="mt-1 text-white/80">support@re-mind.no</div>
           </div>
         </div>
       </div>
