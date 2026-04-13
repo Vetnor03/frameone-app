@@ -134,8 +134,8 @@ export async function GET(req: Request) {
 
     // If your table is named differently, swap 'surf_experiences' here.
     const { data: expRow, error: expError } = await supabase
-      .from('surf_experiences')
-      .select('id, logged_at, rating_1_6, spot_id')
+.from('user_surf_experiences')
+.select('id, logged_at, spot_id')
       .eq('user_id', user_id)
       .eq('spot_id', resolvedSpotId)
       .order('logged_at', { ascending: false })
