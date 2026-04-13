@@ -2475,7 +2475,7 @@ function nextReminderOccurrenceDate(
   if (repeat === 'weekly') return addDaysLocal(base, 7)
   if (repeat === '2weeks') return addDaysLocal(base, 14)
   if (repeat === '4weeks') return addDaysLocal(base, 28)
-  if (repeat === 'monthly') return addMonthsByWeekdayPattern(base, 1)
+  if (repeat === 'monthly') return addMonthsLocal(base, 1)
   if (repeat === 'halfyear') return addMonthsLocal(base, 6)
   if (repeat === 'yearly') return addYearsLocal(base, 1)
   if (repeat === '2years') return addYearsLocal(base, 2)
