@@ -1867,18 +1867,70 @@ function MyFramesSection({
     }
   }
 
-  async function addFrame() {
-    const code = prompt(t.addFramePrompt)
-    if (!code) return
-    const cleaned = code.trim().toUpperCase()
+async function addFrame() {
+  const wasEmpty = frames.length === 0
 
-    const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
-    if (error) return alert(error.message)
-    if (data !== true) return alert(t.invalidPairCode)
+  const code = prompt(t.addFramePrompt)
+  if (!code) return
+  const cleaned = code.trim().toUpperCase()
 
+  const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
+  if (error) return alert(error.message)
+  if (data !== true) return alert(t.invalidPairCode)
+
+  const { data: sessionData } = await supabase.auth.getSession()
+  const session = sessionData.session
+
+  if (!session) {
+    await reload()
+    return
+  }
+
+  const { data: members, error: membersError } = await supabase
+    .from('device_members')
+    .select('device_id, role')
+    .eq('user_id', session.user.id)
+    .order('device_id', { ascending: true })
+
+  if (membersError) {
     await reload()
     alert(t.frameAdded)
+    return
   }
+
+  const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+  const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+
+  let statusMap = new Map<string, string | null>()
+
+  if (deviceIds.length > 0) {
+    const { data: statuses } = await supabase
+      .from('device_status')
+      .select('device_id, current_version')
+      .in('device_id', deviceIds)
+
+    statusMap = new Map(
+      ((statuses || []) as Array<{ device_id: string; current_version: string | null }>).map((s) => [
+        s.device_id,
+        s.current_version ?? null,
+      ])
+    )
+  }
+
+  const merged: MemberRow[] = memberRows.map((m) => ({
+    device_id: m.device_id,
+    role: m.role,
+    current_version: statusMap.get(m.device_id) ?? null,
+  }))
+
+  onFramesChanged(merged)
+
+  if (wasEmpty && merged.length > 0) {
+    onSelectDevice(merged[0].device_id)
+  }
+
+  alert(t.frameAdded)
+}
 
   async function openShare() {
     if (!activeDeviceId) return
