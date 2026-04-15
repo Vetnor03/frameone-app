@@ -2403,6 +2403,12 @@ function reminderRepeatOptionLabel(language: AppLanguage, key: ReminderRepeatKey
   return language === 'no' ? found.labelNo : found.label
 }
 
+function reminderTagOptionLabel(language: AppLanguage, key: ReminderTag | null) {
+  const found = REMINDER_TAG_OPTIONS.find((x) => x.key === key)
+  if (!found) return language === 'no' ? 'Ingen tag' : 'No tag'
+  return language === 'no' ? found.labelNo : found.label
+}
+
 function isReminderRepeatKey(v: any): v is ReminderRepeatKey {
   return (
     v === 'none' ||
@@ -4071,6 +4077,7 @@ const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
 
 const [datePickerOpen, setDatePickerOpen] = useState(false)
 const [timePickerOpen, setTimePickerOpen] = useState(false)
+const [tagPickerOpen, setTagPickerOpen] = useState(false)
 const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
 const normalizedCustomRepeatDays =
@@ -4290,21 +4297,13 @@ const normalizedTime = normalizeReminderTime(time)
 
           <div className="mt-4">
             <div className="tracking-widest text-xs text-[color:var(--fg-50)]">TAG</div>
-            <select
-              value={tag ?? ''}
-              onChange={(e) => {
-                const next = e.target.value
-                setTag(isReminderTag(next) ? next : null)
-                setStatus(null)
-              }}
-              className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+            <button
+              type="button"
+              onClick={() => setTagPickerOpen(true)}
+              className="mt-2 flex w-full h-12 items-center rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]"
             >
-              {REMINDER_TAG_OPTIONS.map((opt) => (
-                <option key={opt.key ?? 'none'} value={opt.key ?? ''}>
-                  {language === 'no' ? opt.labelNo : opt.label}
-                </option>
-              ))}
-            </select>
+              {reminderTagOptionLabel(language, tag)}
+            </button>
           </div>
 
           <div className="mt-4">
@@ -4446,6 +4445,19 @@ const normalizedTime = normalizeReminderTime(time)
   />
 )}
 
+      {tagPickerOpen && (
+        <ReminderTagPickerSheet
+          language={language}
+          current={tag}
+          onClose={() => setTagPickerOpen(false)}
+          onPick={(next) => {
+            setTag(next)
+            setStatus(null)
+            setTagPickerOpen(false)
+          }}
+        />
+      )}
+
       {confirmDeleteOpen && (
         <DeleteReminderSheet
           language={language}
@@ -4503,6 +4515,49 @@ function DeleteReminderSheet({
           >
             {language === 'no' ? 'AVBRYT' : 'CANCEL'}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReminderTagPickerSheet({
+  language,
+  current,
+  onClose,
+  onPick,
+}: {
+  language: AppLanguage
+  current: ReminderTag | null
+  onClose: () => void
+  onPick: (tag: ReminderTag | null) => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">TAG</div>
+          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {REMINDER_TAG_OPTIONS.map((opt) => {
+            const active = current === opt.key
+
+            return (
+              <button
+                key={opt.key ?? 'none'}
+                onClick={() => onPick(opt.key)}
+                className={`h-12 rounded-2xl border tracking-widest ${
+                  active ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
+                }`}
+              >
+                {language === 'no' ? opt.labelNo : opt.label}
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>
