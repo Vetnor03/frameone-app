@@ -2428,6 +2428,63 @@ function isReminderTag(v: any): v is ReminderTag {
   return v === 'work' || v === 'personal' || v === 'sports' || v === 'chores' || v === 'event'
 }
 
+function ReminderTagIcon({
+  tag,
+  size = 5,
+  className = '',
+}: {
+  tag: ReminderTag
+  size?: number
+  className?: string
+}) {
+  if (tag === 'work') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+        <rect x="2.5" y="5.5" width="11" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M6 5.5V4.8c0-.7.5-1.3 1.2-1.3h1.6c.7 0 1.2.6 1.2 1.3v.7" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    )
+  }
+
+  if (tag === 'personal') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+        <path
+          d="M8 12.8c-.1 0-.2 0-.3-.1C4.7 10.9 3 9.4 3 7.3 3 6 4 5 5.3 5c1 0 1.9.5 2.7 1.3.8-.8 1.7-1.3 2.7-1.3C12 5 13 6 13 7.3c0 2.1-1.7 3.6-4.7 5.4-.1.1-.2.1-.3.1Z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  if (tag === 'sports') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+        <circle cx="8" cy="8" r="5.1" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M8 2.9c1.2 1.4 1.2 8.8 0 10.2M2.9 8h10.2" stroke="currentColor" strokeWidth="1.1" />
+      </svg>
+    )
+  }
+
+  if (tag === 'chores') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+        <rect x="4" y="3.5" width="8" height="10" rx="1.4" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M6 6h4M6 8.5h4M6 11h2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+      <rect x="3" y="4" width="10" height="9" rx="1.4" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M5.2 2.8v2.4M10.8 2.8v2.4M3 6h10" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function normalizeReminderItems(raw: any): ReminderUiItem[] {
   const arr = Array.isArray(raw) ? raw : []
 
@@ -3626,14 +3683,16 @@ const items: ReminderUiItem[] = (data || [])
     return expandReminderOccurrences(reminders, gridStartYmd, gridEndYmd, 180)
   }, [reminders, gridStartYmd, gridEndYmd])
 
-  const reminderDotsByDay = useMemo(() => {
-    const map: Record<string, number> = {}
+  const reminderMarkersByDay = useMemo(() => {
+    const map: Record<string, Array<ReminderTag | null>> = {}
 
     for (const item of visibleOccurrences) {
       const key = item.occurrenceDate
       if (!key) continue
       if (key < todayYmd) continue
-      map[key] = Math.min(3, (map[key] || 0) + 1)
+      if (!map[key]) map[key] = []
+      if (map[key].length >= 3) continue
+      map[key].push(isReminderTag(item.tag) ? item.tag : null)
     }
 
     return map
@@ -3645,6 +3704,7 @@ const items: ReminderUiItem[] = (data || [])
     inMonth: boolean
     isToday: boolean
     isSelected: boolean
+    markerTags: Array<ReminderTag | null>
     dotCount: number
   }> = []
 
@@ -3685,7 +3745,8 @@ const items: ReminderUiItem[] = (data || [])
       inMonth,
       isToday: ymd === todayYmd,
       isSelected: selectedDayYmd === ymd,
-      dotCount: reminderDotsByDay[ymd] || 0,
+      markerTags: reminderMarkersByDay[ymd] || [],
+      dotCount: (reminderMarkersByDay[ymd] || []).length,
     })
   }
 
@@ -3892,14 +3953,24 @@ const sortedReminders = useMemo(() => {
 
                         {cell.dotCount > 0 && (
                           <div className="absolute bottom-[1px] left-1/2 -translate-x-1/2 flex items-center justify-center gap-[3px]">
-                            {Array.from({ length: Math.min(3, cell.dotCount) }).map((_, idx) => (
-                              <span
-                                key={idx}
-                                className={`block w-[4px] h-[4px] rounded-full ${
-                                  showFilledBlue ? 'bg-white/90' : 'bg-[#2aa3ff]'
-                                }`}
-                              />
-                            ))}
+                            {cell.markerTags.map((tag, idx) =>
+                              tag ? (
+                                <span key={idx} className="block w-[4px] h-[4px]">
+                                  <ReminderTagIcon
+                                    tag={tag}
+                                    size={5}
+                                    className={showFilledBlue ? 'text-white/90' : 'text-[#2aa3ff]'}
+                                  />
+                                </span>
+                              ) : (
+                                <span
+                                  key={idx}
+                                  className={`block w-[4px] h-[4px] rounded-full ${
+                                    showFilledBlue ? 'bg-white/90' : 'bg-[#2aa3ff]'
+                                  }`}
+                                />
+                              )
+                            )}
                           </div>
                         )}
                       </div>
