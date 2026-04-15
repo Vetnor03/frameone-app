@@ -603,17 +603,16 @@ export default function HomePage() {
     return Object.keys(emptyCellsFor(targetLayout)).map(Number).sort((a, b) => a - b)
   }
 
-  function extractModuleMemoryFromCells(cells: Record<number, ModuleKey | null>) {
+  function buildSlotIndexedMemoryFromCells(cells: Record<number, ModuleKey | null>) {
+    // Memory is slot-aligned: array index === slot number.
     return Object.keys(cells)
       .map(Number)
       .sort((a, b) => a - b)
       .map((slot) => cells[slot])
   }
 
-  function projectCellsIntoLayout(
-    moduleMemory: (ModuleKey | null)[],
-    targetLayout: LayoutKey
-  ) {
+  function projectSlotMemoryIntoLayout(moduleMemory: (ModuleKey | null)[], targetLayout: LayoutKey) {
+    // We intentionally keep sparse values as null so layout switches preserve slot positions.
     const target = emptyCellsFor(targetLayout)
     const targetSlots = orderedSlotsForLayout(targetLayout)
 
@@ -624,26 +623,20 @@ export default function HomePage() {
     return target
   }
 
-  function replaceMemoryAtVisibleIndex(
+  function replaceMemoryAtSlotIndex(
     memory: (ModuleKey | null)[],
-    visibleLayout: LayoutKey,
-    visibleSlot: number,
+    layout: LayoutKey,
+    slot: number,
     nextValue: ModuleKey | null
   ) {
-    const slots = orderedSlotsForLayout(visibleLayout)
-    const visibleIndex = slots.indexOf(visibleSlot)
-    if (visibleIndex === -1) return memory
+    const validSlots = emptyCellsFor(layout)
+    if (!Object.prototype.hasOwnProperty.call(validSlots, String(slot))) return memory
 
     const next = [...memory]
+    // Keep sparse slot alignment by extending with nulls before writing.
+    while (next.length <= slot) next.push(null)
 
-    while (next.length <= visibleIndex) next.push(null)
-
-    if (nextValue) {
-      next[visibleIndex] = nextValue
-      return next
-    }
-
-    next[visibleIndex] = null
+    next[slot] = nextValue ?? null
     return next
   }
 
@@ -722,7 +715,7 @@ export default function HomePage() {
       [nextLayout]: nextCellsForLayout,
     }
 
-    layoutModuleMemoryRef.current = extractModuleMemoryFromCells(nextCellsForLayout)
+    layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(nextCellsForLayout)
 
     const rawModules =
       json.modules && typeof json.modules === 'object'
@@ -825,7 +818,7 @@ export default function HomePage() {
 
     stickySettingsRef.current = false
 
-    const projected = projectCellsIntoLayout(layoutModuleMemoryRef.current, nextLayoutKey)
+    const projected = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, nextLayoutKey)
     const nextCellsByLayout = {
       ...cellsByLayout,
       [nextLayoutKey]: projected,
@@ -848,7 +841,7 @@ export default function HomePage() {
 
     stickySettingsRef.current = false
 
-    const projected = projectCellsIntoLayout(layoutModuleMemoryRef.current, nextLayoutKey)
+    const projected = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, nextLayoutKey)
     const nextCellsByLayout = {
       ...cellsByLayout,
       [nextLayoutKey]: projected,
@@ -872,14 +865,14 @@ export default function HomePage() {
   function chooseModule(module: ModuleKey) {
     if (pickerSlot == null) return
 
-    layoutModuleMemoryRef.current = replaceMemoryAtVisibleIndex(
+    layoutModuleMemoryRef.current = replaceMemoryAtSlotIndex(
       layoutModuleMemoryRef.current,
       layoutKey,
       pickerSlot,
       module
     )
 
-    const nextCellsForLayout = projectCellsIntoLayout(layoutModuleMemoryRef.current, layoutKey)
+    const nextCellsForLayout = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, layoutKey)
 
     const nextCellsByLayout = {
       ...cellsByLayout,
@@ -895,14 +888,14 @@ export default function HomePage() {
   function clearCell() {
     if (pickerSlot == null) return
 
-    layoutModuleMemoryRef.current = replaceMemoryAtVisibleIndex(
+    layoutModuleMemoryRef.current = replaceMemoryAtSlotIndex(
       layoutModuleMemoryRef.current,
       layoutKey,
       pickerSlot,
       null
     )
 
-    const nextCellsForLayout = projectCellsIntoLayout(layoutModuleMemoryRef.current, layoutKey)
+    const nextCellsForLayout = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, layoutKey)
 
     const nextCellsByLayout = {
       ...cellsByLayout,
@@ -948,7 +941,7 @@ export default function HomePage() {
         [layoutKey]: savedCellsForLayout,
       }
 
-      layoutModuleMemoryRef.current = extractModuleMemoryFromCells(savedCellsForLayout)
+      layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(savedCellsForLayout)
 
       setCellsByLayout(nextCellsByLayout)
       setModulesJson(modulesForSave)
