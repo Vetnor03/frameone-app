@@ -42,7 +42,7 @@ const UI = {
     update: 'UPDATE',
     loadingFrame: 'LOADING FRAME…',
 
-    selectWidget: 'SELECT WIDGET',
+    selectWidget: 'ADD TILE',
     clearCell: 'CLEAR CELL',
 
     themeTitle: 'THEME',
@@ -139,7 +139,7 @@ const UI = {
     update: 'OPPDATER',
     loadingFrame: 'LASTER FRAME…',
 
-    selectWidget: 'VELG WIDGET',
+    selectWidget: 'ADD TILE',
     clearCell: 'TØM FELT',
 
     themeTitle: 'TEMA',
@@ -546,7 +546,7 @@ export default function HomePage() {
   }, [dynamicTabs, language])
 
   const savedStateRef = useRef<string>('')
-  const layoutModuleMemoryRef = useRef<ModuleKey[]>([])
+  const layoutModuleMemoryRef = useRef<(ModuleKey | null)[]>([])
 
   function serializeComparableState(args: {
     theme: 'dark' | 'light'
@@ -608,11 +608,10 @@ export default function HomePage() {
       .map(Number)
       .sort((a, b) => a - b)
       .map((slot) => cells[slot])
-      .filter(Boolean) as ModuleKey[]
   }
 
   function projectCellsIntoLayout(
-    moduleMemory: ModuleKey[],
+    moduleMemory: (ModuleKey | null)[],
     targetLayout: LayoutKey
   ) {
     const target = emptyCellsFor(targetLayout)
@@ -626,7 +625,7 @@ export default function HomePage() {
   }
 
   function replaceMemoryAtVisibleIndex(
-    memory: ModuleKey[],
+    memory: (ModuleKey | null)[],
     visibleLayout: LayoutKey,
     visibleSlot: number,
     nextValue: ModuleKey | null
@@ -637,18 +636,15 @@ export default function HomePage() {
 
     const next = [...memory]
 
-    while (next.length < visibleIndex) next.push(null as any)
+    while (next.length <= visibleIndex) next.push(null)
 
     if (nextValue) {
       next[visibleIndex] = nextValue
-      return next.filter(Boolean) as ModuleKey[]
+      return next
     }
 
-    if (visibleIndex < next.length) {
-      next.splice(visibleIndex, 1)
-    }
-
-    return next.filter(Boolean) as ModuleKey[]
+    next[visibleIndex] = null
+    return next
   }
 
   function formatRelative(iso: string) {
