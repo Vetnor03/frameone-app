@@ -272,14 +272,21 @@ function baseModuleKeyFromStored(moduleStr: string): ModuleKey | null {
   return null
 }
 
-function cellsMapToArray(map: Record<number, ModuleKey | null>) {
+function cellsMapToArray(
+  map: Record<number, ModuleKey | null>,
+  options?: { includeEmptySlots?: boolean }
+) {
   let weatherCounter = 0
   let surfCounter = 0
   let soccerCounter = 0
 
   return Object.entries(map)
-    .filter(([, mod]) => !!mod)
+    .filter(([, mod]) => options?.includeEmptySlots || !!mod)
     .map(([slot, mod]) => {
+      if (!mod) {
+        return { slot: Number(slot), module: '' }
+      }
+
       const m = mod as ModuleKey
 
       if (m === 'weather') {
@@ -704,6 +711,10 @@ export default function HomePage() {
     if (error) return
 
     const json = (data?.settings_json || {}) as SettingsJson
+    const hasSavedSettings =
+      !!data?.settings_json &&
+      typeof data.settings_json === 'object' &&
+      Object.keys(data.settings_json as Record<string, unknown>).length > 0
     const nextTheme = (json.theme || 'dark') as 'dark' | 'light'
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
@@ -744,6 +755,22 @@ export default function HomePage() {
     await loadDeviceStatus(deviceId)
 
     if (!stickySettingsRef.current) setActiveTab('frame')
+
+    if (!hasSavedSettings) {
+      const initialSettingsJson: SettingsJson = {
+        theme: nextTheme,
+        language: nextLanguage,
+        fontSize: nextFontSize,
+        layout: 'default',
+        cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
+        modules: normalizedModules,
+      }
+
+      await supabase.rpc('upsert_device_settings', {
+        p_device_id: deviceId,
+        p_settings: initialSettingsJson,
+      })
+    }
 
     isLoadedRef.current = true
   }
