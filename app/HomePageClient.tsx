@@ -2360,7 +2360,18 @@ type ReminderUiItem = {
   time?: any
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
+  tag?: ReminderTag | null
 }
+
+type ReminderTag = 'work' | 'personal' | 'sports' | 'chores'
+type ReminderTagFilter = 'all' | 'none' | ReminderTag
+
+const REMINDER_TAG_OPTIONS: Array<{ key: ReminderTag; label: string; labelNo: string }> = [
+  { key: 'work', label: 'Work', labelNo: 'Jobb' },
+  { key: 'personal', label: 'Personal', labelNo: 'Personlig' },
+  { key: 'sports', label: 'Sports', labelNo: 'Sport' },
+  { key: 'chores', label: 'Chores', labelNo: 'Oppgaver' },
+]
 
 type ReminderCompletionItem = {
   reminderId: string
@@ -2406,6 +2417,72 @@ function isReminderRepeatKey(v: any): v is ReminderRepeatKey {
   )
 }
 
+function isReminderTag(v: any): v is ReminderTag {
+  return v === 'work' || v === 'personal' || v === 'sports' || v === 'chores'
+}
+
+function reminderTagLabel(language: AppLanguage, tag: ReminderTag) {
+  const found = REMINDER_TAG_OPTIONS.find((x) => x.key === tag)
+  if (!found) return tag
+  return language === 'no' ? found.labelNo : found.label
+}
+
+function reminderTagFilterLabel(language: AppLanguage, filter: ReminderTagFilter) {
+  if (filter === 'all') return language === 'no' ? 'Alle' : 'All'
+  if (filter === 'none') return language === 'no' ? 'Ingen tag' : 'No tag'
+  return reminderTagLabel(language, filter)
+}
+
+function ReminderTagIcon({
+  tag,
+  size = 10,
+  className = '',
+}: {
+  tag: ReminderTag | null | undefined
+  size?: number
+  className?: string
+}) {
+  if (!tag) return null
+
+  if (tag === 'work') {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" width={size} height={size} className={className} fill="none">
+        <rect x="4.5" y="7.5" width="15" height="11" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M9 7V6a3 3 0 0 1 6 0v1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  if (tag === 'personal') {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" width={size} height={size} className={className} fill="none">
+        <circle cx="12" cy="8.5" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M6.5 18.5a5.5 5.5 0 0 1 11 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  if (tag === 'sports') {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" width={size} height={size} className={className} fill="none">
+        <circle cx="12" cy="12" r="6.5" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M5.8 9.5h12.4M5.8 14.5h12.4M12 5.5c2 2 2 11 0 13M12 5.5c-2 2-2 11 0 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  if (tag === 'chores') {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" width={size} height={size} className={className} fill="none">
+        <rect x="6" y="4.5" width="12" height="15" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M9 9h6M9 12h6M9 15h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  return null
+}
+
 function normalizeReminderItems(raw: any): ReminderUiItem[] {
   const arr = Array.isArray(raw) ? raw : []
 
@@ -2425,6 +2502,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
         date,
         time,
         repeat,
+        tag: isReminderTag(x.tag) ? x.tag : null,
         customRepeatDays:
           Number.isFinite(customRepeatDaysRaw) && customRepeatDaysRaw > 0
             ? customRepeatDaysRaw
@@ -3445,6 +3523,7 @@ function RemindersModuleSettingsTab({
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
+  const [tagFilter, setTagFilter] = useState<ReminderTagFilter>('all')
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
@@ -3471,7 +3550,7 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
+        .select('id, title, due_date, due_time, repeat_type, custom_repeat_days, tag, is_done')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
@@ -3495,6 +3574,7 @@ const items: ReminderUiItem[] = (data || [])
       Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
         ? Number(row.custom_repeat_days)
         : null,
+    tag: isReminderTag(row.tag) ? row.tag : null,
   }))
   .filter((x) => x.title && x.date)
 
@@ -3597,22 +3677,30 @@ const items: ReminderUiItem[] = (data || [])
     return toLocalYmd(end)
   }, [viewYear, viewMonth, startWeekday])
 
-  const visibleOccurrences = useMemo(() => {
-    return expandReminderOccurrences(reminders, gridStartYmd, gridEndYmd, 180)
-  }, [reminders, gridStartYmd, gridEndYmd])
+  const filteredReminders = useMemo(() => {
+    if (tagFilter === 'all') return reminders
+    if (tagFilter === 'none') return reminders.filter((x) => !x.tag)
+    return reminders.filter((x) => x.tag === tagFilter)
+  }, [reminders, tagFilter])
 
-  const reminderDotsByDay = useMemo(() => {
-    const map: Record<string, number> = {}
+  const filteredVisibleOccurrences = useMemo(() => {
+    return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
+  }, [filteredReminders, gridStartYmd, gridEndYmd])
 
-    for (const item of visibleOccurrences) {
+  const reminderMarkersByDay = useMemo(() => {
+    const map: Record<string, Array<ReminderTag | 'dot'>> = {}
+
+    for (const item of filteredVisibleOccurrences) {
       const key = item.occurrenceDate
       if (!key) continue
       if (key < todayYmd) continue
-      map[key] = Math.min(3, (map[key] || 0) + 1)
+      const marker = isReminderTag(item.tag) ? item.tag : 'dot'
+      if (!map[key]) map[key] = []
+      if (map[key].length < 3) map[key].push(marker)
     }
 
     return map
-  }, [visibleOccurrences, todayYmd])
+  }, [filteredVisibleOccurrences, todayYmd])
 
   const calendarCells: Array<{
     ymd: string
@@ -3620,7 +3708,7 @@ const items: ReminderUiItem[] = (data || [])
     inMonth: boolean
     isToday: boolean
     isSelected: boolean
-    dotCount: number
+    markers: Array<ReminderTag | 'dot'>
   }> = []
 
   for (let i = 0; i < 42; i++) {
@@ -3660,7 +3748,7 @@ const items: ReminderUiItem[] = (data || [])
       inMonth,
       isToday: ymd === todayYmd,
       isSelected: selectedDayYmd === ymd,
-      dotCount: reminderDotsByDay[ymd] || 0,
+      markers: reminderMarkersByDay[ymd] || [],
     })
   }
 
@@ -3670,8 +3758,8 @@ const items: ReminderUiItem[] = (data || [])
   }, [])
 
   const allListOccurrences = useMemo(() => {
-    return expandReminderOccurrences(reminders, todayYmd, listRangeEnd, 160)
-  }, [reminders, todayYmd, listRangeEnd])
+    return expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
+  }, [filteredReminders, todayYmd, listRangeEnd])
 
   function getNextOccurrenceOnOrAfter(item: ReminderUiItem, fromYmd: string) {
     const occurrences = expandReminderOccurrences([item], fromYmd, listRangeEnd, 160)
@@ -3693,7 +3781,7 @@ const sortedReminders = useMemo(() => {
         .map((x) => x.sourceId)
     )
 
-    return reminders
+    return filteredReminders
       .filter((x) => matchingIds.has(x.id))
       .map((x) => ({
         ...x,
@@ -3712,7 +3800,7 @@ const sortedReminders = useMemo(() => {
       })
   }
 
-  return reminders
+  return filteredReminders
     .map((x) => {
       const displayDate = getNextOccurrenceOnOrAfter(x, todayYmd)
       if (!displayDate) return null
@@ -3734,7 +3822,7 @@ const sortedReminders = useMemo(() => {
 
       return a!.title.localeCompare(b!.title)
     }) as Array<ReminderUiItem & { displayDate: string }>
-}, [reminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
+}, [filteredReminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
 
   function toggleSelectedDay(ymd: string) {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
@@ -3865,16 +3953,25 @@ const sortedReminders = useMemo(() => {
                           {cell.day}
                         </span>
 
-                        {cell.dotCount > 0 && (
+                        {cell.markers.length > 0 && (
                           <div className="absolute bottom-[1px] left-1/2 -translate-x-1/2 flex items-center justify-center gap-[3px]">
-                            {Array.from({ length: Math.min(3, cell.dotCount) }).map((_, idx) => (
-                              <span
-                                key={idx}
-                                className={`block w-[4px] h-[4px] rounded-full ${
-                                  showFilledBlue ? 'bg-white/90' : 'bg-[#2aa3ff]'
-                                }`}
-                              />
-                            ))}
+                            {cell.markers.slice(0, 3).map((marker, idx) =>
+                              marker === 'dot' ? (
+                                <span
+                                  key={`dot-${idx}`}
+                                  className={`block w-[4px] h-[4px] rounded-full ${
+                                    showFilledBlue ? 'bg-white/90' : 'bg-[#2aa3ff]'
+                                  }`}
+                                />
+                              ) : (
+                                <ReminderTagIcon
+                                  key={`${marker}-${idx}`}
+                                  tag={marker}
+                                  size={8}
+                                  className={showFilledBlue ? 'text-white/90' : 'text-[#2aa3ff]'}
+                                />
+                              )
+                            )}
                           </div>
                         )}
                       </div>
@@ -3906,6 +4003,25 @@ const sortedReminders = useMemo(() => {
             )}
           </div>
 
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(['all', 'none', 'work', 'personal', 'sports', 'chores'] as ReminderTagFilter[]).map((option) => {
+              const active = tagFilter === option
+              return (
+                <button
+                  key={option}
+                  onClick={() => setTagFilter(option)}
+                  className={`h-7 px-2.5 rounded-xl border text-[10px] tracking-widest ${
+                    active
+                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                      : 'border-[color:var(--bd-15)] text-[color:var(--fg-65)]'
+                  }`}
+                >
+                  {reminderTagFilterLabel(language, option).toUpperCase()}
+                </button>
+              )
+            })}
+          </div>
+
           <div className="mt-3 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 flex-1 min-h-0">
             <div ref={listRef} className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
@@ -3927,8 +4043,8 @@ const sortedReminders = useMemo(() => {
                   {sortedReminders.map((item) => (
                     <div key={item.id} className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[color:var(--fg-95)] text-[15px] leading-tight font-medium">
-                        {formatReminderTitleWithTime(item)}
+                        <div className="text-[color:var(--fg-95)] text-[15px] leading-tight font-medium flex items-center gap-1.5">
+                        {formatReminderTitleWithTime(item)}{item.tag ? <ReminderTagIcon tag={item.tag} size={11} className="text-[color:var(--fg-55)]" /> : null}
                         </div>
 
                         <div className="mt-0.5 text-[12px] text-[color:var(--fg-55)]">
@@ -3966,6 +4082,7 @@ const sortedReminders = useMemo(() => {
                   time: null,
                   repeat: 'none',
                   customRepeatDays: null,
+                  tag: null,
                 } as any)
                 setSheetOpen(true)
               }}
@@ -4037,6 +4154,7 @@ const [title, setTitle] = useState(editingReminder?.title ?? '')
 const [date, setDate] = useState(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
 const [time, setTime] = useState<string>(normalizeReminderTime(editingReminder?.time) ?? '')
 const [repeat, setRepeat] = useState<ReminderRepeatKey>(editingReminder?.repeat ?? 'none')
+const [tag, setTag] = useState<ReminderTag | null>(editingReminder?.tag ?? null)
 const [customRepeatDays, setCustomRepeatDays] = useState<number | ''>(
   Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
     ? Number(editingReminder?.customRepeatDays)
@@ -4064,6 +4182,7 @@ const normalizedTime = normalizeReminderTime(time)
   setDate(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
   setTime(normalizeReminderTime(editingReminder?.time) ?? '')
   setRepeat(editingReminder?.repeat ?? 'none')
+  setTag(editingReminder?.tag ?? null)
   setCustomRepeatDays(
     Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
       ? Number(editingReminder?.customRepeatDays)
@@ -4121,6 +4240,7 @@ const normalizedTime = normalizeReminderTime(time)
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
     updated_by_user_id: userId,
     updated_at: new Date().toISOString(),
+    tag,
   })
   .eq('id', editingReminder.id)
   .eq('device_id', activeDeviceId)
@@ -4138,6 +4258,7 @@ const normalizedTime = normalizeReminderTime(time)
     due_time: normalizedTime,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
+    tag,
     is_done: false,
   })
         if (error) throw error
@@ -4263,6 +4384,48 @@ const normalizedTime = normalizeReminderTime(time)
     </button>
   </div>
 </div>
+
+          <div className="mt-4">
+            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'TAG (VALGFRI)' : 'TAG (OPTIONAL)'}</div>
+
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setTag(null)
+                  setStatus(null)
+                }}
+                className={`h-11 rounded-2xl border text-sm transition ${
+                  !tag
+                    ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                    : 'border-[color:var(--bd-10)] text-[color:var(--fg-80)]'
+                }`}
+              >
+                {language === 'no' ? 'Ingen tag' : 'No tag'}
+              </button>
+
+              {REMINDER_TAG_OPTIONS.map((opt) => {
+                const active = tag === opt.key
+
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => {
+                      setTag(opt.key)
+                      setStatus(null)
+                    }}
+                    className={`h-11 rounded-2xl border text-sm transition flex items-center justify-center gap-1.5 ${
+                      active
+                        ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                        : 'border-[color:var(--bd-10)] text-[color:var(--fg-80)]'
+                    }`}
+                  >
+                    <ReminderTagIcon tag={opt.key} size={12} />
+                    {language === 'no' ? opt.labelNo : opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           <div className="mt-4">
             <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'GJENTAS' : 'REPEATS'}</div>
