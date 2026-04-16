@@ -247,6 +247,14 @@ type MemberRow = {
   battery_voltage?: number | null
 }
 
+function normalizeBatteryPercent(value: number | null | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  const rounded = Math.round(value)
+  if (rounded < 0) return 0
+  if (rounded > 100) return 100
+  return rounded
+}
+
 function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
   if (layout === 'default') return { 0: null, 1: null, 2: null }
   if (layout === 'pyramid') return { 0: null, 1: null, 2: null, 3: null }
@@ -812,7 +820,45 @@ export default function HomePage() {
         return
       }
 
-      const list = (members || []) as MemberRow[]
+      const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+      const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+      let statusMap = new Map<
+        string,
+        { current_version: string | null; battery_percent: number | null; battery_voltage: number | null }
+      >()
+
+      if (deviceIds.length > 0) {
+        const { data: statuses } = await supabase
+          .from('device_status')
+          .select('device_id, current_version, battery_percent, battery_voltage')
+          .in('device_id', deviceIds)
+
+        statusMap = new Map(
+          (
+            (statuses || []) as Array<{
+              device_id: string
+              current_version: string | null
+              battery_percent: number | null
+              battery_voltage: number | null
+            }>
+          ).map((s) => [
+            s.device_id,
+            {
+              current_version: s.current_version ?? null,
+              battery_percent: normalizeBatteryPercent(s.battery_percent),
+              battery_voltage: s.battery_voltage ?? null,
+            },
+          ])
+        )
+      }
+
+      const list: MemberRow[] = memberRows.map((m) => ({
+        device_id: m.device_id,
+        role: m.role,
+        current_version: statusMap.get(m.device_id)?.current_version ?? null,
+        battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+        battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+      }))
       setFrames(list)
 
       const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
@@ -1833,14 +1879,6 @@ function MyFramesSection({
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
 
-  function toBatteryPercent(value: number | null | undefined): number | null {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return null
-    const rounded = Math.round(value)
-    if (rounded < 0) return 0
-    if (rounded > 100) return 100
-    return rounded
-  }
-
   function BatteryIcon({ percent }: { percent: number }) {
     const p = Math.max(0, Math.min(100, percent))
     const bars = p >= 75 ? 3 : p >= 35 ? 2 : p >= 10 ? 1 : 0
@@ -1910,7 +1948,7 @@ function MyFramesSection({
             s.device_id,
             {
               current_version: s.current_version ?? null,
-              battery_percent: toBatteryPercent(s.battery_percent),
+              battery_percent: normalizeBatteryPercent(s.battery_percent),
               battery_voltage: s.battery_voltage ?? null,
             },
           ])
@@ -1988,7 +2026,7 @@ async function addFrame() {
         s.device_id,
         {
           current_version: s.current_version ?? null,
-          battery_percent: toBatteryPercent(s.battery_percent),
+          battery_percent: normalizeBatteryPercent(s.battery_percent),
           battery_voltage: s.battery_voltage ?? null,
         },
       ])
@@ -2123,7 +2161,8 @@ async function addFrame() {
 
           {frames.map((f) => {
             const selected = f.device_id === activeDeviceId
-            const batteryPercent = toBatteryPercent(f.battery_percent)
+            const batteryPercent = normalizeBatteryPercent(f.battery_percent)
+            const hasBattery = batteryPercent !== null
             return (
               <button
                 key={f.device_id}
@@ -2143,12 +2182,13 @@ async function addFrame() {
 
                 <div className="flex items-center gap-3 text-xs opacity-70">
                   <div>{(f.role || 'member').toUpperCase()}</div>
-                  {batteryPercent !== null && (
-                    <div className="inline-flex items-center gap-1.5 normal-case tracking-normal" aria-label={`${batteryLabel} ${batteryPercent}%`}>
-                      <BatteryIcon percent={batteryPercent} />
-                      <span>{batteryPercent}%</span>
-                    </div>
-                  )}
+                  <div
+                    className="inline-flex items-center gap-1.5 normal-case tracking-normal"
+                    aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%` : `${batteryLabel} unavailable`}
+                  >
+                    <BatteryIcon percent={batteryPercent ?? 0} />
+                    <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
+                  </div>
                 </div>
               </button>
             )
