@@ -6,6 +6,27 @@ export const runtime = 'nodejs'
 type StatusPostBody = {
   device_id?: string
   current_version?: string | null
+  battery_percent?: number | string | null
+  battery_voltage?: number | string | null
+}
+
+function parseBatteryPercent(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+
+  const rounded = Math.round(n)
+  if (rounded < 0) return 0
+  if (rounded > 100) return 100
+  return rounded
+}
+
+function parseBatteryVoltage(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  if (n < 0) return null
+  return Number(n.toFixed(3))
 }
 
 export async function GET(req: Request) {
@@ -24,7 +45,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from('device_status')
-      .select('last_refresh_at, current_version')
+      .select('last_refresh_at, current_version, battery_percent, battery_voltage')
       .eq('device_id', device_id)
       .maybeSingle()
 
@@ -36,6 +57,8 @@ export async function GET(req: Request) {
       device_id,
       last_refresh_at: data?.last_refresh_at ?? null,
       current_version: data?.current_version ?? null,
+      battery_percent: data?.battery_percent ?? null,
+      battery_voltage: data?.battery_voltage ?? null,
     })
   } catch (e: any) {
     return NextResponse.json(
@@ -52,6 +75,8 @@ export async function POST(req: Request) {
     const device_id = String(body?.device_id ?? '').trim()
     const current_versionRaw = String(body?.current_version ?? '').trim()
     const current_version = current_versionRaw || null
+    const battery_percent = parseBatteryPercent(body?.battery_percent)
+    const battery_voltage = parseBatteryVoltage(body?.battery_voltage)
 
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
@@ -66,6 +91,8 @@ export async function POST(req: Request) {
       device_id,
       last_refresh_at: new Date().toISOString(),
       current_version,
+      battery_percent,
+      battery_voltage,
     }
 
     const { error } = await supabase
@@ -80,6 +107,8 @@ export async function POST(req: Request) {
       ok: true,
       device_id,
       current_version,
+      battery_percent,
+      battery_voltage,
     })
   } catch (e: any) {
     return NextResponse.json(
