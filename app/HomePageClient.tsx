@@ -243,6 +243,8 @@ type MemberRow = {
   device_id: string
   role: string | null
   current_version?: string | null
+  battery_percent?: number | null
+  battery_voltage?: number | null
 }
 
 function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
@@ -1829,6 +1831,36 @@ function MyFramesSection({
   const [copyDone, setCopyDone] = useState(false)
 
   const t = tx(language)
+  const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
+
+  function toBatteryPercent(value: number | null | undefined): number | null {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null
+    const rounded = Math.round(value)
+    if (rounded < 0) return 0
+    if (rounded > 100) return 100
+    return rounded
+  }
+
+  function BatteryIcon({ percent }: { percent: number }) {
+    const p = Math.max(0, Math.min(100, percent))
+    const bars = p >= 75 ? 3 : p >= 35 ? 2 : p >= 10 ? 1 : 0
+
+    return (
+      <svg
+        aria-hidden
+        viewBox="0 0 20 12"
+        className="h-3.5 w-[18px] opacity-80"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect x="1" y="1" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
+        <rect x="17.4" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" />
+        {bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+        {bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+        {bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+      </svg>
+    )
+  }
 
   async function reload() {
     setLoading(true)
@@ -1855,18 +1887,32 @@ function MyFramesSection({
       const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
       const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
 
-      let statusMap = new Map<string, string | null>()
+      let statusMap = new Map<
+        string,
+        { current_version: string | null; battery_percent: number | null; battery_voltage: number | null }
+      >()
 
       if (deviceIds.length > 0) {
         const { data: statuses } = await supabase
           .from('device_status')
-          .select('device_id, current_version')
+          .select('device_id, current_version, battery_percent, battery_voltage')
           .in('device_id', deviceIds)
 
         statusMap = new Map(
-          ((statuses || []) as Array<{ device_id: string; current_version: string | null }>).map((s) => [
+          (
+            (statuses || []) as Array<{
+              device_id: string
+              current_version: string | null
+              battery_percent: number | null
+              battery_voltage: number | null
+            }>
+          ).map((s) => [
             s.device_id,
-            s.current_version ?? null,
+            {
+              current_version: s.current_version ?? null,
+              battery_percent: toBatteryPercent(s.battery_percent),
+              battery_voltage: s.battery_voltage ?? null,
+            },
           ])
         )
       }
@@ -1874,7 +1920,9 @@ function MyFramesSection({
       const merged: MemberRow[] = memberRows.map((m) => ({
         device_id: m.device_id,
         role: m.role,
-        current_version: statusMap.get(m.device_id) ?? null,
+        current_version: statusMap.get(m.device_id)?.current_version ?? null,
+        battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+        battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
       }))
 
       onFramesChanged(merged)
@@ -1917,18 +1965,32 @@ async function addFrame() {
   const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
   const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
 
-  let statusMap = new Map<string, string | null>()
+  let statusMap = new Map<
+    string,
+    { current_version: string | null; battery_percent: number | null; battery_voltage: number | null }
+  >()
 
   if (deviceIds.length > 0) {
     const { data: statuses } = await supabase
       .from('device_status')
-      .select('device_id, current_version')
+      .select('device_id, current_version, battery_percent, battery_voltage')
       .in('device_id', deviceIds)
 
     statusMap = new Map(
-      ((statuses || []) as Array<{ device_id: string; current_version: string | null }>).map((s) => [
+      (
+        (statuses || []) as Array<{
+          device_id: string
+          current_version: string | null
+          battery_percent: number | null
+          battery_voltage: number | null
+        }>
+      ).map((s) => [
         s.device_id,
-        s.current_version ?? null,
+        {
+          current_version: s.current_version ?? null,
+          battery_percent: toBatteryPercent(s.battery_percent),
+          battery_voltage: s.battery_voltage ?? null,
+        },
       ])
     )
   }
@@ -1936,7 +1998,9 @@ async function addFrame() {
   const merged: MemberRow[] = memberRows.map((m) => ({
     device_id: m.device_id,
     role: m.role,
-    current_version: statusMap.get(m.device_id) ?? null,
+    current_version: statusMap.get(m.device_id)?.current_version ?? null,
+    battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+    battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
   }))
 
   onFramesChanged(merged)
@@ -2059,6 +2123,7 @@ async function addFrame() {
 
           {frames.map((f) => {
             const selected = f.device_id === activeDeviceId
+            const batteryPercent = toBatteryPercent(f.battery_percent)
             return (
               <button
                 key={f.device_id}
@@ -2076,7 +2141,15 @@ async function addFrame() {
                   )}
                 </div>
 
-                <div className="text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>
+                <div className="flex items-center gap-3 text-xs opacity-70">
+                  <div>{(f.role || 'member').toUpperCase()}</div>
+                  {batteryPercent !== null && (
+                    <div className="inline-flex items-center gap-1.5 normal-case tracking-normal" aria-label={`${batteryLabel} ${batteryPercent}%`}>
+                      <BatteryIcon percent={batteryPercent} />
+                      <span>{batteryPercent}%</span>
+                    </div>
+                  )}
+                </div>
               </button>
             )
           })}
