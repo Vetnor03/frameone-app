@@ -2353,11 +2353,15 @@ type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
+type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
+type ReminderTagFilter = 'all' | ReminderTag
+
 type ReminderUiItem = {
   id: string
   title: string
   date: string
   time?: any
+  tag: ReminderTag | null
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
 }
@@ -2385,10 +2389,30 @@ const REMINDER_REPEAT_OPTIONS: Array<{ key: ReminderRepeatKey; label: string; la
   { key: 'custom', label: 'Custom days', labelNo: 'Egendefinerte dager' },
 ]
 
+const REMINDER_TAG_OPTIONS: Array<{ key: ReminderTag | null; label: string; labelNo: string }> = [
+  { key: null, label: 'No tag', labelNo: 'Ingen tag' },
+  { key: 'work', label: 'Work', labelNo: 'Jobb' },
+  { key: 'personal', label: 'Personal', labelNo: 'Personlig' },
+  { key: 'sports', label: 'Sports', labelNo: 'Sport' },
+  { key: 'chores', label: 'Chores', labelNo: 'Gjøremål' },
+  { key: 'event', label: 'Event', labelNo: 'Hendelse' },
+]
+
 function reminderRepeatOptionLabel(language: AppLanguage, key: ReminderRepeatKey) {
   const found = REMINDER_REPEAT_OPTIONS.find((x) => x.key === key)
   if (!found) return language === 'no' ? 'Ingen' : 'None'
   return language === 'no' ? found.labelNo : found.label
+}
+
+function reminderTagOptionLabel(language: AppLanguage, key: ReminderTag | null) {
+  const found = REMINDER_TAG_OPTIONS.find((x) => x.key === key)
+  if (!found) return language === 'no' ? 'Ingen tag' : 'No tag'
+  return language === 'no' ? found.labelNo : found.label
+}
+
+function reminderTagFilterLabel(language: AppLanguage, key: ReminderTagFilter) {
+  if (key === 'all') return language === 'no' ? 'Alle' : 'All'
+  return reminderTagOptionLabel(language, key)
 }
 
 function isReminderRepeatKey(v: any): v is ReminderRepeatKey {
@@ -2406,6 +2430,10 @@ function isReminderRepeatKey(v: any): v is ReminderRepeatKey {
   )
 }
 
+function isReminderTag(v: any): v is ReminderTag {
+  return v === 'work' || v === 'personal' || v === 'sports' || v === 'chores' || v === 'event'
+}
+
 function normalizeReminderItems(raw: any): ReminderUiItem[] {
   const arr = Array.isArray(raw) ? raw : []
 
@@ -2416,6 +2444,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
       const title = String(x.title ?? '').trim().slice(0, 120)
       const date = String(x.date ?? '').trim()
       const time = normalizeReminderTime(x.time)
+      const tag = isReminderTag(x.tag) ? x.tag : null
       const repeat = isReminderRepeatKey(x.repeat) ? x.repeat : 'none'
       const customRepeatDaysRaw = Number(x.customRepeatDays)
 
@@ -2424,6 +2453,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
         title,
         date,
         time,
+        tag,
         repeat,
         customRepeatDays:
           Number.isFinite(customRepeatDaysRaw) && customRepeatDaysRaw > 0
@@ -3443,6 +3473,7 @@ function RemindersModuleSettingsTab({
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
+  const [tagFilter, setTagFilter] = useState<ReminderTagFilter>('all')
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
@@ -3471,7 +3502,7 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
+        .select('id, title, due_date, due_time, tag, repeat_type, custom_repeat_days, is_done')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
@@ -3490,6 +3521,7 @@ const items: ReminderUiItem[] = (data || [])
     title: String(row.title ?? '').trim(),
     date: String(row.due_date ?? '').trim(),
     time: row.due_time ?? null,
+    tag: isReminderTag(row.tag) ? row.tag : null,
     repeat: isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none',
     customRepeatDays:
       Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
@@ -3597,9 +3629,14 @@ const items: ReminderUiItem[] = (data || [])
     return toLocalYmd(end)
   }, [viewYear, viewMonth, startWeekday])
 
+  const filteredReminders = useMemo(() => {
+    if (tagFilter === 'all') return reminders
+    return reminders.filter((x) => x.tag === tagFilter)
+  }, [reminders, tagFilter])
+
   const visibleOccurrences = useMemo(() => {
-    return expandReminderOccurrences(reminders, gridStartYmd, gridEndYmd, 180)
-  }, [reminders, gridStartYmd, gridEndYmd])
+    return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
+  }, [filteredReminders, gridStartYmd, gridEndYmd])
 
   const reminderDotsByDay = useMemo(() => {
     const map: Record<string, number> = {}
@@ -3670,8 +3707,8 @@ const items: ReminderUiItem[] = (data || [])
   }, [])
 
   const allListOccurrences = useMemo(() => {
-    return expandReminderOccurrences(reminders, todayYmd, listRangeEnd, 160)
-  }, [reminders, todayYmd, listRangeEnd])
+    return expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
+  }, [filteredReminders, todayYmd, listRangeEnd])
 
   function getNextOccurrenceOnOrAfter(item: ReminderUiItem, fromYmd: string) {
     const occurrences = expandReminderOccurrences([item], fromYmd, listRangeEnd, 160)
@@ -3693,7 +3730,7 @@ const sortedReminders = useMemo(() => {
         .map((x) => x.sourceId)
     )
 
-    return reminders
+    return filteredReminders
       .filter((x) => matchingIds.has(x.id))
       .map((x) => ({
         ...x,
@@ -3712,7 +3749,7 @@ const sortedReminders = useMemo(() => {
       })
   }
 
-  return reminders
+  return filteredReminders
     .map((x) => {
       const displayDate = getNextOccurrenceOnOrAfter(x, todayYmd)
       if (!displayDate) return null
@@ -3734,7 +3771,7 @@ const sortedReminders = useMemo(() => {
 
       return a!.title.localeCompare(b!.title)
     }) as Array<ReminderUiItem & { displayDate: string }>
-}, [reminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
+}, [filteredReminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
 
   function toggleSelectedDay(ymd: string) {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
@@ -3906,6 +3943,25 @@ const sortedReminders = useMemo(() => {
             )}
           </div>
 
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
+              const active = tagFilter === opt
+              return (
+                <button
+                  key={opt}
+                  onClick={() => setTagFilter(opt)}
+                  className={`h-9 rounded-xl border text-xs tracking-widest transition ${
+                    active
+                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                      : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
+                  }`}
+                >
+                  {reminderTagFilterLabel(language, opt)}
+                </button>
+              )
+            })}
+          </div>
+
           <div className="mt-3 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 flex-1 min-h-0">
             <div ref={listRef} className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
@@ -3964,6 +4020,7 @@ const sortedReminders = useMemo(() => {
                   title: '',
                   date: addDate,
                   time: null,
+                  tag: null,
                   repeat: 'none',
                   customRepeatDays: null,
                 } as any)
@@ -4036,6 +4093,7 @@ function ReminderDraftSheet({
 const [title, setTitle] = useState(editingReminder?.title ?? '')
 const [date, setDate] = useState(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
 const [time, setTime] = useState<string>(normalizeReminderTime(editingReminder?.time) ?? '')
+const [tag, setTag] = useState<ReminderTag | null>(isReminderTag(editingReminder?.tag) ? editingReminder?.tag : null)
 const [repeat, setRepeat] = useState<ReminderRepeatKey>(editingReminder?.repeat ?? 'none')
 const [customRepeatDays, setCustomRepeatDays] = useState<number | ''>(
   Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
@@ -4050,6 +4108,7 @@ const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
 
 const [datePickerOpen, setDatePickerOpen] = useState(false)
 const [timePickerOpen, setTimePickerOpen] = useState(false)
+const [tagPickerOpen, setTagPickerOpen] = useState(false)
 const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
 const normalizedCustomRepeatDays =
@@ -4063,6 +4122,7 @@ const normalizedTime = normalizeReminderTime(time)
   setTitle(editingReminder?.title ?? '')
   setDate(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
   setTime(normalizeReminderTime(editingReminder?.time) ?? '')
+  setTag(isReminderTag(editingReminder?.tag) ? editingReminder?.tag : null)
   setRepeat(editingReminder?.repeat ?? 'none')
   setCustomRepeatDays(
     Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
@@ -4117,6 +4177,7 @@ const normalizedTime = normalizeReminderTime(time)
     title: cleanTitle,
     due_date: cleanDate,
     due_time: normalizedTime,
+    tag,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
     updated_by_user_id: userId,
@@ -4136,6 +4197,7 @@ const normalizedTime = normalizeReminderTime(time)
     title: cleanTitle,
     due_date: cleanDate,
     due_time: normalizedTime,
+    tag,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
     is_done: false,
@@ -4263,6 +4325,17 @@ const normalizedTime = normalizeReminderTime(time)
     </button>
   </div>
 </div>
+
+          <div className="mt-4">
+            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">TAG</div>
+            <button
+              type="button"
+              onClick={() => setTagPickerOpen(true)}
+              className="mt-2 flex w-full h-12 items-center rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]"
+            >
+              {reminderTagOptionLabel(language, tag)}
+            </button>
+          </div>
 
           <div className="mt-4">
             <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'GJENTAS' : 'REPEATS'}</div>
@@ -4403,6 +4476,19 @@ const normalizedTime = normalizeReminderTime(time)
   />
 )}
 
+      {tagPickerOpen && (
+        <ReminderTagPickerSheet
+          language={language}
+          current={tag}
+          onClose={() => setTagPickerOpen(false)}
+          onPick={(next) => {
+            setTag(next)
+            setStatus(null)
+            setTagPickerOpen(false)
+          }}
+        />
+      )}
+
       {confirmDeleteOpen && (
         <DeleteReminderSheet
           language={language}
@@ -4460,6 +4546,49 @@ function DeleteReminderSheet({
           >
             {language === 'no' ? 'AVBRYT' : 'CANCEL'}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReminderTagPickerSheet({
+  language,
+  current,
+  onClose,
+  onPick,
+}: {
+  language: AppLanguage
+  current: ReminderTag | null
+  onClose: () => void
+  onPick: (tag: ReminderTag | null) => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">TAG</div>
+          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {REMINDER_TAG_OPTIONS.map((opt) => {
+            const active = current === opt.key
+
+            return (
+              <button
+                key={opt.key ?? 'none'}
+                onClick={() => onPick(opt.key)}
+                className={`h-12 rounded-2xl border tracking-widest ${
+                  active ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
+                }`}
+              >
+                {language === 'no' ? opt.labelNo : opt.label}
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>
