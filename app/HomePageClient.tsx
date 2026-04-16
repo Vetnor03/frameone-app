@@ -4012,7 +4012,7 @@ const sortedReminders = useMemo(() => {
             </div>
           </div>
 
-          <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
+          <div className="py-5 flex flex-col items-center relative z-20">
             <button
               onClick={() => {
                 setEditingReminder({
@@ -4036,13 +4036,6 @@ const sortedReminders = useMemo(() => {
             >
               {language === 'no' ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}
             </button>
-
-            <div
-              className="mt-6 h-[16px] text-xs tracking-widest opacity-0 pointer-events-none select-none"
-              aria-hidden="true"
-            >
-              Updated just now
-            </div>
           </div>
         </div>
       </div>
