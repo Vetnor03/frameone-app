@@ -1814,7 +1814,7 @@ function SettingsTab({
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
-  const [showBottomFade, setShowBottomFade] = useState(false)
+  const [, setShowBottomFade] = useState(false)
 
   function updateFadeState() {
     const el = scrollRef.current
@@ -4927,10 +4927,6 @@ function SurfModuleSettingsTab({
       <div className="relative mt-5 flex-1 min-h-0">
         {surfView === 'main' && showTopFade && (
           <div className="pointer-events-none absolute top-0 left-0 right-0 z-10 h-6 bg-gradient-to-b from-[color:var(--app-bg)] to-transparent" />
-        )}
-
-        {surfView === 'main' && showBottomFade && (
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-12 bg-gradient-to-t from-[color:var(--app-bg)] to-transparent" />
         )}
 
         <div
