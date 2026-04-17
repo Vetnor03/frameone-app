@@ -5341,6 +5341,7 @@ function SurfExperienceCard({
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
   const [latestOpen, setLatestOpen] = useState(false)
+  const latestListRef = useRef<HTMLDivElement | null>(null)
 
   async function loadRecent() {
     try {
@@ -5358,7 +5359,6 @@ function SurfExperienceCard({
         .select('id, spot_id, spot, logged_at, rating_1_6, wave_height_m, wave_period_s, wave_dir_from_deg, wind_speed_ms, wind_dir_from_deg')
         .eq('user_id', userId)
         .order('logged_at', { ascending: false })
-        .limit(4)
 
       if (error) {
         setItems([])
@@ -5374,6 +5374,11 @@ function SurfExperienceCard({
   useEffect(() => {
     loadRecent()
   }, [refreshKey])
+
+  useEffect(() => {
+    if (!latestOpen) return
+    if (latestListRef.current) latestListRef.current.scrollTop = 0
+  }, [latestOpen])
 
   return (
     <>
@@ -5404,7 +5409,7 @@ function SurfExperienceCard({
             className="w-full flex items-center justify-between rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
           >
             <div className="text-left">
-              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SISTE 4' : 'LATEST 4'}</div>
+              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SISTE' : 'LATEST'}</div>
               <div className="mt-1 text-xs text-[color:var(--fg-40)]">
                 {latestOpen
                   ? language === 'no'
@@ -5426,7 +5431,7 @@ function SurfExperienceCard({
           </button>
 
           {latestOpen && (
-            <div className="mt-3 space-y-2">
+            <div ref={latestListRef} className="mt-3 space-y-2 max-h-72 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
               {loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
