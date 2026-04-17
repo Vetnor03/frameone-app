@@ -247,12 +247,54 @@ type MemberRow = {
   battery_voltage?: number | null
 }
 
-function normalizeBatteryPercent(value: number | null | undefined): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null
-  const rounded = Math.round(value)
+type DeviceStatusMeta = {
+  current_version: string | null
+  battery_percent: number | null
+  battery_voltage: number | null
+  last_refresh_at: string | null
+}
+
+type DeviceStatusRow = {
+  device_id: string
+  current_version: string | null
+  battery_percent: number | string | null
+  battery_voltage: number | string | null
+  last_refresh_at: string | null
+}
+
+function normalizeBatteryPercent(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const rounded = Math.round(n)
   if (rounded < 0) return 0
   if (rounded > 100) return 100
   return rounded
+}
+
+function normalizeBatteryVoltage(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return null
+  return Number(n.toFixed(3))
+}
+
+function buildLatestStatusMap(rows: DeviceStatusRow[]): Map<string, DeviceStatusMeta> {
+  const map = new Map<string, DeviceStatusMeta>()
+
+  for (const row of rows) {
+    if (!row?.device_id) continue
+    if (map.has(row.device_id)) continue
+
+    map.set(row.device_id, {
+      current_version: row.current_version ?? null,
+      battery_percent: normalizeBatteryPercent(row.battery_percent),
+      battery_voltage: normalizeBatteryVoltage(row.battery_voltage),
+      last_refresh_at: row.last_refresh_at ?? null,
+    })
+  }
+
+  return map
 }
 
 function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
@@ -830,26 +872,11 @@ export default function HomePage() {
       if (deviceIds.length > 0) {
         const { data: statuses } = await supabase
           .from('device_status')
-          .select('device_id, current_version, battery_percent, battery_voltage')
+          .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
           .in('device_id', deviceIds)
+          .order('last_refresh_at', { ascending: false, nullsFirst: false })
 
-        statusMap = new Map(
-          (
-            (statuses || []) as Array<{
-              device_id: string
-              current_version: string | null
-              battery_percent: number | null
-              battery_voltage: number | null
-            }>
-          ).map((s) => [
-            s.device_id,
-            {
-              current_version: s.current_version ?? null,
-              battery_percent: normalizeBatteryPercent(s.battery_percent),
-              battery_voltage: s.battery_voltage ?? null,
-            },
-          ])
-        )
+        statusMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
       }
 
       const list: MemberRow[] = memberRows.map((m) => ({
@@ -1925,34 +1952,16 @@ function MyFramesSection({
       const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
       const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
 
-      let statusMap = new Map<
-        string,
-        { current_version: string | null; battery_percent: number | null; battery_voltage: number | null }
-      >()
+      let statusMap = new Map<string, DeviceStatusMeta>()
 
       if (deviceIds.length > 0) {
         const { data: statuses } = await supabase
           .from('device_status')
-          .select('device_id, current_version, battery_percent, battery_voltage')
+          .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
           .in('device_id', deviceIds)
+          .order('last_refresh_at', { ascending: false, nullsFirst: false })
 
-        statusMap = new Map(
-          (
-            (statuses || []) as Array<{
-              device_id: string
-              current_version: string | null
-              battery_percent: number | null
-              battery_voltage: number | null
-            }>
-          ).map((s) => [
-            s.device_id,
-            {
-              current_version: s.current_version ?? null,
-              battery_percent: normalizeBatteryPercent(s.battery_percent),
-              battery_voltage: s.battery_voltage ?? null,
-            },
-          ])
-        )
+        statusMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
       }
 
       const merged: MemberRow[] = memberRows.map((m) => ({
@@ -2003,34 +2012,16 @@ async function addFrame() {
   const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
   const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
 
-  let statusMap = new Map<
-    string,
-    { current_version: string | null; battery_percent: number | null; battery_voltage: number | null }
-  >()
+  let statusMap = new Map<string, DeviceStatusMeta>()
 
   if (deviceIds.length > 0) {
     const { data: statuses } = await supabase
       .from('device_status')
-      .select('device_id, current_version, battery_percent, battery_voltage')
+      .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
       .in('device_id', deviceIds)
+      .order('last_refresh_at', { ascending: false, nullsFirst: false })
 
-    statusMap = new Map(
-      (
-        (statuses || []) as Array<{
-          device_id: string
-          current_version: string | null
-          battery_percent: number | null
-          battery_voltage: number | null
-        }>
-      ).map((s) => [
-        s.device_id,
-        {
-          current_version: s.current_version ?? null,
-          battery_percent: normalizeBatteryPercent(s.battery_percent),
-          battery_voltage: s.battery_voltage ?? null,
-        },
-      ])
-    )
+    statusMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
   }
 
   const merged: MemberRow[] = memberRows.map((m) => ({
@@ -2181,7 +2172,6 @@ async function addFrame() {
                 </div>
 
                 <div className="flex items-center gap-3 text-xs opacity-70">
-                  <div>{(f.role || 'member').toUpperCase()}</div>
                   <div
                     className="inline-flex items-center gap-1.5 normal-case tracking-normal"
                     aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%` : `${batteryLabel} unavailable`}
@@ -2189,6 +2179,7 @@ async function addFrame() {
                     <BatteryIcon percent={batteryPercent ?? 0} />
                     <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
                   </div>
+                  <div>{(f.role || 'member').toUpperCase()}</div>
                 </div>
               </button>
             )
