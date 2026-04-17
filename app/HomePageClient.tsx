@@ -4973,9 +4973,6 @@ function SurfModuleSettingsTab({
                     if (scrollRef.current) scrollRef.current.scrollTop = 0
                   })
                 }}
-                onDeleted={() => {
-                  setExperienceListVersion((v) => v + 1)
-                }}
                 onExpandedLatest={() => {
                   window.setTimeout(() => {
                     scrollToBottomSmooth()
@@ -5323,20 +5320,16 @@ function SurfExperienceCard({
   refreshKey,
   onOpenLog,
   onEditExperience,
-  onDeleted,
   onExpandedLatest,
 }: {
   language: AppLanguage
   refreshKey: number
   onOpenLog: () => void
   onEditExperience: (experienceId: string) => void
-  onDeleted: () => void
   onExpandedLatest: () => void
 }) {
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [latestOpen, setLatestOpen] = useState(false)
 
   async function loadRecent() {
@@ -5371,24 +5364,6 @@ function SurfExperienceCard({
   useEffect(() => {
     loadRecent()
   }, [refreshKey])
-
-  async function deleteExperience(id: string) {
-    try {
-      setDeletingId(id)
-
-      const { error } = await supabase.from('user_surf_experiences').delete().eq('id', id)
-      if (error) {
-        alert(error.message)
-        return
-      }
-
-      setItems((prev) => prev.filter((x) => x.id !== id))
-      onDeleted()
-    } finally {
-      setDeletingId(null)
-      setConfirmDeleteId(null)
-    }
-  }
 
   return (
     <>
@@ -5456,24 +5431,12 @@ function SurfExperienceCard({
                         <div className="mt-1 text-sm text-[color:var(--fg-70)]">{formatFeelingFromRating(language, item.rating_1_6)}</div>
                       </div>
 
-                      <div className="flex flex-col gap-2 shrink-0">
+                      <div className="shrink-0 self-center">
                         <button
                           onClick={() => onEditExperience(item.id)}
                           className="h-9 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
                         >
                           {language === 'no' ? 'REDIGER' : 'EDIT'}
-                        </button>
-
-                        <button
-                          onClick={() => setConfirmDeleteId(item.id)}
-                          disabled={deletingId === item.id}
-                          className={`h-9 px-3 rounded-xl border tracking-widest text-xs ${
-                            deletingId === item.id
-                              ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
-                              : 'border-[color:var(--danger-bd)] text-[color:var(--danger)]'
-                          }`}
-                        >
-                          {deletingId === item.id ? '…' : language === 'no' ? 'SLETT' : 'DELETE'}
                         </button>
                       </div>
                     </div>
@@ -5484,15 +5447,6 @@ function SurfExperienceCard({
           )}
         </div>
       </div>
-
-      {confirmDeleteId && (
-        <DeleteExperienceSheet
-          language={language}
-          deleting={deletingId === confirmDeleteId}
-          onCancel={() => setConfirmDeleteId(null)}
-          onConfirm={() => deleteExperience(confirmDeleteId)}
-        />
-      )}
     </>
   )
 }
@@ -5532,6 +5486,8 @@ function SurfExperienceEditor({
   })
 
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
@@ -5685,6 +5641,26 @@ function SurfExperienceEditor({
     }
   }
 
+  async function deleteExperienceFromEditor() {
+    if (!experienceId) return
+
+    try {
+      setDeleting(true)
+      setStatus(null)
+
+      const { error } = await supabase.from('user_surf_experiences').delete().eq('id', experienceId)
+      if (error) throw error
+
+      onDeleted()
+    } catch (e: any) {
+      setStatusKind('error')
+      setStatus(String(e?.message || e))
+    } finally {
+      setDeleting(false)
+      setConfirmDeleteOpen(false)
+    }
+  }
+
   function feelingButtonClass(optKey: FeelingChoice, active: boolean) {
     if (!active) {
       return 'border-[color:var(--bd-10)] text-[color:var(--fg-80)]'
@@ -5780,11 +5756,25 @@ function SurfExperienceEditor({
 
               <button
                 onClick={onCancel}
-                disabled={saving}
+                disabled={saving || deleting}
                 className="w-full h-12 rounded-2xl border border-[color:var(--bd-10)] text-[color:var(--fg-60)] tracking-widest text-sm"
               >
                 {language === 'no' ? 'AVBRYT' : 'CANCEL'}
               </button>
+
+              {isEdit && (
+                <button
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={saving || deleting}
+                  className={`w-full h-12 rounded-2xl border tracking-widest text-sm ${
+                    deleting
+                      ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
+                      : 'border-[color:var(--danger-bd)] text-[color:var(--danger)]'
+                  }`}
+                >
+                  {deleting ? '…' : language === 'no' ? 'SLETT ERFARING' : 'DELETE EXPERIENCE'}
+                </button>
+              )}
             </div>
 
             <div className="mt-2 min-h-[18px] text-xs">
@@ -5862,6 +5852,15 @@ function SurfExperienceEditor({
           onClose={() => setDuplicateData(null)}
           onUpdateExisting={() => doSave('update_existing', duplicateData?.existing?.id)}
           onSaveAsNew={() => doSave('force_new')}
+        />
+      )}
+
+      {confirmDeleteOpen && (
+        <DeleteExperienceSheet
+          language={language}
+          deleting={deleting}
+          onCancel={() => setConfirmDeleteOpen(false)}
+          onConfirm={deleteExperienceFromEditor}
         />
       )}
     </>
