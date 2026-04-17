@@ -5381,7 +5381,7 @@ function SurfExperienceCard({
     const updateListMaxHeight = () => {
       const el = latestListRef.current
       if (!el) return
-      const bottomGap = 12
+      const bottomGap = 20
       const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - bottomGap)
       setLatestListMaxHeight(Math.max(available, 160))
     }
