@@ -3607,10 +3607,6 @@ function RemindersModuleSettingsTab({
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
-  const listRef = useRef<HTMLDivElement | null>(null)
-  const [showTopFade, setShowTopFade] = useState(false)
-  const [showBottomFade, setShowBottomFade] = useState(false)
-
   const calendarTouchStartYRef = useRef<number | null>(null)
   const calendarWheelLockRef = useRef<number>(0)
 
@@ -3675,48 +3671,6 @@ const items: ReminderUiItem[] = (data || [])
       if (calendarAnimTimerRef.current) window.clearTimeout(calendarAnimTimerRef.current)
     }
   }, [])
-
-  function updateListFadeState() {
-    const el = listRef.current
-    if (!el) {
-      setShowTopFade(false)
-      setShowBottomFade(false)
-      return
-    }
-
-    const hasOverflow = el.scrollHeight > el.clientHeight + 1
-    if (!hasOverflow) {
-      setShowTopFade(false)
-      setShowBottomFade(false)
-      return
-    }
-
-    setShowTopFade(el.scrollTop > 2)
-    setShowBottomFade(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
-  }
-
-  useEffect(() => {
-    const el = listRef.current
-    if (!el) return
-
-    updateListFadeState()
-
-    const onScroll = () => updateListFadeState()
-    el.addEventListener('scroll', onScroll, { passive: true })
-
-    const ro = new ResizeObserver(() => updateListFadeState())
-    ro.observe(el)
-
-    const t1 = window.setTimeout(updateListFadeState, 50)
-    const t2 = window.setTimeout(updateListFadeState, 180)
-
-    return () => {
-      el.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-      window.clearTimeout(t1)
-      window.clearTimeout(t2)
-    }
-  }, [reminders.length, loading, selectedDayYmd])
 
   function triggerCalendarAnimation(direction: 'next' | 'prev') {
     if (calendarAnimTimerRef.current) window.clearTimeout(calendarAnimTimerRef.current)
@@ -4059,14 +4013,15 @@ const sortedReminders = useMemo(() => {
               </div>
             </div>
 
-            {selectedDayYmd && (
-              <button
-                onClick={() => setSelectedDayYmd(null)}
-                className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-[11px]"
-              >
-                {language === 'no' ? 'TØM' : 'CLEAR'}
-              </button>
-            )}
+            <button
+              onClick={() => setSelectedDayYmd(null)}
+              disabled={!selectedDayYmd}
+              className={`shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] tracking-widest text-[11px] ${
+                selectedDayYmd ? 'text-[color:var(--fg-70)]' : 'invisible pointer-events-none'
+              }`}
+            >
+              {language === 'no' ? 'TØM' : 'CLEAR'}
+            </button>
           </div>
 
           <div className="mt-2.5 max-[420px]:mt-2 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
@@ -4089,15 +4044,7 @@ const sortedReminders = useMemo(() => {
           </div>
 
           <div className="mt-2.5 max-[420px]:mt-2 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
-            {showTopFade && (
-              <div className="pointer-events-none absolute top-0 left-0 right-0 z-10 h-6 bg-gradient-to-b from-[color:var(--app-bg)] to-transparent" />
-            )}
-
-            {showBottomFade && (
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-12 bg-gradient-to-t from-[color:var(--app-bg)] to-transparent" />
-            )}
-
-            <div ref={listRef} className="h-full overflow-y-auto no-scrollbar pr-1">
+            <div className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
               ) : loading ? (
