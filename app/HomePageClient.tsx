@@ -553,6 +553,16 @@ function formatFeelingFromRating(language: AppLanguage, rating: number | null | 
   return feelingLabel(language, choice)
 }
 
+function feelingTextColorClass(choice: FeelingChoice | null) {
+  if (choice === 'flat') return 'text-[#dc2626]'
+  if (choice === 'poor') return 'text-[#d97706]'
+  if (choice === 'poor_fair') return 'text-[#facc15]'
+  if (choice === 'fair') return 'text-[#84cc16]'
+  if (choice === 'good') return 'text-[#15803d]'
+  if (choice === 'epic') return 'text-[#a855f7]'
+  return 'text-[color:var(--fg-60)]'
+}
+
 function isSpotReadyForExperience(spotLabel: string, spotId: string) {
   const label = String(spotLabel || '').trim()
   const id = String(spotId || '').trim()
@@ -3607,10 +3617,6 @@ function RemindersModuleSettingsTab({
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
-  const listRef = useRef<HTMLDivElement | null>(null)
-  const [showTopFade, setShowTopFade] = useState(false)
-  const [showBottomFade, setShowBottomFade] = useState(false)
-
   const calendarTouchStartYRef = useRef<number | null>(null)
   const calendarWheelLockRef = useRef<number>(0)
 
@@ -3675,48 +3681,6 @@ const items: ReminderUiItem[] = (data || [])
       if (calendarAnimTimerRef.current) window.clearTimeout(calendarAnimTimerRef.current)
     }
   }, [])
-
-  function updateListFadeState() {
-    const el = listRef.current
-    if (!el) {
-      setShowTopFade(false)
-      setShowBottomFade(false)
-      return
-    }
-
-    const hasOverflow = el.scrollHeight > el.clientHeight + 1
-    if (!hasOverflow) {
-      setShowTopFade(false)
-      setShowBottomFade(false)
-      return
-    }
-
-    setShowTopFade(el.scrollTop > 2)
-    setShowBottomFade(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
-  }
-
-  useEffect(() => {
-    const el = listRef.current
-    if (!el) return
-
-    updateListFadeState()
-
-    const onScroll = () => updateListFadeState()
-    el.addEventListener('scroll', onScroll, { passive: true })
-
-    const ro = new ResizeObserver(() => updateListFadeState())
-    ro.observe(el)
-
-    const t1 = window.setTimeout(updateListFadeState, 50)
-    const t2 = window.setTimeout(updateListFadeState, 180)
-
-    return () => {
-      el.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-      window.clearTimeout(t1)
-      window.clearTimeout(t2)
-    }
-  }, [reminders.length, loading, selectedDayYmd])
 
   function triggerCalendarAnimation(direction: 'next' | 'prev') {
     if (calendarAnimTimerRef.current) window.clearTimeout(calendarAnimTimerRef.current)
@@ -3907,6 +3871,15 @@ const sortedReminders = useMemo(() => {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
   }
 
+  function selectReminderDate(ymd: string) {
+    const dt = parseYmdToLocalDate(ymd)
+    if (dt) {
+      setViewYear(dt.getFullYear())
+      setViewMonth(dt.getMonth())
+    }
+    setSelectedDayYmd(ymd)
+  }
+
   function handleCalendarWheel(e: React.WheelEvent<HTMLDivElement>) {
     const now = Date.now()
     if (now < calendarWheelLockRef.current) return
@@ -4052,28 +4025,25 @@ const sortedReminders = useMemo(() => {
             </div>
           </div>
 
-          <div className="mt-2.5 max-[420px]:mt-2 flex items-center justify-between gap-3">
+          <div className="mt-2 max-[420px]:mt-1.5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] tracking-widest text-[color:var(--fg-50)] uppercase">
-                {selectedDayYmd ? (language === 'no' ? 'Valgt dag' : 'Selected day') : (language === 'no' ? 'Alle påminnelser' : 'All reminders')}
-              </div>
-
-              <div className="mt-1 text-sm text-[color:var(--fg-90)] truncate">
+              <div className="text-sm text-[color:var(--fg-90)] truncate">
                 {selectedDayYmd ? formatReminderDateLabel(language, selectedDayYmd) : (language === 'no' ? 'Viser alle datoer' : 'Showing all dates')}
               </div>
             </div>
 
-            {selectedDayYmd && (
-              <button
-                onClick={() => setSelectedDayYmd(null)}
-                className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-[11px]"
-              >
-                {language === 'no' ? 'TØM' : 'CLEAR'}
-              </button>
-            )}
+            <button
+              onClick={() => setSelectedDayYmd(null)}
+              disabled={!selectedDayYmd}
+              className={`shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] tracking-widest text-[11px] ${
+                selectedDayYmd ? 'text-[color:var(--fg-70)]' : 'invisible pointer-events-none'
+              }`}
+            >
+              {language === 'no' ? 'TØM' : 'CLEAR'}
+            </button>
           </div>
 
-          <div className="mt-2.5 max-[420px]:mt-2 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
+          <div className="mt-2 max-[420px]:mt-1.5 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
             {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
               const active = tagFilter === opt
               return (
@@ -4092,8 +4062,8 @@ const sortedReminders = useMemo(() => {
             })}
           </div>
 
-          <div className="mt-2.5 max-[420px]:mt-2 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
-            <div ref={listRef} className="h-full overflow-y-auto no-scrollbar pr-1">
+          <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
+            <div className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
               ) : loading ? (
@@ -4109,24 +4079,37 @@ const sortedReminders = useMemo(() => {
                       : 'No reminders yet'}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="divide-y divide-[color:var(--bd-10)]">
                   {sortedReminders.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between gap-2.5">
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectReminderDate(item.displayDate)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          selectReminderDate(item.displayDate)
+                        }
+                      }}
+                      className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
+                    >
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
                         {formatReminderTitleWithTime(item)}
                         </div>
 
-                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-55)]">
+                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
   {`${formatReminderFullDateLabel(language, item.displayDate)}${
   normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
 } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
 </div>
                       </div>
 
-                      <div className="shrink-0 flex flex-col gap-1">
+                      <div className="shrink-0 self-center">
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation()
                             setEditingReminder(item)
                             setSheetOpen(true)
                           }}
@@ -5000,9 +4983,6 @@ function SurfModuleSettingsTab({
                     if (scrollRef.current) scrollRef.current.scrollTop = 0
                   })
                 }}
-                onDeleted={() => {
-                  setExperienceListVersion((v) => v + 1)
-                }}
                 onExpandedLatest={() => {
                   window.setTimeout(() => {
                     scrollToBottomSmooth()
@@ -5350,20 +5330,16 @@ function SurfExperienceCard({
   refreshKey,
   onOpenLog,
   onEditExperience,
-  onDeleted,
   onExpandedLatest,
 }: {
   language: AppLanguage
   refreshKey: number
   onOpenLog: () => void
   onEditExperience: (experienceId: string) => void
-  onDeleted: () => void
   onExpandedLatest: () => void
 }) {
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [latestOpen, setLatestOpen] = useState(false)
 
   async function loadRecent() {
@@ -5398,24 +5374,6 @@ function SurfExperienceCard({
   useEffect(() => {
     loadRecent()
   }, [refreshKey])
-
-  async function deleteExperience(id: string) {
-    try {
-      setDeletingId(id)
-
-      const { error } = await supabase.from('user_surf_experiences').delete().eq('id', id)
-      if (error) {
-        alert(error.message)
-        return
-      }
-
-      setItems((prev) => prev.filter((x) => x.id !== id))
-      onDeleted()
-    } finally {
-      setDeletingId(null)
-      setConfirmDeleteId(null)
-    }
-  }
 
   return (
     <>
@@ -5474,52 +5432,39 @@ function SurfExperienceCard({
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
               ) : (
-                items.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-[color:var(--bd-10)] px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[color:var(--fg-90)] font-medium truncate">{item.spot || '--'}</div>
-                        <div className="mt-1 text-xs text-[color:var(--fg-50)]">{formatTimeLabel(language, new Date(item.logged_at))}</div>
-                        <div className="mt-1 text-sm text-[color:var(--fg-70)]">{formatFeelingFromRating(language, item.rating_1_6)}</div>
-                      </div>
+                items.map((item) => {
+                  const feelingChoice = ratingToFeelingChoice(item.rating_1_6)
+                  const feeling = formatFeelingFromRating(language, item.rating_1_6)
 
-                      <div className="flex flex-col gap-2 shrink-0">
-                        <button
-                          onClick={() => onEditExperience(item.id)}
-                          className="h-9 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
-                        >
-                          {language === 'no' ? 'REDIGER' : 'EDIT'}
-                        </button>
+                  return (
+                    <div key={item.id} className="rounded-2xl border border-[color:var(--bd-10)] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[color:var(--fg-90)] font-medium truncate">{item.spot || '--'}</div>
+                          <div className="mt-1 text-xs flex items-center gap-1.5">
+                            <span className={`font-medium ${feelingTextColorClass(feelingChoice)}`}>{feeling}</span>
+                            <span className="text-[color:var(--fg-40)]">•</span>
+                            <span className="text-[color:var(--fg-50)]">{formatTimeLabel(language, new Date(item.logged_at))}</span>
+                          </div>
+                        </div>
 
-                        <button
-                          onClick={() => setConfirmDeleteId(item.id)}
-                          disabled={deletingId === item.id}
-                          className={`h-9 px-3 rounded-xl border tracking-widest text-xs ${
-                            deletingId === item.id
-                              ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
-                              : 'border-[color:var(--danger-bd)] text-[color:var(--danger)]'
-                          }`}
-                        >
-                          {deletingId === item.id ? '…' : language === 'no' ? 'SLETT' : 'DELETE'}
-                        </button>
+                        <div className="shrink-0 self-center">
+                          <button
+                            onClick={() => onEditExperience(item.id)}
+                            className="h-9 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
+                          >
+                            {language === 'no' ? 'REDIGER' : 'EDIT'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           )}
         </div>
       </div>
-
-      {confirmDeleteId && (
-        <DeleteExperienceSheet
-          language={language}
-          deleting={deletingId === confirmDeleteId}
-          onCancel={() => setConfirmDeleteId(null)}
-          onConfirm={() => deleteExperience(confirmDeleteId)}
-        />
-      )}
     </>
   )
 }
@@ -5559,6 +5504,8 @@ function SurfExperienceEditor({
   })
 
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
@@ -5712,6 +5659,26 @@ function SurfExperienceEditor({
     }
   }
 
+  async function deleteExperienceFromEditor() {
+    if (!experienceId) return
+
+    try {
+      setDeleting(true)
+      setStatus(null)
+
+      const { error } = await supabase.from('user_surf_experiences').delete().eq('id', experienceId)
+      if (error) throw error
+
+      onDeleted()
+    } catch (e: any) {
+      setStatusKind('error')
+      setStatus(String(e?.message || e))
+    } finally {
+      setDeleting(false)
+      setConfirmDeleteOpen(false)
+    }
+  }
+
   function feelingButtonClass(optKey: FeelingChoice, active: boolean) {
     if (!active) {
       return 'border-[color:var(--bd-10)] text-[color:var(--fg-80)]'
@@ -5807,11 +5774,25 @@ function SurfExperienceEditor({
 
               <button
                 onClick={onCancel}
-                disabled={saving}
+                disabled={saving || deleting}
                 className="w-full h-12 rounded-2xl border border-[color:var(--bd-10)] text-[color:var(--fg-60)] tracking-widest text-sm"
               >
                 {language === 'no' ? 'AVBRYT' : 'CANCEL'}
               </button>
+
+              {isEdit && (
+                <button
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={saving || deleting}
+                  className={`w-full h-12 rounded-2xl border tracking-widest text-sm ${
+                    deleting
+                      ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
+                      : 'border-[color:var(--danger-bd)] text-[color:var(--danger)]'
+                  }`}
+                >
+                  {deleting ? '…' : language === 'no' ? 'SLETT ERFARING' : 'DELETE EXPERIENCE'}
+                </button>
+              )}
             </div>
 
             <div className="mt-2 min-h-[18px] text-xs">
@@ -5889,6 +5870,15 @@ function SurfExperienceEditor({
           onClose={() => setDuplicateData(null)}
           onUpdateExisting={() => doSave('update_existing', duplicateData?.existing?.id)}
           onSaveAsNew={() => doSave('force_new')}
+        />
+      )}
+
+      {confirmDeleteOpen && (
+        <DeleteExperienceSheet
+          language={language}
+          deleting={deleting}
+          onCancel={() => setConfirmDeleteOpen(false)}
+          onConfirm={deleteExperienceFromEditor}
         />
       )}
     </>
