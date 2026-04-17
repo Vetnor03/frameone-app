@@ -3968,7 +3968,7 @@ const sortedReminders = useMemo(() => {
       `}</style>
 
       <div className="h-full flex flex-col min-h-0">
-        <div className="mt-4 flex-1 min-h-0 flex flex-col">
+        <div className="mt-4 max-[420px]:mt-3 flex-1 min-h-0 flex flex-col">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
               <div className="text-[color:var(--fg-90)] text-sm font-semibold capitalize">
@@ -3992,9 +3992,9 @@ const sortedReminders = useMemo(() => {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-7 text-center text-[11px] font-medium tracking-wide text-[color:var(--fg-55)]">
+            <div className="mt-3.5 max-[420px]:mt-3 grid grid-cols-7 text-center text-[11px] font-medium tracking-wide text-[color:var(--fg-55)]">
               {weekdayShort.map((x) => (
-                <div key={x} className="h-5 flex items-center justify-center">
+                <div key={x} className="h-[18px] max-[420px]:h-4 flex items-center justify-center">
                   {x}
                 </div>
               ))}
@@ -4006,7 +4006,7 @@ const sortedReminders = useMemo(() => {
               onTouchStart={handleCalendarTouchStart}
               onTouchEnd={handleCalendarTouchEnd}
             >
-              <div className={`grid grid-cols-7 gap-y-0.5 ${calendarAnimClass}`}>
+              <div className={`grid grid-cols-7 gap-y-0.5 max-[420px]:gap-y-0 ${calendarAnimClass}`}>
                 {calendarCells.map((cell) => {
                   const showFilledBlue = cell.isSelected || (!selectedDayYmd && cell.isToday)
                   const showBlueTextOnly = selectedDayYmd && cell.isToday && !cell.isSelected
@@ -4015,11 +4015,11 @@ const sortedReminders = useMemo(() => {
                     <button
                       key={cell.ymd}
                       onClick={() => toggleSelectedDay(cell.ymd)}
-                      className="h-10 flex items-center justify-center"
+                      className="h-[38px] max-[420px]:h-9 flex items-center justify-center"
                     >
-                      <div className="relative h-9 w-9 flex items-start justify-center">
+                      <div className="relative h-[34px] w-[34px] max-[420px]:h-8 max-[420px]:w-8 flex items-start justify-center">
                         <span
-                          className={`mt-[1px] flex h-7 w-7 items-center justify-center rounded-full text-sm transition ${
+                          className={`mt-[1px] flex h-6.5 w-6.5 max-[420px]:h-6 max-[420px]:w-6 items-center justify-center rounded-full text-[13px] max-[420px]:text-xs transition ${
                             showFilledBlue
                               ? 'bg-[#2aa3ff] text-white'
                               : showBlueTextOnly
@@ -4033,11 +4033,11 @@ const sortedReminders = useMemo(() => {
                         </span>
 
                         {cell.dotCount > 0 && (
-                          <div className="absolute bottom-[1px] left-1/2 -translate-x-1/2 flex items-center justify-center gap-[3px]">
+                          <div className="absolute bottom-[1px] max-[420px]:bottom-0 left-1/2 -translate-x-1/2 flex items-center justify-center gap-[3px]">
                             {Array.from({ length: Math.min(3, cell.dotCount) }).map((_, idx) => (
                               <span
                                 key={idx}
-                                className={`block w-[4px] h-[4px] rounded-full ${
+                                className={`block w-[3.5px] h-[3.5px] max-[420px]:w-[3px] max-[420px]:h-[3px] rounded-full ${
                                   showFilledBlue ? 'bg-white/90' : 'bg-[#2aa3ff]'
                                 }`}
                               />
@@ -4052,7 +4052,7 @@ const sortedReminders = useMemo(() => {
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="mt-2.5 max-[420px]:mt-2 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] tracking-widest text-[color:var(--fg-50)] uppercase">
                 {selectedDayYmd ? (language === 'no' ? 'Valgt dag' : 'Selected day') : (language === 'no' ? 'Alle påminnelser' : 'All reminders')}
@@ -4073,14 +4073,14 @@ const sortedReminders = useMemo(() => {
             )}
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-2.5 max-[420px]:mt-2 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
             {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
               const active = tagFilter === opt
               return (
                 <button
                   key={opt}
                   onClick={() => setTagFilter(opt)}
-                  className={`h-9 rounded-xl border text-xs tracking-widest transition ${
+                  className={`h-8 max-[420px]:h-[30px] rounded-xl border text-[11px] tracking-widest transition ${
                     active
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
                       : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
@@ -4092,7 +4092,7 @@ const sortedReminders = useMemo(() => {
             })}
           </div>
 
-          <div className="mt-3 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 flex-1 min-h-0">
+          <div className="mt-2.5 max-[420px]:mt-2 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
             <div ref={listRef} className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
@@ -4109,28 +4109,28 @@ const sortedReminders = useMemo(() => {
                       : 'No reminders yet'}
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {sortedReminders.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between gap-3">
+                    <div key={item.id} className="flex items-start justify-between gap-2.5">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[color:var(--fg-95)] text-[15px] leading-tight font-medium">
+                        <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
                         {formatReminderTitleWithTime(item)}
                         </div>
 
-                        <div className="mt-0.5 text-[12px] text-[color:var(--fg-55)]">
+                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-55)]">
   {`${formatReminderFullDateLabel(language, item.displayDate)}${
   normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
 } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
 </div>
                       </div>
 
-                      <div className="shrink-0 flex flex-col gap-1.5">
+                      <div className="shrink-0 flex flex-col gap-1">
                         <button
                           onClick={() => {
                             setEditingReminder(item)
                             setSheetOpen(true)
                           }}
-                          className="h-7 px-3 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+                          className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
                         >
                           {language === 'no' ? 'REDIGER' : 'EDIT'}
                         </button>
