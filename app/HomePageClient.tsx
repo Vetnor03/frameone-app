@@ -4006,7 +4006,7 @@ const sortedReminders = useMemo(() => {
             </div>
           </div>
 
-          <div className="mt-2.5 max-[420px]:mt-2 flex items-center justify-between gap-3">
+          <div className="mt-2 max-[420px]:mt-1.5 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm text-[color:var(--fg-90)] truncate">
                 {selectedDayYmd ? formatReminderDateLabel(language, selectedDayYmd) : (language === 'no' ? 'Viser alle datoer' : 'Showing all dates')}
@@ -4024,7 +4024,7 @@ const sortedReminders = useMemo(() => {
             </button>
           </div>
 
-          <div className="mt-2.5 max-[420px]:mt-2 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
+          <div className="mt-2 max-[420px]:mt-1.5 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
             {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
               const active = tagFilter === opt
               return (
@@ -4043,7 +4043,7 @@ const sortedReminders = useMemo(() => {
             })}
           </div>
 
-          <div className="mt-2.5 max-[420px]:mt-2 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
+          <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
             <div className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
@@ -4062,7 +4062,7 @@ const sortedReminders = useMemo(() => {
               ) : (
                 <div className="divide-y divide-[color:var(--bd-10)]">
                   {sortedReminders.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between gap-2.5 py-2.5 first:pt-0 last:pb-0">
+                    <div key={item.id} className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0">
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
                         {formatReminderTitleWithTime(item)}
@@ -4075,7 +4075,7 @@ const sortedReminders = useMemo(() => {
 </div>
                       </div>
 
-                      <div className="shrink-0 flex flex-col gap-1">
+                      <div className="shrink-0 self-center">
                         <button
                           onClick={() => {
                             setEditingReminder(item)
