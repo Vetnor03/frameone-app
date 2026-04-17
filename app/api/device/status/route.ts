@@ -43,19 +43,40 @@ export async function GET(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const { data, error } = await supabase
+    let data: {
+      last_refresh_at?: string | null
+      last_render_at?: string | null
+      current_version?: string | null
+      battery_percent?: number | null
+      battery_voltage?: number | null
+    } | null = null
+
+    const withRender = await supabase
       .from('device_status')
-      .select('last_refresh_at, current_version, battery_percent, battery_voltage')
+      .select('last_refresh_at, last_render_at, current_version, battery_percent, battery_voltage')
       .eq('device_id', device_id)
       .maybeSingle()
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!withRender.error) {
+      data = withRender.data
+    } else {
+      const withoutRender = await supabase
+        .from('device_status')
+        .select('last_refresh_at, current_version, battery_percent, battery_voltage')
+        .eq('device_id', device_id)
+        .maybeSingle()
+
+      if (withoutRender.error) {
+        return NextResponse.json({ error: withoutRender.error.message }, { status: 500 })
+      }
+
+      data = withoutRender.data
     }
 
     return NextResponse.json({
       device_id,
       last_refresh_at: data?.last_refresh_at ?? null,
+      last_render_at: data?.last_render_at ?? null,
       current_version: data?.current_version ?? null,
       battery_percent: data?.battery_percent ?? null,
       battery_voltage: data?.battery_voltage ?? null,
