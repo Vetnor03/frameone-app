@@ -5341,6 +5341,7 @@ function SurfExperienceCard({
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
   const [latestOpen, setLatestOpen] = useState(false)
+  const [latestListMaxHeight, setLatestListMaxHeight] = useState<number | null>(null)
   const latestListRef = useRef<HTMLDivElement | null>(null)
 
   async function loadRecent() {
@@ -5376,8 +5377,32 @@ function SurfExperienceCard({
   }, [refreshKey])
 
   useEffect(() => {
-    if (!latestOpen) return
-    if (latestListRef.current) latestListRef.current.scrollTop = 0
+    if (!latestOpen) {
+      setLatestListMaxHeight(null)
+      return
+    }
+
+    const updateListMaxHeight = () => {
+      const el = latestListRef.current
+      if (!el) return
+      const bottomGap = 12
+      const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - bottomGap)
+      setLatestListMaxHeight(Math.max(available, 160))
+    }
+
+    const raf = window.requestAnimationFrame(() => {
+      if (latestListRef.current) latestListRef.current.scrollTop = 0
+      updateListMaxHeight()
+    })
+    const settleTimer = window.setTimeout(updateListMaxHeight, 220)
+
+    window.addEventListener('resize', updateListMaxHeight)
+
+    return () => {
+      window.cancelAnimationFrame(raf)
+      window.clearTimeout(settleTimer)
+      window.removeEventListener('resize', updateListMaxHeight)
+    }
   }, [latestOpen])
 
   return (
@@ -5431,7 +5456,11 @@ function SurfExperienceCard({
           </button>
 
           {latestOpen && (
-            <div ref={latestListRef} className="mt-3 space-y-2 max-h-72 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
+            <div
+              ref={latestListRef}
+              style={latestListMaxHeight ? { maxHeight: `${latestListMaxHeight}px` } : undefined}
+              className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
+            >
               {loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
