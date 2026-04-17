@@ -45,7 +45,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from('device_status')
-      .select('last_refresh_at, last_render_at, current_version, battery_percent, battery_voltage')
+      .select('last_refresh_at, current_version, battery_percent, battery_voltage')
       .eq('device_id', device_id)
       .maybeSingle()
 
@@ -56,7 +56,6 @@ export async function GET(req: Request) {
     return NextResponse.json({
       device_id,
       last_refresh_at: data?.last_refresh_at ?? null,
-      last_render_at: data?.last_render_at ?? null,
       current_version: data?.current_version ?? null,
       battery_percent: data?.battery_percent ?? null,
       battery_voltage: data?.battery_voltage ?? null,

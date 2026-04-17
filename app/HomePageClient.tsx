@@ -252,7 +252,6 @@ type DeviceStatusMeta = {
   battery_percent: number | null
   battery_voltage: number | null
   last_refresh_at: string | null
-  last_render_at: string | null
 }
 
 type DeviceStatusRow = {
@@ -261,7 +260,6 @@ type DeviceStatusRow = {
   battery_percent: number | string | null
   battery_voltage: number | string | null
   last_refresh_at: string | null
-  last_render_at: string | null
 }
 
 function normalizeBatteryPercent(value: number | string | null | undefined): number | null {
@@ -293,7 +291,6 @@ function buildLatestStatusMap(rows: DeviceStatusRow[]): Map<string, DeviceStatus
       battery_percent: normalizeBatteryPercent(row.battery_percent),
       battery_voltage: normalizeBatteryVoltage(row.battery_voltage),
       last_refresh_at: row.last_refresh_at ?? null,
-      last_render_at: row.last_render_at ?? null,
     })
   }
 
@@ -317,7 +314,6 @@ async function fetchStatusMapFromApi(deviceIds: string[]): Promise<Map<string, D
           battery_percent: normalizeBatteryPercent(data?.battery_percent),
           battery_voltage: normalizeBatteryVoltage(data?.battery_voltage),
           last_refresh_at: data?.last_refresh_at ?? null,
-          last_render_at: data?.last_render_at ?? null,
         }
       } catch {
         return null
@@ -341,7 +337,7 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   try {
     const { data: statuses } = await supabase
       .from('device_status')
-      .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at, last_render_at')
+      .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
       .in('device_id', deviceIds)
       .order('last_refresh_at', { ascending: false, nullsFirst: false })
 
@@ -580,7 +576,7 @@ export default function HomePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [lastRenderAtText, setLastRenderAtText] = useState<string | null>(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
   const [dirty, setDirty] = useState(false)
@@ -781,30 +777,30 @@ export default function HomePage() {
     const diffSec = Math.floor(diffMs / 1000)
 
     if (language === 'no') {
-      if (diffSec < 10) return 'Sist tegnet akkurat nå'
-      if (diffSec < 60) return `Sist tegnet for ${diffSec} sekunder siden`
+      if (diffSec < 10) return 'Oppdatert akkurat nå'
+      if (diffSec < 60) return `Oppdatert for ${diffSec} sekunder siden`
 
       const diffMin = Math.floor(diffSec / 60)
-      if (diffMin < 60) return `Sist tegnet for ${diffMin} minutt${diffMin === 1 ? '' : 'er'} siden`
+      if (diffMin < 60) return `Oppdatert for ${diffMin} minutt${diffMin === 1 ? '' : 'er'} siden`
 
       const diffHr = Math.floor(diffMin / 60)
-      if (diffHr < 24) return `Sist tegnet for ${diffHr} time${diffHr === 1 ? '' : 'r'} siden`
+      if (diffHr < 24) return `Oppdatert for ${diffHr} time${diffHr === 1 ? '' : 'r'} siden`
 
       const diffDay = Math.floor(diffHr / 24)
-      return `Sist tegnet for ${diffDay} dag${diffDay === 1 ? '' : 'er'} siden`
+      return `Oppdatert for ${diffDay} dag${diffDay === 1 ? '' : 'er'} siden`
     }
 
-    if (diffSec < 10) return 'Last redraw just now'
-    if (diffSec < 60) return `Last redraw ${diffSec} seconds ago`
+    if (diffSec < 10) return 'Updated just now'
+    if (diffSec < 60) return `Updated ${diffSec} seconds ago`
 
     const diffMin = Math.floor(diffSec / 60)
-    if (diffMin < 60) return `Last redraw ${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
+    if (diffMin < 60) return `Updated ${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
 
     const diffHr = Math.floor(diffMin / 60)
-    if (diffHr < 24) return `Last redraw ${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
+    if (diffHr < 24) return `Updated ${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
 
     const diffDay = Math.floor(diffHr / 24)
-    return `Last redraw ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
+    return `Updated ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
   async function loadDeviceStatus(deviceId: string) {
@@ -813,17 +809,17 @@ export default function HomePage() {
       if (!resp.ok) return
 
       const data = await resp.json()
-      const iso = data?.last_render_at ? String(data.last_render_at) : ''
+      const iso = data?.last_refresh_at ? String(data.last_refresh_at) : ''
 
       if (!iso) {
-        setLastRenderAtText(language === 'no' ? 'Ingen oppdateringer ennå' : 'No updates yet')
+        setLastUpdatedAt(null)
         return
       }
 
       const text = formatRelative(iso)
-      setLastRenderAtText(text)
+      setLastUpdatedAt(text)
     } catch {
-      setLastRenderAtText(language === 'no' ? 'Ingen oppdateringer ennå' : 'No updates yet')
+      setLastUpdatedAt(null)
     }
   }
 
@@ -1244,7 +1240,7 @@ async function handleSelectTab(k: TabKey) {
     </button>
 
     <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
-      {lastRenderAtText ?? ''}
+      {lastUpdatedAt ?? ''}
     </div>
   </div>
 )}
