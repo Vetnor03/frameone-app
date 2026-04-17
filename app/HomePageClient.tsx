@@ -4054,11 +4054,7 @@ const sortedReminders = useMemo(() => {
 
           <div className="mt-2.5 max-[420px]:mt-2 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] tracking-widest text-[color:var(--fg-50)] uppercase">
-                {selectedDayYmd ? (language === 'no' ? 'Valgt dag' : 'Selected day') : (language === 'no' ? 'Alle påminnelser' : 'All reminders')}
-              </div>
-
-              <div className="mt-1 text-sm text-[color:var(--fg-90)] truncate">
+              <div className="text-sm text-[color:var(--fg-90)] truncate">
                 {selectedDayYmd ? formatReminderDateLabel(language, selectedDayYmd) : (language === 'no' ? 'Viser alle datoer' : 'Showing all dates')}
               </div>
             </div>
@@ -4093,6 +4089,14 @@ const sortedReminders = useMemo(() => {
           </div>
 
           <div className="mt-2.5 max-[420px]:mt-2 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
+            {showTopFade && (
+              <div className="pointer-events-none absolute top-0 left-0 right-0 z-10 h-6 bg-gradient-to-b from-[color:var(--app-bg)] to-transparent" />
+            )}
+
+            {showBottomFade && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-12 bg-gradient-to-t from-[color:var(--app-bg)] to-transparent" />
+            )}
+
             <div ref={listRef} className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
@@ -4109,9 +4113,9 @@ const sortedReminders = useMemo(() => {
                       : 'No reminders yet'}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="divide-y divide-[color:var(--bd-10)]">
                   {sortedReminders.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between gap-2.5">
+                    <div key={item.id} className="flex items-start justify-between gap-2.5 py-2.5 first:pt-0 last:pb-0">
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
                         {formatReminderTitleWithTime(item)}
