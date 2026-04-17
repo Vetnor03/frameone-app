@@ -3861,6 +3861,15 @@ const sortedReminders = useMemo(() => {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
   }
 
+  function selectReminderDate(ymd: string) {
+    const dt = parseYmdToLocalDate(ymd)
+    if (dt) {
+      setViewYear(dt.getFullYear())
+      setViewMonth(dt.getMonth())
+    }
+    setSelectedDayYmd(ymd)
+  }
+
   function handleCalendarWheel(e: React.WheelEvent<HTMLDivElement>) {
     const now = Date.now()
     if (now < calendarWheelLockRef.current) return
@@ -4062,7 +4071,19 @@ const sortedReminders = useMemo(() => {
               ) : (
                 <div className="divide-y divide-[color:var(--bd-10)]">
                   {sortedReminders.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0">
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectReminderDate(item.displayDate)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          selectReminderDate(item.displayDate)
+                        }
+                      }}
+                      className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
+                    >
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
                         {formatReminderTitleWithTime(item)}
@@ -4077,7 +4098,8 @@ const sortedReminders = useMemo(() => {
 
                       <div className="shrink-0 self-center">
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation()
                             setEditingReminder(item)
                             setSheetOpen(true)
                           }}
