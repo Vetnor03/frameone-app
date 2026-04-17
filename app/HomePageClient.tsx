@@ -553,6 +553,16 @@ function formatFeelingFromRating(language: AppLanguage, rating: number | null | 
   return feelingLabel(language, choice)
 }
 
+function feelingTextColorClass(choice: FeelingChoice | null) {
+  if (choice === 'flat') return 'text-[#dc2626]'
+  if (choice === 'poor') return 'text-[#d97706]'
+  if (choice === 'poor_fair') return 'text-[#facc15]'
+  if (choice === 'fair') return 'text-[#84cc16]'
+  if (choice === 'good') return 'text-[#15803d]'
+  if (choice === 'epic') return 'text-[#a855f7]'
+  return 'text-[color:var(--fg-60)]'
+}
+
 function isSpotReadyForExperience(spotLabel: string, spotId: string) {
   const label = String(spotLabel || '').trim()
   const id = String(spotId || '').trim()
@@ -5422,26 +5432,34 @@ function SurfExperienceCard({
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
               ) : (
-                items.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-[color:var(--bd-10)] px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[color:var(--fg-90)] font-medium truncate">{item.spot || '--'}</div>
-                        <div className="mt-1 text-xs text-[color:var(--fg-50)]">{formatTimeLabel(language, new Date(item.logged_at))}</div>
-                        <div className="mt-1 text-sm text-[color:var(--fg-70)]">{formatFeelingFromRating(language, item.rating_1_6)}</div>
-                      </div>
+                items.map((item) => {
+                  const feelingChoice = ratingToFeelingChoice(item.rating_1_6)
+                  const feeling = formatFeelingFromRating(language, item.rating_1_6)
 
-                      <div className="shrink-0 self-center">
-                        <button
-                          onClick={() => onEditExperience(item.id)}
-                          className="h-9 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
-                        >
-                          {language === 'no' ? 'REDIGER' : 'EDIT'}
-                        </button>
+                  return (
+                    <div key={item.id} className="rounded-2xl border border-[color:var(--bd-10)] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[color:var(--fg-90)] font-medium truncate">{item.spot || '--'}</div>
+                          <div className="mt-1 text-xs flex items-center gap-1.5">
+                            <span className={`font-medium ${feelingTextColorClass(feelingChoice)}`}>{feeling}</span>
+                            <span className="text-[color:var(--fg-40)]">•</span>
+                            <span className="text-[color:var(--fg-50)]">{formatTimeLabel(language, new Date(item.logged_at))}</span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 self-center">
+                          <button
+                            onClick={() => onEditExperience(item.id)}
+                            className="h-9 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
+                          >
+                            {language === 'no' ? 'REDIGER' : 'EDIT'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           )}
