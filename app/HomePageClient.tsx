@@ -4089,7 +4089,7 @@ const sortedReminders = useMemo(() => {
                         {formatReminderTitleWithTime(item)}
                         </div>
 
-                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)]">
+                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
   {`${formatReminderFullDateLabel(language, item.displayDate)}${
   normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
 } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
