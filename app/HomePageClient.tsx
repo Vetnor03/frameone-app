@@ -4929,10 +4929,6 @@ function SurfModuleSettingsTab({
           <div className="pointer-events-none absolute top-0 left-0 right-0 z-10 h-6 bg-gradient-to-b from-[color:var(--app-bg)] to-transparent" />
         )}
 
-        {surfView === 'main' && showBottomFade && (
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-12 bg-gradient-to-t from-[color:var(--app-bg)] to-transparent" />
-        )}
-
         <div
           ref={scrollRef}
           className={`h-full pr-1 no-scrollbar ${
@@ -5341,6 +5337,8 @@ function SurfExperienceCard({
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
   const [latestOpen, setLatestOpen] = useState(false)
+  const [latestListMaxHeight, setLatestListMaxHeight] = useState<number | null>(null)
+  const latestListRef = useRef<HTMLDivElement | null>(null)
 
   async function loadRecent() {
     try {
@@ -5358,7 +5356,6 @@ function SurfExperienceCard({
         .select('id, spot_id, spot, logged_at, rating_1_6, wave_height_m, wave_period_s, wave_dir_from_deg, wind_speed_ms, wind_dir_from_deg')
         .eq('user_id', userId)
         .order('logged_at', { ascending: false })
-        .limit(4)
 
       if (error) {
         setItems([])
@@ -5374,6 +5371,35 @@ function SurfExperienceCard({
   useEffect(() => {
     loadRecent()
   }, [refreshKey])
+
+  useEffect(() => {
+    if (!latestOpen) {
+      setLatestListMaxHeight(null)
+      return
+    }
+
+    const updateListMaxHeight = () => {
+      const el = latestListRef.current
+      if (!el) return
+      const bottomGap = 20
+      const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - bottomGap)
+      setLatestListMaxHeight(Math.max(available, 160))
+    }
+
+    const raf = window.requestAnimationFrame(() => {
+      if (latestListRef.current) latestListRef.current.scrollTop = 0
+      updateListMaxHeight()
+    })
+    const settleTimer = window.setTimeout(updateListMaxHeight, 220)
+
+    window.addEventListener('resize', updateListMaxHeight)
+
+    return () => {
+      window.cancelAnimationFrame(raf)
+      window.clearTimeout(settleTimer)
+      window.removeEventListener('resize', updateListMaxHeight)
+    }
+  }, [latestOpen])
 
   return (
     <>
@@ -5404,7 +5430,7 @@ function SurfExperienceCard({
             className="w-full flex items-center justify-between rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
           >
             <div className="text-left">
-              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SISTE 4' : 'LATEST 4'}</div>
+              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SISTE' : 'LATEST'}</div>
               <div className="mt-1 text-xs text-[color:var(--fg-40)]">
                 {latestOpen
                   ? language === 'no'
@@ -5426,7 +5452,11 @@ function SurfExperienceCard({
           </button>
 
           {latestOpen && (
-            <div className="mt-3 space-y-2">
+            <div
+              ref={latestListRef}
+              style={latestListMaxHeight ? { maxHeight: `${latestListMaxHeight}px` } : undefined}
+              className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
+            >
               {loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
