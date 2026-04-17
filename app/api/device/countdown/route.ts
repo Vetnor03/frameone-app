@@ -138,6 +138,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       device_id,
+      generated_at: new Date().toISOString(),
       timezone: timeZone,
       today_ymd: todayYmd,
       items,
