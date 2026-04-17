@@ -1814,7 +1814,7 @@ function SettingsTab({
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
-  const [, setShowBottomFade] = useState(false)
+  const [showBottomFade, setShowBottomFade] = useState(false)
 
   function updateFadeState() {
     const el = scrollRef.current
