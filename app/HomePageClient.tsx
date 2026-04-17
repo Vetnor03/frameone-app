@@ -297,6 +297,66 @@ function buildLatestStatusMap(rows: DeviceStatusRow[]): Map<string, DeviceStatus
   return map
 }
 
+async function fetchStatusMapFromApi(deviceIds: string[]): Promise<Map<string, DeviceStatusMeta>> {
+  const map = new Map<string, DeviceStatusMeta>()
+  if (deviceIds.length === 0) return map
+
+  const results = await Promise.all(
+    deviceIds.map(async (deviceId) => {
+      try {
+        const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+        if (!resp.ok) return null
+
+        const data = await resp.json()
+        return {
+          device_id: deviceId,
+          current_version: data?.current_version ?? null,
+          battery_percent: normalizeBatteryPercent(data?.battery_percent),
+          battery_voltage: normalizeBatteryVoltage(data?.battery_voltage),
+          last_refresh_at: data?.last_refresh_at ?? null,
+        }
+      } catch {
+        return null
+      }
+    })
+  )
+
+  for (const row of results) {
+    if (!row?.device_id) continue
+    map.set(row.device_id, row)
+  }
+
+  return map
+}
+
+async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, DeviceStatusMeta>> {
+  if (deviceIds.length === 0) return new Map<string, DeviceStatusMeta>()
+
+  let directMap = new Map<string, DeviceStatusMeta>()
+
+  try {
+    const { data: statuses } = await supabase
+      .from('device_status')
+      .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
+      .in('device_id', deviceIds)
+      .order('last_refresh_at', { ascending: false, nullsFirst: false })
+
+    directMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
+  } catch {
+    directMap = new Map<string, DeviceStatusMeta>()
+  }
+
+  const missingIds = deviceIds.filter((id) => !directMap.has(id))
+  if (missingIds.length === 0) return directMap
+
+  const apiMap = await fetchStatusMapFromApi(missingIds)
+  for (const [id, meta] of apiMap.entries()) {
+    directMap.set(id, meta)
+  }
+
+  return directMap
+}
+
 function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
   if (layout === 'default') return { 0: null, 1: null, 2: null }
   if (layout === 'pyramid') return { 0: null, 1: null, 2: null, 3: null }
@@ -864,20 +924,7 @@ export default function HomePage() {
 
       const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
       const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-      let statusMap = new Map<
-        string,
-        { current_version: string | null; battery_percent: number | null; battery_voltage: number | null }
-      >()
-
-      if (deviceIds.length > 0) {
-        const { data: statuses } = await supabase
-          .from('device_status')
-          .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
-          .in('device_id', deviceIds)
-          .order('last_refresh_at', { ascending: false, nullsFirst: false })
-
-        statusMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
-      }
+      const statusMap = await fetchDeviceStatusMap(deviceIds)
 
       const list: MemberRow[] = memberRows.map((m) => ({
         device_id: m.device_id,
@@ -1952,17 +1999,7 @@ function MyFramesSection({
       const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
       const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
 
-      let statusMap = new Map<string, DeviceStatusMeta>()
-
-      if (deviceIds.length > 0) {
-        const { data: statuses } = await supabase
-          .from('device_status')
-          .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
-          .in('device_id', deviceIds)
-          .order('last_refresh_at', { ascending: false, nullsFirst: false })
-
-        statusMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
-      }
+      const statusMap = await fetchDeviceStatusMap(deviceIds)
 
       const merged: MemberRow[] = memberRows.map((m) => ({
         device_id: m.device_id,
@@ -2012,17 +2049,7 @@ async function addFrame() {
   const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
   const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
 
-  let statusMap = new Map<string, DeviceStatusMeta>()
-
-  if (deviceIds.length > 0) {
-    const { data: statuses } = await supabase
-      .from('device_status')
-      .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
-      .in('device_id', deviceIds)
-      .order('last_refresh_at', { ascending: false, nullsFirst: false })
-
-    statusMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
-  }
+  const statusMap = await fetchDeviceStatusMap(deviceIds)
 
   const merged: MemberRow[] = memberRows.map((m) => ({
     device_id: m.device_id,
@@ -2171,16 +2198,15 @@ async function addFrame() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-3 text-xs opacity-70">
-                  <div
-                    className="inline-flex items-center gap-1.5 normal-case tracking-normal"
-                    aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%` : `${batteryLabel} unavailable`}
-                  >
-                    <BatteryIcon percent={batteryPercent ?? 0} />
-                    <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
-                  </div>
-                  <div>{(f.role || 'member').toUpperCase()}</div>
+                <div
+                  className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-normal"
+                  aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%` : `${batteryLabel} unavailable`}
+                >
+                  <BatteryIcon percent={batteryPercent ?? 0} />
+                  <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
                 </div>
+
+                <div className="shrink-0 text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>
               </button>
             )
           })}
