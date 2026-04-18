@@ -1986,7 +1986,7 @@ function MyFramesSection({
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
 
-  function BatteryIcon({ percent }: { percent: number }) {
+  function BatteryIcon({ percent, charging = false }: { percent: number; charging?: boolean }) {
     const p = Math.max(0, Math.min(100, percent))
     const bars = p >= 75 ? 3 : p >= 35 ? 2 : p >= 10 ? 1 : 0
 
@@ -2003,20 +2003,15 @@ function MyFramesSection({
         {bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
         {bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
         {bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
-      </svg>
-    )
-  }
-
-  function ChargingBoltIcon() {
-    return (
-      <svg
-        aria-hidden
-        viewBox="0 0 8 12"
-        className="h-3.5 w-2.5 opacity-90"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M4.9 1 2 6h2.1L3.1 11l2.9-5H4L4.9 1Z" fill="currentColor" />
+        {charging && (
+          <path
+            d="M9 2.8 7.7 6h1.5L8 9.3l3.4-4.8H9.8L11 2.8Z"
+            fill="currentColor"
+            stroke="var(--bg)"
+            strokeWidth="1.1"
+            strokeLinejoin="round"
+          />
+        )}
       </svg>
     )
   }
@@ -2252,8 +2247,7 @@ async function addFrame() {
                   className="shrink-0 inline-flex items-center gap-1 text-xs opacity-70 normal-case tracking-normal"
                   aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}` : `${batteryLabel} unavailable`}
                 >
-                  {isCharging && <ChargingBoltIcon />}
-                  <BatteryIcon percent={batteryPercent ?? 0} />
+                  <BatteryIcon percent={batteryPercent ?? 0} charging={isCharging} />
                   <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
                 </div>
 
