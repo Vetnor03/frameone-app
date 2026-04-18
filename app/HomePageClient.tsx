@@ -2000,15 +2000,15 @@ function MyFramesSection({
       >
         <rect x="1" y="1" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
         <rect x="17.4" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" />
-        {bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
-        {bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
-        {bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+        {!charging && bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+        {!charging && bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+        {!charging && bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
         {charging && (
           <path
             d="M9 2.8 7.7 6h1.5L8 9.3l3.4-4.8H9.8L11 2.8Z"
-            fill="currentColor"
-            stroke="var(--bg)"
-            strokeWidth="1.1"
+            fill="var(--fg-90)"
+            stroke="currentColor"
+            strokeWidth="0.85"
             strokeLinejoin="round"
           />
         )}
