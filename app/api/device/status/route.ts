@@ -10,6 +10,9 @@ type StatusPostBody = {
   battery_voltage?: number | string | null
   is_charging?: boolean | string | number | null
   did_render?: boolean | string | number | null
+  is_usb_present?: boolean | string | number | null
+  pwr_sense_raw?: number | string | null
+  pwr_sense_stable?: number | string | null
 }
 
 function parseBatteryPercent(value: unknown): number | null {
@@ -46,6 +49,13 @@ function parseBoolean(value: unknown): boolean | null {
   return null
 }
 
+function parseSmallInt(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.round(n)
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -62,7 +72,9 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from('device_status')
-      .select('current_version, battery_percent, battery_voltage, is_charging, last_seen_at, last_render_at, last_refresh_at')
+      .select(
+        'current_version, battery_percent, battery_voltage, is_charging, is_usb_present, pwr_sense_raw, pwr_sense_stable, last_seen_at, last_render_at, last_refresh_at'
+      )
       .eq('device_id', device_id)
       .maybeSingle()
 
@@ -76,6 +88,9 @@ export async function GET(req: Request) {
       battery_percent: data?.battery_percent ?? null,
       battery_voltage: data?.battery_voltage ?? null,
       is_charging: parseBoolean(data?.is_charging),
+      is_usb_present: parseBoolean(data?.is_usb_present),
+      pwr_sense_raw: data?.pwr_sense_raw ?? null,
+      pwr_sense_stable: data?.pwr_sense_stable ?? null,
       last_seen_at: data?.last_seen_at ?? data?.last_refresh_at ?? null,
       last_render_at: data?.last_render_at ?? data?.last_refresh_at ?? null,
     })
@@ -99,6 +114,10 @@ export async function POST(req: Request) {
     const is_charging = parseBoolean(body?.is_charging)
     const did_render = parseBoolean(body?.did_render)
 
+    const is_usb_present = parseBoolean(body?.is_usb_present)
+    const pwr_sense_raw = parseSmallInt(body?.pwr_sense_raw)
+    const pwr_sense_stable = parseSmallInt(body?.pwr_sense_stable)
+
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
     }
@@ -116,6 +135,9 @@ export async function POST(req: Request) {
       battery_percent,
       battery_voltage,
       is_charging,
+      is_usb_present,
+      pwr_sense_raw,
+      pwr_sense_stable,
       last_seen_at: nowIso,
     }
 
@@ -140,6 +162,9 @@ export async function POST(req: Request) {
       battery_percent,
       battery_voltage,
       is_charging,
+      is_usb_present,
+      pwr_sense_raw,
+      pwr_sense_stable,
       did_render: did_render === true,
       last_seen_at: nowIso,
       last_render_at: did_render === true ? nowIso : null,
