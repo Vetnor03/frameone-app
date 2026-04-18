@@ -817,7 +817,7 @@ export default function HomePage() {
       return `${prefix} for ${diffDay} dag${diffDay === 1 ? '' : 'er'} siden`
     }
 
-    const prefix = 'Last updated'
+    const prefix = 'Updated'
 
     if (diffSec < 10) return `${prefix} just now`
     if (diffSec < 60) return `${prefix} ${diffSec} seconds ago`
@@ -1263,7 +1263,7 @@ async function handleSelectTab(k: TabKey) {
     </button>
 
     <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
-      {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Last updated —')}
+      {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
     </div>
   </div>
 )}
@@ -1986,7 +1986,7 @@ function MyFramesSection({
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
 
-  function BatteryIcon({ percent }: { percent: number }) {
+  function BatteryIcon({ percent, charging = false }: { percent: number; charging?: boolean }) {
     const p = Math.max(0, Math.min(100, percent))
     const bars = p >= 75 ? 3 : p >= 35 ? 2 : p >= 10 ? 1 : 0
 
@@ -2003,6 +2003,7 @@ function MyFramesSection({
         {bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
         {bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
         {bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+        {charging && <path d="M9 2.8 7.7 6h1.5L8 9.3l3.4-4.8H9.8L11 2.8Z" fill="currentColor" />}
       </svg>
     )
   }
@@ -2235,12 +2236,11 @@ async function addFrame() {
                 </div>
 
                 <div
-                  className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-normal"
+                  className="shrink-0 inline-flex items-center gap-1 text-xs opacity-70 normal-case tracking-normal"
                   aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}` : `${batteryLabel} unavailable`}
                 >
-                  <BatteryIcon percent={batteryPercent ?? 0} />
+                  <BatteryIcon percent={batteryPercent ?? 0} charging={isCharging} />
                   <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
-                  {isCharging && <span aria-hidden>⚡</span>}
                 </div>
 
                 <div className="shrink-0 text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>
