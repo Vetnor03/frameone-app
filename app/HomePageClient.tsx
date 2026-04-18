@@ -601,7 +601,6 @@ export default function HomePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [lastSeenAt, setLastSeenAt] = useState<string | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
@@ -795,7 +794,7 @@ export default function HomePage() {
     return next
   }
 
-  function formatRelative(iso: string, kind: 'updated' | 'seen') {
+  function formatRelative(iso: string) {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return null
 
@@ -803,7 +802,7 @@ export default function HomePage() {
     const diffSec = Math.floor(diffMs / 1000)
 
     if (language === 'no') {
-      const prefix = kind === 'seen' ? 'Sist sett' : 'Sist oppdatert'
+      const prefix = 'Sist oppdatert'
 
       if (diffSec < 10) return `${prefix} akkurat nå`
       if (diffSec < 60) return `${prefix} for ${diffSec} sekunder siden`
@@ -818,7 +817,7 @@ export default function HomePage() {
       return `${prefix} for ${diffDay} dag${diffDay === 1 ? '' : 'er'} siden`
     }
 
-    const prefix = kind === 'seen' ? 'Last seen' : 'Last updated'
+    const prefix = 'Last updated'
 
     if (diffSec < 10) return `${prefix} just now`
     if (diffSec < 60) return `${prefix} ${diffSec} seconds ago`
@@ -839,13 +838,9 @@ export default function HomePage() {
       if (!resp.ok) return
 
       const data = await resp.json()
-      const seenIso = data?.last_seen_at ? String(data.last_seen_at) : ''
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
-
-      setLastSeenAt(seenIso ? formatRelative(seenIso, 'seen') : null)
-      setLastUpdatedAt(renderIso ? formatRelative(renderIso, 'updated') : null)
+      setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
     } catch {
-      setLastSeenAt(null)
       setLastUpdatedAt(null)
     }
   }
@@ -1267,9 +1262,8 @@ async function handleSelectTab(k: TabKey) {
       {persisting ? tx(language).saving : tx(language).update}
     </button>
 
-    <div className="mt-5 min-h-[30px] text-xs tracking-widest text-[color:var(--fg-40)] space-y-1">
-      <div>{lastSeenAt ?? (language === 'no' ? 'Sist sett —' : 'Last seen —')}</div>
-      <div>{lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Last updated —')}</div>
+    <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
+      {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Last updated —')}
     </div>
   </div>
 )}
