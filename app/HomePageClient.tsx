@@ -246,6 +246,7 @@ type MemberRow = {
   battery_percent?: number | null
   battery_voltage?: number | null
   is_charging?: boolean | null
+  is_usb_present?: boolean | null
 }
 
 type DeviceStatusMeta = {
@@ -253,6 +254,7 @@ type DeviceStatusMeta = {
   battery_percent: number | null
   battery_voltage: number | null
   is_charging: boolean | null
+  is_usb_present: boolean | null
   last_seen_at: string | null
   last_render_at: string | null
 }
@@ -263,6 +265,7 @@ type DeviceStatusRow = {
   battery_percent: number | string | null
   battery_voltage: number | string | null
   is_charging: boolean | string | number | null
+  is_usb_present: boolean | string | number | null
   last_seen_at: string | null
   last_render_at: string | null
   last_refresh_at?: string | null
@@ -312,6 +315,7 @@ function buildLatestStatusMap(rows: DeviceStatusRow[]): Map<string, DeviceStatus
       battery_percent: normalizeBatteryPercent(row.battery_percent),
       battery_voltage: normalizeBatteryVoltage(row.battery_voltage),
       is_charging: normalizeBoolean(row.is_charging),
+      is_usb_present: normalizeBoolean(row.is_usb_present),
       last_seen_at: row.last_seen_at ?? row.last_refresh_at ?? null,
       last_render_at: row.last_render_at ?? row.last_refresh_at ?? null,
     })
@@ -337,6 +341,7 @@ async function fetchStatusMapFromApi(deviceIds: string[]): Promise<Map<string, D
           battery_percent: normalizeBatteryPercent(data?.battery_percent),
           battery_voltage: normalizeBatteryVoltage(data?.battery_voltage),
           is_charging: normalizeBoolean(data?.is_charging),
+          is_usb_present: normalizeBoolean(data?.is_usb_present),
           last_seen_at: data?.last_seen_at ?? null,
           last_render_at: data?.last_render_at ?? null,
         }
@@ -362,7 +367,9 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   try {
     const { data: statuses } = await supabase
       .from('device_status')
-      .select('device_id, current_version, battery_percent, battery_voltage, is_charging, last_seen_at, last_render_at, last_refresh_at')
+      .select(
+        'device_id, current_version, battery_percent, battery_voltage, is_charging, is_usb_present, last_seen_at, last_render_at, last_refresh_at'
+      )
       .in('device_id', deviceIds)
       .order('last_seen_at', { ascending: false, nullsFirst: false })
 
@@ -965,6 +972,7 @@ export default function HomePage() {
         battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
         battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
         is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+        is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
       }))
       setFrames(list)
 
@@ -2055,6 +2063,7 @@ function MyFramesSection({
         battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
         battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
         is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+        is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
       }))
 
       onFramesChanged(merged)
@@ -2106,6 +2115,7 @@ async function addFrame() {
     battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
     battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
     is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+    is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
   }))
 
   onFramesChanged(merged)
@@ -2230,7 +2240,7 @@ async function addFrame() {
             const selected = f.device_id === activeDeviceId
             const batteryPercent = normalizeBatteryPercent(f.battery_percent)
             const hasBattery = batteryPercent !== null
-            const isCharging = f.is_charging === true
+            const isCharging = f.is_usb_present === true || f.is_charging === true
             return (
               <button
                 key={f.device_id}
