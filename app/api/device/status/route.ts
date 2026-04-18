@@ -8,6 +8,8 @@ type StatusPostBody = {
   current_version?: string | null
   battery_percent?: number | string | null
   battery_voltage?: number | string | null
+  is_charging?: boolean | string | number | null
+  did_render?: boolean | string | number | null
 }
 
 function parseBatteryPercent(value: unknown): number | null {
@@ -29,6 +31,21 @@ function parseBatteryVoltage(value: unknown): number | null {
   return Number(n.toFixed(3))
 }
 
+function parseBoolean(value: unknown): boolean | null {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (value === 1) return true
+    if (value === 0) return false
+    return null
+  }
+
+  const normalized = String(value).trim().toLowerCase()
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true
+  if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false
+  return null
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -45,7 +62,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from('device_status')
-      .select('last_refresh_at, current_version, battery_percent, battery_voltage')
+      .select('current_version, battery_percent, battery_voltage, is_charging, last_seen_at, last_render_at, last_refresh_at')
       .eq('device_id', device_id)
       .maybeSingle()
 
@@ -55,10 +72,12 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       device_id,
-      last_refresh_at: data?.last_refresh_at ?? null,
       current_version: data?.current_version ?? null,
       battery_percent: data?.battery_percent ?? null,
       battery_voltage: data?.battery_voltage ?? null,
+      is_charging: parseBoolean(data?.is_charging),
+      last_seen_at: data?.last_seen_at ?? data?.last_refresh_at ?? null,
+      last_render_at: data?.last_render_at ?? data?.last_refresh_at ?? null,
     })
   } catch (e: any) {
     return NextResponse.json(
@@ -77,6 +96,8 @@ export async function POST(req: Request) {
     const current_version = current_versionRaw || null
     const battery_percent = parseBatteryPercent(body?.battery_percent)
     const battery_voltage = parseBatteryVoltage(body?.battery_voltage)
+    const is_charging = parseBoolean(body?.is_charging)
+    const did_render = parseBoolean(body?.did_render)
 
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
@@ -87,12 +108,21 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const payload = {
+    const nowIso = new Date().toISOString()
+
+    const payload: Record<string, string | number | boolean | null> = {
       device_id,
-      last_refresh_at: new Date().toISOString(),
       current_version,
       battery_percent,
       battery_voltage,
+      is_charging,
+      last_seen_at: nowIso,
+    }
+
+    if (did_render === true) {
+      payload.last_render_at = nowIso
+      // Keep this for backwards compatibility with older consumers still reading last_refresh_at.
+      payload.last_refresh_at = nowIso
     }
 
     const { error } = await supabase
@@ -109,6 +139,10 @@ export async function POST(req: Request) {
       current_version,
       battery_percent,
       battery_voltage,
+      is_charging,
+      did_render: did_render === true,
+      last_seen_at: nowIso,
+      last_render_at: did_render === true ? nowIso : null,
     })
   } catch (e: any) {
     return NextResponse.json(

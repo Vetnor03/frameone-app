@@ -245,13 +245,16 @@ type MemberRow = {
   current_version?: string | null
   battery_percent?: number | null
   battery_voltage?: number | null
+  is_charging?: boolean | null
 }
 
 type DeviceStatusMeta = {
   current_version: string | null
   battery_percent: number | null
   battery_voltage: number | null
-  last_refresh_at: string | null
+  is_charging: boolean | null
+  last_seen_at: string | null
+  last_render_at: string | null
 }
 
 type DeviceStatusRow = {
@@ -259,7 +262,10 @@ type DeviceStatusRow = {
   current_version: string | null
   battery_percent: number | string | null
   battery_voltage: number | string | null
-  last_refresh_at: string | null
+  is_charging: boolean | string | number | null
+  last_seen_at: string | null
+  last_render_at: string | null
+  last_refresh_at?: string | null
 }
 
 function normalizeBatteryPercent(value: number | string | null | undefined): number | null {
@@ -279,6 +285,21 @@ function normalizeBatteryVoltage(value: number | string | null | undefined): num
   return Number(n.toFixed(3))
 }
 
+function normalizeBoolean(value: boolean | string | number | null | undefined): boolean | null {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (value === 1) return true
+    if (value === 0) return false
+    return null
+  }
+
+  const normalized = String(value).trim().toLowerCase()
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true
+  if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false
+  return null
+}
+
 function buildLatestStatusMap(rows: DeviceStatusRow[]): Map<string, DeviceStatusMeta> {
   const map = new Map<string, DeviceStatusMeta>()
 
@@ -290,7 +311,9 @@ function buildLatestStatusMap(rows: DeviceStatusRow[]): Map<string, DeviceStatus
       current_version: row.current_version ?? null,
       battery_percent: normalizeBatteryPercent(row.battery_percent),
       battery_voltage: normalizeBatteryVoltage(row.battery_voltage),
-      last_refresh_at: row.last_refresh_at ?? null,
+      is_charging: normalizeBoolean(row.is_charging),
+      last_seen_at: row.last_seen_at ?? row.last_refresh_at ?? null,
+      last_render_at: row.last_render_at ?? row.last_refresh_at ?? null,
     })
   }
 
@@ -313,7 +336,9 @@ async function fetchStatusMapFromApi(deviceIds: string[]): Promise<Map<string, D
           current_version: data?.current_version ?? null,
           battery_percent: normalizeBatteryPercent(data?.battery_percent),
           battery_voltage: normalizeBatteryVoltage(data?.battery_voltage),
-          last_refresh_at: data?.last_refresh_at ?? null,
+          is_charging: normalizeBoolean(data?.is_charging),
+          last_seen_at: data?.last_seen_at ?? null,
+          last_render_at: data?.last_render_at ?? null,
         }
       } catch {
         return null
@@ -337,9 +362,9 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   try {
     const { data: statuses } = await supabase
       .from('device_status')
-      .select('device_id, current_version, battery_percent, battery_voltage, last_refresh_at')
+      .select('device_id, current_version, battery_percent, battery_voltage, is_charging, last_seen_at, last_render_at, last_refresh_at')
       .in('device_id', deviceIds)
-      .order('last_refresh_at', { ascending: false, nullsFirst: false })
+      .order('last_seen_at', { ascending: false, nullsFirst: false })
 
     directMap = buildLatestStatusMap((statuses || []) as DeviceStatusRow[])
   } catch {
@@ -777,30 +802,34 @@ export default function HomePage() {
     const diffSec = Math.floor(diffMs / 1000)
 
     if (language === 'no') {
-      if (diffSec < 10) return 'Oppdatert akkurat nå'
-      if (diffSec < 60) return `Oppdatert for ${diffSec} sekunder siden`
+      const prefix = 'Sist oppdatert'
+
+      if (diffSec < 10) return `${prefix} akkurat nå`
+      if (diffSec < 60) return `${prefix} for ${diffSec} sekunder siden`
 
       const diffMin = Math.floor(diffSec / 60)
-      if (diffMin < 60) return `Oppdatert for ${diffMin} minutt${diffMin === 1 ? '' : 'er'} siden`
+      if (diffMin < 60) return `${prefix} for ${diffMin} minutt${diffMin === 1 ? '' : 'er'} siden`
 
       const diffHr = Math.floor(diffMin / 60)
-      if (diffHr < 24) return `Oppdatert for ${diffHr} time${diffHr === 1 ? '' : 'r'} siden`
+      if (diffHr < 24) return `${prefix} for ${diffHr} time${diffHr === 1 ? '' : 'r'} siden`
 
       const diffDay = Math.floor(diffHr / 24)
-      return `Oppdatert for ${diffDay} dag${diffDay === 1 ? '' : 'er'} siden`
+      return `${prefix} for ${diffDay} dag${diffDay === 1 ? '' : 'er'} siden`
     }
 
-    if (diffSec < 10) return 'Updated just now'
-    if (diffSec < 60) return `Updated ${diffSec} seconds ago`
+    const prefix = 'Last updated'
+
+    if (diffSec < 10) return `${prefix} just now`
+    if (diffSec < 60) return `${prefix} ${diffSec} seconds ago`
 
     const diffMin = Math.floor(diffSec / 60)
-    if (diffMin < 60) return `Updated ${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
+    if (diffMin < 60) return `${prefix} ${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
 
     const diffHr = Math.floor(diffMin / 60)
-    if (diffHr < 24) return `Updated ${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
+    if (diffHr < 24) return `${prefix} ${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
 
     const diffDay = Math.floor(diffHr / 24)
-    return `Updated ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
+    return `${prefix} ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
   async function loadDeviceStatus(deviceId: string) {
@@ -809,15 +838,8 @@ export default function HomePage() {
       if (!resp.ok) return
 
       const data = await resp.json()
-      const iso = data?.last_refresh_at ? String(data.last_refresh_at) : ''
-
-      if (!iso) {
-        setLastUpdatedAt(null)
-        return
-      }
-
-      const text = formatRelative(iso)
-      setLastUpdatedAt(text)
+      const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
+      setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
     } catch {
       setLastUpdatedAt(null)
     }
@@ -942,6 +964,7 @@ export default function HomePage() {
         current_version: statusMap.get(m.device_id)?.current_version ?? null,
         battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
         battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+        is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
       }))
       setFrames(list)
 
@@ -1240,7 +1263,7 @@ async function handleSelectTab(k: TabKey) {
     </button>
 
     <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
-      {lastUpdatedAt ?? ''}
+      {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Last updated —')}
     </div>
   </div>
 )}
@@ -2017,6 +2040,7 @@ function MyFramesSection({
         current_version: statusMap.get(m.device_id)?.current_version ?? null,
         battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
         battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+        is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
       }))
 
       onFramesChanged(merged)
@@ -2067,6 +2091,7 @@ async function addFrame() {
     current_version: statusMap.get(m.device_id)?.current_version ?? null,
     battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
     battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+    is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
   }))
 
   onFramesChanged(merged)
@@ -2191,6 +2216,7 @@ async function addFrame() {
             const selected = f.device_id === activeDeviceId
             const batteryPercent = normalizeBatteryPercent(f.battery_percent)
             const hasBattery = batteryPercent !== null
+            const isCharging = f.is_charging === true
             return (
               <button
                 key={f.device_id}
@@ -2210,10 +2236,11 @@ async function addFrame() {
 
                 <div
                   className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-normal"
-                  aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%` : `${batteryLabel} unavailable`}
+                  aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}` : `${batteryLabel} unavailable`}
                 >
                   <BatteryIcon percent={batteryPercent ?? 0} />
                   <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
+                  {isCharging && <span aria-hidden>⚡</span>}
                 </div>
 
                 <div className="shrink-0 text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>
