@@ -85,6 +85,16 @@ static void resetSoccer(FrameConfig& out) {
   }
 }
 
+static void resetStocks(FrameConfig& out) {
+  out.stocksCount = 0;
+  for (int i = 0; i < 4; i++) {
+    out.stocks[i].id = 0;
+    out.stocks[i].symbol[0] = '\0';
+    out.stocks[i].name[0] = '\0';
+    out.stocks[i].refreshMs = 900000UL;
+  }
+}
+
 namespace FrameConfigApi {
 
 bool fetch(FrameConfig& out, const String& deviceToken) {
@@ -110,10 +120,11 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
     out.date.holidays[i].name[0] = '\0';
   }
 
-  // reset weather + surf + soccer
+  // reset weather + surf + soccer + stocks
   resetWeather(out);
   resetSurf(out);
   resetSoccer(out);
+  resetStocks(out);
 
   String url = String(BASE_URL) + "/api/device/frame-config?device_id=" + DeviceIdentity::getDeviceId();
 
@@ -308,6 +319,38 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
         dst.refreshMs = (uint32_t)(s["refresh"] | 1800000UL);
 
         out.soccerCount++;
+      }
+    }
+
+    // ===== modules.stocks =====
+    JsonArray stocksArr = modules["stocks"].as<JsonArray>();
+    if (!stocksArr.isNull()) {
+      for (JsonObject s : stocksArr) {
+        if (out.stocksCount >= 4) break;
+
+        int id = s["id"] | 0;
+        if (id < 1 || id > 255) continue;
+
+        const char* symbol = s["symbol"] | "";
+        const char* name = s["name"] | "";
+
+        if ((!symbol || !symbol[0]) && (!name || !name[0])) continue;
+
+        StocksModuleConfig& dst = out.stocks[out.stocksCount];
+        dst.id = (uint8_t)id;
+
+        if (symbol && symbol[0]) strlcpy(dst.symbol, symbol, sizeof(dst.symbol));
+        else dst.symbol[0] = '\0';
+
+        if (name && name[0]) strlcpy(dst.name, name, sizeof(dst.name));
+        else dst.name[0] = '\0';
+
+        uint32_t refreshMs = (uint32_t)(s["refresh"] | 900000UL);
+        if (refreshMs < 60000UL) refreshMs = 60000UL;
+        if (refreshMs > 86400000UL) refreshMs = 86400000UL;
+        dst.refreshMs = refreshMs;
+
+        out.stocksCount++;
       }
     }
 

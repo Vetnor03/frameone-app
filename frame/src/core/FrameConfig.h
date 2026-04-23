@@ -80,6 +80,14 @@ struct SoccerModuleConfig {
   uint32_t refreshMs = 10800000UL; // default 3h
 };
 
+// ===== Stocks module config (parsed from settings_json.modules.stocks[]) =====
+struct StocksModuleConfig {
+  uint8_t id = 0;                 // 1..n (matches "stocks:<id>")
+  char symbol[24] = {0};          // e.g. "EQNR.OL"
+  char name[48] = {0};            // e.g. "Equinor"
+  uint32_t refreshMs = 900000UL;  // default 15 min
+};
+
 struct FrameConfig {
   LayoutKey layout = LAYOUT_DEFAULT;
   ThemeKey theme = THEME_DARK;
@@ -98,9 +106,13 @@ struct FrameConfig {
   SurfModuleConfig surf[4];
   uint8_t surfCount = 0;
 
-   // Soccer instances
+  // Soccer instances
   SoccerModuleConfig soccer[4];
   uint8_t soccerCount = 0;
+
+  // Stocks instances
+  StocksModuleConfig stocks[4];
+  uint8_t stocksCount = 0;
 
   // Surf global settings
   SurfSettingsConfig surfSettings;
