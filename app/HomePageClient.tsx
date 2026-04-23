@@ -8,7 +8,7 @@ import { findSpotByLabel } from './lib/surf/spots'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 
 type CoreTabKey = 'frame' | 'settings'
-type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer'
+type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
@@ -28,6 +28,8 @@ const UI = {
       reminders: 'REMINDERS',
       countdown: 'COUNTDOWN',
       soccer: 'SOCCER',
+      stocks: 'STOCKS',
+      groceries: 'GROCERIES',
     },
 
     layouts: {
@@ -87,6 +89,9 @@ const UI = {
 
     soccerTeam: 'Team',
     soccerTeamFor: 'Team',
+    stock: 'Stock',
+    stockSymbol: 'Symbol',
+    groceriesComingSoon: 'Groceries coming soon',
 
     countdownNoEvents: 'No events yet',
     newEvent: 'NEW EVENT',
@@ -125,6 +130,8 @@ const UI = {
       reminders: 'PÅMINNELSER',
       countdown: 'NEDTELLING',
       soccer: 'FOTBALL',
+      stocks: 'AKSJER',
+      groceries: 'MATVARER',
     },
 
     layouts: {
@@ -184,6 +191,9 @@ const UI = {
 
     soccerTeam: 'Lag',
     soccerTeamFor: 'Lag',
+    stock: 'Aksje',
+    stockSymbol: 'Symbol',
+    groceriesComingSoon: 'Matvarer kommer snart',
 
     countdownNoEvents: 'Ingen hendelser ennå',
     newEvent: 'NY HENDELSE',
@@ -408,7 +418,9 @@ function baseModuleKeyFromStored(moduleStr: string): ModuleKey | null {
     base === 'surf' ||
     base === 'reminders' ||
     base === 'countdown' ||
-    base === 'soccer'
+    base === 'soccer' ||
+    base === 'stocks' ||
+    base === 'groceries'
   ) {
     return base as ModuleKey
   }
@@ -423,6 +435,8 @@ function cellsMapToArray(
   let weatherCounter = 0
   let surfCounter = 0
   let soccerCounter = 0
+  let stocksCounter = 0
+  let groceriesCounter = 0
 
   return Object.entries(map)
     .filter(([, mod]) => options?.includeEmptySlots || !!mod)
@@ -446,6 +460,16 @@ function cellsMapToArray(
       if (m === 'soccer') {
         soccerCounter += 1
         return { slot: Number(slot), module: `soccer:${soccerCounter}` }
+      }
+
+      if (m === 'stocks') {
+        stocksCounter += 1
+        return { slot: Number(slot), module: `stocks:${stocksCounter}` }
+      }
+
+      if (m === 'groceries') {
+        groceriesCounter += 1
+        return { slot: Number(slot), module: `groceries:${groceriesCounter}` }
       }
 
       return { slot: Number(slot), module: m }
@@ -1636,7 +1660,7 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
-  const options: ModuleKey[] = ['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer']
+  const options: ModuleKey[] = ['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries']
   const t = tx(language)
 
   return (
@@ -2453,6 +2477,20 @@ type SoccerCfg = {
   competitionName?: string
 }
 
+type StockCfg = {
+  id: number
+  symbol?: string
+  name?: string
+  refresh?: number
+}
+
+type StockSearchResult = {
+  symbol: string
+  displayName: string
+  exchange: string
+  country: string
+}
+
 function normalizeSoccerList(raw: any): SoccerCfg[] {
   const arr = Array.isArray(raw) ? raw : []
 
@@ -2471,6 +2509,28 @@ function normalizeSoccerList(raw: any): SoccerCfg[] {
       if (teamName) out.teamName = teamName
       if (competitionId) out.competitionId = competitionId
       if (competitionName) out.competitionName = competitionName
+
+      return out
+    })
+    .filter((x) => Number.isFinite(x.id) && x.id >= 1 && x.id <= 255)
+}
+
+function normalizeStocksList(raw: any): StockCfg[] {
+  const arr = Array.isArray(raw) ? raw : []
+
+  return arr
+    .filter((x) => x && typeof x === 'object')
+    .map((x) => {
+      const id = Number(x.id)
+      const symbol = String(x.symbol ?? '').trim().slice(0, 24)
+      const name = String(x.name ?? '').trim().slice(0, 80)
+      const refreshRaw = Number(x.refresh)
+      const refresh = Number.isFinite(refreshRaw) && refreshRaw > 0 ? Math.round(refreshRaw) : 900000
+
+      const out: StockCfg = { id, refresh }
+
+      if (symbol) out.symbol = symbol
+      if (name) out.name = name
 
       return out
     })
@@ -2945,6 +3005,23 @@ function ModuleSettingsTab({
         markDirty={markDirty}
       />
     )
+  }
+
+  if (module === 'stocks') {
+    return (
+      <StocksModuleSettingsTab
+        language={language}
+        layoutKey={layoutKey}
+        cells={cells}
+        modulesJson={modulesJson}
+        setModulesJson={setModulesJson}
+        markDirty={markDirty}
+      />
+    )
+  }
+
+  if (module === 'groceries') {
+    return <GroceriesModuleSettingsTab language={language} />
   }
 
   return (
@@ -3650,6 +3727,228 @@ type SoccerTeamItem = {
   teamName: string
   competitionId?: string
   competitionName?: string
+}
+
+function StocksModuleSettingsTab({
+  language,
+  layoutKey,
+  cells,
+  modulesJson,
+  setModulesJson,
+  markDirty,
+}: {
+  language: AppLanguage
+  layoutKey: LayoutKey
+  cells: Record<number, ModuleKey | null>
+  modulesJson: Record<string, any>
+  setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
+  markDirty: () => void
+}) {
+  const stockSlots = Object.entries(cells)
+    .filter(([, m]) => m === 'stocks')
+    .map(([slot]) => Number(slot))
+    .sort((a, b) => a - b)
+
+  const stockInstances = (stockSlots.length ? stockSlots : [0]).map((slot, idx) => ({
+    slot,
+    id: idx + 1,
+  }))
+
+  const single = stockInstances.length === 1
+  const stockList: StockCfg[] = normalizeStocksList(modulesJson.stocks)
+
+  function commitStockList(nextList: StockCfg[]) {
+    const fixed = normalizeStocksList(nextList)
+    setModulesJson((prev) => ({ ...prev, stocks: fixed }))
+    markDirty()
+  }
+
+  function upsertStock(id: number, patch: Partial<StockCfg>) {
+    const next: StockCfg[] = normalizeStocksList(modulesJson.stocks)
+    const idx = next.findIndex((x) => Number(x?.id) === id)
+
+    const merged: StockCfg = {
+      ...(idx >= 0 ? next[idx] : ({ id } as StockCfg)),
+      ...patch,
+      id,
+      refresh: 900000,
+    }
+
+    if (idx >= 0) next[idx] = merged
+    else next.push(merged)
+
+    commitStockList(next)
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="mt-5 space-y-3 overflow-auto pr-1">
+        {stockInstances.map(({ slot, id }) => {
+          const cfg = stockList.find((x) => Number(x?.id) === id) || null
+          const title = single ? tx(language).stock : `${tx(language).stock} — ${slotLabel(language, layoutKey, slot)}`
+          return (
+            <StockRow
+              key={`${slot}-${id}`}
+              language={language}
+              title={title}
+              symbol={cfg?.symbol ? String(cfg.symbol) : ''}
+              name={cfg?.name ? String(cfg.name) : ''}
+              onSave={(patch) => upsertStock(id, patch)}
+            />
+          )
+        })}
+      </div>
+      <div className="flex-1" />
+    </div>
+  )
+}
+
+function StockRow({
+  language,
+  title,
+  symbol,
+  name,
+  onSave,
+}: {
+  language: AppLanguage
+  title: string
+  symbol: string
+  name: string
+  onSave: (cfgPatch: Partial<StockCfg>) => void
+}) {
+  const [draftSymbol, setDraftSymbol] = useState(symbol)
+  const [draftName, setDraftName] = useState(name)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<StockSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => setDraftSymbol(symbol), [symbol])
+  useEffect(() => setDraftName(name), [name])
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([])
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    const handle = window.setTimeout(async () => {
+      try {
+        const resp = await fetch(`/api/stocks/search?q=${encodeURIComponent(q)}`, { cache: 'no-store' })
+        if (!resp.ok) throw new Error('Search failed')
+        const data = await resp.json()
+        const next = Array.isArray(data?.results) ? (data.results as StockSearchResult[]) : []
+        setResults(next)
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, 250)
+
+    return () => window.clearTimeout(handle)
+  }, [query])
+
+  return (
+    <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+      <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{title.toUpperCase()}</div>
+
+      <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'SØK' : 'SEARCH'}</div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={language === 'no' ? 'Søk ticker eller selskap' : 'Search ticker or company'}
+        className="mt-1 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+      />
+
+      <div className="mt-2 text-xs tracking-widest text-[color:var(--fg-40)]">
+        {loading
+          ? language === 'no'
+            ? 'SØKER…'
+            : 'SEARCHING…'
+          : results.length > 0
+            ? language === 'no'
+              ? 'RESULTATER'
+              : 'RESULTS'
+            : query.trim().length >= 2
+              ? language === 'no'
+                ? 'INGEN RESULTATER'
+                : 'NO RESULTS'
+              : ''}
+      </div>
+
+      {results.length > 0 && (
+        <div className="mt-2 max-h-44 overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
+          {results.map((item) => (
+            <button
+              key={`${item.symbol}-${item.exchange}`}
+              onClick={() => {
+                setDraftSymbol(item.symbol)
+                setDraftName(item.displayName)
+                onSave({
+                  symbol: item.symbol,
+                  name: item.displayName,
+                  refresh: 900000,
+                })
+                setQuery('')
+                setResults([])
+              }}
+              className="w-full text-left px-4 py-3 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
+            >
+              <div className="text-[color:var(--fg-90)] text-sm font-medium">{item.symbol}</div>
+              <div className="text-[color:var(--fg-60)] text-xs truncate">{item.displayName}</div>
+              <div className="text-[color:var(--fg-40)] text-[11px] mt-1">{[item.exchange, item.country].filter(Boolean).join(' • ')}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-45)]">{tx(language).stockSymbol.toUpperCase()}</div>
+      <input
+        value={draftSymbol}
+        onChange={(e) => setDraftSymbol(e.target.value.toUpperCase())}
+        placeholder={language === 'no' ? 'F.eks. EQNR.OL' : 'e.g. EQNR.OL'}
+        className="mt-1 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+      />
+
+      <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'NAVN' : 'NAME'}</div>
+      <input
+        value={draftName}
+        onChange={(e) => setDraftName(e.target.value)}
+        placeholder={language === 'no' ? 'F.eks. Equinor' : 'e.g. Equinor'}
+        className="mt-1 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+      />
+
+      <button
+        onClick={() =>
+          onSave({
+            symbol: draftSymbol.trim().slice(0, 24).toUpperCase(),
+            name: draftName.trim().slice(0, 80),
+            refresh: 900000,
+          })}
+        className="mt-4 h-11 px-4 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs"
+      >
+        {language === 'no' ? 'LAGRE AKSJE' : 'SAVE STOCK'}
+      </button>
+    </div>
+  )
+}
+
+function GroceriesModuleSettingsTab({ language }: { language: AppLanguage }) {
+  return (
+    <div className="h-full flex flex-col">
+      <div className="mt-5 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+        <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
+          {moduleLabel(language, 'groceries')}
+        </div>
+        <div className="mt-2 text-[color:var(--fg-80)] text-base">
+          {tx(language).groceriesComingSoon}
+        </div>
+      </div>
+      <div className="flex-1" />
+    </div>
+  )
 }
 
 function RemindersModuleSettingsTab({
