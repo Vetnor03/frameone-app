@@ -3816,14 +3816,73 @@ function StockRow({
   name: string
   onSave: (cfgPatch: Partial<StockCfg>) => void
 }) {
-  const [draftSymbol, setDraftSymbol] = useState(symbol)
-  const [draftName, setDraftName] = useState(name)
+  const [open, setOpen] = useState(false)
+  const selectedName = name.trim()
+  const selectedSymbol = symbol.trim().toUpperCase()
+  const hasSelected = !!selectedSymbol
+
+  return (
+    <>
+      <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{title.toUpperCase()}</div>
+            <div className="mt-1 text-[color:var(--fg-90)] text-xl font-semibold leading-tight truncate">
+              {hasSelected ? (selectedName || selectedSymbol) : (language === 'no' ? 'Velg aksje' : 'Choose stock')}
+            </div>
+            {hasSelected && (
+              <div className="mt-1 text-sm text-[color:var(--fg-55)] truncate">{selectedSymbol}</div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setOpen(true)}
+            className="shrink-0 h-10 px-4 rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs hover:bg-[color:var(--panel-05)]"
+          >
+            {tx(language).change}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <StockSearchSheet
+          language={language}
+          title={title}
+          initialSymbol={selectedSymbol}
+          initialName={selectedName}
+          onClose={() => setOpen(false)}
+          onPicked={(picked) => {
+            onSave(picked)
+            setOpen(false)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function StockSearchSheet({
+  language,
+  title,
+  initialSymbol,
+  initialName,
+  onClose,
+  onPicked,
+}: {
+  language: AppLanguage
+  title: string
+  initialSymbol: string
+  initialName: string
+  onClose: () => void
+  onPicked: (cfgPatch: Partial<StockCfg>) => void
+}) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<StockSearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualSymbol, setManualSymbol] = useState(initialSymbol)
+  const [manualName, setManualName] = useState(initialName)
 
-  useEffect(() => setDraftSymbol(symbol), [symbol])
-  useEffect(() => setDraftName(name), [name])
   useEffect(() => {
     const q = query.trim()
     if (q.length < 2) {
@@ -3851,86 +3910,77 @@ function StockRow({
   }, [query])
 
   return (
-    <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
-      <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{title.toUpperCase()}</div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{title.toUpperCase()}</div>
+          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button>
+        </div>
 
-      <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'SØK' : 'SEARCH'}</div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={language === 'no' ? 'Søk ticker eller selskap' : 'Search ticker or company'}
-        className="mt-1 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
-      />
+        <div className="mt-4">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={language === 'no' ? 'Søk ticker eller selskap' : 'Search ticker or company'}
+            className="w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+          />
+        </div>
 
-      <div className="mt-2 text-xs tracking-widest text-[color:var(--fg-40)]">
-        {loading
-          ? language === 'no'
-            ? 'SØKER…'
-            : 'SEARCHING…'
-          : results.length > 0
-            ? language === 'no'
-              ? 'RESULTATER'
-              : 'RESULTS'
-            : query.trim().length >= 2
-              ? language === 'no'
-                ? 'INGEN RESULTATER'
-                : 'NO RESULTS'
-              : ''}
-      </div>
+        <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
+          {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
+        </div>
 
-      {results.length > 0 && (
-        <div className="mt-2 max-h-44 overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
+        <div className="mt-3 max-h-[42vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
           {results.map((item) => (
             <button
               key={`${item.symbol}-${item.exchange}`}
-              onClick={() => {
-                setDraftSymbol(item.symbol)
-                setDraftName(item.displayName)
-                onSave({
-                  symbol: item.symbol,
-                  name: item.displayName,
-                  refresh: 900000,
-                })
-                setQuery('')
-                setResults([])
-              }}
-              className="w-full text-left px-4 py-3 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
+              onClick={() => onPicked({ symbol: item.symbol, name: item.displayName, refresh: 900000 })}
+              className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
             >
-              <div className="text-[color:var(--fg-90)] text-sm font-medium">{item.symbol}</div>
-              <div className="text-[color:var(--fg-60)] text-xs truncate">{item.displayName}</div>
-              <div className="text-[color:var(--fg-40)] text-[11px] mt-1">{[item.exchange, item.country].filter(Boolean).join(' • ')}</div>
+              <div className="text-[color:var(--fg-90)] text-base font-medium">{item.displayName}</div>
+              <div className="text-[color:var(--fg-55)] text-sm mt-0.5">{item.symbol}</div>
+              <div className="text-[color:var(--fg-35)] text-[11px] mt-1">{[item.exchange, item.country].filter(Boolean).join(' • ')}</div>
             </button>
           ))}
         </div>
-      )}
 
-      <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-45)]">{tx(language).stockSymbol.toUpperCase()}</div>
-      <input
-        value={draftSymbol}
-        onChange={(e) => setDraftSymbol(e.target.value.toUpperCase())}
-        placeholder={language === 'no' ? 'F.eks. EQNR.OL' : 'e.g. EQNR.OL'}
-        className="mt-1 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
-      />
+        <button
+          onClick={() => setManualOpen((v) => !v)}
+          className="mt-3 text-xs tracking-widest text-[color:var(--fg-50)] hover:text-[color:var(--fg-70)]"
+        >
+          {manualOpen
+            ? (language === 'no' ? 'SKJUL MANUELL INNSKRIVING' : 'HIDE MANUAL ENTRY')
+            : (language === 'no' ? 'SKRIV INN MANUELT' : 'ENTER MANUALLY')}
+        </button>
 
-      <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'NAVN' : 'NAME'}</div>
-      <input
-        value={draftName}
-        onChange={(e) => setDraftName(e.target.value)}
-        placeholder={language === 'no' ? 'F.eks. Equinor' : 'e.g. Equinor'}
-        className="mt-1 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
-      />
-
-      <button
-        onClick={() =>
-          onSave({
-            symbol: draftSymbol.trim().slice(0, 24).toUpperCase(),
-            name: draftName.trim().slice(0, 80),
-            refresh: 900000,
-          })}
-        className="mt-4 h-11 px-4 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs"
-      >
-        {language === 'no' ? 'LAGRE AKSJE' : 'SAVE STOCK'}
-      </button>
+        {manualOpen && (
+          <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
+            <input
+              value={manualSymbol}
+              onChange={(e) => setManualSymbol(e.target.value.toUpperCase())}
+              placeholder={language === 'no' ? 'Ticker (f.eks. EQNR.OL)' : 'Ticker (e.g. EQNR.OL)'}
+              className="w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+            />
+            <input
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+              placeholder={language === 'no' ? 'Navn (valgfritt)' : 'Name (optional)'}
+              className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+            />
+            <button
+              onClick={() =>
+                onPicked({
+                  symbol: manualSymbol.trim().slice(0, 24).toUpperCase(),
+                  name: manualName.trim().slice(0, 80),
+                  refresh: 900000,
+                })}
+              className="mt-2 h-10 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
+            >
+              {language === 'no' ? 'LAGRE' : 'SAVE'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
