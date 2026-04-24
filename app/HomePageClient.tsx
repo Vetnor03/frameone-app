@@ -4084,19 +4084,19 @@ type GrocerySuggestion = {
 
 const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
 const GROCERY_CATEGORY_ORDER: GroceryCategory[] = [
-  'fruit_veg',
   'bread',
-  'dairy',
   'cold_cuts',
-  'meat_fish',
-  'frozen',
+  'dairy',
+  'drinks',
   'dry_goods',
+  'frozen',
+  'fruit_veg',
+  'household',
+  'meat_fish',
+  'other',
+  'snacks',
   'spices',
   'toiletries',
-  'snacks',
-  'drinks',
-  'household',
-  'other',
 ]
 
 function asGroceryCategory(value: string | null | undefined): GroceryCategory {
@@ -4520,13 +4520,13 @@ function GroceriesDraftSheet({
 }) {
   const [name, setName] = useState(editingItem?.name ?? '')
   const [quantity, setQuantity] = useState(editingItem?.quantity ?? 1)
-  const [category, setCategory] = useState<GroceryCategory>(editingItem?.category ?? 'other')
+  const [category, setCategory] = useState<GroceryCategory | ''>(editingItem?.category ?? '')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setName(editingItem?.name ?? '')
     setQuantity(editingItem?.quantity ?? 1)
-    setCategory(editingItem?.category ?? 'other')
+    setCategory(editingItem?.category ?? '')
   }, [editingItem])
 
   const filteredSuggestions = useMemo(() => {
@@ -4543,19 +4543,19 @@ function GroceriesDraftSheet({
   useEffect(() => {
     if (editingItem) return
     const found = suggestions.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
-    setCategory(found?.category ?? 'other')
+    setCategory(found?.category ?? '')
   }, [editingItem, name, suggestions])
 
-  const canSave = !!name.trim() && !saving
+  const canSave = !!name.trim() && !!category && !saving
 
   async function save() {
     if (!canSave) return
     setSaving(true)
     try {
       if (editingItem?.id) {
-        await updateItem(editingItem.id, name.trim(), quantity, category)
+        await updateItem(editingItem.id, name.trim(), quantity, category as GroceryCategory)
       } else {
-        await addItem(name.trim(), quantity, category)
+        await addItem(name.trim(), quantity, category as GroceryCategory)
       }
       await onSaved()
     } finally {
@@ -4589,9 +4589,12 @@ function GroceriesDraftSheet({
 
         <select
           value={category}
-          onChange={(e) => setCategory(asGroceryCategory(e.target.value))}
+          onChange={(e) => setCategory(e.target.value ? asGroceryCategory(e.target.value) : '')}
           className="mt-4 w-full h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-85)] outline-none"
         >
+          <option value="">
+            {language === 'no' ? 'Velg kategori' : 'Select category'}
+          </option>
           {GROCERY_CATEGORY_ORDER.map((c) => (
             <option key={c} value={c}>{groceryCategoryLabel(language, c)}</option>
           ))}
