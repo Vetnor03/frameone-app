@@ -3,6 +3,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
@@ -4162,6 +4163,8 @@ function GroceriesModuleSettingsTab({
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
+  const reloadTimerRef = useRef<number | null>(null)
 
   const groupedVisibleItems = useMemo(() => {
     const visible = items.filter((item) => groceryIsVisible(item, nowMs))
@@ -4184,14 +4187,18 @@ function GroceriesModuleSettingsTab({
     pendingScrollTopRef.current = null
   }, [groupedVisibleItems, loading])
 
-  async function loadGroceries() {
+  async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean }) {
+    const silent = !!options?.silent
+    if (options?.preserveScroll) {
+      pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
+    }
     if (!activeDeviceId) {
       setItems([])
       setSuggestions([])
       return
     }
 
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const { data, error } = await supabase
         .from('grocery_items')
@@ -4216,7 +4223,7 @@ function GroceriesModuleSettingsTab({
 
       setItems(parsed)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -4252,6 +4259,65 @@ function GroceriesModuleSettingsTab({
     loadGroceries()
     loadHistory()
   }, [activeDeviceId])
+
+  useEffect(() => {
+    if (!activeDeviceId) return
+
+    const scheduleReload = () => {
+      if (reloadTimerRef.current != null) return
+      reloadTimerRef.current = window.setTimeout(() => {
+        reloadTimerRef.current = null
+        loadGroceries({ silent: true, preserveScroll: true })
+      }, 150)
+    }
+
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current)
+      realtimeChannelRef.current = null
+    }
+
+    const channel = supabase
+      .channel(`grocery-items:${activeDeviceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'grocery_items',
+          filter: `device_id=eq.${activeDeviceId}`,
+        },
+        () => {
+          scheduleReload()
+        }
+      )
+      .subscribe()
+
+    realtimeChannelRef.current = channel
+
+    return () => {
+      if (reloadTimerRef.current != null) {
+        window.clearTimeout(reloadTimerRef.current)
+        reloadTimerRef.current = null
+      }
+      supabase.removeChannel(channel)
+      if (realtimeChannelRef.current === channel) {
+        realtimeChannelRef.current = null
+      }
+    }
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    return () => {
+      if (reloadTimerRef.current != null) {
+        window.clearTimeout(reloadTimerRef.current)
+        reloadTimerRef.current = null
+      }
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current)
+        realtimeChannelRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const handle = window.setInterval(() => setNowMs(Date.now()), 60_000)
