@@ -4166,6 +4166,20 @@ function GroceriesModuleSettingsTab({
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const reloadTimerRef = useRef<number | null>(null)
 
+  const isRemovedRow = (row: any): boolean => {
+    if (!row) return false
+    if (row.deleted_at != null) return true
+    if (row.archived_at != null) return true
+    if (row.is_deleted === true) return true
+    if (row.active === false) return true
+    if (typeof row.quantity === 'number' && row.quantity <= 0) return true
+    if (typeof row.quantity === 'string') {
+      const parsed = Number(row.quantity)
+      if (!Number.isNaN(parsed) && parsed <= 0) return true
+    }
+    return false
+  }
+
   const groupedVisibleItems = useMemo(() => {
     const visible = items.filter((item) => groceryIsVisible(item, nowMs))
     return GROCERY_CATEGORY_LIST_ORDER.map((category) => {
@@ -4214,12 +4228,12 @@ function GroceriesModuleSettingsTab({
       const parsed: GroceryItem[] = (data || []).map((row: any) => ({
         id: String(row.id),
         name: String(row.name ?? '').trim(),
-        quantity: Math.max(1, Number(row.quantity ?? 1) || 1),
+        quantity: Number(row.quantity ?? 1) || 1,
         category: asGroceryCategory(row.category),
         isChecked: !!row.is_checked,
         checkedAt: row.checked_at ? String(row.checked_at) : null,
         updatedAt: row.updated_at ? String(row.updated_at) : null,
-      }))
+      })).filter((item) => item.quantity > 0)
 
       setItems(parsed)
     } finally {
@@ -4263,7 +4277,25 @@ function GroceriesModuleSettingsTab({
   useEffect(() => {
     if (!activeDeviceId) return
 
-    const scheduleReload = () => {
+    const removeItemFromState = (itemId: string | null | undefined) => {
+      if (!itemId) return
+      setItems((prev) => prev.filter((item) => item.id !== itemId))
+    }
+
+    const logRealtime = (payload: any, reloadCalled: boolean, reason: string) => {
+      if (process.env.NODE_ENV === 'production') return
+      console.debug('[groceries realtime]', {
+        eventType: payload?.eventType ?? null,
+        table: payload?.table ?? null,
+        oldRow: payload?.old ?? null,
+        newRow: payload?.new ?? null,
+        reloadGroceriesCalled: reloadCalled,
+        reason,
+      })
+    }
+
+    const scheduleReload = (reason: string, payload?: any) => {
+      logRealtime(payload, true, reason)
       if (reloadTimerRef.current != null) return
       reloadTimerRef.current = window.setTimeout(() => {
         reloadTimerRef.current = null
@@ -4286,8 +4318,8 @@ function GroceriesModuleSettingsTab({
           table: 'grocery_items',
           filter: `device_id=eq.${activeDeviceId}`,
         },
-        () => {
-          scheduleReload()
+        (payload) => {
+          scheduleReload('insert', payload)
         }
       )
       .on(
@@ -4298,8 +4330,14 @@ function GroceriesModuleSettingsTab({
           table: 'grocery_items',
           filter: `device_id=eq.${activeDeviceId}`,
         },
-        () => {
-          scheduleReload()
+        (payload) => {
+          const newRow = (payload as { new?: any })?.new
+          if (isRemovedRow(newRow)) {
+            removeItemFromState(newRow?.id ? String(newRow.id) : null)
+            scheduleReload('update-removed', payload)
+            return
+          }
+          scheduleReload('update', payload)
         }
       )
       .on(
@@ -4310,9 +4348,18 @@ function GroceriesModuleSettingsTab({
           table: 'grocery_items',
         },
         (payload) => {
-          const oldRow = (payload as { old?: { device_id?: string | null } })?.old
-          if (oldRow?.device_id === activeDeviceId) {
-            scheduleReload()
+          const oldRow = (payload as { old?: { id?: string | null; device_id?: string | null } })?.old
+          if (!oldRow) {
+            logRealtime(payload, false, 'delete-missing-old-row')
+            return
+          }
+          if (oldRow.device_id && oldRow.device_id !== activeDeviceId) {
+            logRealtime(payload, false, 'delete-other-device')
+            return
+          }
+          removeItemFromState(oldRow.id ? String(oldRow.id) : null)
+          if (!oldRow.device_id || oldRow.device_id === activeDeviceId) {
+            scheduleReload('delete', payload)
           }
         }
       )
