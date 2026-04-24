@@ -5,12 +5,14 @@ create table if not exists public.grocery_items (
   created_by uuid references auth.users(id) on delete set null,
   name text not null,
   quantity integer not null default 1,
+  category text not null default 'other',
   is_checked boolean not null default false,
   checked_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint grocery_items_name_not_empty check (char_length(btrim(name)) > 0),
-  constraint grocery_items_quantity_min check (quantity >= 1)
+  constraint grocery_items_quantity_min check (quantity >= 1),
+  constraint grocery_items_category_valid check (category in ('fruit_veg','bread','dairy','paalegg','meat_fish','frozen','dry_goods','snacks','drinks','household','other'))
 );
 
 create table if not exists public.grocery_item_history (
@@ -18,11 +20,13 @@ create table if not exists public.grocery_item_history (
   device_id text not null,
   name text not null,
   usage_count integer not null default 1,
+  category text not null default 'other',
   last_used_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint grocery_item_history_name_not_empty check (char_length(btrim(name)) > 0),
   constraint grocery_item_history_usage_min check (usage_count >= 1),
+  constraint grocery_item_history_category_valid check (category in ('fruit_veg','bread','dairy','paalegg','meat_fish','frozen','dry_goods','snacks','drinks','household','other')),
   constraint grocery_item_history_device_name_unique unique (device_id, name)
 );
 

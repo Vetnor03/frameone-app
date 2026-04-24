@@ -48,9 +48,9 @@ function normalizeStockChartRange(value: any): StockChartRange {
   return 'day'
 }
 
-function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; updated_at: string | null }>) {
+function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; category: string; updated_at: string | null }>) {
   const stable = items
-    .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.updated_at ?? ''}`)
+    .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.category}|${x.updated_at ?? ''}`)
     .sort()
     .join('||')
   return createHash('sha256').update(stable).digest('hex').slice(0, 16)
@@ -244,7 +244,7 @@ export async function GET(req: Request) {
     // -------------------------------
     const { data: groceriesData, error: groceriesError } = await supabase
       .from('grocery_items')
-      .select('id, name, quantity, is_checked, checked_at, updated_at')
+      .select('id, name, quantity, category, is_checked, checked_at, updated_at')
       .eq('device_id', device_id)
       .order('updated_at', { ascending: false })
 
@@ -265,6 +265,7 @@ export async function GET(req: Request) {
         id: String(x.id),
         name: asString(x.name, '').slice(0, 80),
         quantity: Math.max(1, Number(x.quantity ?? 1) || 1),
+        category: asString(x.category, 'other').slice(0, 24),
         checked: false,
         updated_at: x.updated_at ? String(x.updated_at) : null,
       }))
