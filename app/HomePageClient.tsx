@@ -142,7 +142,7 @@ const UI = {
       countdown: 'NEDTELLING',
       soccer: 'FOTBALL',
       stocks: 'AKSJER',
-      groceries: 'MATVARER',
+      groceries: 'HANDLELISTE',
     },
 
     layouts: {
