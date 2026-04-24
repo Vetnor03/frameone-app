@@ -1661,6 +1661,9 @@ function PickerModal({
   language: AppLanguage
 }) {
   const options: ModuleKey[] = ['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries']
+  const sortedOptions = [...options].sort((a, b) =>
+    moduleLabel(language, a).localeCompare(moduleLabel(language, b), language === 'no' ? 'nb' : 'en')
+  )
   const t = tx(language)
 
   return (
@@ -1674,7 +1677,7 @@ function PickerModal({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          {options.map((m) => (
+          {sortedOptions.map((m) => (
             <button
               key={m}
               onClick={() => onPick(m)}
