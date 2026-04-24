@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
+import { createHash } from 'crypto'
 
 export const runtime = 'nodejs'
 
@@ -39,12 +40,26 @@ function asString(v: any, def: string) {
   return typeof v === 'string' ? v : def
 }
 
+function normalizeGroceryCategory(value: any) {
+  const raw = asString(value, 'other').trim()
+  if (raw === 'paalegg') return 'cold_cuts'
+  return raw
+}
+
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
 function normalizeStockChartRange(value: any): StockChartRange {
   const v = String(value ?? '').trim().toLowerCase()
   if (v === 'week' || v === 'month' || v === 'year') return v
   return 'day'
+}
+
+function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; category: string; updated_at: string | null }>) {
+  const stable = items
+    .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.category}|${x.updated_at ?? ''}`)
+    .sort()
+    .join('||')
+  return createHash('sha256').update(stable).digest('hex').slice(0, 16)
 }
 
 export async function GET(req: Request) {
@@ -229,6 +244,40 @@ export async function GET(req: Request) {
     }
 
     settings_json.modules.stocks = sanitizedStocks
+
+    // -------------------------------
+    // ✅ Groceries payload for firmware
+    // -------------------------------
+    const { data: groceriesData, error: groceriesError } = await supabase
+      .from('grocery_items')
+      .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+      .eq('device_id', device_id)
+      .order('updated_at', { ascending: false })
+
+    if (groceriesError) {
+      return NextResponse.json({ error: groceriesError.message }, { status: 500 })
+    }
+
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
+    const activeGroceries = (groceriesData || [])
+      .filter((x: any) => {
+        if (!x?.is_checked) return true
+        if (!x?.checked_at) return false
+        return new Date(String(x.checked_at)).getTime() >= twentyFourHoursAgo
+      })
+      .filter((x: any) => !x?.is_checked)
+      .slice(0, 120)
+      .map((x: any) => ({
+        id: String(x.id),
+        name: asString(x.name, '').slice(0, 80),
+        quantity: Math.max(1, Number(x.quantity ?? 1) || 1),
+        category: normalizeGroceryCategory(x.category).slice(0, 24),
+        checked: false,
+        updated_at: x.updated_at ? String(x.updated_at) : null,
+      }))
+
+    settings_json.modules.groceries = activeGroceries
+    settings_json.modules.groceries_signature = groceriesSignature(activeGroceries)
 
     // -------------------------------
     // ✅ Holidays injection (unchanged from your version)

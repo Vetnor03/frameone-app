@@ -96,7 +96,13 @@ const UI = {
     chartWeek: 'Week',
     chartMonth: 'Month',
     chartYear: 'Year',
-    groceriesComingSoon: 'Groceries coming soon',
+    groceriesInputPlaceholder: 'Add grocery item',
+    groceriesAdd: 'ADD',
+    groceriesSuggestions: 'Suggestions',
+    groceriesNoItems: 'No grocery items yet',
+    groceriesCheckedLabel: 'Bought',
+    groceriesUntickHint: 'You can undo for 24h',
+    groceriesQty: 'Qty',
 
     countdownNoEvents: 'No events yet',
     newEvent: 'NEW EVENT',
@@ -203,7 +209,13 @@ const UI = {
     chartWeek: 'Uke',
     chartMonth: 'Måned',
     chartYear: 'År',
-    groceriesComingSoon: 'Matvarer kommer snart',
+    groceriesInputPlaceholder: 'Legg til vare',
+    groceriesAdd: 'LEGG TIL',
+    groceriesSuggestions: 'Forslag',
+    groceriesNoItems: 'Ingen varer ennå',
+    groceriesCheckedLabel: 'Kjøpt',
+    groceriesUntickHint: 'Kan angres i 24t',
+    groceriesQty: 'Antall',
 
     countdownNoEvents: 'Ingen hendelser ennå',
     newEvent: 'NY HENDELSE',
@@ -3042,7 +3054,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
   }
 
   return (
@@ -4038,18 +4050,593 @@ function StockSearchSheet({
   )
 }
 
-function GroceriesModuleSettingsTab({ language }: { language: AppLanguage }) {
+type GroceryItem = {
+  id: string
+  name: string
+  quantity: number
+  category: GroceryCategory
+  isChecked: boolean
+  checkedAt: string | null
+  updatedAt: string | null
+}
+
+type GroceryCategory =
+  | 'fruit_veg'
+  | 'bread'
+  | 'dairy'
+  | 'cold_cuts'
+  | 'meat_fish'
+  | 'frozen'
+  | 'dry_goods'
+  | 'spices'
+  | 'toiletries'
+  | 'snacks'
+  | 'drinks'
+  | 'household'
+  | 'other'
+
+type GrocerySuggestion = {
+  name: string
+  usageCount: number
+  lastUsedAt: string | null
+  category: GroceryCategory
+}
+
+const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
+const GROCERY_CATEGORY_LIST_ORDER: GroceryCategory[] = [
+  'bread',
+  'cold_cuts',
+  'dairy',
+  'drinks',
+  'dry_goods',
+  'frozen',
+  'fruit_veg',
+  'household',
+  'meat_fish',
+  'snacks',
+  'spices',
+  'toiletries',
+  'other',
+]
+
+function asGroceryCategory(value: string | null | undefined): GroceryCategory {
+  const raw = String(value ?? '').trim()
+  const normalized = raw === 'paalegg' ? 'cold_cuts' : raw
+  const v = normalized as GroceryCategory
+  return GROCERY_CATEGORY_LIST_ORDER.includes(v) ? v : 'other'
+}
+
+function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) {
+  const labelsEn: Record<GroceryCategory, string> = {
+    fruit_veg: 'Fruit & veg',
+    bread: 'Bread',
+    dairy: 'Dairy',
+    cold_cuts: 'Cold cuts',
+    meat_fish: 'Meat & fish',
+    frozen: 'Frozen',
+    dry_goods: 'Dry goods',
+    spices: 'Spices',
+    toiletries: 'Toiletries',
+    snacks: 'Snacks',
+    drinks: 'Drinks',
+    household: 'Household',
+    other: 'Other',
+  }
+  const labelsNo: Record<GroceryCategory, string> = {
+    fruit_veg: 'Frukt og grønt',
+    bread: 'Brød',
+    dairy: 'Meieri',
+    cold_cuts: 'Pålegg',
+    meat_fish: 'Kjøtt og fisk',
+    frozen: 'Frossen',
+    dry_goods: 'Tørrvarer',
+    spices: 'Krydder',
+    toiletries: 'Toalettsaker',
+    snacks: 'Snacks',
+    drinks: 'Drikke',
+    household: 'Husholdning',
+    other: 'Annet',
+  }
+  return language === 'no' ? labelsNo[category] : labelsEn[category]
+}
+
+function groceryIsVisible(item: GroceryItem, nowMs: number) {
+  if (!item.isChecked) return true
+  if (!item.checkedAt) return false
+  return nowMs - new Date(item.checkedAt).getTime() < GROCERY_UNDO_WINDOW_MS
+}
+
+function GroceriesModuleSettingsTab({
+  language,
+  activeDeviceId,
+}: {
+  language: AppLanguage
+  activeDeviceId: string | null
+}) {
+  const t = tx(language)
+  const [items, setItems] = useState<GroceryItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
+
+  const groupedVisibleItems = useMemo(() => {
+    const visible = items.filter((item) => groceryIsVisible(item, nowMs))
+    return GROCERY_CATEGORY_LIST_ORDER.map((category) => {
+      const group = visible
+        .filter((item) => item.category === category)
+        .sort((a, b) => {
+          if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
+          const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
+          const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
+          return bTime - aTime
+        })
+      return { category, items: group }
+    }).filter((group) => group.items.length > 0)
+  }, [items, nowMs])
+
+  async function loadGroceries() {
+    if (!activeDeviceId) {
+      setItems([])
+      setSuggestions([])
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('grocery_items')
+        .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+        .eq('device_id', activeDeviceId)
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      const parsed: GroceryItem[] = (data || []).map((row: any) => ({
+        id: String(row.id),
+        name: String(row.name ?? '').trim(),
+        quantity: Math.max(1, Number(row.quantity ?? 1) || 1),
+        category: asGroceryCategory(row.category),
+        isChecked: !!row.is_checked,
+        checkedAt: row.checked_at ? String(row.checked_at) : null,
+        updatedAt: row.updated_at ? String(row.updated_at) : null,
+      }))
+
+      setItems(parsed)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadHistory() {
+    if (!activeDeviceId) {
+      setSuggestions([])
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('grocery_item_history')
+      .select('name, usage_count, last_used_at, category')
+      .eq('device_id', activeDeviceId)
+      .order('usage_count', { ascending: false })
+      .order('last_used_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const parsed: GrocerySuggestion[] = (data || []).map((row: any) => ({
+      name: String(row.name ?? '').trim(),
+      usageCount: Math.max(1, Number(row.usage_count ?? 1) || 1),
+      lastUsedAt: row.last_used_at ? String(row.last_used_at) : null,
+      category: asGroceryCategory(row.category),
+    }))
+    setSuggestions(parsed.filter((x) => x.name))
+  }
+
+  useEffect(() => {
+    loadGroceries()
+    loadHistory()
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const handle = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(handle)
+  }, [])
+
+  async function addItem(name: string, quantity: number, category: GroceryCategory) {
+    const normalizedName = name.trim()
+    if (!normalizedName || !activeDeviceId) return
+
+    const { data: authData } = await supabase.auth.getUser()
+    const createdBy = authData.user?.id ?? null
+    const nowIso = new Date().toISOString()
+    const { error } = await supabase
+      .from('grocery_items')
+      .insert({
+        device_id: activeDeviceId,
+        created_by: createdBy,
+        name: normalizedName,
+        quantity: Math.max(1, Number(quantity) || 1),
+        category,
+        is_checked: false,
+        checked_at: null,
+      })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const { data: existingHistory } = await supabase
+      .from('grocery_item_history')
+      .select('id, usage_count')
+      .eq('device_id', activeDeviceId)
+      .ilike('name', normalizedName)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingHistory?.id) {
+      await supabase
+        .from('grocery_item_history')
+        .update({
+          usage_count: Math.max(1, Number(existingHistory.usage_count ?? 1) || 1) + 1,
+          last_used_at: nowIso,
+          category,
+        })
+        .eq('id', existingHistory.id)
+    } else {
+      await supabase
+        .from('grocery_item_history')
+        .insert({
+          device_id: activeDeviceId,
+          name: normalizedName,
+          usage_count: 1,
+          last_used_at: nowIso,
+          category,
+        })
+    }
+
+    await loadGroceries()
+    await loadHistory()
+  }
+
+  async function toggleChecked(item: GroceryItem) {
+    const nextChecked = !item.isChecked
+    const { error } = await supabase
+      .from('grocery_items')
+      .update({
+        is_checked: nextChecked,
+        checked_at: nextChecked ? new Date().toISOString() : null,
+      })
+      .eq('id', item.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await loadGroceries()
+  }
+
+  async function adjustQuantity(item: GroceryItem, delta: number) {
+    if (delta < 0 && item.quantity === 1) {
+      const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
+      if (!confirmed) return
+
+      const { error: deleteError } = await supabase
+        .from('grocery_items')
+        .delete()
+        .eq('id', item.id)
+
+      if (deleteError) {
+        alert(deleteError.message)
+        return
+      }
+      await loadGroceries()
+      return
+    }
+
+    const nextQty = Math.max(1, item.quantity + delta)
+
+    const { error } = await supabase
+      .from('grocery_items')
+      .update({
+        quantity: nextQty,
+      })
+      .eq('id', item.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await loadGroceries()
+  }
+
+  async function updateItem(id: string, name: string, quantity: number, category: GroceryCategory) {
+    if (!activeDeviceId) return
+    const normalizedName = name.trim()
+    if (!normalizedName) return
+    const nowIso = new Date().toISOString()
+
+    const { error } = await supabase
+      .from('grocery_items')
+      .update({
+        name: normalizedName,
+        quantity: Math.max(1, Number(quantity) || 1),
+        category,
+      })
+      .eq('id', id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await supabase
+      .from('grocery_item_history')
+      .upsert({
+        device_id: activeDeviceId,
+        name: normalizedName,
+        category,
+        last_used_at: nowIso,
+      }, { onConflict: 'device_id,name' })
+
+    await loadGroceries()
+    await loadHistory()
+  }
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="mt-5 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
-        <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
-          {moduleLabel(language, 'groceries')}
+    <>
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {loading ? (
+          <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+        ) : groupedVisibleItems.length === 0 ? (
+          <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
+        ) : (
+          <div className="px-2 py-2">
+            {groupedVisibleItems.map((group) => (
+              <div key={group.category} className="mb-3">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
+                  {groceryCategoryLabel(language, group.category)}
+                </div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
+                <ul className="divide-y divide-[color:var(--bd-10)]">
+            {group.items.map((item) => (
+              <li
+                key={item.id}
+                className="px-4 py-3 flex items-start gap-3 cursor-pointer"
+                onClick={() => {
+                  setEditingItem(item)
+                  setSheetOpen(true)
+                }}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleChecked(item)
+                  }}
+                  className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}
+                  aria-label={item.isChecked ? `${t.groceriesCheckedLabel}: ${item.name}` : item.name}
+                >
+                  {item.isChecked ? <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--fg-60)]" /> : null}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className={`text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>
+                    {item.name}
+                  </div>
+                  {item.isChecked ? (
+                    <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{t.groceriesUntickHint}</div>
+                  ) : null}
+                </div>
+                <div className="shrink-0 flex items-center gap-1">
+                  <div className={`text-xs w-6 text-center text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>{item.quantity}</div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      adjustQuantity(item, -1)
+                    }}
+                    className="h-7 w-7 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      adjustQuantity(item, +1)
+                    }}
+                    className="h-7 w-7 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
+                  >
+                    +
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="py-5 flex flex-col items-center relative z-20">
+        <button
+          onClick={() => setSheetOpen(true)}
+          disabled={!activeDeviceId}
+          className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+            !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
+          }`}
+          style={{ backgroundColor: 'var(--app-bg)' }}
+        >
+          {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
+        </button>
+      </div>
+    </div>
+    {sheetOpen && activeDeviceId && (
+      <GroceriesDraftSheet
+        language={language}
+        suggestions={suggestions}
+        onClose={() => setSheetOpen(false)}
+        onSaved={async () => {
+          setSheetOpen(false)
+          setEditingItem(null)
+          await loadGroceries()
+          await loadHistory()
+        }}
+        addItem={addItem}
+        updateItem={updateItem}
+        editingItem={editingItem}
+      />
+    )}
+    </>
+  )
+}
+
+function GroceriesDraftSheet({
+  language,
+  suggestions,
+  onClose,
+  onSaved,
+  addItem,
+  updateItem,
+  editingItem,
+}: {
+  language: AppLanguage
+  suggestions: GrocerySuggestion[]
+  onClose: () => void
+  onSaved: () => void | Promise<void>
+  addItem: (name: string, quantity: number, category: GroceryCategory) => Promise<void>
+  updateItem: (id: string, name: string, quantity: number, category: GroceryCategory) => Promise<void>
+  editingItem: GroceryItem | null
+}) {
+  const [name, setName] = useState(editingItem?.name ?? '')
+  const [quantity, setQuantity] = useState(editingItem?.quantity ?? 1)
+  const [category, setCategory] = useState<GroceryCategory>(editingItem?.category ?? 'other')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setName(editingItem?.name ?? '')
+    setQuantity(editingItem?.quantity ?? 1)
+    setCategory(editingItem?.category ?? 'other')
+  }, [editingItem])
+
+  const filteredSuggestions = useMemo(() => {
+    const q = name.trim().toLowerCase()
+    const list = suggestions.filter((s) => !q || s.name.toLowerCase().includes(q))
+    return list.sort((a, b) => {
+      if (category) {
+        const aCategoryScore = a.category === category ? 1 : 0
+        const bCategoryScore = b.category === category ? 1 : 0
+        if (aCategoryScore !== bCategoryScore) return bCategoryScore - aCategoryScore
+      }
+      if (a.usageCount !== b.usageCount) return b.usageCount - a.usageCount
+      const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0
+      const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0
+      return bTime - aTime
+    })
+  }, [category, name, suggestions])
+
+  useEffect(() => {
+    if (editingItem) return
+    const found = suggestions.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
+    setCategory(found?.category ?? 'other')
+  }, [editingItem, name, suggestions])
+
+  const canSave = !!name.trim() && !saving
+
+  async function save() {
+    if (!canSave) return
+    setSaving(true)
+    try {
+      if (editingItem?.id) {
+        await updateItem(editingItem.id, name.trim(), quantity, category)
+      } else {
+        await addItem(name.trim(), quantity, category)
+      }
+      await onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh] px-5 pt-5 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">
+            {editingItem ? (language === 'no' ? 'REDIGER VARE' : 'EDIT ITEM') : (language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM')}
+          </div>
+          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button>
         </div>
-        <div className="mt-2 text-[color:var(--fg-80)] text-base">
-          {tx(language).groceriesComingSoon}
+
+        <input
+          autoFocus={!editingItem}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={tx(language).groceriesInputPlaceholder}
+          className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+        />
+
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <button onClick={() => setQuantity((v) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
+          <div className="w-10 text-center text-[color:var(--fg-85)]">{quantity}</div>
+          <button onClick={() => setQuantity((v) => v + 1)} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">+</button>
+        </div>
+
+        <select
+          value={category}
+          onChange={(e) => setCategory(asGroceryCategory(e.target.value))}
+          className="mt-4 w-full h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-85)] outline-none"
+        >
+          {GROCERY_CATEGORY_LIST_ORDER.map((c) => (
+            <option key={c} value={c}>{groceryCategoryLabel(language, c)}</option>
+          ))}
+        </select>
+
+        <div className="mt-4 text-[10px] tracking-widest text-[color:var(--fg-45)]">{tx(language).groceriesSuggestions}</div>
+        <div className="mt-2 h-48 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+          {filteredSuggestions.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-xs text-[color:var(--fg-45)]">
+              {language === 'no' ? 'Ingen treff' : 'No matching items'}
+            </div>
+          ) : filteredSuggestions.map((s) => (
+            <button
+              key={s.name.toLowerCase()}
+              onClick={() => {
+                setName(s.name)
+                setCategory(s.category)
+                setQuantity(1)
+              }}
+              className="w-full text-left px-3 py-2 border-b border-[color:var(--bd-10)] last:border-b-0"
+            >
+              <div className="text-sm text-[color:var(--fg-85)]">{s.name}</div>
+              <div className="text-[10px] text-[color:var(--fg-45)]">{groceryCategoryLabel(language, s.category)}</div>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-2">
+          <button
+            onClick={save}
+            disabled={!canSave}
+            className={`h-11 rounded-2xl border tracking-widest text-xs ${canSave ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'}`}
+          >
+            {editingItem ? (language === 'no' ? 'LAGRE ENDRINGER' : 'SAVE CHANGES') : tx(language).groceriesAdd}
+          </button>
+          <button onClick={onClose} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)] w-full">
+            {language === 'no' ? 'LUKK' : 'CLOSE'}
+          </button>
         </div>
       </div>
-      <div className="flex-1" />
     </div>
   )
 }
