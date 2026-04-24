@@ -4084,6 +4084,7 @@ type GrocerySuggestion = {
 
 const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
 const GROCERY_CATEGORY_ORDER: GroceryCategory[] = [
+  'other',
   'bread',
   'cold_cuts',
   'dairy',
@@ -4093,7 +4094,6 @@ const GROCERY_CATEGORY_ORDER: GroceryCategory[] = [
   'fruit_veg',
   'household',
   'meat_fish',
-  'other',
   'snacks',
   'spices',
   'toiletries',
@@ -4533,12 +4533,17 @@ function GroceriesDraftSheet({
     const q = name.trim().toLowerCase()
     const list = suggestions.filter((s) => !q || s.name.toLowerCase().includes(q))
     return list.sort((a, b) => {
+      if (category) {
+        const aCategoryScore = a.category === category ? 1 : 0
+        const bCategoryScore = b.category === category ? 1 : 0
+        if (aCategoryScore !== bCategoryScore) return bCategoryScore - aCategoryScore
+      }
       if (a.usageCount !== b.usageCount) return b.usageCount - a.usageCount
       const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0
       const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0
       return bTime - aTime
     })
-  }, [name, suggestions])
+  }, [category, name, suggestions])
 
   useEffect(() => {
     if (editingItem) return
