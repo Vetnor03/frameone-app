@@ -20,6 +20,7 @@
 #include "ModuleSurf.h"
 #include "ModuleReminders.h"
 #include "ModuleSoccer.h"
+#include "ModuleStocks.h"
 #include "FirmwareUpdater.h"
 
 #include <Preferences.h>
@@ -607,6 +608,7 @@ void setup() {
   ModuleSurf::setConfig(&g_cfg);
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
+  ModuleStocks::setConfig(&g_cfg);
 
   ensureDisplay();
 
