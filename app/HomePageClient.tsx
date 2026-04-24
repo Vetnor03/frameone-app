@@ -91,6 +91,11 @@ const UI = {
     soccerTeamFor: 'Team',
     stock: 'Stock',
     stockSymbol: 'Symbol',
+    chart: 'Chart',
+    chartToday: 'Today',
+    chartWeek: 'Week',
+    chartMonth: 'Month',
+    chartYear: 'Year',
     groceriesComingSoon: 'Groceries coming soon',
 
     countdownNoEvents: 'No events yet',
@@ -193,6 +198,11 @@ const UI = {
     soccerTeamFor: 'Lag',
     stock: 'Aksje',
     stockSymbol: 'Symbol',
+    chart: 'Chart',
+    chartToday: 'I dag',
+    chartWeek: 'Uke',
+    chartMonth: 'Måned',
+    chartYear: 'År',
     groceriesComingSoon: 'Matvarer kommer snart',
 
     countdownNoEvents: 'Ingen hendelser ennå',
@@ -2480,11 +2490,14 @@ type SoccerCfg = {
   competitionName?: string
 }
 
+type StockChartRange = 'day' | 'week' | 'month' | 'year'
+
 type StockCfg = {
   id: number
   symbol?: string
   name?: string
   refresh?: number
+  chartRange?: StockChartRange
 }
 
 type StockSearchResult = {
@@ -2520,6 +2533,7 @@ function normalizeSoccerList(raw: any): SoccerCfg[] {
 
 function normalizeStocksList(raw: any): StockCfg[] {
   const arr = Array.isArray(raw) ? raw : []
+  const allowedChartRanges: StockChartRange[] = ['day', 'week', 'month', 'year']
 
   return arr
     .filter((x) => x && typeof x === 'object')
@@ -2529,8 +2543,12 @@ function normalizeStocksList(raw: any): StockCfg[] {
       const name = String(x.name ?? '').trim().slice(0, 80)
       const refreshRaw = Number(x.refresh)
       const refresh = Number.isFinite(refreshRaw) && refreshRaw > 0 ? Math.round(refreshRaw) : 900000
+      const chartRangeRaw = String(x.chartRange ?? '').trim().toLowerCase()
+      const chartRange: StockChartRange = allowedChartRanges.includes(chartRangeRaw as StockChartRange)
+        ? (chartRangeRaw as StockChartRange)
+        : 'day'
 
-      const out: StockCfg = { id, refresh }
+      const out: StockCfg = { id, refresh, chartRange }
 
       if (symbol) out.symbol = symbol
       if (name) out.name = name
@@ -3775,6 +3793,7 @@ function StocksModuleSettingsTab({
       ...patch,
       id,
       refresh: 900000,
+      chartRange: patch.chartRange ?? (idx >= 0 ? next[idx]?.chartRange : 'day') ?? 'day',
     }
 
     if (idx >= 0) next[idx] = merged
@@ -3796,6 +3815,7 @@ function StocksModuleSettingsTab({
               title={title}
               symbol={cfg?.symbol ? String(cfg.symbol) : ''}
               name={cfg?.name ? String(cfg.name) : ''}
+              chartRange={cfg?.chartRange === 'week' || cfg?.chartRange === 'month' || cfg?.chartRange === 'year' ? cfg.chartRange : 'day'}
               onSave={(patch) => upsertStock(id, patch)}
             />
           )
@@ -3811,12 +3831,14 @@ function StockRow({
   title,
   symbol,
   name,
+  chartRange,
   onSave,
 }: {
   language: AppLanguage
   title: string
   symbol: string
   name: string
+  chartRange: StockChartRange
   onSave: (cfgPatch: Partial<StockCfg>) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -3844,6 +3866,34 @@ function StockRow({
           >
             {tx(language).change}
           </button>
+        </div>
+
+        <div className="mt-4">
+          <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{tx(language).chart}</div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {([
+              { key: 'day', label: tx(language).chartToday },
+              { key: 'week', label: tx(language).chartWeek },
+              { key: 'month', label: tx(language).chartMonth },
+              { key: 'year', label: tx(language).chartYear },
+            ] as { key: StockChartRange; label: string }[]).map((opt) => {
+              const active = chartRange === opt.key
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => onSave({ chartRange: opt.key })}
+                  className={`h-11 rounded-2xl border text-sm transition ${
+                    active
+                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                      : 'border-[color:var(--bd-10)] text-[color:var(--fg-80)]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 

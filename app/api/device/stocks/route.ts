@@ -28,7 +28,10 @@ type StockConfigItem = {
   id?: number | string
   symbol?: string
   name?: string
+  chartRange?: string
 }
+
+type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -61,6 +64,26 @@ function toIsoOrNull(epochSeconds: unknown) {
   const ts = Number(epochSeconds)
   if (!Number.isFinite(ts) || ts <= 0) return null
   return new Date(ts * 1000).toISOString()
+}
+
+function normalizeChartRange(value: unknown): StockChartRange {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (v === 'week' || v === 'month' || v === 'year') return v
+  return 'day'
+}
+
+function downsampleSeries(points: SeriesPoint[], maxPoints: number) {
+  if (points.length <= maxPoints) return points
+  if (maxPoints <= 1) return points.length ? [points[points.length - 1]] : []
+
+  const out: SeriesPoint[] = []
+  const lastIdx = points.length - 1
+  for (let i = 0; i < maxPoints; i++) {
+    const idx = Math.round((i * lastIdx) / (maxPoints - 1))
+    out.push(points[idx])
+  }
+
+  return out
 }
 
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
@@ -169,6 +192,7 @@ export async function GET(req: Request) {
 
     const symbol = String(cfg.symbol || '').trim().toUpperCase()
     const name = String(cfg.name || '').trim()
+    const chartRange = normalizeChartRange(cfg.chartRange)
 
     if (!symbol && !name) {
       return NextResponse.json({ error: 'Stock config missing symbol/name' }, { status: 404 })
@@ -204,6 +228,7 @@ export async function GET(req: Request) {
     let day: SeriesPoint[] = []
     let week: SeriesPoint[] = []
     let month: SeriesPoint[] = []
+    let year: SeriesPoint[] = []
 
     try {
       day = await fetchCandles(resolvedSymbol, '60', nowSec - 36 * 3600, nowSec, apiKey)
@@ -226,9 +251,17 @@ export async function GET(req: Request) {
       month = []
     }
 
+    try {
+      year = await fetchCandles(resolvedSymbol, 'D', nowSec - 380 * 24 * 3600, nowSec, apiKey)
+      year = downsampleSeries(year, 52)
+    } catch {
+      year = []
+    }
+
     const response = {
       symbol: resolvedSymbol,
       name: name || resolvedSymbol,
+      chartRange,
       currency,
       quote: {
         price,
@@ -244,7 +277,9 @@ export async function GET(req: Request) {
         day,
         week,
         month,
+        year,
       },
+      selectedSeries: ({ day, week, month, year } as Record<StockChartRange, SeriesPoint[]>)[chartRange] || [],
       signature: makeSignature(resolvedSymbol, price, change, changePercent),
     }
 

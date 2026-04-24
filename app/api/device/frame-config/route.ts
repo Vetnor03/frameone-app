@@ -39,6 +39,14 @@ function asString(v: any, def: string) {
   return typeof v === 'string' ? v : def
 }
 
+type StockChartRange = 'day' | 'week' | 'month' | 'year'
+
+function normalizeStockChartRange(value: any): StockChartRange {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (v === 'week' || v === 'month' || v === 'year') return v
+  return 'day'
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -190,6 +198,37 @@ export async function GET(req: Request) {
 
     // If none configured, leave empty (firmware will show "Set spot")
     settings_json.modules.surf = sanitizedSurf
+
+    // -------------------------------
+    // ✅ Stocks sanitize + chart range default/validation
+    // -------------------------------
+    let stocksList: any[] = Array.isArray(settings_json.modules.stocks) ? settings_json.modules.stocks : []
+    const sanitizedStocks: any[] = []
+    const seenStockIds = new Set<number>()
+
+    for (const s of stocksList) {
+      if (!s || typeof s !== 'object') continue
+      const id = asInt(s.id, 0)
+      if (id < 1 || id > 255) continue
+      if (seenStockIds.has(id)) continue
+
+      const symbol = asString(s.symbol, '').trim().slice(0, 24)
+      const name = asString(s.name, '').trim().slice(0, 80)
+      const chartRange = normalizeStockChartRange(s.chartRange)
+
+      sanitizedStocks.push({
+        id,
+        ...(symbol ? { symbol } : {}),
+        ...(name ? { name } : {}),
+        refresh: 900000,
+        chartRange,
+      })
+
+      seenStockIds.add(id)
+      if (sanitizedStocks.length >= 4) break
+    }
+
+    settings_json.modules.stocks = sanitizedStocks
 
     // -------------------------------
     // ✅ Holidays injection (unchanged from your version)
