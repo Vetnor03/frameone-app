@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
@@ -4160,6 +4160,8 @@ function GroceriesModuleSettingsTab({
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
+  const listScrollRef = useRef<HTMLDivElement | null>(null)
+  const pendingScrollTopRef = useRef<number | null>(null)
 
   const groupedVisibleItems = useMemo(() => {
     const visible = items.filter((item) => groceryIsVisible(item, nowMs))
@@ -4175,6 +4177,12 @@ function GroceriesModuleSettingsTab({
       return { category, items: group }
     }).filter((group) => group.items.length > 0)
   }, [items, nowMs])
+
+  useLayoutEffect(() => {
+    if (pendingScrollTopRef.current == null || !listScrollRef.current) return
+    listScrollRef.current.scrollTop = pendingScrollTopRef.current
+    pendingScrollTopRef.current = null
+  }, [groupedVisibleItems, loading])
 
   async function loadGroceries() {
     if (!activeDeviceId) {
@@ -4309,20 +4317,35 @@ function GroceriesModuleSettingsTab({
 
   async function toggleChecked(item: GroceryItem) {
     const nextChecked = !item.isChecked
+    const nowIso = new Date().toISOString()
+    pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
+
+    setItems((prev) =>
+      prev.map((x) =>
+        x.id === item.id
+          ? {
+              ...x,
+              isChecked: nextChecked,
+              checkedAt: nextChecked ? nowIso : null,
+              updatedAt: nowIso,
+            }
+          : x
+      )
+    )
+
     const { error } = await supabase
       .from('grocery_items')
       .update({
         is_checked: nextChecked,
-        checked_at: nextChecked ? new Date().toISOString() : null,
+        checked_at: nextChecked ? nowIso : null,
       })
       .eq('id', item.id)
 
     if (error) {
       alert(error.message)
+      await loadGroceries()
       return
     }
-
-    await loadGroceries()
   }
 
   async function adjustQuantity(item: GroceryItem, delta: number) {
@@ -4396,7 +4419,7 @@ function GroceriesModuleSettingsTab({
   return (
     <>
     <div className="h-full flex flex-col min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : groupedVisibleItems.length === 0 ? (
