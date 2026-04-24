@@ -4064,7 +4064,7 @@ type GroceryCategory =
   | 'fruit_veg'
   | 'bread'
   | 'dairy'
-  | 'paalegg'
+  | 'cold_cuts'
   | 'meat_fish'
   | 'frozen'
   | 'dry_goods'
@@ -4085,7 +4085,7 @@ const GROCERY_CATEGORY_ORDER: GroceryCategory[] = [
   'fruit_veg',
   'bread',
   'dairy',
-  'paalegg',
+  'cold_cuts',
   'meat_fish',
   'frozen',
   'dry_goods',
@@ -4096,7 +4096,9 @@ const GROCERY_CATEGORY_ORDER: GroceryCategory[] = [
 ]
 
 function asGroceryCategory(value: string | null | undefined): GroceryCategory {
-  const v = String(value ?? '').trim() as GroceryCategory
+  const raw = String(value ?? '').trim()
+  const normalized = raw === 'paalegg' ? 'cold_cuts' : raw
+  const v = normalized as GroceryCategory
   return GROCERY_CATEGORY_ORDER.includes(v) ? v : 'other'
 }
 
@@ -4105,7 +4107,7 @@ function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) 
     fruit_veg: 'Fruit & veg',
     bread: 'Bread',
     dairy: 'Dairy',
-    paalegg: 'Pålegg',
+    cold_cuts: 'Cold cuts',
     meat_fish: 'Meat & fish',
     frozen: 'Frozen',
     dry_goods: 'Dry goods',
@@ -4118,7 +4120,7 @@ function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) 
     fruit_veg: 'Frukt og grønt',
     bread: 'Brød',
     dairy: 'Meieri',
-    paalegg: 'Pålegg',
+    cold_cuts: 'Pålegg',
     meat_fish: 'Kjøtt og fisk',
     frozen: 'Frossen',
     dry_goods: 'Tørrvarer',
@@ -4315,8 +4317,24 @@ function GroceriesModuleSettingsTab({
   }
 
   async function adjustQuantity(item: GroceryItem, delta: number) {
+    if (delta < 0 && item.quantity === 1) {
+      const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
+      if (!confirmed) return
+
+      const { error: deleteError } = await supabase
+        .from('grocery_items')
+        .delete()
+        .eq('id', item.id)
+
+      if (deleteError) {
+        alert(deleteError.message)
+        return
+      }
+      await loadGroceries()
+      return
+    }
+
     const nextQty = Math.max(1, item.quantity + delta)
-    if (nextQty === item.quantity) return
 
     const { error } = await supabase
       .from('grocery_items')
@@ -4336,7 +4354,7 @@ function GroceriesModuleSettingsTab({
   return (
     <>
     <div className="h-full flex flex-col min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)]">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : groupedVisibleItems.length === 0 ? (
@@ -4344,11 +4362,11 @@ function GroceriesModuleSettingsTab({
         ) : (
           <div className="px-2 py-2">
             {groupedVisibleItems.map((group) => (
-              <div key={group.category} className="mb-3">
+              <div key={group.category} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
                 <div className="px-2 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
                   {groceryCategoryLabel(language, group.category)}
                 </div>
-                <ul className="divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
+                <ul className="divide-y divide-[color:var(--bd-10)]">
             {group.items.map((item) => (
               <li key={item.id} className="px-4 py-3 flex items-start gap-3">
                 <button
@@ -4500,8 +4518,12 @@ function GroceriesDraftSheet({
         </select>
 
         <div className="mt-4 text-[10px] tracking-widest text-[color:var(--fg-45)]">{tx(language).groceriesSuggestions}</div>
-        <div className="mt-2 flex-1 min-h-0 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
-          {filteredSuggestions.map((s) => (
+        <div className="mt-2 h-48 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+          {filteredSuggestions.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-xs text-[color:var(--fg-45)]">
+              {language === 'no' ? 'Ingen treff' : 'No matching items'}
+            </div>
+          ) : filteredSuggestions.map((s) => (
             <button
               key={s.name.toLowerCase()}
               onClick={() => {
@@ -4517,7 +4539,7 @@ function GroceriesDraftSheet({
           ))}
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid grid-cols-1 gap-2">
           <button
             onClick={save}
             disabled={!canSave}
@@ -4525,7 +4547,7 @@ function GroceriesDraftSheet({
           >
             {tx(language).groceriesAdd}
           </button>
-          <button onClick={onClose} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">
+          <button onClick={onClose} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)] w-full">
             {language === 'no' ? 'LUKK' : 'CLOSE'}
           </button>
         </div>

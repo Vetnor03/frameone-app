@@ -40,6 +40,12 @@ function asString(v: any, def: string) {
   return typeof v === 'string' ? v : def
 }
 
+function normalizeGroceryCategory(value: any) {
+  const raw = asString(value, 'other').trim()
+  if (raw === 'paalegg') return 'cold_cuts'
+  return raw
+}
+
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
 function normalizeStockChartRange(value: any): StockChartRange {
@@ -265,7 +271,7 @@ export async function GET(req: Request) {
         id: String(x.id),
         name: asString(x.name, '').slice(0, 80),
         quantity: Math.max(1, Number(x.quantity ?? 1) || 1),
-        category: asString(x.category, 'other').slice(0, 24),
+        category: normalizeGroceryCategory(x.category).slice(0, 24),
         checked: false,
         updated_at: x.updated_at ? String(x.updated_at) : null,
       }))
