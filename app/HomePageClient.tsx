@@ -4437,23 +4437,25 @@ function GroceriesModuleSettingsTab({
                     <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{t.groceriesUntickHint}</div>
                   ) : null}
                 </div>
-                <div className="shrink-0 flex items-center gap-1">
-                  <div className={`text-xs w-6 text-center text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>{item.quantity}</div>
+                <div className="shrink-0 flex items-center gap-2.5">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
                       adjustQuantity(item, -1)
                     }}
-                    className="h-7 w-7 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
+                    className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
                   >
                     −
                   </button>
+                  <div className={`text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>
+                    {item.quantity}
+                  </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
                       adjustQuantity(item, +1)
                     }}
-                    className="h-7 w-7 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
+                    className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
                   >
                     +
                   </button>
