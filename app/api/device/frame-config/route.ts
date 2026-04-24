@@ -39,11 +39,11 @@ function asString(v: any, def: string) {
   return typeof v === 'string' ? v : def
 }
 
-type StockChartRange = 'day' | 'week' | 'month'
+type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
 function normalizeStockChartRange(value: any): StockChartRange {
   const v = String(value ?? '').trim().toLowerCase()
-  if (v === 'week' || v === 'month') return v
+  if (v === 'week' || v === 'month' || v === 'year') return v
   return 'day'
 }
 

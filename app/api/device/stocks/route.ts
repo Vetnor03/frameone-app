@@ -31,7 +31,7 @@ type StockConfigItem = {
   chartRange?: string
 }
 
-type StockChartRange = 'day' | 'week' | 'month'
+type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -68,8 +68,22 @@ function toIsoOrNull(epochSeconds: unknown) {
 
 function normalizeChartRange(value: unknown): StockChartRange {
   const v = String(value ?? '').trim().toLowerCase()
-  if (v === 'week' || v === 'month') return v
+  if (v === 'week' || v === 'month' || v === 'year') return v
   return 'day'
+}
+
+function downsampleSeries(points: SeriesPoint[], maxPoints: number) {
+  if (points.length <= maxPoints) return points
+  if (maxPoints <= 1) return points.length ? [points[points.length - 1]] : []
+
+  const out: SeriesPoint[] = []
+  const lastIdx = points.length - 1
+  for (let i = 0; i < maxPoints; i++) {
+    const idx = Math.round((i * lastIdx) / (maxPoints - 1))
+    out.push(points[idx])
+  }
+
+  return out
 }
 
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
@@ -214,6 +228,7 @@ export async function GET(req: Request) {
     let day: SeriesPoint[] = []
     let week: SeriesPoint[] = []
     let month: SeriesPoint[] = []
+    let year: SeriesPoint[] = []
 
     try {
       day = await fetchCandles(resolvedSymbol, '60', nowSec - 36 * 3600, nowSec, apiKey)
@@ -236,6 +251,13 @@ export async function GET(req: Request) {
       month = []
     }
 
+    try {
+      year = await fetchCandles(resolvedSymbol, 'D', nowSec - 380 * 24 * 3600, nowSec, apiKey)
+      year = downsampleSeries(year, 52)
+    } catch {
+      year = []
+    }
+
     const response = {
       symbol: resolvedSymbol,
       name: name || resolvedSymbol,
@@ -255,8 +277,9 @@ export async function GET(req: Request) {
         day,
         week,
         month,
+        year,
       },
-      selectedSeries: ({ day, week, month } as Record<StockChartRange, SeriesPoint[]>)[chartRange] || [],
+      selectedSeries: ({ day, week, month, year } as Record<StockChartRange, SeriesPoint[]>)[chartRange] || [],
       signature: makeSignature(resolvedSymbol, price, change, changePercent),
     }
 

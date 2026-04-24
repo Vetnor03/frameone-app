@@ -95,6 +95,7 @@ const UI = {
     chartToday: 'Today',
     chartWeek: 'Week',
     chartMonth: 'Month',
+    chartYear: 'Year',
     groceriesComingSoon: 'Groceries coming soon',
 
     countdownNoEvents: 'No events yet',
@@ -201,6 +202,7 @@ const UI = {
     chartToday: 'I dag',
     chartWeek: 'Uke',
     chartMonth: 'Måned',
+    chartYear: 'År',
     groceriesComingSoon: 'Matvarer kommer snart',
 
     countdownNoEvents: 'Ingen hendelser ennå',
@@ -2488,7 +2490,7 @@ type SoccerCfg = {
   competitionName?: string
 }
 
-type StockChartRange = 'day' | 'week' | 'month'
+type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
 type StockCfg = {
   id: number
@@ -2531,7 +2533,7 @@ function normalizeSoccerList(raw: any): SoccerCfg[] {
 
 function normalizeStocksList(raw: any): StockCfg[] {
   const arr = Array.isArray(raw) ? raw : []
-  const allowedChartRanges: StockChartRange[] = ['day', 'week', 'month']
+  const allowedChartRanges: StockChartRange[] = ['day', 'week', 'month', 'year']
 
   return arr
     .filter((x) => x && typeof x === 'object')
@@ -3813,7 +3815,7 @@ function StocksModuleSettingsTab({
               title={title}
               symbol={cfg?.symbol ? String(cfg.symbol) : ''}
               name={cfg?.name ? String(cfg.name) : ''}
-              chartRange={cfg?.chartRange === 'week' || cfg?.chartRange === 'month' ? cfg.chartRange : 'day'}
+              chartRange={cfg?.chartRange === 'week' || cfg?.chartRange === 'month' || cfg?.chartRange === 'year' ? cfg.chartRange : 'day'}
               onSave={(patch) => upsertStock(id, patch)}
             />
           )
@@ -3868,11 +3870,12 @@ function StockRow({
 
         <div className="mt-4">
           <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{tx(language).chart}</div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {([
               { key: 'day', label: tx(language).chartToday },
               { key: 'week', label: tx(language).chartWeek },
               { key: 'month', label: tx(language).chartMonth },
+              { key: 'year', label: tx(language).chartYear },
             ] as { key: StockChartRange; label: string }[]).map((opt) => {
               const active = chartRange === opt.key
               return (
