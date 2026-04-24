@@ -96,7 +96,13 @@ const UI = {
     chartWeek: 'Week',
     chartMonth: 'Month',
     chartYear: 'Year',
-    groceriesComingSoon: 'Groceries coming soon',
+    groceriesInputPlaceholder: 'Add grocery item',
+    groceriesAdd: 'ADD',
+    groceriesSuggestions: 'Suggestions',
+    groceriesNoItems: 'No grocery items yet',
+    groceriesCheckedLabel: 'Bought',
+    groceriesUntickHint: 'You can undo for 24h',
+    groceriesQty: 'Qty',
 
     countdownNoEvents: 'No events yet',
     newEvent: 'NEW EVENT',
@@ -203,7 +209,13 @@ const UI = {
     chartWeek: 'Uke',
     chartMonth: 'Måned',
     chartYear: 'År',
-    groceriesComingSoon: 'Matvarer kommer snart',
+    groceriesInputPlaceholder: 'Legg til vare',
+    groceriesAdd: 'LEGG TIL',
+    groceriesSuggestions: 'Forslag',
+    groceriesNoItems: 'Ingen varer ennå',
+    groceriesCheckedLabel: 'Kjøpt',
+    groceriesUntickHint: 'Kan angres i 24t',
+    groceriesQty: 'Antall',
 
     countdownNoEvents: 'Ingen hendelser ennå',
     newEvent: 'NY HENDELSE',
@@ -3042,7 +3054,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
   }
 
   return (
@@ -4038,18 +4050,317 @@ function StockSearchSheet({
   )
 }
 
-function GroceriesModuleSettingsTab({ language }: { language: AppLanguage }) {
+type GroceryItem = {
+  id: string
+  name: string
+  quantity: number
+  isChecked: boolean
+  checkedAt: string | null
+  updatedAt: string | null
+}
+
+type GrocerySuggestion = {
+  name: string
+  usageCount: number
+  lastUsedAt: string | null
+}
+
+const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
+
+function groceryIsVisible(item: GroceryItem, nowMs: number) {
+  if (!item.isChecked) return true
+  if (!item.checkedAt) return false
+  return nowMs - new Date(item.checkedAt).getTime() < GROCERY_UNDO_WINDOW_MS
+}
+
+function GroceriesModuleSettingsTab({
+  language,
+  activeDeviceId,
+}: {
+  language: AppLanguage
+  activeDeviceId: string | null
+}) {
+  const t = tx(language)
+  const [items, setItems] = useState<GroceryItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  const visibleItems = useMemo(() => {
+    const visible = items.filter((item) => groceryIsVisible(item, nowMs))
+    const unchecked = visible
+      .filter((item) => !item.isChecked)
+      .sort((a, b) => {
+        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+        return bTime - aTime
+      })
+    const checked = visible
+      .filter((item) => item.isChecked)
+      .sort((a, b) => {
+        const aTime = a.checkedAt ? new Date(a.checkedAt).getTime() : 0
+        const bTime = b.checkedAt ? new Date(b.checkedAt).getTime() : 0
+        return bTime - aTime
+      })
+
+    return [...unchecked, ...checked]
+  }, [items, nowMs])
+
+  const filteredSuggestions = useMemo(() => {
+    const q = nameInput.trim().toLowerCase()
+    return suggestions.filter((item) => {
+      if (!q) return true
+      return item.name.toLowerCase().includes(q)
+    })
+  }, [nameInput, suggestions])
+
+  async function loadGroceries() {
+    if (!activeDeviceId) {
+      setItems([])
+      setSuggestions([])
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('grocery_items')
+        .select('id, name, quantity, is_checked, checked_at, updated_at')
+        .eq('device_id', activeDeviceId)
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      const parsed: GroceryItem[] = (data || []).map((row: any) => ({
+        id: String(row.id),
+        name: String(row.name ?? '').trim(),
+        quantity: Math.max(1, Number(row.quantity ?? 1) || 1),
+        isChecked: !!row.is_checked,
+        checkedAt: row.checked_at ? String(row.checked_at) : null,
+        updatedAt: row.updated_at ? String(row.updated_at) : null,
+      }))
+
+      setItems(parsed)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadHistory() {
+    if (!activeDeviceId) {
+      setSuggestions([])
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('grocery_item_history')
+      .select('name, usage_count, last_used_at')
+      .eq('device_id', activeDeviceId)
+      .order('usage_count', { ascending: false })
+      .order('last_used_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const parsed: GrocerySuggestion[] = (data || []).map((row: any) => ({
+      name: String(row.name ?? '').trim(),
+      usageCount: Math.max(1, Number(row.usage_count ?? 1) || 1),
+      lastUsedAt: row.last_used_at ? String(row.last_used_at) : null,
+    }))
+    setSuggestions(parsed.filter((x) => x.name))
+  }
+
+  useEffect(() => {
+    loadGroceries()
+    loadHistory()
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const handle = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(handle)
+  }, [])
+
+  async function addItem(nameValue?: string) {
+    const normalizedName = (nameValue ?? nameInput).trim()
+    if (!normalizedName || !activeDeviceId) return
+
+    const { data: authData } = await supabase.auth.getUser()
+    const createdBy = authData.user?.id ?? null
+    const nowIso = new Date().toISOString()
+    const { error } = await supabase
+      .from('grocery_items')
+      .insert({
+        device_id: activeDeviceId,
+        created_by: createdBy,
+        name: normalizedName,
+        quantity: 1,
+        is_checked: false,
+        checked_at: null,
+      })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const { data: existingHistory } = await supabase
+      .from('grocery_item_history')
+      .select('id, usage_count')
+      .eq('device_id', activeDeviceId)
+      .ilike('name', normalizedName)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingHistory?.id) {
+      await supabase
+        .from('grocery_item_history')
+        .update({
+          usage_count: Math.max(1, Number(existingHistory.usage_count ?? 1) || 1) + 1,
+          last_used_at: nowIso,
+        })
+        .eq('id', existingHistory.id)
+    } else {
+      await supabase
+        .from('grocery_item_history')
+        .insert({
+          device_id: activeDeviceId,
+          name: normalizedName,
+          usage_count: 1,
+          last_used_at: nowIso,
+        })
+    }
+
+    setNameInput('')
+    await loadGroceries()
+    await loadHistory()
+  }
+
+  async function toggleChecked(item: GroceryItem) {
+    const nextChecked = !item.isChecked
+    const { error } = await supabase
+      .from('grocery_items')
+      .update({
+        is_checked: nextChecked,
+        checked_at: nextChecked ? new Date().toISOString() : null,
+      })
+      .eq('id', item.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await loadGroceries()
+  }
+
+  async function adjustQuantity(item: GroceryItem, delta: number) {
+    const nextQty = Math.max(1, item.quantity + delta)
+    if (nextQty === item.quantity) return
+
+    const { error } = await supabase
+      .from('grocery_items')
+      .update({
+        quantity: nextQty,
+      })
+      .eq('id', item.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await loadGroceries()
+  }
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="mt-5 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
-        <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
-          {moduleLabel(language, 'groceries')}
-        </div>
-        <div className="mt-2 text-[color:var(--fg-80)] text-base">
-          {tx(language).groceriesComingSoon}
-        </div>
+    <div className="h-full flex flex-col min-h-0">
+      <div className="mt-2 text-xl font-semibold tracking-widest">{moduleLabel(language, 'groceries')}</div>
+
+      <div className="mt-3 flex-1 min-h-0 overflow-y-auto rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)]">
+        {loading ? (
+          <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+        ) : visibleItems.length === 0 ? (
+          <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
+        ) : (
+          <ul className="divide-y divide-[color:var(--bd-10)]">
+            {visibleItems.map((item) => (
+              <li key={item.id} className="px-4 py-3 flex items-start gap-3">
+                <button
+                  onClick={() => toggleChecked(item)}
+                  className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}
+                  aria-label={item.isChecked ? `${t.groceriesCheckedLabel}: ${item.name}` : item.name}
+                >
+                  {item.isChecked ? <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--fg-60)]" /> : null}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className={`text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>
+                    {item.name}
+                  </div>
+                  <div className={`text-xs mt-1 text-[color:var(--fg-50)] ${item.isChecked ? 'line-through' : ''}`}>
+                    {t.groceriesQty}: {item.quantity}
+                  </div>
+                  {item.isChecked ? (
+                    <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{t.groceriesUntickHint}</div>
+                  ) : null}
+                </div>
+                <div className="shrink-0 flex items-center gap-1">
+                  <button
+                    onClick={() => adjustQuantity(item, -1)}
+                    className="h-7 w-7 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => adjustQuantity(item, +1)}
+                    className="h-7 w-7 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]"
+                  >
+                    +
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      <div className="flex-1" />
+
+      <div className="mt-3 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
+        <input
+          value={nameInput}
+          onChange={(e) => setNameInput(e.target.value)}
+          placeholder={t.groceriesInputPlaceholder}
+          className="w-full h-11 rounded-xl bg-[color:var(--bg)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+        />
+        <button
+          onClick={() => addItem()}
+          className="mt-2 h-10 px-4 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"
+        >
+          {t.groceriesAdd}
+        </button>
+
+        {filteredSuggestions.length > 0 ? (
+          <div className="mt-3">
+            <div className="text-[10px] tracking-widest text-[color:var(--fg-45)] mb-2">{t.groceriesSuggestions}</div>
+            <div className="flex flex-wrap gap-2">
+              {filteredSuggestions.slice(0, 8).map((s) => (
+                <button
+                  key={s.name.toLowerCase()}
+                  onClick={() => addItem(s.name)}
+                  className="px-3 py-1.5 rounded-full border border-[color:var(--bd-15)] text-xs text-[color:var(--fg-65)]"
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
