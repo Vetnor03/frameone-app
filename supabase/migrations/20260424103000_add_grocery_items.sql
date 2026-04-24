@@ -12,7 +12,7 @@ create table if not exists public.grocery_items (
   updated_at timestamptz not null default now(),
   constraint grocery_items_name_not_empty check (char_length(btrim(name)) > 0),
   constraint grocery_items_quantity_min check (quantity >= 1),
-  constraint grocery_items_category_valid check (category in ('fruit_veg','bread','dairy','cold_cuts','meat_fish','frozen','dry_goods','spices','snacks','drinks','household','other'))
+  constraint grocery_items_category_valid check (category in ('fruit_veg','bread','dairy','cold_cuts','meat_fish','frozen','dry_goods','spices','toiletries','snacks','drinks','household','other'))
 );
 
 create table if not exists public.grocery_item_history (
@@ -26,7 +26,7 @@ create table if not exists public.grocery_item_history (
   updated_at timestamptz not null default now(),
   constraint grocery_item_history_name_not_empty check (char_length(btrim(name)) > 0),
   constraint grocery_item_history_usage_min check (usage_count >= 1),
-  constraint grocery_item_history_category_valid check (category in ('fruit_veg','bread','dairy','cold_cuts','meat_fish','frozen','dry_goods','spices','snacks','drinks','household','other')),
+  constraint grocery_item_history_category_valid check (category in ('fruit_veg','bread','dairy','cold_cuts','meat_fish','frozen','dry_goods','spices','toiletries','snacks','drinks','household','other')),
   constraint grocery_item_history_device_name_unique unique (device_id, name)
 );
 

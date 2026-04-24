@@ -4069,6 +4069,7 @@ type GroceryCategory =
   | 'frozen'
   | 'dry_goods'
   | 'spices'
+  | 'toiletries'
   | 'snacks'
   | 'drinks'
   | 'household'
@@ -4091,6 +4092,7 @@ const GROCERY_CATEGORY_ORDER: GroceryCategory[] = [
   'frozen',
   'dry_goods',
   'spices',
+  'toiletries',
   'snacks',
   'drinks',
   'household',
@@ -4114,6 +4116,7 @@ function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) 
     frozen: 'Frozen',
     dry_goods: 'Dry goods',
     spices: 'Spices',
+    toiletries: 'Toiletries',
     snacks: 'Snacks',
     drinks: 'Drinks',
     household: 'Household',
@@ -4128,6 +4131,7 @@ function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) 
     frozen: 'Frossen',
     dry_goods: 'Tørrvarer',
     spices: 'Krydder',
+    toiletries: 'Toalettsaker',
     snacks: 'Snacks',
     drinks: 'Drikke',
     household: 'Husholdning',
