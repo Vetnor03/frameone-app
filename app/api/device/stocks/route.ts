@@ -28,7 +28,10 @@ type StockConfigItem = {
   id?: number | string
   symbol?: string
   name?: string
+  chartRange?: string
 }
+
+type StockChartRange = 'day' | 'week' | 'month'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -61,6 +64,12 @@ function toIsoOrNull(epochSeconds: unknown) {
   const ts = Number(epochSeconds)
   if (!Number.isFinite(ts) || ts <= 0) return null
   return new Date(ts * 1000).toISOString()
+}
+
+function normalizeChartRange(value: unknown): StockChartRange {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (v === 'week' || v === 'month') return v
+  return 'day'
 }
 
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
@@ -169,6 +178,7 @@ export async function GET(req: Request) {
 
     const symbol = String(cfg.symbol || '').trim().toUpperCase()
     const name = String(cfg.name || '').trim()
+    const chartRange = normalizeChartRange(cfg.chartRange)
 
     if (!symbol && !name) {
       return NextResponse.json({ error: 'Stock config missing symbol/name' }, { status: 404 })
@@ -229,6 +239,7 @@ export async function GET(req: Request) {
     const response = {
       symbol: resolvedSymbol,
       name: name || resolvedSymbol,
+      chartRange,
       currency,
       quote: {
         price,
@@ -245,6 +256,7 @@ export async function GET(req: Request) {
         week,
         month,
       },
+      selectedSeries: ({ day, week, month } as Record<StockChartRange, SeriesPoint[]>)[chartRange] || [],
       signature: makeSignature(resolvedSymbol, price, change, changePercent),
     }
 
