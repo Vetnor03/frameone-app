@@ -4362,10 +4362,11 @@ function GroceriesModuleSettingsTab({
         ) : (
           <div className="px-2 py-2">
             {groupedVisibleItems.map((group) => (
-              <div key={group.category} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
-                <div className="px-2 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
+              <div key={group.category} className="mb-3">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
                   {groceryCategoryLabel(language, group.category)}
                 </div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
                 <ul className="divide-y divide-[color:var(--bd-10)]">
             {group.items.map((item) => (
               <li key={item.id} className="px-4 py-3 flex items-start gap-3">
@@ -4402,6 +4403,7 @@ function GroceriesModuleSettingsTab({
               </li>
             ))}
           </ul>
+                </div>
               </div>
             ))}
           </div>
