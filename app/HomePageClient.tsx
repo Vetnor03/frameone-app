@@ -4574,7 +4574,7 @@ function GroceriesDraftSheet({
         </div>
 
         <input
-          autoFocus
+          autoFocus={!editingItem}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={tx(language).groceriesInputPlaceholder}
