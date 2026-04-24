@@ -4281,13 +4281,39 @@ function GroceriesModuleSettingsTab({
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'grocery_items',
           filter: `device_id=eq.${activeDeviceId}`,
         },
         () => {
           scheduleReload()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'grocery_items',
+          filter: `device_id=eq.${activeDeviceId}`,
+        },
+        () => {
+          scheduleReload()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'grocery_items',
+        },
+        (payload) => {
+          const oldRow = (payload as { old?: { device_id?: string | null } })?.old
+          if (oldRow?.device_id === activeDeviceId) {
+            scheduleReload()
+          }
         }
       )
       .subscribe()
@@ -4561,7 +4587,10 @@ function GroceriesModuleSettingsTab({
 
       <div className="py-5 flex flex-col items-center relative z-20">
         <button
-          onClick={() => setSheetOpen(true)}
+          onClick={() => {
+            setEditingItem(null)
+            setSheetOpen(true)
+          }}
           disabled={!activeDeviceId}
           className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
             !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
@@ -4576,7 +4605,10 @@ function GroceriesModuleSettingsTab({
       <GroceriesDraftSheet
         language={language}
         suggestions={suggestions}
-        onClose={() => setSheetOpen(false)}
+        onClose={() => {
+          setSheetOpen(false)
+          setEditingItem(null)
+        }}
         onSaved={async () => {
           setSheetOpen(false)
           setEditingItem(null)
