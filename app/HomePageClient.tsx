@@ -4533,6 +4533,8 @@ function GroceriesModuleSettingsTab({
     if (!activeDeviceId) return
     const normalizedName = name.trim()
     if (!normalizedName) return
+    const previousName = items.find((item) => item.id === id)?.name.trim() ?? ''
+    const hasNameChange = previousName.toLocaleLowerCase() !== normalizedName.toLocaleLowerCase()
     const nowIso = new Date().toISOString()
 
     const { error } = await supabase
@@ -4549,14 +4551,61 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    await supabase
-      .from('grocery_item_history')
-      .upsert({
-        device_id: activeDeviceId,
-        name: normalizedName,
-        category,
-        last_used_at: nowIso,
-      }, { onConflict: 'device_id,name' })
+    const historyBase = {
+      device_id: activeDeviceId,
+      name: normalizedName,
+      category,
+      last_used_at: nowIso,
+    }
+
+    if (!hasNameChange) {
+      await supabase
+        .from('grocery_item_history')
+        .upsert(historyBase, { onConflict: 'device_id,name' })
+    } else {
+      const { data: oldHistory } = await supabase
+        .from('grocery_item_history')
+        .select('id, usage_count')
+        .eq('device_id', activeDeviceId)
+        .ilike('name', previousName)
+        .limit(1)
+        .maybeSingle()
+
+      const { data: updatedHistory } = await supabase
+        .from('grocery_item_history')
+        .select('id, usage_count')
+        .eq('device_id', activeDeviceId)
+        .ilike('name', normalizedName)
+        .limit(1)
+        .maybeSingle()
+
+      const carryUsageCount = Math.max(1, Number(oldHistory?.usage_count ?? 1) || 1)
+
+      if (updatedHistory?.id) {
+        await supabase
+          .from('grocery_item_history')
+          .update({
+            usage_count: Math.max(1, Number(updatedHistory.usage_count ?? 1) || 1) + carryUsageCount,
+            category,
+            last_used_at: nowIso,
+          })
+          .eq('id', updatedHistory.id)
+      } else {
+        await supabase
+          .from('grocery_item_history')
+          .upsert({
+            ...historyBase,
+            usage_count: carryUsageCount,
+          }, { onConflict: 'device_id,name' })
+      }
+
+      if (oldHistory?.id && oldHistory.id !== updatedHistory?.id) {
+        await supabase
+          .from('grocery_item_history')
+          .delete()
+          .eq('id', oldHistory.id)
+      }
+    }
 
     await loadGroceries()
     await loadHistory()
