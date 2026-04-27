@@ -4182,17 +4182,24 @@ function GroceriesModuleSettingsTab({
 
   const groupedVisibleItems = useMemo(() => {
     const visible = items.filter((item) => groceryIsVisible(item, nowMs))
-    return GROCERY_CATEGORY_LIST_ORDER.map((category) => {
-      const group = visible
-        .filter((item) => item.category === category)
-        .sort((a, b) => {
-          if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
-          const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
-          const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
-          return bTime - aTime
-        })
-      return { category, items: group }
-    }).filter((group) => group.items.length > 0)
+    return GROCERY_CATEGORY_LIST_ORDER
+      .map((category, order) => {
+        const group = visible
+          .filter((item) => item.category === category)
+          .sort((a, b) => {
+            if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
+            const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
+            const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
+            return bTime - aTime
+          })
+        return { category, items: group, allChecked: group.every((item) => item.isChecked), order }
+      })
+      .filter((group) => group.items.length > 0)
+      .sort((a, b) => {
+        if (a.allChecked !== b.allChecked) return a.allChecked ? 1 : -1
+        return a.order - b.order
+      })
+      .map(({ category, items }) => ({ category, items }))
   }, [items, nowMs])
 
   useLayoutEffect(() => {
@@ -4202,7 +4209,7 @@ function GroceriesModuleSettingsTab({
   }, [groupedVisibleItems, loading])
 
   async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean }) {
-    const silent = !!options?.silent
+    const silent = !!options?.silent || !!options?.preserveScroll
     if (options?.preserveScroll) {
       pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
     }
@@ -4482,7 +4489,7 @@ function GroceriesModuleSettingsTab({
 
     if (error) {
       alert(error.message)
-      await loadGroceries()
+      await loadGroceries({ preserveScroll: true })
       return
     }
   }
@@ -4519,7 +4526,7 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    await loadGroceries()
+    await loadGroceries({ preserveScroll: true })
   }
 
   async function updateItem(id: string, name: string, quantity: number, category: GroceryCategory) {
