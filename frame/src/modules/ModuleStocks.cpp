@@ -307,11 +307,37 @@ static bool parseQuoteJson(const String& body, StockCache& out) {
   if (!selected.isNull()) {
     for (JsonVariant v : selected) {
       if (out.seriesCount >= MAX_SERIES_POINTS) break;
-      float p = v["p"] | NAN;
+      float p = NAN;
+      if (v.is<float>() || v.is<double>() || v.is<int>() || v.is<long>()) p = (float)v.as<double>();
+      if (!isfinite(p)) p = v["p"] | NAN;
+      if (!isfinite(p)) p = v["price"] | NAN;
       if (!isfinite(p)) continue;
       out.series[out.seriesCount++] = p;
     }
   }
+  if (out.seriesCount < 2) {
+    out.seriesCount = 0;
+    if (isfinite(out.previousClose) && isfinite(out.price)) {
+      out.series[out.seriesCount++] = out.previousClose;
+      out.series[out.seriesCount++] = out.price;
+    } else if (isfinite(out.open) && isfinite(out.price)) {
+      out.series[out.seriesCount++] = out.open;
+      out.series[out.seriesCount++] = out.price;
+    }
+  }
+
+  Serial.print("[STOCKS] Parsed symbol/name: ");
+  Serial.print(out.symbol);
+  Serial.print(" / ");
+  Serial.println(out.name);
+  Serial.print("[STOCKS] Parsed quote p/d/dp: ");
+  Serial.print(out.price, 4);
+  Serial.print(" / ");
+  Serial.print(out.change, 4);
+  Serial.print(" / ");
+  Serial.println(out.changePercent, 4);
+  Serial.print("[STOCKS] selectedSeries count: ");
+  Serial.println(out.seriesCount);
 
   return true;
 }
@@ -330,6 +356,12 @@ static bool fetchQuote(int idx, StockCache& out) {
   int code = 0;
   String body;
   bool ok = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
+  Serial.print("[STOCKS] URL: ");
+  Serial.println(url);
+  Serial.print("[STOCKS] HTTP code: ");
+  Serial.println(code);
+  Serial.print("[STOCKS] body bytes: ");
+  Serial.println(body.length());
 
   if (code == 401 || code == 403) {
     DeviceIdentity::clearToken();
@@ -367,11 +399,14 @@ static void tick(int idx) {
   cache.fetchedAtMs = now;
 
   if (isfinite(fresh.price)) {
+    const bool wasValid = cache.valid;
     fresh.valid = true;
     fresh.fetchAttempted = true;
     fresh.lastFetchFailed = false;
     fresh.fetchedAtMs = now;
     cache = fresh;
+    Serial.print("[STOCKS] cache.valid became true: ");
+    Serial.println((!wasValid && cache.valid) ? "true" : "false");
     return;
   }
 
