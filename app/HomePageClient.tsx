@@ -4482,7 +4482,7 @@ function GroceriesModuleSettingsTab({
 
     if (error) {
       alert(error.message)
-      await loadGroceries()
+      await loadGroceries({ preserveScroll: true })
       return
     }
   }
@@ -4519,7 +4519,7 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    await loadGroceries()
+    await loadGroceries({ preserveScroll: true })
   }
 
   async function updateItem(id: string, name: string, quantity: number, category: GroceryCategory) {
