@@ -4202,7 +4202,7 @@ function GroceriesModuleSettingsTab({
   }, [groupedVisibleItems, loading])
 
   async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean }) {
-    const silent = !!options?.silent
+    const silent = !!options?.silent || !!options?.preserveScroll
     if (options?.preserveScroll) {
       pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
     }
