@@ -21,6 +21,7 @@ namespace ModuleStocks {
 
 static const FrameConfig* g_cfg = nullptr;
 static const int MAX_INSTANCES = 4;
+static const int MAX_SERIES_POINTS = 64;
 
 struct StockInstanceConfig {
   uint8_t id = 1;
@@ -42,6 +43,10 @@ struct StockCache {
   float price = NAN;
   float change = NAN;
   float changePercent = NAN;
+
+  char chartRange[8] = {0};
+  uint8_t seriesCount = 0;
+  float series[MAX_SERIES_POINTS] = {0};
 };
 
 static StockInstanceConfig g_inst[MAX_INSTANCES];
@@ -216,14 +221,28 @@ static bool parseQuoteJson(const String& body, StockCache& out) {
   const char* symbol = doc["symbol"] | "";
   const char* name = doc["name"] | "";
   const char* currency = doc["currency"] | "";
+  const char* chartRange = doc["chartRange"] | "";
 
   if (symbol && symbol[0]) strlcpy(out.symbol, symbol, sizeof(out.symbol));
   if (name && name[0]) strlcpy(out.name, name, sizeof(out.name));
   if (currency && currency[0]) strlcpy(out.currency, currency, sizeof(out.currency));
+  if (chartRange && chartRange[0]) strlcpy(out.chartRange, chartRange, sizeof(out.chartRange));
+  else out.chartRange[0] = '\0';
 
   out.price = doc["quote"]["price"] | NAN;
   out.change = doc["quote"]["change"] | NAN;
   out.changePercent = doc["quote"]["changePercent"] | NAN;
+
+  out.seriesCount = 0;
+  JsonArray selected = doc["selectedSeries"].as<JsonArray>();
+  if (!selected.isNull()) {
+    for (JsonVariant v : selected) {
+      if (out.seriesCount >= MAX_SERIES_POINTS) break;
+      float p = v["p"] | NAN;
+      if (!isfinite(p)) continue;
+      out.series[out.seriesCount++] = p;
+    }
+  }
 
   return true;
 }
@@ -327,32 +346,68 @@ static void drawLive(const Cell& c, const StockCache& data) {
     return;
   }
 
-  if (c.size == CELL_MEDIUM) {
-    int rowH = c.h / 3;
-    drawCenteredLine(c.x, c.y, c.w, rowH, title, FONT_B9, Theme::ink());
-    drawCenteredLine(c.x, c.y + rowH, c.w, rowH, priceTxt, FONT_B18, Theme::ink());
-    drawCenteredLine(c.x, c.y + rowH * 2, c.w, c.h - rowH * 2, pctTxt, FONT_B12, Theme::ink());
-    return;
-  }
+  auto& d = DisplayCore::get();
+  const int pad = (c.size == CELL_MEDIUM) ? 6 : 10;
+  const int titleH = (c.size == CELL_MEDIUM) ? 16 : 20;
+  const int bottomH = (c.size == CELL_MEDIUM) ? 34 : 42;
 
-  int left = c.x + 12;
-  int y1 = c.y + 28;
-  int y2 = c.y + (c.h / 2);
-  int y3 = c.y + c.h - 14;
+  const int chartX = c.x + pad;
+  const int chartY = c.y + titleH;
+  const int chartW = c.w - pad * 2;
+  const int chartH = c.h - titleH - bottomH - 2;
+  const int bottomY = c.y + c.h - bottomH;
 
-  char titleFit[56] = {0};
-  fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - 24, FONT_B12);
+  // Header / title
+  char titleFit[64] = {0};
+  fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - pad * 2, FONT_B9);
+  drawCenteredLine(c.x, c.y, c.w, titleH, titleFit, FONT_B9, Theme::ink());
 
-  drawLeft(left, y1, titleFit, FONT_B12, Theme::ink());
-  drawLeft(left, y2, priceTxt, FONT_B18, Theme::ink());
+  // Chart
+  d.drawRect(chartX, chartY, chartW, chartH, Theme::ink());
+  if (data.seriesCount >= 2 && chartW > 6 && chartH > 6) {
+    float mn = data.series[0];
+    float mx = data.series[0];
+    for (uint8_t i = 1; i < data.seriesCount; i++) {
+      if (data.series[i] < mn) mn = data.series[i];
+      if (data.series[i] > mx) mx = data.series[i];
+    }
 
-  char bottom[48] = {0};
-  if (data.currency[0]) {
-    snprintf(bottom, sizeof(bottom), "%s  (%s)  %s", changeTxt, pctTxt, data.currency);
+    float span = mx - mn;
+    if (span < 0.0001f) span = 1.0f;
+
+    const int innerX = chartX + 2;
+    const int innerY = chartY + 2;
+    const int innerW = chartW - 4;
+    const int innerH = chartH - 4;
+
+    // Mid reference line
+    d.drawFastHLine(innerX, innerY + innerH / 2, innerW, Theme::ink());
+
+    const int n = (int)data.seriesCount;
+    int prevX = innerX;
+    int prevY = innerY + innerH - (int)roundf(((data.series[0] - mn) / span) * (float)(innerH - 1));
+    for (int i = 1; i < n; i++) {
+      int x = innerX + (i * (innerW - 1)) / (n - 1);
+      int y = innerY + innerH - (int)roundf(((data.series[i] - mn) / span) * (float)(innerH - 1));
+      d.drawLine(prevX, prevY, x, y, Theme::ink());
+      prevX = x;
+      prevY = y;
+    }
   } else {
-    snprintf(bottom, sizeof(bottom), "%s  (%s)", changeTxt, pctTxt);
+    drawCenteredLine(chartX, chartY, chartW, chartH, "No chart data", FONT_B9, Theme::ink());
   }
-  drawLeft(left, y3, bottom, FONT_B9, Theme::ink());
+
+  // Main values at bottom
+  d.drawFastHLine(c.x + pad, bottomY, c.w - pad * 2, Theme::ink());
+
+  int priceY = bottomY + ((c.size == CELL_MEDIUM) ? 16 : 18);
+  int deltaY = c.y + c.h - 10;
+  drawLeft(c.x + pad, priceY, priceTxt, (c.size == CELL_MEDIUM) ? FONT_B12 : FONT_B18, Theme::ink());
+
+  char bottom[56] = {0};
+  if (data.currency[0]) snprintf(bottom, sizeof(bottom), "%s  (%s)  %s", changeTxt, pctTxt, data.currency);
+  else snprintf(bottom, sizeof(bottom), "%s  (%s)", changeTxt, pctTxt);
+  drawLeft(c.x + pad, deltaY, bottom, FONT_B9, Theme::ink());
 }
 
 void setConfig(const FrameConfig* cfg) {
