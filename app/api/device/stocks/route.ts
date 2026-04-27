@@ -32,6 +32,7 @@ type StockConfigItem = {
 }
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
+type CandleFetchStatus = 'ok' | 'http_error' | 'no_data' | 'invalid_payload' | 'exception'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -72,36 +73,6 @@ function normalizeChartRange(value: unknown): StockChartRange {
   return 'day'
 }
 
-function downsampleSeries(points: SeriesPoint[], maxPoints: number) {
-  if (points.length <= maxPoints) return points
-  if (maxPoints <= 1) return points.length ? [points[points.length - 1]] : []
-
-  const out: SeriesPoint[] = []
-  const lastIdx = points.length - 1
-  for (let i = 0; i < maxPoints; i++) {
-    const idx = Math.round((i * lastIdx) / (maxPoints - 1))
-    out.push(points[idx])
-  }
-
-  return out
-}
-
-function pickBestSelectedSeries(
-  preferredRange: StockChartRange,
-  allSeries: Record<StockChartRange, SeriesPoint[]>
-) {
-  const preferred = allSeries[preferredRange] || []
-  if (preferred.length > 0) return preferred
-
-  const fallbackOrder: StockChartRange[] = ['day', 'week', 'month', 'year']
-  for (const k of fallbackOrder) {
-    const arr = allSeries[k] || []
-    if (arr.length > 0) return arr
-  }
-
-  return [] as SeriesPoint[]
-}
-
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
   const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`
   const resp = await fetch(url, { cache: 'no-store' })
@@ -125,12 +96,36 @@ async function fetchCandles(symbol: string, resolution: string, fromSec: number,
     `&from=${fromSec}&to=${toSec}&token=${encodeURIComponent(apiKey)}`
 
   const resp = await fetch(url, { cache: 'no-store' })
-  if (!resp.ok) return [] as SeriesPoint[]
+  if (!resp.ok) {
+    return {
+      points: [] as SeriesPoint[],
+      status: 'http_error' as CandleFetchStatus,
+      reason: `HTTP ${resp.status}`,
+    }
+  }
 
   const body = (await resp.json()) as {
     s?: string
     c?: number[]
     t?: number[]
+    error?: string
+  }
+
+  const apiStatus = String(body?.s ?? '').toLowerCase()
+  if (apiStatus === 'no_data') {
+    return {
+      points: [] as SeriesPoint[],
+      status: 'no_data' as CandleFetchStatus,
+      reason: String(body?.error || 'Finnhub returned no_data'),
+    }
+  }
+
+  if (apiStatus && apiStatus !== 'ok') {
+    return {
+      points: [] as SeriesPoint[],
+      status: 'invalid_payload' as CandleFetchStatus,
+      reason: `Unexpected status: ${apiStatus}`,
+    }
   }
 
   const prices = Array.isArray(body?.c) ? body.c : []
@@ -145,7 +140,11 @@ async function fetchCandles(symbol: string, resolution: string, fromSec: number,
     out.push({ t: new Date(t * 1000).toISOString(), p })
   }
 
-  return out
+  return {
+    points: out,
+    status: 'ok' as CandleFetchStatus,
+    reason: '',
+  }
 }
 
 function makeSignature(symbol: string, price: number | null, change: number | null, changePercent: number | null) {
@@ -241,47 +240,92 @@ export async function GET(req: Request) {
     const low = toNumber(quoteRaw?.l)
     const asOf = toIsoOrNull(quoteRaw?.t)
 
+    const candleStatus: Record<StockChartRange, { status: CandleFetchStatus; reason: string }> = {
+      day: { status: 'exception', reason: 'Not requested' },
+      week: { status: 'exception', reason: 'Not requested' },
+      month: { status: 'exception', reason: 'Not requested' },
+      year: { status: 'exception', reason: 'Not requested' },
+    }
+
     let day: SeriesPoint[] = []
-    let week: SeriesPoint[] = []
-    let month: SeriesPoint[] = []
-    let year: SeriesPoint[] = []
-
     try {
-      day = await fetchCandles(resolvedSymbol, '60', nowSec - 36 * 3600, nowSec, apiKey)
-      day = clampPoints(day, 24)
-    } catch {
+      const result = await fetchCandles(resolvedSymbol, '60', nowSec - 36 * 3600, nowSec, apiKey)
+      day = clampPoints(result.points, 24)
+      candleStatus.day = { status: result.status, reason: result.reason }
+    } catch (error: unknown) {
       day = []
+      candleStatus.day = {
+        status: 'exception',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      }
     }
 
+    let week: SeriesPoint[] = []
     try {
-      week = await fetchCandles(resolvedSymbol, 'D', nowSec - 14 * 24 * 3600, nowSec, apiKey)
-      week = clampPoints(week, 10)
-    } catch {
+      const result = await fetchCandles(resolvedSymbol, 'D', nowSec - 14 * 24 * 3600, nowSec, apiKey)
+      week = clampPoints(result.points, 10)
+      candleStatus.week = { status: result.status, reason: result.reason }
+    } catch (error: unknown) {
       week = []
+      candleStatus.week = {
+        status: 'exception',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      }
     }
 
+    let month: SeriesPoint[] = []
     try {
-      month = await fetchCandles(resolvedSymbol, 'D', nowSec - 45 * 24 * 3600, nowSec, apiKey)
-      month = clampPoints(month, 30)
-    } catch {
+      const result = await fetchCandles(resolvedSymbol, 'D', nowSec - 45 * 24 * 3600, nowSec, apiKey)
+      month = clampPoints(result.points, 30)
+      candleStatus.month = { status: result.status, reason: result.reason }
+    } catch (error: unknown) {
       month = []
+      candleStatus.month = {
+        status: 'exception',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      }
     }
 
+    let year: SeriesPoint[] = []
     try {
-      year = await fetchCandles(resolvedSymbol, 'D', nowSec - 380 * 24 * 3600, nowSec, apiKey)
-      year = downsampleSeries(year, 52)
-    } catch {
+      const result = await fetchCandles(resolvedSymbol, 'W', nowSec - 500 * 24 * 3600, nowSec, apiKey)
+      year = clampPoints(result.points, 60)
+      candleStatus.year = { status: result.status, reason: result.reason }
+    } catch (error: unknown) {
       year = []
+      candleStatus.year = {
+        status: 'exception',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      }
     }
 
     const seriesByRange: Record<StockChartRange, SeriesPoint[]> = { day, week, month, year }
-    let selectedSeries = pickBestSelectedSeries(chartRange, seriesByRange)
-    if (selectedSeries.length === 0 && price != null && previousClose != null) {
+    let selectedSeries = seriesByRange[chartRange] || []
+    const selectedStatus = candleStatus[chartRange]
+    const selectedSeriesFailed = selectedStatus.status !== 'ok'
+
+    if (selectedSeriesFailed && selectedSeries.length === 0 && price != null && previousClose != null) {
       selectedSeries = [
         { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
         { t: new Date(nowSec * 1000).toISOString(), p: price },
       ]
     }
+
+    console.log(
+      '[device/stocks] chart response',
+      JSON.stringify({
+        symbol: resolvedSymbol,
+        requestedChartRange: chartRange,
+        selectedSeriesLength: selectedSeries.length,
+        seriesLengths: {
+          day: day.length,
+          week: week.length,
+          month: month.length,
+          year: year.length,
+        },
+        candleStatus,
+      })
+    )
 
     const response = {
       symbol: resolvedSymbol,
