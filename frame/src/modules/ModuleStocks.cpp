@@ -43,6 +43,10 @@ struct StockCache {
   float price = NAN;
   float change = NAN;
   float changePercent = NAN;
+  float previousClose = NAN;
+  float open = NAN;
+  float high = NAN;
+  float low = NAN;
 
   char chartRange[8] = {0};
   uint8_t seriesCount = 0;
@@ -179,6 +183,42 @@ static void formatSigned(char* out, size_t n, float v, int decimals, bool withPe
   }
 }
 
+static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
+  auto& d = DisplayCore::get();
+  d.drawRect(x, y, w, h, Theme::ink());
+  if (w <= 6 || h <= 6 || data.seriesCount < 2) {
+    drawCenteredLine(x, y, w, h, "No chart data", FONT_B9, Theme::ink());
+    return;
+  }
+
+  const int innerX = x + 2;
+  const int innerY = y + 2;
+  const int innerW = w - 4;
+  const int innerH = h - 4;
+
+  float mn = data.series[0];
+  float mx = data.series[0];
+  for (uint8_t i = 1; i < data.seriesCount; i++) {
+    if (data.series[i] < mn) mn = data.series[i];
+    if (data.series[i] > mx) mx = data.series[i];
+  }
+  float span = mx - mn;
+  if (span < 0.0001f) span = 1.0f;
+
+  d.drawFastHLine(innerX, innerY + innerH / 2, innerW, Theme::ink());
+
+  const int n = (int)data.seriesCount;
+  int prevX = innerX;
+  int prevY = innerY + innerH - (int)roundf(((data.series[0] - mn) / span) * (float)(innerH - 1));
+  for (int i = 1; i < n; i++) {
+    int px = innerX + (i * (innerW - 1)) / (n - 1);
+    int py = innerY + innerH - (int)roundf(((data.series[i] - mn) / span) * (float)(innerH - 1));
+    d.drawLine(prevX, prevY, px, py, Theme::ink());
+    prevX = px;
+    prevY = py;
+  }
+}
+
 static bool cfgChanged(const StockInstanceConfig& oldCfg, const StocksModuleConfig& next) {
   if (oldCfg.id != next.id) return true;
   if (oldCfg.refreshMs != next.refreshMs) return true;
@@ -232,6 +272,10 @@ static bool parseQuoteJson(const String& body, StockCache& out) {
   out.price = doc["quote"]["price"] | NAN;
   out.change = doc["quote"]["change"] | NAN;
   out.changePercent = doc["quote"]["changePercent"] | NAN;
+  out.previousClose = doc["quote"]["previousClose"] | NAN;
+  out.open = doc["quote"]["open"] | NAN;
+  out.high = doc["quote"]["high"] | NAN;
+  out.low = doc["quote"]["low"] | NAN;
 
   out.seriesCount = 0;
   JsonArray selected = doc["selectedSeries"].as<JsonArray>();
@@ -346,68 +390,92 @@ static void drawLive(const Cell& c, const StockCache& data) {
     return;
   }
 
-  auto& d = DisplayCore::get();
-  const int pad = (c.size == CELL_MEDIUM) ? 6 : 10;
-  const int titleH = (c.size == CELL_MEDIUM) ? 16 : 20;
-  const int bottomH = (c.size == CELL_MEDIUM) ? 34 : 42;
+  char openTxt[24] = {0};
+  char highTxt[24] = {0};
+  char lowTxt[24] = {0};
+  char prevCloseTxt[24] = {0};
+  formatPrice(openTxt, sizeof(openTxt), data.open);
+  formatPrice(highTxt, sizeof(highTxt), data.high);
+  formatPrice(lowTxt, sizeof(lowTxt), data.low);
+  formatPrice(prevCloseTxt, sizeof(prevCloseTxt), data.previousClose);
 
-  const int chartX = c.x + pad;
-  const int chartY = c.y + titleH;
-  const int chartW = c.w - pad * 2;
-  const int chartH = c.h - titleH - bottomH - 2;
-  const int bottomY = c.y + c.h - bottomH;
+  const int pad = (c.size == CELL_MEDIUM) ? 8 : 12;
+  const int headerH = (c.size == CELL_MEDIUM) ? 42 : 58;
+  const int chartBottomPad = (c.size == CELL_MEDIUM) ? 54 : 74;
+  const int chartY = c.y + headerH;
+  const int chartH = c.h - headerH - chartBottomPad;
+  const int priceBase = c.y + c.h - ((c.size == CELL_MEDIUM) ? 28 : 38);
+  const int deltaBase = c.y + c.h - 10;
 
-  // Header / title
   char titleFit[64] = {0};
-  fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - pad * 2, FONT_B9);
-  drawCenteredLine(c.x, c.y, c.w, titleH, titleFit, FONT_B9, Theme::ink());
+  fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - (pad * 2) - 140, FONT_B12);
+  drawLeft(c.x + pad, c.y + 16, titleFit, FONT_B12, Theme::ink());
 
-  // Chart
-  d.drawRect(chartX, chartY, chartW, chartH, Theme::ink());
-  if (data.seriesCount >= 2 && chartW > 6 && chartH > 6) {
-    float mn = data.series[0];
-    float mx = data.series[0];
-    for (uint8_t i = 1; i < data.seriesCount; i++) {
-      if (data.series[i] < mn) mn = data.series[i];
-      if (data.series[i] > mx) mx = data.series[i];
-    }
+  char headRight[40] = {0};
+  snprintf(headRight, sizeof(headRight), "%s  %s", changeTxt, pctTxt);
+  int hw = textWidth(headRight, FONT_B12);
+  drawLeft(c.x + c.w - pad - hw, c.y + 16, headRight, FONT_B12, Theme::ink());
 
-    float span = mx - mn;
-    if (span < 0.0001f) span = 1.0f;
+  if (c.size == CELL_MEDIUM) {
+    char row1[48] = {0};
+    snprintf(row1, sizeof(row1), "O %s  H %s", openTxt, highTxt);
+    drawLeft(c.x + pad, c.y + 34, row1, FONT_B9, Theme::ink());
 
-    const int innerX = chartX + 2;
-    const int innerY = chartY + 2;
-    const int innerW = chartW - 4;
-    const int innerH = chartH - 4;
+    int chartX = c.x + pad;
+    int chartW = c.w - pad * 2;
+    drawChartBox(chartX, chartY, chartW, chartH, data);
 
-    // Mid reference line
-    d.drawFastHLine(innerX, innerY + innerH / 2, innerW, Theme::ink());
-
-    const int n = (int)data.seriesCount;
-    int prevX = innerX;
-    int prevY = innerY + innerH - (int)roundf(((data.series[0] - mn) / span) * (float)(innerH - 1));
-    for (int i = 1; i < n; i++) {
-      int x = innerX + (i * (innerW - 1)) / (n - 1);
-      int y = innerY + innerH - (int)roundf(((data.series[i] - mn) / span) * (float)(innerH - 1));
-      d.drawLine(prevX, prevY, x, y, Theme::ink());
-      prevX = x;
-      prevY = y;
-    }
-  } else {
-    drawCenteredLine(chartX, chartY, chartW, chartH, "No chart data", FONT_B9, Theme::ink());
+    drawLeft(c.x + pad, priceBase, priceTxt, FONT_B18, Theme::ink());
+    char footer[40] = {0};
+    snprintf(footer, sizeof(footer), "Low %s", lowTxt);
+    drawLeft(c.x + pad, deltaBase, footer, FONT_B9, Theme::ink());
+    return;
   }
 
-  // Main values at bottom
-  d.drawFastHLine(c.x + pad, bottomY, c.w - pad * 2, Theme::ink());
+  auto& d = DisplayCore::get();
+  if (c.size == CELL_LARGE) {
+    const int splitX = c.x + (c.w * 50) / 100;
+    char row1[40] = {0}, row2[40] = {0}, row3[40] = {0};
+    snprintf(row1, sizeof(row1), "Open  %s", openTxt);
+    snprintf(row2, sizeof(row2), "High  %s", highTxt);
+    snprintf(row3, sizeof(row3), "Low   %s", lowTxt);
+    drawLeft(c.x + pad, c.y + 34, row1, FONT_B9, Theme::ink());
+    drawLeft(c.x + pad, c.y + 50, row2, FONT_B9, Theme::ink());
+    drawLeft(c.x + pad, c.y + 66, row3, FONT_B9, Theme::ink());
 
-  int priceY = bottomY + ((c.size == CELL_MEDIUM) ? 16 : 18);
-  int deltaY = c.y + c.h - 10;
-  drawLeft(c.x + pad, priceY, priceTxt, (c.size == CELL_MEDIUM) ? FONT_B12 : FONT_B18, Theme::ink());
+    d.drawFastVLine(splitX, c.y + headerH - 10, 82, Theme::ink());
+    drawChartBox(splitX + 8, c.y + headerH - 6, c.x + c.w - (splitX + 8) - pad, 90, data);
 
-  char bottom[56] = {0};
-  if (data.currency[0]) snprintf(bottom, sizeof(bottom), "%s  (%s)  %s", changeTxt, pctTxt, data.currency);
-  else snprintf(bottom, sizeof(bottom), "%s  (%s)", changeTxt, pctTxt);
-  drawLeft(c.x + pad, deltaY, bottom, FONT_B9, Theme::ink());
+    drawLeft(c.x + pad, priceBase, priceTxt, FONT_B18, Theme::ink());
+    char footer[56] = {0};
+    snprintf(footer, sizeof(footer), "Prev close %s", prevCloseTxt);
+    drawLeft(c.x + pad, deltaBase, footer, FONT_B9, Theme::ink());
+    return;
+  }
+
+  // XL
+  const int splitX = c.x + c.w / 2;
+  d.drawFastVLine(splitX, c.y + headerH - 8, 92, Theme::ink());
+  char l1[40] = {0}, l2[40] = {0}, l3[40] = {0};
+  char r1[40] = {0}, r2[40] = {0}, r3[40] = {0};
+  snprintf(l1, sizeof(l1), "Open  %s", openTxt);
+  snprintf(l2, sizeof(l2), "High  %s", highTxt);
+  snprintf(l3, sizeof(l3), "Low   %s", lowTxt);
+  snprintf(r1, sizeof(r1), "Prev  %s", prevCloseTxt);
+  snprintf(r2, sizeof(r2), "Range %s", data.chartRange[0] ? data.chartRange : "--");
+  snprintf(r3, sizeof(r3), "%s", data.currency[0] ? data.currency : "--");
+  drawLeft(c.x + pad, c.y + 38, l1, FONT_B12, Theme::ink());
+  drawLeft(c.x + pad, c.y + 60, l2, FONT_B12, Theme::ink());
+  drawLeft(c.x + pad, c.y + 82, l3, FONT_B12, Theme::ink());
+  drawLeft(splitX + 14, c.y + 38, r1, FONT_B12, Theme::ink());
+  drawLeft(splitX + 14, c.y + 60, r2, FONT_B12, Theme::ink());
+  drawLeft(splitX + 14, c.y + 82, r3, FONT_B12, Theme::ink());
+
+  drawLeft(c.x + pad, priceBase, priceTxt, FONT_B18, Theme::ink());
+  drawChartBox(c.x + pad, c.y + headerH + 102, c.w - pad * 2, c.h - (headerH + 102) - 14, data);
+  char footer[56] = {0};
+  snprintf(footer, sizeof(footer), "%s  (%s)", changeTxt, pctTxt);
+  drawLeft(c.x + pad, deltaBase, footer, FONT_B9, Theme::ink());
 }
 
 void setConfig(const FrameConfig* cfg) {
