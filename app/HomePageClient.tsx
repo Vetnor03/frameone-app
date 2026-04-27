@@ -4182,17 +4182,24 @@ function GroceriesModuleSettingsTab({
 
   const groupedVisibleItems = useMemo(() => {
     const visible = items.filter((item) => groceryIsVisible(item, nowMs))
-    return GROCERY_CATEGORY_LIST_ORDER.map((category) => {
-      const group = visible
-        .filter((item) => item.category === category)
-        .sort((a, b) => {
-          if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
-          const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
-          const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
-          return bTime - aTime
-        })
-      return { category, items: group }
-    }).filter((group) => group.items.length > 0)
+    return GROCERY_CATEGORY_LIST_ORDER
+      .map((category, order) => {
+        const group = visible
+          .filter((item) => item.category === category)
+          .sort((a, b) => {
+            if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
+            const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
+            const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
+            return bTime - aTime
+          })
+        return { category, items: group, allChecked: group.every((item) => item.isChecked), order }
+      })
+      .filter((group) => group.items.length > 0)
+      .sort((a, b) => {
+        if (a.allChecked !== b.allChecked) return a.allChecked ? 1 : -1
+        return a.order - b.order
+      })
+      .map(({ category, items }) => ({ category, items }))
   }, [items, nowMs])
 
   useLayoutEffect(() => {
