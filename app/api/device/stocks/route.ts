@@ -34,6 +34,12 @@ type StockConfigItem = {
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 type CandleFetchStatus = 'ok' | 'http_error' | 'no_data' | 'invalid_payload' | 'exception'
 type YahooFetchStatus = 'ok' | 'http_error' | 'invalid_payload' | 'exception'
+const SERIES_CAPS: Record<StockChartRange, number> = {
+  day: 32,
+  week: 10,
+  month: 30,
+  year: 60,
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -54,6 +60,13 @@ function toNumber(v: unknown) {
 function clampPoints(points: SeriesPoint[], max: number) {
   if (points.length <= max) return points
   return points.slice(points.length - max)
+}
+
+function sanitizeSeries(points: SeriesPoint[]) {
+  return points.filter((point) => {
+    const hasIso = typeof point.t === 'string' && point.t.length > 0
+    return hasIso && Number.isFinite(point.p)
+  })
 }
 
 function inferCurrencyFromSymbol(symbol: string) {
@@ -168,7 +181,7 @@ function yahooRangeParams(chartRange: StockChartRange) {
   if (chartRange === 'week') return { range: '5d', interval: '1d', limit: 10 }
   if (chartRange === 'month') return { range: '1mo', interval: '1d', limit: 30 }
   if (chartRange === 'year') return { range: '1y', interval: '1wk', limit: 60 }
-  return { range: '1d', interval: '1h', limit: 24 }
+  return { range: '1d', interval: '30m', limit: 32 }
 }
 
 async function fetchYahooCandles(symbol: string, chartRange: StockChartRange) {
@@ -230,7 +243,7 @@ async function fetchYahooCandles(symbol: string, chartRange: StockChartRange) {
   }
 
   return {
-    points: clampPoints(points, params.limit),
+    points: clampPoints(sanitizeSeries(points), params.limit),
     status: 'ok' as YahooFetchStatus,
     reason: raw.slice(0, 200),
   }
@@ -338,9 +351,10 @@ export async function GET(req: Request) {
 
     let day: SeriesPoint[] = []
     try {
-      const result = await fetchCandles(resolvedSymbol, '60', nowSec - 36 * 3600, nowSec, apiKey)
-      day = clampPoints(result.points, 24)
+      const result = await fetchCandles(resolvedSymbol, '30', nowSec - 36 * 3600, nowSec, apiKey)
+      day = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.day)
       candleStatus.day = { status: result.status, reason: result.reason }
+      console.log('[device/stocks] day finnhub points', JSON.stringify({ symbol: resolvedSymbol, count: day.length }))
     } catch (error: unknown) {
       day = []
       candleStatus.day = {
@@ -352,7 +366,7 @@ export async function GET(req: Request) {
     let week: SeriesPoint[] = []
     try {
       const result = await fetchCandles(resolvedSymbol, 'D', nowSec - 14 * 24 * 3600, nowSec, apiKey)
-      week = clampPoints(result.points, 10)
+      week = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.week)
       candleStatus.week = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       week = []
@@ -365,7 +379,7 @@ export async function GET(req: Request) {
     let month: SeriesPoint[] = []
     try {
       const result = await fetchCandles(resolvedSymbol, 'D', nowSec - 45 * 24 * 3600, nowSec, apiKey)
-      month = clampPoints(result.points, 30)
+      month = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.month)
       candleStatus.month = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       month = []
@@ -378,7 +392,7 @@ export async function GET(req: Request) {
     let year: SeriesPoint[] = []
     try {
       const result = await fetchCandles(resolvedSymbol, 'W', nowSec - 500 * 24 * 3600, nowSec, apiKey)
-      year = clampPoints(result.points, 60)
+      year = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.year)
       candleStatus.year = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       year = []
@@ -401,6 +415,9 @@ export async function GET(req: Request) {
         if (yahoo.status === 'ok' && yahoo.points.length > 0) {
           seriesByRange[chartRange] = yahoo.points
           selectedSeries = yahoo.points
+          if (chartRange === 'day') {
+            console.log('[device/stocks] day yahoo fallback points', JSON.stringify({ symbol: resolvedSymbol, count: yahoo.points.length }))
+          }
         }
       } catch (error: unknown) {
         yahooFallbackStatus = {
