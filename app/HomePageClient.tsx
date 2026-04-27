@@ -4533,6 +4533,8 @@ function GroceriesModuleSettingsTab({
     if (!activeDeviceId) return
     const normalizedName = name.trim()
     if (!normalizedName) return
+    const previousName = items.find((item) => item.id === id)?.name.trim() ?? ''
+    const hasNameChange = previousName.toLocaleLowerCase() !== normalizedName.toLocaleLowerCase()
     const nowIso = new Date().toISOString()
 
     const { error } = await supabase
@@ -4549,16 +4551,82 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    await supabase
-      .from('grocery_item_history')
-      .upsert({
-        device_id: activeDeviceId,
-        name: normalizedName,
-        category,
-        last_used_at: nowIso,
-      }, { onConflict: 'device_id,name' })
+    const historyBase = {
+      device_id: activeDeviceId,
+      name: normalizedName,
+      category,
+      last_used_at: nowIso,
+    }
+
+    if (!hasNameChange) {
+      await supabase
+        .from('grocery_item_history')
+        .upsert(historyBase, { onConflict: 'device_id,name' })
+    } else {
+      const { data: oldHistory } = await supabase
+        .from('grocery_item_history')
+        .select('id, usage_count')
+        .eq('device_id', activeDeviceId)
+        .ilike('name', previousName)
+        .limit(1)
+        .maybeSingle()
+
+      const { data: updatedHistory } = await supabase
+        .from('grocery_item_history')
+        .select('id, usage_count')
+        .eq('device_id', activeDeviceId)
+        .ilike('name', normalizedName)
+        .limit(1)
+        .maybeSingle()
+
+      const oldUsageCount = oldHistory?.id ? Math.max(1, Number(oldHistory.usage_count ?? 1) || 1) : 0
+
+      if (updatedHistory?.id) {
+        await supabase
+          .from('grocery_item_history')
+          .update({
+            usage_count: Math.max(1, Number(updatedHistory.usage_count ?? 1) || 1) + oldUsageCount,
+            category,
+            last_used_at: nowIso,
+          })
+          .eq('id', updatedHistory.id)
+      } else {
+        await supabase
+          .from('grocery_item_history')
+          .upsert({
+            ...historyBase,
+            usage_count: Math.max(1, oldUsageCount || 1),
+          }, { onConflict: 'device_id,name' })
+      }
+
+      if (oldHistory?.id && oldHistory.id !== updatedHistory?.id) {
+        await supabase
+          .from('grocery_item_history')
+          .delete()
+          .eq('id', oldHistory.id)
+      }
+    }
 
     await loadGroceries()
+    await loadHistory()
+  }
+
+  async function deleteHistorySuggestion(name: string) {
+    if (!activeDeviceId) return
+    const normalizedName = name.trim()
+    if (!normalizedName) return
+
+    const { error } = await supabase
+      .from('grocery_item_history')
+      .delete()
+      .eq('device_id', activeDeviceId)
+      .ilike('name', normalizedName)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
     await loadHistory()
   }
 
@@ -4671,6 +4739,7 @@ function GroceriesModuleSettingsTab({
         }}
         addItem={addItem}
         updateItem={updateItem}
+        onDeleteSuggestion={deleteHistorySuggestion}
         editingItem={editingItem}
       />
     )}
@@ -4685,6 +4754,7 @@ function GroceriesDraftSheet({
   onSaved,
   addItem,
   updateItem,
+  onDeleteSuggestion,
   editingItem,
 }: {
   language: AppLanguage
@@ -4693,6 +4763,7 @@ function GroceriesDraftSheet({
   onSaved: () => void | Promise<void>
   addItem: (name: string, quantity: number, category: GroceryCategory) => Promise<void>
   updateItem: (id: string, name: string, quantity: number, category: GroceryCategory) => Promise<void>
+  onDeleteSuggestion: (name: string) => Promise<void>
   editingItem: GroceryItem | null
 }) {
   const [name, setName] = useState(editingItem?.name ?? '')
@@ -4786,18 +4857,17 @@ function GroceriesDraftSheet({
               {language === 'no' ? 'Ingen treff' : 'No matching items'}
             </div>
           ) : filteredSuggestions.map((s) => (
-            <button
+            <GrocerySuggestionSwipeRow
               key={s.name.toLowerCase()}
-              onClick={() => {
+              language={language}
+              suggestion={s}
+              onSelect={() => {
                 setName(s.name)
                 setCategory(s.category)
                 setQuantity(1)
               }}
-              className="w-full text-left px-3 py-2 border-b border-[color:var(--bd-10)] last:border-b-0"
-            >
-              <div className="text-sm text-[color:var(--fg-85)]">{s.name}</div>
-              <div className="text-[10px] text-[color:var(--fg-45)]">{groceryCategoryLabel(language, s.category)}</div>
-            </button>
+              onDelete={onDeleteSuggestion}
+            />
           ))}
         </div>
 
@@ -4814,6 +4884,89 @@ function GroceriesDraftSheet({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function GrocerySuggestionSwipeRow({
+  language,
+  suggestion,
+  onSelect,
+  onDelete,
+}: {
+  language: AppLanguage
+  suggestion: GrocerySuggestion
+  onSelect: () => void
+  onDelete: (name: string) => Promise<void>
+}) {
+  const deleteWidth = 88
+  const openThreshold = 40
+  const [translateX, setTranslateX] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const dragStartXRef = useRef<number | null>(null)
+
+  const closeSwipe = () => setTranslateX(0)
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLButtonElement>) => {
+    dragStartXRef.current = event.touches[0]?.clientX ?? null
+  }
+
+  const handleTouchMove = (event: React.TouchEvent<HTMLButtonElement>) => {
+    if (dragStartXRef.current == null) return
+    const currentX = event.touches[0]?.clientX ?? dragStartXRef.current
+    const deltaX = currentX - dragStartXRef.current
+    const nextTranslate = Math.max(-deleteWidth, Math.min(0, deltaX))
+    if (nextTranslate < 0) {
+      event.preventDefault()
+    }
+    setTranslateX(nextTranslate)
+  }
+
+  const handleTouchEnd = () => {
+    dragStartXRef.current = null
+    setTranslateX((prev) => (prev < -openThreshold ? -deleteWidth : 0))
+  }
+
+  const handleDelete = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    if (deleting) return
+    setDeleting(true)
+    try {
+      await onDelete(suggestion.name)
+      closeSwipe()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="relative overflow-hidden border-b border-[color:var(--bd-10)] last:border-b-0">
+      <div className="absolute inset-y-0 right-0 w-[88px] flex items-center justify-center bg-[#d94b4b]">
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="h-full w-full text-[10px] tracking-widest text-white disabled:opacity-70"
+        >
+          {language === 'no' ? 'SLETT' : 'DELETE'}
+        </button>
+      </div>
+      <button
+        onClick={() => {
+          if (translateX !== 0) {
+            closeSwipe()
+            return
+          }
+          onSelect()
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="relative w-full bg-[color:var(--sheet-bg)] text-left px-3 py-2 transition-transform duration-150 touch-pan-y"
+        style={{ transform: `translateX(${translateX}px)` }}
+      >
+        <div className="text-sm text-[color:var(--fg-85)]">{suggestion.name}</div>
+        <div className="text-[10px] text-[color:var(--fg-45)]">{groceryCategoryLabel(language, suggestion.category)}</div>
+      </button>
     </div>
   )
 }
