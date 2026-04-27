@@ -53,8 +53,30 @@ struct StockCache {
   float series[MAX_SERIES_POINTS] = {0};
 };
 
-static StockInstanceConfig g_inst[MAX_INSTANCES];
-static StockCache g_cache[MAX_INSTANCES];
+static StockInstanceConfig* g_inst = nullptr;
+static StockCache* g_cache = nullptr;
+static bool g_stateReady = false;
+
+static bool ensureState() {
+  if (g_stateReady && g_inst && g_cache) return true;
+
+  if (!g_inst) {
+    g_inst = new StockInstanceConfig[MAX_INSTANCES];
+    if (!g_inst) return false;
+  }
+
+  if (!g_cache) {
+    g_cache = new StockCache[MAX_INSTANCES];
+    if (!g_cache) return false;
+  }
+
+  for (int i = 0; i < MAX_INSTANCES; i++) {
+    g_inst[i] = StockInstanceConfig();
+    g_cache[i] = StockCache();
+  }
+  g_stateReady = true;
+  return true;
+}
 
 static uint8_t parseInstanceId(const String& moduleName) {
   int idx = moduleName.indexOf(':');
@@ -66,6 +88,7 @@ static uint8_t parseInstanceId(const String& moduleName) {
 }
 
 static int findInstIndexById(uint8_t id) {
+  if (!g_stateReady || !g_inst) return -1;
   for (int i = 0; i < MAX_INSTANCES; i++) {
     if (g_inst[i].id == id && (g_inst[i].symbol[0] || g_inst[i].name[0])) {
       return i;
@@ -228,6 +251,8 @@ static bool cfgChanged(const StockInstanceConfig& oldCfg, const StocksModuleConf
 }
 
 static void applyConfigFromFrameConfig() {
+  if (!ensureState()) return;
+
   for (int i = 0; i < MAX_INSTANCES; i++) {
     g_inst[i] = StockInstanceConfig();
   }
@@ -292,6 +317,7 @@ static bool parseQuoteJson(const String& body, StockCache& out) {
 }
 
 static bool fetchQuote(int idx, StockCache& out) {
+  if (!g_stateReady || !g_inst) return false;
   const StockInstanceConfig& cfg = g_inst[idx];
   if (!cfg.id) return false;
 
@@ -317,6 +343,7 @@ static bool fetchQuote(int idx, StockCache& out) {
 }
 
 static void tick(int idx) {
+  if (!g_stateReady || !g_inst || !g_cache) return;
   StockInstanceConfig& cfg = g_inst[idx];
   StockCache& cache = g_cache[idx];
 
@@ -484,6 +511,11 @@ void setConfig(const FrameConfig* cfg) {
 }
 
 void render(const Cell& c, const String& moduleName) {
+  if (!ensureState()) {
+    drawCenteredLine(c.x, c.y, c.w, c.h, "Stock unavailable", FONT_B12, Theme::ink());
+    return;
+  }
+
   const uint8_t id = parseInstanceId(moduleName);
   int idx = findInstIndexById(id);
 
