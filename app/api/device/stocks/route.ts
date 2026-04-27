@@ -36,7 +36,7 @@ type CandleFetchStatus = 'ok' | 'http_error' | 'no_data' | 'invalid_payload' | '
 type YahooFetchStatus = 'ok' | 'http_error' | 'invalid_payload' | 'exception'
 const SERIES_CAPS: Record<StockChartRange, number> = {
   day: 32,
-  week: 10,
+  week: 40,
   month: 30,
   year: 60,
 }
@@ -178,74 +178,92 @@ function shouldFallbackToYahoo(status: CandleFetchStatus, reason: string) {
 }
 
 function yahooRangeParams(chartRange: StockChartRange) {
-  if (chartRange === 'week') return { range: '5d', interval: '1d', limit: 10 }
+  if (chartRange === 'week') return { range: '5d', interval: '1h', limit: 40 }
   if (chartRange === 'month') return { range: '1mo', interval: '1d', limit: 30 }
   if (chartRange === 'year') return { range: '1y', interval: '1wk', limit: 60 }
   return { range: '1d', interval: '30m', limit: 32 }
 }
 
 async function fetchYahooCandles(symbol: string, chartRange: StockChartRange) {
-  const params = yahooRangeParams(chartRange)
-  const url =
-    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
-    `?range=${encodeURIComponent(params.range)}&interval=${encodeURIComponent(params.interval)}`
+  const primaryParams = yahooRangeParams(chartRange)
+  const paramsCandidates =
+    chartRange === 'week'
+      ? [
+          primaryParams,
+          { range: '7d', interval: '1h', limit: primaryParams.limit },
+        ]
+      : [primaryParams]
 
-  const resp = await fetch(url, {
-    cache: 'no-store',
-    headers: { 'user-agent': 'Mozilla/5.0' },
-  })
+  let lastFailure: { status: YahooFetchStatus; reason: string } = { status: 'invalid_payload', reason: 'No attempts made' }
 
-  const raw = await resp.text().catch(() => '')
-  if (!resp.ok) {
-    return {
-      points: [] as SeriesPoint[],
-      status: 'http_error' as YahooFetchStatus,
-      reason: `HTTP ${resp.status} ${raw.slice(0, 200)}`,
+  for (const params of paramsCandidates) {
+    const url =
+      `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+      `?range=${encodeURIComponent(params.range)}&interval=${encodeURIComponent(params.interval)}`
+
+    const resp = await fetch(url, {
+      cache: 'no-store',
+      headers: { 'user-agent': 'Mozilla/5.0' },
+    })
+
+    const raw = await resp.text().catch(() => '')
+    if (!resp.ok) {
+      lastFailure = {
+        status: 'http_error' as YahooFetchStatus,
+        reason: `HTTP ${resp.status} ${raw.slice(0, 200)}`,
+      }
+      continue
     }
-  }
 
-  let body: {
-    chart?: {
-      result?: Array<{
-        timestamp?: number[]
-        indicators?: { quote?: Array<{ close?: Array<number | null> }> }
-      }>
+    let body: {
+      chart?: {
+        result?: Array<{
+          timestamp?: number[]
+          indicators?: { quote?: Array<{ close?: Array<number | null> }> }
+        }>
+      }
     }
-  }
-  try {
-    body = (raw ? JSON.parse(raw) : {}) as typeof body
-  } catch {
-    return {
-      points: [] as SeriesPoint[],
-      status: 'invalid_payload' as YahooFetchStatus,
-      reason: raw.slice(0, 200),
+    try {
+      body = (raw ? JSON.parse(raw) : {}) as typeof body
+    } catch {
+      lastFailure = {
+        status: 'invalid_payload' as YahooFetchStatus,
+        reason: raw.slice(0, 200),
+      }
+      continue
     }
-  }
 
-  const result = Array.isArray(body?.chart?.result) ? body.chart?.result?.[0] : null
-  const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : []
-  const closes = Array.isArray(result?.indicators?.quote?.[0]?.close) ? result.indicators?.quote?.[0]?.close ?? [] : []
-  const n = Math.min(timestamps.length, closes.length)
-  const points: SeriesPoint[] = []
-  for (let i = 0; i < n; i++) {
-    const t = toNumber(timestamps[i])
-    const p = toNumber(closes[i])
-    if (t == null || p == null || t <= 0) continue
-    points.push({ t: new Date(t * 1000).toISOString(), p })
-  }
+    const result = Array.isArray(body?.chart?.result) ? body.chart?.result?.[0] : null
+    const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : []
+    const closes = Array.isArray(result?.indicators?.quote?.[0]?.close) ? result.indicators?.quote?.[0]?.close ?? [] : []
+    const n = Math.min(timestamps.length, closes.length)
+    const points: SeriesPoint[] = []
+    for (let i = 0; i < n; i++) {
+      const t = toNumber(timestamps[i])
+      const p = toNumber(closes[i])
+      if (t == null || p == null || t <= 0) continue
+      points.push({ t: new Date(t * 1000).toISOString(), p })
+    }
 
-  if (points.length === 0) {
-    return {
-      points: [] as SeriesPoint[],
+    const sanitized = clampPoints(sanitizeSeries(points), params.limit)
+    if (sanitized.length > 0) {
+      return {
+        points: sanitized,
+        status: 'ok' as YahooFetchStatus,
+        reason: raw.slice(0, 200),
+      }
+    }
+
+    lastFailure = {
       status: 'invalid_payload' as YahooFetchStatus,
       reason: raw.slice(0, 200),
     }
   }
 
   return {
-    points: clampPoints(sanitizeSeries(points), params.limit),
-    status: 'ok' as YahooFetchStatus,
-    reason: raw.slice(0, 200),
+    points: [] as SeriesPoint[],
+    status: lastFailure.status,
+    reason: lastFailure.reason,
   }
 }
 
@@ -365,7 +383,7 @@ export async function GET(req: Request) {
 
     let week: SeriesPoint[] = []
     try {
-      const result = await fetchCandles(resolvedSymbol, 'D', nowSec - 14 * 24 * 3600, nowSec, apiKey)
+      const result = await fetchCandles(resolvedSymbol, '60', nowSec - 7 * 24 * 3600, nowSec, apiKey)
       week = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.week)
       candleStatus.week = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
@@ -407,6 +425,7 @@ export async function GET(req: Request) {
     const selectedStatus = candleStatus[chartRange]
     const selectedSeriesFailed = selectedStatus.status !== 'ok'
     let yahooFallbackStatus: { status: YahooFetchStatus; reason: string } | null = null
+    let weekDataProvider: 'Finnhub' | 'Yahoo' | 'quote fallback' = 'Finnhub'
 
     if (selectedSeriesFailed && selectedSeries.length === 0 && shouldFallbackToYahoo(selectedStatus.status, selectedStatus.reason)) {
       try {
@@ -415,6 +434,7 @@ export async function GET(req: Request) {
         if (yahoo.status === 'ok' && yahoo.points.length > 0) {
           seriesByRange[chartRange] = yahoo.points
           selectedSeries = yahoo.points
+          if (chartRange === 'week') weekDataProvider = 'Yahoo'
           if (chartRange === 'day') {
             console.log('[device/stocks] day yahoo fallback points', JSON.stringify({ symbol: resolvedSymbol, count: yahoo.points.length }))
           }
@@ -432,13 +452,27 @@ export async function GET(req: Request) {
         { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
         { t: new Date(nowSec * 1000).toISOString(), p: price },
       ]
+      if (chartRange === 'week') weekDataProvider = 'quote fallback'
     }
+
+    console.log(
+      '[device/stocks] week data source',
+      JSON.stringify({
+        symbol: resolvedSymbol,
+        requestedChartRange: chartRange,
+        weekPointCount: seriesByRange.week.length,
+        weekDataProvider,
+      })
+    )
 
     console.log(
       '[device/stocks] chart response',
       JSON.stringify({
         symbol: resolvedSymbol,
         chartRange,
+        requestedChartRange: chartRange,
+        weekPointCount: seriesByRange.week.length,
+        weekDataProvider,
         finnhubSelectedStatus: candleStatus[chartRange],
         yahooFallbackStatus,
         selectedSeriesLength: selectedSeries.length,
