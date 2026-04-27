@@ -91,7 +91,6 @@ static void resetStocks(FrameConfig& out) {
     out.stocks[i].id = 0;
     out.stocks[i].symbol[0] = '\0';
     out.stocks[i].name[0] = '\0';
-    strlcpy(out.stocks[i].chartRange, "day", sizeof(out.stocks[i].chartRange));
     out.stocks[i].refreshMs = 900000UL;
   }
 }
@@ -334,7 +333,6 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
 
         const char* symbol = s["symbol"] | "";
         const char* name = s["name"] | "";
-        const char* chartRange = s["chartRange"] | "day";
 
         if ((!symbol || !symbol[0]) && (!name || !name[0])) continue;
 
@@ -346,9 +344,6 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
 
         if (name && name[0]) strlcpy(dst.name, name, sizeof(dst.name));
         else dst.name[0] = '\0';
-
-        if (chartRange && chartRange[0]) strlcpy(dst.chartRange, chartRange, sizeof(dst.chartRange));
-        else strlcpy(dst.chartRange, "day", sizeof(dst.chartRange));
 
         uint32_t refreshMs = (uint32_t)(s["refresh"] | 900000UL);
         if (refreshMs < 60000UL) refreshMs = 60000UL;
