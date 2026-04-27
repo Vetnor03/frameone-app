@@ -37,8 +37,6 @@ type CandleFetchResult = {
   points: SeriesPoint[]
   status: CandleFetchStatus
   reason: string
-  httpStatus: number | null
-  responseBody: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -96,8 +94,53 @@ async function fetchFinnhubCurrency(symbol: string, apiKey: string): Promise<str
   return String(body?.currency || '').trim().toUpperCase()
 }
 
-async function fetchCandles(symbol: string, resolution: string, fromSec: number, toSec: number, apiKey: string) {
-  const endpoint = 'https://finnhub.io/api/v1/stock/candle'
+function toYahooRangeAndInterval(range: StockChartRange): { range: string; interval: string } {
+  if (range === 'day') return { range: '1d', interval: '1h' }
+  if (range === 'week') return { range: '5d', interval: '1d' }
+  if (range === 'month') return { range: '1mo', interval: '1d' }
+  return { range: '1y', interval: '1wk' }
+}
+
+async function fetchYahooSeries(symbol: string, range: StockChartRange): Promise<SeriesPoint[]> {
+  const mapped = toYahooRangeAndInterval(range)
+  const url =
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+    `?range=${encodeURIComponent(mapped.range)}&interval=${encodeURIComponent(mapped.interval)}`
+
+  const resp = await fetch(url, { cache: 'no-store' })
+  if (!resp.ok) return []
+
+  const body = (await resp.json()) as {
+    chart?: {
+      result?: Array<{
+        timestamp?: number[]
+        indicators?: { quote?: Array<{ close?: Array<number | null> }> }
+      }>
+    }
+  }
+
+  const first = body?.chart?.result?.[0]
+  const ts = Array.isArray(first?.timestamp) ? first.timestamp : []
+  const closes = Array.isArray(first?.indicators?.quote?.[0]?.close) ? first!.indicators!.quote![0]!.close! : []
+  const n = Math.min(ts.length, closes.length)
+  const out: SeriesPoint[] = []
+  for (let i = 0; i < n; i++) {
+    const t = toNumber(ts[i])
+    const p = toNumber(closes[i])
+    if (t == null || p == null || t <= 0) continue
+    out.push({ t: new Date(t * 1000).toISOString(), p })
+  }
+  return out
+}
+
+async function fetchCandles(
+  symbol: string,
+  range: StockChartRange,
+  resolution: string,
+  fromSec: number,
+  toSec: number,
+  apiKey: string
+): Promise<CandleFetchResult> {
   const params = new URLSearchParams({
     symbol,
     resolution,
@@ -105,21 +148,12 @@ async function fetchCandles(symbol: string, resolution: string, fromSec: number,
     to: String(toSec),
     token: apiKey,
   })
-  const url = `${endpoint}?${params.toString()}`
+  const url = `https://finnhub.io/api/v1/stock/candle?${params.toString()}`
   const hasToken = Boolean(apiKey && apiKey.trim())
 
   const resp = await fetch(url, { cache: 'no-store' })
   const rawBody = await resp.text()
-
   if (!resp.ok) {
-    const result: CandleFetchResult = {
-      points: [] as SeriesPoint[],
-      status: 'http_error' as CandleFetchStatus,
-      reason: `HTTP ${resp.status}`,
-      httpStatus: resp.status,
-      responseBody: rawBody,
-    }
-
     console.warn(
       '[device/stocks] candle fetch failed',
       JSON.stringify({
@@ -133,79 +167,88 @@ async function fetchCandles(symbol: string, resolution: string, fromSec: number,
       })
     )
 
-    return result
+    const yahoo = await fetchYahooSeries(symbol, range)
+    if (yahoo.length > 0) {
+      return {
+        points: yahoo,
+        status: 'ok',
+        reason: `finnhub_http_${resp.status}_fallback_yahoo`,
+      }
+    }
+
+    return {
+      points: [],
+      status: 'http_error',
+      reason: `HTTP ${resp.status}`,
+    }
   }
 
-  const body = (rawBody ? JSON.parse(rawBody) : {}) as {
+  let body: {
     s?: string
     c?: number[]
     t?: number[]
     error?: string
+  } = {}
+  try {
+    body = (rawBody ? JSON.parse(rawBody) : {}) as {
+      s?: string
+      c?: number[]
+      t?: number[]
+      error?: string
+    }
+  } catch {
+    const yahoo = await fetchYahooSeries(symbol, range)
+    if (yahoo.length > 0) {
+      return {
+        points: yahoo,
+        status: 'ok',
+        reason: 'finnhub_invalid_json_fallback_yahoo',
+      }
+    }
+    return {
+      points: [],
+      status: 'invalid_payload',
+      reason: 'Invalid JSON payload from Finnhub candle endpoint',
+    }
   }
 
   const apiStatus = String(body?.s ?? '').toLowerCase()
   if (apiStatus === 'no_data') {
+    const yahoo = await fetchYahooSeries(symbol, range)
+    if (yahoo.length > 0) {
+      return {
+        points: yahoo,
+        status: 'ok',
+        reason: 'finnhub_no_data_fallback_yahoo',
+      }
+    }
+
     return {
-      points: [] as SeriesPoint[],
-      status: 'no_data' as CandleFetchStatus,
+      points: [],
+      status: 'no_data',
       reason: String(body?.error || 'Finnhub returned no_data'),
-      httpStatus: resp.status,
-      responseBody: rawBody,
     }
   }
 
   if (apiStatus && apiStatus !== 'ok') {
-    const result: CandleFetchResult = {
-      points: [] as SeriesPoint[],
-      status: 'invalid_payload' as CandleFetchStatus,
+    const yahoo = await fetchYahooSeries(symbol, range)
+    if (yahoo.length > 0) {
+      return {
+        points: yahoo,
+        status: 'ok',
+        reason: `finnhub_${apiStatus}_fallback_yahoo`,
+      }
+    }
+
+    return {
+      points: [],
+      status: 'invalid_payload',
       reason: `Unexpected status: ${apiStatus}`,
-      httpStatus: resp.status,
-      responseBody: rawBody,
     }
-
-    console.warn(
-      '[device/stocks] candle fetch invalid payload',
-      JSON.stringify({
-        symbol,
-        resolution,
-        from: fromSec,
-        to: toSec,
-        hasToken,
-        httpStatus: resp.status,
-        finnhubBody: rawBody,
-      })
-    )
-
-    return result
   }
 
-  if (!Array.isArray(body?.c) || !Array.isArray(body?.t)) {
-    const result: CandleFetchResult = {
-      points: [] as SeriesPoint[],
-      status: 'invalid_payload' as CandleFetchStatus,
-      reason: 'Missing candle arrays',
-      httpStatus: resp.status,
-      responseBody: rawBody,
-    }
-
-    console.warn(
-      '[device/stocks] candle fetch missing arrays',
-      JSON.stringify({
-        symbol,
-        resolution,
-        from: fromSec,
-        to: toSec,
-        hasToken,
-        httpStatus: resp.status,
-        finnhubBody: rawBody,
-      })
-    )
-
-    return result
-  }
-
-  const prices = body.c
-  const ts = body.t
+  const prices = Array.isArray(body?.c) ? body.c : []
+  const ts = Array.isArray(body?.t) ? body.t : []
   const n = Math.min(prices.length, ts.length)
 
   const out: SeriesPoint[] = []
@@ -216,71 +259,10 @@ async function fetchCandles(symbol: string, resolution: string, fromSec: number,
     out.push({ t: new Date(t * 1000).toISOString(), p })
   }
 
-  const result: CandleFetchResult = {
+  return {
     points: out,
-    status: 'ok' as CandleFetchStatus,
+    status: 'ok',
     reason: '',
-    httpStatus: resp.status,
-    responseBody: rawBody,
-  }
-
-  return result
-}
-
-function getCandleRequestDebug(
-  symbol: string,
-  resolution: string,
-  fromSec: number,
-  toSec: number,
-  hasToken: boolean
-) {
-  return {
-    symbol,
-    resolution,
-    from: fromSec,
-    to: toSec,
-    hasToken,
-  }
-}
-
-function getFallbackSeries(nowSec: number, previousClose: number, price: number): SeriesPoint[] {
-  return [
-    { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
-    { t: new Date(nowSec * 1000).toISOString(), p: price },
-  ]
-}
-
-function resolveCandleReason(status: CandleFetchStatus, reason: string, httpStatus: number | null) {
-  if (status === 'ok') return ''
-  if (status === 'http_error' && httpStatus != null) return `HTTP ${httpStatus}${reason ? `: ${reason}` : ''}`
-  return reason
-}
-
-function logCandleException(symbol: string, resolution: string, fromSec: number, toSec: number, apiKey: string, error: unknown) {
-  console.warn(
-    '[device/stocks] candle fetch exception',
-    JSON.stringify({
-      ...getCandleRequestDebug(symbol, resolution, fromSec, toSec, Boolean(apiKey && apiKey.trim())),
-      httpStatus: null,
-      finnhubBody: '',
-      reason: error instanceof Error ? error.message : 'Unknown error',
-    })
-  )
-}
-
-function summarizeCandleStatus(
-  status: CandleFetchStatus,
-  reason: string,
-  httpStatus: number | null,
-  responseBody: string,
-  request: { symbol: string; resolution: string; from: number; to: number; hasToken: boolean }
-) {
-  return {
-    status,
-    reason: resolveCandleReason(status, reason, httpStatus),
-    httpStatus,
-    responseBody: responseBody.slice(0, 500),
-    request,
   }
 }
 
@@ -377,164 +359,63 @@ export async function GET(req: Request) {
     const low = toNumber(quoteRaw?.l)
     const asOf = toIsoOrNull(quoteRaw?.t)
 
-    const candleStatus: Record<
-      StockChartRange,
-      {
-        status: CandleFetchStatus
-        reason: string
-        httpStatus: number | null
-        responseBody: string
-        request: { symbol: string; resolution: string; from: number; to: number; hasToken: boolean }
-      }
-    > = {
-      day: {
-        status: 'exception',
-        reason: 'Not requested',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(resolvedSymbol, '60', nowSec - 36 * 3600, nowSec, Boolean(apiKey && apiKey.trim())),
-      },
-      week: {
-        status: 'exception',
-        reason: 'Not requested',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(
-          resolvedSymbol,
-          'D',
-          nowSec - 14 * 24 * 3600,
-          nowSec,
-          Boolean(apiKey && apiKey.trim())
-        ),
-      },
-      month: {
-        status: 'exception',
-        reason: 'Not requested',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(
-          resolvedSymbol,
-          'D',
-          nowSec - 45 * 24 * 3600,
-          nowSec,
-          Boolean(apiKey && apiKey.trim())
-        ),
-      },
-      year: {
-        status: 'exception',
-        reason: 'Not requested',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(
-          resolvedSymbol,
-          'W',
-          nowSec - 500 * 24 * 3600,
-          nowSec,
-          Boolean(apiKey && apiKey.trim())
-        ),
-      },
+    const candleStatus: Record<StockChartRange, { status: CandleFetchStatus; reason: string }> = {
+      day: { status: 'exception', reason: 'Not requested' },
+      week: { status: 'exception', reason: 'Not requested' },
+      month: { status: 'exception', reason: 'Not requested' },
+      year: { status: 'exception', reason: 'Not requested' },
     }
 
     let day: SeriesPoint[] = []
-    const dayFrom = nowSec - 36 * 3600
     try {
-      const result = await fetchCandles(resolvedSymbol, '60', dayFrom, nowSec, apiKey)
+      const result = await fetchCandles(resolvedSymbol, 'day', '60', nowSec - 36 * 3600, nowSec, apiKey)
       day = clampPoints(result.points, 24)
-      candleStatus.day = summarizeCandleStatus(result.status, result.reason, result.httpStatus, result.responseBody, {
-        symbol: resolvedSymbol,
-        resolution: '60',
-        from: dayFrom,
-        to: nowSec,
-        hasToken: Boolean(apiKey && apiKey.trim()),
-      })
+      candleStatus.day = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       day = []
       candleStatus.day = {
         status: 'exception',
         reason: error instanceof Error ? error.message : 'Unknown error',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(resolvedSymbol, '60', dayFrom, nowSec, Boolean(apiKey && apiKey.trim())),
       }
-      logCandleException(resolvedSymbol, '60', dayFrom, nowSec, apiKey, error)
     }
 
     let week: SeriesPoint[] = []
-    const weekFrom = nowSec - 14 * 24 * 3600
     try {
-      const result = await fetchCandles(resolvedSymbol, 'D', weekFrom, nowSec, apiKey)
+      const result = await fetchCandles(resolvedSymbol, 'week', 'D', nowSec - 14 * 24 * 3600, nowSec, apiKey)
       week = clampPoints(result.points, 10)
-      candleStatus.week = summarizeCandleStatus(result.status, result.reason, result.httpStatus, result.responseBody, {
-        symbol: resolvedSymbol,
-        resolution: 'D',
-        from: weekFrom,
-        to: nowSec,
-        hasToken: Boolean(apiKey && apiKey.trim()),
-      })
+      candleStatus.week = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       week = []
       candleStatus.week = {
         status: 'exception',
         reason: error instanceof Error ? error.message : 'Unknown error',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(resolvedSymbol, 'D', weekFrom, nowSec, Boolean(apiKey && apiKey.trim())),
       }
-      logCandleException(resolvedSymbol, 'D', weekFrom, nowSec, apiKey, error)
     }
 
     let month: SeriesPoint[] = []
-    const monthFrom = nowSec - 45 * 24 * 3600
     try {
-      const result = await fetchCandles(resolvedSymbol, 'D', monthFrom, nowSec, apiKey)
+      const result = await fetchCandles(resolvedSymbol, 'month', 'D', nowSec - 45 * 24 * 3600, nowSec, apiKey)
       month = clampPoints(result.points, 30)
-      candleStatus.month = summarizeCandleStatus(
-        result.status,
-        result.reason,
-        result.httpStatus,
-        result.responseBody,
-        {
-          symbol: resolvedSymbol,
-          resolution: 'D',
-          from: monthFrom,
-          to: nowSec,
-          hasToken: Boolean(apiKey && apiKey.trim()),
-        }
-      )
+      candleStatus.month = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       month = []
       candleStatus.month = {
         status: 'exception',
         reason: error instanceof Error ? error.message : 'Unknown error',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(resolvedSymbol, 'D', monthFrom, nowSec, Boolean(apiKey && apiKey.trim())),
       }
-      logCandleException(resolvedSymbol, 'D', monthFrom, nowSec, apiKey, error)
     }
 
     let year: SeriesPoint[] = []
-    const yearFrom = nowSec - 500 * 24 * 3600
     try {
-      const result = await fetchCandles(resolvedSymbol, 'W', yearFrom, nowSec, apiKey)
+      const result = await fetchCandles(resolvedSymbol, 'year', 'W', nowSec - 500 * 24 * 3600, nowSec, apiKey)
       year = clampPoints(result.points, 60)
-      candleStatus.year = summarizeCandleStatus(result.status, result.reason, result.httpStatus, result.responseBody, {
-        symbol: resolvedSymbol,
-        resolution: 'W',
-        from: yearFrom,
-        to: nowSec,
-        hasToken: Boolean(apiKey && apiKey.trim()),
-      })
+      candleStatus.year = { status: result.status, reason: result.reason }
     } catch (error: unknown) {
       year = []
       candleStatus.year = {
         status: 'exception',
         reason: error instanceof Error ? error.message : 'Unknown error',
-        httpStatus: null,
-        responseBody: '',
-        request: getCandleRequestDebug(resolvedSymbol, 'W', yearFrom, nowSec, Boolean(apiKey && apiKey.trim())),
       }
-      logCandleException(resolvedSymbol, 'W', yearFrom, nowSec, apiKey, error)
     }
 
     const seriesByRange: Record<StockChartRange, SeriesPoint[]> = { day, week, month, year }
@@ -543,7 +424,10 @@ export async function GET(req: Request) {
     const selectedSeriesFailed = selectedStatus.status !== 'ok'
 
     if (selectedSeriesFailed && selectedSeries.length === 0 && price != null && previousClose != null) {
-      selectedSeries = getFallbackSeries(nowSec, previousClose, price)
+      selectedSeries = [
+        { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
+        { t: new Date(nowSec * 1000).toISOString(), p: price },
+      ]
     }
 
     console.log(
