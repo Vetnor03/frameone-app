@@ -27,6 +27,7 @@ struct StockInstanceConfig {
   uint8_t id = 1;
   char symbol[24] = {0};
   char name[48] = {0};
+  char chartRange[8] = "day";
   uint32_t refreshMs = 900000UL;
 };
 
@@ -247,7 +248,16 @@ static bool cfgChanged(const StockInstanceConfig& oldCfg, const StocksModuleConf
   if (oldCfg.refreshMs != next.refreshMs) return true;
   if (strcmp(oldCfg.symbol, next.symbol) != 0) return true;
   if (strcmp(oldCfg.name, next.name) != 0) return true;
+  if (strcmp(oldCfg.chartRange, next.chartRange) != 0) return true;
   return false;
+}
+
+static const char* normalizeRange(const char* raw) {
+  if (!raw || !raw[0]) return "day";
+  if (strcmp(raw, "week") == 0) return "week";
+  if (strcmp(raw, "month") == 0) return "month";
+  if (strcmp(raw, "year") == 0) return "year";
+  return "day";
 }
 
 static void applyConfigFromFrameConfig() {
@@ -271,6 +281,7 @@ static void applyConfigFromFrameConfig() {
 
     if (src.symbol[0]) strlcpy(g_inst[dstIdx].symbol, src.symbol, sizeof(g_inst[dstIdx].symbol));
     if (src.name[0]) strlcpy(g_inst[dstIdx].name, src.name, sizeof(g_inst[dstIdx].name));
+    strlcpy(g_inst[dstIdx].chartRange, normalizeRange(src.chartRange), sizeof(g_inst[dstIdx].chartRange));
 
     if (cfgChanged(oldCfg, src)) {
       g_cache[dstIdx] = StockCache();
@@ -278,10 +289,32 @@ static void applyConfigFromFrameConfig() {
   }
 }
 
-static bool parseQuoteJson(const String& body, StockCache& out) {
-  StaticJsonDocument<8192> doc;
+static bool parseSeriesArray(JsonVariantConst arrVar, StockCache& out) {
+  JsonArrayConst arr = arrVar.as<JsonArrayConst>();
+  if (arr.isNull()) return false;
+  for (JsonVariantConst v : arr) {
+    if (out.seriesCount >= MAX_SERIES_POINTS) break;
+    float p = NAN;
+    if (v.is<float>() || v.is<double>() || v.is<long>() || v.is<int>()) {
+      p = (float)v.as<double>();
+    } else {
+      p = v["p"] | NAN;
+      if (!isfinite(p)) p = v["price"] | NAN;
+    }
+    if (!isfinite(p)) continue;
+    out.series[out.seriesCount++] = p;
+  }
+  return out.seriesCount > 0;
+}
+
+static bool parseQuoteJson(const String& body, const StockInstanceConfig& cfg, StockCache& out) {
+  DynamicJsonDocument doc((size_t)body.length() + 2048);
   DeserializationError err = deserializeJson(doc, body);
-  if (err) return false;
+  if (err) {
+    Serial.print("[STOCKS] JSON parse failed: ");
+    Serial.println(err.c_str());
+    return false;
+  }
 
   const char* symbol = doc["symbol"] | "";
   const char* name = doc["name"] | "";
@@ -291,8 +324,8 @@ static bool parseQuoteJson(const String& body, StockCache& out) {
   if (symbol && symbol[0]) strlcpy(out.symbol, symbol, sizeof(out.symbol));
   if (name && name[0]) strlcpy(out.name, name, sizeof(out.name));
   if (currency && currency[0]) strlcpy(out.currency, currency, sizeof(out.currency));
-  if (chartRange && chartRange[0]) strlcpy(out.chartRange, chartRange, sizeof(out.chartRange));
-  else out.chartRange[0] = '\0';
+  if (chartRange && chartRange[0]) strlcpy(out.chartRange, normalizeRange(chartRange), sizeof(out.chartRange));
+  else strlcpy(out.chartRange, normalizeRange(cfg.chartRange), sizeof(out.chartRange));
 
   out.price = doc["quote"]["price"] | NAN;
   out.change = doc["quote"]["change"] | NAN;
@@ -302,16 +335,38 @@ static bool parseQuoteJson(const String& body, StockCache& out) {
   out.high = doc["quote"]["high"] | NAN;
   out.low = doc["quote"]["low"] | NAN;
 
+  if (!isfinite(out.price)) out.price = doc["quote"]["c"] | NAN;
+  if (!isfinite(out.change)) out.change = doc["quote"]["d"] | NAN;
+  if (!isfinite(out.changePercent)) out.changePercent = doc["quote"]["dp"] | NAN;
+  if (!isfinite(out.previousClose)) out.previousClose = doc["quote"]["pc"] | NAN;
+  if (!isfinite(out.open)) out.open = doc["quote"]["o"] | NAN;
+  if (!isfinite(out.high)) out.high = doc["quote"]["h"] | NAN;
+  if (!isfinite(out.low)) out.low = doc["quote"]["l"] | NAN;
+
   out.seriesCount = 0;
-  JsonArray selected = doc["selectedSeries"].as<JsonArray>();
-  if (!selected.isNull()) {
-    for (JsonVariant v : selected) {
-      if (out.seriesCount >= MAX_SERIES_POINTS) break;
-      float p = v["p"] | NAN;
-      if (!isfinite(p)) continue;
-      out.series[out.seriesCount++] = p;
-    }
+  bool parsedSeries = parseSeriesArray(doc["selectedSeries"], out);
+  if (!parsedSeries) {
+    parsedSeries = parseSeriesArray(doc["series"][out.chartRange], out);
   }
+  if (!parsedSeries) {
+    parsedSeries = parseSeriesArray(doc["series"][normalizeRange(cfg.chartRange)], out);
+  }
+  if (!parsedSeries) {
+    parseSeriesArray(doc["series"]["day"], out);
+  }
+
+  Serial.print("[STOCKS] Parsed symbol/name: ");
+  Serial.print(out.symbol);
+  Serial.print(" / ");
+  Serial.println(out.name);
+  Serial.print("[STOCKS] Parsed quote p/d/dp: ");
+  Serial.print(out.price, 4);
+  Serial.print(" / ");
+  Serial.print(out.change, 4);
+  Serial.print(" / ");
+  Serial.println(out.changePercent, 4);
+  Serial.print("[STOCKS] selectedSeries count: ");
+  Serial.println(out.seriesCount);
 
   return true;
 }
@@ -330,6 +385,12 @@ static bool fetchQuote(int idx, StockCache& out) {
   int code = 0;
   String body;
   bool ok = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
+  Serial.print("[STOCKS] URL: ");
+  Serial.println(url);
+  Serial.print("[STOCKS] HTTP code: ");
+  Serial.println(code);
+  Serial.print("[STOCKS] body bytes: ");
+  Serial.println(body.length());
 
   if (code == 401 || code == 403) {
     DeviceIdentity::clearToken();
@@ -339,7 +400,7 @@ static bool fetchQuote(int idx, StockCache& out) {
     return false;
   }
 
-  return parseQuoteJson(body, out);
+  return parseQuoteJson(body, cfg, out);
 }
 
 static void tick(int idx) {
@@ -367,11 +428,14 @@ static void tick(int idx) {
   cache.fetchedAtMs = now;
 
   if (isfinite(fresh.price)) {
+    const bool wasValid = cache.valid;
     fresh.valid = true;
     fresh.fetchAttempted = true;
     fresh.lastFetchFailed = false;
     fresh.fetchedAtMs = now;
     cache = fresh;
+    Serial.print("[STOCKS] cache.valid became true: ");
+    Serial.println((!wasValid && cache.valid) ? "true" : "false");
     return;
   }
 

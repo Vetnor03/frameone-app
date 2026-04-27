@@ -85,6 +85,7 @@ struct StocksModuleConfig {
   uint8_t id = 0;                 // 1..n (matches "stocks:<id>")
   char symbol[24] = {0};          // e.g. "EQNR.OL"
   char name[48] = {0};            // e.g. "Equinor"
+  char chartRange[8] = "day";     // "day" | "week" | "month" | "year"
   uint32_t refreshMs = 900000UL;  // default 15 min
 };
 
