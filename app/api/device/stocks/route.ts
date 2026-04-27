@@ -86,6 +86,22 @@ function downsampleSeries(points: SeriesPoint[], maxPoints: number) {
   return out
 }
 
+function pickBestSelectedSeries(
+  preferredRange: StockChartRange,
+  allSeries: Record<StockChartRange, SeriesPoint[]>
+) {
+  const preferred = allSeries[preferredRange] || []
+  if (preferred.length > 0) return preferred
+
+  const fallbackOrder: StockChartRange[] = ['day', 'week', 'month', 'year']
+  for (const k of fallbackOrder) {
+    const arr = allSeries[k] || []
+    if (arr.length > 0) return arr
+  }
+
+  return [] as SeriesPoint[]
+}
+
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
   const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`
   const resp = await fetch(url, { cache: 'no-store' })
@@ -258,6 +274,15 @@ export async function GET(req: Request) {
       year = []
     }
 
+    const seriesByRange: Record<StockChartRange, SeriesPoint[]> = { day, week, month, year }
+    let selectedSeries = pickBestSelectedSeries(chartRange, seriesByRange)
+    if (selectedSeries.length === 0 && price != null && previousClose != null) {
+      selectedSeries = [
+        { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
+        { t: new Date(nowSec * 1000).toISOString(), p: price },
+      ]
+    }
+
     const response = {
       symbol: resolvedSymbol,
       name: name || resolvedSymbol,
@@ -273,13 +298,8 @@ export async function GET(req: Request) {
         low,
         asOf,
       },
-      series: {
-        day,
-        week,
-        month,
-        year,
-      },
-      selectedSeries: ({ day, week, month, year } as Record<StockChartRange, SeriesPoint[]>)[chartRange] || [],
+      series: seriesByRange,
+      selectedSeries,
       signature: makeSignature(resolvedSymbol, price, change, changePercent),
     }
 
