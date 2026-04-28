@@ -15,10 +15,6 @@ type FinnhubQuote = {
   t?: number
 }
 
-type FinnhubProfile = {
-  currency?: string
-}
-
 type SeriesPoint = {
   t: string
   p: number
@@ -30,6 +26,7 @@ type StockConfigItem = {
   name?: string
   assetType?: string
   purchasePrice?: number | string
+  currency?: string
   chartRange?: string
 }
 
@@ -71,12 +68,6 @@ function sanitizeSeries(points: SeriesPoint[]) {
   })
 }
 
-function inferCurrencyFromSymbol(symbol: string) {
-  const s = symbol.toUpperCase()
-  if (s.endsWith('.OL')) return 'NOK'
-  return ''
-}
-
 function toIsoOrNull(epochSeconds: unknown) {
   const ts = Number(epochSeconds)
   if (!Number.isFinite(ts) || ts <= 0) return null
@@ -95,20 +86,20 @@ function normalizeAssetType(value: unknown): 'stock' | 'etf' | 'fund' | 'unknown
   return 'stock'
 }
 
+function normalizeCurrency(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8)
+}
+
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
   const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`
   const resp = await fetch(url, { cache: 'no-store' })
   if (!resp.ok) return null
   const body = (await resp.json()) as FinnhubQuote
   return body && typeof body === 'object' ? body : null
-}
-
-async function fetchFinnhubCurrency(symbol: string, apiKey: string): Promise<string> {
-  const url = `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`
-  const resp = await fetch(url, { cache: 'no-store' })
-  if (!resp.ok) return ''
-  const body = (await resp.json()) as FinnhubProfile
-  return String(body?.currency || '').trim().toUpperCase()
 }
 
 async function fetchCandles(symbol: string, resolution: string, fromSec: number, toSec: number, apiKey: string) {
@@ -355,13 +346,7 @@ export async function GET(req: Request) {
 
     const quoteRaw = await fetchFinnhubQuote(resolvedSymbol, apiKey)
 
-    let currency = ''
-    try {
-      currency = await fetchFinnhubCurrency(resolvedSymbol, apiKey)
-    } catch {
-      currency = ''
-    }
-    if (!currency) currency = inferCurrencyFromSymbol(resolvedSymbol)
+    const currency = normalizeCurrency(cfg.currency) || 'USD'
 
     const price = toNumber(quoteRaw?.c)
     const change = toNumber(quoteRaw?.d)
