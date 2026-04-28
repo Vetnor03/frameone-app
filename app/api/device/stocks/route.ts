@@ -30,6 +30,7 @@ type StockConfigItem = {
   name?: string
   assetType?: string
   purchasePrice?: number | string
+  currency?: string
   chartRange?: string
 }
 
@@ -93,6 +94,14 @@ function normalizeAssetType(value: unknown): 'stock' | 'etf' | 'fund' | 'unknown
   const v = String(value ?? '').trim().toLowerCase()
   if (v === 'etf' || v === 'fund' || v === 'unknown') return v
   return 'stock'
+}
+
+function normalizeCurrency(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8)
 }
 
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
@@ -355,11 +364,13 @@ export async function GET(req: Request) {
 
     const quoteRaw = await fetchFinnhubQuote(resolvedSymbol, apiKey)
 
-    let currency = ''
-    try {
-      currency = await fetchFinnhubCurrency(resolvedSymbol, apiKey)
-    } catch {
-      currency = ''
+    let currency = normalizeCurrency(cfg.currency)
+    if (!currency) {
+      try {
+        currency = await fetchFinnhubCurrency(resolvedSymbol, apiKey)
+      } catch {
+        currency = ''
+      }
     }
     if (!currency) currency = inferCurrencyFromSymbol(resolvedSymbol)
 

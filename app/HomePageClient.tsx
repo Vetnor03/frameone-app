@@ -2511,6 +2511,7 @@ type StockCfg = {
   name?: string
   assetType?: 'stock' | 'etf' | 'fund' | 'unknown'
   purchasePrice?: number
+  currency?: string
   refresh?: number
   chartRange?: StockChartRange
 }
@@ -2568,6 +2569,11 @@ function normalizeStocksList(raw: any): StockCfg[] {
       const assetType = allowedAssetTypes.has(assetTypeRaw) ? (assetTypeRaw as StockCfg['assetType']) : 'stock'
       const purchasePriceRaw = Number(x.purchasePrice)
       const purchasePrice = Number.isFinite(purchasePriceRaw) && purchasePriceRaw > 0 ? purchasePriceRaw : undefined
+      const currency = String(x.currency ?? '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 8)
 
       const out: StockCfg = { id, refresh, chartRange }
 
@@ -2575,6 +2581,7 @@ function normalizeStocksList(raw: any): StockCfg[] {
       if (name) out.name = name
       if (assetType) out.assetType = assetType
       if (purchasePrice != null) out.purchasePrice = purchasePrice
+      if (currency) out.currency = currency
 
       return out
     })
@@ -3840,6 +3847,7 @@ function StocksModuleSettingsTab({
               name={cfg?.name ? String(cfg.name) : ''}
               assetType={cfg?.assetType || 'stock'}
               purchasePrice={typeof cfg?.purchasePrice === 'number' ? cfg.purchasePrice : undefined}
+              currency={cfg?.currency ? String(cfg.currency) : ''}
               chartRange={cfg?.chartRange === 'week' || cfg?.chartRange === 'month' || cfg?.chartRange === 'year' ? cfg.chartRange : 'day'}
               onSave={(patch) => upsertStock(id, patch)}
             />
@@ -3858,6 +3866,7 @@ function StockRow({
   name,
   assetType,
   purchasePrice,
+  currency,
   chartRange,
   onSave,
 }: {
@@ -3867,6 +3876,7 @@ function StockRow({
   name: string
   assetType: 'stock' | 'etf' | 'fund' | 'unknown'
   purchasePrice?: number
+  currency?: string
   chartRange: StockChartRange
   onSave: (cfgPatch: Partial<StockCfg>) => void
 }) {
@@ -3874,6 +3884,7 @@ function StockRow({
   const [purchasePriceInput, setPurchasePriceInput] = useState(
     typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0 ? String(purchasePrice) : ''
   )
+  const [currencyInput, setCurrencyInput] = useState(currency ? String(currency).trim().toUpperCase() : '')
   const [purchasePriceError, setPurchasePriceError] = useState('')
   const selectedName = name.trim()
   const selectedSymbol = symbol.trim().toUpperCase()
@@ -3884,6 +3895,9 @@ function StockRow({
   useEffect(() => {
     setPurchasePriceInput(typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0 ? String(purchasePrice) : '')
   }, [purchasePrice])
+  useEffect(() => {
+    setCurrencyInput(currency ? String(currency).trim().toUpperCase() : '')
+  }, [currency])
 
   function commitPurchasePrice() {
     const raw = purchasePriceInput.trim()
@@ -3950,6 +3964,34 @@ function StockRow({
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
+            {language === 'no' ? 'VALUTA' : 'CURRENCY'}
+          </div>
+          <select
+            value={currencyInput}
+            onChange={(e) => {
+              const next = String(e.target.value || '')
+                .trim()
+                .toUpperCase()
+                .slice(0, 8)
+              setCurrencyInput(next)
+              onSave({ currency: next || undefined })
+            }}
+            className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+          >
+            <option value="">{language === 'no' ? 'Automatisk' : 'Automatic'}</option>
+            {['USD', 'EUR', 'NOK', 'GBP', 'SEK', 'DKK', 'CAD', 'AUD', 'CHF', 'JPY'].map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+          <div className="mt-1 text-[11px] text-[color:var(--fg-45)]">
+            {language === 'no' ? 'Bruk Automatisk for å hente valuta fra markedet.' : 'Use Automatic to fetch currency from market data.'}
           </div>
         </div>
 

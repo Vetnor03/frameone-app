@@ -60,6 +60,14 @@ function normalizeAssetType(value: any): 'stock' | 'etf' | 'fund' | 'unknown' {
   return 'stock'
 }
 
+function normalizeCurrency(value: any): string {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8)
+}
+
 function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; category: string; updated_at: string | null }>) {
   const stable = items
     .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.category}|${x.updated_at ?? ''}`)
@@ -239,6 +247,7 @@ export async function GET(req: Request) {
       const assetType = normalizeAssetType(s.assetType)
       const purchasePriceRaw = Number(s.purchasePrice)
       const purchasePrice = Number.isFinite(purchasePriceRaw) && purchasePriceRaw > 0 ? purchasePriceRaw : null
+      const currency = normalizeCurrency(s.currency)
 
       sanitizedStocks.push({
         id,
@@ -246,6 +255,7 @@ export async function GET(req: Request) {
         ...(name ? { name } : {}),
         assetType,
         ...(purchasePrice != null ? { purchasePrice } : {}),
+        ...(currency ? { currency } : {}),
         refresh: 900000,
         chartRange,
       })
