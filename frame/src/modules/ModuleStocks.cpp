@@ -254,6 +254,7 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   for (int i = 1; i < n; i++) {
     int px = innerX + (i * (innerW - 1)) / (n - 1);
     int py = innerY + innerH - (int)roundf(((data.series[i] - mn) / span) * (float)(innerH - 1));
+    d.drawLine(prevX, prevY - 1, px, py - 1, Theme::ink());
     d.drawLine(prevX, prevY, px, py, Theme::ink());
     d.drawLine(prevX, prevY + 1, px, py + 1, Theme::ink());
     prevX = px;
@@ -618,10 +619,10 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rangeBaselineY = underlineY + titleUnderlineH + 18;
     drawTextCenteredAt(c.x + c.w / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
 
-    const int chartSidePad = 18; // squeeze chart horizontally to open side breathing room
+    const int chartSidePad = 24; // match the width footprint of the bottom value row
     const int chartX = c.x + chartSidePad;
     const int chartTopGap = 10;
-    const int chartBottomGap = 10;
+    const int chartBottomGap = 16; // lift + shorten chart so it sits closer to surf-medium detail alignment
     int16_t rangeX1, rangeY1;
     uint16_t rangeW, rangeH;
     measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
