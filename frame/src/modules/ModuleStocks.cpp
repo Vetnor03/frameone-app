@@ -559,26 +559,49 @@ static void drawLive(const Cell& c, const StockCache& data) {
   formatPrice(prevCloseTxt, sizeof(prevCloseTxt), data.previousClose);
 
   if (c.size == CELL_MEDIUM) {
-    const int sidePad = 12;
-    const int rightSafePad = 16;
-    const int headerY = c.y + 20;
-    const int chartX = c.x + sidePad + 2;
-    const int chartY = c.y + 42;
-    const int chartW = c.w - (sidePad + 2) * 2;
-    const int chartH = 26;
-    const int priceY = c.y + c.h - 16;
+    auto& d2 = DisplayCore::get();
+    const uint16_t ink = Theme::ink();
+
+    const int topPad = 20;
+    const int titleUnderlineGap = 4;
+    const int titleUnderlineH = 2;
+    const int bottomPad = 35; // match medium surf lower padding rhythm
 
     char titleFit[64] = {0};
-    fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - (sidePad + rightSafePad) - 120, FONT_B12);
-    drawLeft(c.x + sidePad, headerY, titleFit, FONT_B12, Theme::ink());
+    fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - 32, FONT_B12);
 
-    char rightTxt[40] = {0};
-    snprintf(rightTxt, sizeof(rightTxt), "%s  %s", changeTxt, dayPctTxt);
-    int rw = textWidth(rightTxt, FONT_B12);
-    drawLeft(c.x + c.w - rightSafePad - rw, headerY, rightTxt, FONT_B12, Theme::ink());
+    int16_t hx1, hy1;
+    uint16_t hw, hh;
+    measureText(titleFit, FONT_B12, hx1, hy1, hw, hh);
+    const int titleBaseline = c.y + topPad - hy1;
+    const int titleTop = titleBaseline + hy1;
+    drawCenteredLine(c.x, titleTop, c.w, hh, titleFit, FONT_B12, ink);
 
+    const int underlineY = (titleBaseline + hy1) + (int)hh + titleUnderlineGap;
+    const int underlineX = c.x + c.w / 2 - (int)hw / 2;
+    d2.fillRect(underlineX, underlineY, (int)hw, titleUnderlineH, ink);
+
+    const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
+    const int rowY = underlineY + titleUnderlineH + 16;
+    const int rowW = c.w - 48; // tighter grouping than small, but still centered
+    const int rowX = c.x + (c.w - rowW) / 2;
+    const int colW = rowW / 3;
+
+    drawCenteredLine(rowX + colW * 0, rowY, colW, 16, priceTxt, FONT_B12, ink);
+    drawCenteredLine(rowX + colW * 1, rowY, colW, 16, dayPctTxt, FONT_B12, ink);
+    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, 16, thirdValue, FONT_B12, ink);
+
+    const int pipeY = rowY + 8;
+    drawCenteredLine(rowX + colW - 6, pipeY - 8, 12, 16, "|", FONT_B12, ink);
+    drawCenteredLine(rowX + colW * 2 - 6, pipeY - 8, 12, 16, "|", FONT_B12, ink);
+
+    const int chartSidePad = 18; // squeeze chart horizontally to open side breathing room
+    const int chartX = c.x + chartSidePad;
+    const int chartY = rowY + 22;
+    const int chartW = c.w - chartSidePad * 2;
+    const int chartBottom = c.y + c.h - bottomPad;
+    const int chartH = max(20, chartBottom - chartY);
     drawChartBox(chartX, chartY, chartW, chartH, data);
-    drawLeft(c.x + sidePad, priceY, priceTxt, FONT_B18, Theme::ink());
     return;
   }
 
