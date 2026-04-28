@@ -582,6 +582,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const uint16_t ink = Theme::ink();
 
     const int topPad = 20;
+    const int headerNudgeDown = 4;
     const int titleUnderlineGap = 4;
     const int titleUnderlineH = 2;
 
@@ -591,7 +592,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     int16_t hx1, hy1;
     uint16_t hw, hh;
     measureText(titleFit, FONT_B12, hx1, hy1, hw, hh);
-    const int titleBaseline = c.y + topPad - hy1;
+    const int titleBaseline = c.y + topPad - hy1 + headerNudgeDown;
     drawTextCenteredAt(c.x + c.w / 2, titleBaseline, titleFit, FONT_B12, ink);
 
     const int underlineY = (titleBaseline + hy1) + (int)hh + titleUnderlineGap;
@@ -603,7 +604,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rowX = c.x + (c.w - rowW) / 2;
     const int colW = rowW / 3;
     const int rowH = 16;
-    const int bottomPad = 10;
+    const int bottomPad = 30;
     const int rowY = c.y + c.h - bottomPad - rowH;
 
     const int dividerPad = 2;
