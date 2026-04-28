@@ -604,7 +604,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rowX = c.x + (c.w - rowW) / 2;
     const int colW = rowW / 3;
     const int rowH = 16;
-    const int bottomPad = 30;
+    const int bottomPad = 26;
     const int rowY = c.y + c.h - bottomPad - rowH;
 
     const int dividerPad = 2;
@@ -620,15 +620,15 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rangeBaselineY = underlineY + titleUnderlineH + 18;
     drawTextCenteredAt(c.x + c.w / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
 
-    const int chartSidePad = 24; // match the width footprint of the bottom value row
-    const int chartX = c.x + chartSidePad;
+    const int chartInsetFromRow = 2; // keep close to value row width, but slightly tighter
+    const int chartX = rowX + chartInsetFromRow;
     const int chartTopGap = 10;
-    const int chartBottomGap = 16; // lift + shorten chart so it sits closer to surf-medium detail alignment
+    const int chartBottomGap = 12; // let chart sit a touch lower while keeping clear separation from value row
     int16_t rangeX1, rangeY1;
     uint16_t rangeW, rangeH;
     measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
     const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
-    const int chartW = c.w - chartSidePad * 2;
+    const int chartW = max(20, rowW - chartInsetFromRow * 2);
     const int chartBottom = rowY - chartBottomGap;
     const int chartH = max(20, chartBottom - chartY);
     drawChartBox(chartX, chartY, chartW, chartH, data);
