@@ -210,6 +210,13 @@ static void formatSigned(char* out, size_t n, float v, int decimals, bool withPe
   }
 }
 
+// Purchase-aware UI is intentionally gated until purchase fields are finalized
+// in the backend/config contract. Keep fallback layouts active by default.
+static bool hasPurchaseData(const StockCache& data) {
+  (void)data;
+  return false;
+}
+
 static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   auto& d = DisplayCore::get();
   if (w <= 6 || h <= 6 || data.seriesCount < 2) {
@@ -480,7 +487,7 @@ static void drawPlaceholder(const Cell& c, const StockInstanceConfig& cfg) {
 static void drawLive(const Cell& c, const StockCache& data) {
   auto& d = DisplayCore::get();
   const char* title = data.name[0] ? data.name : data.symbol;
-  const bool hasPurchase = isfinite(data.purchasePrice);
+  const bool hasPurchase = hasPurchaseData(data);
 
   char priceTxt[24] = {0};
   char changeTxt[20] = {0};
@@ -492,7 +499,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
   formatSigned(changeTxt, sizeof(changeTxt), data.change, 2, false);
   formatSigned(dayPctTxt, sizeof(dayPctTxt), data.changePercent, 2, true);
   formatSigned(rangePctTxt, sizeof(rangePctTxt), data.selectedRangePercent, 2, true);
-  if (isfinite(data.personalChangePercent)) {
+  if (hasPurchase && isfinite(data.personalChangePercent)) {
     formatSigned(posPctTxt, sizeof(posPctTxt), data.personalChangePercent, 2, true);
   } else {
     strlcpy(posPctTxt, "--", sizeof(posPctTxt));
@@ -517,9 +524,11 @@ static void drawLive(const Cell& c, const StockCache& data) {
   char openTxt[24] = {0};
   char highTxt[24] = {0};
   char lowTxt[24] = {0};
+  char prevCloseTxt[24] = {0};
   formatPrice(openTxt, sizeof(openTxt), data.open);
   formatPrice(highTxt, sizeof(highTxt), data.high);
   formatPrice(lowTxt, sizeof(lowTxt), data.low);
+  formatPrice(prevCloseTxt, sizeof(prevCloseTxt), data.previousClose);
 
   if (c.size == CELL_MEDIUM) {
     const int pad = 10;
@@ -620,14 +629,12 @@ static void drawLive(const Cell& c, const StockCache& data) {
     drawLeft(leftX, rowY + rowStep * 2, "Low", FONT_B12, Theme::ink());
     drawLeft(leftX + 88, rowY + rowStep * 2, lowTxt, FONT_B12, Theme::ink());
 
-    char volumeTxt[24] = {0};
-    strlcpy(volumeTxt, "--", sizeof(volumeTxt));
-    drawLeft(rightX, rowY + rowStep * 0, "Volume", FONT_B12, Theme::ink());
-    drawLeft(rightX + 80, rowY + rowStep * 0, volumeTxt, FONT_B12, Theme::ink());
-    drawLeft(rightX, rowY + rowStep * 1, "52w High", FONT_B12, Theme::ink());
-    drawLeft(rightX + 80, rowY + rowStep * 1, highTxt, FONT_B12, Theme::ink());
-    drawLeft(rightX, rowY + rowStep * 2, "52w Low", FONT_B12, Theme::ink());
-    drawLeft(rightX + 80, rowY + rowStep * 2, lowTxt, FONT_B12, Theme::ink());
+    drawLeft(rightX, rowY + rowStep * 0, "Prev close", FONT_B12, Theme::ink());
+    drawLeft(rightX + 80, rowY + rowStep * 0, prevCloseTxt, FONT_B12, Theme::ink());
+    drawLeft(rightX, rowY + rowStep * 1, "Change", FONT_B12, Theme::ink());
+    drawLeft(rightX + 80, rowY + rowStep * 1, changeTxt, FONT_B12, Theme::ink());
+    drawLeft(rightX, rowY + rowStep * 2, "Day %", FONT_B12, Theme::ink());
+    drawLeft(rightX + 80, rowY + rowStep * 2, dayPctTxt, FONT_B12, Theme::ink());
   }
 
   drawLeft(leftX, c.y + topH - 14, priceTxt, FONT_B18, Theme::ink());
