@@ -604,7 +604,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rowX = c.x + (c.w - rowW) / 2;
     const int colW = rowW / 3;
     const int rowH = 16;
-    const int bottomPad = 26;
+    const int bottomPad = 24; // nudge bottom value row slightly lower to match medium surf baseline feel
     const int rowY = c.y + c.h - bottomPad - rowH;
 
     const int dividerPad = 2;
@@ -620,7 +620,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rangeBaselineY = underlineY + titleUnderlineH + 18;
     drawTextCenteredAt(c.x + c.w / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
 
-    const int chartInsetFromRow = 2; // keep close to value row width, but slightly tighter
+    const int chartInsetFromRow = 8; // scale chart narrower in medium layout
     const int chartX = rowX + chartInsetFromRow;
     const int chartTopGap = 10;
     const int chartBottomGap = 12; // let chart sit a touch lower while keeping clear separation from value row
