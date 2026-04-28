@@ -1690,11 +1690,13 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
   int waveArrowCx = waveX + slotW / 2;
   int windArrowCx = windX + windW / 2;
 
-  if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, ratingCenterY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
-  else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, ratingCenterY, arrowLenWave, ink);
+  const int arrowY = ratingCenterY - 10;
 
-  if (isfinite(data.windDirDegFrom)) drawArrowFlatTailCentered(windArrowCx, ratingCenterY, arrowLenWind, data.windDirDegFrom + 180.0f, 3, ink);
-  else d.drawFastHLine(windArrowCx - arrowLenWind / 2, ratingCenterY, arrowLenWind, ink);
+  if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
+  else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
+
+  if (isfinite(data.windDirDegFrom)) drawArrowFlatTailCentered(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom + 180.0f, 3, ink);
+  else d.drawFastHLine(windArrowCx - arrowLenWind / 2, arrowY, arrowLenWind, ink);
 
   char perTxt[12] = {0};
   if (isfinite(data.swellPeriodS) && data.swellPeriodS > 0) snprintf(perTxt, sizeof(perTxt), "%.0f s", data.swellPeriodS);
@@ -2169,7 +2171,7 @@ static void renderCommon(const Cell& c,
       const int arrowHeadLenMax = clampi(arrowLenMax / 3, 10, 22);
       const int arrowDownReachMax = (arrowLenMax + arrowHeadLenMax) / 2;
       const int minArrowToIconGap = 3;
-      const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax);
+      const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax) - 10;
 
       if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
       else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
