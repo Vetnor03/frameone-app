@@ -3967,8 +3967,8 @@ function StockRow({
           />
           <div className="mt-1 text-[11px] text-[color:var(--fg-45)]">
             {language === 'no'
-              ? 'Brukes bare for å vise prosentvis gevinst/tap. Vi spør ikke hvor mye du har investert.'
-              : 'Used only to show percentage gain/loss. We do not ask how much you invested.'}
+              ? 'Brukes kun for å vise prosentvis gevinst/tap.'
+              : 'Used only to show percentage gain/loss.'}
           </div>
           {purchasePriceError ? (
             <div className="mt-1 text-[11px] text-[#ff6b6b]">{purchasePriceError}</div>
