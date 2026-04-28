@@ -218,7 +218,6 @@ static bool hasPurchaseData(const StockCache& data) {
 }
 
 static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
-  auto& d = DisplayCore::get();
   if (w <= 6 || h <= 6 || data.seriesCount < 2) {
     drawCenteredLine(x, y, w, h, "No chart data", FONT_B9, Theme::ink());
     return;
@@ -237,8 +236,7 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   }
   float span = mx - mn;
   if (span < 0.0001f) span = 1.0f;
-
-  d.drawFastHLine(innerX, innerY + innerH / 2, innerW, Theme::ink());
+  auto& d = DisplayCore::get();
 
   const int n = (int)data.seriesCount;
   int prevX = innerX;
@@ -561,23 +559,26 @@ static void drawLive(const Cell& c, const StockCache& data) {
   formatPrice(prevCloseTxt, sizeof(prevCloseTxt), data.previousClose);
 
   if (c.size == CELL_MEDIUM) {
-    const int pad = 10;
-    const int headerY = c.y + 16;
-    const int chartY = c.y + 36;
-    const int chartH = 28;
-    const int priceY = c.y + c.h - 12;
+    const int sidePad = 12;
+    const int rightSafePad = 16;
+    const int headerY = c.y + 20;
+    const int chartX = c.x + sidePad + 2;
+    const int chartY = c.y + 42;
+    const int chartW = c.w - (sidePad + 2) * 2;
+    const int chartH = 26;
+    const int priceY = c.y + c.h - 16;
 
     char titleFit[64] = {0};
-    fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - (pad * 2) - 120, FONT_B12);
-    drawLeft(c.x + pad, headerY, titleFit, FONT_B12, Theme::ink());
+    fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - (sidePad + rightSafePad) - 120, FONT_B12);
+    drawLeft(c.x + sidePad, headerY, titleFit, FONT_B12, Theme::ink());
 
     char rightTxt[40] = {0};
     snprintf(rightTxt, sizeof(rightTxt), "%s  %s", changeTxt, dayPctTxt);
     int rw = textWidth(rightTxt, FONT_B12);
-    drawLeft(c.x + c.w - pad - rw, headerY, rightTxt, FONT_B12, Theme::ink());
+    drawLeft(c.x + c.w - rightSafePad - rw, headerY, rightTxt, FONT_B12, Theme::ink());
 
-    drawChartBox(c.x + pad, chartY, c.w - pad * 2, chartH, data);
-    drawLeft(c.x + pad, priceY, priceTxt, FONT_B18, Theme::ink());
+    drawChartBox(chartX, chartY, chartW, chartH, data);
+    drawLeft(c.x + sidePad, priceY, priceTxt, FONT_B18, Theme::ink());
     return;
   }
 
