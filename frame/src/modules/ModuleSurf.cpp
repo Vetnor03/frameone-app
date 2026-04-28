@@ -2158,17 +2158,24 @@ static void renderCommon(const Cell& c,
 
       const int arrowLenWave = clampi(slotW - 20, 20, 34);
       const int arrowLenWind = clampi(windSlotW - 20, 20, 34);
-
-      if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, middleRatingBaseline + 2, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
-      else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, middleRatingBaseline + 2, arrowLenWave, ink);
-
-      if (isfinite(data.windDirDegFrom)) drawArrowFlatTailCentered(windArrowCx, middleRatingBaseline + 2, arrowLenWind, data.windDirDegFrom + 180.0f, 3, ink);
-      else d.drawFastHLine(windArrowCx - arrowLenWind / 2, middleRatingBaseline + 2, arrowLenWind, ink);
+      const int arrowLenMax = max(arrowLenWave, arrowLenWind);
 
       const int iconH = 14;
       const int waveIconW = 28;
       const int windIconW = 36;
       const int iconY = middleVisualCenterY - iconH / 2;
+
+      const int arrowBaseY = middleRatingBaseline + 2;
+      const int arrowHeadLenMax = clampi(arrowLenMax / 3, 10, 22);
+      const int arrowDownReachMax = (arrowLenMax + arrowHeadLenMax) / 2;
+      const int minArrowToIconGap = 3;
+      const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax);
+
+      if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
+      else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
+
+      if (isfinite(data.windDirDegFrom)) drawArrowFlatTailCentered(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom + 180.0f, 3, ink);
+      else d.drawFastHLine(windArrowCx - arrowLenWind / 2, arrowY, arrowLenWind, ink);
 
       const int waveIconX = waveArrowCx - waveIconW / 2;
       const int windIconX = windArrowCx - windIconW / 2;
