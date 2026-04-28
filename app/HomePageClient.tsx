@@ -29,7 +29,7 @@ const UI = {
       reminders: 'REMINDERS',
       countdown: 'COUNTDOWN',
       soccer: 'SOCCER',
-      stocks: 'STOCKS',
+      stocks: 'INVESTMENTS',
       groceries: 'GROCERIES',
     },
 
@@ -90,7 +90,7 @@ const UI = {
 
     soccerTeam: 'Team',
     soccerTeamFor: 'Team',
-    stock: 'Stock',
+    stock: 'Investment',
     stockSymbol: 'Symbol',
     chart: 'Chart',
     chartToday: 'Today',
@@ -142,7 +142,7 @@ const UI = {
       reminders: 'PÅMINNELSER',
       countdown: 'NEDTELLING',
       soccer: 'FOTBALL',
-      stocks: 'AKSJER',
+      stocks: 'INVESTERINGER',
       groceries: 'HANDLELISTE',
     },
 
@@ -203,7 +203,7 @@ const UI = {
 
     soccerTeam: 'Lag',
     soccerTeamFor: 'Lag',
-    stock: 'Aksje',
+    stock: 'Investering',
     stockSymbol: 'Symbol',
     chart: 'Chart',
     chartToday: 'I dag',
@@ -2509,6 +2509,8 @@ type StockCfg = {
   id: number
   symbol?: string
   name?: string
+  assetType?: 'stock' | 'etf' | 'fund' | 'unknown'
+  purchasePrice?: number
   refresh?: number
   chartRange?: StockChartRange
 }
@@ -2518,6 +2520,7 @@ type StockSearchResult = {
   displayName: string
   exchange: string
   country: string
+  assetType?: 'stock' | 'etf' | 'fund' | 'unknown'
 }
 
 function normalizeSoccerList(raw: any): SoccerCfg[] {
@@ -2547,6 +2550,7 @@ function normalizeSoccerList(raw: any): SoccerCfg[] {
 function normalizeStocksList(raw: any): StockCfg[] {
   const arr = Array.isArray(raw) ? raw : []
   const allowedChartRanges: StockChartRange[] = ['day', 'week', 'month', 'year']
+  const allowedAssetTypes = new Set(['stock', 'etf', 'fund', 'unknown'])
 
   return arr
     .filter((x) => x && typeof x === 'object')
@@ -2560,11 +2564,17 @@ function normalizeStocksList(raw: any): StockCfg[] {
       const chartRange: StockChartRange = allowedChartRanges.includes(chartRangeRaw as StockChartRange)
         ? (chartRangeRaw as StockChartRange)
         : 'day'
+      const assetTypeRaw = String(x.assetType ?? '').trim().toLowerCase()
+      const assetType = allowedAssetTypes.has(assetTypeRaw) ? (assetTypeRaw as StockCfg['assetType']) : 'stock'
+      const purchasePriceRaw = Number(x.purchasePrice)
+      const purchasePrice = Number.isFinite(purchasePriceRaw) && purchasePriceRaw > 0 ? purchasePriceRaw : undefined
 
       const out: StockCfg = { id, refresh, chartRange }
 
       if (symbol) out.symbol = symbol
       if (name) out.name = name
+      if (assetType) out.assetType = assetType
+      if (purchasePrice != null) out.purchasePrice = purchasePrice
 
       return out
     })
@@ -3828,6 +3838,8 @@ function StocksModuleSettingsTab({
               title={title}
               symbol={cfg?.symbol ? String(cfg.symbol) : ''}
               name={cfg?.name ? String(cfg.name) : ''}
+              assetType={cfg?.assetType || 'stock'}
+              purchasePrice={typeof cfg?.purchasePrice === 'number' ? cfg.purchasePrice : undefined}
               chartRange={cfg?.chartRange === 'week' || cfg?.chartRange === 'month' || cfg?.chartRange === 'year' ? cfg.chartRange : 'day'}
               onSave={(patch) => upsertStock(id, patch)}
             />
@@ -3844,6 +3856,8 @@ function StockRow({
   title,
   symbol,
   name,
+  assetType,
+  purchasePrice,
   chartRange,
   onSave,
 }: {
@@ -3851,13 +3865,41 @@ function StockRow({
   title: string
   symbol: string
   name: string
+  assetType: 'stock' | 'etf' | 'fund' | 'unknown'
+  purchasePrice?: number
   chartRange: StockChartRange
   onSave: (cfgPatch: Partial<StockCfg>) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [purchasePriceInput, setPurchasePriceInput] = useState(
+    typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0 ? String(purchasePrice) : ''
+  )
+  const [purchasePriceError, setPurchasePriceError] = useState('')
   const selectedName = name.trim()
   const selectedSymbol = symbol.trim().toUpperCase()
   const hasSelected = !!selectedSymbol
+  const assetTypeLabel =
+    assetType === 'etf' ? 'ETF' : assetType === 'fund' ? (language === 'no' ? 'Fond' : 'Fund') : assetType === 'unknown' ? (language === 'no' ? 'Ukjent' : 'Unknown') : (language === 'no' ? 'Aksje' : 'Stock')
+
+  useEffect(() => {
+    setPurchasePriceInput(typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0 ? String(purchasePrice) : '')
+  }, [purchasePrice])
+
+  function commitPurchasePrice() {
+    const raw = purchasePriceInput.trim()
+    if (!raw) {
+      setPurchasePriceError('')
+      onSave({ purchasePrice: undefined })
+      return
+    }
+    const parsed = Number(raw.replace(',', '.'))
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setPurchasePriceError(language === 'no' ? 'Må være et positivt tall' : 'Must be a positive number')
+      return
+    }
+    setPurchasePriceError('')
+    onSave({ purchasePrice: parsed })
+  }
 
   return (
     <>
@@ -3866,10 +3908,12 @@ function StockRow({
           <div className="min-w-0 flex-1">
             <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{title.toUpperCase()}</div>
             <div className="mt-1 text-[color:var(--fg-90)] text-xl font-semibold leading-tight truncate">
-              {hasSelected ? (selectedName || selectedSymbol) : (language === 'no' ? 'Velg aksje' : 'Choose stock')}
+              {hasSelected ? (selectedName || selectedSymbol) : (language === 'no' ? 'Velg investering' : 'Choose investment')}
             </div>
             {hasSelected && (
-              <div className="mt-1 text-sm text-[color:var(--fg-55)] truncate">{selectedSymbol}</div>
+              <div className="mt-1 text-sm text-[color:var(--fg-55)] truncate">
+                {selectedSymbol} · {assetTypeLabel}
+              </div>
             )}
           </div>
 
@@ -3908,6 +3952,28 @@ function StockRow({
             })}
           </div>
         </div>
+
+        <div className="mt-4">
+          <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
+            {language === 'no' ? 'KJØPSPRIS' : 'PURCHASE PRICE'}
+          </div>
+          <input
+            value={purchasePriceInput}
+            onChange={(e) => setPurchasePriceInput(e.target.value)}
+            onBlur={commitPurchasePrice}
+            placeholder={language === 'no' ? 'Valgfritt' : 'Optional'}
+            inputMode="decimal"
+            className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+          />
+          <div className="mt-1 text-[11px] text-[color:var(--fg-45)]">
+            {language === 'no'
+              ? 'Brukes kun for å vise prosentvis gevinst/tap.'
+              : 'Used only to show percentage gain/loss.'}
+          </div>
+          {purchasePriceError ? (
+            <div className="mt-1 text-[11px] text-[#ff6b6b]">{purchasePriceError}</div>
+          ) : null}
+        </div>
       </div>
 
       {open && (
@@ -3916,6 +3982,7 @@ function StockRow({
           title={title}
           initialSymbol={selectedSymbol}
           initialName={selectedName}
+          initialAssetType={assetType}
           onClose={() => setOpen(false)}
           onPicked={(picked) => {
             onSave(picked)
@@ -3932,6 +3999,7 @@ function StockSearchSheet({
   title,
   initialSymbol,
   initialName,
+  initialAssetType,
   onClose,
   onPicked,
 }: {
@@ -3939,6 +4007,7 @@ function StockSearchSheet({
   title: string
   initialSymbol: string
   initialName: string
+  initialAssetType: 'stock' | 'etf' | 'fund' | 'unknown'
   onClose: () => void
   onPicked: (cfgPatch: Partial<StockCfg>) => void
 }) {
@@ -3948,6 +4017,7 @@ function StockSearchSheet({
   const [manualOpen, setManualOpen] = useState(false)
   const [manualSymbol, setManualSymbol] = useState(initialSymbol)
   const [manualName, setManualName] = useState(initialName)
+  const [manualAssetType, setManualAssetType] = useState<'stock' | 'etf' | 'fund' | 'unknown'>(initialAssetType || 'stock')
 
   useEffect(() => {
     const q = query.trim()
@@ -4000,11 +4070,13 @@ function StockSearchSheet({
           {results.map((item) => (
             <button
               key={`${item.symbol}-${item.exchange}`}
-              onClick={() => onPicked({ symbol: item.symbol, name: item.displayName, refresh: 900000 })}
+              onClick={() => onPicked({ symbol: item.symbol, name: item.displayName, assetType: item.assetType || 'unknown', refresh: 900000 })}
               className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
             >
               <div className="text-[color:var(--fg-90)] text-base font-medium">{item.displayName}</div>
-              <div className="text-[color:var(--fg-55)] text-sm mt-0.5">{item.symbol}</div>
+              <div className="text-[color:var(--fg-55)] text-sm mt-0.5">
+                {item.symbol} · {item.assetType === 'etf' ? 'ETF' : item.assetType === 'fund' ? 'Fund' : item.assetType === 'stock' ? 'Stock' : 'Unknown'}
+              </div>
               <div className="text-[color:var(--fg-35)] text-[11px] mt-1">{[item.exchange, item.country].filter(Boolean).join(' • ')}</div>
             </button>
           ))}
@@ -4033,11 +4105,22 @@ function StockSearchSheet({
               placeholder={language === 'no' ? 'Navn (valgfritt)' : 'Name (optional)'}
               className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
             />
+            <select
+              value={manualAssetType}
+              onChange={(e) => setManualAssetType(e.target.value as 'stock' | 'etf' | 'fund' | 'unknown')}
+              className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+            >
+              <option value="stock">{language === 'no' ? 'Aksje' : 'Stock'}</option>
+              <option value="etf">ETF</option>
+              <option value="fund">{language === 'no' ? 'Fond' : 'Fund'}</option>
+              <option value="unknown">{language === 'no' ? 'Ukjent' : 'Unknown'}</option>
+            </select>
             <button
               onClick={() =>
                 onPicked({
                   symbol: manualSymbol.trim().slice(0, 24).toUpperCase(),
                   name: manualName.trim().slice(0, 80),
+                  assetType: manualAssetType,
                   refresh: 900000,
                 })}
               className="mt-2 h-10 px-3 rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs"

@@ -28,6 +28,8 @@ type StockConfigItem = {
   id?: number | string
   symbol?: string
   name?: string
+  assetType?: string
+  purchasePrice?: number | string
   chartRange?: string
 }
 
@@ -85,6 +87,12 @@ function normalizeChartRange(value: unknown): StockChartRange {
   const v = String(value ?? '').trim().toLowerCase()
   if (v === 'week' || v === 'month' || v === 'year') return v
   return 'day'
+}
+
+function normalizeAssetType(value: unknown): 'stock' | 'etf' | 'fund' | 'unknown' {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (v === 'etf' || v === 'fund' || v === 'unknown') return v
+  return 'stock'
 }
 
 async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<FinnhubQuote | null> {
@@ -328,6 +336,10 @@ export async function GET(req: Request) {
     const symbol = String(cfg.symbol || '').trim().toUpperCase()
     const name = String(cfg.name || '').trim()
     const chartRange = normalizeChartRange(cfg.chartRange)
+    const assetType = normalizeAssetType(cfg.assetType)
+    const purchasePriceRaw = toNumber(cfg.purchasePrice)
+    // Privacy: intentionally only store buy price and percent performance, never amount invested/position size.
+    const purchasePrice = purchasePriceRaw != null && purchasePriceRaw > 0 ? purchasePriceRaw : null
 
     if (!symbol && !name) {
       return NextResponse.json({ error: 'Stock config missing symbol/name' }, { status: 404 })
@@ -489,8 +501,13 @@ export async function GET(req: Request) {
     const response = {
       symbol: resolvedSymbol,
       name: name || resolvedSymbol,
+      assetType,
       chartRange,
       currency,
+      ...(purchasePrice != null ? { purchasePrice } : {}),
+      ...(purchasePrice != null && price != null
+        ? { personalChangePercent: ((price - purchasePrice) / purchasePrice) * 100 }
+        : {}),
       quote: {
         price,
         change,

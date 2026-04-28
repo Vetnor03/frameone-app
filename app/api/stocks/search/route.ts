@@ -17,6 +17,7 @@ type StockSearchResult = {
   displayName: string
   exchange: string
   country: string
+  assetType: 'stock' | 'etf' | 'fund' | 'unknown'
 }
 
 type StockSearchResultRanked = StockSearchResult & {
@@ -41,20 +42,29 @@ function normalizeType(rawType: string) {
 function isPreferredEquityType(rawType: string) {
   const t = normalizeType(rawType)
   if (!t) return true
-  return t === 'common stock' || t === 'equity' || t === 'etp'
+  return t === 'common stock' || t === 'equity' || t === 'etp' || t.includes('etf') || t.includes('fund')
 }
 
 function isNoisyType(rawType: string) {
   const t = normalizeType(rawType)
   return (
-    t.includes('etf') ||
-    t.includes('fund') ||
     t.includes('index') ||
     t.includes('forex') ||
     t.includes('crypto') ||
     t.includes('warrant') ||
     t.includes('right')
   )
+}
+
+function inferAssetType(rawType: string, description: string, symbol: string): 'stock' | 'etf' | 'fund' | 'unknown' {
+  const type = normalizeType(rawType)
+  const desc = String(description || '').trim().toLowerCase()
+  const sym = String(symbol || '').trim().toLowerCase()
+
+  if (type.includes('etf') || type.includes('etp') || desc.includes(' etf') || desc.startsWith('etf ') || sym.endsWith('etf')) return 'etf'
+  if (type.includes('fund') || type.includes('mutual') || desc.includes(' fund') || desc.includes(' indeks') || desc.includes(' index fund')) return 'fund'
+  if (type.includes('stock') || type.includes('equity') || type === '') return 'stock'
+  return 'unknown'
 }
 
 export async function GET(req: NextRequest) {
@@ -106,6 +116,7 @@ export async function GET(req: NextRequest) {
         displayName: description || symbol,
         exchange,
         country,
+        assetType: inferAssetType(type, description, symbol),
         preferred: isPreferredEquityType(type) ? 1 : 0,
       })
     }
@@ -130,6 +141,7 @@ export async function GET(req: NextRequest) {
         displayName: item.displayName,
         exchange: item.exchange,
         country: item.country,
+        assetType: item.assetType,
       }))
       .slice(0, 20)
 
