@@ -506,18 +506,48 @@ static void drawLive(const Cell& c, const StockCache& data) {
   }
 
   if (c.size == CELL_SMALL) {
-    const int pad = 8;
-    const int titleH = 20;
-    const int divY = c.y + titleH + 2;
-    drawCenteredLine(c.x + pad, c.y + 2, c.w - pad * 2, titleH, title, FONT_B9, Theme::ink());
-    d.drawFastHLine(c.x + pad, divY, c.w - pad * 2, Theme::ink());
+    const uint16_t ink = Theme::ink();
+    const int topPad = 20;
+    const int underlineGap = 1;
+    const int underlineH = 2;
 
-    const int rowY = divY + 3;
-    const int rowH = c.h - (rowY - c.y) - 2;
-    const int colW = (c.w - pad * 2) / 3;
-    drawCenteredLine(c.x + pad + colW * 0, rowY, colW, rowH, priceTxt, FONT_B9, Theme::ink());
-    drawCenteredLine(c.x + pad + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B9, Theme::ink());
-    drawCenteredLine(c.x + pad + colW * 2, rowY, colW, rowH, hasPurchase ? posPctTxt : rangePctTxt, FONT_B9, Theme::ink());
+    char titleFit[64] = {0};
+    fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - 16, FONT_B12);
+
+    int16_t hx1, hy1;
+    uint16_t hw, hh;
+    measureText(titleFit, FONT_B12, hx1, hy1, hw, hh);
+
+    const int titleBaseline = c.y + topPad - hy1;
+    d.setFont(FONT_B12);
+    d.setTextColor(ink);
+    d.setTextSize(1);
+    d.setCursor(c.x + c.w / 2 - (int)hw / 2 - hx1, titleBaseline);
+    d.print(titleFit);
+    d.setFont(nullptr);
+
+    const int underlineY = titleBaseline + hy1 + (int)hh + underlineGap;
+    const int underlineX = c.x + c.w / 2 - (int)hw / 2;
+    d.fillRect(underlineX, underlineY, (int)hw, underlineH, ink);
+
+    const int contentTop = underlineY + underlineH + 10;
+    const int contentBottom = c.y + c.h - 10;
+    const int contentH = contentBottom - contentTop;
+    if (contentH <= 8) return;
+
+    const int dividerInsetTop = 8;
+    const int dividerInsetBottom = 8;
+    const int dividerY = contentTop + dividerInsetTop;
+    const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
+    const int div1X = c.x + c.w / 3;
+    const int div2X = c.x + (c.w * 2) / 3;
+    d.drawFastVLine(div1X, dividerY, dividerH, ink);
+    d.drawFastVLine(div2X, dividerY, dividerH, ink);
+
+    const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
+    drawCenteredLine(c.x + (c.w * 0) / 3, contentTop, c.w / 3, contentH, priceTxt, FONT_B12, ink);
+    drawCenteredLine(c.x + (c.w * 1) / 3, contentTop, c.w / 3, contentH, dayPctTxt, FONT_B12, ink);
+    drawCenteredLine(c.x + (c.w * 2) / 3, contentTop, c.w - ((c.w * 2) / 3), contentH, thirdValue, FONT_B12, ink);
     return;
   }
 
