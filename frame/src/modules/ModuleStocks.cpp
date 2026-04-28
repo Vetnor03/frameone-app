@@ -583,7 +583,6 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int topPad = 20;
     const int titleUnderlineGap = 4;
     const int titleUnderlineH = 2;
-    const int bottomPad = 35; // match medium surf lower padding rhythm
 
     char titleFit[64] = {0};
     fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - 32, FONT_B12);
@@ -599,15 +598,12 @@ static void drawLive(const Cell& c, const StockCache& data) {
     d2.fillRect(underlineX, underlineY, (int)hw, titleUnderlineH, ink);
 
     const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
-    const int rowY = underlineY + titleUnderlineH + 16;
     const int rowW = c.w - 48; // tighter grouping than small, but still centered
     const int rowX = c.x + (c.w - rowW) / 2;
     const int colW = rowW / 3;
-
     const int rowH = 16;
-    drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B9, ink);
-    drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B9, ink);
-    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B9, ink);
+    const int bottomPad = 10;
+    const int rowY = c.y + c.h - bottomPad - rowH;
 
     const int dividerPad = 2;
     const int dividerY = rowY - dividerPad;
@@ -615,15 +611,25 @@ static void drawLive(const Cell& c, const StockCache& data) {
     d2.drawFastVLine(rowX + colW, dividerY, dividerH, ink);
     d2.drawFastVLine(rowX + colW * 2, dividerY, dividerH, ink);
 
+    drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B9, ink);
+    drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B9, ink);
+    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B9, ink);
+
+    const int rangeBaselineY = underlineY + titleUnderlineH + 18;
+    drawTextCenteredAt(c.x + c.w / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
+
     const int chartSidePad = 18; // squeeze chart horizontally to open side breathing room
     const int chartX = c.x + chartSidePad;
-    const int chartY = rowY + 22;
+    const int chartTopGap = 10;
+    const int chartBottomGap = 10;
+    int16_t rangeX1, rangeY1;
+    uint16_t rangeW, rangeH;
+    measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
+    const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
     const int chartW = c.w - chartSidePad * 2;
-    const int chartBottom = c.y + c.h - bottomPad;
+    const int chartBottom = rowY - chartBottomGap;
     const int chartH = max(20, chartBottom - chartY);
     drawChartBox(chartX, chartY, chartW, chartH, data);
-
-    drawLeft(c.x + 10, c.y + c.h - 10, rangeLabel(data.chartRange), FONT_B9, ink);
     return;
   }
 
