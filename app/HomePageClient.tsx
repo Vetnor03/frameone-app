@@ -2569,11 +2569,12 @@ function normalizeStocksList(raw: any): StockCfg[] {
       const assetType = allowedAssetTypes.has(assetTypeRaw) ? (assetTypeRaw as StockCfg['assetType']) : 'stock'
       const purchasePriceRaw = Number(x.purchasePrice)
       const purchasePrice = Number.isFinite(purchasePriceRaw) && purchasePriceRaw > 0 ? purchasePriceRaw : undefined
-      const currency = String(x.currency ?? '')
+      const currencyRaw = String(x.currency ?? '')
         .trim()
         .toUpperCase()
         .replace(/[^A-Z0-9]/g, '')
         .slice(0, 8)
+      const currency = currencyRaw || 'USD'
 
       const out: StockCfg = { id, refresh, chartRange }
 
@@ -2581,7 +2582,7 @@ function normalizeStocksList(raw: any): StockCfg[] {
       if (name) out.name = name
       if (assetType) out.assetType = assetType
       if (purchasePrice != null) out.purchasePrice = purchasePrice
-      if (currency) out.currency = currency
+      out.currency = currency
 
       return out
     })
@@ -3847,7 +3848,7 @@ function StocksModuleSettingsTab({
               name={cfg?.name ? String(cfg.name) : ''}
               assetType={cfg?.assetType || 'stock'}
               purchasePrice={typeof cfg?.purchasePrice === 'number' ? cfg.purchasePrice : undefined}
-              currency={cfg?.currency ? String(cfg.currency) : ''}
+              currency={cfg?.currency ? String(cfg.currency) : 'USD'}
               chartRange={cfg?.chartRange === 'week' || cfg?.chartRange === 'month' || cfg?.chartRange === 'year' ? cfg.chartRange : 'day'}
               onSave={(patch) => upsertStock(id, patch)}
             />
@@ -3884,7 +3885,7 @@ function StockRow({
   const [purchasePriceInput, setPurchasePriceInput] = useState(
     typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0 ? String(purchasePrice) : ''
   )
-  const [currencyInput, setCurrencyInput] = useState(currency ? String(currency).trim().toUpperCase() : '')
+  const [currencyInput, setCurrencyInput] = useState(currency ? String(currency).trim().toUpperCase() : 'USD')
   const [purchasePriceError, setPurchasePriceError] = useState('')
   const selectedName = name.trim()
   const selectedSymbol = symbol.trim().toUpperCase()
@@ -3896,7 +3897,7 @@ function StockRow({
     setPurchasePriceInput(typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0 ? String(purchasePrice) : '')
   }, [purchasePrice])
   useEffect(() => {
-    setCurrencyInput(currency ? String(currency).trim().toUpperCase() : '')
+    setCurrencyInput(currency ? String(currency).trim().toUpperCase() : 'USD')
   }, [currency])
 
   function commitPurchasePrice() {
@@ -3968,45 +3969,44 @@ function StockRow({
         </div>
 
         <div className="mt-4">
-          <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
-            {language === 'no' ? 'VALUTA' : 'CURRENCY'}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
+                {language === 'no' ? 'KJØPSPRIS' : 'PURCHASE PRICE'}
+              </div>
+              <input
+                value={purchasePriceInput}
+                onChange={(e) => setPurchasePriceInput(e.target.value)}
+                onBlur={commitPurchasePrice}
+                placeholder={language === 'no' ? 'Valgfritt' : 'Optional'}
+                inputMode="decimal"
+                className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+              />
+            </div>
+            <div className="col-span-1">
+              <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
+                {language === 'no' ? 'VALUTA' : 'CURRENCY'}
+              </div>
+              <select
+                value={currencyInput}
+                onChange={(e) => {
+                  const next = String(e.target.value || 'USD')
+                    .trim()
+                    .toUpperCase()
+                    .slice(0, 8)
+                  setCurrencyInput(next || 'USD')
+                  onSave({ currency: next || 'USD' })
+                }}
+                className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
+              >
+                {['USD', 'EUR', 'NOK', 'GBP', 'SEK', 'DKK', 'CAD', 'AUD', 'CHF', 'JPY'].map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <select
-            value={currencyInput}
-            onChange={(e) => {
-              const next = String(e.target.value || '')
-                .trim()
-                .toUpperCase()
-                .slice(0, 8)
-              setCurrencyInput(next)
-              onSave({ currency: next || undefined })
-            }}
-            className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
-          >
-            <option value="">{language === 'no' ? 'Automatisk' : 'Automatic'}</option>
-            {['USD', 'EUR', 'NOK', 'GBP', 'SEK', 'DKK', 'CAD', 'AUD', 'CHF', 'JPY'].map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-          <div className="mt-1 text-[11px] text-[color:var(--fg-45)]">
-            {language === 'no' ? 'Bruk Automatisk for å hente valuta fra markedet.' : 'Use Automatic to fetch currency from market data.'}
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
-            {language === 'no' ? 'KJØPSPRIS' : 'PURCHASE PRICE'}
-          </div>
-          <input
-            value={purchasePriceInput}
-            onChange={(e) => setPurchasePriceInput(e.target.value)}
-            onBlur={commitPurchasePrice}
-            placeholder={language === 'no' ? 'Valgfritt' : 'Optional'}
-            inputMode="decimal"
-            className="mt-2 w-full h-11 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none"
-          />
           <div className="mt-1 text-[11px] text-[color:var(--fg-45)]">
             {language === 'no'
               ? 'Brukes kun for å vise prosentvis gevinst/tap.'

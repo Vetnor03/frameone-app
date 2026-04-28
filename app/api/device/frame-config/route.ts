@@ -247,7 +247,7 @@ export async function GET(req: Request) {
       const assetType = normalizeAssetType(s.assetType)
       const purchasePriceRaw = Number(s.purchasePrice)
       const purchasePrice = Number.isFinite(purchasePriceRaw) && purchasePriceRaw > 0 ? purchasePriceRaw : null
-      const currency = normalizeCurrency(s.currency)
+      const currency = normalizeCurrency(s.currency) || 'USD'
 
       sanitizedStocks.push({
         id,
@@ -255,7 +255,7 @@ export async function GET(req: Request) {
         ...(name ? { name } : {}),
         assetType,
         ...(purchasePrice != null ? { purchasePrice } : {}),
-        ...(currency ? { currency } : {}),
+        currency,
         refresh: 900000,
         chartRange,
       })
