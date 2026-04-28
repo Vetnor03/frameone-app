@@ -278,6 +278,14 @@ static const char* normalizeRange(const char* raw) {
   return "day";
 }
 
+static const char* rangeLabel(const char* raw) {
+  const char* normalized = normalizeRange(raw);
+  if (strcmp(normalized, "week") == 0) return "Week";
+  if (strcmp(normalized, "month") == 0) return "Month";
+  if (strcmp(normalized, "year") == 0) return "Year";
+  return "Day";
+}
+
 static void applyConfigFromFrameConfig() {
   if (!ensureState()) return;
 
@@ -596,13 +604,16 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int rowX = c.x + (c.w - rowW) / 2;
     const int colW = rowW / 3;
 
-    drawCenteredLine(rowX + colW * 0, rowY, colW, 16, priceTxt, FONT_B12, ink);
-    drawCenteredLine(rowX + colW * 1, rowY, colW, 16, dayPctTxt, FONT_B12, ink);
-    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, 16, thirdValue, FONT_B12, ink);
+    const int rowH = 16;
+    drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B9, ink);
+    drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B9, ink);
+    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B9, ink);
 
-    const int pipeY = rowY + 8;
-    drawTextCenteredAt(rowX + colW, pipeY, "|", FONT_B12, ink);
-    drawTextCenteredAt(rowX + colW * 2, pipeY, "|", FONT_B12, ink);
+    const int dividerPad = 2;
+    const int dividerY = rowY - dividerPad;
+    const int dividerH = rowH + (dividerPad * 2);
+    d2.drawFastVLine(rowX + colW, dividerY, dividerH, ink);
+    d2.drawFastVLine(rowX + colW * 2, dividerY, dividerH, ink);
 
     const int chartSidePad = 18; // squeeze chart horizontally to open side breathing room
     const int chartX = c.x + chartSidePad;
@@ -611,6 +622,8 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int chartBottom = c.y + c.h - bottomPad;
     const int chartH = max(20, chartBottom - chartY);
     drawChartBox(chartX, chartY, chartW, chartH, data);
+
+    drawLeft(c.x + 10, c.y + c.h - 10, rangeLabel(data.chartRange), FONT_B9, ink);
     return;
   }
 
