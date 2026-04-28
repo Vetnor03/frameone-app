@@ -54,6 +54,12 @@ function normalizeStockChartRange(value: any): StockChartRange {
   return 'day'
 }
 
+function normalizeAssetType(value: any): 'stock' | 'etf' | 'fund' | 'unknown' {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (v === 'etf' || v === 'fund' || v === 'unknown') return v
+  return 'stock'
+}
+
 function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; category: string; updated_at: string | null }>) {
   const stable = items
     .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.category}|${x.updated_at ?? ''}`)
@@ -230,11 +236,16 @@ export async function GET(req: Request) {
       const symbol = asString(s.symbol, '').trim().slice(0, 24)
       const name = asString(s.name, '').trim().slice(0, 80)
       const chartRange = normalizeStockChartRange(s.chartRange)
+      const assetType = normalizeAssetType(s.assetType)
+      const purchasePriceRaw = Number(s.purchasePrice)
+      const purchasePrice = Number.isFinite(purchasePriceRaw) && purchasePriceRaw > 0 ? purchasePriceRaw : null
 
       sanitizedStocks.push({
         id,
         ...(symbol ? { symbol } : {}),
         ...(name ? { name } : {}),
+        assetType,
+        ...(purchasePrice != null ? { purchasePrice } : {}),
         refresh: 900000,
         chartRange,
       })

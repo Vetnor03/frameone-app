@@ -48,6 +48,9 @@ struct StockCache {
   float open = NAN;
   float high = NAN;
   float low = NAN;
+  float purchasePrice = NAN;
+  float personalChangePercent = NAN;
+  float selectedRangePercent = NAN;
 
   char chartRange[8] = {0};
   uint8_t seriesCount = 0;
@@ -334,6 +337,8 @@ static bool parseQuoteJson(const String& body, const StockInstanceConfig& cfg, S
   out.open = doc["quote"]["open"] | NAN;
   out.high = doc["quote"]["high"] | NAN;
   out.low = doc["quote"]["low"] | NAN;
+  out.purchasePrice = doc["purchasePrice"] | NAN;
+  out.personalChangePercent = doc["personalChangePercent"] | NAN;
 
   if (!isfinite(out.price)) out.price = doc["quote"]["c"] | NAN;
   if (!isfinite(out.change)) out.change = doc["quote"]["d"] | NAN;
@@ -353,6 +358,15 @@ static bool parseQuoteJson(const String& body, const StockInstanceConfig& cfg, S
   }
   if (!parsedSeries) {
     parseSeriesArray(doc["series"]["day"], out);
+  }
+
+  out.selectedRangePercent = NAN;
+  if (out.seriesCount >= 2) {
+    const float start = out.series[0];
+    const float end = out.series[out.seriesCount - 1];
+    if (isfinite(start) && isfinite(end) && fabsf(start) > 0.00001f) {
+      out.selectedRangePercent = ((end - start) / start) * 100.0f;
+    }
   }
 
   Serial.print("[STOCKS] Parsed symbol/name: ");
@@ -469,15 +483,26 @@ static void drawLive(const Cell& c, const StockCache& data) {
   char priceTxt[24] = {0};
   char changeTxt[20] = {0};
   char pctTxt[20] = {0};
+  char thirdTxt[20] = {0};
 
   formatPrice(priceTxt, sizeof(priceTxt), data.price);
   formatSigned(changeTxt, sizeof(changeTxt), data.change, 2, false);
   formatSigned(pctTxt, sizeof(pctTxt), data.changePercent, 2, true);
+  if (isfinite(data.personalChangePercent)) {
+    formatSigned(thirdTxt, sizeof(thirdTxt), data.personalChangePercent, 2, true);
+  } else {
+    formatSigned(thirdTxt, sizeof(thirdTxt), data.selectedRangePercent, 2, true);
+  }
 
   if (c.size == CELL_SMALL) {
-    int topH = c.h / 2;
-    drawCenteredLine(c.x, c.y, c.w, topH, data.symbol[0] ? data.symbol : title, FONT_B9, Theme::ink());
-    drawCenteredLine(c.x, c.y + topH, c.w, c.h - topH, priceTxt, FONT_B12, Theme::ink());
+    const int pad = 6;
+    const int topH = 22;
+    drawCenteredLine(c.x, c.y, c.w, topH, title, FONT_B9, Theme::ink());
+
+    const int colW = (c.w - pad * 2) / 3;
+    drawCenteredLine(c.x + pad, c.y + topH, colW, c.h - topH, priceTxt, FONT_B9, Theme::ink());
+    drawCenteredLine(c.x + pad + colW, c.y + topH, colW, c.h - topH, pctTxt, FONT_B9, Theme::ink());
+    drawCenteredLine(c.x + pad + colW * 2, c.y + topH, colW, c.h - topH, thirdTxt, FONT_B9, Theme::ink());
     return;
   }
 
@@ -503,7 +528,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
   drawLeft(c.x + pad, c.y + 16, titleFit, FONT_B12, Theme::ink());
 
   char headRight[40] = {0};
-  snprintf(headRight, sizeof(headRight), "%s  %s", changeTxt, pctTxt);
+  snprintf(headRight, sizeof(headRight), "%s  %s  %s", changeTxt, pctTxt, thirdTxt);
   int hw = textWidth(headRight, FONT_B12);
   drawLeft(c.x + c.w - pad - hw, c.y + 16, headRight, FONT_B12, Theme::ink());
 
