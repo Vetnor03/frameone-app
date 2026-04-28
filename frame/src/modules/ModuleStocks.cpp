@@ -127,6 +127,16 @@ static void drawLeft(int x, int baselineY, const char* text, const GFXfont* font
   d.setTextSize(1);
 }
 
+static void drawTextCenteredAt(int cx, int baselineY,
+                               const char* text,
+                               const GFXfont* font,
+                               uint16_t col) {
+  int16_t x1, y1;
+  uint16_t tw, th;
+  measureText(text, font, x1, y1, tw, th);
+  drawLeft(cx - (int)tw / 2 - x1, baselineY, text, font, col);
+}
+
 static void drawCenteredLine(int x, int y, int w, int h,
                              const char* text,
                              const GFXfont* font,
