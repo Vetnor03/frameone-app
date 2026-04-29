@@ -1252,15 +1252,6 @@ async function handleSelectTab(k: TabKey) {
               tabs={tabs}
               activeTab={activeTab}
               onSelect={handleSelectTab}
-              pinnedModuleTabs={pinnedModuleTabs}
-              onTogglePinModuleTab={(module) => {
-                setPinnedModuleTabs((prev) => {
-                  const exists = prev.includes(module)
-                  const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
-                  markDirty({ pinnedModuleTabs: nextPinned })
-                  return nextPinned
-                })
-              }}
               getScrollBehavior={() => {
                 const instant = preferInstantScrollRef.current
                 preferInstantScrollRef.current = false
@@ -1300,16 +1291,44 @@ async function handleSelectTab(k: TabKey) {
               )}
 
               {activeTab !== 'frame' && activeTab !== 'settings' && (
-                <ModuleSettingsTab
-                  language={language}
-                  module={activeTab as ModuleKey}
-                  layoutKey={layoutKey}
-                  cells={cellsByLayout[layoutKey]}
-                  modulesJson={modulesJson}
-                  setModulesJson={setModulesJson}
-                  markDirty={markDirty}
-                  activeDeviceId={activeDeviceId}
-                />
+                <>
+                  <div className="mb-4 flex justify-end">
+                    <button
+                      onClick={() => {
+                        const module = activeTab as ModuleKey
+                        setPinnedModuleTabs((prev) => {
+                          const exists = prev.includes(module)
+                          const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
+                          markDirty({ pinnedModuleTabs: nextPinned })
+                          return nextPinned
+                        })
+                      }}
+                      className="inline-flex items-center gap-2 text-[color:var(--fg-70)] tracking-widest text-[11px]"
+                      title={pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-4 h-4"
+                        fill={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'none'}
+                        stroke={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'currentColor'}
+                        strokeWidth={1.8}
+                      >
+                        <path d="M12 3.5l2.7 5.47 6.03.88-4.36 4.25 1.03 6.01L12 17.2l-5.4 2.91 1.03-6.01-4.36-4.25 6.03-.88L12 3.5z" />
+                      </svg>
+                      <span>{pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'PINNED' : 'PIN TAB'}</span>
+                    </button>
+                  </div>
+                  <ModuleSettingsTab
+                    language={language}
+                    module={activeTab as ModuleKey}
+                    layoutKey={layoutKey}
+                    cells={cellsByLayout[layoutKey]}
+                    modulesJson={modulesJson}
+                    setModulesJson={setModulesJson}
+                    markDirty={markDirty}
+                    activeDeviceId={activeDeviceId}
+                  />
+                </>
               )}
             </div>
 
@@ -1411,15 +1430,11 @@ function TabBar({
   activeTab,
   onSelect,
   getScrollBehavior,
-  pinnedModuleTabs,
-  onTogglePinModuleTab,
 }: {
   tabs: { key: TabKey; label: string }[]
   activeTab: TabKey
   onSelect: (k: TabKey) => void
   getScrollBehavior: () => ScrollBehavior
-  pinnedModuleTabs: ModuleKey[]
-  onTogglePinModuleTab: (module: ModuleKey) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -1504,20 +1519,6 @@ function TabBar({
               }`}
             >
               <span>{t.label}</span>
-              {t.key !== 'frame' && t.key !== 'settings' && (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onTogglePinModuleTab(t.key as ModuleKey)
-                  }}
-                  className="inline-flex items-center justify-center ml-1"
-                  title={pinnedModuleTabs.includes(t.key as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
-                >
-                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={pinnedModuleTabs.includes(t.key as ModuleKey) ? '#2aa3ff' : 'none'} stroke={pinnedModuleTabs.includes(t.key as ModuleKey) ? '#2aa3ff' : 'currentColor'} strokeWidth={1.8}>
-                    <path d="M12 3.5l2.7 5.47 6.03.88-4.36 4.25 1.03 6.01L12 17.2l-5.4 2.91 1.03-6.01-4.36-4.25 6.03-.88L12 3.5z" />
-                  </svg>
-                </span>
-              )}
             </button>
           )
         })}
