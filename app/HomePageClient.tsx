@@ -1526,6 +1526,7 @@ function TabBar({
   const holdTimerRef = useRef<number | null>(null)
   const dragStartXRef = useRef<number | null>(null)
   const dragPointerXRef = useRef<number | null>(null)
+  const lastPointerMoveAtRef = useRef<number>(0)
   const autoScrollRafRef = useRef<number | null>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
@@ -1636,7 +1637,8 @@ function TabBar({
     }
     const tick = () => {
       const x = dragPointerXRef.current
-      if (x != null) maybeAutoScrollAt(x)
+      const recentlyMoved = Date.now() - lastPointerMoveAtRef.current < 140
+      if (x != null && recentlyMoved) maybeAutoScrollAt(x)
       autoScrollRafRef.current = requestAnimationFrame(tick)
     }
     autoScrollRafRef.current = requestAnimationFrame(tick)
@@ -1645,6 +1647,34 @@ function TabBar({
       autoScrollRafRef.current = null
     }
   }, [draggingModule, moduleTabs])
+
+  function finalizeDrag() {
+    clearHoldTimer()
+    dragStartXRef.current = null
+    if (!draggingModule) return
+    const dropX = dragPointerXRef.current
+    const draft = draftModuleOrder
+    if (draft && draft.length) {
+      const finalIndex = draft.indexOf(draggingModule)
+      onReorderModuleTab(draggingModule, Math.max(0, finalIndex))
+    } else if (dropX != null) {
+      const targetIndex = computeDropIndex(dropX, draggingModule)
+      onReorderModuleTab(draggingModule, targetIndex)
+    }
+    setDraftModuleOrder(null)
+    setDraggingModule(null)
+  }
+
+  useEffect(() => {
+    if (!draggingModule) return
+    const onEnd = () => finalizeDrag()
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
+    return () => {
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+    }
+  }, [draggingModule, draftModuleOrder, moduleTabs])
 
   function updateDraftOrder(clientX: number, dragged: ModuleKey) {
     setDraftModuleOrder((prev) => {
@@ -1701,6 +1731,7 @@ function TabBar({
               onPointerMove={(event) => {
                 if (isCoreTab) return
                 dragPointerXRef.current = event.clientX
+                lastPointerMoveAtRef.current = Date.now()
                 if (draggingModule !== t.key) {
                   const startX = dragStartXRef.current
                   if (startX != null && Math.abs(event.clientX - startX) > 8) clearHoldTimer()
@@ -1710,21 +1741,7 @@ function TabBar({
                 updateDraftOrder(event.clientX, draggingModule)
               }}
               onPointerUp={() => {
-                clearHoldTimer()
-                dragStartXRef.current = null
-                if (draggingModule) {
-                  const dropX = dragPointerXRef.current
-                  const draft = draftModuleOrder
-                  if (draft && draft.length) {
-                    const finalIndex = draft.indexOf(draggingModule)
-                    onReorderModuleTab(draggingModule, Math.max(0, finalIndex))
-                  } else if (dropX != null) {
-                    const targetIndex = computeDropIndex(dropX, draggingModule)
-                    onReorderModuleTab(draggingModule, targetIndex)
-                  }
-                  setDraftModuleOrder(null)
-                  setDraggingModule(null)
-                }
+                finalizeDrag()
               }}
               onPointerCancel={() => {
                 clearHoldTimer()
