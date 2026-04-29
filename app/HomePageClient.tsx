@@ -682,6 +682,7 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
+  const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
   const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
   const saveToastTimerRef = useRef<number | null>(null)
@@ -725,7 +726,6 @@ export default function HomePage() {
 
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
-  const autoSaveTimerRef = useRef<number | null>(null)
   const isLoadedRef = useRef(false)
 
   useEffect(() => {
@@ -738,12 +738,19 @@ export default function HomePage() {
   }, [searchParams])
 
   const dynamicTabs = useMemo(() => {
-    const mods = Object.values(cellsByLayout[layoutKey]).filter(Boolean) as ModuleKey[]
+    const activeModules = Array.from(
+      new Set((Object.values(cellsByLayout[layoutKey]).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date'))
+    )
 
-    return Array.from(new Set(mods))
-      .filter((m) => m !== 'date')
-      .map((m) => ({ key: m as ModuleKey, label: moduleLabel(language, m) }))
-  }, [cellsByLayout, layoutKey, language])
+    const pinnedInactive = pinnedModuleTabs.filter((m) => m !== 'date' && !activeModules.includes(m))
+    const pinnedActive = pinnedModuleTabs.filter((m) => m !== 'date' && activeModules.includes(m))
+    const activeUnpinned = activeModules.filter((m) => !pinnedActive.includes(m))
+
+    return [...pinnedActive, ...activeUnpinned, ...pinnedInactive].map((m) => ({
+      key: m as ModuleKey,
+      label: moduleLabel(language, m),
+    }))
+  }, [cellsByLayout, layoutKey, language, pinnedModuleTabs])
 
   const tabs = useMemo(() => {
     return [
@@ -763,6 +770,7 @@ export default function HomePage() {
     layoutKey: LayoutKey
     cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson: Record<string, any>
+    pinnedModuleTabs: ModuleKey[]
   }) {
     const normalizedModules = normalizeModulesForSave(args.modulesJson)
 
@@ -773,6 +781,7 @@ export default function HomePage() {
       layout: args.layoutKey,
       cells: cellsMapToArray(args.cellsByLayout[args.layoutKey]),
       modules: normalizedModules,
+      pinnedTabs: args.pinnedModuleTabs,
     })
   }
 
@@ -783,6 +792,7 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
+    pinnedModuleTabs?: ModuleKey[]
   }) {
     const serialized = serializeComparableState({
       theme: next?.theme ?? theme,
@@ -791,6 +801,7 @@ export default function HomePage() {
       layoutKey: next?.layoutKey ?? layoutKey,
       cellsByLayout: next?.cellsByLayout ?? cellsByLayout,
       modulesJson: next?.modulesJson ?? modulesJson,
+      pinnedModuleTabs: next?.pinnedModuleTabs ?? pinnedModuleTabs,
     })
 
     setDirty(serialized !== savedStateRef.current)
@@ -803,6 +814,7 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
+    pinnedModuleTabs?: ModuleKey[]
   }) {
     refreshDirtyState(next)
   }
@@ -932,6 +944,9 @@ export default function HomePage() {
         : ({} as Record<string, any>)
 
     const normalizedModules = normalizeModulesForSave(rawModules)
+    const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
+      ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
+      : []
 
     setTheme(nextTheme)
     setLanguage(nextLanguage)
@@ -939,6 +954,7 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setLayoutKey(nextLayout)
     setModulesJson(normalizedModules)
+    setPinnedModuleTabs(nextPinnedTabs)
 
     savedStateRef.current = JSON.stringify({
       theme: nextTheme,
@@ -947,6 +963,7 @@ export default function HomePage() {
       layout: nextLayout,
       cells: cellsMapToArray(nextCellsByLayout[nextLayout]),
       modules: normalizedModules,
+      pinnedTabs: nextPinnedTabs,
     })
 
     setDirty(false)
@@ -962,6 +979,7 @@ export default function HomePage() {
         layout: 'default',
         cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
         modules: normalizedModules,
+        pinned_tabs: nextPinnedTabs,
       }
 
       await supabase.rpc('upsert_device_settings', {
@@ -1161,6 +1179,7 @@ export default function HomePage() {
         layout: layoutKey,
         cells: cellsMapToArray(cellsByLayout[layoutKey]),
         modules: modulesForSave,
+        pinned_tabs: pinnedModuleTabs,
       }
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
@@ -1190,6 +1209,7 @@ export default function HomePage() {
         layout: layoutKey,
         cells: cellsMapToArray(nextCellsByLayout[layoutKey]),
         modules: modulesForSave,
+        pinned_tabs: pinnedModuleTabs,
       })
 
       setDirty(false)
@@ -1201,22 +1221,7 @@ export default function HomePage() {
     }
   }
 
-useEffect(() => {
-  if (!isLoadedRef.current) return
-  if (!activeDeviceId) return
-  if (!dirty) return
-  if (activeTab === 'frame') return
 
-  if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current)
-
-  autoSaveTimerRef.current = window.setTimeout(() => {
-    persistSettings(true)
-  }, 550)
-
-  return () => {
-    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current)
-  }
-}, [dirty, theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, activeDeviceId, activeTab])
 
   async function logout() {
     await supabase.auth.signOut()
@@ -1229,10 +1234,6 @@ useEffect(() => {
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
-
-  if (activeTab !== 'frame' && k !== activeTab && dirty) {
-    await persistSettings(true)
-  }
 
   setActiveTab(k)
 }
@@ -1250,6 +1251,15 @@ async function handleSelectTab(k: TabKey) {
               tabs={tabs}
               activeTab={activeTab}
               onSelect={handleSelectTab}
+              pinnedModuleTabs={pinnedModuleTabs}
+              onTogglePinModuleTab={(module) => {
+                setPinnedModuleTabs((prev) => {
+                  const exists = prev.includes(module)
+                  const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
+                  markDirty({ pinnedModuleTabs: nextPinned })
+                  return nextPinned
+                })
+              }}
               getScrollBehavior={() => {
                 const instant = preferInstantScrollRef.current
                 preferInstantScrollRef.current = false
@@ -1400,11 +1410,15 @@ function TabBar({
   activeTab,
   onSelect,
   getScrollBehavior,
+  pinnedModuleTabs,
+  onTogglePinModuleTab,
 }: {
   tabs: { key: TabKey; label: string }[]
   activeTab: TabKey
   onSelect: (k: TabKey) => void
   getScrollBehavior: () => ScrollBehavior
+  pinnedModuleTabs: ModuleKey[]
+  onTogglePinModuleTab: (module: ModuleKey) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -1488,7 +1502,21 @@ function TabBar({
                   : 'text-[color:var(--fg-70)] text-[13px] font-normal'
               }`}
             >
-              {t.label}
+              <span>{t.label}</span>
+              {t.key !== 'frame' && t.key !== 'settings' && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onTogglePinModuleTab(t.key as ModuleKey)
+                  }}
+                  className="inline-flex items-center justify-center ml-1"
+                  title={pinnedModuleTabs.includes(t.key as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={pinnedModuleTabs.includes(t.key as ModuleKey) ? '#2aa3ff' : 'none'} stroke={pinnedModuleTabs.includes(t.key as ModuleKey) ? '#2aa3ff' : 'currentColor'} strokeWidth={1.8}>
+                    <path d="M12 3.5l2.7 5.47 6.03.88-4.36 4.25 1.03 6.01L12 17.2l-5.4 2.91 1.03-6.01-4.36-4.25 6.03-.88L12 3.5z" />
+                  </svg>
+                </span>
+              )}
             </button>
           )
         })}
