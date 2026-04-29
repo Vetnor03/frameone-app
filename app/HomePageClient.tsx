@@ -762,6 +762,13 @@ export default function HomePage() {
   }, [dynamicTabs, language])
 
   const savedStateRef = useRef<string>('')
+  const savedFrameStateRef = useRef<{
+    theme: 'dark' | 'light'
+    language: AppLanguage
+    fontSize: AppFontSize
+    layoutKey: LayoutKey
+    cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
+  } | null>(null)
   const layoutModuleMemoryRef = useRef<(ModuleKey | null)[]>([])
 
   function serializeComparableState(args: {
@@ -966,6 +973,13 @@ export default function HomePage() {
       modules: normalizedModules,
       pinnedTabs: nextPinnedTabs,
     })
+    savedFrameStateRef.current = {
+      theme: nextTheme,
+      language: nextLanguage,
+      fontSize: nextFontSize,
+      layoutKey: nextLayout,
+      cellsByLayout: nextCellsByLayout,
+    }
 
     setDirty(false)
     await loadDeviceStatus(deviceId)
@@ -1212,6 +1226,13 @@ export default function HomePage() {
         modules: modulesForSave,
         pinned_tabs: pinnedModuleTabs,
       })
+      savedFrameStateRef.current = {
+        theme,
+        language,
+        fontSize,
+        layoutKey,
+        cellsByLayout: nextCellsByLayout,
+      }
 
       setDirty(false)
       if (showToast) showSavedToast(tx(language).saved)
@@ -1231,6 +1252,54 @@ export default function HomePage() {
 
   const appBg = 'var(--app-bg)'
   const appText = 'text-[color:var(--fg)]'
+
+  useEffect(() => {
+    if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting) return
+    if (activeTab === 'settings') return
+
+    const timer = window.setTimeout(async () => {
+      const baseline = savedFrameStateRef.current
+      if (!baseline) return
+
+      const modulesForSave = normalizeModulesForSave(modulesJson)
+      const settingsJson: SettingsJson = {
+        theme: baseline.theme,
+        language: baseline.language,
+        fontSize: baseline.fontSize,
+        layout: baseline.layoutKey,
+        cells: cellsMapToArray(baseline.cellsByLayout[baseline.layoutKey]),
+        modules: modulesForSave,
+        pinned_tabs: pinnedModuleTabs,
+      }
+
+      try {
+        setPersisting(true)
+        const { data, error } = await supabase.rpc('upsert_device_settings', {
+          p_device_id: activeDeviceId,
+          p_settings: settingsJson,
+        })
+        if (error) throw error
+        if (data !== true) throw new Error('Failed to auto-save module settings')
+
+        savedStateRef.current = serializeComparableState({
+          theme,
+          language,
+          fontSize,
+          layoutKey,
+          cellsByLayout,
+          modulesJson: modulesForSave,
+          pinnedModuleTabs,
+        })
+        refreshDirtyState()
+      } catch {
+        // keep unsaved state; user can still tap UPDATE manually
+      } finally {
+        setPersisting(false)
+      }
+    }, 550)
+
+    return () => window.clearTimeout(timer)
+  }, [activeDeviceId, activeTab, modulesJson, pinnedModuleTabs])
 
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
@@ -1308,12 +1377,15 @@ async function handleSelectTab(k: TabKey) {
                     >
                       <svg
                         viewBox="0 0 24 24"
-                        className="w-4 h-4"
-                        fill={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'none'}
+                        className={`w-4 h-4 ${pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'fill-[#2aa3ff]' : 'fill-none'}`}
                         stroke={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'currentColor'}
-                        strokeWidth={1.8}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       >
-                        <path d="M12 3.5l2.7 5.47 6.03.88-4.36 4.25 1.03 6.01L12 17.2l-5.4 2.91 1.03-6.01-4.36-4.25 6.03-.88L12 3.5z" />
+                        <path d="M12 17v5" />
+                        <path d="M5 3l14 0" />
+                        <path d="M7 3l2 7v3l-2 2v1h10v-1l-2-2v-3l2-7" />
                       </svg>
                       <span>{pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'PINNED' : 'PIN TAB'}</span>
                     </button>
