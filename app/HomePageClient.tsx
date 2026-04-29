@@ -270,6 +270,7 @@ type SettingsJson = {
   layout?: LayoutKey
   cells?: { slot: number; module: string }[]
   modules?: Record<string, any>
+  pinned_tabs?: ModuleKey[]
 }
 
 type MemberRow = {
