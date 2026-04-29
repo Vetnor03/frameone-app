@@ -742,12 +742,11 @@ export default function HomePage() {
     const activeModules = Array.from(
       new Set((Object.values(cellsByLayout[layoutKey]).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date'))
     )
+    const preferredOrder = pinnedModuleTabs.filter((m) => m !== 'date')
+    const merged = [...preferredOrder, ...activeModules]
+    const uniqueOrdered = Array.from(new Set(merged))
 
-    const pinnedInactive = pinnedModuleTabs.filter((m) => m !== 'date' && !activeModules.includes(m))
-    const pinnedActive = pinnedModuleTabs.filter((m) => m !== 'date' && activeModules.includes(m))
-    const activeUnpinned = activeModules.filter((m) => !pinnedActive.includes(m))
-
-    return [...pinnedActive, ...activeUnpinned, ...pinnedInactive].map((m) => ({
+    return uniqueOrdered.map((m) => ({
       key: m as ModuleKey,
       label: moduleLabel(language, m),
     }))
