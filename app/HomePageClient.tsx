@@ -1360,8 +1360,8 @@ async function handleSelectTab(k: TabKey) {
               )}
 
               {activeTab !== 'frame' && activeTab !== 'settings' && (
-                <>
-                  <div className="mb-4 flex justify-end">
+                <div className="relative h-full">
+                  <div className="absolute left-0 top-0 z-20">
                     <button
                       onClick={() => {
                         const module = activeTab as ModuleKey
@@ -1372,7 +1372,7 @@ async function handleSelectTab(k: TabKey) {
                           return nextPinned
                         })
                       }}
-                      className="inline-flex items-center gap-2 text-[color:var(--fg-70)] tracking-widest text-[11px]"
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-[color:var(--bd-20)] text-[color:var(--fg-70)]"
                       title={pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
                     >
                       <svg
@@ -1387,7 +1387,6 @@ async function handleSelectTab(k: TabKey) {
                         <path d="M5 3l14 0" />
                         <path d="M7 3l2 7v3l-2 2v1h10v-1l-2-2v-3l2-7" />
                       </svg>
-                      <span>{pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'PINNED' : 'PIN TAB'}</span>
                     </button>
                   </div>
                   <ModuleSettingsTab
@@ -1400,7 +1399,7 @@ async function handleSelectTab(k: TabKey) {
                     markDirty={markDirty}
                     activeDeviceId={activeDeviceId}
                   />
-                </>
+                </div>
               )}
             </div>
 
