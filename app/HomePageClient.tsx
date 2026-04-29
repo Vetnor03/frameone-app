@@ -1361,7 +1361,7 @@ async function handleSelectTab(k: TabKey) {
 
               {activeTab !== 'frame' && activeTab !== 'settings' && (
                 <div className="relative h-full">
-                  <div className="absolute left-0 top-0 z-20">
+                  <div className="absolute left-0 -top-1 z-20">
                     <button
                       onClick={() => {
                         const module = activeTab as ModuleKey
