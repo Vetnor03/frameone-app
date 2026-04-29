@@ -2171,7 +2171,7 @@ static void renderCommon(const Cell& c,
       const int arrowHeadLenMax = clampi(arrowLenMax / 3, 10, 22);
       const int arrowDownReachMax = (arrowLenMax + arrowHeadLenMax) / 2;
       const int minArrowToIconGap = 7;
-      const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax) - 10;
+      const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax) - 20;
 
       if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
       else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
