@@ -270,6 +270,7 @@ type SettingsJson = {
   layout?: LayoutKey
   cells?: { slot: number; module: string }[]
   modules?: Record<string, any>
+  pinned_tabs?: ModuleKey[]
 }
 
 type MemberRow = {
@@ -682,6 +683,7 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
+  const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
   const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
   const saveToastTimerRef = useRef<number | null>(null)
@@ -725,7 +727,6 @@ export default function HomePage() {
 
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
-  const autoSaveTimerRef = useRef<number | null>(null)
   const isLoadedRef = useRef(false)
 
   useEffect(() => {
@@ -738,12 +739,19 @@ export default function HomePage() {
   }, [searchParams])
 
   const dynamicTabs = useMemo(() => {
-    const mods = Object.values(cellsByLayout[layoutKey]).filter(Boolean) as ModuleKey[]
+    const activeModules = Array.from(
+      new Set((Object.values(cellsByLayout[layoutKey]).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date'))
+    )
 
-    return Array.from(new Set(mods))
-      .filter((m) => m !== 'date')
-      .map((m) => ({ key: m as ModuleKey, label: moduleLabel(language, m) }))
-  }, [cellsByLayout, layoutKey, language])
+    const pinnedInactive = pinnedModuleTabs.filter((m) => m !== 'date' && !activeModules.includes(m))
+    const pinnedActive = pinnedModuleTabs.filter((m) => m !== 'date' && activeModules.includes(m))
+    const activeUnpinned = activeModules.filter((m) => !pinnedActive.includes(m))
+
+    return [...pinnedActive, ...activeUnpinned, ...pinnedInactive].map((m) => ({
+      key: m as ModuleKey,
+      label: moduleLabel(language, m),
+    }))
+  }, [cellsByLayout, layoutKey, language, pinnedModuleTabs])
 
   const tabs = useMemo(() => {
     return [
@@ -754,6 +762,13 @@ export default function HomePage() {
   }, [dynamicTabs, language])
 
   const savedStateRef = useRef<string>('')
+  const savedFrameStateRef = useRef<{
+    theme: 'dark' | 'light'
+    language: AppLanguage
+    fontSize: AppFontSize
+    layoutKey: LayoutKey
+    cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
+  } | null>(null)
   const layoutModuleMemoryRef = useRef<(ModuleKey | null)[]>([])
 
   function serializeComparableState(args: {
@@ -763,6 +778,7 @@ export default function HomePage() {
     layoutKey: LayoutKey
     cellsByLayout: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson: Record<string, any>
+    pinnedModuleTabs: ModuleKey[]
   }) {
     const normalizedModules = normalizeModulesForSave(args.modulesJson)
 
@@ -773,6 +789,7 @@ export default function HomePage() {
       layout: args.layoutKey,
       cells: cellsMapToArray(args.cellsByLayout[args.layoutKey]),
       modules: normalizedModules,
+      pinnedTabs: args.pinnedModuleTabs,
     })
   }
 
@@ -783,6 +800,7 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
+    pinnedModuleTabs?: ModuleKey[]
   }) {
     const serialized = serializeComparableState({
       theme: next?.theme ?? theme,
@@ -791,6 +809,7 @@ export default function HomePage() {
       layoutKey: next?.layoutKey ?? layoutKey,
       cellsByLayout: next?.cellsByLayout ?? cellsByLayout,
       modulesJson: next?.modulesJson ?? modulesJson,
+      pinnedModuleTabs: next?.pinnedModuleTabs ?? pinnedModuleTabs,
     })
 
     setDirty(serialized !== savedStateRef.current)
@@ -803,6 +822,7 @@ export default function HomePage() {
     layoutKey?: LayoutKey
     cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
     modulesJson?: Record<string, any>
+    pinnedModuleTabs?: ModuleKey[]
   }) {
     refreshDirtyState(next)
   }
@@ -932,6 +952,9 @@ export default function HomePage() {
         : ({} as Record<string, any>)
 
     const normalizedModules = normalizeModulesForSave(rawModules)
+    const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
+      ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
+      : []
 
     setTheme(nextTheme)
     setLanguage(nextLanguage)
@@ -939,6 +962,7 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setLayoutKey(nextLayout)
     setModulesJson(normalizedModules)
+    setPinnedModuleTabs(nextPinnedTabs)
 
     savedStateRef.current = JSON.stringify({
       theme: nextTheme,
@@ -947,7 +971,15 @@ export default function HomePage() {
       layout: nextLayout,
       cells: cellsMapToArray(nextCellsByLayout[nextLayout]),
       modules: normalizedModules,
+      pinnedTabs: nextPinnedTabs,
     })
+    savedFrameStateRef.current = {
+      theme: nextTheme,
+      language: nextLanguage,
+      fontSize: nextFontSize,
+      layoutKey: nextLayout,
+      cellsByLayout: nextCellsByLayout,
+    }
 
     setDirty(false)
     await loadDeviceStatus(deviceId)
@@ -962,6 +994,7 @@ export default function HomePage() {
         layout: 'default',
         cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
         modules: normalizedModules,
+        pinned_tabs: nextPinnedTabs,
       }
 
       await supabase.rpc('upsert_device_settings', {
@@ -1161,6 +1194,7 @@ export default function HomePage() {
         layout: layoutKey,
         cells: cellsMapToArray(cellsByLayout[layoutKey]),
         modules: modulesForSave,
+        pinned_tabs: pinnedModuleTabs,
       }
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
@@ -1190,7 +1224,15 @@ export default function HomePage() {
         layout: layoutKey,
         cells: cellsMapToArray(nextCellsByLayout[layoutKey]),
         modules: modulesForSave,
+        pinned_tabs: pinnedModuleTabs,
       })
+      savedFrameStateRef.current = {
+        theme,
+        language,
+        fontSize,
+        layoutKey,
+        cellsByLayout: nextCellsByLayout,
+      }
 
       setDirty(false)
       if (showToast) showSavedToast(tx(language).saved)
@@ -1201,22 +1243,7 @@ export default function HomePage() {
     }
   }
 
-useEffect(() => {
-  if (!isLoadedRef.current) return
-  if (!activeDeviceId) return
-  if (!dirty) return
-  if (activeTab === 'frame') return
 
-  if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current)
-
-  autoSaveTimerRef.current = window.setTimeout(() => {
-    persistSettings(true)
-  }, 550)
-
-  return () => {
-    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current)
-  }
-}, [dirty, theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, activeDeviceId, activeTab])
 
   async function logout() {
     await supabase.auth.signOut()
@@ -1226,13 +1253,57 @@ useEffect(() => {
   const appBg = 'var(--app-bg)'
   const appText = 'text-[color:var(--fg)]'
 
+  useEffect(() => {
+    if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting) return
+    if (activeTab === 'settings') return
+
+    const timer = window.setTimeout(async () => {
+      const baseline = savedFrameStateRef.current
+      if (!baseline) return
+
+      const modulesForSave = normalizeModulesForSave(modulesJson)
+      const settingsJson: SettingsJson = {
+        theme: baseline.theme,
+        language: baseline.language,
+        fontSize: baseline.fontSize,
+        layout: baseline.layoutKey,
+        cells: cellsMapToArray(baseline.cellsByLayout[baseline.layoutKey]),
+        modules: modulesForSave,
+        pinned_tabs: pinnedModuleTabs,
+      }
+
+      try {
+        setPersisting(true)
+        const { data, error } = await supabase.rpc('upsert_device_settings', {
+          p_device_id: activeDeviceId,
+          p_settings: settingsJson,
+        })
+        if (error) throw error
+        if (data !== true) throw new Error('Failed to auto-save module settings')
+
+        savedStateRef.current = serializeComparableState({
+          theme,
+          language,
+          fontSize,
+          layoutKey,
+          cellsByLayout,
+          modulesJson: modulesForSave,
+          pinnedModuleTabs,
+        })
+        refreshDirtyState()
+      } catch {
+        // keep unsaved state; user can still tap UPDATE manually
+      } finally {
+        setPersisting(false)
+      }
+    }, 550)
+
+    return () => window.clearTimeout(timer)
+  }, [activeDeviceId, activeTab, modulesJson, pinnedModuleTabs])
+
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
-
-  if (activeTab !== 'frame' && k !== activeTab && dirty) {
-    await persistSettings(true)
-  }
 
   setActiveTab(k)
 }
@@ -1289,16 +1360,46 @@ async function handleSelectTab(k: TabKey) {
               )}
 
               {activeTab !== 'frame' && activeTab !== 'settings' && (
-                <ModuleSettingsTab
-                  language={language}
-                  module={activeTab as ModuleKey}
-                  layoutKey={layoutKey}
-                  cells={cellsByLayout[layoutKey]}
-                  modulesJson={modulesJson}
-                  setModulesJson={setModulesJson}
-                  markDirty={markDirty}
-                  activeDeviceId={activeDeviceId}
-                />
+                <div className="relative h-full">
+                  <div className="absolute right-0 -top-4 z-20">
+                    <button
+                      onClick={() => {
+                        const module = activeTab as ModuleKey
+                        setPinnedModuleTabs((prev) => {
+                          const exists = prev.includes(module)
+                          const nextPinned = exists ? prev.filter((m) => m !== module) : [...prev, module]
+                          markDirty({ pinnedModuleTabs: nextPinned })
+                          return nextPinned
+                        })
+                      }}
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-[color:var(--bd-20)] text-[color:var(--fg-70)]"
+                      title={pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'Unpin tab' : 'Pin tab'}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className={`w-4 h-4 ${pinnedModuleTabs.includes(activeTab as ModuleKey) ? 'fill-[#2aa3ff]' : 'fill-none'}`}
+                        stroke={pinnedModuleTabs.includes(activeTab as ModuleKey) ? '#2aa3ff' : 'currentColor'}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 17v5" />
+                        <path d="M5 3l14 0" />
+                        <path d="M7 3l2 7v3l-2 2v1h10v-1l-2-2v-3l2-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <ModuleSettingsTab
+                    language={language}
+                    module={activeTab as ModuleKey}
+                    layoutKey={layoutKey}
+                    cells={cellsByLayout[layoutKey]}
+                    modulesJson={modulesJson}
+                    setModulesJson={setModulesJson}
+                    markDirty={markDirty}
+                    activeDeviceId={activeDeviceId}
+                  />
+                </div>
               )}
             </div>
 
@@ -1488,7 +1589,7 @@ function TabBar({
                   : 'text-[color:var(--fg-70)] text-[13px] font-normal'
               }`}
             >
-              {t.label}
+              <span>{t.label}</span>
             </button>
           )
         })}
