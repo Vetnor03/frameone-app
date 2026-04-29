@@ -2159,8 +2159,8 @@ static void renderCommon(const Cell& c,
       const int windArrowCx = windSlotX + windSlotW / 2;
 
       const int arrowLenWave = clampi(slotW - 20, 20, 34);
-      const int arrowLenWind = clampi(windSlotW - 20, 20, 34);
-      const int arrowLenMax = max(arrowLenWave, arrowLenWind);
+      const int arrowLenWind = arrowLenWave;
+      const int arrowLenMax = arrowLenWave;
 
       const int iconH = 14;
       const int waveIconW = 28;
