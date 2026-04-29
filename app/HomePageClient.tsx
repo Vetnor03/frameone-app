@@ -1322,14 +1322,14 @@ async function handleSelectTab(k: TabKey) {
               activeTab={activeTab}
               onSelect={handleSelectTab}
               onReorderModuleTab={(module, toIndex) => {
-                setPinnedModuleTabs((prev) => {
+                setPinnedModuleTabs(() => {
                   const currentModuleOrder = tabs
                     .map((t) => t.key)
                     .filter((k): k is ModuleKey => k !== 'frame' && k !== 'settings')
                   const moved = currentModuleOrder.filter((k) => k !== module)
                   const safeIndex = Math.max(0, Math.min(toIndex, moved.length))
                   moved.splice(safeIndex, 0, module)
-                  const nextPinned = moved.filter((m) => prev.includes(m) || m === module)
+                  const nextPinned = moved
                   markDirty({ pinnedModuleTabs: nextPinned })
                   return nextPinned
                 })
