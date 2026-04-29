@@ -648,8 +648,6 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int panelBottom = c.y + c.h - 10;
     const int panelH = max(24, panelBottom - panelTop);
 
-    d.drawFastVLine(dividerX, panelTop + 2, panelH - 4, ink);
-
     // Left panel: medium-style summary
     const int topPad = 12;
     const int headerNudgeDown = 3;
@@ -669,24 +667,40 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int underlineX = leftX + leftW / 2 - (int)hw / 2;
     d.fillRect(underlineX, underlineY, (int)hw, titleUnderlineH, ink);
 
-    const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
-    const int rowW = max(30, leftW - 20);
-    const int rowX = leftX + (leftW - rowW) / 2;
-    const int colW = rowW / 3;
-    const int rowH = 18;
-    const int rowY = panelBottom - 30;
-    d.drawFastVLine(rowX + colW, rowY - 2, rowH + 4, ink);
-    d.drawFastVLine(rowX + colW * 2, rowY - 2, rowH + 4, ink);
-
-    drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B9, ink);
-    drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B9, ink);
-    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B9, ink);
-
     const int rangeBaselineY = underlineY + titleUnderlineH + 18;
     drawTextCenteredAt(leftX + leftW / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
 
+    // Left stats block: centered rows with even spacing.
+    const int statsTop = rangeBaselineY + 12;
+    const int statsBottom = panelBottom - 8;
+    const int rows = 6;
+    const int spacing = max(12, (statsBottom - statsTop) / max(1, rows - 1));
+    const int valueX = leftX + (leftW / 2) + 16;
+    const int labelX = leftX + (leftW / 2) - 16;
+    drawTextCenteredAt(labelX, statsTop + spacing * 0, "Open", FONT_B9, ink);
+    drawTextCenteredAt(valueX, statsTop + spacing * 0, openTxt, FONT_B9, ink);
+    drawTextCenteredAt(labelX, statsTop + spacing * 1, "High", FONT_B9, ink);
+    drawTextCenteredAt(valueX, statsTop + spacing * 1, highTxt, FONT_B9, ink);
+    drawTextCenteredAt(labelX, statsTop + spacing * 2, "Low", FONT_B9, ink);
+    drawTextCenteredAt(valueX, statsTop + spacing * 2, lowTxt, FONT_B9, ink);
+    drawTextCenteredAt(labelX, statsTop + spacing * 3, "Prev close", FONT_B9, ink);
+    drawTextCenteredAt(valueX, statsTop + spacing * 3, prevCloseTxt, FONT_B9, ink);
+    drawTextCenteredAt(labelX, statsTop + spacing * 4, "Change", FONT_B9, ink);
+    drawTextCenteredAt(valueX, statsTop + spacing * 4, changeTxt, FONT_B9, ink);
+    const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
+    drawTextCenteredAt(labelX, statsTop + spacing * 5, hasPurchase ? "Pos %" : "Range %", FONT_B9, ink);
+    drawTextCenteredAt(valueX, statsTop + spacing * 5, thirdValue, FONT_B9, ink);
+
     // Right panel: chart only
-    drawChartBox(rightX, panelTop, rightW, panelH, data);
+    const int chartInsetX = 10;
+    const int chartInsetY = 14;
+    drawChartBox(
+      rightX + chartInsetX,
+      panelTop + chartInsetY,
+      max(20, rightW - chartInsetX * 2),
+      max(20, panelH - chartInsetY * 2),
+      data
+    );
     return;
   }
 
