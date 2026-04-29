@@ -1528,6 +1528,7 @@ function TabBar({
   const dragStartXRef = useRef<number | null>(null)
   const dragPointerXRef = useRef<number | null>(null)
   const autoScrollRafRef = useRef<number | null>(null)
+  const lastAppliedIndexRef = useRef<number | null>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
   const [draggingModule, setDraggingModule] = useState<ModuleKey | null>(null)
@@ -1616,8 +1617,19 @@ function TabBar({
       })
       .filter(Boolean) as { key: ModuleKey; center: number }[]
     if (!centers.length) return
-    let targetIndex = centers.findIndex((c) => clientX < c.center)
-    if (targetIndex < 0) targetIndex = centers.length
+    const dragIndex = currentOrder.findIndex((k) => k === dragged)
+    if (dragIndex < 0) return
+
+    const deadZone = 8
+    let targetIndex = dragIndex
+    const prev = centers[dragIndex - 1]
+    const next = centers[dragIndex + 1]
+    if (prev && clientX < prev.center - deadZone) targetIndex = dragIndex - 1
+    else if (next && clientX > next.center + deadZone) targetIndex = dragIndex + 1
+
+    if (targetIndex === dragIndex) return
+    if (lastAppliedIndexRef.current === targetIndex) return
+    lastAppliedIndexRef.current = targetIndex
     onReorderModuleTab(dragged, targetIndex)
   }
 
@@ -1626,6 +1638,7 @@ function TabBar({
       if (autoScrollRafRef.current != null) cancelAnimationFrame(autoScrollRafRef.current)
       autoScrollRafRef.current = null
       dragPointerXRef.current = null
+      lastAppliedIndexRef.current = null
       return
     }
     const tick = () => {
