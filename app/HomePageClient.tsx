@@ -1321,6 +1321,19 @@ async function handleSelectTab(k: TabKey) {
               tabs={tabs}
               activeTab={activeTab}
               onSelect={handleSelectTab}
+              onReorderModuleTab={(module, toIndex) => {
+                setPinnedModuleTabs((prev) => {
+                  const currentModuleOrder = tabs
+                    .map((t) => t.key)
+                    .filter((k): k is ModuleKey => k !== 'frame' && k !== 'settings')
+                  const moved = currentModuleOrder.filter((k) => k !== module)
+                  const safeIndex = Math.max(0, Math.min(toIndex, moved.length))
+                  moved.splice(safeIndex, 0, module)
+                  const nextPinned = moved.filter((m) => prev.includes(m) || m === module)
+                  markDirty({ pinnedModuleTabs: nextPinned })
+                  return nextPinned
+                })
+              }}
               getScrollBehavior={() => {
                 const instant = preferInstantScrollRef.current
                 preferInstantScrollRef.current = false
@@ -1500,17 +1513,24 @@ function TabBar({
   tabs,
   activeTab,
   onSelect,
+  onReorderModuleTab,
   getScrollBehavior,
 }: {
   tabs: { key: TabKey; label: string }[]
   activeTab: TabKey
   onSelect: (k: TabKey) => void
+  onReorderModuleTab: (module: ModuleKey, toIndex: number) => void
   getScrollBehavior: () => ScrollBehavior
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const holdTimerRef = useRef<number | null>(null)
+  const dragStartXRef = useRef<number | null>(null)
+  const dragPointerXRef = useRef<number | null>(null)
+  const autoScrollRafRef = useRef<number | null>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
+  const [draggingModule, setDraggingModule] = useState<ModuleKey | null>(null)
 
   function recompute() {
     const el = scrollerRef.current
@@ -1564,6 +1584,65 @@ function TabBar({
     }
   }, [tabs.length])
 
+  const moduleTabs = tabs.filter((t): t is { key: ModuleKey; label: string } => t.key !== 'frame' && t.key !== 'settings')
+
+  function clearHoldTimer() {
+    if (holdTimerRef.current != null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }
+
+  function maybeAutoScrollAt(clientX: number) {
+    const el = scrollerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const edge = 36
+    let delta = 0
+    if (clientX < rect.left + edge) delta = -10
+    else if (clientX > rect.right - edge) delta = 10
+    if (delta !== 0) el.scrollLeft += delta
+  }
+
+  function reorderFromPointer(clientX: number, dragged: ModuleKey) {
+    const currentOrder = moduleTabs.map((m) => m.key)
+    if (!currentOrder.length) return
+    const centers = currentOrder
+      .map((k) => {
+        const node = btnRefs.current[String(k)]
+        if (!node) return null
+        const rect = node.getBoundingClientRect()
+        return { key: k, center: rect.left + rect.width / 2 }
+      })
+      .filter(Boolean) as { key: ModuleKey; center: number }[]
+    if (!centers.length) return
+    let targetIndex = centers.findIndex((c) => clientX < c.center)
+    if (targetIndex < 0) targetIndex = centers.length
+    onReorderModuleTab(dragged, targetIndex)
+  }
+
+  useEffect(() => {
+    if (!draggingModule) {
+      if (autoScrollRafRef.current != null) cancelAnimationFrame(autoScrollRafRef.current)
+      autoScrollRafRef.current = null
+      dragPointerXRef.current = null
+      return
+    }
+    const tick = () => {
+      const x = dragPointerXRef.current
+      if (x != null) {
+        maybeAutoScrollAt(x)
+        reorderFromPointer(x, draggingModule)
+      }
+      autoScrollRafRef.current = requestAnimationFrame(tick)
+    }
+    autoScrollRafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (autoScrollRafRef.current != null) cancelAnimationFrame(autoScrollRafRef.current)
+      autoScrollRafRef.current = null
+    }
+  }, [draggingModule, moduleTabs])
+
   return (
     <div className="relative select-none touch-pan-x">
       {canLeft && (
@@ -1576,18 +1655,47 @@ function TabBar({
       <div ref={scrollerRef} className="flex gap-8 tracking-widest overflow-x-auto overflow-y-hidden tab-scroll pr-6">
         {tabs.map((t) => {
           const isActive = t.key === activeTab
+          const isCoreTab = t.key === 'frame' || t.key === 'settings'
+          const isDragging = !isCoreTab && draggingModule === t.key
           return (
             <button
               key={t.key}
               ref={(node) => {
                 btnRefs.current[String(t.key)] = node
               }}
+              onPointerDown={(event) => {
+                if (isCoreTab) return
+                dragStartXRef.current = event.clientX
+                clearHoldTimer()
+                holdTimerRef.current = window.setTimeout(() => setDraggingModule(t.key as ModuleKey), 350)
+                ;(event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId)
+              }}
+              onPointerMove={(event) => {
+                if (isCoreTab) return
+                dragPointerXRef.current = event.clientX
+                if (draggingModule !== t.key) {
+                  const startX = dragStartXRef.current
+                  if (startX != null && Math.abs(event.clientX - startX) > 8) clearHoldTimer()
+                  return
+                }
+                event.preventDefault()
+              }}
+              onPointerUp={() => {
+                clearHoldTimer()
+                dragStartXRef.current = null
+                if (draggingModule) setDraggingModule(null)
+              }}
+              onPointerCancel={() => {
+                clearHoldTimer()
+                dragStartXRef.current = null
+                if (draggingModule) setDraggingModule(null)
+              }}
               onClick={() => onSelect(t.key)}
-              className={`pb-2 whitespace-nowrap leading-none transition-[color,font-size,font-weight] duration-150 ${
+              className={`pb-2 whitespace-nowrap leading-none transition-[color,font-size,font-weight,opacity] duration-150 ${
                 isActive
                   ? 'text-[#2aa3ff] border-b-2 border-[#2aa3ff] text-[15px] font-semibold'
                   : 'text-[color:var(--fg-70)] text-[13px] font-normal'
-              }`}
+              } ${isDragging ? 'opacity-60' : 'opacity-100'}`}
             >
               <span>{t.label}</span>
             </button>
