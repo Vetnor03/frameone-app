@@ -1527,7 +1527,6 @@ function TabBar({
   const dragStartXRef = useRef<number | null>(null)
   const dragPointerXRef = useRef<number | null>(null)
   const autoScrollRafRef = useRef<number | null>(null)
-  const lastAppliedIndexRef = useRef<number | null>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
   const [draggingModule, setDraggingModule] = useState<ModuleKey | null>(null)
@@ -1604,9 +1603,9 @@ function TabBar({
     if (delta !== 0) el.scrollLeft += delta
   }
 
-  function reorderFromPointer(clientX: number, dragged: ModuleKey) {
-    const currentOrder = moduleTabs.map((m) => m.key)
-    if (!currentOrder.length) return
+  function computeDropIndex(clientX: number, dragged: ModuleKey) {
+    const currentOrder = moduleTabs.map((m) => m.key).filter((k) => k !== dragged)
+    if (!currentOrder.length) return 0
     const centers = currentOrder
       .map((k) => {
         const node = btnRefs.current[String(k)]
@@ -1615,21 +1614,9 @@ function TabBar({
         return { key: k, center: rect.left + rect.width / 2 }
       })
       .filter(Boolean) as { key: ModuleKey; center: number }[]
-    if (!centers.length) return
-    const dragIndex = currentOrder.findIndex((k) => k === dragged)
-    if (dragIndex < 0) return
-
-    const deadZone = 8
-    let targetIndex = dragIndex
-    const prev = centers[dragIndex - 1]
-    const next = centers[dragIndex + 1]
-    if (prev && clientX < prev.center - deadZone) targetIndex = dragIndex - 1
-    else if (next && clientX > next.center + deadZone) targetIndex = dragIndex + 1
-
-    if (targetIndex === dragIndex) return
-    if (lastAppliedIndexRef.current === targetIndex) return
-    lastAppliedIndexRef.current = targetIndex
-    onReorderModuleTab(dragged, targetIndex)
+    if (!centers.length) return 0
+    const index = centers.findIndex((c) => clientX < c.center)
+    return index < 0 ? centers.length : index
   }
 
   useEffect(() => {
@@ -1637,15 +1624,11 @@ function TabBar({
       if (autoScrollRafRef.current != null) cancelAnimationFrame(autoScrollRafRef.current)
       autoScrollRafRef.current = null
       dragPointerXRef.current = null
-      lastAppliedIndexRef.current = null
       return
     }
     const tick = () => {
       const x = dragPointerXRef.current
-      if (x != null) {
-        maybeAutoScrollAt(x)
-        reorderFromPointer(x, draggingModule)
-      }
+      if (x != null) maybeAutoScrollAt(x)
       autoScrollRafRef.current = requestAnimationFrame(tick)
     }
     autoScrollRafRef.current = requestAnimationFrame(tick)
@@ -1695,7 +1678,14 @@ function TabBar({
               onPointerUp={() => {
                 clearHoldTimer()
                 dragStartXRef.current = null
-                if (draggingModule) setDraggingModule(null)
+                if (draggingModule) {
+                  const dropX = dragPointerXRef.current
+                  if (dropX != null) {
+                    const targetIndex = computeDropIndex(dropX, draggingModule)
+                    onReorderModuleTab(draggingModule, targetIndex)
+                  }
+                  setDraggingModule(null)
+                }
               }}
               onPointerCancel={() => {
                 clearHoldTimer()
