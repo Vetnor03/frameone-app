@@ -637,66 +637,56 @@ static void drawLive(const Cell& c, const StockCache& data) {
 
   if (c.size == CELL_LARGE) {
     const uint16_t ink = Theme::ink();
-    const int padX = 16;
-    const int headerTop = c.y + 18;
+    const int panelPad = 14;
+    const int splitGap = 6;
+    const int dividerX = c.x + c.w / 2;
+    const int leftX = c.x + panelPad;
+    const int leftW = max(24, dividerX - splitGap - leftX);
+    const int rightX = dividerX + splitGap;
+    const int rightW = max(24, c.x + c.w - panelPad - rightX);
+    const int panelTop = c.y + 10;
+    const int panelBottom = c.y + c.h - 10;
+    const int panelH = max(24, panelBottom - panelTop);
+
+    d.drawFastVLine(dividerX, panelTop + 2, panelH - 4, ink);
+
+    // Left panel: medium-style summary
+    const int topPad = 12;
+    const int headerNudgeDown = 3;
+    const int titleUnderlineGap = 4;
+    const int titleUnderlineH = 2;
 
     char titleFit[64] = {0};
-    fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - padX * 2, FONT_B12);
-    drawTextCenteredAt(c.x + c.w / 2, headerTop, titleFit, FONT_B12, ink);
+    fitTextToWidth(title, titleFit, sizeof(titleFit), leftW - 12, FONT_B12);
 
-    const int rangeBaseline = headerTop + 17;
-    drawTextCenteredAt(c.x + c.w / 2, rangeBaseline, rangeLabel(data.chartRange), FONT_B9, ink);
+    int16_t hx1, hy1;
+    uint16_t hw, hh;
+    measureText(titleFit, FONT_B12, hx1, hy1, hw, hh);
+    const int titleBaseline = panelTop + topPad - hy1 + headerNudgeDown;
+    drawTextCenteredAt(leftX + leftW / 2, titleBaseline, titleFit, FONT_B12, ink);
+
+    const int underlineY = (titleBaseline + hy1) + (int)hh + titleUnderlineGap;
+    const int underlineX = leftX + leftW / 2 - (int)hw / 2;
+    d.fillRect(underlineX, underlineY, (int)hw, titleUnderlineH, ink);
 
     const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
-    const int rowW = c.w - 48;
-    const int rowX = c.x + (c.w - rowW) / 2;
+    const int rowW = max(30, leftW - 20);
+    const int rowX = leftX + (leftW - rowW) / 2;
     const int colW = rowW / 3;
-    const int rowY = rangeBaseline + 9;
-    const int rowH = 16;
+    const int rowH = 18;
+    const int rowY = panelBottom - 30;
     d.drawFastVLine(rowX + colW, rowY - 2, rowH + 4, ink);
     d.drawFastVLine(rowX + colW * 2, rowY - 2, rowH + 4, ink);
-    drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B12, ink);
-    drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B12, ink);
-    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B12, ink);
 
-    const int contentTop = rowY + rowH + 10;
-    const int contentBottom = c.y + c.h - 12;
-    const int contentH = max(24, contentBottom - contentTop);
-    const int statsX = c.x + padX;
-    const int statsW = (c.w * 38) / 100;
-    const int chartX = statsX + statsW + 8;
-    const int chartW = max(24, c.x + c.w - padX - chartX);
+    drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B9, ink);
+    drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B9, ink);
+    drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B9, ink);
 
-    const int statsTop = contentTop + max(0, (contentH - 40) / 2);
-    if (hasPurchase) {
-      char avgBuyTxt[24] = {0};
-      formatPrice(avgBuyTxt, sizeof(avgBuyTxt), data.purchasePrice);
-      drawLeft(statsX, statsTop, "Avg buy", FONT_B9, ink);
-      drawLeft(statsX + 54, statsTop, avgBuyTxt, FONT_B9, ink);
-      drawLeft(statsX, statsTop + 14, "Position", FONT_B9, ink);
-      drawLeft(statsX + 54, statsTop + 14, posPctTxt, FONT_B9, ink);
-      drawLeft(statsX, statsTop + 28, "Gain", FONT_B9, ink);
-      drawLeft(statsX + 54, statsTop + 28, changeTxt, FONT_B9, ink);
-    } else {
-      drawLeft(statsX, statsTop, "Open", FONT_B9, ink);
-      drawLeft(statsX + 42, statsTop, openTxt, FONT_B9, ink);
-      drawLeft(statsX, statsTop + 14, "High", FONT_B9, ink);
-      drawLeft(statsX + 42, statsTop + 14, highTxt, FONT_B9, ink);
-      drawLeft(statsX, statsTop + 28, "Low", FONT_B9, ink);
-      drawLeft(statsX + 42, statsTop + 28, lowTxt, FONT_B9, ink);
+    const int rangeBaselineY = underlineY + titleUnderlineH + 18;
+    drawTextCenteredAt(leftX + leftW / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
 
-      const int rightStatsX = statsX + 118;
-      if (rightStatsX + 100 <= chartX - 6) {
-        drawLeft(rightStatsX, statsTop, "Prev close", FONT_B9, ink);
-        drawLeft(rightStatsX + 58, statsTop, prevCloseTxt, FONT_B9, ink);
-        drawLeft(rightStatsX, statsTop + 14, "Change", FONT_B9, ink);
-        drawLeft(rightStatsX + 58, statsTop + 14, changeTxt, FONT_B9, ink);
-        drawLeft(rightStatsX, statsTop + 28, "Day %", FONT_B9, ink);
-        drawLeft(rightStatsX + 58, statsTop + 28, dayPctTxt, FONT_B9, ink);
-      }
-    }
-
-    drawChartBox(chartX, contentTop, chartW, contentH, data);
+    // Right panel: chart only
+    drawChartBox(rightX, panelTop, rightW, panelH, data);
     return;
   }
 
