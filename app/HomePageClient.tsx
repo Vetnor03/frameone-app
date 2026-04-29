@@ -1701,7 +1701,7 @@ function TabBar({
   }
 
   return (
-    <div className="relative select-none touch-pan-x">
+    <div className={`relative select-none ${draggingModule ? 'touch-none' : 'touch-pan-x'}`} style={{ touchAction: draggingModule ? 'none' : 'pan-x' }}>
       {canLeft && (
         <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-6 bg-gradient-to-r from-[color:var(--app-bg)] to-transparent" />
       )}
@@ -1709,7 +1709,10 @@ function TabBar({
         <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-10 bg-gradient-to-l from-[color:var(--app-bg)] to-transparent" />
       )}
 
-      <div ref={scrollerRef} className="flex gap-8 tracking-widest overflow-x-auto overflow-y-hidden tab-scroll pr-6">
+      <div
+        ref={scrollerRef}
+        className={`flex gap-8 tracking-widest overflow-y-hidden tab-scroll pr-6 ${draggingModule ? 'overflow-x-hidden' : 'overflow-x-auto'}`}
+      >
         {renderTabs.map((t) => {
           const isActive = t.key === activeTab
           const isCoreTab = t.key === 'frame' || t.key === 'settings'
