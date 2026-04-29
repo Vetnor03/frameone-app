@@ -1530,6 +1530,7 @@ function TabBar({
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
   const [draggingModule, setDraggingModule] = useState<ModuleKey | null>(null)
+  const [draftModuleOrder, setDraftModuleOrder] = useState<ModuleKey[] | null>(null)
 
   function recompute() {
     const el = scrollerRef.current
@@ -1584,6 +1585,13 @@ function TabBar({
   }, [tabs.length])
 
   const moduleTabs = tabs.filter((t): t is { key: ModuleKey; label: string } => t.key !== 'frame' && t.key !== 'settings')
+  const tabByKey = useMemo(() => Object.fromEntries(tabs.map((t) => [String(t.key), t])), [tabs])
+  const renderTabs = useMemo(() => {
+    const modules = (draftModuleOrder ?? moduleTabs.map((m) => m.key))
+      .map((k) => tabByKey[String(k)])
+      .filter(Boolean) as { key: TabKey; label: string }[]
+    return [tabByKey.frame, ...modules, tabByKey.settings].filter(Boolean) as { key: TabKey; label: string }[]
+  }, [draftModuleOrder, moduleTabs, tabByKey])
 
   function clearHoldTimer() {
     if (holdTimerRef.current != null) {
@@ -1604,7 +1612,7 @@ function TabBar({
   }
 
   function computeDropIndex(clientX: number, dragged: ModuleKey) {
-    const currentOrder = moduleTabs.map((m) => m.key).filter((k) => k !== dragged)
+    const currentOrder = (draftModuleOrder ?? moduleTabs.map((m) => m.key)).filter((k) => k !== dragged)
     if (!currentOrder.length) return 0
     const centers = currentOrder
       .map((k) => {
@@ -1638,6 +1646,30 @@ function TabBar({
     }
   }, [draggingModule, moduleTabs])
 
+  function updateDraftOrder(clientX: number, dragged: ModuleKey) {
+    setDraftModuleOrder((prev) => {
+      const order = [...(prev ?? moduleTabs.map((m) => m.key))]
+      const from = order.indexOf(dragged)
+      if (from < 0) return order
+      let to = from
+      for (let i = 0; i < order.length; i += 1) {
+        if (order[i] === dragged) continue
+        const node = btnRefs.current[String(order[i])]
+        if (!node) continue
+        const rect = node.getBoundingClientRect()
+        if (clientX < rect.left + rect.width / 2) {
+          to = i
+          break
+        }
+        to = i + 1
+      }
+      if (to === from) return order
+      const next = order.filter((k) => k !== dragged)
+      next.splice(to > from ? to - 1 : to, 0, dragged)
+      return next
+    })
+  }
+
   return (
     <div className="relative select-none touch-pan-x">
       {canLeft && (
@@ -1648,7 +1680,7 @@ function TabBar({
       )}
 
       <div ref={scrollerRef} className="flex gap-8 tracking-widest overflow-x-auto overflow-y-hidden tab-scroll pr-6">
-        {tabs.map((t) => {
+        {renderTabs.map((t) => {
           const isActive = t.key === activeTab
           const isCoreTab = t.key === 'frame' || t.key === 'settings'
           const isDragging = !isCoreTab && draggingModule === t.key
@@ -1663,6 +1695,7 @@ function TabBar({
                 dragStartXRef.current = event.clientX
                 clearHoldTimer()
                 holdTimerRef.current = window.setTimeout(() => setDraggingModule(t.key as ModuleKey), 350)
+                setDraftModuleOrder(moduleTabs.map((m) => m.key))
                 ;(event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId)
               }}
               onPointerMove={(event) => {
@@ -1674,22 +1707,29 @@ function TabBar({
                   return
                 }
                 event.preventDefault()
+                updateDraftOrder(event.clientX, draggingModule)
               }}
               onPointerUp={() => {
                 clearHoldTimer()
                 dragStartXRef.current = null
                 if (draggingModule) {
                   const dropX = dragPointerXRef.current
-                  if (dropX != null) {
+                  const draft = draftModuleOrder
+                  if (draft && draft.length) {
+                    const finalIndex = draft.indexOf(draggingModule)
+                    onReorderModuleTab(draggingModule, Math.max(0, finalIndex))
+                  } else if (dropX != null) {
                     const targetIndex = computeDropIndex(dropX, draggingModule)
                     onReorderModuleTab(draggingModule, targetIndex)
                   }
+                  setDraftModuleOrder(null)
                   setDraggingModule(null)
                 }
               }}
               onPointerCancel={() => {
                 clearHoldTimer()
                 dragStartXRef.current = null
+                setDraftModuleOrder(null)
                 if (draggingModule) setDraggingModule(null)
               }}
               onClick={() => onSelect(t.key)}
