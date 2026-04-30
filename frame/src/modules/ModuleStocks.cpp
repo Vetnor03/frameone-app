@@ -717,11 +717,10 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int underlineX = leftX + leftW / 2 - (int)hw / 2;
     d.fillRect(underlineX, underlineY, (int)hw, titleUnderlineH, ink);
 
-    const int rangeBaselineY = underlineY + titleUnderlineH + 18;
-    drawTextCenteredAt(leftX + leftW / 2, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
+    const int leftSummaryTop = underlineY + titleUnderlineH + 18;
 
     // Left stats block: centered rows with even spacing.
-    const int statsTop = rangeBaselineY + 12;
+    const int statsTop = leftSummaryTop + 12;
     const int statsBottom = panelBottom - 8;
     const int rows = 6;
     const int spacing = max(12, (statsBottom - statsTop) / max(1, rows - 1));
@@ -741,14 +740,26 @@ static void drawLive(const Cell& c, const StockCache& data) {
     drawTextCenteredAt(labelX, statsTop + spacing * 5, hasPurchase ? "Pos %" : "Range %", FONT_B9, ink);
     drawTextCenteredAt(valueX, statsTop + spacing * 5, thirdValue, FONT_B9, ink);
 
-    // Right panel: chart only
+    // Right panel: chart with range label above plot area.
     const int chartInsetX = 10;
-    const int chartInsetY = 14;
+    const int chartInsetTop = 14;
+    const int chartBottomPad = 14;
+    const int rangeBaselineY = panelTop + chartInsetTop;
+    const int labelCenterX = rightX + 68 / 2;
+    drawTextCenteredAt(labelCenterX, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
+
+    int16_t rangeX1, rangeY1;
+    uint16_t rangeW, rangeH;
+    measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
+
+    const int chartTopGap = 8;
+    const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
+    const int chartH = max(20, panelBottom - chartBottomPad - chartY);
     drawChartBox(
       rightX + chartInsetX,
-      panelTop + chartInsetY,
+      chartY,
       max(20, rightW - chartInsetX * 2),
-      max(20, panelH - chartInsetY * 2),
+      chartH,
       data
     );
     return;
