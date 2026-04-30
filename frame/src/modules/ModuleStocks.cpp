@@ -227,6 +227,53 @@ static bool hasPurchaseData(const StockCache& data) {
   return false;
 }
 
+static bool getReferenceLineValue(const StockCache& data, float& outValue) {
+  outValue = NAN;
+
+  // Keep purchase-aware safety gate: only use purchase price when purchase
+  // data is explicitly enabled and valid.
+  if (hasPurchaseData(data) && isfinite(data.purchasePrice) && data.purchasePrice > 0.0f) {
+    outValue = data.purchasePrice;
+    return true;
+  }
+
+  // Default market reference line: previous close.
+  if (isfinite(data.previousClose) && data.previousClose > 0.0f) {
+    outValue = data.previousClose;
+    return true;
+  }
+
+  return false;
+}
+
+static void drawReferenceLine(int x, int y, int w, int h,
+                              float minValue, float maxValue,
+                              const StockCache& data) {
+  if (w <= 1 || h <= 1) return;
+  if (!isfinite(minValue) || !isfinite(maxValue)) return;
+
+  float referenceValue = NAN;
+  if (!getReferenceLineValue(data, referenceValue)) return;
+  if (!isfinite(referenceValue) || referenceValue <= 0.0f) return;
+  if (referenceValue < minValue || referenceValue > maxValue) return;
+
+  float span = maxValue - minValue;
+  if (span < 0.0001f) return;
+
+  auto& d = DisplayCore::get();
+  const uint16_t refCol = Theme::ink();
+  const int py = y + h - (int)roundf(((referenceValue - minValue) / span) * (float)(h - 1));
+
+  if (py < y || py > (y + h - 1)) return;
+
+  // Subtle dashed line (short segment + wider gap), clipped to plot bounds.
+  for (int px = x; px <= (x + w - 1); px += 6) {
+    int segW = 2;
+    if (px + segW > x + w) segW = (x + w) - px;
+    if (segW > 0) d.drawFastHLine(px, py, segW, refCol);
+  }
+}
+
 static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   if (w <= 6 || h <= 6 || data.seriesCount < 2) {
     drawCenteredLine(x, y, w, h, "No chart data", FONT_B9, Theme::ink());
@@ -247,6 +294,9 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   float span = mx - mn;
   if (span < 0.0001f) span = 1.0f;
   auto& d = DisplayCore::get();
+
+  // Draw reference line behind price stroke.
+  drawReferenceLine(innerX, innerY, innerW, innerH, mn, mx, data);
 
   const int n = (int)data.seriesCount;
   int prevX = innerX;
