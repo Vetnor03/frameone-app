@@ -795,9 +795,17 @@ static void drawLive(const Cell& c, const StockCache& data) {
   drawLeft(rightColX + labelW, statsY + 28, dayPctTxt, FONT_B9, ink);
 
   const int chartX = c.x + 20;
-  const int chartY = statsY + 40;
   const int chartW = c.w - 40;
-  const int chartH = max(30, c.y + c.h - 20 - chartY);
+  const int rangeBaselineY = statsY + 44;
+  drawTextCenteredAt(rightColX + (labelW / 2), rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
+
+  int16_t rangeX1, rangeY1;
+  uint16_t rangeW, rangeH;
+  measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
+  const int chartTopGap = 8;
+  const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
+  const int chartBottomPad = 24;
+  const int chartH = max(26, c.y + c.h - chartBottomPad - chartY);
   drawChartBox(chartX, chartY, chartW, chartH, data);
 }
 
