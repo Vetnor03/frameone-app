@@ -5982,7 +5982,6 @@ const normalizedTime = normalizeReminderTime(time)
 
   async function completeReminderFromEditor() {
     if (!editingReminder) return
-    let didComplete = false
     try {
       setCompleting(true)
       setStatus(null)
@@ -6002,17 +6001,16 @@ const normalizedTime = normalizeReminderTime(time)
           )
         if (error) throw error
       }
-      didComplete = true
       onCompleted?.({ reminderId: editingReminder.id, occurrenceDate: date, repeat: editingReminder.repeat })
+      setConfirmCompleteOpen(false)
       onClose()
       void onSaved()
     } catch (e: any) {
+      setConfirmCompleteOpen(false)
       setStatusKind('error')
       setStatus(String(e?.message || e))
     } finally {
       setCompleting(false)
-      setConfirmCompleteOpen(false)
-      if (didComplete) onClose()
     }
   }
 
