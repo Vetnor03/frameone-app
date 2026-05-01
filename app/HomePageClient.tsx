@@ -4375,6 +4375,16 @@ function groceryIsVisible(item: GroceryItem, nowMs: number) {
   return nowMs - new Date(item.checkedAt).getTime() < GROCERY_UNDO_WINDOW_MS
 }
 
+function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs: number) {
+  if (!checkedAt) return language === 'no' ? 'Kan angres i 24t' : 'You can undo for 24h'
+  const elapsedMs = Math.max(0, nowMs - new Date(checkedAt).getTime())
+  const remainingHours = (GROCERY_UNDO_WINDOW_MS - elapsedMs) / (60 * 60 * 1000)
+
+  const hourBucket = remainingHours > 5 ? 24 : remainingHours > 2 ? 5 : remainingHours > 1 ? 2 : 1
+  if (language === 'no') return `Kan angres i ${hourBucket}t`
+  return `You can undo for ${hourBucket}h`
+}
+
 function GroceriesModuleSettingsTab({
   language,
   activeDeviceId,
@@ -4899,7 +4909,9 @@ function GroceriesModuleSettingsTab({
                     {item.name}
                   </div>
                   {item.isChecked ? (
-                    <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{t.groceriesUntickHint}</div>
+                    <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">
+                      {groceryUndoHint(language, item.checkedAt, nowMs)}
+                    </div>
                   ) : null}
                 </div>
                 <div className="shrink-0 flex items-center gap-2.5">
