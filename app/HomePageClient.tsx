@@ -6002,8 +6002,8 @@ const normalizedTime = normalizeReminderTime(time)
         if (error) throw error
       }
       onCompleted?.({ reminderId: editingReminder.id, occurrenceDate: date, repeat: editingReminder.repeat })
-      await onSaved()
       onClose()
+      await onSaved()
     } catch (e: any) {
       setStatusKind('error')
       setStatus(String(e?.message || e))
