@@ -5205,6 +5205,7 @@ function RemindersModuleSettingsTab({
   activeDeviceId: string | null
 }) {
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
+  const [completions, setCompletions] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
 
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -5221,6 +5222,7 @@ function RemindersModuleSettingsTab({
 
   const [calendarAnimClass, setCalendarAnimClass] = useState('')
   const calendarAnimTimerRef = useRef<number | null>(null)
+  const [openSwipeKey, setOpenSwipeKey] = useState<string | null>(null)
 
   const todayYmd = toLocalYmd(new Date())
     async function loadReminders() {
@@ -5232,18 +5234,25 @@ function RemindersModuleSettingsTab({
     try {
       setLoading(true)
 
-      const { data, error } = await supabase
+      const [{ data, error }, completionRes] = await Promise.all([
+        supabase
         .from('reminders')
         .select('id, title, due_date, due_time, tag, repeat_type, custom_repeat_days, is_done')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
         .order('due_time', { ascending: true, nullsFirst: false })
-        .order('title', { ascending: true })
+        .order('title', { ascending: true }),
+        supabase
+          .from('reminder_completions')
+          .select('reminder_id, occurrence_date')
+          .eq('device_id', activeDeviceId),
+      ])
 
       if (error) {
         alert(error.message)
         setReminders([])
+        setCompletions([])
         return
       }
 
@@ -5263,6 +5272,11 @@ const items: ReminderUiItem[] = (data || [])
   .filter((x) => x.title && x.date)
 
       setReminders(items)
+      const completionItems: ReminderCompletionItem[] = (completionRes.data || []).map((row: any) => ({
+        reminderId: String(row.reminder_id ?? ''),
+        occurrenceDate: String(row.occurrence_date ?? ''),
+      })).filter((x) => x.reminderId && x.occurrenceDate)
+      setCompletions(completionItems)
     } finally {
       setLoading(false)
     }
@@ -5325,8 +5339,11 @@ const items: ReminderUiItem[] = (data || [])
   }, [reminders, tagFilter])
 
   const visibleOccurrences = useMemo(() => {
-    return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
-  }, [filteredReminders, gridStartYmd, gridEndYmd])
+    return filterCompletedOccurrences(
+      expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180),
+      completions
+    )
+  }, [filteredReminders, gridStartYmd, gridEndYmd, completions])
 
   const reminderDotsByDay = useMemo(() => {
     const map: Record<string, number> = {}
@@ -5397,8 +5414,11 @@ const items: ReminderUiItem[] = (data || [])
   }, [])
 
   const allListOccurrences = useMemo(() => {
-    return expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
-  }, [filteredReminders, todayYmd, listRangeEnd])
+    return filterCompletedOccurrences(
+      expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160),
+      completions
+    )
+  }, [filteredReminders, todayYmd, listRangeEnd, completions])
 
   function getNextOccurrenceOnOrAfter(item: ReminderUiItem, fromYmd: string) {
     const occurrences = expandReminderOccurrences([item], fromYmd, listRangeEnd, 160)
@@ -5505,6 +5525,32 @@ const sortedReminders = useMemo(() => {
 
     if (diff < 0) moveMonth(1)
     else moveMonth(-1)
+  }
+
+  async function completeReminderOccurrence(reminder: ReminderUiItem, occurrenceDate: string) {
+    if (!activeDeviceId) return
+    const completionKey = `${reminder.id}__${occurrenceDate}`
+    const isOneTime = reminder.repeat === 'none'
+
+    setCompletions((prev) => {
+      if (prev.some((x) => `${x.reminderId}__${x.occurrenceDate}` === completionKey)) return prev
+      return [...prev, { reminderId: reminder.id, occurrenceDate }]
+    })
+    setOpenSwipeKey(null)
+    if (isOneTime) setReminders((prev) => prev.filter((x) => x.id !== reminder.id))
+
+    const { error } = isOneTime
+      ? await supabase.from('reminders').update({ is_done: true }).eq('id', reminder.id).eq('device_id', activeDeviceId)
+      : await supabase.from('reminder_completions').insert({
+          device_id: activeDeviceId,
+          reminder_id: reminder.id,
+          occurrence_date: occurrenceDate,
+        })
+
+    if (error) {
+      alert(error.message)
+      await loadReminders()
+    }
   }
 
   const addDate = selectedDayYmd || todayYmd
@@ -5676,9 +5722,23 @@ const sortedReminders = useMemo(() => {
                 </div>
               ) : (
                 <div className="divide-y divide-[color:var(--bd-10)]">
-                  {sortedReminders.map((item) => (
+                  {sortedReminders.map((item) => {
+                    const swipeKey = `${item.id}__${item.displayDate}`
+                    const isSwipeOpen = openSwipeKey === swipeKey
+                    return (
+                    <div key={swipeKey} className="relative overflow-hidden">
+                      <div className="absolute inset-y-1.5 right-0 flex items-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void completeReminderOccurrence(item, item.displayDate)
+                          }}
+                          className="h-full w-[106px] rounded-xl bg-gradient-to-r from-[#1f7a43] to-[#24a75a] text-white/95 text-[11px] tracking-widest shadow-[0_8px_22px_rgba(24,168,90,0.35)]"
+                        >
+                          {language === 'no' ? 'FULLFØR' : 'COMPLETE'}
+                        </button>
+                      </div>
                     <div
-                      key={item.id}
                       role="button"
                       tabIndex={0}
                       onClick={() => selectReminderDate(item.displayDate)}
@@ -5688,7 +5748,18 @@ const sortedReminders = useMemo(() => {
                           selectReminderDate(item.displayDate)
                         }
                       }}
-                      className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
+                      onTouchStart={(e) => {
+                        const startX = e.touches[0]?.clientX ?? 0
+                        ;(e.currentTarget as any).dataset.swipeStartX = String(startX)
+                      }}
+                      onTouchEnd={(e) => {
+                        const startX = Number((e.currentTarget as any).dataset.swipeStartX ?? '0')
+                        const endX = e.changedTouches[0]?.clientX ?? startX
+                        const delta = startX - endX
+                        if (delta > 36) setOpenSwipeKey(swipeKey)
+                        else if (delta < -24) setOpenSwipeKey(null)
+                      }}
+                      className={`relative z-10 flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer transition-transform duration-180 ease-out ${isSwipeOpen ? '-translate-x-[92px]' : 'translate-x-0'} bg-[color:var(--panel-05)]`}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
@@ -5715,7 +5786,8 @@ const sortedReminders = useMemo(() => {
                         </button>
                       </div>
                     </div>
-                  ))}
+                    </div>
+                  )})}
                 </div>
               )}
             </div>

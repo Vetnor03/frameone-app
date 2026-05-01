@@ -27,6 +27,10 @@ type ReminderRow = {
   custom_repeat_days: number | null
   is_done: boolean | null
 }
+type ReminderCompletionRow = {
+  reminder_id: string
+  occurrence_date: string
+}
 
 type DeviceReminderItem = {
   reminder_id: string
@@ -302,7 +306,8 @@ function buildOccurrencesForRow(
   todayYmd: string,
   nowHm: string,
   horizonEndYmd: string,
-  includeOverdue: boolean
+  includeOverdue: boolean,
+  completionKeys: Set<string>
 ): DeviceReminderItem[] {
   const title = String(row.title ?? '').trim()
   const dueDate = String(row.due_date ?? '').trim()
@@ -318,6 +323,7 @@ function buildOccurrencesForRow(
   const items: DeviceReminderItem[] = []
 
   const addOccurrence = (occurrenceYmd: string) => {
+    if (completionKeys.has(`${row.id}__${occurrenceYmd}`)) return
     if (isTimedOccurrenceAlreadyPassed(occurrenceYmd, dueTime, todayYmd, nowHm)) {
       return
     }
@@ -396,13 +402,19 @@ export async function GET(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const { data, error } = await supabase
+    const [{ data, error }, completionResult] = await Promise.all([
+      supabase
       .from('reminders')
       .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
       .eq('device_id', device_id)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
-      .order('title', { ascending: true })
+      .order('title', { ascending: true }),
+      supabase
+        .from('reminder_completions')
+        .select('reminder_id, occurrence_date')
+        .eq('device_id', device_id),
+    ])
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -418,9 +430,13 @@ export async function GET(req: Request) {
 
     const horizonEndYmd = toLocalYmd(addDaysLocal(today, horizonDays))
     const rows = Array.isArray(data) ? (data as ReminderRow[]) : []
+    const completionRows = Array.isArray(completionResult.data) ? (completionResult.data as ReminderCompletionRow[]) : []
+    const completionKeys = new Set(
+      completionRows.map((x) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`)
+    )
 
     const items: DeviceReminderItem[] = rows
-      .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue))
+      .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue, completionKeys))
       .sort((a, b) => {
         if (a.days_until !== b.days_until) return a.days_until - b.days_until
         if (a.occurrence_date < b.occurrence_date) return -1
