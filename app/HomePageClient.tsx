@@ -5990,6 +5990,7 @@ const normalizedTime = normalizeReminderTime(time)
         if (error) throw error
       }
       await onSaved()
+      onClose()
     } catch (e: any) {
       setStatusKind('error')
       setStatus(String(e?.message || e))
