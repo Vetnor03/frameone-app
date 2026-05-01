@@ -5792,6 +5792,16 @@ const sortedReminders = useMemo(() => {
             setEditingReminder(null)
             await loadReminders()
           }}
+          onCompleted={({ reminderId, occurrenceDate, repeat }) => {
+            if (repeat === 'none') {
+              setReminders((prev) => prev.filter((x) => x.id !== reminderId))
+              return
+            }
+            setCompletedOccurrences((prev) => {
+              if (prev.some((x) => x.reminderId === reminderId && x.occurrenceDate === occurrenceDate)) return prev
+              return [...prev, { reminderId, occurrenceDate }]
+            })
+          }}
         />
       )}
     </>
@@ -5806,6 +5816,7 @@ function ReminderDraftSheet({
   onClose,
   onSaved,
   onDeleted,
+  onCompleted,
 }: {
   language: AppLanguage
   activeDeviceId: string
@@ -5814,6 +5825,7 @@ function ReminderDraftSheet({
   onClose: () => void
   onSaved: () => void | Promise<void>
   onDeleted: () => void | Promise<void>
+  onCompleted?: (completion: { reminderId: string; occurrenceDate: string; repeat: ReminderRepeatKey }) => void
 }) {
 const [title, setTitle] = useState(editingReminder?.title ?? '')
 const [date, setDate] = useState(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
@@ -5985,17 +5997,20 @@ const normalizedTime = normalizeReminderTime(time)
           .from('reminder_completions')
           .upsert(
             { device_id: activeDeviceId, reminder_id: editingReminder.id, occurrence_date: date },
-            { onConflict: 'reminder_id,occurrence_date' }
+            { onConflict: 'reminder_id,occurrence_date', ignoreDuplicates: true }
           )
         if (error) throw error
       }
-      await onSaved()
+      onCompleted?.({ reminderId: editingReminder.id, occurrenceDate: date, repeat: editingReminder.repeat })
+      setConfirmCompleteOpen(false)
+      onClose()
+      void onSaved()
     } catch (e: any) {
+      setConfirmCompleteOpen(false)
       setStatusKind('error')
       setStatus(String(e?.message || e))
     } finally {
       setCompleting(false)
-      setConfirmCompleteOpen(false)
     }
   }
 
