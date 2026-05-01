@@ -5223,6 +5223,8 @@ function RemindersModuleSettingsTab({
   const [calendarAnimClass, setCalendarAnimClass] = useState('')
   const calendarAnimTimerRef = useRef<number | null>(null)
   const [openSwipeKey, setOpenSwipeKey] = useState<string | null>(null)
+  const [completeConfirm, setCompleteConfirm] = useState<ReminderEditState>(null)
+  const [completing, setCompleting] = useState(false)
 
   const todayYmd = toLocalYmd(new Date())
     async function loadReminders() {
@@ -5527,6 +5529,10 @@ const sortedReminders = useMemo(() => {
     else moveMonth(-1)
   }
 
+  function requestCompleteReminderOccurrence(reminder: ReminderUiItem, occurrenceDate: string) {
+    setCompleteConfirm({ reminder, occurrenceDate })
+  }
+
   async function completeReminderOccurrence(reminder: ReminderUiItem, occurrenceDate: string) {
     if (!activeDeviceId) return
     const completionKey = `${reminder.id}__${occurrenceDate}`
@@ -5539,6 +5545,7 @@ const sortedReminders = useMemo(() => {
     setOpenSwipeKey(null)
     if (isOneTime) setReminders((prev) => prev.filter((x) => x.id !== reminder.id))
 
+    setCompleting(true)
     const { error } = isOneTime
       ? await supabase.from('reminders').update({ is_done: true }).eq('id', reminder.id).eq('device_id', activeDeviceId)
       : await supabase.from('reminder_completions').insert({
@@ -5546,6 +5553,7 @@ const sortedReminders = useMemo(() => {
           reminder_id: reminder.id,
           occurrence_date: occurrenceDate,
         })
+    setCompleting(false)
 
     if (error) {
       alert(error.message)
@@ -5727,13 +5735,13 @@ const sortedReminders = useMemo(() => {
                     const isSwipeOpen = openSwipeKey === swipeKey
                     return (
                     <div key={swipeKey} className="relative overflow-hidden">
-                      <div className="absolute inset-y-1.5 right-0 flex items-center">
+                      <div className={`absolute inset-y-1.5 right-0 flex items-center transition-opacity duration-150 ${isSwipeOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            void completeReminderOccurrence(item, item.displayDate)
+                            requestCompleteReminderOccurrence(item, item.displayDate)
                           }}
-                          className="h-full w-[106px] rounded-xl bg-gradient-to-r from-[#1f7a43] to-[#24a75a] text-white/95 text-[11px] tracking-widest shadow-[0_8px_22px_rgba(24,168,90,0.35)]"
+                          className="h-full w-[106px] rounded-r-xl rounded-l-sm bg-[#2fbe66] text-white text-[11px] tracking-[0.22em]"
                         >
                           {language === 'no' ? 'FULLFØR' : 'COMPLETE'}
                         </button>
@@ -5760,6 +5768,7 @@ const sortedReminders = useMemo(() => {
                         else if (delta < -24) setOpenSwipeKey(null)
                       }}
                       className={`relative z-10 flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer transition-transform duration-180 ease-out ${isSwipeOpen ? '-translate-x-[92px]' : 'translate-x-0'} bg-[color:var(--panel-05)]`}
+                      style={{ touchAction: 'pan-y' }}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
@@ -5793,7 +5802,7 @@ const sortedReminders = useMemo(() => {
             </div>
           </div>
 
-          <div className="py-5 flex flex-col items-center relative z-20">
+      <div className="py-5 flex flex-col items-center relative z-20">
             <button
               onClick={() => {
                 setEditingReminder({
@@ -6406,10 +6415,10 @@ function CompleteReminderSheet({
           {repeating
             ? language === 'no'
               ? `Fullfør bare ${formatReminderFullDateLabel(language, occurrenceDate)}?`
-              : `Complete only ${formatReminderFullDateLabel(language, occurrenceDate)}?`
+              : 'Complete this occurrence only?'
             : language === 'no'
               ? 'Marker denne påminnelsen som ferdig?'
-              : 'Mark this reminder as done?'}
+              : 'Complete this reminder?'}
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-3">
@@ -6419,7 +6428,7 @@ function CompleteReminderSheet({
             className={`h-12 rounded-2xl border tracking-widest text-sm ${
               completing
                 ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
-                : 'border-[#2aa3ff] text-[#2aa3ff]'
+                : 'border-[#2fbe66] text-[#2fbe66]'
             }`}
           >
             {completing
@@ -6432,7 +6441,7 @@ function CompleteReminderSheet({
                   : 'COMPLETE OCCURRENCE'
                 : language === 'no'
                   ? 'MARKER SOM FERDIG'
-                  : 'MARK DONE'}
+                  : 'COMPLETE'}
           </button>
 
           <button
@@ -7163,6 +7172,25 @@ function SurfExperienceCard({
           )}
         </div>
       </div>
+
+      {completeConfirm && (
+        <CompleteReminderSheet
+          language={language}
+          completing={completing}
+          repeating={completeConfirm.reminder.repeat !== 'none'}
+          occurrenceDate={completeConfirm.occurrenceDate}
+          onCancel={() => {
+            if (completing) return
+            setCompleteConfirm(null)
+            setOpenSwipeKey(null)
+          }}
+          onConfirm={async () => {
+            if (!completeConfirm) return
+            await completeReminderOccurrence(completeConfirm.reminder, completeConfirm.occurrenceDate)
+            setCompleteConfirm(null)
+          }}
+        />
+      )}
     </>
   )
 }
