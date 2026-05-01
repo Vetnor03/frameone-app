@@ -5347,9 +5347,8 @@ const items: ReminderUiItem[] = (data || [])
   }, [reminders, tagFilter])
 
   const visibleOccurrences = useMemo(() => {
-    const occurrences = expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
-    return filterCompletedOccurrences(occurrences, completedOccurrences)
-  }, [filteredReminders, gridStartYmd, gridEndYmd, completedOccurrences])
+    return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
+  }, [filteredReminders, gridStartYmd, gridEndYmd])
 
   const reminderDotsByDay = useMemo(() => {
     const map: Record<string, number> = {}
@@ -5420,9 +5419,14 @@ const items: ReminderUiItem[] = (data || [])
   }, [])
 
   const allListOccurrences = useMemo(() => {
-    const occurrences = expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
-    return filterCompletedOccurrences(occurrences, completedOccurrences)
-  }, [filteredReminders, todayYmd, listRangeEnd, completedOccurrences])
+    return expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
+  }, [filteredReminders, todayYmd, listRangeEnd])
+
+
+
+  const completedOccurrenceKeySet = useMemo(() => {
+    return new Set(completedOccurrences.map((x) => `${x.reminderId}__${x.occurrenceDate}`))
+  }, [completedOccurrences])
 
   function getNextOccurrenceOnOrAfter(item: ReminderUiItem, fromYmd: string) {
     const occurrences = expandReminderOccurrences([item], fromYmd, listRangeEnd, 160)
@@ -5726,16 +5730,22 @@ const sortedReminders = useMemo(() => {
                         </div>
                       </div>
                       <div className="shrink-0 self-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setEditingReminder(item)
-                            setSheetOpen(true)
-                          }}
-                          className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
-                        >
-                          {language === 'no' ? 'REDIGER' : 'EDIT'}
-                        </button>
+                        {completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
+                          <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
+                            {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingReminder(item)
+                              setSheetOpen(true)
+                            }}
+                            className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+                          >
+                            {language === 'no' ? 'REDIGER' : 'EDIT'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
