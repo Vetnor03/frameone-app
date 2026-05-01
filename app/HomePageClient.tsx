@@ -5997,7 +5997,7 @@ const normalizedTime = normalizeReminderTime(time)
           .from('reminder_completions')
           .upsert(
             { device_id: activeDeviceId, reminder_id: editingReminder.id, occurrence_date: date },
-            { onConflict: 'reminder_id,occurrence_date' }
+            { onConflict: 'reminder_id,occurrence_date', ignoreDuplicates: true }
           )
         if (error) throw error
       }
