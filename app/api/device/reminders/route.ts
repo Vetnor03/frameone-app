@@ -407,6 +407,14 @@ export async function GET(req: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    const { data: completionsData, error: completionsError } = await supabase
+      .from('reminder_completions')
+      .select('reminder_id, occurrence_date')
+      .eq('device_id', device_id)
+
+    if (completionsError) {
+      return NextResponse.json({ error: completionsError.message }, { status: 500 })
+    }
 
     const todayYmd = getTodayYmdInTimeZone(timeZone)
     const nowHm = getNowHmInTimeZone(timeZone)
@@ -419,8 +427,15 @@ export async function GET(req: Request) {
     const horizonEndYmd = toLocalYmd(addDaysLocal(today, horizonDays))
     const rows = Array.isArray(data) ? (data as ReminderRow[]) : []
 
+    const completedKeySet = new Set(
+      (Array.isArray(completionsData) ? completionsData : []).map(
+        (x: any) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`
+      )
+    )
+
     const items: DeviceReminderItem[] = rows
       .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue))
+      .filter((item) => !completedKeySet.has(`${item.reminder_id}__${item.occurrence_date}`))
       .sort((a, b) => {
         if (a.days_until !== b.days_until) return a.days_until - b.days_until
         if (a.occurrence_date < b.occurrence_date) return -1

@@ -2775,6 +2775,8 @@ type ReminderCompletionItem = {
   occurrenceDate: string
 }
 
+type ReminderListItem = ReminderUiItem & { displayDate: string }
+
 type ReminderEditState = {
   reminder: ReminderUiItem
   occurrenceDate: string
@@ -5205,6 +5207,7 @@ function RemindersModuleSettingsTab({
   activeDeviceId: string | null
 }) {
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
+  const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
 
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -5221,6 +5224,9 @@ function RemindersModuleSettingsTab({
 
   const [calendarAnimClass, setCalendarAnimClass] = useState('')
   const calendarAnimTimerRef = useRef<number | null>(null)
+  const [swipedReminderKey, setSwipedReminderKey] = useState<string | null>(null)
+  const [completeConfirmItem, setCompleteConfirmItem] = useState<ReminderListItem | null>(null)
+  const [completingReminder, setCompletingReminder] = useState(false)
 
   const todayYmd = toLocalYmd(new Date())
     async function loadReminders() {
@@ -5244,7 +5250,26 @@ function RemindersModuleSettingsTab({
       if (error) {
         alert(error.message)
         setReminders([])
+        setCompletedOccurrences([])
         return
+      }
+      const { data: completionsData, error: completionsError } = await supabase
+        .from('reminder_completions')
+        .select('reminder_id, occurrence_date')
+        .eq('device_id', activeDeviceId)
+
+      if (completionsError) {
+        alert(completionsError.message)
+        setCompletedOccurrences([])
+      } else {
+        setCompletedOccurrences(
+          (completionsData || [])
+            .map((row: any) => ({
+              reminderId: String(row.reminder_id ?? ''),
+              occurrenceDate: String(row.occurrence_date ?? ''),
+            }))
+            .filter((x) => x.reminderId && x.occurrenceDate)
+        )
       }
 
 const items: ReminderUiItem[] = (data || [])
@@ -5325,8 +5350,9 @@ const items: ReminderUiItem[] = (data || [])
   }, [reminders, tagFilter])
 
   const visibleOccurrences = useMemo(() => {
-    return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
-  }, [filteredReminders, gridStartYmd, gridEndYmd])
+    const occurrences = expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
+    return filterCompletedOccurrences(occurrences, completedOccurrences)
+  }, [filteredReminders, gridStartYmd, gridEndYmd, completedOccurrences])
 
   const reminderDotsByDay = useMemo(() => {
     const map: Record<string, number> = {}
@@ -5397,8 +5423,9 @@ const items: ReminderUiItem[] = (data || [])
   }, [])
 
   const allListOccurrences = useMemo(() => {
-    return expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
-  }, [filteredReminders, todayYmd, listRangeEnd])
+    const occurrences = expandReminderOccurrences(filteredReminders, todayYmd, listRangeEnd, 160)
+    return filterCompletedOccurrences(occurrences, completedOccurrences)
+  }, [filteredReminders, todayYmd, listRangeEnd, completedOccurrences])
 
   function getNextOccurrenceOnOrAfter(item: ReminderUiItem, fromYmd: string) {
     const occurrences = expandReminderOccurrences([item], fromYmd, listRangeEnd, 160)
@@ -5462,6 +5489,39 @@ const sortedReminders = useMemo(() => {
       return a!.title.localeCompare(b!.title)
     }) as Array<ReminderUiItem & { displayDate: string }>
 }, [filteredReminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
+
+  async function completeReminderOccurrence(item: ReminderListItem) {
+    if (!activeDeviceId || completingReminder) return
+    try {
+      setCompletingReminder(true)
+      if (item.repeat === 'none') {
+        const { error } = await supabase
+          .from('reminders')
+          .update({ is_done: true })
+          .eq('id', item.id)
+          .eq('device_id', activeDeviceId)
+        if (error) throw error
+        setReminders((prev) => prev.filter((x) => x.id !== item.id))
+      } else {
+        const payload = {
+          device_id: activeDeviceId,
+          reminder_id: item.id,
+          occurrence_date: item.displayDate,
+        }
+        const { error } = await supabase.from('reminder_completions').upsert(payload, {
+          onConflict: 'reminder_id,occurrence_date',
+        })
+        if (error) throw error
+        setCompletedOccurrences((prev) => [...prev.filter((x) => !(x.reminderId === item.id && x.occurrenceDate === item.displayDate)), { reminderId: item.id, occurrenceDate: item.displayDate }])
+      }
+      setCompleteConfirmItem(null)
+      setSwipedReminderKey(null)
+    } catch (error: any) {
+      alert(error?.message ?? 'Failed to complete reminder')
+    } finally {
+      setCompletingReminder(false)
+    }
+  }
 
   function toggleSelectedDay(ymd: string) {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
@@ -5677,44 +5737,20 @@ const sortedReminders = useMemo(() => {
               ) : (
                 <div className="divide-y divide-[color:var(--bd-10)]">
                   {sortedReminders.map((item) => (
-                    <div
-                      key={item.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => selectReminderDate(item.displayDate)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          selectReminderDate(item.displayDate)
-                        }
+                    <ReminderSwipeRow
+                      key={`${item.id}__${item.displayDate}`}
+                      language={language}
+                      item={item}
+                      isOpen={swipedReminderKey === `${item.id}__${item.displayDate}`}
+                      onOpen={() => setSwipedReminderKey(`${item.id}__${item.displayDate}`)}
+                      onClose={() => setSwipedReminderKey(null)}
+                      onSelectDate={selectReminderDate}
+                      onEdit={(next) => {
+                        setEditingReminder(next)
+                        setSheetOpen(true)
                       }}
-                      className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
-                        {formatReminderTitleWithTime(item)}
-                        </div>
-
-                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
-  {`${formatReminderFullDateLabel(language, item.displayDate)}${
-  normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
-} • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
-</div>
-                      </div>
-
-                      <div className="shrink-0 self-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setEditingReminder(item)
-                            setSheetOpen(true)
-                          }}
-                          className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
-                        >
-                          {language === 'no' ? 'REDIGER' : 'EDIT'}
-                        </button>
-                      </div>
-                    </div>
+                      onCompleteRequest={(next) => setCompleteConfirmItem(next)}
+                    />
                   ))}
                 </div>
               )}
@@ -5769,6 +5805,18 @@ const sortedReminders = useMemo(() => {
             setEditingReminder(null)
             await loadReminders()
           }}
+        />
+      )}
+      {completeConfirmItem && (
+        <CompleteReminderSheet
+          language={language}
+          repeating={completeConfirmItem.repeat !== 'none'}
+          completing={completingReminder}
+          onCancel={() => {
+            setCompleteConfirmItem(null)
+            setSwipedReminderKey(null)
+          }}
+          onConfirm={() => void completeReminderOccurrence(completeConfirmItem)}
         />
       )}
     </>
@@ -6203,6 +6251,99 @@ const normalizedTime = normalizeReminderTime(time)
   )
 }
 
+function ReminderSwipeRow({
+  language,
+  item,
+  isOpen,
+  onOpen,
+  onClose,
+  onSelectDate,
+  onEdit,
+  onCompleteRequest,
+}: {
+  language: AppLanguage
+  item: ReminderListItem
+  isOpen: boolean
+  onOpen: () => void
+  onClose: () => void
+  onSelectDate: (ymd: string) => void
+  onEdit: (item: ReminderListItem) => void
+  onCompleteRequest: (item: ReminderListItem) => void
+}) {
+  const completeWidth = 88
+  const openThreshold = 40
+  const [translateX, setTranslateX] = useState(0)
+  const dragStartXRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    setTranslateX(isOpen ? -completeWidth : 0)
+  }, [isOpen])
+
+  return (
+    <div className="relative overflow-hidden border-b border-[color:var(--bd-10)] last:border-b-0">
+      <div className="absolute inset-y-0 right-0 w-[88px] flex items-center justify-center bg-[#2ea75d]">
+        <button onClick={() => onCompleteRequest(item)} className="h-full w-full text-[10px] tracking-widest text-white">
+          {language === 'no' ? 'FULLFØR' : 'COMPLETE'}
+        </button>
+      </div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          if (translateX !== 0) return onClose()
+          onSelectDate(item.displayDate)
+        }}
+        onTouchStart={(event) => {
+          dragStartXRef.current = event.touches[0]?.clientX ?? null
+        }}
+        onTouchMove={(event) => {
+          if (dragStartXRef.current == null) return
+          const currentX = event.touches[0]?.clientX ?? dragStartXRef.current
+          const deltaX = currentX - dragStartXRef.current
+          const nextTranslate = Math.max(-completeWidth, Math.min(0, deltaX))
+          if (nextTranslate < 0) event.preventDefault()
+          setTranslateX(nextTranslate)
+        }}
+        onTouchEnd={() => {
+          dragStartXRef.current = null
+          const shouldOpen = translateX < -openThreshold
+          if (shouldOpen) onOpen()
+          else onClose()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onSelectDate(item.displayDate)
+          }
+        }}
+        className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer bg-[color:var(--panel-05)] transition-transform duration-150 touch-pan-y"
+        style={{ transform: `translateX(${translateX}px)` }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">{formatReminderTitleWithTime(item)}</div>
+          <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
+            {`${formatReminderFullDateLabel(language, item.displayDate)}${
+              normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
+            } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+          </div>
+        </div>
+        <div className="shrink-0 self-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (translateX !== 0) return onClose()
+              onEdit(item)
+            }}
+            className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+          >
+            {language === 'no' ? 'REDIGER' : 'EDIT'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DeleteReminderSheet({
   language,
   deleting,
@@ -6247,6 +6388,54 @@ function DeleteReminderSheet({
             className="h-12 rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-60)] tracking-widest text-sm"
           >
             {language === 'no' ? 'AVBRYT' : 'CANCEL'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CompleteReminderSheet({
+  language,
+  repeating,
+  completing,
+  onCancel,
+  onConfirm,
+}: {
+  language: AppLanguage
+  repeating: boolean
+  completing: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="mt-2 text-[color:var(--fg-90)] text-base font-medium">
+          {repeating
+            ? language === 'no'
+              ? 'Fullføre bare denne forekomsten?'
+              : 'Complete this occurrence only?'
+            : language === 'no'
+              ? 'Fullføre denne påminnelsen?'
+              : 'Complete this reminder?'}
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-3">
+          <button
+            onClick={onCancel}
+            disabled={completing}
+            className="h-12 rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-60)] tracking-widest text-sm"
+          >
+            {language === 'no' ? 'AVBRYT' : 'CANCEL'}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={completing}
+            className={`h-12 rounded-2xl border tracking-widest text-sm ${
+              completing ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[#2ea75d] text-[#2ea75d]'
+            }`}
+          >
+            {completing ? (language === 'no' ? 'FULLFØRER…' : 'COMPLETING…') : language === 'no' ? 'FULLFØR' : 'COMPLETE'}
           </button>
         </div>
       </div>
