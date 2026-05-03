@@ -4045,29 +4045,31 @@ function StockRow({
 
         <div className="mt-4">
           <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{tx(language).chart}</div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {([
-              { key: 'day', label: tx(language).chartToday },
-              { key: 'week', label: tx(language).chartWeek },
-              { key: 'month', label: tx(language).chartMonth },
-              { key: 'year', label: tx(language).chartYear },
-            ] as { key: StockChartRange; label: string }[]).map((opt) => {
-              const active = chartRange === opt.key
-              return (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => onSave({ chartRange: opt.key })}
-                  className={`h-11 rounded-2xl border text-sm transition ${
-                    active
-                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
-                      : 'border-[color:var(--bd-10)] text-[color:var(--fg-80)]'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              )
-            })}
+          <div className="mt-2 flex justify-end">
+            <div className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-03)] p-1">
+              {([
+                { key: 'day', label: tx(language).chartToday },
+                { key: 'week', label: tx(language).chartWeek },
+                { key: 'month', label: tx(language).chartMonth },
+                { key: 'year', label: tx(language).chartYear },
+              ] as { key: StockChartRange; label: string }[]).map((opt) => {
+                const active = chartRange === opt.key
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => onSave({ chartRange: opt.key })}
+                    className={`h-9 min-w-[76px] rounded-xl px-3 text-sm transition ${
+                      active
+                        ? 'bg-[#2aa3ff] text-white shadow-[0_4px_14px_rgba(42,163,255,0.35)]'
+                        : 'text-[color:var(--fg-80)] hover:bg-[color:var(--panel-08)]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 
