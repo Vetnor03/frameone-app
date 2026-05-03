@@ -4932,15 +4932,6 @@ function GroceriesModuleSettingsTab({
     <>
     <div className="h-full flex flex-col min-h-0">
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-2 pt-2">
-          <button
-            onClick={() => setDinnerPlanOpen(true)}
-            disabled={!activeDeviceId}
-            className={`w-full h-11 rounded-2xl border text-xs tracking-widest ${!activeDeviceId ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'}`}
-          >
-            {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
-          </button>
-        </div>
         {hasDinnerPlan ? (
           <div className="px-2 pt-3">
             {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
@@ -5030,12 +5021,22 @@ function GroceriesModuleSettingsTab({
 
       <div className="py-5 flex flex-col items-center relative z-20">
         <button
+          onClick={() => setDinnerPlanOpen(true)}
+          disabled={!activeDeviceId}
+          className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+            !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
+          }`}
+          style={{ backgroundColor: 'var(--app-bg)' }}
+        >
+          {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
+        </button>
+        <button
           onClick={() => {
             setEditingItem(null)
             setSheetOpen(true)
           }}
           disabled={!activeDeviceId}
-          className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+          className={`mt-3 w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
             !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
           }`}
           style={{ backgroundColor: 'var(--app-bg)' }}
