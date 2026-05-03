@@ -337,6 +337,46 @@ static const char* rangeLabel(const char* raw) {
   return "Day";
 }
 
+static void drawRangeSelectorRow(int centerX, int baselineY, const char* selectedRange, uint16_t textColor) {
+  auto& d = DisplayCore::get();
+
+  const char* keys[4] = {"day", "week", "month", "year"};
+  const char* labels[4] = {"Day", "Week", "Month", "Year"};
+
+  const int itemGap = 12;
+  const int padX = 8;
+  const int padY = 4;
+
+  int widths[4] = {0};
+  int totalWidth = 0;
+  for (int i = 0; i < 4; i++) {
+    widths[i] = textWidth(labels[i], FONT_B9);
+    totalWidth += widths[i];
+    if (i < 3) totalWidth += itemGap;
+  }
+
+  const int startX = centerX - totalWidth / 2;
+  int cursorX = startX;
+  for (int i = 0; i < 4; i++) {
+    const bool isSelected = strcmp(normalizeRange(selectedRange), keys[i]) == 0;
+    if (isSelected) {
+      int16_t x1, y1;
+      uint16_t tw, th;
+      measureText(labels[i], FONT_B9, x1, y1, tw, th);
+      const int rectX = cursorX - padX;
+      const int rectY = baselineY + y1 - padY;
+      const int rectW = (int)tw + (padX * 2);
+      const int rectH = (int)th + (padY * 2);
+      d.fillRoundRect(rectX, rectY, rectW, rectH, 6, GxEPD_BLACK);
+      drawLeft(cursorX, baselineY, labels[i], FONT_B9, GxEPD_WHITE);
+    } else {
+      drawLeft(cursorX, baselineY, labels[i], FONT_B9, textColor);
+    }
+
+    cursorX += widths[i] + itemGap;
+  }
+}
+
 static void applyConfigFromFrameConfig() {
   if (!ensureState()) return;
 
@@ -744,12 +784,12 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int chartInsetX = 10;
     const int chartBottomPad = 24;
     const int rangeBaselineY = titleBaseline;
-    const int labelCenterX = rightX + 68 / 2;
-    drawTextCenteredAt(labelCenterX, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
+    const int rightCenterX = rightX + rightW / 2;
+    drawRangeSelectorRow(rightCenterX, rangeBaselineY, data.chartRange, ink);
 
     int16_t rangeX1, rangeY1;
     uint16_t rangeW, rangeH;
-    measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
+    measureText("Month", FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
 
     const int chartTopGap = 14;
     const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
