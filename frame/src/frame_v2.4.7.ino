@@ -474,9 +474,11 @@ void setup() {
 
   UpdateChecker::noteWake();
 
+  bool reconnectedViaProvisioning = false;
   if (!WiFiManagerV2::connectSaved(12000)) {
     ensureDisplay();
     ProvisioningPortal::runBlocking();
+    reconnectedViaProvisioning = true;
   }
 
   TimeSync::ensure(8000);
@@ -567,6 +569,10 @@ void setup() {
     Serial.println("🔋 Battery changed by >= 10% -> force redraw");
   }
 
+  if (reconnectedViaProvisioning) {
+    Serial.println("📶 Reconnected after provisioning -> force redraw");
+  }
+
   bool shouldRender =
     forceFw ||
     forcePeriodic ||
@@ -574,7 +580,8 @@ void setup() {
     remindersChanged ||
     surfChanged ||
     usbChanged ||
-    batteryJumpChanged;
+    batteryJumpChanged ||
+    reconnectedViaProvisioning;
 
   // ---------------- No redraw ----------------
   if (!shouldRender) {
