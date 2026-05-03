@@ -280,23 +280,27 @@ static float smoothedSeriesValueAt(const StockCache& data, int idx) {
   const int n = (int)data.seriesCount;
   if (idx < 0 || idx >= n) return NAN;
 
-  // Weighted 5-point moving average (kernel: 1,2,3,2,1) to reduce jaggedness
-  // without adding interpolation points.
+  // Light smoothing only: 3-point moving average (kernel: 1,2,1), then blend
+  // with the raw value so we mostly preserve detail while rounding sharp edges.
   float weightedSum = 0.0f;
   float totalWeight = 0.0f;
-  for (int offset = -2; offset <= 2; offset++) {
+  for (int offset = -1; offset <= 1; offset++) {
     const int j = idx + offset;
     if (j < 0 || j >= n) continue;
     const float v = data.series[j];
     if (!isfinite(v)) continue;
 
-    const float w = (float)(3 - abs(offset));
+    const float w = (offset == 0) ? 2.0f : 1.0f;
     weightedSum += v * w;
     totalWeight += w;
   }
 
-  if (totalWeight <= 0.0f) return data.series[idx];
-  return weightedSum / totalWeight;
+  const float raw = data.series[idx];
+  if (totalWeight <= 0.0f || !isfinite(raw)) return raw;
+
+  const float localAvg = weightedSum / totalWeight;
+  const float keepDetail = 0.65f;
+  return (keepDetail * raw) + ((1.0f - keepDetail) * localAvg);
 }
 
 static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
