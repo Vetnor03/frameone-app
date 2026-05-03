@@ -4991,8 +4991,8 @@ function GroceriesModuleSettingsTab({
                 if (aAll !== bAll) return aAll ? 1 : -1
                 return DINNER_PLAN_DAY_ORDER.indexOf(a.day) - DINNER_PLAN_DAY_ORDER.indexOf(b.day)
               })
-              .map((day) => (
-              <div key={day.day} className="mb-3">
+              .map((day, dayIndex, dayList) => (
+              <div key={day.day} className={`mb-3 ${dayIndex < dayList.length - 1 ? 'pb-3 border-b border-[color:var(--bd-10)]' : ''}`}>
                 <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-85)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
                 <div className="rounded-2xl bg-transparent">
                   {GROCERY_CATEGORY_LIST_ORDER.map((cat) => {
@@ -5035,6 +5035,9 @@ function GroceriesModuleSettingsTab({
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
         ) : (
           <div className="px-2 py-2">
+            {hasDinnerPlan && uncategorizedMainItems.length > 0 ? (
+              <div className="px-1 pb-2 text-sm font-semibold text-[color:var(--fg-80)]">{language === 'no' ? 'Annet:' : 'Other:'}</div>
+            ) : null}
             {(hasDinnerPlan ? uncategorizedMainItems : groupedVisibleItems).map((group) => (
               <div key={group.category} className="mb-3">
                 <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
