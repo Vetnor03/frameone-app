@@ -303,6 +303,24 @@ static float smoothedSeriesValueAt(const StockCache& data, int idx) {
   return (keepDetail * raw) + ((1.0f - keepDetail) * localAvg);
 }
 
+static float interpolatedSeriesValueAt(const StockCache& data, float idxF) {
+  const int n = (int)data.seriesCount;
+  if (n <= 0) return NAN;
+  if (idxF <= 0.0f) return smoothedSeriesValueAt(data, 0);
+  if (idxF >= (float)(n - 1)) return smoothedSeriesValueAt(data, n - 1);
+
+  const int i0 = (int)floorf(idxF);
+  const int i1 = min(n - 1, i0 + 1);
+  const float t = idxF - (float)i0;
+
+  const float v0 = smoothedSeriesValueAt(data, i0);
+  const float v1 = smoothedSeriesValueAt(data, i1);
+  if (!isfinite(v0) && !isfinite(v1)) return NAN;
+  if (!isfinite(v0)) return v1;
+  if (!isfinite(v1)) return v0;
+  return v0 + (v1 - v0) * t;
+}
+
 static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   if (w <= 6 || h <= 6 || data.seriesCount < 2) {
     drawCenteredLine(x, y, w, h, "No chart data", FONT_B9, Theme::ink());
@@ -332,12 +350,15 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
 
   const int n = (int)data.seriesCount;
   int prevX = innerX;
-  const float s0 = smoothedSeriesValueAt(data, 0);
+  const float s0 = interpolatedSeriesValueAt(data, 0.0f);
   int prevY = innerY + innerH - (int)roundf((((isfinite(s0) ? s0 : data.series[0]) - mn) / span) * (float)(innerH - 1));
-  for (int i = 1; i < n; i++) {
-    int px = innerX + (i * (innerW - 1)) / (n - 1);
-    const float sv = smoothedSeriesValueAt(data, i);
-    const float value = isfinite(sv) ? sv : data.series[i];
+  for (int dx = 1; dx < innerW; dx++) {
+    int px = innerX + dx;
+    const float idxF = ((float)dx / (float)(innerW - 1)) * (float)(n - 1);
+    const float sv = interpolatedSeriesValueAt(data, idxF);
+    const int nearest = (int)roundf(idxF);
+    const float fallback = data.series[min(max(nearest, 0), n - 1)];
+    const float value = isfinite(sv) ? sv : fallback;
     int py = innerY + innerH - (int)roundf(((value - mn) / span) * (float)(innerH - 1));
     d.drawLine(prevX, prevY - 1, px, py - 1, Theme::ink());
     d.drawLine(prevX, prevY, px, py, Theme::ink());
