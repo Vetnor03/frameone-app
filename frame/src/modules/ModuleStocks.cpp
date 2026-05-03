@@ -810,7 +810,6 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int midY = c.y + (c.h / 2);
 
   // Upper half: title + summary + detailed triplets.
-  const int titleBaseline = c.y + 22;
   const int titleUnderlineGap = 4;
   const int titleUnderlineH = 2;
   char titleFit[64] = {0};
@@ -818,15 +817,23 @@ static void drawLive(const Cell& c, const StockCache& data) {
   int16_t tx1, ty1;
   uint16_t tw, th;
   measureText(titleFit, FONT_B12, tx1, ty1, tw, th);
+
+  const int rowW = c.w - 80;
+  const int rowX = c.x + (c.w - rowW) / 2;
+  const int rowH = 20;
+  const int topHalfTop = c.y + 34;
+  const int topHalfBottom = midY - 8;
+  const int stackH = 28;
+  const int topContentH = (int)th + titleUnderlineGap + titleUnderlineH + rowH + stackH;
+  const int topGap = max(8, (topHalfBottom - topHalfTop - topContentH) / 3);
+
+  const int titleBaseline = topHalfTop + topGap - ty1;
   drawTextCenteredAt(c.x + c.w / 2, titleBaseline, titleFit, FONT_B12, ink);
   const int titleUnderlineY = (titleBaseline + ty1) + (int)th + titleUnderlineGap;
   const int titleUnderlineX = c.x + c.w / 2 - (int)tw / 2;
   d.fillRect(titleUnderlineX, titleUnderlineY, (int)tw, titleUnderlineH, ink);
 
-  const int rowW = c.w - 80;
-  const int rowX = c.x + (c.w - rowW) / 2;
-  const int rowY = titleUnderlineY + titleUnderlineH + 12;
-  const int rowH = 20;
+  const int rowY = titleUnderlineY + titleUnderlineH + topGap;
   const int colW = rowW / 3;
   d.drawFastVLine(rowX + colW, rowY - 2, rowH + 4, ink);
   d.drawFastVLine(rowX + colW * 2, rowY - 2, rowH + 4, ink);
@@ -834,7 +841,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
   drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, changeTxt, FONT_B12, ink);
   drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, dayPctTxt, FONT_B12, ink);
 
-  const int stackY = rowY + rowH + 12;
+  const int stackY = rowY + rowH + topGap;
   const int groupW = (c.w - (padX * 2)) / 3;
   const int g1X = c.x + padX;
   const int g2X = g1X + groupW;
@@ -855,11 +862,10 @@ static void drawLive(const Cell& c, const StockCache& data) {
   drawLeft(g3X + 44, stackY, changeTxt, FONT_B9, ink);
   drawLeft(g3X + 44, stackY + 14, dayPctTxt, FONT_B9, ink);
 
-  // Lower half: range selector on top-left, chart below.
+  // Lower half: centered range selector above chart.
   const int lowerTop = midY;
   const int rangeBaselineY = lowerTop + 16;
-  const int rangeLeftX = c.x + padX;
-  drawRangeSelectorRow(rangeLeftX + 92, rangeBaselineY, data.chartRange, ink);
+  drawRangeSelectorRow(c.x + c.w / 2, rangeBaselineY, data.chartRange, ink);
 
   int16_t rangeX1, rangeY1;
   uint16_t rangeW, rangeH;
