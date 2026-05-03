@@ -850,7 +850,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int g3CenterX = detailX + groupW * 2 + (detailW - groupW * 2) / 2;
 
   const int valueOffsetX = 74;
-  const int valueLineGapY = 20;
+  const int valueLineGapY = 25;
 
   const int g1LeftX = g1CenterX - (valueOffsetX / 2);
   const int g1RightX = g1CenterX + (valueOffsetX / 2);
