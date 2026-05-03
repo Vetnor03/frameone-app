@@ -821,13 +821,13 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int rowW = c.w - 80;
   const int rowX = c.x + (c.w - rowW) / 2;
   const int rowH = 20;
-  const int topHalfTop = c.y + 30;
+  const int topContentTop = c.y + 24; // anchor from the actual top of the XL view area
   const int topHalfBottom = midY - 8;
   const int stackH = 46;
   const int topContentH = (int)th + titleUnderlineGap + titleUnderlineH + rowH + stackH;
-  const int topGap = max(8, (topHalfBottom - topHalfTop - topContentH) / 3);
+  const int topGap = max(8, (topHalfBottom - topContentTop - topContentH) / 3);
 
-  const int titleBaseline = topHalfTop + topGap - ty1;
+  const int titleBaseline = topContentTop - ty1;
   drawTextCenteredAt(c.x + c.w / 2, titleBaseline, titleFit, FONT_B12, ink);
   const int titleUnderlineY = (titleBaseline + ty1) + (int)th + titleUnderlineGap;
   const int titleUnderlineX = c.x + c.w / 2 - (int)tw / 2;
