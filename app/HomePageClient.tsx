@@ -2495,7 +2495,20 @@ function ShareFrameCodeSheet({
 
         {/* Code box */}
         <div className="mt-5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-center">
-          {loading ? (
+          {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
+        {loading ? (
             <div className="text-[color:var(--fg-50)] text-sm">
               {isNo ? 'Laster…' : 'Loading…'}
             </div>
@@ -3439,7 +3452,20 @@ function CountdownModuleSettingsTab({
         </div>
       </div>
 
-      {sheetOpen && activeDeviceId && (
+      {dinnerPlanOpen && activeDeviceId && (
+      <DinnerPlanSheet
+        language={language}
+        suggestions={suggestions}
+        initialDays={dinnerPlanDays}
+        onCancel={() => setDinnerPlanOpen(false)}
+        onSave={(days) => {
+          setDinnerPlanDays(days)
+          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
+          setDinnerPlanOpen(false)
+        }}
+      />
+    )}
+    {sheetOpen && activeDeviceId && (
         <CountdownDraftSheet
           language={language}
           activeDeviceId={activeDeviceId}
@@ -4210,7 +4236,20 @@ function StockSearchSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
+          {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
+        {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
         </div>
 
         <div className="mt-3 max-h-[42vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
@@ -4313,6 +4352,30 @@ type GrocerySuggestion = {
   category: GroceryCategory
 }
 
+
+
+type DinnerPlanDay = {
+  day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+  title: string
+  items: { name: string; category: GroceryCategory }[]
+}
+
+const DINNER_PLAN_DAY_ORDER: DinnerPlanDay['day'][] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+function dinnerPlanDayLabel(language: AppLanguage, day: DinnerPlanDay['day']) {
+  const en: Record<DinnerPlanDay['day'], string> = {
+    monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday'
+  }
+  const no: Record<DinnerPlanDay['day'], string> = {
+    monday: 'Mandag', tuesday: 'Tirsdag', wednesday: 'Onsdag', thursday: 'Torsdag', friday: 'Fredag', saturday: 'Lørdag', sunday: 'Søndag'
+  }
+  return language === 'no' ? no[day] : en[day]
+}
+
+function defaultDinnerPlanDays(): DinnerPlanDay[] {
+  return DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: '', items: [] }))
+}
+
 const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
 const GROCERY_CATEGORY_LIST_ORDER: GroceryCategory[] = [
   'bread',
@@ -4401,6 +4464,8 @@ function GroceriesModuleSettingsTab({
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
+  const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
+  const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
@@ -4644,6 +4709,37 @@ function GroceriesModuleSettingsTab({
     return () => window.clearInterval(handle)
   }, [])
 
+
+  useEffect(() => {
+    if (!activeDeviceId) {
+      setDinnerPlanDays(defaultDinnerPlanDays())
+      return
+    }
+    const key = `dinner-plan:${activeDeviceId}`
+    const raw = window.localStorage.getItem(key)
+    if (!raw) {
+      setDinnerPlanDays(defaultDinnerPlanDays())
+      return
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      const next = DINNER_PLAN_DAY_ORDER.map((day) => {
+        const found = Array.isArray(parsed) ? parsed.find((x: any) => x?.day === day) : null
+        const items = Array.isArray(found?.items)
+          ? found.items
+            .map((it: any) => ({ name: String(it?.name ?? '').trim(), category: asGroceryCategory(it?.category) }))
+            .filter((it: { name: string }) => !!it.name)
+          : []
+        return { day, title: String(found?.title ?? '').trim(), items }
+      })
+      setDinnerPlanDays(next)
+    } catch {
+      setDinnerPlanDays(defaultDinnerPlanDays())
+    }
+  }, [activeDeviceId])
+
+  const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
+
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
     const normalizedName = name.trim()
     if (!normalizedName || !activeDeviceId) return
@@ -4874,6 +4970,28 @@ function GroceriesModuleSettingsTab({
     <>
     <div className="h-full flex flex-col min-h-0">
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-2 pt-2">
+          <button
+            onClick={() => setDinnerPlanOpen(true)}
+            disabled={!activeDeviceId}
+            className={`w-full h-11 rounded-2xl border text-xs tracking-widest ${!activeDeviceId ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'}`}
+          >
+            {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
+          </button>
+        </div>
+        {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : groupedVisibleItems.length === 0 ? (
@@ -4965,6 +5083,19 @@ function GroceriesModuleSettingsTab({
         </button>
       </div>
     </div>
+    {dinnerPlanOpen && activeDeviceId && (
+      <DinnerPlanSheet
+        language={language}
+        suggestions={suggestions}
+        initialDays={dinnerPlanDays}
+        onCancel={() => setDinnerPlanOpen(false)}
+        onSave={(days) => {
+          setDinnerPlanDays(days)
+          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
+          setDinnerPlanOpen(false)
+        }}
+      />
+    )}
     {sheetOpen && activeDeviceId && (
       <GroceriesDraftSheet
         language={language}
@@ -5128,6 +5259,43 @@ function GroceriesDraftSheet({
       </div>
     </div>
   )
+}
+
+
+function DinnerPlanSheet({
+  language,
+  suggestions,
+  initialDays,
+  onCancel,
+  onSave,
+}: {
+  language: AppLanguage
+  suggestions: GrocerySuggestion[]
+  initialDays: DinnerPlanDay[]
+  onCancel: () => void
+  onSave: (days: DinnerPlanDay[]) => void
+}) {
+  const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
+  const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
+  const addFromSuggestion = (day: DinnerPlanDay['day'], s: GrocerySuggestion) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: s.name, category: s.category }] } : x))
+  const removeItem = (day: DinnerPlanDay['day'], idx: number) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: x.items.filter((_, i) => i !== idx) } : x))
+  return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+    <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
+      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div><button onClick={onCancel} className="text-[color:var(--fg-60)] text-xl">✕</button></div>
+      <div className="mt-4 overflow-y-auto pr-1">
+        {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
+          <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+          <input value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
+          <div className="mt-2 space-y-1">{day.items.map((item,i)=><button key={`${item.name}-${i}`} onClick={()=>removeItem(day.day,i)} className="w-full text-left text-xs rounded-lg px-2 py-1 border border-[color:var(--bd-10)]">{item.name} · {groceryCategoryLabel(language, item.category)}</button>)}</div>
+          <div className="mt-2 flex flex-wrap gap-1">{suggestions.slice(0,8).map((s)=><button key={`${day.day}-${s.name}`} onClick={()=>addFromSuggestion(day.day,s)} className="text-[10px] px-2 py-1 rounded-full border border-[color:var(--bd-10)]">+ {s.name}</button>)}</div>
+        </div>)}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+        <button onClick={onCancel} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
+      </div>
+    </div>
+  </div>
 }
 
 function GrocerySuggestionSwipeRow({
@@ -5796,7 +5964,20 @@ const sortedReminders = useMemo(() => {
         </div>
       </div>
 
-      {sheetOpen && activeDeviceId && (
+      {dinnerPlanOpen && activeDeviceId && (
+      <DinnerPlanSheet
+        language={language}
+        suggestions={suggestions}
+        initialDays={dinnerPlanDays}
+        onCancel={() => setDinnerPlanOpen(false)}
+        onSave={(days) => {
+          setDinnerPlanDays(days)
+          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
+          setDinnerPlanOpen(false)
+        }}
+      />
+    )}
+    {sheetOpen && activeDeviceId && (
         <ReminderDraftSheet
           language={language}
           activeDeviceId={activeDeviceId}
@@ -7139,7 +7320,20 @@ function SurfExperienceCard({
               style={latestListMaxHeight ? { maxHeight: `${latestListMaxHeight}px` } : undefined}
               className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
             >
-              {loading ? (
+              {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
+        {loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
@@ -8278,11 +8472,37 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
+          {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
+        {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
         </div>
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
-          {loading ? (
+          {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
+        {loading ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen spots funnet' : 'No spots found'}</div>
@@ -8442,7 +8662,20 @@ function WeatherLocationSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
+          {hasDinnerPlan ? (
+          <div className="px-2 pt-3">
+            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
+              <div key={day.day} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
+                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
+                </div>
+              </div>
+            ) : null)}
+          </div>
+        ) : null}
+
+        {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
         </div>
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
