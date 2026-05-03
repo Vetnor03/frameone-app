@@ -3440,19 +3440,6 @@ function CountdownModuleSettingsTab({
         </div>
       </div>
 
-      {dinnerPlanOpen && activeDeviceId && (
-      <DinnerPlanSheet
-        language={language}
-        suggestions={suggestions}
-        initialDays={dinnerPlanDays}
-        onCancel={() => setDinnerPlanOpen(false)}
-        onSave={(days) => {
-          setDinnerPlanDays(days)
-          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
-          setDinnerPlanOpen(false)
-        }}
-      />
-    )}
     {sheetOpen && activeDeviceId && (
         <CountdownDraftSheet
           language={language}
@@ -4224,20 +4211,7 @@ function StockSearchSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
-              <div key={day.day} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
-                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
-                </div>
-              </div>
-            ) : null)}
-          </div>
-        ) : null}
-
-        {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
+          {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
         </div>
 
         <div className="mt-3 max-h-[42vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
@@ -4979,7 +4953,6 @@ function GroceriesModuleSettingsTab({
             ) : null)}
           </div>
         ) : null}
-
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : groupedVisibleItems.length === 0 ? (
@@ -5952,19 +5925,6 @@ const sortedReminders = useMemo(() => {
         </div>
       </div>
 
-      {dinnerPlanOpen && activeDeviceId && (
-      <DinnerPlanSheet
-        language={language}
-        suggestions={suggestions}
-        initialDays={dinnerPlanDays}
-        onCancel={() => setDinnerPlanOpen(false)}
-        onSave={(days) => {
-          setDinnerPlanDays(days)
-          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
-          setDinnerPlanOpen(false)
-        }}
-      />
-    )}
     {sheetOpen && activeDeviceId && (
         <ReminderDraftSheet
           language={language}
@@ -7308,20 +7268,7 @@ function SurfExperienceCard({
               style={latestListMaxHeight ? { maxHeight: `${latestListMaxHeight}px` } : undefined}
               className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
             >
-              {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
-              <div key={day.day} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
-                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
-                </div>
-              </div>
-            ) : null)}
-          </div>
-        ) : null}
-
-        {loading ? (
+                      {loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
@@ -8460,37 +8407,11 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
-              <div key={day.day} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
-                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
-                </div>
-              </div>
-            ) : null)}
-          </div>
-        ) : null}
-
-        {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
+                  {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
         </div>
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
-          {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
-              <div key={day.day} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
-                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
-                </div>
-              </div>
-            ) : null)}
-          </div>
-        ) : null}
-
-        {loading ? (
+                  {loading ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen spots funnet' : 'No spots found'}</div>
@@ -8650,20 +8571,7 @@ function WeatherLocationSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
-              <div key={day.day} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
-                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
-                </div>
-              </div>
-            ) : null)}
-          </div>
-        ) : null}
-
-        {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
+                  {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
         </div>
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
