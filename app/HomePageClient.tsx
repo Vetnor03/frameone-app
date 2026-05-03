@@ -4708,6 +4708,40 @@ function GroceriesModuleSettingsTab({
   }, [activeDeviceId])
 
   const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
+  const dinnerPlanOtherItems = useMemo(
+    () => dinnerPlanDays.flatMap((d) => d.items).filter((x) => x.category === 'other'),
+    [dinnerPlanDays]
+  )
+
+  function persistDinnerPlan(next: DinnerPlanDay[]) {
+    setDinnerPlanDays(next)
+    if (activeDeviceId) {
+      window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(next))
+    }
+  }
+
+  function toggleDinnerItem(dayKey: DinnerPlanDay['day'], itemIndex: number) {
+    const nowIso = new Date().toISOString()
+    const next = dinnerPlanDays.map((day) => {
+      if (day.day !== dayKey) return day
+      return {
+        ...day,
+        items: day.items.map((item, idx) => idx === itemIndex ? { ...item, isChecked: !item.isChecked, checkedAt: !item.isChecked ? nowIso : null, updatedAt: nowIso } : item),
+      }
+    })
+    persistDinnerPlan(next)
+  }
+
+  function adjustDinnerItemQty(dayKey: DinnerPlanDay['day'], itemIndex: number, delta: number) {
+    const next = dinnerPlanDays.map((day) => {
+      if (day.day !== dayKey) return day
+      const items = day.items
+        .map((item, idx) => idx === itemIndex ? { ...item, quantity: Math.max(0, item.quantity + delta), updatedAt: new Date().toISOString() } : item)
+        .filter((item) => item.quantity > 0)
+      return { ...day, items }
+    })
+    persistDinnerPlan(next)
+  }
 
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
     const normalizedName = name.trim()
@@ -4960,13 +4994,26 @@ function GroceriesModuleSettingsTab({
                     const allChecked = sorted.every((x) => x.isChecked)
                     return <div key={`${day.day}-${cat}`} className={`${allChecked ? 'opacity-70' : ''} border-t first:border-t-0 border-[color:var(--bd-10)]`}>
                       <div className="px-3 pt-2 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, cat)}</div>
-                      {sorted.map((item, idx) => <div key={`${day.day}-${cat}-${idx}`} className="px-3 py-1.5 text-sm text-[color:var(--fg-85)]">{item.name} ×{item.quantity}</div>)}
+                      {sorted.map((item, idx) => {
+                        const absoluteIndex = day.items.findIndex((x) => x === item)
+                        return <div key={`${day.day}-${cat}-${idx}`} className="px-4 py-2 flex items-start gap-3">
+                          <button onClick={() => toggleDinnerItem(day.day, absoluteIndex)} className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}>
+                            {item.isChecked ? <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--fg-60)]" /> : null}
+                          </button>
+                          <div className={`min-w-0 flex-1 text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>{item.name}</div>
+                          <div className="shrink-0 flex items-center gap-2.5">
+                            <button onClick={() => adjustDinnerItemQty(day.day, absoluteIndex, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
+                            <div className={`text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>{item.quantity}</div>
+                            <button onClick={() => adjustDinnerItemQty(day.day, absoluteIndex, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
+                          </div>
+                        </div>
+                      })}
                     </div>
                   })}
                 </div>
               </div>
             ))}
-            {dinnerPlanDays.find((d) => d.day === 'sunday')?.items.some((x) => x.category === 'other') ? (
+            {dinnerPlanOtherItems.length > 0 ? (
               <div className="mt-2 pt-2 border-t border-[color:var(--bd-10)] text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'Annet:' : 'Other:'}</div>
             ) : null}
           </div>
