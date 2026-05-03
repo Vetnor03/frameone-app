@@ -343,7 +343,7 @@ static void drawRangeSelectorRow(int centerX, int baselineY, const char* selecte
   const char* keys[4] = {"day", "week", "month", "year"};
   const char* labels[4] = {"Day", "Week", "Month", "Year"};
 
-  const int itemGap = 12;
+  const int itemGap = 20;
   const int padX = 8;
   const int padY = 4;
 
@@ -367,8 +367,8 @@ static void drawRangeSelectorRow(int centerX, int baselineY, const char* selecte
       const int rectY = baselineY + y1 - padY;
       const int rectW = (int)tw + (padX * 2);
       const int rectH = (int)th + (padY * 2);
-      d.fillRoundRect(rectX, rectY, rectW, rectH, 6, GxEPD_BLACK);
-      drawLeft(cursorX, baselineY, labels[i], FONT_B9, GxEPD_WHITE);
+      d.fillRoundRect(rectX, rectY, rectW, rectH, 6, GxEPD_WHITE);
+      drawLeft(cursorX, baselineY, labels[i], FONT_B9, GxEPD_BLACK);
     } else {
       drawLeft(cursorX, baselineY, labels[i], FONT_B9, textColor);
     }
