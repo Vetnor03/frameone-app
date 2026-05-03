@@ -764,8 +764,8 @@ static void drawLive(const Cell& c, const StockCache& data) {
     const int statsBottom = panelBottom - 8;
     const int rows = 6;
     const int spacing = max(12, (statsBottom - statsTop) / max(1, rows - 1));
-    const int valueX = leftX + (leftW / 2) + 60;
-    const int labelX = leftX + (leftW / 2) - 60;
+    const int valueX = leftX + (leftW / 2) + 70;
+    const int labelX = leftX + (leftW / 2) - 70;
     drawTextCenteredAt(labelX, statsTop + spacing * 0, "Open", FONT_B9, ink);
     drawTextCenteredAt(valueX, statsTop + spacing * 0, openTxt, FONT_B9, ink);
     drawTextCenteredAt(labelX, statsTop + spacing * 1, "High", FONT_B9, ink);
@@ -850,7 +850,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int g3CenterX = detailX + groupW * 2 + (detailW - groupW * 2) / 2;
 
   const int pairGapY = 22;
-  const int valueOffsetX = 60;
+  const int valueOffsetX = 70;
 
   drawLeft(g1CenterX - (valueOffsetX / 2), stackY, "High", FONT_B9, ink);
   drawLeft(g1CenterX - (valueOffsetX / 2), stackY + pairGapY, "Low", FONT_B9, ink);
