@@ -4712,6 +4712,14 @@ function GroceriesModuleSettingsTab({
     () => dinnerPlanDays.flatMap((d) => d.items).filter((x) => x.category === 'other'),
     [dinnerPlanDays]
   )
+  const plannedNameSet = useMemo(() => new Set(dinnerPlanDays.flatMap((d) => d.items.map((i) => i.name.trim().toLowerCase())).filter(Boolean)), [dinnerPlanDays])
+  const uncategorizedMainItems = useMemo(
+    () =>
+      groupedVisibleItems
+        .map((g) => ({ ...g, items: g.items.filter((it) => !plannedNameSet.has(it.name.trim().toLowerCase())) }))
+        .filter((g) => g.items.length > 0),
+    [groupedVisibleItems, plannedNameSet]
+  )
 
   function persistDinnerPlan(next: DinnerPlanDay[]) {
     setDinnerPlanDays(next)
@@ -4986,14 +4994,15 @@ function GroceriesModuleSettingsTab({
               .map((day) => (
               <div key={day.day} className="mb-3">
                 <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-85)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
+                <div className="rounded-2xl bg-transparent">
                   {GROCERY_CATEGORY_LIST_ORDER.map((cat) => {
                     const visibleItems = day.items.filter((item) => item.category === cat).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
                     if (!visibleItems.length) return null
                     const sorted = [...visibleItems].sort((a, b) => Number(a.isChecked) - Number(b.isChecked))
                     const allChecked = sorted.every((x) => x.isChecked)
-                    return <div key={`${day.day}-${cat}`} className={`${allChecked ? 'opacity-70' : ''} border-t first:border-t-0 border-[color:var(--bd-10)]`}>
-                      <div className="px-3 pt-2 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, cat)}</div>
+                    return <div key={`${day.day}-${cat}`} className={`${allChecked ? 'opacity-70' : ''} mb-2`}>
+                      <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, cat)}</div>
+                      <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
                       {sorted.map((item, idx) => {
                         const absoluteIndex = day.items.findIndex((x) => x === item)
                         return <div key={`${day.day}-${cat}-${idx}`} className="px-4 py-2 flex items-start gap-3">
@@ -5008,11 +5017,13 @@ function GroceriesModuleSettingsTab({
                           </div>
                         </div>
                       })}
+                      </div>
                     </div>
                   })}
                 </div>
               </div>
             ))}
+            <div className="my-3 border-t border-[color:var(--bd-10)]" />
             {dinnerPlanOtherItems.length > 0 ? (
               <div className="mt-2 pt-2 border-t border-[color:var(--bd-10)] text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'Annet:' : 'Other:'}</div>
             ) : null}
@@ -5024,7 +5035,7 @@ function GroceriesModuleSettingsTab({
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
         ) : (
           <div className="px-2 py-2">
-            {groupedVisibleItems.map((group) => (
+            {(hasDinnerPlan ? uncategorizedMainItems : groupedVisibleItems).map((group) => (
               <div key={group.category} className="mb-3">
                 <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
                   {groceryCategoryLabel(language, group.category)}
