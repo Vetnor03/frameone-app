@@ -5021,16 +5021,6 @@ function GroceriesModuleSettingsTab({
 
       <div className="py-5 flex flex-col items-center relative z-20">
         <button
-          onClick={() => setDinnerPlanOpen(true)}
-          disabled={!activeDeviceId}
-          className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
-            !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
-          }`}
-          style={{ backgroundColor: 'var(--app-bg)' }}
-        >
-          {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
-        </button>
-        <button
           onClick={() => {
             setEditingItem(null)
             setSheetOpen(true)
@@ -5042,6 +5032,15 @@ function GroceriesModuleSettingsTab({
           style={{ backgroundColor: 'var(--app-bg)' }}
         >
           {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
+        </button>
+        <button
+          onClick={() => setDinnerPlanOpen(true)}
+          disabled={!activeDeviceId}
+          className={`mt-3 w-[260px] h-[44px] rounded-2xl border text-xs tracking-widest transition ${
+            !activeDeviceId ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'
+          }`}
+        >
+          {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
         </button>
       </div>
     </div>
