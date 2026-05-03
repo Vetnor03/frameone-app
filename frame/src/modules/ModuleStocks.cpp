@@ -821,9 +821,9 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int rowW = c.w - 80;
   const int rowX = c.x + (c.w - rowW) / 2;
   const int rowH = 20;
-  const int topHalfTop = c.y + 34;
+  const int topHalfTop = c.y + 30;
   const int topHalfBottom = midY - 8;
-  const int stackH = 28;
+  const int stackH = 46;
   const int topContentH = (int)th + titleUnderlineGap + titleUnderlineH + rowH + stackH;
   const int topGap = max(8, (topHalfBottom - topHalfTop - topContentH) / 3);
 
@@ -841,26 +841,29 @@ static void drawLive(const Cell& c, const StockCache& data) {
   drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, changeTxt, FONT_B12, ink);
   drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, dayPctTxt, FONT_B12, ink);
 
-  const int stackY = rowY + rowH + topGap;
+  const int stackY = rowY + rowH + topGap + 2;
   const int groupW = (c.w - (padX * 2)) / 3;
   const int g1X = c.x + padX;
   const int g2X = g1X + groupW;
   const int g3X = g2X + groupW;
 
+  const int pairGapY = 22;
+  const int valueOffsetX = 50;
+
   drawLeft(g1X, stackY, "High", FONT_B9, ink);
-  drawLeft(g1X, stackY + 14, "Low", FONT_B9, ink);
-  drawLeft(g1X + 38, stackY, highTxt, FONT_B9, ink);
-  drawLeft(g1X + 38, stackY + 14, lowTxt, FONT_B9, ink);
+  drawLeft(g1X, stackY + pairGapY, "Low", FONT_B9, ink);
+  drawLeft(g1X + valueOffsetX, stackY, highTxt, FONT_B9, ink);
+  drawLeft(g1X + valueOffsetX, stackY + pairGapY, lowTxt, FONT_B9, ink);
 
   drawLeft(g2X, stackY, "Open", FONT_B9, ink);
-  drawLeft(g2X, stackY + 14, "Prev", FONT_B9, ink);
-  drawLeft(g2X + 38, stackY, openTxt, FONT_B9, ink);
-  drawLeft(g2X + 38, stackY + 14, prevCloseTxt, FONT_B9, ink);
+  drawLeft(g2X, stackY + pairGapY, "Prev", FONT_B9, ink);
+  drawLeft(g2X + valueOffsetX, stackY, openTxt, FONT_B9, ink);
+  drawLeft(g2X + valueOffsetX, stackY + pairGapY, prevCloseTxt, FONT_B9, ink);
 
   drawLeft(g3X, stackY, "Change", FONT_B9, ink);
-  drawLeft(g3X, stackY + 14, "Day %", FONT_B9, ink);
-  drawLeft(g3X + 44, stackY, changeTxt, FONT_B9, ink);
-  drawLeft(g3X + 44, stackY + 14, dayPctTxt, FONT_B9, ink);
+  drawLeft(g3X, stackY + pairGapY, "Day %", FONT_B9, ink);
+  drawLeft(g3X + valueOffsetX, stackY, changeTxt, FONT_B9, ink);
+  drawLeft(g3X + valueOffsetX, stackY + pairGapY, dayPctTxt, FONT_B9, ink);
 
   // Lower half: centered range selector above chart.
   const int lowerTop = midY;
