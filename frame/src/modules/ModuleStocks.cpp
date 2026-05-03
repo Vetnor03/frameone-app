@@ -279,28 +279,7 @@ static void drawReferenceLine(int x, int y, int w, int h,
 static float smoothedSeriesValueAt(const StockCache& data, int idx) {
   const int n = (int)data.seriesCount;
   if (idx < 0 || idx >= n) return NAN;
-
-  // Light smoothing only: 3-point moving average (kernel: 1,2,1), then blend
-  // with the raw value so we mostly preserve detail while rounding sharp edges.
-  float weightedSum = 0.0f;
-  float totalWeight = 0.0f;
-  for (int offset = -1; offset <= 1; offset++) {
-    const int j = idx + offset;
-    if (j < 0 || j >= n) continue;
-    const float v = data.series[j];
-    if (!isfinite(v)) continue;
-
-    const float w = (offset == 0) ? 2.0f : 1.0f;
-    weightedSum += v * w;
-    totalWeight += w;
-  }
-
-  const float raw = data.series[idx];
-  if (totalWeight <= 0.0f || !isfinite(raw)) return raw;
-
-  const float localAvg = weightedSum / totalWeight;
-  const float keepDetail = 0.65f;
-  return (keepDetail * raw) + ((1.0f - keepDetail) * localAvg);
+  return data.series[idx];
 }
 
 static float interpolatedSeriesValueAt(const StockCache& data, float idxF) {
