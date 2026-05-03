@@ -274,6 +274,31 @@ static void drawReferenceLine(int x, int y, int w, int h,
   }
 }
 
+
+
+static float smoothedSeriesValueAt(const StockCache& data, int idx) {
+  const int n = (int)data.seriesCount;
+  if (idx < 0 || idx >= n) return NAN;
+
+  // Weighted 5-point moving average (kernel: 1,2,3,2,1) to reduce jaggedness
+  // without adding interpolation points.
+  float weightedSum = 0.0f;
+  float totalWeight = 0.0f;
+  for (int offset = -2; offset <= 2; offset++) {
+    const int j = idx + offset;
+    if (j < 0 || j >= n) continue;
+    const float v = data.series[j];
+    if (!isfinite(v)) continue;
+
+    const float w = (float)(3 - abs(offset));
+    weightedSum += v * w;
+    totalWeight += w;
+  }
+
+  if (totalWeight <= 0.0f) return data.series[idx];
+  return weightedSum / totalWeight;
+}
+
 static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   if (w <= 6 || h <= 6 || data.seriesCount < 2) {
     drawCenteredLine(x, y, w, h, "No chart data", FONT_B9, Theme::ink());
@@ -285,11 +310,14 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
   const int innerW = w;
   const int innerH = h;
 
-  float mn = data.series[0];
-  float mx = data.series[0];
+  float first = smoothedSeriesValueAt(data, 0);
+  float mn = isfinite(first) ? first : data.series[0];
+  float mx = mn;
   for (uint8_t i = 1; i < data.seriesCount; i++) {
-    if (data.series[i] < mn) mn = data.series[i];
-    if (data.series[i] > mx) mx = data.series[i];
+    const float sv = smoothedSeriesValueAt(data, (int)i);
+    if (!isfinite(sv)) continue;
+    if (sv < mn) mn = sv;
+    if (sv > mx) mx = sv;
   }
   float span = mx - mn;
   if (span < 0.0001f) span = 1.0f;
@@ -300,10 +328,13 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
 
   const int n = (int)data.seriesCount;
   int prevX = innerX;
-  int prevY = innerY + innerH - (int)roundf(((data.series[0] - mn) / span) * (float)(innerH - 1));
+  const float s0 = smoothedSeriesValueAt(data, 0);
+  int prevY = innerY + innerH - (int)roundf((((isfinite(s0) ? s0 : data.series[0]) - mn) / span) * (float)(innerH - 1));
   for (int i = 1; i < n; i++) {
     int px = innerX + (i * (innerW - 1)) / (n - 1);
-    int py = innerY + innerH - (int)roundf(((data.series[i] - mn) / span) * (float)(innerH - 1));
+    const float sv = smoothedSeriesValueAt(data, i);
+    const float value = isfinite(sv) ? sv : data.series[i];
+    int py = innerY + innerH - (int)roundf(((value - mn) / span) * (float)(innerH - 1));
     d.drawLine(prevX, prevY - 1, px, py - 1, Theme::ink());
     d.drawLine(prevX, prevY, px, py, Theme::ink());
     d.drawLine(prevX, prevY + 1, px, py + 1, Theme::ink());
