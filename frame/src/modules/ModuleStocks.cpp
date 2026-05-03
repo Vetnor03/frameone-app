@@ -742,9 +742,8 @@ static void drawLive(const Cell& c, const StockCache& data) {
 
     // Right panel: chart with range label above plot area.
     const int chartInsetX = 10;
-    const int chartInsetTop = 14;
-    const int chartBottomPad = 14;
-    const int rangeBaselineY = panelTop + chartInsetTop;
+    const int chartBottomPad = 24;
+    const int rangeBaselineY = titleBaseline;
     const int labelCenterX = rightX + 68 / 2;
     drawTextCenteredAt(labelCenterX, rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
 
@@ -752,7 +751,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
     uint16_t rangeW, rangeH;
     measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
 
-    const int chartTopGap = 8;
+    const int chartTopGap = 14;
     const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
     const int chartH = max(20, panelBottom - chartBottomPad - chartY);
     drawChartBox(
