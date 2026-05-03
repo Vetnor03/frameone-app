@@ -2495,18 +2495,6 @@ function ShareFrameCodeSheet({
 
         {/* Code box */}
         <div className="mt-5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-center">
-          {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {dinnerPlanDays.map((day) => (day.title || day.items.length > 0) ? (
-              <div key={day.day} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2">
-                  <div className="text-sm text-[color:var(--fg-90)]">{day.title || '—'}</div>
-                </div>
-              </div>
-            ) : null)}
-          </div>
-        ) : null}
 
         {loading ? (
             <div className="text-[color:var(--fg-50)] text-sm">
