@@ -790,7 +790,7 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int statsY = rowY + rowH + 16;
   const int leftColX = c.x + padX;
   const int rightColX = c.x + c.w / 2 + 12;
-  const int labelW = 68;
+  const int labelW = 92;
   drawLeft(leftColX, statsY, "Open", FONT_B9, ink);
   drawLeft(leftColX + labelW, statsY, openTxt, FONT_B9, ink);
   drawLeft(leftColX, statsY + 14, "High", FONT_B9, ink);
