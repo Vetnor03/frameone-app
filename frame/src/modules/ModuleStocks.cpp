@@ -807,55 +807,68 @@ static void drawLive(const Cell& c, const StockCache& data) {
   // XL
   const uint16_t ink = Theme::ink();
   const int padX = 22;
-  const int topY = c.y + 22;
+  const int midY = c.y + (c.h / 2);
 
+  // Upper half: title + summary + detailed triplets.
+  const int titleBaseline = c.y + 22;
+  const int titleUnderlineGap = 4;
+  const int titleUnderlineH = 2;
   char titleFit[64] = {0};
-  fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - padX * 2, FONT_B18);
-  drawTextCenteredAt(c.x + c.w / 2, topY, titleFit, FONT_B18, ink);
-  drawTextCenteredAt(c.x + c.w / 2, topY + 18, rangeLabel(data.chartRange), FONT_B9, ink);
+  fitTextToWidth(title, titleFit, sizeof(titleFit), c.w - padX * 2, FONT_B12);
+  int16_t tx1, ty1;
+  uint16_t tw, th;
+  measureText(titleFit, FONT_B12, tx1, ty1, tw, th);
+  drawTextCenteredAt(c.x + c.w / 2, titleBaseline, titleFit, FONT_B12, ink);
+  const int titleUnderlineY = (titleBaseline + ty1) + (int)th + titleUnderlineGap;
+  const int titleUnderlineX = c.x + c.w / 2 - (int)tw / 2;
+  d.fillRect(titleUnderlineX, titleUnderlineY, (int)tw, titleUnderlineH, ink);
 
-  const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
   const int rowW = c.w - 80;
   const int rowX = c.x + (c.w - rowW) / 2;
-  const int rowY = topY + 26;
-  const int colW = rowW / 3;
+  const int rowY = titleUnderlineY + titleUnderlineH + 12;
   const int rowH = 20;
+  const int colW = rowW / 3;
   d.drawFastVLine(rowX + colW, rowY - 2, rowH + 4, ink);
   d.drawFastVLine(rowX + colW * 2, rowY - 2, rowH + 4, ink);
   drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B12, ink);
-  drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B12, ink);
-  drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B12, ink);
+  drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, changeTxt, FONT_B12, ink);
+  drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, dayPctTxt, FONT_B12, ink);
 
-  const int statsY = rowY + rowH + 16;
-  const int leftColX = c.x + padX;
-  const int rightColX = c.x + c.w / 2 + 12;
-  const int labelW = 68;
-  drawLeft(leftColX, statsY, "Open", FONT_B9, ink);
-  drawLeft(leftColX + labelW, statsY, openTxt, FONT_B9, ink);
-  drawLeft(leftColX, statsY + 14, "High", FONT_B9, ink);
-  drawLeft(leftColX + labelW, statsY + 14, highTxt, FONT_B9, ink);
-  drawLeft(leftColX, statsY + 28, "Low", FONT_B9, ink);
-  drawLeft(leftColX + labelW, statsY + 28, lowTxt, FONT_B9, ink);
+  const int stackY = rowY + rowH + 12;
+  const int groupW = (c.w - (padX * 2)) / 3;
+  const int g1X = c.x + padX;
+  const int g2X = g1X + groupW;
+  const int g3X = g2X + groupW;
 
-  drawLeft(rightColX, statsY, "Prev close", FONT_B9, ink);
-  drawLeft(rightColX + labelW, statsY, prevCloseTxt, FONT_B9, ink);
-  drawLeft(rightColX, statsY + 14, "Change", FONT_B9, ink);
-  drawLeft(rightColX + labelW, statsY + 14, changeTxt, FONT_B9, ink);
-  drawLeft(rightColX, statsY + 28, "Day %", FONT_B9, ink);
-  drawLeft(rightColX + labelW, statsY + 28, dayPctTxt, FONT_B9, ink);
+  drawLeft(g1X, stackY, "High", FONT_B9, ink);
+  drawLeft(g1X, stackY + 14, "Low", FONT_B9, ink);
+  drawLeft(g1X + 38, stackY, highTxt, FONT_B9, ink);
+  drawLeft(g1X + 38, stackY + 14, lowTxt, FONT_B9, ink);
 
-  const int chartX = c.x + 20;
-  const int chartW = c.w - 40;
-  const int rangeBaselineY = statsY + 44;
-  drawTextCenteredAt(rightColX + (labelW / 2), rangeBaselineY, rangeLabel(data.chartRange), FONT_B9, ink);
+  drawLeft(g2X, stackY, "Open", FONT_B9, ink);
+  drawLeft(g2X, stackY + 14, "Prev", FONT_B9, ink);
+  drawLeft(g2X + 38, stackY, openTxt, FONT_B9, ink);
+  drawLeft(g2X + 38, stackY + 14, prevCloseTxt, FONT_B9, ink);
+
+  drawLeft(g3X, stackY, "Change", FONT_B9, ink);
+  drawLeft(g3X, stackY + 14, "Day %", FONT_B9, ink);
+  drawLeft(g3X + 44, stackY, changeTxt, FONT_B9, ink);
+  drawLeft(g3X + 44, stackY + 14, dayPctTxt, FONT_B9, ink);
+
+  // Lower half: range selector on top-left, chart below.
+  const int lowerTop = midY;
+  const int rangeBaselineY = lowerTop + 16;
+  const int rangeLeftX = c.x + padX;
+  drawRangeSelectorRow(rangeLeftX + 92, rangeBaselineY, data.chartRange, ink);
 
   int16_t rangeX1, rangeY1;
   uint16_t rangeW, rangeH;
-  measureText(rangeLabel(data.chartRange), FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
-  const int chartTopGap = 8;
-  const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + chartTopGap;
-  const int chartBottomPad = 24;
-  const int chartH = max(26, c.y + c.h - chartBottomPad - chartY);
+  measureText("Month", FONT_B9, rangeX1, rangeY1, rangeW, rangeH);
+  const int chartX = c.x + 20;
+  const int chartW = c.w - 40;
+  const int chartY = rangeBaselineY + rangeY1 + (int)rangeH + 8;
+  const int chartBottomPad = 20;
+  const int chartH = max(24, c.y + c.h - chartBottomPad - chartY);
   drawChartBox(chartX, chartY, chartW, chartH, data);
 }
 
