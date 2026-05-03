@@ -849,23 +849,29 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int g2CenterX = detailX + groupW + groupW / 2;
   const int g3CenterX = detailX + groupW * 2 + (detailW - groupW * 2) / 2;
 
-  const int pairGapY = 22;
-  const int valueOffsetX = 70;
+  const int valueOffsetX = 74;
+  const int valueLineGapY = 14;
 
-  drawLeft(g1CenterX - (valueOffsetX / 2), stackY, "High", FONT_B9, ink);
-  drawLeft(g1CenterX - (valueOffsetX / 2), stackY + pairGapY, "Low", FONT_B9, ink);
-  drawLeft(g1CenterX - (valueOffsetX / 2) + valueOffsetX, stackY, highTxt, FONT_B9, ink);
-  drawLeft(g1CenterX - (valueOffsetX / 2) + valueOffsetX, stackY + pairGapY, lowTxt, FONT_B9, ink);
+  const int g1LeftX = g1CenterX - (valueOffsetX / 2);
+  const int g1RightX = g1CenterX + (valueOffsetX / 2);
+  drawTextCenteredAt(g1LeftX, stackY, "High", FONT_B9, ink);
+  drawTextCenteredAt(g1RightX, stackY, "Low", FONT_B9, ink);
+  drawTextCenteredAt(g1LeftX, stackY + valueLineGapY, highTxt, FONT_B9, ink);
+  drawTextCenteredAt(g1RightX, stackY + valueLineGapY, lowTxt, FONT_B9, ink);
 
-  drawLeft(g2CenterX - (valueOffsetX / 2), stackY, "Open", FONT_B9, ink);
-  drawLeft(g2CenterX - (valueOffsetX / 2), stackY + pairGapY, "Prev", FONT_B9, ink);
-  drawLeft(g2CenterX - (valueOffsetX / 2) + valueOffsetX, stackY, openTxt, FONT_B9, ink);
-  drawLeft(g2CenterX - (valueOffsetX / 2) + valueOffsetX, stackY + pairGapY, prevCloseTxt, FONT_B9, ink);
+  const int g2LeftX = g2CenterX - (valueOffsetX / 2);
+  const int g2RightX = g2CenterX + (valueOffsetX / 2);
+  drawTextCenteredAt(g2LeftX, stackY, "Open", FONT_B9, ink);
+  drawTextCenteredAt(g2RightX, stackY, "Prev", FONT_B9, ink);
+  drawTextCenteredAt(g2LeftX, stackY + valueLineGapY, openTxt, FONT_B9, ink);
+  drawTextCenteredAt(g2RightX, stackY + valueLineGapY, prevCloseTxt, FONT_B9, ink);
 
-  drawLeft(g3CenterX - (valueOffsetX / 2), stackY, "Change", FONT_B9, ink);
-  drawLeft(g3CenterX - (valueOffsetX / 2), stackY + pairGapY, "Day %", FONT_B9, ink);
-  drawLeft(g3CenterX - (valueOffsetX / 2) + valueOffsetX, stackY, changeTxt, FONT_B9, ink);
-  drawLeft(g3CenterX - (valueOffsetX / 2) + valueOffsetX, stackY + pairGapY, dayPctTxt, FONT_B9, ink);
+  const int g3LeftX = g3CenterX - (valueOffsetX / 2);
+  const int g3RightX = g3CenterX + (valueOffsetX / 2);
+  drawTextCenteredAt(g3LeftX, stackY, "Change", FONT_B9, ink);
+  drawTextCenteredAt(g3RightX, stackY, "Day", FONT_B9, ink);
+  drawTextCenteredAt(g3LeftX, stackY + valueLineGapY, changeTxt, FONT_B9, ink);
+  drawTextCenteredAt(g3RightX, stackY + valueLineGapY, dayPctTxt, FONT_B9, ink);
 
   // Lower half: centered range selector above chart.
   const int lowerTop = midY;
