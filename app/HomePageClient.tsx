@@ -5036,9 +5036,6 @@ function GroceriesModuleSettingsTab({
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
         ) : (
           <div className="px-2 py-2">
-            {hasDinnerPlan && uncategorizedMainItems.length > 0 ? (
-              <div className="px-1 pb-2 text-sm font-semibold text-[color:var(--fg-80)]">{language === 'no' ? 'Annet:' : 'Other:'}</div>
-            ) : null}
             {groupsForDisplay.map((group) => (
               <div key={group.category} className="mb-3">
                 <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
