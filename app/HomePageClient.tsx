@@ -5331,7 +5331,7 @@ function DinnerPlanSheet({
   const removeItem = (day: DinnerPlanDay['day'], idx: number) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: x.items.filter((_, i) => i !== idx) } : x))
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
-      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div><button onClick={onCancel} className="text-[color:var(--fg-60)] text-xl">✕</button></div>
+      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
       <div className="mt-4 overflow-y-auto pr-1">
         {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
           <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
