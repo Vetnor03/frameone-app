@@ -683,6 +683,7 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
+  const autoPersistingRef = useRef(false)
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
   const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
@@ -1273,7 +1274,7 @@ export default function HomePage() {
   const appText = 'text-[color:var(--fg)]'
 
   useEffect(() => {
-    if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting) return
+    if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting || autoPersistingRef.current) return
     if (activeTab === 'settings') return
 
     const timer = window.setTimeout(async () => {
@@ -1292,7 +1293,7 @@ export default function HomePage() {
       }
 
       try {
-        setPersisting(true)
+        autoPersistingRef.current = true
         const { data, error } = await supabase.rpc('upsert_device_settings', {
           p_device_id: activeDeviceId,
           p_settings: settingsJson,
@@ -1313,7 +1314,7 @@ export default function HomePage() {
       } catch {
         // keep unsaved state; user can still tap UPDATE manually
       } finally {
-        setPersisting(false)
+        autoPersistingRef.current = false
       }
     }, 550)
 
