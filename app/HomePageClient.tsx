@@ -4504,11 +4504,13 @@ function groceryIsVisible(item: GroceryItem, nowMs: number) {
 function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs: number) {
   if (!checkedAt) return language === 'no' ? 'Kan angres i 24t' : 'You can undo for 24h'
   const elapsedMs = Math.max(0, nowMs - new Date(checkedAt).getTime())
-  const remainingHours = (GROCERY_UNDO_WINDOW_MS - elapsedMs) / (60 * 60 * 1000)
+  const remainingMs = Math.max(0, GROCERY_UNDO_WINDOW_MS - elapsedMs)
+  const remainingTotalMinutes = Math.ceil(remainingMs / (60 * 1000))
+  const hours = Math.floor(remainingTotalMinutes / 60)
+  const minutes = remainingTotalMinutes % 60
 
-  const hourBucket = remainingHours > 5 ? 24 : remainingHours > 2 ? 5 : remainingHours > 1 ? 2 : 1
-  if (language === 'no') return `Kan angres i ${hourBucket}t`
-  return `You can undo for ${hourBucket}h`
+  if (language === 'no') return `Kan angres i ${hours}t ${minutes}m`
+  return `You can undo for ${hours}h ${minutes}m`
 }
 
 function GroceriesModuleSettingsTab({
@@ -4972,14 +4974,6 @@ function GroceriesModuleSettingsTab({
         .filter((g) => g.items.length > 0),
     [groupedVisibleItems, plannedNameSet]
   )
-  const dinnerPlanActiveDays = useMemo(
-    () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && !(day.items.length > 0 && day.items.every((x) => x.isChecked))),
-    [dinnerPlanDays]
-  )
-  const dinnerPlanCompletedDays = useMemo(
-    () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && day.items.length > 0 && day.items.every((x) => x.isChecked)),
-    [dinnerPlanDays]
-  )
   const dinnerPlanGroupedItems = useMemo(() => {
     const byCategory = new Map<GroceryCategory, GroceryItem[]>()
     for (const c of GROCERY_CATEGORY_LIST_ORDER) byCategory.set(c, [])
@@ -5005,14 +4999,27 @@ function GroceriesModuleSettingsTab({
     return GROCERY_CATEGORY_LIST_ORDER.map((category) => ({ category, items: byCategory.get(category) || [] })).filter((g) => g.items.length > 0)
   }, [dinnerPlanDays])
   const groupsForDisplay = useMemo(() => {
-    if (!hasDinnerPlan) return groupedVisibleItems
+    const sortGroups = (groups: Array<{ category: GroceryCategory; items: GroceryItem[] }>) =>
+      groups
+        .map((group) => ({
+          ...group,
+          allChecked: group.items.length > 0 && group.items.every((item) => item.isChecked),
+          order: GROCERY_CATEGORY_LIST_ORDER.indexOf(group.category),
+        }))
+        .sort((a, b) => {
+          if (a.allChecked !== b.allChecked) return a.allChecked ? 1 : -1
+          return a.order - b.order
+        })
+        .map(({ category, items }) => ({ category, items }))
+
+    if (!hasDinnerPlan) return sortGroups(groupedVisibleItems)
     const base = uncategorizedMainItems.map((g) => ({ ...g, items: [...g.items] }))
     for (const dGroup of dinnerPlanGroupedItems) {
       const target = base.find((g) => g.category === dGroup.category)
       if (target) target.items = [...target.items, ...dGroup.items]
       else base.push({ category: dGroup.category, items: [...dGroup.items] })
     }
-    return base.filter((g) => g.items.length > 0)
+    return sortGroups(base.filter((g) => g.items.length > 0))
   }, [hasDinnerPlan, groupedVisibleItems, uncategorizedMainItems, dinnerPlanGroupedItems])
 
   async function rememberHistoryItem(name: string, category: GroceryCategory, nowIso = new Date().toISOString()) {
@@ -5545,15 +5552,6 @@ function GroceriesModuleSettingsTab({
                 </div>
               </div>
             ))}
-            {hasDinnerPlan && dinnerPlanCompletedDays.length > 0 ? (
-              <div className="mt-3 pt-3 border-t border-[color:var(--bd-10)]">
-                {dinnerPlanCompletedDays.map((day) => (
-                  <div key={`completed-${day.day}`} className="mb-3">
-                    <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-60)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
           </div>
         )}
       </div>
