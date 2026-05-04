@@ -2495,7 +2495,8 @@ function ShareFrameCodeSheet({
 
         {/* Code box */}
         <div className="mt-5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-center">
-          {loading ? (
+
+        {loading ? (
             <div className="text-[color:var(--fg-50)] text-sm">
               {isNo ? 'Laster…' : 'Loading…'}
             </div>
@@ -3439,7 +3440,7 @@ function CountdownModuleSettingsTab({
         </div>
       </div>
 
-      {sheetOpen && activeDeviceId && (
+    {sheetOpen && activeDeviceId && (
         <CountdownDraftSheet
           language={language}
           activeDeviceId={activeDeviceId}
@@ -4313,6 +4314,30 @@ type GrocerySuggestion = {
   category: GroceryCategory
 }
 
+
+
+type DinnerPlanDay = {
+  day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+  title: string
+  items: { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }[]
+}
+
+const DINNER_PLAN_DAY_ORDER: DinnerPlanDay['day'][] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+function dinnerPlanDayLabel(language: AppLanguage, day: DinnerPlanDay['day']) {
+  const en: Record<DinnerPlanDay['day'], string> = {
+    monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday'
+  }
+  const no: Record<DinnerPlanDay['day'], string> = {
+    monday: 'Mandag', tuesday: 'Tirsdag', wednesday: 'Onsdag', thursday: 'Torsdag', friday: 'Fredag', saturday: 'Lørdag', sunday: 'Søndag'
+  }
+  return language === 'no' ? no[day] : en[day]
+}
+
+function defaultDinnerPlanDays(): DinnerPlanDay[] {
+  return DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: '', items: [] }))
+}
+
 const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
 const GROCERY_CATEGORY_LIST_ORDER: GroceryCategory[] = [
   'bread',
@@ -4401,6 +4426,9 @@ function GroceriesModuleSettingsTab({
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
+  const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
+  const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
+  const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
@@ -4644,6 +4672,144 @@ function GroceriesModuleSettingsTab({
     return () => window.clearInterval(handle)
   }, [])
 
+
+  useEffect(() => {
+    if (!activeDeviceId) {
+      setDinnerPlanDays(defaultDinnerPlanDays())
+      return
+    }
+    const key = `dinner-plan:${activeDeviceId}`
+    const raw = window.localStorage.getItem(key)
+    if (!raw) {
+      setDinnerPlanDays(defaultDinnerPlanDays())
+      return
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      const next = DINNER_PLAN_DAY_ORDER.map((day) => {
+        const found = Array.isArray(parsed) ? parsed.find((x: any) => x?.day === day) : null
+        const items = Array.isArray(found?.items)
+          ? found.items
+            .map((it: any) => ({
+              name: String(it?.name ?? '').trim(),
+              category: asGroceryCategory(it?.category),
+              quantity: Math.max(1, Number(it?.quantity ?? 1) || 1),
+              isChecked: !!it?.isChecked,
+              checkedAt: it?.checkedAt ? String(it.checkedAt) : null,
+              updatedAt: it?.updatedAt ? String(it.updatedAt) : null,
+            }))
+            .filter((it: { name: string }) => !!it.name)
+          : []
+        return { day, title: String(found?.title ?? '').trim(), items }
+      })
+      setDinnerPlanDays(next)
+    } catch {
+      setDinnerPlanDays(defaultDinnerPlanDays())
+    }
+  }, [activeDeviceId])
+
+  const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
+  const dinnerPlanOtherItems = useMemo(
+    () => dinnerPlanDays.flatMap((d) => d.items).filter((x) => x.category === 'other'),
+    [dinnerPlanDays]
+  )
+  const plannedNameSet = useMemo(() => new Set(dinnerPlanDays.flatMap((d) => d.items.map((i) => i.name.trim().toLowerCase())).filter(Boolean)), [dinnerPlanDays])
+  const uncategorizedMainItems = useMemo(
+    () =>
+      groupedVisibleItems
+        .map((g) => ({ ...g, items: g.items.filter((it) => !plannedNameSet.has(it.name.trim().toLowerCase())) }))
+        .filter((g) => g.items.length > 0),
+    [groupedVisibleItems, plannedNameSet]
+  )
+  const dinnerPlanActiveDays = useMemo(
+    () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && !(day.items.length > 0 && day.items.every((x) => x.isChecked))),
+    [dinnerPlanDays]
+  )
+  const dinnerPlanCompletedDays = useMemo(
+    () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && day.items.length > 0 && day.items.every((x) => x.isChecked)),
+    [dinnerPlanDays]
+  )
+  const dinnerPlanGroupedItems = useMemo(() => {
+    const byCategory = new Map<GroceryCategory, GroceryItem[]>()
+    for (const c of GROCERY_CATEGORY_LIST_ORDER) byCategory.set(c, [])
+    const aggregate = new Map<string, { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }>()
+    for (const day of dinnerPlanDays) {
+      for (const item of day.items) {
+        const key = `${item.category}__${item.name.trim().toLowerCase()}`
+        const existing = aggregate.get(key)
+        if (existing) {
+          existing.quantity += item.quantity
+          existing.isChecked = existing.isChecked && item.isChecked
+          if (!existing.checkedAt || (item.checkedAt && item.checkedAt > existing.checkedAt)) existing.checkedAt = item.checkedAt
+        } else {
+          aggregate.set(key, { ...item })
+        }
+      }
+    }
+    for (const entry of aggregate.values()) {
+      const list = byCategory.get(entry.category) || []
+      list.push({ id: `dinner-${entry.category}-${entry.name}`, ...entry })
+      byCategory.set(entry.category, list)
+    }
+    return GROCERY_CATEGORY_LIST_ORDER.map((category) => ({ category, items: byCategory.get(category) || [] })).filter((g) => g.items.length > 0)
+  }, [dinnerPlanDays])
+  const groupsForDisplay = useMemo(() => {
+    if (!hasDinnerPlan) return groupedVisibleItems
+    const base = uncategorizedMainItems.map((g) => ({ ...g, items: [...g.items] }))
+    for (const dGroup of dinnerPlanGroupedItems) {
+      const target = base.find((g) => g.category === dGroup.category)
+      if (target) target.items = [...target.items, ...dGroup.items]
+      else base.push({ category: dGroup.category, items: [...dGroup.items] })
+    }
+    return base.filter((g) => g.items.length > 0)
+  }, [hasDinnerPlan, groupedVisibleItems, uncategorizedMainItems, dinnerPlanGroupedItems])
+
+  function persistDinnerPlan(next: DinnerPlanDay[]) {
+    setDinnerPlanDays(next)
+    if (activeDeviceId) {
+      window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(next))
+    }
+  }
+  function isDinnerVirtualId(id: string) {
+    return id.startsWith('dinner-')
+  }
+  function findDinnerTarget(item: GroceryItem) {
+    for (const day of dinnerPlanDays) {
+      const idx = day.items.findIndex((x) => x.name.trim().toLowerCase() === item.name.trim().toLowerCase() && x.category === item.category)
+      if (idx >= 0) return { day: day.day, idx }
+    }
+    return null
+  }
+
+  function toggleDinnerItem(dayKey: DinnerPlanDay['day'], itemIndex: number) {
+    const nowIso = new Date().toISOString()
+    const next = dinnerPlanDays.map((day) => {
+      if (day.day !== dayKey) return day
+      return {
+        ...day,
+        items: day.items.map((item, idx) => idx === itemIndex ? { ...item, isChecked: !item.isChecked, checkedAt: !item.isChecked ? nowIso : null, updatedAt: nowIso } : item),
+      }
+    })
+    persistDinnerPlan(next)
+  }
+
+  function adjustDinnerItemQty(dayKey: DinnerPlanDay['day'], itemIndex: number, delta: number) {
+    const day = dinnerPlanDays.find((x) => x.day === dayKey)
+    const current = day?.items[itemIndex]
+    if (delta < 0 && current && current.quantity <= 1) {
+      const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
+      if (!confirmed) return
+    }
+    const next = dinnerPlanDays.map((day) => {
+      if (day.day !== dayKey) return day
+      const items = day.items
+        .map((item, idx) => idx === itemIndex ? { ...item, quantity: Math.max(0, item.quantity + delta), updatedAt: new Date().toISOString() } : item)
+        .filter((item) => item.quantity > 0)
+      return { ...day, items }
+    })
+    persistDinnerPlan(next)
+  }
+
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
     const normalizedName = name.trim()
     if (!normalizedName || !activeDeviceId) return
@@ -4702,6 +4868,16 @@ function GroceriesModuleSettingsTab({
   }
 
   async function toggleChecked(item: GroceryItem) {
+    if (isDinnerVirtualId(item.id)) {
+      const nextChecked = !item.isChecked
+      const nowIso = new Date().toISOString()
+      const next = dinnerPlanDays.map((day) => ({
+        ...day,
+        items: day.items.map((x) => x.name.trim().toLowerCase() === item.name.trim().toLowerCase() && x.category === item.category ? { ...x, isChecked: nextChecked, checkedAt: nextChecked ? nowIso : null, updatedAt: nowIso } : x),
+      }))
+      persistDinnerPlan(next)
+      return
+    }
     const nextChecked = !item.isChecked
     const nowIso = new Date().toISOString()
     pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
@@ -4735,6 +4911,23 @@ function GroceriesModuleSettingsTab({
   }
 
   async function adjustQuantity(item: GroceryItem, delta: number) {
+    if (isDinnerVirtualId(item.id)) {
+      const target = findDinnerTarget(item)
+      if (!target) return
+      if (delta < 0 && item.quantity <= 1) {
+        const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
+        if (!confirmed) return
+      }
+      const next = dinnerPlanDays.map((day) => {
+        if (day.day !== target.day) return day
+        const items = day.items
+          .map((x, idx) => idx === target.idx ? { ...x, quantity: Math.max(0, x.quantity + delta), updatedAt: new Date().toISOString() } : x)
+          .filter((x) => x.quantity > 0)
+        return { ...day, items }
+      })
+      persistDinnerPlan(next)
+      return
+    }
     if (delta < 0 && item.quantity === 1) {
       const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
       if (!confirmed) return
@@ -4880,7 +5073,7 @@ function GroceriesModuleSettingsTab({
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
         ) : (
           <div className="px-2 py-2">
-            {groupedVisibleItems.map((group) => (
+            {groupsForDisplay.map((group) => (
               <div key={group.category} className="mb-3">
                 <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
                   {groceryCategoryLabel(language, group.category)}
@@ -4892,6 +5085,11 @@ function GroceriesModuleSettingsTab({
                 key={item.id}
                 className="px-4 py-3 flex items-start gap-3 cursor-pointer"
                 onClick={() => {
+                  if (isDinnerVirtualId(item.id)) {
+                    const target = findDinnerTarget(item)
+                    if (target) setDinnerPlanMainEditTarget(target)
+                    return
+                  }
                   setEditingItem(item)
                   setSheetOpen(true)
                 }}
@@ -4945,6 +5143,15 @@ function GroceriesModuleSettingsTab({
                 </div>
               </div>
             ))}
+            {hasDinnerPlan && dinnerPlanCompletedDays.length > 0 ? (
+              <div className="mt-3 pt-3 border-t border-[color:var(--bd-10)]">
+                {dinnerPlanCompletedDays.map((day) => (
+                  <div key={`completed-${day.day}`} className="mb-3">
+                    <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-60)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -4956,15 +5163,50 @@ function GroceriesModuleSettingsTab({
             setSheetOpen(true)
           }}
           disabled={!activeDeviceId}
-          className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+          className={`mt-3 w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
             !activeDeviceId ? 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]' : 'border-[#2aa3ff] text-[#2aa3ff]'
           }`}
           style={{ backgroundColor: 'var(--app-bg)' }}
         >
           {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
         </button>
+        <button
+          onClick={() => setDinnerPlanOpen(true)}
+          disabled={!activeDeviceId}
+          className={`mt-3 w-[260px] h-[44px] rounded-2xl border text-xs tracking-widest transition ${
+            !activeDeviceId ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'
+          }`}
+        >
+          {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
+        </button>
       </div>
     </div>
+    {dinnerPlanOpen && activeDeviceId && (
+      <DinnerPlanSheet
+        language={language}
+        suggestions={suggestions}
+        initialDays={dinnerPlanDays}
+        onCancel={() => setDinnerPlanOpen(false)}
+        onSave={(days) => {
+          setDinnerPlanDays(days)
+          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
+          setDinnerPlanOpen(false)
+        }}
+      />
+    )}
+    {dinnerPlanMainEditTarget ? (
+      <DinnerPlanAddItemSheet
+        language={language}
+        suggestions={suggestions}
+        initialItem={dinnerPlanDays.find((d) => d.day === dinnerPlanMainEditTarget.day)?.items[dinnerPlanMainEditTarget.idx] ?? null}
+        onClose={() => setDinnerPlanMainEditTarget(null)}
+        onAdd={(name, quantity, category) => {
+          const next = dinnerPlanDays.map((d) => d.day === dinnerPlanMainEditTarget.day ? { ...d, items: d.items.map((it, i) => i === dinnerPlanMainEditTarget.idx ? { ...it, name, quantity, category, updatedAt: new Date().toISOString() } : it) } : d)
+          persistDinnerPlan(next)
+          setDinnerPlanMainEditTarget(null)
+        }}
+      />
+    ) : null}
     {sheetOpen && activeDeviceId && (
       <GroceriesDraftSheet
         language={language}
@@ -5128,6 +5370,153 @@ function GroceriesDraftSheet({
       </div>
     </div>
   )
+}
+
+
+function DinnerPlanSheet({
+  language,
+  suggestions,
+  initialDays,
+  onCancel,
+  onSave,
+}: {
+  language: AppLanguage
+  suggestions: GrocerySuggestion[]
+  initialDays: DinnerPlanDay[]
+  onCancel: () => void
+  onSave: (days: DinnerPlanDay[]) => void
+}) {
+  const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
+  const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
+  const [editingTarget, setEditingTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
+  const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
+  const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
+    setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
+  const adjustDayItemQty = (day: DinnerPlanDay['day'], idx: number, delta: number) =>
+    setDays((prev) =>
+      prev.map((x) => {
+        if (x.day !== day) return x
+        const current = x.items[idx]
+        if (delta < 0 && current && current.quantity <= 1) {
+          const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra dagen?' : 'Remove this item from this day?')
+          if (!confirmed) return x
+        }
+        const items = x.items
+          .map((it, i) => (i === idx ? { ...it, quantity: Math.max(0, it.quantity + delta), updatedAt: new Date().toISOString() } : it))
+          .filter((it) => it.quantity > 0)
+        return { ...x, items }
+      })
+    )
+  return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+    <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
+      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
+      <div className="mt-4 overflow-y-auto pr-1">
+        {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
+          <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+          <input value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
+          <div className="mt-2">
+            {[...GROCERY_CATEGORY_LIST_ORDER].sort((a, b) => {
+              const aItems = day.items.filter((item) => item.category === a)
+              const bItems = day.items.filter((item) => item.category === b)
+              const aAllChecked = aItems.length > 0 && aItems.every((x) => x.isChecked)
+              const bAllChecked = bItems.length > 0 && bItems.every((x) => x.isChecked)
+              if (aAllChecked !== bAllChecked) return aAllChecked ? 1 : -1
+              return GROCERY_CATEGORY_LIST_ORDER.indexOf(a) - GROCERY_CATEGORY_LIST_ORDER.indexOf(b)
+            }).map((c) => {
+              const categoryItems = day.items.map((item, idx) => ({ item, idx })).filter((x) => x.item.category === c)
+              if (categoryItems.length === 0) return null
+              return <div key={`${day.day}-${c}`} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, c)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] divide-y divide-[color:var(--bd-10)]">
+                  {categoryItems.map(({ item, idx }) => (
+                    <div key={`${day.day}-${c}-${idx}`} className="px-3 py-2 flex items-center gap-3">
+                      <button onClick={() => setEditingTarget({ day: day.day, idx })} className="min-w-0 flex-1 text-left text-[color:var(--fg-90)]">{item.name}</button>
+                      <div className="shrink-0 flex items-center gap-2.5">
+                        <button onClick={() => adjustDayItemQty(day.day, idx, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
+                        <div className="text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)]">{item.quantity}</div>
+                        <button onClick={() => adjustDayItemQty(day.day, idx, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            })}
+          </div>
+          <button onClick={() => setAddTargetDay(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
+        </div>)}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+        <button onClick={onCancel} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
+      </div>
+    </div>
+    {addTargetDay ? (
+      <DinnerPlanAddItemSheet
+        language={language}
+        suggestions={suggestions}
+        onClose={() => setAddTargetDay(null)}
+        onAdd={(name, quantity, category) => {
+          addItemToDay(addTargetDay, name, quantity, category)
+          setAddTargetDay(null)
+        }}
+      />
+    ) : null}
+    {editingTarget ? (
+      <DinnerPlanAddItemSheet
+        language={language}
+        suggestions={suggestions}
+        initialItem={days.find((d) => d.day === editingTarget.day)?.items[editingTarget.idx] ?? null}
+        onClose={() => setEditingTarget(null)}
+        onAdd={(name, quantity, category) => {
+          setDays((prev) => prev.map((d) => d.day === editingTarget.day ? { ...d, items: d.items.map((it, i) => i === editingTarget.idx ? { ...it, name, quantity, category, updatedAt: new Date().toISOString() } : it) } : d))
+          setEditingTarget(null)
+        }}
+      />
+    ) : null}
+  </div>
+}
+
+function DinnerPlanAddItemSheet({
+  language,
+  suggestions,
+  initialItem,
+  onClose,
+  onAdd,
+}: {
+  language: AppLanguage
+  suggestions: GrocerySuggestion[]
+  initialItem?: { name: string; quantity: number; category: GroceryCategory } | null
+  onClose: () => void
+  onAdd: (name: string, quantity: number, category: GroceryCategory) => void
+}) {
+  const [name, setName] = useState(initialItem?.name ?? '')
+  const [quantity, setQuantity] = useState(initialItem?.quantity ?? 1)
+  const [category, setCategory] = useState<GroceryCategory>(initialItem?.category ?? 'other')
+  const filtered = useMemo(() => {
+    const q = name.trim().toLowerCase()
+    return suggestions.filter((s) => !q || s.name.toLowerCase().includes(q)).slice(0, 30)
+  }, [name, suggestions])
+
+  return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[color:var(--overlay-55)]">
+    <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh] px-5 pt-5 pb-6">
+      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</div><button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button></div>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(language).groceriesInputPlaceholder} className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none" />
+      <div className="mt-4 flex items-center justify-center gap-3">
+          <button onClick={() => setQuantity((v: number) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
+        <div className="w-10 text-center text-[color:var(--fg-85)]">{quantity}</div>
+          <button onClick={() => setQuantity((v: number) => v + 1)} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">+</button>
+      </div>
+      <select value={category} onChange={(e) => setCategory(asGroceryCategory(e.target.value))} className="mt-4 w-full h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-85)] outline-none">
+        {GROCERY_CATEGORY_LIST_ORDER.map((c) => <option key={c} value={c}>{groceryCategoryLabel(language, c)}</option>)}
+      </select>
+      <div className="mt-4 text-[10px] tracking-widest text-[color:var(--fg-45)]">{tx(language).groceriesSuggestions}</div>
+      <div className="mt-2 h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+        {filtered.map((s) => <button key={s.name} onClick={() => { setName(s.name); setCategory(s.category) }} className="w-full text-left px-4 py-3 border-b border-[color:var(--bd-10)] last:border-b-0"><div className="text-[color:var(--fg-90)]">{s.name}</div><div className="text-xs text-[color:var(--fg-45)]">{groceryCategoryLabel(language, s.category)}</div></button>)}
+      </div>
+      <button onClick={() => name.trim() && onAdd(name.trim(), quantity, category)} disabled={!name.trim()} className={`mt-4 h-11 rounded-2xl border tracking-widest text-xs ${name.trim() ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'}`}>{language === 'no' ? 'LEGG TIL' : 'ADD'}</button>
+      <button onClick={onClose} className="mt-2 h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'LUKK' : 'CLOSE'}</button>
+    </div>
+  </div>
 }
 
 function GrocerySuggestionSwipeRow({
@@ -5796,7 +6185,7 @@ const sortedReminders = useMemo(() => {
         </div>
       </div>
 
-      {sheetOpen && activeDeviceId && (
+    {sheetOpen && activeDeviceId && (
         <ReminderDraftSheet
           language={language}
           activeDeviceId={activeDeviceId}
@@ -7139,7 +7528,7 @@ function SurfExperienceCard({
               style={latestListMaxHeight ? { maxHeight: `${latestListMaxHeight}px` } : undefined}
               className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
             >
-              {loading ? (
+                      {loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
@@ -8278,11 +8667,11 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
+                  {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
         </div>
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
-          {loading ? (
+                  {loading ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen spots funnet' : 'No spots found'}</div>
@@ -8442,7 +8831,7 @@ function WeatherLocationSheet({
         </div>
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
-          {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
+                  {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
         </div>
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
