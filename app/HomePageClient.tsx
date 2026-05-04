@@ -4338,6 +4338,13 @@ function defaultDinnerPlanDays(): DinnerPlanDay[] {
   return DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: '', items: [] }))
 }
 
+function formatLocalIsoDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function isoDateForDinnerDay(day: DinnerPlanDay['day']): string {
   const now = new Date()
   const jsDay = now.getDay() // sunday=0
@@ -4348,11 +4355,11 @@ function isoDateForDinnerDay(day: DinnerPlanDay['day']): string {
   const targetOffset = DINNER_PLAN_DAY_ORDER.indexOf(day)
   const target = new Date(monday)
   target.setDate(monday.getDate() + targetOffset)
-  return target.toISOString().slice(0, 10)
+  return formatLocalIsoDate(target)
 }
 
 function dinnerDayFromIsoDate(isoDate: string): DinnerPlanDay['day'] | null {
-  const parsed = new Date(`${isoDate}T00:00:00`)
+  const parsed = new Date(`${isoDate}T12:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return null
   const jsDay = parsed.getDay()
   const map: Record<number, DinnerPlanDay['day']> = {
@@ -4873,8 +4880,29 @@ function GroceriesModuleSettingsTab({
 
   async function persistDinnerPlan(next: DinnerPlanDay[]) {
     const normalized = sanitizeDinnerPlanDays(next)
+    const prevByKey = new Map<string, DinnerPlanDay['items'][number]>()
+    for (const day of dinnerPlanDays) {
+      for (const item of day.items) prevByKey.set(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`, item)
+    }
+    const nextByKey = new Set<string>()
+    for (const day of normalized) {
+      for (const item of day.items) nextByKey.add(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`)
+    }
+    const removedItems = [...prevByKey.entries()]
+      .filter(([key]) => !nextByKey.has(key))
+      .map(([, item]) => item)
+
     setDinnerPlanDays(normalized)
     if (!activeDeviceId) return
+
+    const deleteDates = DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day))
+    const { error: deleteError } = await supabase
+      .from('dinner_plan_days')
+      .delete()
+      .eq('device_id', activeDeviceId)
+      .in('date', deleteDates)
+    if (deleteError) console.error('Failed to clear dinner plan days', { deleteError })
+
     const payload = normalized
       .filter((d) => d.title || d.items.length > 0)
       .map((d) => ({
@@ -4883,8 +4911,23 @@ function GroceriesModuleSettingsTab({
         title: d.title || dinnerPlanDayLabel('en', d.day),
         note: JSON.stringify(d.items),
       }))
-    const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
-    if (error) console.error('Failed to persist dinner plan', { error })
+    if (payload.length > 0) {
+      const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
+      if (error) console.error('Failed to persist dinner plan', { error })
+    }
+
+    if (removedItems.length > 0) {
+      for (const item of removedItems) {
+        const { error } = await supabase
+          .from('grocery_items')
+          .delete()
+          .eq('device_id', activeDeviceId)
+          .ilike('name', item.name.trim())
+          .eq('category', item.category)
+        if (error) console.error('Failed to remove dinner item from main list', { error, item })
+      }
+      await loadGroceries()
+    }
   }
   function isDinnerVirtualId(id: string) {
     return id.startsWith('dinner-')
@@ -5511,6 +5554,9 @@ function DinnerPlanSheet({
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
   const [editingTarget, setEditingTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
+  useEffect(() => {
+    setDays(initialDays.map((d) => ({ ...d, items: [...d.items] })))
+  }, [initialDays])
   const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
   const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
     setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
