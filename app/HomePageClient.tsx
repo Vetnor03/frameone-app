@@ -5419,6 +5419,11 @@ function GroceriesModuleSettingsTab({
         language={language}
         suggestions={suggestions}
         initialDays={dinnerPlanDays}
+        onItemAdded={async (name, category) => {
+          const nowIso = new Date().toISOString()
+          await rememberHistoryItem(name, category, nowIso)
+          await loadHistory()
+        }}
         onCancel={async () => {
           setDinnerPlanOpen(false)
           await loadDinnerPlan()
@@ -5616,12 +5621,14 @@ function DinnerPlanSheet({
   initialDays,
   onCancel,
   onSave,
+  onItemAdded,
 }: {
   language: AppLanguage
   suggestions: GrocerySuggestion[]
   initialDays: DinnerPlanDay[]
   onCancel: () => void
   onSave: (days: DinnerPlanDay[]) => void
+  onItemAdded: (name: string, category: GroceryCategory) => Promise<void>
 }) {
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
@@ -5697,6 +5704,7 @@ function DinnerPlanSheet({
         onClose={() => setAddTargetDay(null)}
         onAdd={(name, quantity, category) => {
           addItemToDay(addTargetDay, name, quantity, category)
+          void onItemAdded(name, category)
           setAddTargetDay(null)
         }}
       />
