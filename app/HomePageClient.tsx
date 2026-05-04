@@ -5077,31 +5077,35 @@ function GroceriesModuleSettingsTab({
       if (error) console.error('Failed to persist dinner plan', { error })
     }
 
-    if (addedItems.length > 0) {
-      const historySeen = new Set<string>()
-      const nowIso = new Date().toISOString()
-      for (const item of addedItems) {
-        const historyKey = `${item.name.trim().toLowerCase()}__${item.category}`
-        if (historySeen.has(historyKey)) continue
-        historySeen.add(historyKey)
-        await rememberHistoryItem(item.name, item.category, nowIso)
+    // Keep dinner-plan save snappy for the active editor by moving heavy grocery/history sync
+    // to background work after the core dinner_plan_days write has completed.
+    void (async () => {
+      if (addedItems.length > 0) {
+        const historySeen = new Set<string>()
+        const nowIso = new Date().toISOString()
+        for (const item of addedItems) {
+          const historyKey = `${item.name.trim().toLowerCase()}__${item.category}`
+          if (historySeen.has(historyKey)) continue
+          historySeen.add(historyKey)
+          await rememberHistoryItem(item.name, item.category, nowIso)
+        }
+        await loadHistory()
       }
-      await loadHistory()
-    }
 
-    if (removedItems.length > 0) {
-      for (const item of removedItems) {
-        const { error } = await supabase
-          .from('grocery_items')
-          .delete()
-          .eq('device_id', activeDeviceId)
-          .ilike('name', item.name.trim())
-          .eq('category', item.category)
-        if (error) console.error('Failed to remove dinner item from main list', { error, item })
+      if (removedItems.length > 0) {
+        for (const item of removedItems) {
+          const { error } = await supabase
+            .from('grocery_items')
+            .delete()
+            .eq('device_id', activeDeviceId)
+            .ilike('name', item.name.trim())
+            .eq('category', item.category)
+          if (error) console.error('Failed to remove dinner item from main list', { error, item })
+        }
       }
-    }
 
-    await syncMainGroceriesFromDinnerPlan(normalized)
+      await syncMainGroceriesFromDinnerPlan(normalized)
+    })()
   }
   function isDinnerVirtualId(id: string) {
     return id.startsWith('dinner-')
