@@ -4959,6 +4959,61 @@ function GroceriesModuleSettingsTab({
     }
   }
 
+
+
+  async function syncMainGroceriesFromDinnerPlan(days: DinnerPlanDay[]) {
+    if (!activeDeviceId) return
+
+    const aggregate = new Map<string, { name: string; category: GroceryCategory; quantity: number }>()
+    for (const day of days) {
+      for (const item of day.items) {
+        const normalizedName = item.name.trim()
+        if (!normalizedName) continue
+        const key = `${item.category}__${normalizedName.toLowerCase()}`
+        const existing = aggregate.get(key)
+        if (existing) existing.quantity += Math.max(1, item.quantity)
+        else aggregate.set(key, { name: normalizedName, category: item.category, quantity: Math.max(1, item.quantity) })
+      }
+    }
+
+    for (const item of aggregate.values()) {
+      const { data: existing, error: existingError } = await supabase
+        .from('grocery_items')
+        .select('id, quantity')
+        .eq('device_id', activeDeviceId)
+        .ilike('name', item.name)
+        .eq('category', item.category)
+        .limit(1)
+        .maybeSingle()
+
+      if (existingError) {
+        console.error('Failed to read existing grocery item for dinner sync', { existingError, item })
+        continue
+      }
+
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('grocery_items')
+          .update({ quantity: Math.max(Number(existing.quantity ?? 1) || 1, item.quantity), updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+        if (updateError) console.error('Failed to update grocery item from dinner sync', { updateError, item })
+      } else {
+        const { error: insertError } = await supabase
+          .from('grocery_items')
+          .insert({
+            device_id: activeDeviceId,
+            name: item.name,
+            quantity: item.quantity,
+            category: item.category,
+            is_checked: false,
+            checked_at: null,
+          })
+        if (insertError) console.error('Failed to insert grocery item from dinner sync', { insertError, item })
+      }
+    }
+
+    await loadGroceries()
+  }
   async function persistDinnerPlan(next: DinnerPlanDay[]) {
     const normalized = sanitizeDinnerPlanDays(next)
     const prevByKey = new Map<string, DinnerPlanDay['items'][number]>()
@@ -5022,8 +5077,9 @@ function GroceriesModuleSettingsTab({
           .eq('category', item.category)
         if (error) console.error('Failed to remove dinner item from main list', { error, item })
       }
-      await loadGroceries()
     }
+
+    await syncMainGroceriesFromDinnerPlan(normalized)
   }
   function isDinnerVirtualId(id: string) {
     return id.startsWith('dinner-')
@@ -5426,13 +5482,15 @@ function GroceriesModuleSettingsTab({
         }}
         onCancel={async () => {
           setDinnerPlanOpen(false)
-          await loadDinnerPlan()
+          const latest = await loadDinnerPlan()
+          await syncMainGroceriesFromDinnerPlan(latest)
         }}
         onSave={async (days) => {
           const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
           await persistDinnerPlan(nextDays)
           setDinnerPlanOpen(false)
-          await loadDinnerPlan()
+          const latest = await loadDinnerPlan()
+          await syncMainGroceriesFromDinnerPlan(latest)
         }}
       />
     )}
