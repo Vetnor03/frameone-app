@@ -4553,21 +4553,29 @@ function GroceriesModuleSettingsTab({
   }
 
   const groupedVisibleItems = useMemo(() => {
-    const visible = items.filter((item) => groceryIsVisible(item, nowMs))
-    return GROCERY_CATEGORY_LIST_ORDER
-      .map((category, order) => {
-        const group = visible
-          .filter((item) => item.category === category)
-          .sort((a, b) => {
-            if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
-            const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-            if (nameCmp !== 0) return nameCmp
-            const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
-            const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
-            return bTime - aTime
-          })
-        return { category, items: group, allChecked: group.every((item) => item.isChecked), order }
+    const byCategory = new Map<GroceryCategory, GroceryItem[]>()
+    for (const category of GROCERY_CATEGORY_LIST_ORDER) byCategory.set(category, [])
+
+    for (const item of items) {
+      if (!groceryIsVisible(item, nowMs)) continue
+      const list = byCategory.get(item.category)
+      if (list) list.push(item)
+    }
+
+    const groups = GROCERY_CATEGORY_LIST_ORDER.map((category, order) => {
+      const group = byCategory.get(category) || []
+      group.sort((a, b) => {
+        if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
+        const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        if (nameCmp !== 0) return nameCmp
+        const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
+        const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
+        return bTime - aTime
       })
+      return { category, items: group, allChecked: group.length > 0 && group.every((item) => item.isChecked), order }
+    })
+
+    return groups
       .filter((group) => group.items.length > 0)
       .sort((a, b) => {
         if (a.allChecked !== b.allChecked) return a.allChecked ? 1 : -1
@@ -5264,6 +5272,7 @@ function GroceriesModuleSettingsTab({
       const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
       if (!confirmed) return
 
+      setItems((prev) => prev.filter((x) => x.id !== item.id))
       const { error: deleteError } = await supabase
         .from('grocery_items')
         .delete()
@@ -5271,13 +5280,13 @@ function GroceriesModuleSettingsTab({
 
       if (deleteError) {
         alert(deleteError.message)
-        return
+        await loadGroceries({ silent: true, preserveScroll: true })
       }
-      await loadGroceries()
       return
     }
 
     const nextQty = Math.max(1, item.quantity + delta)
+    setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, quantity: nextQty, updatedAt: new Date().toISOString() } : x)))
 
     const { error } = await supabase
       .from('grocery_items')
@@ -5288,10 +5297,8 @@ function GroceriesModuleSettingsTab({
 
     if (error) {
       alert(error.message)
-      return
+      await loadGroceries({ silent: true, preserveScroll: true })
     }
-
-    await loadGroceries({ preserveScroll: true })
   }
 
   async function updateItem(id: string, name: string, quantity: number, category: GroceryCategory) {
