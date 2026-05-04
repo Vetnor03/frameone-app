@@ -214,7 +214,7 @@ static bool fetchGroceries() {
   if (hasTodayDinner) {
     char titleFit[80] = {0};
     fitTextToWidth(dinnerTitle, titleFit, sizeof(titleFit), 220, FONT_B12);
-    snprintf(g_cache.header, sizeof(g_cache.header), "Today: %s", titleFit);
+    snprintf(g_cache.header, sizeof(g_cache.header), "Today's Dinner: %s", titleFit);
   } else {
     safeCopy(g_cache.header, sizeof(g_cache.header), "Grocery List");
   }
@@ -264,6 +264,44 @@ static void drawListLines(const Cell& c, int startY, int maxLines) {
   }
 }
 
+static void drawMediumCenteredBulletedList(const Cell& c, int startY, int endY, int maxLines) {
+  if (g_cache.count <= 0) {
+    drawCenter(c.x + (c.w / 2), startY + 16, emptyPhrase(), FONT_B9, Theme::ink());
+    return;
+  }
+
+  int r = getRotationStep4h();
+  int show = min(maxLines, g_cache.count);
+  int availableH = max(20, endY - startY);
+  int step = max(14, availableH / (show + 1));
+
+  const int bulletGap = 8;
+  const int maxTextWidth = max(20, c.w - 36 - bulletGap);
+
+  for (int i = 0; i < show; i++) {
+    int idx = (r + i) % g_cache.count;
+
+    char raw[120] = {0};
+    if (g_cache.items[idx].qty > 1) {
+      snprintf(raw, sizeof(raw), "%s x%d", g_cache.items[idx].name, g_cache.items[idx].qty);
+    } else {
+      safeCopy(raw, sizeof(raw), g_cache.items[idx].name);
+    }
+
+    char textFit[120] = {0};
+    fitTextToWidth(raw, textFit, sizeof(textFit), maxTextWidth, FONT_B9);
+
+    int textW = textWidth(textFit, FONT_B9);
+    int bulletW = textWidth("•", FONT_B9);
+    int rowW = bulletW + bulletGap + textW;
+    int rowX = c.x + ((c.w - rowW) / 2);
+    int y = startY + ((i + 1) * step);
+
+    drawLeft(rowX, y, "•", FONT_B9, Theme::ink());
+    drawLeft(rowX + bulletW + bulletGap, y, textFit, FONT_B9, Theme::ink());
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Module-size specific renderers (same pattern as other modules)
 // -----------------------------------------------------------------------------
@@ -278,9 +316,9 @@ static void renderSmall(const Cell& c) {
 static void renderMedium(const Cell& c) {
   char header[96] = {0};
   fitTextToWidth(g_cache.header, header, sizeof(header), c.w - 24, FONT_B12);
-  drawLeft(c.x + 12, c.y + 24, header, FONT_B12, Theme::ink());
+  drawCenter(c.x + (c.w / 2), c.y + 18, header, FONT_B12, Theme::ink());
 
-  drawListLines(c, c.y + 30, 5);
+  drawMediumCenteredBulletedList(c, c.y + 24, c.y + c.h - 10, 5);
 }
 
 static void renderLarge(const Cell& c) {
