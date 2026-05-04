@@ -4559,6 +4559,8 @@ function GroceriesModuleSettingsTab({
           .filter((item) => item.category === category)
           .sort((a, b) => {
             if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1
+            const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+            if (nameCmp !== 0) return nameCmp
             const aTime = (a.isChecked ? a.checkedAt : a.updatedAt) ? new Date((a.isChecked ? a.checkedAt : a.updatedAt) || '').getTime() : 0
             const bTime = (b.isChecked ? b.checkedAt : b.updatedAt) ? new Date((b.isChecked ? b.checkedAt : b.updatedAt) || '').getTime() : 0
             return bTime - aTime
