@@ -4806,10 +4806,21 @@ function GroceriesModuleSettingsTab({
     if (error) return
     const current = (data?.settings_json && typeof data.settings_json === 'object') ? (data.settings_json as Record<string, any>) : {}
     const merged = { ...current, dinner_plan: next }
-    await supabase.rpc('upsert_device_settings', {
+    const { error: upsertErr } = await supabase.rpc('upsert_device_settings', {
       p_device_id: activeDeviceId,
       p_settings: merged,
     })
+    if (upsertErr) {
+      // Fallback for environments where RPC execution is blocked/misconfigured.
+      // This ensures dinner_plan still persists in public.device_settings.
+      const { error: fallbackErr } = await supabase
+        .from('device_settings')
+        .update({ settings_json: merged })
+        .eq('device_id', activeDeviceId)
+      if (fallbackErr) {
+        console.error('Failed to persist dinner plan', { upsertErr, fallbackErr })
+      }
+    }
   }
   function isDinnerVirtualId(id: string) {
     return id.startsWith('dinner-')
