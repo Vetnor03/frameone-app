@@ -4553,6 +4553,35 @@ function GroceriesModuleSettingsTab({
     return false
   }
 
+  const groceryItemFromRow = useCallback((row: any): GroceryItem | null => {
+    if (!row || isRemovedRow(row)) return null
+    const id = row.id == null ? '' : String(row.id)
+    const name = String(row.name ?? '').trim()
+    if (!id || !name) return null
+
+    return {
+      id,
+      name,
+      quantity: Math.max(1, Number(row.quantity ?? 1) || 1),
+      category: asGroceryCategory(row.category),
+      isChecked: !!row.is_checked,
+      checkedAt: row.checked_at ? String(row.checked_at) : null,
+      updatedAt: row.updated_at ? String(row.updated_at) : null,
+    }
+  }, [])
+
+  const upsertItemInState = useCallback((nextItem: GroceryItem) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((item) => item.id === nextItem.id)
+      if (idx === -1) return [nextItem, ...prev]
+      const copy = [...prev]
+      copy[idx] = { ...copy[idx], ...nextItem }
+      return copy
+    })
+  }, [])
+
+
+
   const groupedVisibleItems = useMemo(() => {
     const byCategory = new Map<GroceryCategory, GroceryItem[]>()
     for (const category of GROCERY_CATEGORY_LIST_ORDER) byCategory.set(category, [])
@@ -4625,16 +4654,7 @@ function GroceriesModuleSettingsTab({
         return
       }
 
-      const parsed: GroceryItem[] = (data || []).map((row: any) => ({
-        id: String(row.id),
-        name: String(row.name ?? '').trim(),
-        quantity: Number(row.quantity ?? 1) || 1,
-        category: asGroceryCategory(row.category),
-        isChecked: !!row.is_checked,
-        checkedAt: row.checked_at ? String(row.checked_at) : null,
-        updatedAt: row.updated_at ? String(row.updated_at) : null,
-      })).filter((item) => item.quantity > 0)
-
+      const parsed: GroceryItem[] = (data || []).map((row: any) => groceryItemFromRow(row)).filter(Boolean) as GroceryItem[]
       setItems(parsed)
     } finally {
       if (!silent) setLoading(false)
@@ -4723,7 +4743,14 @@ function GroceriesModuleSettingsTab({
           filter: `device_id=eq.${activeDeviceId}`,
         },
         (payload) => {
-          scheduleReload('insert', payload)
+          const newRow = (payload as { new?: any })?.new
+          const nextItem = groceryItemFromRow(newRow)
+          if (nextItem) {
+            upsertItemInState(nextItem)
+            logRealtime(payload, false, 'insert-local-upsert')
+            return
+          }
+          scheduleReload('insert-fallback', payload)
         }
       )
       .on(
@@ -4736,12 +4763,19 @@ function GroceriesModuleSettingsTab({
         },
         (payload) => {
           const newRow = (payload as { new?: any })?.new
+          const newId = newRow?.id ? String(newRow.id) : null
           if (isRemovedRow(newRow)) {
-            removeItemFromState(newRow?.id ? String(newRow.id) : null)
-            scheduleReload('update-removed', payload)
+            removeItemFromState(newId)
+            logRealtime(payload, false, 'update-removed-local-delete')
             return
           }
-          scheduleReload('update', payload)
+          const nextItem = groceryItemFromRow(newRow)
+          if (nextItem) {
+            upsertItemInState(nextItem)
+            logRealtime(payload, false, 'update-local-upsert')
+            return
+          }
+          scheduleReload('update-fallback', payload)
         }
       )
       .on(
@@ -4781,7 +4815,7 @@ function GroceriesModuleSettingsTab({
         realtimeChannelRef.current = null
       }
     }
-  }, [activeDeviceId])
+  }, [activeDeviceId, groceryItemFromRow, upsertItemInState])
 
   useEffect(() => {
     return () => {
