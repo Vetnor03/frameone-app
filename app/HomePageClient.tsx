@@ -4995,7 +4995,14 @@ function GroceriesModuleSettingsTab({
               <div key={day.day} className={`mb-3 ${dayIndex < dayList.length - 1 ? 'pb-3 border-b border-[color:var(--bd-10)]' : ''}`}>
                 <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-85)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
                 <div className="rounded-2xl bg-transparent">
-                  {GROCERY_CATEGORY_LIST_ORDER.map((cat) => {
+                  {[...GROCERY_CATEGORY_LIST_ORDER].sort((a, b) => {
+                    const aItems = day.items.filter((item) => item.category === a).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
+                    const bItems = day.items.filter((item) => item.category === b).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
+                    const aAllChecked = aItems.length > 0 && aItems.every((x) => x.isChecked)
+                    const bAllChecked = bItems.length > 0 && bItems.every((x) => x.isChecked)
+                    if (aAllChecked !== bAllChecked) return aAllChecked ? 1 : -1
+                    return GROCERY_CATEGORY_LIST_ORDER.indexOf(a) - GROCERY_CATEGORY_LIST_ORDER.indexOf(b)
+                  }).map((cat) => {
                     const visibleItems = day.items.filter((item) => item.category === cat).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
                     if (!visibleItems.length) return null
                     const sorted = [...visibleItems].sort((a, b) => Number(a.isChecked) - Number(b.isChecked))
@@ -5347,7 +5354,14 @@ function DinnerPlanSheet({
           <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
           <input value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
           <div className="mt-2">
-            {GROCERY_CATEGORY_LIST_ORDER.map((c) => {
+            {[...GROCERY_CATEGORY_LIST_ORDER].sort((a, b) => {
+              const aItems = day.items.filter((item) => item.category === a)
+              const bItems = day.items.filter((item) => item.category === b)
+              const aAllChecked = aItems.length > 0 && aItems.every((x) => x.isChecked)
+              const bAllChecked = bItems.length > 0 && bItems.every((x) => x.isChecked)
+              if (aAllChecked !== bAllChecked) return aAllChecked ? 1 : -1
+              return GROCERY_CATEGORY_LIST_ORDER.indexOf(a) - GROCERY_CATEGORY_LIST_ORDER.indexOf(b)
+            }).map((c) => {
               const categoryItems = day.items.map((item, idx) => ({ item, idx })).filter((x) => x.item.category === c)
               if (categoryItems.length === 0) return null
               return <div key={`${day.day}-${c}`} className="mb-2">
