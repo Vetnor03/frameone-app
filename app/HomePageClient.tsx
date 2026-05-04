@@ -4537,6 +4537,7 @@ function GroceriesModuleSettingsTab({
   const dinnerLockClientIdRef = useRef(`dinner-lock-${Math.random().toString(36).slice(2)}`)
   const reloadTimerRef = useRef<number | null>(null)
   const suppressRealtimeUntilRef = useRef(0)
+  const userHasScrolledListRef = useRef(false)
 
   const isRemovedRow = (row: any): boolean => {
     if (!row) return false
@@ -4590,9 +4591,19 @@ function GroceriesModuleSettingsTab({
     pendingScrollTopRef.current = null
   }, [groupedVisibleItems, loading])
 
-  async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean }) {
+  useEffect(() => {
+    const el = listScrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      userHasScrolledListRef.current = true
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  async function loadGroceries(options?: { silent?: boolean; preserveScroll?: boolean; keepAnchorUnlessUserScrolled?: boolean }) {
     const silent = !!options?.silent || !!options?.preserveScroll
-    if (options?.preserveScroll) {
+    if (options?.preserveScroll || (options?.keepAnchorUnlessUserScrolled && !userHasScrolledListRef.current)) {
       pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
     }
     if (!activeDeviceId) {
@@ -4852,14 +4863,17 @@ function GroceriesModuleSettingsTab({
     }
     const channel = supabase
       .channel(`dinner-plan:${activeDeviceId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dinner_plan_days', filter: `device_id=eq.${activeDeviceId}` }, () => { loadDinnerPlan() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dinner_plan_days', filter: `device_id=eq.${activeDeviceId}` }, () => {
+        if (dinnerPlanOpen) return
+        loadDinnerPlan()
+      })
       .subscribe()
     dinnerRealtimeChannelRef.current = channel
     return () => {
       supabase.removeChannel(channel)
       if (dinnerRealtimeChannelRef.current === channel) dinnerRealtimeChannelRef.current = null
     }
-  }, [activeDeviceId, loadDinnerPlan])
+  }, [activeDeviceId, dinnerPlanOpen, loadDinnerPlan])
 
   useEffect(() => {
     if (!activeDeviceId) {
@@ -4904,6 +4918,12 @@ function GroceriesModuleSettingsTab({
     })
   }, [dinnerPlanOpen])
 
+
+  useEffect(() => {
+    if (!dinnerPlanOpen || !dinnerPlanLockedByOtherUser) return
+    setDinnerPlanOpen(false)
+    void loadDinnerPlan()
+  }, [dinnerPlanLockedByOtherUser, dinnerPlanOpen, loadDinnerPlan])
 
   const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
   const dinnerPlanOtherItems = useMemo(
@@ -5049,7 +5069,7 @@ function GroceriesModuleSettingsTab({
       }
     }
 
-    await loadGroceries()
+    await loadGroceries({ silent: true, keepAnchorUnlessUserScrolled: true })
   }
   async function persistDinnerPlan(next: DinnerPlanDay[]) {
     const normalized = sanitizeDinnerPlanDays(next)
@@ -5539,6 +5559,7 @@ function GroceriesModuleSettingsTab({
         language={language}
         suggestions={suggestions}
         initialDays={dinnerPlanDays}
+        isLocked={dinnerPlanLockedByOtherUser}
         onItemAdded={async (name, category) => {
           const nowIso = new Date().toISOString()
           await rememberHistoryItem(name, category, nowIso)
@@ -5582,7 +5603,7 @@ function GroceriesModuleSettingsTab({
         onSaved={async () => {
           setSheetOpen(false)
           setEditingItem(null)
-          await loadGroceries()
+          await loadGroceries({ silent: true, keepAnchorUnlessUserScrolled: true })
           await loadHistory()
         }}
         addItem={addItem}
@@ -5741,6 +5762,7 @@ function DinnerPlanSheet({
   language,
   suggestions,
   initialDays,
+  isLocked,
   onCancel,
   onSave,
   onItemAdded,
@@ -5748,6 +5770,7 @@ function DinnerPlanSheet({
   language: AppLanguage
   suggestions: GrocerySuggestion[]
   initialDays: DinnerPlanDay[]
+  isLocked: boolean
   onCancel: () => void
   onSave: (days: DinnerPlanDay[]) => void
   onItemAdded: (name: string, category: GroceryCategory) => Promise<void>
@@ -5759,6 +5782,7 @@ function DinnerPlanSheet({
     setDays(initialDays.map((d) => ({ ...d, items: [...d.items] })))
   }, [initialDays])
   const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
+  const blocked = isLocked
   const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
     setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
   const adjustDayItemQty = (day: DinnerPlanDay['day'], idx: number, delta: number) =>
@@ -5779,10 +5803,11 @@ function DinnerPlanSheet({
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
+      {blocked ? <div className="mt-3 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER'}</div> : null}
       <div className="mt-4 overflow-y-auto pr-1">
         {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
           <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-          <input value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
+          <input disabled={blocked} value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
           <div className="mt-2">
             {[...GROCERY_CATEGORY_LIST_ORDER].sort((a, b) => {
               const aItems = day.items.filter((item) => item.category === a)
@@ -5799,11 +5824,11 @@ function DinnerPlanSheet({
                 <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] divide-y divide-[color:var(--bd-10)]">
                   {categoryItems.map(({ item, idx }) => (
                     <div key={`${day.day}-${c}-${idx}`} className="px-3 py-2 flex items-center gap-3">
-                      <button onClick={() => setEditingTarget({ day: day.day, idx })} className="min-w-0 flex-1 text-left text-[color:var(--fg-90)]">{item.name}</button>
+                      <button disabled={blocked} onClick={() => setEditingTarget({ day: day.day, idx })} className="min-w-0 flex-1 text-left text-[color:var(--fg-90)]">{item.name}</button>
                       <div className="shrink-0 flex items-center gap-2.5">
-                        <button onClick={() => adjustDayItemQty(day.day, idx, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
+                        <button disabled={blocked} onClick={() => adjustDayItemQty(day.day, idx, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
                         <div className="text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)]">{item.quantity}</div>
-                        <button onClick={() => adjustDayItemQty(day.day, idx, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
+                        <button disabled={blocked} onClick={() => adjustDayItemQty(day.day, idx, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
                       </div>
                     </div>
                   ))}
@@ -5811,11 +5836,11 @@ function DinnerPlanSheet({
               </div>
             })}
           </div>
-          <button onClick={() => setAddTargetDay(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
+          <button disabled={blocked} onClick={() => setAddTargetDay(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
         </div>)}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+        <button disabled={blocked} onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
         <button onClick={onCancel} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
       </div>
     </div>
