@@ -1,9 +1,14 @@
 #pragma once
 #include <Arduino.h>
-#include "../core/LayoutCells.h"
-#include "../core/FrameConfig.h"
+#include "Types.h"
+#include "FrameConfig.h"
 
 namespace ModuleGroceries {
-  void begin(const FrameConfig* cfg);
+
+  // Kept consistent with other modules.
+  void setConfig(const FrameConfig* cfg);
+
+  // moduleName supports "groceries" and "groceries:<id>" (id currently ignored).
   void render(const Cell& c, const String& moduleName);
-}
+
+} // namespace ModuleGroceries
