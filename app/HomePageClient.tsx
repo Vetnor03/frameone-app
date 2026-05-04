@@ -5333,6 +5333,7 @@ function DinnerPlanSheet({
 }) {
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
+  const [editingTarget, setEditingTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
   const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
     setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
@@ -5340,6 +5341,11 @@ function DinnerPlanSheet({
     setDays((prev) =>
       prev.map((x) => {
         if (x.day !== day) return x
+        const current = x.items[idx]
+        if (delta < 0 && current && current.quantity <= 1) {
+          const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra dagen?' : 'Remove this item from this day?')
+          if (!confirmed) return x
+        }
         const items = x.items
           .map((it, i) => (i === idx ? { ...it, quantity: Math.max(0, it.quantity + delta), updatedAt: new Date().toISOString() } : it))
           .filter((it) => it.quantity > 0)
@@ -5369,7 +5375,7 @@ function DinnerPlanSheet({
                 <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] divide-y divide-[color:var(--bd-10)]">
                   {categoryItems.map(({ item, idx }) => (
                     <div key={`${day.day}-${c}-${idx}`} className="px-3 py-2 flex items-center gap-3">
-                      <div className="min-w-0 flex-1 text-[color:var(--fg-90)]">{item.name}</div>
+                      <button onClick={() => setEditingTarget({ day: day.day, idx })} className="min-w-0 flex-1 text-left text-[color:var(--fg-90)]">{item.name}</button>
                       <div className="shrink-0 flex items-center gap-2.5">
                         <button onClick={() => adjustDayItemQty(day.day, idx, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
                         <div className="text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)]">{item.quantity}</div>
@@ -5400,23 +5406,37 @@ function DinnerPlanSheet({
         }}
       />
     ) : null}
+    {editingTarget ? (
+      <DinnerPlanAddItemSheet
+        language={language}
+        suggestions={suggestions}
+        initialItem={days.find((d) => d.day === editingTarget.day)?.items[editingTarget.idx] ?? null}
+        onClose={() => setEditingTarget(null)}
+        onAdd={(name, quantity, category) => {
+          setDays((prev) => prev.map((d) => d.day === editingTarget.day ? { ...d, items: d.items.map((it, i) => i === editingTarget.idx ? { ...it, name, quantity, category, updatedAt: new Date().toISOString() } : it) } : d))
+          setEditingTarget(null)
+        }}
+      />
+    ) : null}
   </div>
 }
 
 function DinnerPlanAddItemSheet({
   language,
   suggestions,
+  initialItem,
   onClose,
   onAdd,
 }: {
   language: AppLanguage
   suggestions: GrocerySuggestion[]
+  initialItem?: { name: string; quantity: number; category: GroceryCategory } | null
   onClose: () => void
   onAdd: (name: string, quantity: number, category: GroceryCategory) => void
 }) {
-  const [name, setName] = useState('')
-  const [quantity, setQuantity] = useState(1)
-  const [category, setCategory] = useState<GroceryCategory>('other')
+  const [name, setName] = useState(initialItem?.name ?? '')
+  const [quantity, setQuantity] = useState(initialItem?.quantity ?? 1)
+  const [category, setCategory] = useState<GroceryCategory>(initialItem?.category ?? 'other')
   const filtered = useMemo(() => {
     const q = name.trim().toLowerCase()
     return suggestions.filter((s) => !q || s.name.toLowerCase().includes(q)).slice(0, 30)
@@ -5427,9 +5447,9 @@ function DinnerPlanAddItemSheet({
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</div><button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button></div>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(language).groceriesInputPlaceholder} className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none" />
       <div className="mt-4 flex items-center justify-center gap-3">
-        <button onClick={() => setQuantity((v) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
+          <button onClick={() => setQuantity((v: number) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
         <div className="w-10 text-center text-[color:var(--fg-85)]">{quantity}</div>
-        <button onClick={() => setQuantity((v) => v + 1)} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">+</button>
+          <button onClick={() => setQuantity((v: number) => v + 1)} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">+</button>
       </div>
       <select value={category} onChange={(e) => setCategory(asGroceryCategory(e.target.value))} className="mt-4 w-full h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-85)] outline-none">
         {GROCERY_CATEGORY_LIST_ORDER.map((c) => <option key={c} value={c}>{groceryCategoryLabel(language, c)}</option>)}
