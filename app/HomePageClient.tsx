@@ -4536,6 +4536,7 @@ function GroceriesModuleSettingsTab({
   const dinnerLockChannelRef = useRef<RealtimeChannel | null>(null)
   const dinnerLockClientIdRef = useRef(`dinner-lock-${Math.random().toString(36).slice(2)}`)
   const reloadTimerRef = useRef<number | null>(null)
+  const suppressRealtimeUntilRef = useRef(0)
 
   const isRemovedRow = (row: any): boolean => {
     if (!row) return false
@@ -4675,6 +4676,10 @@ function GroceriesModuleSettingsTab({
     }
 
     const scheduleReload = (reason: string, payload?: any) => {
+      if (Date.now() < suppressRealtimeUntilRef.current) {
+        logRealtime(payload, false, `${reason}-suppressed-local-save`)
+        return
+      }
       logRealtime(payload, true, reason)
       if (reloadTimerRef.current != null) return
       reloadTimerRef.current = window.setTimeout(() => {
@@ -5156,26 +5161,41 @@ function GroceriesModuleSettingsTab({
     const { data: authData } = await supabase.auth.getUser()
     const createdBy = authData.user?.id ?? null
     const nowIso = new Date().toISOString()
+    const optimisticId = `local-${Math.random().toString(36).slice(2)}`
+    const nextQty = Math.max(1, Number(quantity) || 1)
+    setItems((prev) => [
+      {
+        id: optimisticId,
+        name: normalizedName,
+        quantity: nextQty,
+        category,
+        isChecked: false,
+        checkedAt: null,
+        updatedAt: nowIso,
+      },
+      ...prev,
+    ])
+    suppressRealtimeUntilRef.current = Date.now() + 1200
     const { error } = await supabase
       .from('grocery_items')
       .insert({
         device_id: activeDeviceId,
         created_by: createdBy,
         name: normalizedName,
-        quantity: Math.max(1, Number(quantity) || 1),
+        quantity: nextQty,
         category,
         is_checked: false,
         checked_at: null,
       })
 
     if (error) {
+      setItems((prev) => prev.filter((item) => item.id !== optimisticId))
       alert(error.message)
       return
     }
 
+    setItems((prev) => prev.filter((item) => item.id !== optimisticId))
     await rememberHistoryItem(normalizedName, category, nowIso)
-
-    await loadGroceries()
     await loadHistory()
   }
 
@@ -5281,18 +5301,28 @@ function GroceriesModuleSettingsTab({
     const previousName = items.find((item) => item.id === id)?.name.trim() ?? ''
     const hasNameChange = previousName.toLocaleLowerCase() !== normalizedName.toLocaleLowerCase()
     const nowIso = new Date().toISOString()
+    const nextQty = Math.max(1, Number(quantity) || 1)
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, name: normalizedName, quantity: nextQty, category, updatedAt: nowIso }
+          : item
+      )
+    )
+    suppressRealtimeUntilRef.current = Date.now() + 1200
 
     const { error } = await supabase
       .from('grocery_items')
       .update({
         name: normalizedName,
-        quantity: Math.max(1, Number(quantity) || 1),
+        quantity: nextQty,
         category,
       })
       .eq('id', id)
 
     if (error) {
       alert(error.message)
+      await loadGroceries({ silent: true, preserveScroll: true })
       return
     }
 
@@ -5352,7 +5382,6 @@ function GroceriesModuleSettingsTab({
       }
     }
 
-    await loadGroceries()
     await loadHistory()
   }
 
@@ -5516,9 +5545,9 @@ function GroceriesModuleSettingsTab({
         onSave={async (days) => {
           const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
           await persistDinnerPlan(nextDays)
+          setDinnerPlanDays(nextDays)
           setDinnerPlanOpen(false)
-          const latest = await loadDinnerPlan()
-          await syncMainGroceriesFromDinnerPlan(latest)
+          await syncMainGroceriesFromDinnerPlan(nextDays)
         }}
       />
     )}
