@@ -4338,6 +4338,54 @@ function defaultDinnerPlanDays(): DinnerPlanDay[] {
   return DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: '', items: [] }))
 }
 
+function isoDateForDinnerDay(day: DinnerPlanDay['day']): string {
+  const now = new Date()
+  const jsDay = now.getDay() // sunday=0
+  const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(now.getDate() + mondayOffset)
+  const targetOffset = DINNER_PLAN_DAY_ORDER.indexOf(day)
+  const target = new Date(monday)
+  target.setDate(monday.getDate() + targetOffset)
+  return target.toISOString().slice(0, 10)
+}
+
+function dinnerDayFromIsoDate(isoDate: string): DinnerPlanDay['day'] | null {
+  const parsed = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return null
+  const jsDay = parsed.getDay()
+  const map: Record<number, DinnerPlanDay['day']> = {
+    0: 'sunday',
+    1: 'monday',
+    2: 'tuesday',
+    3: 'wednesday',
+    4: 'thursday',
+    5: 'friday',
+    6: 'saturday',
+  }
+  return map[jsDay] ?? null
+}
+
+function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
+  if (typeof rawNote !== 'string' || !rawNote.trim()) return []
+  try {
+    const parsed = JSON.parse(rawNote)
+    return Array.isArray(parsed)
+      ? parsed.map((it: any) => ({
+        name: String(it?.name ?? '').trim(),
+        category: asGroceryCategory(it?.category),
+        quantity: Math.max(1, Number(it?.quantity ?? 1) || 1),
+        isChecked: !!it?.isChecked,
+        checkedAt: it?.checkedAt ? String(it.checkedAt) : null,
+        updatedAt: it?.updatedAt ? String(it.updatedAt) : null,
+      })).filter((it: { name: string }) => !!it.name)
+      : []
+  } catch {
+    return []
+  }
+}
+
 const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
 const GROCERY_CATEGORY_LIST_ORDER: GroceryCategory[] = [
   'bread',
@@ -4699,13 +4747,21 @@ function GroceriesModuleSettingsTab({
       return
     }
     const { data, error } = await supabase
-      .from('device_settings')
-      .select('settings_json')
+      .from('dinner_plan_days')
+      .select('date,title,note')
       .eq('device_id', activeDeviceId)
-      .maybeSingle()
+      .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day)))
     if (error) return
-    const settings = (data?.settings_json && typeof data.settings_json === 'object') ? (data.settings_json as any) : {}
-    setDinnerPlanDays(parseDinnerPlanDays(settings?.dinner_plan))
+    const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
+    for (const row of data ?? []) {
+      const day = dinnerDayFromIsoDate(String(row.date))
+      if (!day) continue
+      byDay.set(day, {
+        title: String(row.title ?? '').trim(),
+        items: parseDinnerItemsNote(row.note),
+      })
+    }
+    setDinnerPlanDays(DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] })))
   }, [activeDeviceId, parseDinnerPlanDays])
 
   useEffect(() => {
@@ -4720,16 +4776,7 @@ function GroceriesModuleSettingsTab({
     }
     const channel = supabase
       .channel(`dinner-plan:${activeDeviceId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'device_settings',
-          filter: `device_id=eq.${activeDeviceId}`,
-        },
-        () => { loadDinnerPlan() }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dinner_plan_days', filter: `device_id=eq.${activeDeviceId}` }, () => { loadDinnerPlan() })
       .subscribe()
     dinnerRealtimeChannelRef.current = channel
     return () => {
@@ -4798,29 +4845,16 @@ function GroceriesModuleSettingsTab({
   async function persistDinnerPlan(next: DinnerPlanDay[]) {
     setDinnerPlanDays(next)
     if (!activeDeviceId) return
-    const { data, error } = await supabase
-      .from('device_settings')
-      .select('settings_json')
-      .eq('device_id', activeDeviceId)
-      .maybeSingle()
-    if (error) return
-    const current = (data?.settings_json && typeof data.settings_json === 'object') ? (data.settings_json as Record<string, any>) : {}
-    const merged = { ...current, dinner_plan: next }
-    const { error: upsertErr } = await supabase.rpc('upsert_device_settings', {
-      p_device_id: activeDeviceId,
-      p_settings: merged,
-    })
-    if (upsertErr) {
-      // Fallback for environments where RPC execution is blocked/misconfigured.
-      // This ensures dinner_plan still persists in public.device_settings.
-      const { error: fallbackErr } = await supabase
-        .from('device_settings')
-        .update({ settings_json: merged })
-        .eq('device_id', activeDeviceId)
-      if (fallbackErr) {
-        console.error('Failed to persist dinner plan', { upsertErr, fallbackErr })
-      }
-    }
+    const payload = next
+      .filter((d) => d.title || d.items.length > 0)
+      .map((d) => ({
+        device_id: activeDeviceId,
+        date: isoDateForDinnerDay(d.day),
+        title: d.title || dinnerPlanDayLabel('en', d.day),
+        note: JSON.stringify(d.items),
+      }))
+    const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
+    if (error) console.error('Failed to persist dinner plan', { error })
   }
   function isDinnerVirtualId(id: string) {
     return id.startsWith('dinner-')
