@@ -4729,6 +4729,40 @@ function GroceriesModuleSettingsTab({
     () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && day.items.length > 0 && day.items.every((x) => x.isChecked)),
     [dinnerPlanDays]
   )
+  const dinnerPlanGroupedItems = useMemo(() => {
+    const byCategory = new Map<GroceryCategory, GroceryItem[]>()
+    for (const c of GROCERY_CATEGORY_LIST_ORDER) byCategory.set(c, [])
+    const aggregate = new Map<string, { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }>()
+    for (const day of dinnerPlanDays) {
+      for (const item of day.items) {
+        const key = `${item.category}__${item.name.trim().toLowerCase()}`
+        const existing = aggregate.get(key)
+        if (existing) {
+          existing.quantity += item.quantity
+          existing.isChecked = existing.isChecked && item.isChecked
+          if (!existing.checkedAt || (item.checkedAt && item.checkedAt > existing.checkedAt)) existing.checkedAt = item.checkedAt
+        } else {
+          aggregate.set(key, { ...item })
+        }
+      }
+    }
+    for (const entry of aggregate.values()) {
+      const list = byCategory.get(entry.category) || []
+      list.push({ id: `dinner-${entry.category}-${entry.name}`, ...entry })
+      byCategory.set(entry.category, list)
+    }
+    return GROCERY_CATEGORY_LIST_ORDER.map((category) => ({ category, items: byCategory.get(category) || [] })).filter((g) => g.items.length > 0)
+  }, [dinnerPlanDays])
+  const groupsForDisplay = useMemo(() => {
+    if (!hasDinnerPlan) return groupedVisibleItems
+    const base = uncategorizedMainItems.map((g) => ({ ...g, items: [...g.items] }))
+    for (const dGroup of dinnerPlanGroupedItems) {
+      const target = base.find((g) => g.category === dGroup.category)
+      if (target) target.items = [...target.items, ...dGroup.items]
+      else base.push({ category: dGroup.category, items: [...dGroup.items] })
+    }
+    return base.filter((g) => g.items.length > 0)
+  }, [hasDinnerPlan, groupedVisibleItems, uncategorizedMainItems, dinnerPlanGroupedItems])
 
   function persistDinnerPlan(next: DinnerPlanDay[]) {
     setDinnerPlanDays(next)
@@ -4996,60 +5030,6 @@ function GroceriesModuleSettingsTab({
     <>
     <div className="h-full flex flex-col min-h-0">
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
-        {hasDinnerPlan ? (
-          <div className="px-2 pt-3">
-            {[...dinnerPlanActiveDays]
-              .sort((a, b) => {
-                return DINNER_PLAN_DAY_ORDER.indexOf(a.day) - DINNER_PLAN_DAY_ORDER.indexOf(b.day)
-              })
-              .map((day, dayIndex, dayList) => (
-              <div key={day.day} className={`mb-3 ${dayIndex < dayList.length - 1 ? 'pb-3 border-b border-[color:var(--bd-10)]' : ''}`}>
-                <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-85)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
-                <div className="rounded-2xl bg-transparent">
-                  {[...GROCERY_CATEGORY_LIST_ORDER].sort((a, b) => {
-                    const aItems = day.items.filter((item) => item.category === a).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
-                    const bItems = day.items.filter((item) => item.category === b).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
-                    const aAllChecked = aItems.length > 0 && aItems.every((x) => x.isChecked)
-                    const bAllChecked = bItems.length > 0 && bItems.every((x) => x.isChecked)
-                    if (aAllChecked !== bAllChecked) return aAllChecked ? 1 : -1
-                    return GROCERY_CATEGORY_LIST_ORDER.indexOf(a) - GROCERY_CATEGORY_LIST_ORDER.indexOf(b)
-                  }).map((cat) => {
-                    const visibleItems = day.items.filter((item) => item.category === cat).filter((item) => groceryIsVisible({ ...item, id: 'd' } as GroceryItem, nowMs))
-                    if (!visibleItems.length) return null
-                    const sorted = [...visibleItems].sort((a, b) => Number(a.isChecked) - Number(b.isChecked))
-                    const allChecked = sorted.every((x) => x.isChecked)
-                    return <div key={`${day.day}-${cat}`} className={`${allChecked ? 'opacity-70' : ''} mb-2`}>
-                      <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, cat)}</div>
-                      <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)]">
-                      {sorted.map((item, idx) => {
-                        const absoluteIndex = day.items.findIndex((x) => x === item)
-                        return <div key={`${day.day}-${cat}-${idx}`} className="px-4 py-2 flex items-start gap-3">
-                          <button onClick={() => toggleDinnerItem(day.day, absoluteIndex)} className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}>
-                            {item.isChecked ? <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--fg-60)]" /> : null}
-                          </button>
-                          <button onClick={() => setDinnerPlanMainEditTarget({ day: day.day, idx: absoluteIndex })} className="min-w-0 flex-1 text-left">
-                            <div className={`text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>{item.name}</div>
-                            {item.isChecked ? <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{groceryUndoHint(language, item.checkedAt, nowMs)}</div> : null}
-                          </button>
-                          <div className="shrink-0 flex items-center gap-2.5">
-                            <button onClick={() => adjustDinnerItemQty(day.day, absoluteIndex, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
-                            <div className={`text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>{item.quantity}</div>
-                            <button onClick={() => adjustDinnerItemQty(day.day, absoluteIndex, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
-                          </div>
-                        </div>
-                      })}
-                      </div>
-                    </div>
-                  })}
-                </div>
-              </div>
-            ))}
-            <div className="my-3 border-t border-[color:var(--bd-10)]" />
-            {dinnerPlanOtherItems.length > 0 ? (
-              <div className="mt-2 pt-2 border-t border-[color:var(--bd-10)] text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'Annet:' : 'Other:'}</div>
-            ) : null}
-          </div>
-        ) : null}
         {loading ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : groupedVisibleItems.length === 0 ? (
@@ -5059,7 +5039,7 @@ function GroceriesModuleSettingsTab({
             {hasDinnerPlan && uncategorizedMainItems.length > 0 ? (
               <div className="px-1 pb-2 text-sm font-semibold text-[color:var(--fg-80)]">{language === 'no' ? 'Annet:' : 'Other:'}</div>
             ) : null}
-            {(hasDinnerPlan ? uncategorizedMainItems : groupedVisibleItems).map((group) => (
+            {groupsForDisplay.map((group) => (
               <div key={group.category} className="mb-3">
                 <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">
                   {groceryCategoryLabel(language, group.category)}
