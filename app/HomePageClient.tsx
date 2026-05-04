@@ -5232,6 +5232,9 @@ function GroceriesModuleSettingsTab({
           void persistDinnerPlan(days)
           setDinnerPlanOpen(false)
         }}
+        onAutosave={(days) => {
+          void persistDinnerPlan(days)
+        }}
       />
     )}
     {dinnerPlanMainEditTarget ? (
@@ -5419,12 +5422,14 @@ function DinnerPlanSheet({
   initialDays,
   onCancel,
   onSave,
+  onAutosave,
 }: {
   language: AppLanguage
   suggestions: GrocerySuggestion[]
   initialDays: DinnerPlanDay[]
   onCancel: () => void
   onSave: (days: DinnerPlanDay[]) => void
+  onAutosave: (days: DinnerPlanDay[]) => void
 }) {
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
@@ -5447,6 +5452,12 @@ function DinnerPlanSheet({
         return { ...x, items }
       })
     )
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      onAutosave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))
+    }, 500)
+    return () => window.clearTimeout(handle)
+  }, [days, onAutosave])
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
