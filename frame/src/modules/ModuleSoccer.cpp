@@ -29,7 +29,10 @@ static const int MAX_INSTANCES = 4;
 static const int MAX_TABLE_ROWS = 24;
 static const int DETAIL_LEFT_PAD = 8; // easy to tweak XL bottom-left left padding
 
-static DynamicJsonDocument g_soccerDoc(16384);
+// Parse JSON in a temporary heap document (not global .bss DRAM).
+// We try a smaller capacity first, then retry with a larger one if needed.
+static const size_t SOCCER_DOC_CAP_SMALL = 12288;
+static const size_t SOCCER_DOC_CAP_LARGE = 16384;
 
 struct SoccerInstanceConfig {
   uint8_t id = 1;
@@ -724,19 +727,24 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
 
   Serial.printf("[soccer] body len=%d\n", body.length());
 
-  g_soccerDoc.clear();
-  DeserializationError err = deserializeJson(g_soccerDoc, body);
+  DynamicJsonDocument doc(SOCCER_DOC_CAP_SMALL);
+  DeserializationError err = deserializeJson(doc, body);
+  if (err == DeserializationError::NoMemory) {
+    Serial.printf("[soccer] json needs larger doc, retrying %u bytes\n", (unsigned)SOCCER_DOC_CAP_LARGE);
+    doc = DynamicJsonDocument(SOCCER_DOC_CAP_LARGE);
+    err = deserializeJson(doc, body);
+  }
   if (err) {
     Serial.printf("[soccer] json err: %s\n", err.c_str());
     return false;
   }
 
   copySafe(out.teamName, sizeof(out.teamName),
-           g_soccerDoc["teamName"] | g_soccerDoc["teamKey"] | cfg.teamName);
+           doc["teamName"] | doc["teamKey"] | cfg.teamName);
   copySafe(out.competitionName, sizeof(out.competitionName),
-           g_soccerDoc["competitionName"] | g_soccerDoc["domesticCompetitionCode"] | cfg.competitionName);
+           doc["competitionName"] | doc["domesticCompetitionCode"] | cfg.competitionName);
 
-  JsonObject nextMatch = g_soccerDoc["next"];
+  JsonObject nextMatch = doc["next"];
   out.hasNext = !nextMatch.isNull();
   if (out.hasNext) {
     out.nextHome = nextMatch["isHome"] | true;
@@ -752,7 +760,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     out.nextHome = true;
   }
 
-  JsonObject prevMatch = g_soccerDoc["last"];
+  JsonObject prevMatch = doc["last"];
   out.hasPrev = !prevMatch.isNull();
   if (out.hasPrev) {
     out.prevHome = prevMatch["isHome"] | true;
@@ -770,7 +778,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     out.prevGoalsAway = -1;
   }
 
-  JsonObject standing = g_soccerDoc["standing"];
+  JsonObject standing = doc["standing"];
   out.hasStanding = !standing.isNull();
   if (out.hasStanding) {
     out.position = standing["position"] | -1;
@@ -812,7 +820,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
 
   out.tableCount = 0;
   out.selectedTableIndex = -1;
-  JsonArray tbl = g_soccerDoc["table"].as<JsonArray>();
+  JsonArray tbl = doc["table"].as<JsonArray>();
   if (!tbl.isNull()) {
     for (JsonVariant row : tbl) {
       if (out.tableCount >= MAX_TABLE_ROWS) break;
@@ -831,7 +839,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     }
   }
 
-  JsonObject topScorer = g_soccerDoc["topScorer"];
+  JsonObject topScorer = doc["topScorer"];
   out.hasTopScorer = !topScorer.isNull();
   if (out.hasTopScorer) {
     copySafe(out.topScorerName, sizeof(out.topScorerName), topScorer["name"] | "--");
@@ -841,7 +849,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     out.topScorerGoals = -1;
   }
 
-  parseLastScorers(g_soccerDoc["lastScorers"], out.lastScorers, sizeof(out.lastScorers));
+  parseLastScorers(doc["lastScorers"], out.lastScorers, sizeof(out.lastScorers));
   return true;
 }
 
