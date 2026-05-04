@@ -301,6 +301,27 @@ export async function GET(req: Request) {
     settings_json.modules.groceries_signature = groceriesSignature(activeGroceries)
 
     // -------------------------------
+    // ✅ Dinner plan payload for firmware ("Today's dinner" header)
+    // -------------------------------
+    const { data: dinnerPlanData, error: dinnerPlanError } = await supabase
+      .from('dinner_plan_days')
+      .select('date,title')
+      .eq('device_id', device_id)
+      .order('date', { ascending: true })
+
+    if (dinnerPlanError) {
+      return NextResponse.json({ error: dinnerPlanError.message }, { status: 500 })
+    }
+
+    settings_json.modules.dinner_planner = (dinnerPlanData || [])
+      .map((row: any) => ({
+        date: asString(row?.date, '').slice(0, 10),
+        title: asString(row?.title, '').trim().slice(0, 80),
+      }))
+      .filter((row: { date: string; title: string }) => isIsoDate(row.date) && !!row.title)
+      .slice(0, 14)
+
+    // -------------------------------
     // ✅ Holidays injection (unchanged from your version)
     // -------------------------------
     const todayIso = isoDateOnly(new Date())
