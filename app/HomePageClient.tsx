@@ -926,7 +926,7 @@ export default function HomePage() {
       .eq('device_id', deviceId)
       .maybeSingle()
 
-    if (error) return
+    if (error) return defaultDinnerPlanDays()
 
     const json = (data?.settings_json || {}) as SettingsJson
     const hasSavedSettings =
@@ -4775,17 +4775,18 @@ function GroceriesModuleSettingsTab({
     })
   }, [])
 
-  const loadDinnerPlan = useCallback(async () => {
+  const loadDinnerPlan = useCallback(async (): Promise<DinnerPlanDay[]> => {
     if (!activeDeviceId) {
-      setDinnerPlanDays(defaultDinnerPlanDays())
-      return
+      const emptyDays = defaultDinnerPlanDays()
+      setDinnerPlanDays(emptyDays)
+      return emptyDays
     }
     const { data, error } = await supabase
       .from('dinner_plan_days')
       .select('date,title,note')
       .eq('device_id', activeDeviceId)
       .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day)))
-    if (error) return
+    if (error) return defaultDinnerPlanDays()
     const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
     for (const row of data ?? []) {
       const day = dinnerDayFromIsoDate(String(row.date))
@@ -4801,6 +4802,7 @@ function GroceriesModuleSettingsTab({
     setDinnerPlanDays(resetDays)
     const changed = JSON.stringify(resetDays) !== JSON.stringify(loadedDays)
     if (changed) void persistDinnerPlan(resetDays)
+    return resetDays
   }, [activeDeviceId, parseDinnerPlanDays])
 
   useEffect(() => {
