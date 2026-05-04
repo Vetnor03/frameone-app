@@ -4924,18 +4924,56 @@ function GroceriesModuleSettingsTab({
     return base.filter((g) => g.items.length > 0)
   }, [hasDinnerPlan, groupedVisibleItems, uncategorizedMainItems, dinnerPlanGroupedItems])
 
+  async function rememberHistoryItem(name: string, category: GroceryCategory, nowIso = new Date().toISOString()) {
+    if (!activeDeviceId) return
+    const normalizedName = name.trim()
+    if (!normalizedName) return
+
+    const { data: existingHistory } = await supabase
+      .from('grocery_item_history')
+      .select('id, usage_count')
+      .eq('device_id', activeDeviceId)
+      .ilike('name', normalizedName)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingHistory?.id) {
+      await supabase
+        .from('grocery_item_history')
+        .update({
+          usage_count: Math.max(1, Number(existingHistory.usage_count ?? 1) || 1) + 1,
+          last_used_at: nowIso,
+          category,
+        })
+        .eq('id', existingHistory.id)
+    } else {
+      await supabase
+        .from('grocery_item_history')
+        .insert({
+          device_id: activeDeviceId,
+          name: normalizedName,
+          usage_count: 1,
+          last_used_at: nowIso,
+          category,
+        })
+    }
+  }
+
   async function persistDinnerPlan(next: DinnerPlanDay[]) {
     const normalized = sanitizeDinnerPlanDays(next)
     const prevByKey = new Map<string, DinnerPlanDay['items'][number]>()
     for (const day of dinnerPlanDays) {
       for (const item of day.items) prevByKey.set(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`, item)
     }
-    const nextByKey = new Set<string>()
+    const nextByKey = new Map<string, DinnerPlanDay['items'][number]>()
     for (const day of normalized) {
-      for (const item of day.items) nextByKey.add(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`)
+      for (const item of day.items) nextByKey.set(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`, item)
     }
     const removedItems = [...prevByKey.entries()]
       .filter(([key]) => !nextByKey.has(key))
+      .map(([, item]) => item)
+    const addedItems = [...nextByKey.entries()]
+      .filter(([key]) => !prevByKey.has(key))
       .map(([, item]) => item)
 
     setDinnerPlanDays(normalized)
@@ -4960,6 +4998,18 @@ function GroceriesModuleSettingsTab({
     if (payload.length > 0) {
       const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
       if (error) console.error('Failed to persist dinner plan', { error })
+    }
+
+    if (addedItems.length > 0) {
+      const historySeen = new Set<string>()
+      const nowIso = new Date().toISOString()
+      for (const item of addedItems) {
+        const historyKey = `${item.name.trim().toLowerCase()}__${item.category}`
+        if (historySeen.has(historyKey)) continue
+        historySeen.add(historyKey)
+        await rememberHistoryItem(item.name, item.category, nowIso)
+      }
+      await loadHistory()
     }
 
     if (removedItems.length > 0) {
@@ -5039,34 +5089,7 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    const { data: existingHistory } = await supabase
-      .from('grocery_item_history')
-      .select('id, usage_count')
-      .eq('device_id', activeDeviceId)
-      .ilike('name', normalizedName)
-      .limit(1)
-      .maybeSingle()
-
-    if (existingHistory?.id) {
-      await supabase
-        .from('grocery_item_history')
-        .update({
-          usage_count: Math.max(1, Number(existingHistory.usage_count ?? 1) || 1) + 1,
-          last_used_at: nowIso,
-          category,
-        })
-        .eq('id', existingHistory.id)
-    } else {
-      await supabase
-        .from('grocery_item_history')
-        .insert({
-          device_id: activeDeviceId,
-          name: normalizedName,
-          usage_count: 1,
-          last_used_at: nowIso,
-          category,
-        })
-    }
+    await rememberHistoryItem(normalizedName, category, nowIso)
 
     await loadGroceries()
     await loadHistory()
