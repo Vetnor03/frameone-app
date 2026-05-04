@@ -4721,6 +4721,14 @@ function GroceriesModuleSettingsTab({
         .filter((g) => g.items.length > 0),
     [groupedVisibleItems, plannedNameSet]
   )
+  const dinnerPlanActiveDays = useMemo(
+    () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && !(day.items.length > 0 && day.items.every((x) => x.isChecked))),
+    [dinnerPlanDays]
+  )
+  const dinnerPlanCompletedDays = useMemo(
+    () => dinnerPlanDays.filter((day) => (day.title || day.items.length > 0) && day.items.length > 0 && day.items.every((x) => x.isChecked)),
+    [dinnerPlanDays]
+  )
 
   function persistDinnerPlan(next: DinnerPlanDay[]) {
     setDinnerPlanDays(next)
@@ -4990,12 +4998,8 @@ function GroceriesModuleSettingsTab({
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {hasDinnerPlan ? (
           <div className="px-2 pt-3">
-            {[...dinnerPlanDays]
-              .filter((day) => day.title || day.items.length > 0)
+            {[...dinnerPlanActiveDays]
               .sort((a, b) => {
-                const aAll = a.items.length > 0 && a.items.every((i) => i.isChecked)
-                const bAll = b.items.length > 0 && b.items.every((i) => i.isChecked)
-                if (aAll !== bAll) return aAll ? 1 : -1
                 return DINNER_PLAN_DAY_ORDER.indexOf(a.day) - DINNER_PLAN_DAY_ORDER.indexOf(b.day)
               })
               .map((day, dayIndex, dayList) => (
@@ -5023,7 +5027,10 @@ function GroceriesModuleSettingsTab({
                           <button onClick={() => toggleDinnerItem(day.day, absoluteIndex)} className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}>
                             {item.isChecked ? <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--fg-60)]" /> : null}
                           </button>
-                          <button onClick={() => setDinnerPlanMainEditTarget({ day: day.day, idx: absoluteIndex })} className={`min-w-0 flex-1 text-left text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>{item.name}{item.isChecked ? <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{groceryUndoHint(language, item.checkedAt, nowMs)}</div> : null}</button>
+                          <button onClick={() => setDinnerPlanMainEditTarget({ day: day.day, idx: absoluteIndex })} className="min-w-0 flex-1 text-left">
+                            <div className={`text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>{item.name}</div>
+                            {item.isChecked ? <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{groceryUndoHint(language, item.checkedAt, nowMs)}</div> : null}
+                          </button>
                           <div className="shrink-0 flex items-center gap-2.5">
                             <button onClick={() => adjustDinnerItemQty(day.day, absoluteIndex, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
                             <div className={`text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>{item.quantity}</div>
@@ -5117,6 +5124,15 @@ function GroceriesModuleSettingsTab({
                 </div>
               </div>
             ))}
+            {hasDinnerPlan && dinnerPlanCompletedDays.length > 0 ? (
+              <div className="mt-3 pt-3 border-t border-[color:var(--bd-10)]">
+                {dinnerPlanCompletedDays.map((day) => (
+                  <div key={`completed-${day.day}`} className="mb-3">
+                    <div className="px-1 pb-1 text-sm font-semibold text-[color:var(--fg-60)]">{`${dinnerPlanDayLabel(language, day.day)}: ${day.title || '—'}`}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
