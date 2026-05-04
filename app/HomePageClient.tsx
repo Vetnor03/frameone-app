@@ -5327,11 +5327,18 @@ function DinnerPlanSheet({
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
   const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
-  const addManualItem = (day: DinnerPlanDay['day']) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: '', category: 'other', quantity: 1, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
   const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
     setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
-  const updateManualItem = (day: DinnerPlanDay['day'], idx: number, patch: Partial<DinnerPlanDay['items'][number]>) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: x.items.map((it, i) => i === idx ? { ...it, ...patch } : it) } : x))
-  const removeItem = (day: DinnerPlanDay['day'], idx: number) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: x.items.filter((_, i) => i !== idx) } : x))
+  const adjustDayItemQty = (day: DinnerPlanDay['day'], idx: number, delta: number) =>
+    setDays((prev) =>
+      prev.map((x) => {
+        if (x.day !== day) return x
+        const items = x.items
+          .map((it, i) => (i === idx ? { ...it, quantity: Math.max(0, it.quantity + delta), updatedAt: new Date().toISOString() } : it))
+          .filter((it) => it.quantity > 0)
+        return { ...x, items }
+      })
+    )
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
@@ -5339,16 +5346,27 @@ function DinnerPlanSheet({
         {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
           <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
           <input value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
-          <div className="mt-2 space-y-2">{day.items.map((item,i)=><div key={`${day.day}-${i}`} className="rounded-lg border border-[color:var(--bd-10)] p-2">
-            <div className="flex gap-2">
-              <input value={item.name} onChange={(e)=>updateManualItem(day.day,i,{name:e.target.value})} placeholder={language === 'no' ? 'Vare' : 'Item'} className="flex-1 h-9 rounded-lg bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-2 text-xs" />
-              <button onClick={()=>removeItem(day.day,i)} className="h-9 px-2 rounded-lg border border-[color:var(--bd-10)] text-[10px]">{language === 'no' ? 'FJERN' : 'REMOVE'}</button>
-            </div>
-            <div className="mt-2 flex gap-2">
-              <select value={item.category} onChange={(e)=>updateManualItem(day.day,i,{category:asGroceryCategory(e.target.value)})} className="flex-1 h-8 rounded-lg bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-2 text-[10px]">{GROCERY_CATEGORY_LIST_ORDER.map((c)=><option key={c} value={c}>{groceryCategoryLabel(language,c)}</option>)}</select>
-              <input type="number" min={1} value={item.quantity} onChange={(e)=>updateManualItem(day.day,i,{quantity:Math.max(1,Number(e.target.value)||1)})} className="w-16 h-8 rounded-lg bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-2 text-[10px]" />
-            </div>
-          </div>)}</div>
+          <div className="mt-2">
+            {GROCERY_CATEGORY_LIST_ORDER.map((c) => {
+              const categoryItems = day.items.map((item, idx) => ({ item, idx })).filter((x) => x.item.category === c)
+              if (categoryItems.length === 0) return null
+              return <div key={`${day.day}-${c}`} className="mb-2">
+                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, c)}</div>
+                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] divide-y divide-[color:var(--bd-10)]">
+                  {categoryItems.map(({ item, idx }) => (
+                    <div key={`${day.day}-${c}-${idx}`} className="px-3 py-2 flex items-center gap-3">
+                      <div className="min-w-0 flex-1 text-[color:var(--fg-90)]">{item.name}</div>
+                      <div className="shrink-0 flex items-center gap-2.5">
+                        <button onClick={() => adjustDayItemQty(day.day, idx, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
+                        <div className="text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)]">{item.quantity}</div>
+                        <button onClick={() => adjustDayItemQty(day.day, idx, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            })}
+          </div>
           <button onClick={() => setAddTargetDay(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
         </div>)}
       </div>
