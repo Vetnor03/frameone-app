@@ -4770,6 +4770,16 @@ function GroceriesModuleSettingsTab({
       window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(next))
     }
   }
+  function isDinnerVirtualId(id: string) {
+    return id.startsWith('dinner-')
+  }
+  function findDinnerTarget(item: GroceryItem) {
+    for (const day of dinnerPlanDays) {
+      const idx = day.items.findIndex((x) => x.name.trim().toLowerCase() === item.name.trim().toLowerCase() && x.category === item.category)
+      if (idx >= 0) return { day: day.day, idx }
+    }
+    return null
+  }
 
   function toggleDinnerItem(dayKey: DinnerPlanDay['day'], itemIndex: number) {
     const nowIso = new Date().toISOString()
@@ -4858,6 +4868,16 @@ function GroceriesModuleSettingsTab({
   }
 
   async function toggleChecked(item: GroceryItem) {
+    if (isDinnerVirtualId(item.id)) {
+      const nextChecked = !item.isChecked
+      const nowIso = new Date().toISOString()
+      const next = dinnerPlanDays.map((day) => ({
+        ...day,
+        items: day.items.map((x) => x.name.trim().toLowerCase() === item.name.trim().toLowerCase() && x.category === item.category ? { ...x, isChecked: nextChecked, checkedAt: nextChecked ? nowIso : null, updatedAt: nowIso } : x),
+      }))
+      persistDinnerPlan(next)
+      return
+    }
     const nextChecked = !item.isChecked
     const nowIso = new Date().toISOString()
     pendingScrollTopRef.current = listScrollRef.current?.scrollTop ?? null
@@ -4891,6 +4911,23 @@ function GroceriesModuleSettingsTab({
   }
 
   async function adjustQuantity(item: GroceryItem, delta: number) {
+    if (isDinnerVirtualId(item.id)) {
+      const target = findDinnerTarget(item)
+      if (!target) return
+      if (delta < 0 && item.quantity <= 1) {
+        const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
+        if (!confirmed) return
+      }
+      const next = dinnerPlanDays.map((day) => {
+        if (day.day !== target.day) return day
+        const items = day.items
+          .map((x, idx) => idx === target.idx ? { ...x, quantity: Math.max(0, x.quantity + delta), updatedAt: new Date().toISOString() } : x)
+          .filter((x) => x.quantity > 0)
+        return { ...day, items }
+      })
+      persistDinnerPlan(next)
+      return
+    }
     if (delta < 0 && item.quantity === 1) {
       const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
       if (!confirmed) return
@@ -5048,6 +5085,11 @@ function GroceriesModuleSettingsTab({
                 key={item.id}
                 className="px-4 py-3 flex items-start gap-3 cursor-pointer"
                 onClick={() => {
+                  if (isDinnerVirtualId(item.id)) {
+                    const target = findDinnerTarget(item)
+                    if (target) setDinnerPlanMainEditTarget(target)
+                    return
+                  }
                   setEditingItem(item)
                   setSheetOpen(true)
                 }}
