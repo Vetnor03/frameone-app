@@ -4367,6 +4367,30 @@ function dinnerDayFromIsoDate(isoDate: string): DinnerPlanDay['day'] | null {
   return map[jsDay] ?? null
 }
 
+
+function stripEmoji(value: string): string {
+  return value
+    .replace(/[\p{Extended_Pictographic}️‍]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function sanitizeDinnerPlanDays(days: DinnerPlanDay[]): DinnerPlanDay[] {
+  return days.map((day) => ({
+    ...day,
+    title: stripEmoji(day.title),
+    items: day.items
+      .map((item) => ({ ...item, name: stripEmoji(item.name) }))
+      .filter((item) => item.name),
+  }))
+}
+
+function resetPassedDinnerDays(days: DinnerPlanDay[]): DinnerPlanDay[] {
+  const jsDay = new Date().getDay()
+  const currentIndex = jsDay === 0 ? 6 : jsDay - 1
+  return days.map((day, idx) => (idx < currentIndex ? { ...day, title: '', items: [] } : day))
+}
+
 function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
   if (typeof rawNote !== 'string' || !rawNote.trim()) return []
   try {
@@ -4761,7 +4785,12 @@ function GroceriesModuleSettingsTab({
         items: parseDinnerItemsNote(row.note),
       })
     }
-    setDinnerPlanDays(DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] })))
+    const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
+    const normalizedDays = sanitizeDinnerPlanDays(loadedDays)
+    const resetDays = resetPassedDinnerDays(normalizedDays)
+    setDinnerPlanDays(resetDays)
+    const changed = JSON.stringify(resetDays) !== JSON.stringify(loadedDays)
+    if (changed) void persistDinnerPlan(resetDays)
   }, [activeDeviceId, parseDinnerPlanDays])
 
   useEffect(() => {
@@ -4843,9 +4872,10 @@ function GroceriesModuleSettingsTab({
   }, [hasDinnerPlan, groupedVisibleItems, uncategorizedMainItems, dinnerPlanGroupedItems])
 
   async function persistDinnerPlan(next: DinnerPlanDay[]) {
-    setDinnerPlanDays(next)
+    const normalized = sanitizeDinnerPlanDays(next)
+    setDinnerPlanDays(normalized)
     if (!activeDeviceId) return
-    const payload = next
+    const payload = normalized
       .filter((d) => d.title || d.items.length > 0)
       .map((d) => ({
         device_id: activeDeviceId,
@@ -5274,11 +5304,13 @@ function GroceriesModuleSettingsTab({
         initialDays={dinnerPlanDays}
         onCancel={() => setDinnerPlanOpen(false)}
         onSave={(days) => {
-          void persistDinnerPlan(days)
+          const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
+          void persistDinnerPlan(nextDays)
           setDinnerPlanOpen(false)
         }}
         onAutosave={(days) => {
-          void persistDinnerPlan(days)
+          const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
+          void persistDinnerPlan(nextDays)
         }}
       />
     )}
