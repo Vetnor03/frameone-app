@@ -10,6 +10,7 @@
 #include "ModuleCountdown.h"
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
+#include "ModuleGroceries.h"
 
 // Simple smooth placeholder font (keep UI consistent)
 #include <Fonts/FreeSansBold12pt7b.h>
@@ -117,6 +118,11 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
 
     if (mod.startsWith("stocks")) {
       ModuleStocks::render(c, mod);
+      continue;
+    }
+
+    if (mod.startsWith("groceries")) {
+      ModuleGroceries::render(c, mod);
       continue;
     }
 
