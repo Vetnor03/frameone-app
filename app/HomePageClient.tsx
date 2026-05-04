@@ -4506,12 +4506,15 @@ function GroceriesModuleSettingsTab({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
+  const [dinnerPlanLockedByOtherUser, setDinnerPlanLockedByOtherUser] = useState(false)
   const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
   const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const dinnerRealtimeChannelRef = useRef<RealtimeChannel | null>(null)
+  const dinnerLockChannelRef = useRef<RealtimeChannel | null>(null)
+  const dinnerLockClientIdRef = useRef(`dinner-lock-${Math.random().toString(36).slice(2)}`)
   const reloadTimerRef = useRef<number | null>(null)
 
   const isRemovedRow = (row: any): boolean => {
@@ -4820,6 +4823,49 @@ function GroceriesModuleSettingsTab({
       if (dinnerRealtimeChannelRef.current === channel) dinnerRealtimeChannelRef.current = null
     }
   }, [activeDeviceId, loadDinnerPlan])
+
+  useEffect(() => {
+    if (!activeDeviceId) {
+      setDinnerPlanLockedByOtherUser(false)
+      return
+    }
+    if (dinnerLockChannelRef.current) {
+      supabase.removeChannel(dinnerLockChannelRef.current)
+      dinnerLockChannelRef.current = null
+    }
+    const channel = supabase.channel(`dinner-plan-lock:${activeDeviceId}`)
+    const updateLockedState = () => {
+      const state = channel.presenceState<{ clientId?: string; isEditingDinnerPlan?: boolean }>()
+      const othersEditing = Object.values(state)
+        .flat()
+        .some((presence) => presence?.clientId !== dinnerLockClientIdRef.current && presence?.isEditingDinnerPlan)
+      setDinnerPlanLockedByOtherUser(othersEditing)
+    }
+    channel
+      .on('presence', { event: 'sync' }, updateLockedState)
+      .subscribe(async (status) => {
+        if (status !== 'SUBSCRIBED') return
+        await channel.track({
+          clientId: dinnerLockClientIdRef.current,
+          isEditingDinnerPlan: false,
+        })
+        updateLockedState()
+      })
+    dinnerLockChannelRef.current = channel
+    return () => {
+      supabase.removeChannel(channel)
+      if (dinnerLockChannelRef.current === channel) dinnerLockChannelRef.current = null
+    }
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const channel = dinnerLockChannelRef.current
+    if (!channel) return
+    void channel.track({
+      clientId: dinnerLockClientIdRef.current,
+      isEditingDinnerPlan: dinnerPlanOpen,
+    })
+  }, [dinnerPlanOpen])
 
 
   const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
@@ -5330,13 +5376,18 @@ function GroceriesModuleSettingsTab({
           {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
         </button>
         <button
-          onClick={() => setDinnerPlanOpen(true)}
-          disabled={!activeDeviceId}
+          onClick={() => {
+            if (dinnerPlanLockedByOtherUser) return
+            setDinnerPlanOpen(true)
+          }}
+          disabled={!activeDeviceId || dinnerPlanLockedByOtherUser}
           className={`mt-3 w-[260px] h-[44px] rounded-2xl border text-xs tracking-widest transition ${
-            !activeDeviceId ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'
+            !activeDeviceId || dinnerPlanLockedByOtherUser ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'
           }`}
         >
-          {language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN')}
+          {dinnerPlanLockedByOtherUser
+            ? (language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER')
+            : (language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN'))}
         </button>
       </div>
     </div>
@@ -5345,15 +5396,15 @@ function GroceriesModuleSettingsTab({
         language={language}
         suggestions={suggestions}
         initialDays={dinnerPlanDays}
-        onCancel={() => setDinnerPlanOpen(false)}
-        onSave={(days) => {
-          const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
-          void persistDinnerPlan(nextDays)
+        onCancel={async () => {
           setDinnerPlanOpen(false)
+          await loadDinnerPlan()
         }}
-        onAutosave={(days) => {
+        onSave={async (days) => {
           const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
-          void persistDinnerPlan(nextDays)
+          await persistDinnerPlan(nextDays)
+          setDinnerPlanOpen(false)
+          await loadDinnerPlan()
         }}
       />
     )}
@@ -5542,14 +5593,12 @@ function DinnerPlanSheet({
   initialDays,
   onCancel,
   onSave,
-  onAutosave,
 }: {
   language: AppLanguage
   suggestions: GrocerySuggestion[]
   initialDays: DinnerPlanDay[]
   onCancel: () => void
   onSave: (days: DinnerPlanDay[]) => void
-  onAutosave: (days: DinnerPlanDay[]) => void
 }) {
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
@@ -5575,12 +5624,6 @@ function DinnerPlanSheet({
         return { ...x, items }
       })
     )
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      onAutosave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))
-    }, 500)
-    return () => window.clearTimeout(handle)
-  }, [days, onAutosave])
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
