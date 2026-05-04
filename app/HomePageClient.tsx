@@ -4504,13 +4504,11 @@ function groceryIsVisible(item: GroceryItem, nowMs: number) {
 function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs: number) {
   if (!checkedAt) return language === 'no' ? 'Kan angres i 24t' : 'You can undo for 24h'
   const elapsedMs = Math.max(0, nowMs - new Date(checkedAt).getTime())
-  const remainingMs = Math.max(0, GROCERY_UNDO_WINDOW_MS - elapsedMs)
-  const remainingTotalMinutes = Math.ceil(remainingMs / (60 * 1000))
-  const hours = Math.floor(remainingTotalMinutes / 60)
-  const minutes = remainingTotalMinutes % 60
+  const remainingHours = (GROCERY_UNDO_WINDOW_MS - elapsedMs) / (60 * 60 * 1000)
 
-  if (language === 'no') return `Kan angres i ${hours}t ${minutes}m`
-  return `You can undo for ${hours}h ${minutes}m`
+  const hourBucket = remainingHours > 5 ? 24 : remainingHours > 2 ? 5 : remainingHours > 1 ? 2 : 1
+  if (language === 'no') return `Kan angres i ${hourBucket}t`
+  return `You can undo for ${hourBucket}h`
 }
 
 function GroceriesModuleSettingsTab({
