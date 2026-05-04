@@ -720,6 +720,7 @@ export default function HomePage() {
   useEffect(() => {
     return () => {
       if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
+      if (dirtyFrameRef.current != null) window.cancelAnimationFrame(dirtyFrameRef.current)
     }
   }, [])
 
@@ -793,6 +794,17 @@ export default function HomePage() {
     })
   }
 
+  const dirtyFrameRef = useRef<number | null>(null)
+  const pendingDirtyStateRef = useRef<{
+    theme?: 'dark' | 'light'
+    language?: AppLanguage
+    fontSize?: AppFontSize
+    layoutKey?: LayoutKey
+    cellsByLayout?: Record<LayoutKey, Record<number, ModuleKey | null>>
+    modulesJson?: Record<string, any>
+    pinnedModuleTabs?: ModuleKey[]
+  } | null>(null)
+
   function refreshDirtyState(next?: {
     theme?: 'dark' | 'light'
     language?: AppLanguage
@@ -824,7 +836,14 @@ export default function HomePage() {
     modulesJson?: Record<string, any>
     pinnedModuleTabs?: ModuleKey[]
   }) {
-    refreshDirtyState(next)
+    pendingDirtyStateRef.current = next ?? null
+    if (dirtyFrameRef.current != null) return
+    dirtyFrameRef.current = window.requestAnimationFrame(() => {
+      dirtyFrameRef.current = null
+      const pending = pendingDirtyStateRef.current
+      pendingDirtyStateRef.current = null
+      refreshDirtyState(pending ?? undefined)
+    })
   }
 
   function orderedSlotsForLayout(targetLayout: LayoutKey) {
