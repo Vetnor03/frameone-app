@@ -4428,6 +4428,7 @@ function GroceriesModuleSettingsTab({
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
   const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
+  const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
@@ -4741,6 +4742,12 @@ function GroceriesModuleSettingsTab({
   }
 
   function adjustDinnerItemQty(dayKey: DinnerPlanDay['day'], itemIndex: number, delta: number) {
+    const day = dinnerPlanDays.find((x) => x.day === dayKey)
+    const current = day?.items[itemIndex]
+    if (delta < 0 && current && current.quantity <= 1) {
+      const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra listen?' : 'Remove this item from the list?')
+      if (!confirmed) return
+    }
     const next = dinnerPlanDays.map((day) => {
       if (day.day !== dayKey) return day
       const items = day.items
@@ -5016,7 +5023,7 @@ function GroceriesModuleSettingsTab({
                           <button onClick={() => toggleDinnerItem(day.day, absoluteIndex)} className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border ${item.isChecked ? 'border-[color:var(--fg-35)] bg-[color:var(--fg-35)]/20' : 'border-[color:var(--fg-55)]'} flex items-center justify-center`}>
                             {item.isChecked ? <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--fg-60)]" /> : null}
                           </button>
-                          <div className={`min-w-0 flex-1 text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>{item.name}</div>
+                          <button onClick={() => setDinnerPlanMainEditTarget({ day: day.day, idx: absoluteIndex })} className={`min-w-0 flex-1 text-left text-[color:var(--fg-90)] ${item.isChecked ? 'line-through text-[color:var(--fg-45)]' : ''}`}>{item.name}{item.isChecked ? <div className="text-[10px] tracking-wide mt-1 text-[color:var(--fg-40)]">{groceryUndoHint(language, item.checkedAt, nowMs)}</div> : null}</button>
                           <div className="shrink-0 flex items-center gap-2.5">
                             <button onClick={() => adjustDinnerItemQty(day.day, absoluteIndex, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
                             <div className={`text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)] ${item.isChecked ? 'line-through' : ''}`}>{item.quantity}</div>
@@ -5152,6 +5159,19 @@ function GroceriesModuleSettingsTab({
         }}
       />
     )}
+    {dinnerPlanMainEditTarget ? (
+      <DinnerPlanAddItemSheet
+        language={language}
+        suggestions={suggestions}
+        initialItem={dinnerPlanDays.find((d) => d.day === dinnerPlanMainEditTarget.day)?.items[dinnerPlanMainEditTarget.idx] ?? null}
+        onClose={() => setDinnerPlanMainEditTarget(null)}
+        onAdd={(name, quantity, category) => {
+          const next = dinnerPlanDays.map((d) => d.day === dinnerPlanMainEditTarget.day ? { ...d, items: d.items.map((it, i) => i === dinnerPlanMainEditTarget.idx ? { ...it, name, quantity, category, updatedAt: new Date().toISOString() } : it) } : d)
+          persistDinnerPlan(next)
+          setDinnerPlanMainEditTarget(null)
+        }}
+      />
+    ) : null}
     {sheetOpen && activeDeviceId && (
       <GroceriesDraftSheet
         language={language}
