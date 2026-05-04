@@ -4835,6 +4835,47 @@ function GroceriesModuleSettingsTab({
   }, [])
 
 
+  useEffect(() => {
+    if (!activeDeviceId) return
+
+    const expiredMainIds = items
+      .filter((item) => item.isChecked && item.checkedAt && nowMs - new Date(item.checkedAt).getTime() >= GROCERY_UNDO_WINDOW_MS)
+      .map((item) => item.id)
+      .filter((id) => !isDinnerVirtualId(id))
+
+    if (expiredMainIds.length > 0) {
+      setItems((prev) => prev.filter((item) => !expiredMainIds.includes(item.id)))
+      void supabase
+        .from('grocery_items')
+        .delete()
+        .in('id', expiredMainIds)
+        .then(({ error }) => {
+          if (error) {
+            console.error('Failed to auto-remove expired checked grocery items', { error, expiredMainIds })
+            void loadGroceries({ silent: true, preserveScroll: true })
+          }
+        })
+    }
+
+    let dinnerChanged = false
+    const nextDinnerPlanDays = dinnerPlanDays.map((day) => {
+      const nextItems = day.items.filter((item) => {
+        if (!item.isChecked || !item.checkedAt) return true
+        const elapsed = nowMs - new Date(item.checkedAt).getTime()
+        if (elapsed < GROCERY_UNDO_WINDOW_MS) return true
+        dinnerChanged = true
+        return false
+      })
+      return nextItems.length === day.items.length ? day : { ...day, items: nextItems }
+    })
+
+    if (dinnerChanged) {
+      setDinnerPlanDays(nextDinnerPlanDays)
+      void persistDinnerPlan(nextDinnerPlanDays)
+    }
+  }, [activeDeviceId, dinnerPlanDays, items, nowMs, loadGroceries])
+
+
   const parseDinnerPlanDays = useCallback((raw: unknown): DinnerPlanDay[] => {
     return DINNER_PLAN_DAY_ORDER.map((day) => {
       const found = Array.isArray(raw) ? raw.find((x: any) => x?.day === day) : null
