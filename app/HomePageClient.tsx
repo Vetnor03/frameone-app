@@ -5325,11 +5325,14 @@ function DinnerPlanSheet({
   onSave: (days: DinnerPlanDay[]) => void
 }) {
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
+  const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
   const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
   const addFromSuggestion = (day: DinnerPlanDay['day'], s: GrocerySuggestion) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: s.name, category: s.category, quantity: 1, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
   const addManualItem = (day: DinnerPlanDay['day']) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: '', category: 'other', quantity: 1, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
   const updateManualItem = (day: DinnerPlanDay['day'], idx: number, patch: Partial<DinnerPlanDay['items'][number]>) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: x.items.map((it, i) => i === idx ? { ...it, ...patch } : it) } : x))
   const removeItem = (day: DinnerPlanDay['day'], idx: number) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: x.items.filter((_, i) => i !== idx) } : x))
+  const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
+    setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div><button onClick={onCancel} className="text-[color:var(--fg-60)] text-xl">✕</button></div>
@@ -5347,8 +5350,7 @@ function DinnerPlanSheet({
               <input type="number" min={1} value={item.quantity} onChange={(e)=>updateManualItem(day.day,i,{quantity:Math.max(1,Number(e.target.value)||1)})} className="w-16 h-8 rounded-lg bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-2 text-[10px]" />
             </div>
           </div>)}</div>
-          <button onClick={() => addManualItem(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
-          <div className="mt-2 flex flex-wrap gap-1">{suggestions.slice(0,8).map((s)=><button key={`${day.day}-${s.name}`} onClick={()=>addFromSuggestion(day.day,s)} className="text-[10px] px-2 py-1 rounded-full border border-[color:var(--bd-10)]">+ {s.name}</button>)}</div>
+          <button onClick={() => setAddTargetDay(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
         </div>)}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -5356,7 +5358,71 @@ function DinnerPlanSheet({
         <button onClick={onCancel} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
       </div>
     </div>
+    {addTargetDay ? (
+      <DinnerPlanAddItemSheet
+        language={language}
+        suggestions={suggestions}
+        onClose={() => setAddTargetDay(null)}
+        onAdd={(name, quantity, category) => {
+          addItemToDay(addTargetDay, name, quantity, category)
+          setAddTargetDay(null)
+        }}
+      />
+    ) : null}
   </div>
+}
+
+function DinnerPlanAddItemSheet({
+  language,
+  suggestions,
+  onClose,
+  onAdd,
+}: {
+  language: AppLanguage
+  suggestions: GrocerySuggestion[]
+  onClose: () => void
+  onAdd: (name: string, quantity: number, category: GroceryCategory) => void
+}) {
+  const [name, setName] = useState('')
+  const [quantity, setQuantity] = useState(1)
+  const [category, setCategory] = useState<GroceryCategory>('other')
+  const filtered = useMemo(() => {
+    const q = name.trim().toLowerCase()
+    return suggestions.filter((s) => !q || s.name.toLowerCase().includes(q))
+  }, [name, suggestions])
+  useEffect(() => {
+    const found = suggestions.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
+    setCategory(found?.category ?? 'other')
+  }, [name, suggestions])
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh] px-5 pt-5 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</div>
+          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button>
+        </div>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(language).groceriesInputPlaceholder} className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none" />
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <button onClick={() => setQuantity((v) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
+          <div className="w-10 text-center text-[color:var(--fg-85)]">{quantity}</div>
+          <button onClick={() => setQuantity((v) => v + 1)} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">+</button>
+        </div>
+        <select value={category} onChange={(e) => setCategory(asGroceryCategory(e.target.value))} className="mt-4 w-full h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-85)] outline-none">
+          {GROCERY_CATEGORY_LIST_ORDER.map((c) => <option key={c} value={c}>{groceryCategoryLabel(language, c)}</option>)}
+        </select>
+        <div className="mt-4 text-[10px] tracking-widest text-[color:var(--fg-45)]">{tx(language).groceriesSuggestions}</div>
+        <div className="mt-2 h-48 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+          {filtered.map((s) => (
+            <button key={s.name} onClick={() => { setName(s.name); setCategory(s.category); setQuantity(1) }} className="w-full text-left px-3 py-2 border-b border-[color:var(--bd-10)] last:border-b-0">
+              <div>{s.name}</div><div className="text-[10px] text-[color:var(--fg-45)]">{groceryCategoryLabel(language, s.category)}</div>
+            </button>
+          ))}
+        </div>
+        <button onClick={() => name.trim() && onAdd(name.trim(), quantity, category)} disabled={!name.trim()} className={`mt-4 h-11 rounded-2xl border tracking-widest text-xs ${name.trim() ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'}`}>{language === 'no' ? 'LEGG TIL' : 'ADD'}</button>
+      </div>
+    </div>
+  )
 }
 
 function GrocerySuggestionSwipeRow({
