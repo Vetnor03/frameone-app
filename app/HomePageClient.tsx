@@ -4432,6 +4432,7 @@ function GroceriesModuleSettingsTab({
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
+  const dinnerRealtimeChannelRef = useRef<RealtimeChannel | null>(null)
   const reloadTimerRef = useRef<number | null>(null)
 
   const isRemovedRow = (row: any): boolean => {
@@ -4673,40 +4674,70 @@ function GroceriesModuleSettingsTab({
   }, [])
 
 
-  useEffect(() => {
+  const parseDinnerPlanDays = useCallback((raw: unknown): DinnerPlanDay[] => {
+    return DINNER_PLAN_DAY_ORDER.map((day) => {
+      const found = Array.isArray(raw) ? raw.find((x: any) => x?.day === day) : null
+      const items = Array.isArray(found?.items)
+        ? found.items
+          .map((it: any) => ({
+            name: String(it?.name ?? '').trim(),
+            category: asGroceryCategory(it?.category),
+            quantity: Math.max(1, Number(it?.quantity ?? 1) || 1),
+            isChecked: !!it?.isChecked,
+            checkedAt: it?.checkedAt ? String(it.checkedAt) : null,
+            updatedAt: it?.updatedAt ? String(it.updatedAt) : null,
+          }))
+          .filter((it: { name: string }) => !!it.name)
+        : []
+      return { day, title: String(found?.title ?? '').trim(), items }
+    })
+  }, [])
+
+  const loadDinnerPlan = useCallback(async () => {
     if (!activeDeviceId) {
       setDinnerPlanDays(defaultDinnerPlanDays())
       return
     }
-    const key = `dinner-plan:${activeDeviceId}`
-    const raw = window.localStorage.getItem(key)
-    if (!raw) {
-      setDinnerPlanDays(defaultDinnerPlanDays())
-      return
+    const { data, error } = await supabase
+      .from('device_settings')
+      .select('settings_json')
+      .eq('device_id', activeDeviceId)
+      .maybeSingle()
+    if (error) return
+    const settings = (data?.settings_json && typeof data.settings_json === 'object') ? (data.settings_json as any) : {}
+    setDinnerPlanDays(parseDinnerPlanDays(settings?.dinner_plan))
+  }, [activeDeviceId, parseDinnerPlanDays])
+
+  useEffect(() => {
+    loadDinnerPlan()
+  }, [loadDinnerPlan])
+
+  useEffect(() => {
+    if (!activeDeviceId) return
+    if (dinnerRealtimeChannelRef.current) {
+      supabase.removeChannel(dinnerRealtimeChannelRef.current)
+      dinnerRealtimeChannelRef.current = null
     }
-    try {
-      const parsed = JSON.parse(raw)
-      const next = DINNER_PLAN_DAY_ORDER.map((day) => {
-        const found = Array.isArray(parsed) ? parsed.find((x: any) => x?.day === day) : null
-        const items = Array.isArray(found?.items)
-          ? found.items
-            .map((it: any) => ({
-              name: String(it?.name ?? '').trim(),
-              category: asGroceryCategory(it?.category),
-              quantity: Math.max(1, Number(it?.quantity ?? 1) || 1),
-              isChecked: !!it?.isChecked,
-              checkedAt: it?.checkedAt ? String(it.checkedAt) : null,
-              updatedAt: it?.updatedAt ? String(it.updatedAt) : null,
-            }))
-            .filter((it: { name: string }) => !!it.name)
-          : []
-        return { day, title: String(found?.title ?? '').trim(), items }
-      })
-      setDinnerPlanDays(next)
-    } catch {
-      setDinnerPlanDays(defaultDinnerPlanDays())
+    const channel = supabase
+      .channel(`dinner-plan:${activeDeviceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'device_settings',
+          filter: `device_id=eq.${activeDeviceId}`,
+        },
+        () => { loadDinnerPlan() }
+      )
+      .subscribe()
+    dinnerRealtimeChannelRef.current = channel
+    return () => {
+      supabase.removeChannel(channel)
+      if (dinnerRealtimeChannelRef.current === channel) dinnerRealtimeChannelRef.current = null
     }
-  }, [activeDeviceId])
+  }, [activeDeviceId, loadDinnerPlan])
+
 
   const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
   const dinnerPlanOtherItems = useMemo(
@@ -4764,11 +4795,21 @@ function GroceriesModuleSettingsTab({
     return base.filter((g) => g.items.length > 0)
   }, [hasDinnerPlan, groupedVisibleItems, uncategorizedMainItems, dinnerPlanGroupedItems])
 
-  function persistDinnerPlan(next: DinnerPlanDay[]) {
+  async function persistDinnerPlan(next: DinnerPlanDay[]) {
     setDinnerPlanDays(next)
-    if (activeDeviceId) {
-      window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(next))
-    }
+    if (!activeDeviceId) return
+    const { data, error } = await supabase
+      .from('device_settings')
+      .select('settings_json')
+      .eq('device_id', activeDeviceId)
+      .maybeSingle()
+    if (error) return
+    const current = (data?.settings_json && typeof data.settings_json === 'object') ? (data.settings_json as Record<string, any>) : {}
+    const merged = { ...current, dinner_plan: next }
+    await supabase.rpc('upsert_device_settings', {
+      p_device_id: activeDeviceId,
+      p_settings: merged,
+    })
   }
   function isDinnerVirtualId(id: string) {
     return id.startsWith('dinner-')
@@ -4790,7 +4831,7 @@ function GroceriesModuleSettingsTab({
         items: day.items.map((item, idx) => idx === itemIndex ? { ...item, isChecked: !item.isChecked, checkedAt: !item.isChecked ? nowIso : null, updatedAt: nowIso } : item),
       }
     })
-    persistDinnerPlan(next)
+    void persistDinnerPlan(next)
   }
 
   function adjustDinnerItemQty(dayKey: DinnerPlanDay['day'], itemIndex: number, delta: number) {
@@ -4807,7 +4848,7 @@ function GroceriesModuleSettingsTab({
         .filter((item) => item.quantity > 0)
       return { ...day, items }
     })
-    persistDinnerPlan(next)
+    void persistDinnerPlan(next)
   }
 
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
@@ -4875,7 +4916,7 @@ function GroceriesModuleSettingsTab({
         ...day,
         items: day.items.map((x) => x.name.trim().toLowerCase() === item.name.trim().toLowerCase() && x.category === item.category ? { ...x, isChecked: nextChecked, checkedAt: nextChecked ? nowIso : null, updatedAt: nowIso } : x),
       }))
-      persistDinnerPlan(next)
+      void persistDinnerPlan(next)
       return
     }
     const nextChecked = !item.isChecked
@@ -4925,7 +4966,7 @@ function GroceriesModuleSettingsTab({
           .filter((x) => x.quantity > 0)
         return { ...day, items }
       })
-      persistDinnerPlan(next)
+      void persistDinnerPlan(next)
       return
     }
     if (delta < 0 && item.quantity === 1) {
@@ -5188,8 +5229,7 @@ function GroceriesModuleSettingsTab({
         initialDays={dinnerPlanDays}
         onCancel={() => setDinnerPlanOpen(false)}
         onSave={(days) => {
-          setDinnerPlanDays(days)
-          window.localStorage.setItem(`dinner-plan:${activeDeviceId}`, JSON.stringify(days))
+          void persistDinnerPlan(days)
           setDinnerPlanOpen(false)
         }}
       />
@@ -5202,7 +5242,7 @@ function GroceriesModuleSettingsTab({
         onClose={() => setDinnerPlanMainEditTarget(null)}
         onAdd={(name, quantity, category) => {
           const next = dinnerPlanDays.map((d) => d.day === dinnerPlanMainEditTarget.day ? { ...d, items: d.items.map((it, i) => i === dinnerPlanMainEditTarget.idx ? { ...it, name, quantity, category, updatedAt: new Date().toISOString() } : it) } : d)
-          persistDinnerPlan(next)
+          void persistDinnerPlan(next)
           setDinnerPlanMainEditTarget(null)
         }}
       />
