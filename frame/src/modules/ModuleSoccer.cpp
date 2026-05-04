@@ -10,6 +10,7 @@
 
 #include <ArduinoJson.h>
 #include <math.h>
+#include <new>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -106,8 +107,12 @@ struct SoccerCache {
   char lastScorers[80] = {0};
 };
 
-static SoccerInstanceConfig g_inst[MAX_INSTANCES];
-static SoccerCache g_cache[MAX_INSTANCES];
+static SoccerInstanceConfig* g_inst = nullptr;
+static SoccerCache* g_cache = nullptr;
+
+static bool hasStorage() {
+  return g_inst != nullptr && g_cache != nullptr;
+}
 
 static uint8_t parseInstanceId(const String& moduleName) {
   int idx = moduleName.indexOf(':');
@@ -220,6 +225,10 @@ static void ensureDefaultsOnce() {
   if (inited) return;
   inited = true;
 
+  g_inst = new (std::nothrow) SoccerInstanceConfig[MAX_INSTANCES];
+  g_cache = new (std::nothrow) SoccerCache[MAX_INSTANCES];
+  if (!g_inst || !g_cache) return;
+
   for (int i = 0; i < MAX_INSTANCES; i++) {
     g_inst[i] = SoccerInstanceConfig();
     g_inst[i].id = (uint8_t)(i + 1);
@@ -253,7 +262,7 @@ static bool cfgChanged(const SoccerInstanceConfig& oldCfg,
 }
 
 static void applyConfigFromFrameConfig() {
-  if (!g_cfg) return;
+  if (!g_cfg || !hasStorage()) return;
   ensureDefaultsOnce();
 
   static SoccerInstanceConfig oldInst[MAX_INSTANCES];
@@ -1458,11 +1467,16 @@ namespace ModuleSoccer {
 void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
   ensureDefaultsOnce();
+  if (!hasStorage()) return;
   applyConfigFromFrameConfig();
 }
 
 void render(const Cell& c, const String& moduleName) {
   ensureDefaultsOnce();
+  if (!hasStorage()) {
+    drawCenteredBox(c.x, c.y, c.w, c.h, "No RAM", FONT_B12, Theme::ink());
+    return;
+  }
 
   uint8_t id = parseInstanceId(moduleName);
   int idx = instIndex(id);
