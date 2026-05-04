@@ -102,7 +102,7 @@ const UI = {
     groceriesSuggestions: 'Suggestions',
     groceriesNoItems: 'No grocery items yet',
     groceriesCheckedLabel: 'Bought',
-    groceriesUntickHint: 'You can undo for 24h',
+    groceriesUntickHint: 'You can undo for 10min',
     groceriesQty: 'Qty',
 
     countdownNoEvents: 'No events yet',
@@ -215,7 +215,7 @@ const UI = {
     groceriesSuggestions: 'Forslag',
     groceriesNoItems: 'Ingen varer ennå',
     groceriesCheckedLabel: 'Kjøpt',
-    groceriesUntickHint: 'Kan angres i 24t',
+    groceriesUntickHint: 'Kan angres i 10 min',
     groceriesQty: 'Antall',
 
     countdownNoEvents: 'Ingen hendelser ennå',
@@ -4437,7 +4437,7 @@ function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
   }
 }
 
-const GROCERY_UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
+const GROCERY_UNDO_WINDOW_MS = 10 * 60 * 1000
 const GROCERY_CATEGORY_LIST_ORDER: GroceryCategory[] = [
   'bread',
   'cold_cuts',
@@ -4502,13 +4502,12 @@ function groceryIsVisible(item: GroceryItem, nowMs: number) {
 }
 
 function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs: number) {
-  if (!checkedAt) return language === 'no' ? 'Kan angres i 24t' : 'You can undo for 24h'
+  if (!checkedAt) return language === 'no' ? 'Kan angres i 10 min' : 'You can undo for 10min'
   const elapsedMs = Math.max(0, nowMs - new Date(checkedAt).getTime())
-  const remainingHours = (GROCERY_UNDO_WINDOW_MS - elapsedMs) / (60 * 60 * 1000)
-
-  const hourBucket = remainingHours > 5 ? 24 : remainingHours > 2 ? 5 : remainingHours > 1 ? 2 : 1
-  if (language === 'no') return `Kan angres i ${hourBucket}t`
-  return `You can undo for ${hourBucket}h`
+  const remainingMinutes = (GROCERY_UNDO_WINDOW_MS - elapsedMs) / (60 * 1000)
+  const minuteBucket = Math.max(1, Math.ceil(remainingMinutes))
+  if (language === 'no') return `Kan angres i ${minuteBucket} min`
+  return `You can undo for ${minuteBucket} min`
 }
 
 function GroceriesModuleSettingsTab({
