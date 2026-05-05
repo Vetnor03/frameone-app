@@ -6858,8 +6858,10 @@ const normalizedTime = normalizeReminderTime(time)
     }
   }
 
-  async function completeReminderFromEditor() {
+async function completeReminderFromEditor() {
     if (!editingReminder) return
+    const selectedOccurrenceDate =
+      String((editingReminder as ReminderUiItem & { displayDate?: string }).displayDate ?? '').trim() || date
     try {
       setCompleting(true)
       setStatus(null)
@@ -6874,12 +6876,12 @@ const normalizedTime = normalizeReminderTime(time)
         const { error } = await supabase
           .from('reminder_completions')
           .upsert(
-            { device_id: activeDeviceId, reminder_id: editingReminder.id, occurrence_date: date },
+            { device_id: activeDeviceId, reminder_id: editingReminder.id, occurrence_date: selectedOccurrenceDate },
             { onConflict: 'reminder_id,occurrence_date', ignoreDuplicates: true }
           )
         if (error) throw error
       }
-      onCompleted?.({ reminderId: editingReminder.id, occurrenceDate: date, repeat: editingReminder.repeat })
+      onCompleted?.({ reminderId: editingReminder.id, occurrenceDate: selectedOccurrenceDate, repeat: editingReminder.repeat })
       setConfirmCompleteOpen(false)
       onClose()
       void onSaved()
