@@ -66,12 +66,12 @@ static void utf8ToLatin1(char* out, size_t n, const char* in) {
       uint8_t d = (uint8_t)in[i + 1];
       i++;
       switch (d) {
-        case 0xB8: out[oi++] = (char)0xF8; break; // ø
-        case 0x98: out[oi++] = (char)0xD8; break; // Ø
-        case 0xA5: out[oi++] = (char)0xE5; break; // å
-        case 0x85: out[oi++] = (char)0xC5; break; // Å
-        case 0xA6: out[oi++] = (char)0xE6; break; // æ
-        case 0x86: out[oi++] = (char)0xC6; break; // Æ
+        case 0xB8: out[oi++] = (char)0xF8; break;
+        case 0x98: out[oi++] = (char)0xD8; break;
+        case 0xA5: out[oi++] = (char)0xE5; break;
+        case 0x85: out[oi++] = (char)0xC5; break;
+        case 0xA6: out[oi++] = (char)0xE6; break;
+        case 0x86: out[oi++] = (char)0xC6; break;
         default:   out[oi++] = '?'; break;
       }
       continue;
@@ -504,10 +504,48 @@ static void renderMedium(const Cell& c) {
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
-  // ---------- EMPTY STATE ----------
-  if (g_cache.count <= 0) {
-    int contentTop = drawHeader(c, g_cache.header, 26, FONT_B12);
+  char mainHeader[96] = {0};
+  char topLabel[32] = {0};
+  bool hasDinner = false;
 
+  const char* dinnerPrefix = "Today's Dinner:";
+
+  if (strncmp(g_cache.header, dinnerPrefix, strlen(dinnerPrefix)) == 0) {
+    hasDinner = true;
+
+    safeCopy(topLabel, sizeof(topLabel), "Today's Dinner");
+
+    const char* dinner = g_cache.header + strlen(dinnerPrefix);
+    while (*dinner == ' ') dinner++;
+
+    safeCopy(mainHeader, sizeof(mainHeader), dinner);
+  } else {
+    safeCopy(mainHeader, sizeof(mainHeader), g_cache.header);
+  }
+
+  int headerTopPad = hasDinner ? 32 : 26;
+
+  if (hasDinner && topLabel[0]) {
+    char labelFit[32] = {0};
+    fitTextToWidth(topLabel, labelFit, sizeof(labelFit), c.w - 24, FONT_B9);
+
+    int16_t lx1, ly1;
+    uint16_t lw, lh;
+    measureText(labelFit, FONT_B9, lx1, ly1, lw, lh);
+
+    int labelBaseline = c.y + 12 - ly1;
+
+    d.setFont(FONT_B9);
+    d.setTextColor(ink);
+    d.setTextSize(1);
+    d.setCursor(c.x + c.w / 2 - (int)lw / 2 - lx1, labelBaseline);
+    d.print(labelFit);
+    d.setFont(nullptr);
+  }
+
+  int contentTop = drawHeader(c, mainHeader, headerTopPad, FONT_B12);
+
+  if (g_cache.count <= 0) {
     Cell body = c;
     body.y = contentTop;
     body.h = c.y + c.h - contentTop;
@@ -516,51 +554,6 @@ static void renderMedium(const Cell& c) {
     return;
   }
 
-  // ---------- HEADER SPLIT ----------
-  char mainHeader[64] = {0};
-  char subHeader[96] = {0};
-  bool hasDinner = false;
-
-  // Check if header starts with "Today's Dinner:"
-  const char* dinnerPrefix = "Today's Dinner:";
-
-if (strncmp(g_cache.header, dinnerPrefix, strlen(dinnerPrefix)) == 0) {
-    hasDinner = true;
-
-    safeCopy(mainHeader, sizeof(mainHeader), "Today's Dinner:");
-
-    const char* dinner = g_cache.header + strlen(dinnerPrefix);
-    while (*dinner == ' ') dinner++; // trim space
-
-    safeCopy(subHeader, sizeof(subHeader), dinner);
-  } else {
-    safeCopy(mainHeader, sizeof(mainHeader), g_cache.header);
-  }
-
-  // ---------- DRAW MAIN HEADER (WITH UNDERLINE) ----------
-  int contentTop = drawHeader(c, mainHeader, 26, FONT_B12);
-
-  // ---------- DRAW SUB HEADER (NO UNDERLINE) ----------
-  if (hasDinner && subHeader[0]) {
-    char fit[96] = {0};
-    fitTextToWidth(subHeader, fit, sizeof(fit), c.w - 24, FONT_B9);
-
-    int16_t x1, y1;
-    uint16_t tw, th;
-    measureText(fit, FONT_B9, x1, y1, tw, th);
-
-    int baseline = contentTop + 14;
-
-    d.setFont(FONT_B9);
-    d.setTextColor(ink);
-    d.setCursor(c.x + c.w / 2 - (int)tw / 2 - x1, baseline - y1);
-    d.print(fit);
-    d.setFont(nullptr);
-
-    contentTop = baseline + th + 6; // push list down
-  }
-
-  // ---------- LIST ----------
   const int visibleCount = min(g_cache.count, 5);
 
   if (g_cache.count > visibleCount) {
