@@ -501,17 +501,66 @@ static void renderSmall(const Cell& c) {
 }
 
 static void renderMedium(const Cell& c) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  // ---------- EMPTY STATE ----------
   if (g_cache.count <= 0) {
     int contentTop = drawHeader(c, g_cache.header, 26, FONT_B12);
+
     Cell body = c;
     body.y = contentTop;
     body.h = c.y + c.h - contentTop;
+
     drawEmptyState(body, "All set", emptyPhrase());
     return;
   }
 
-  int contentTop = drawHeader(c, g_cache.header, 26, FONT_B12);
+  // ---------- HEADER SPLIT ----------
+  char mainHeader[64] = {0};
+  char subHeader[96] = {0};
+  bool hasDinner = false;
 
+  // Check if header starts with "Today's Dinner:"
+  const char* dinnerPrefix = "Today's Dinner:";
+
+if (strncmp(g_cache.header, dinnerPrefix, strlen(dinnerPrefix)) == 0) {
+    hasDinner = true;
+
+    safeCopy(mainHeader, sizeof(mainHeader), "Today's Dinner:");
+
+    const char* dinner = g_cache.header + strlen(dinnerPrefix);
+    while (*dinner == ' ') dinner++; // trim space
+
+    safeCopy(subHeader, sizeof(subHeader), dinner);
+  } else {
+    safeCopy(mainHeader, sizeof(mainHeader), g_cache.header);
+  }
+
+  // ---------- DRAW MAIN HEADER (WITH UNDERLINE) ----------
+  int contentTop = drawHeader(c, mainHeader, 26, FONT_B12);
+
+  // ---------- DRAW SUB HEADER (NO UNDERLINE) ----------
+  if (hasDinner && subHeader[0]) {
+    char fit[96] = {0};
+    fitTextToWidth(subHeader, fit, sizeof(fit), c.w - 24, FONT_B9);
+
+    int16_t x1, y1;
+    uint16_t tw, th;
+    measureText(fit, FONT_B9, x1, y1, tw, th);
+
+    int baseline = contentTop + 14;
+
+    d.setFont(FONT_B9);
+    d.setTextColor(ink);
+    d.setCursor(c.x + c.w / 2 - (int)tw / 2 - x1, baseline - y1);
+    d.print(fit);
+    d.setFont(nullptr);
+
+    contentTop = baseline + th + 6; // push list down
+  }
+
+  // ---------- LIST ----------
   const int visibleCount = min(g_cache.count, 5);
 
   if (g_cache.count > visibleCount) {
@@ -521,7 +570,15 @@ static void renderMedium(const Cell& c) {
   }
 
   int contentBottom = c.y + c.h - 14;
-  drawCenteredItemList(c, 0, visibleCount, contentTop, contentBottom - contentTop, FONT_B12);
+
+  drawCenteredItemList(
+    c,
+    0,
+    visibleCount,
+    contentTop,
+    contentBottom - contentTop,
+    FONT_B12
+  );
 }
 
 static void renderLarge(const Cell& c) {
