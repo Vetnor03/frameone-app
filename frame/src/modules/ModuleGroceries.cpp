@@ -72,6 +72,12 @@ static void drawLeft(int x, int baselineY, const char* text, const GFXfont* font
   d.setFont(nullptr);
 }
 
+static void drawCenter(int centerX, int baselineY, const char* text, const GFXfont* font, uint16_t color) {
+  int w = textWidth(text ? text : "", font);
+  int x = centerX - (w / 2);
+  drawLeft(x, baselineY, text ? text : "", font, color);
+}
+
 static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWidth, const GFXfont* font) {
   if (!dst || dstSize == 0) return;
   dst[0] = '\0';
