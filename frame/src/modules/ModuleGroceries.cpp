@@ -13,6 +13,8 @@
 #include <ArduinoJson.h>
 #include <time.h>
 #include <string.h>
+#include <stdio.h>
+#include <math.h>
 
 #define FONT_B9  (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
@@ -51,29 +53,38 @@ static void safeCopy(char* dst, size_t dstSize, const char* src) {
 static void utf8ToLatin1(char* out, size_t n, const char* in) {
   if (!out || n == 0) return;
   size_t oi = 0;
+
   for (size_t i = 0; in && in[i] && oi + 1 < n; i++) {
     uint8_t c = (uint8_t)in[i];
+
     if (c < 0x80) {
       out[oi++] = (char)c;
       continue;
     }
+
     if (c == 0xC3 && in[i + 1]) {
       uint8_t d = (uint8_t)in[i + 1];
       i++;
       switch (d) {
-        case 0xB8: out[oi++] = (char)0xF8; break;
-        case 0x98: out[oi++] = (char)0xD8; break;
-        case 0xA5: out[oi++] = (char)0xE5; break;
-        case 0x85: out[oi++] = (char)0xC5; break;
-        case 0xA6: out[oi++] = (char)0xE6; break;
-        case 0x86: out[oi++] = (char)0xC6; break;
-        default: out[oi++] = '?'; break;
+        case 0xB8: out[oi++] = (char)0xF8; break; // ø
+        case 0x98: out[oi++] = (char)0xD8; break; // Ø
+        case 0xA5: out[oi++] = (char)0xE5; break; // å
+        case 0x85: out[oi++] = (char)0xC5; break; // Å
+        case 0xA6: out[oi++] = (char)0xE6; break; // æ
+        case 0x86: out[oi++] = (char)0xC6; break; // Æ
+        default:   out[oi++] = '?'; break;
       }
       continue;
     }
+
     out[oi++] = '?';
   }
+
   out[oi] = 0;
+}
+
+static void clearCache() {
+  g_cache = GroceryCache{};
 }
 
 static void measureText(const char* text, const GFXfont* font,
@@ -81,7 +92,7 @@ static void measureText(const char* text, const GFXfont* font,
   auto& d = DisplayCore::get();
   d.setFont(font);
   d.setTextSize(1);
-  d.getTextBounds(text, 0, 0, &x1, &y1, &tw, &th);
+  d.getTextBounds(text ? text : "", 0, 0, &x1, &y1, &tw, &th);
 }
 
 static int textWidth(const char* text, const GFXfont* font) {
@@ -103,23 +114,16 @@ static void drawLeft(int x, int baselineY, const char* text, const GFXfont* font
   d.setTextSize(1);
   d.setTextColor(color);
   d.setCursor(x, baselineY);
-  d.print(text);
+  d.print(text ? text : "");
   d.setFont(nullptr);
-}
-
-static void drawCenteredLine(int x, int y, int w, int h, const char* text, const GFXfont* font, uint16_t color) {
-  int16_t x1, y1;
-  uint16_t tw, th;
-  measureText(text, font, x1, y1, tw, th);
-  int bx = x + (w - (int)tw) / 2;
-  int by = y + (h - (int)th) / 2;
-  drawLeft(bx - x1, by - y1, text, font, color);
 }
 
 static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWidth, const GFXfont* font) {
   if (!dst || dstSize == 0) return;
   dst[0] = '\0';
+
   if (!src || !src[0]) return;
+
   if (textWidth(src, font) <= maxWidth) {
     safeCopy(dst, dstSize, src);
     return;
@@ -129,14 +133,17 @@ static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWi
     char buf[160] = {0};
     int take = n;
     if (take > (int)sizeof(buf) - 4) take = (int)sizeof(buf) - 4;
+
     memcpy(buf, src, take);
     buf[take] = '\0';
     strcat(buf, "...");
+
     if (textWidth(buf, font) <= maxWidth) {
       safeCopy(dst, dstSize, buf);
       return;
     }
   }
+
   safeCopy(dst, dstSize, "...");
 }
 
@@ -146,45 +153,18 @@ static int getRotationStep4h() {
   return (int)(now / (4 * 3600));
 }
 
-static void drawEmptyState(const Cell& c, const char* line1, const char* line2) {
-  const GFXfont* f1 = FONT_B12;
-  const GFXfont* f2 = FONT_B9;
-  int lh1 = fontLineHeight(f1);
-  int lh2 = fontLineHeight(f2);
-  int total = lh1 + 6 + lh2;
-  int top = c.y + (c.h - total) / 2;
-  drawCenteredLine(c.x, top, c.w, lh1, line1, f1, Theme::ink());
-  drawCenteredLine(c.x, top + lh1 + 6, c.w, lh2, line2, f2, Theme::ink());
-}
-
-static void drawCenteredBulletLine(int cx, int baselineY, const char* text, int maxTextWidth) {
-  char fit[140] = {0};
-  fitTextToWidth(text, fit, sizeof(fit), maxTextWidth, FONT_B9);
-  int txtW = textWidth(fit, FONT_B9);
-  int gap = 8;
-  int dotR = 2;
-  int rowW = dotR * 2 + gap + txtW;
-  int rowX = cx - (rowW / 2);
-
-  auto& d = DisplayCore::get();
-  d.fillCircle(rowX + dotR, baselineY - 5, dotR, Theme::ink());
-  drawLeft(rowX + dotR * 2 + gap, baselineY, fit, FONT_B9, Theme::ink());
-}
-
-static const char* emptyPhrase() {
-  static const char* phrases[] = {
-    "Kj\xF8leskapet er fullt",
-    "Alt er handlet",
-    "Ingen varer mangler",
-    "Kj\xF8kkenet er klart"
-  };
-  return phrases[getRotationStep4h() % 4];
+static int wrapIndex(int idx, int count) {
+  if (count <= 0) return 0;
+  while (idx < 0) idx += count;
+  while (idx >= count) idx -= count;
+  return idx;
 }
 
 static bool getTodayYmd(char* out, size_t outSize) {
   if (!out || outSize < 11) return false;
   time_t now = time(nullptr);
   if (now <= 0) return false;
+
   struct tm tmv;
   localtime_r(&now, &tmv);
   strftime(out, outSize, "%Y-%m-%d", &tmv);
@@ -193,70 +173,283 @@ static bool getTodayYmd(char* out, size_t outSize) {
 
 static bool extractTodayDinnerTitle(JsonVariant src, const char* todayYmd, char* out, size_t outSize) {
   if (!todayYmd || !todayYmd[0] || src.isNull()) return false;
+
   if (src.is<JsonArray>()) {
     for (JsonVariant v : src.as<JsonArray>()) {
       if (!v.is<JsonObject>()) continue;
+
       JsonObject o = v.as<JsonObject>();
       const char* date = o["date"] | o["day"] | o["planned_date"] | "";
       if (!date || strcmp(date, todayYmd) != 0) continue;
+
       const char* title = o["title"] | o["name"] | o["dish"] | o["meal"] | "";
-      if (title && title[0]) { safeCopy(out, outSize, title); return true; }
+      if (title && title[0]) {
+        utf8ToLatin1(out, outSize, title);
+        return true;
+      }
     }
   }
+
   if (src.is<JsonObject>()) {
     JsonObject obj = src.as<JsonObject>();
     JsonVariant todayNode = obj[todayYmd];
+
     if (todayNode.is<JsonObject>()) {
       const char* title = todayNode["title"] | todayNode["name"] | todayNode["dish"] | todayNode["meal"] | "";
-      if (title && title[0]) { safeCopy(out, outSize, title); return true; }
+      if (title && title[0]) {
+        utf8ToLatin1(out, outSize, title);
+        return true;
+      }
+    } else if (todayNode.is<const char*>()) {
+      const char* title = todayNode.as<const char*>();
+      if (title && title[0]) {
+        utf8ToLatin1(out, outSize, title);
+        return true;
+      }
     }
   }
+
   return false;
 }
 
-static void clearCache() { g_cache = GroceryCache{}; }
+static const char* emptyPhrase() {
+  static const char* phrases[] = {
+    "Fridge is stacked",
+    "Pantry looks good",
+    "Kitchen is covered",
+    "No grocery run needed"
+  };
 
-static void formatItemLine(const GroceryItem& item, char* out, size_t outSize) {
-  if (item.qty > 1) snprintf(out, outSize, "%d\xD7 %s", item.qty, item.name);
-  else safeCopy(out, outSize, item.name);
+  int r = getRotationStep4h();
+  return phrases[r % 4];
+}
+
+static void formatItem(const GroceryItem& item, char* out, size_t outSize) {
+  if (!out || outSize == 0) return;
+  out[0] = '\0';
+
+  if (item.qty > 1) {
+    snprintf(out, outSize, "%dx %s", item.qty, item.name);
+  } else {
+    safeCopy(out, outSize, item.name);
+  }
+}
+
+static int drawHeader(const Cell& c, const char* header, int topPad, const GFXfont* font) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  char fit[96] = {0};
+  fitTextToWidth(header, fit, sizeof(fit), c.w - 24, font);
+
+  int16_t hx1, hy1;
+  uint16_t hw, hh;
+  measureText(fit, font, hx1, hy1, hw, hh);
+
+  int titleBaseline = c.y + topPad - hy1;
+
+  d.setFont(font);
+  d.setTextColor(ink);
+  d.setTextSize(1);
+  d.setCursor(c.x + c.w / 2 - (int)hw / 2 - hx1, titleBaseline);
+  d.print(fit);
+  d.setFont(nullptr);
+
+  const int underlineGap = 1;
+  const int underlineH = 2;
+  int underlineY = titleBaseline + hy1 + (int)hh + underlineGap;
+  int underlineX = c.x + c.w / 2 - (int)hw / 2;
+
+  d.fillRect(underlineX, underlineY, (int)hw, underlineH, ink);
+
+  return underlineY + underlineH + 10;
+}
+
+static void drawTopRightSmallNote(const Cell& c, const char* txt, int y) {
+  int16_t x1, y1;
+  uint16_t tw, th;
+  measureText(txt, FONT_B9, x1, y1, tw, th);
+
+  int drawX = c.x + c.w - 12 - (int)tw;
+  drawLeft(drawX - x1, y - y1, txt, FONT_B9, Theme::ink());
+}
+
+static void drawEmptyState(const Cell& c, const char* line1, const char* line2) {
+  const GFXfont* f1 = FONT_B12;
+  const GFXfont* f2 = FONT_B9;
+
+  int lh1 = fontLineHeight(f1);
+  int lh2 = fontLineHeight(f2);
+  int totalH = lh1 + 6 + lh2;
+
+  int cy = c.y + (c.h / 2) - (totalH / 2);
+  int centerX = c.x + c.w / 2;
+
+  int w1 = textWidth(line1, f1);
+  int w2 = textWidth(line2, f2);
+
+  drawLeft(centerX - w1 / 2, cy + lh1, line1, f1, Theme::ink());
+  drawLeft(centerX - w2 / 2, cy + lh1 + 6 + lh2, line2, f2, Theme::ink());
+}
+
+static void drawCenteredBulletLine(const Cell& c,
+                                   int centerY,
+                                   const char* text,
+                                   const GFXfont* font,
+                                   int anchorTextStartX) {
+  auto& d = DisplayCore::get();
+
+  int16_t tx1, ty1;
+  uint16_t tw, th;
+  measureText(text, font, tx1, ty1, tw, th);
+
+  const int dotR = 3;
+  const int gap = 10;
+
+  int textBaseline = centerY - (int)th / 2 - ty1;
+  int dotCx = anchorTextStartX - gap - dotR;
+  int dotCy = centerY;
+
+  d.fillCircle(dotCx, dotCy, dotR, Theme::ink());
+
+  d.setFont(font);
+  d.setTextColor(Theme::ink());
+  d.setTextSize(1);
+  d.setCursor(anchorTextStartX, textBaseline);
+  d.print(text);
+  d.setFont(nullptr);
+}
+
+static void drawCenteredItemList(const Cell& c,
+                                 int startOffset,
+                                 int visibleCount,
+                                 int yTop,
+                                 int totalH,
+                                 const GFXfont* lineFont) {
+  if (g_cache.count <= 0 || visibleCount <= 0) return;
+
+  const int lineH = fontLineHeight(lineFont);
+  const int lineGap = 12;
+  const int dotR = 3;
+  const int gap = 10;
+
+  int blockH = visibleCount * lineH + (visibleCount - 1) * lineGap;
+  int startY = yTop + (totalH - blockH) / 2;
+
+  char lines[8][128];
+  int widths[8] = {0};
+  int longestW = 0;
+
+  if (visibleCount > 8) visibleCount = 8;
+
+  int rotation = getRotationStep4h();
+
+  for (int i = 0; i < visibleCount; i++) {
+    lines[i][0] = '\0';
+
+    int idx = wrapIndex(rotation + startOffset + i, g_cache.count);
+
+    char raw[128] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+    fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 50, lineFont);
+    widths[i] = textWidth(lines[i], lineFont);
+    if (widths[i] > longestW) longestW = widths[i];
+  }
+
+  int totalLongestW = dotR * 2 + gap + longestW;
+  int anchorTextStartX = c.x + (c.w - totalLongestW) / 2 + dotR * 2 + gap;
+
+  for (int i = 0; i < visibleCount; i++) {
+    if (!lines[i][0]) continue;
+    int centerY = startY + i * (lineH + lineGap) + lineH / 2;
+    drawCenteredBulletLine(c, centerY, lines[i], lineFont, anchorTextStartX);
+  }
+}
+
+static void drawLeftItemList(const Cell& c,
+                             int startOffset,
+                             int visibleCount,
+                             int yTop,
+                             int yBottom,
+                             const GFXfont* font) {
+  if (g_cache.count <= 0 || visibleCount <= 0) return;
+
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  const int padX = 18;
+  const int lineH = 30;
+  const int dotR = 3;
+  const int gap = 12;
+
+  int availableH = yBottom - yTop;
+  int blockH = visibleCount * lineH;
+  int startY = yTop + max(0, (availableH - blockH) / 2);
+
+  int rotation = getRotationStep4h();
+
+  for (int i = 0; i < visibleCount; i++) {
+    int idx = wrapIndex(rotation + startOffset + i, g_cache.count);
+
+    char raw[128] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+    char fit[128] = {0};
+    fitTextToWidth(raw, fit, sizeof(fit), c.w - padX * 2 - gap - dotR * 2, font);
+
+    int rowY = startY + i * lineH;
+    int centerY = rowY + lineH / 2;
+
+    d.fillCircle(c.x + padX + dotR, centerY, dotR, ink);
+    drawLeft(c.x + padX + dotR * 2 + gap, centerY + 5, fit, font, ink);
+  }
 }
 
 static bool fetchGroceries() {
   clearCache();
+
   String url = String(BASE_URL) + "/api/device/frame-config?device_id=" + DeviceIdentity::getDeviceId();
+
   int code = 0;
   String body;
+
   if (!NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body) || code != 200) {
     g_cache.loaded = true;
+    g_cache.ok = false;
     return false;
   }
 
   StaticJsonDocument<16384> doc;
   if (deserializeJson(doc, body)) {
     g_cache.loaded = true;
+    g_cache.ok = false;
     return false;
   }
 
   JsonArray arr = doc["settings_json"]["modules"]["groceries"].as<JsonArray>();
+
   int idx = 0;
   if (!arr.isNull()) {
     for (JsonObject it : arr) {
       if (idx >= MAX_ITEMS) break;
+
       const char* nm = it["name"] | "";
       if (!nm || !nm[0]) continue;
-      char latin[80] = {0};
-      utf8ToLatin1(latin, sizeof(latin), nm);
+
       g_cache.items[idx].used = true;
-      safeCopy(g_cache.items[idx].name, sizeof(g_cache.items[idx].name), latin);
+      utf8ToLatin1(g_cache.items[idx].name, sizeof(g_cache.items[idx].name), nm);
       g_cache.items[idx].qty = max(1, (int)(it["quantity"] | 1));
       idx++;
     }
   }
+
   g_cache.count = idx;
 
   char todayYmd[16] = {0};
   char dinnerTitle[80] = {0};
   bool hasTodayDinner = false;
+
   if (getTodayYmd(todayYmd, sizeof(todayYmd))) {
     hasTodayDinner =
       extractTodayDinnerTitle(doc["settings_json"]["modules"]["dinnerPlanner"], todayYmd, dinnerTitle, sizeof(dinnerTitle)) ||
@@ -267,13 +460,11 @@ static bool fetchGroceries() {
   }
 
   if (hasTodayDinner) {
-    char latin[80] = {0};
-    utf8ToLatin1(latin, sizeof(latin), dinnerTitle);
-    char fit[80] = {0};
-    fitTextToWidth(latin, fit, sizeof(fit), 210, FONT_B12);
-    snprintf(g_cache.header, sizeof(g_cache.header), "Middag i dag: %s", fit);
+    char titleFit[80] = {0};
+    fitTextToWidth(dinnerTitle, titleFit, sizeof(titleFit), 210, FONT_B12);
+    snprintf(g_cache.header, sizeof(g_cache.header), "Today's Dinner: %s", titleFit);
   } else {
-    safeCopy(g_cache.header, sizeof(g_cache.header), "Handleliste");
+    safeCopy(g_cache.header, sizeof(g_cache.header), "Grocery List");
   }
 
   g_cache.ok = true;
@@ -281,94 +472,152 @@ static bool fetchGroceries() {
   return true;
 }
 
-static void ensureLoaded() { if (!g_cache.loaded) fetchGroceries(); }
-
-static void drawHeader(const Cell& c) {
-  drawCenteredLine(c.x, c.y + 4, c.w, 20, g_cache.header, FONT_B12, Theme::ink());
-  auto& d = DisplayCore::get();
-  int uw = min(120, max(40, textWidth(g_cache.header, FONT_B9) / 2));
-  int ux = c.x + (c.w - uw) / 2;
-  int uy = c.y + 24;
-  d.drawFastHLine(ux, uy, uw, Theme::ink());
-}
-
-static void drawListInColumn(const Cell& c, int startIdx, int maxRows, bool showMoreTopRight, int rotationStart) {
-  int show = min(maxRows, max(0, g_cache.count - startIdx));
-  int lineStart = c.y + 42;
-  int lineStep = 17;
-  int cx = c.x + c.w / 2;
-
-  for (int i = 0; i < show; i++) {
-    char line[120] = {0};
-    int idx = (rotationStart + startIdx + i) % g_cache.count;
-    formatItemLine(g_cache.items[idx], line, sizeof(line));
-    drawCenteredBulletLine(cx, lineStart + (i * lineStep), line, c.w - 34);
-  }
-
-  if (showMoreTopRight) {
-    int hidden = g_cache.count - (startIdx + show);
-    if (hidden > 0) {
-      char more[32] = {0};
-      snprintf(more, sizeof(more), "+%d varer", hidden);
-      drawLeft(c.x + c.w - textWidth(more, FONT_B9) - 4, c.y + 18, more, FONT_B9, Theme::ink());
-    }
-  }
+static void ensureLoaded() {
+  if (!g_cache.loaded) fetchGroceries();
 }
 
 static void renderSmall(const Cell& c) {
-  drawHeader(c);
   if (g_cache.count <= 0) {
-    drawEmptyState(c, g_cache.header, emptyPhrase());
+    int contentTop = drawHeader(c, g_cache.header, 20, FONT_B12);
+    Cell body = c;
+    body.y = contentTop;
+    body.h = c.y + c.h - contentTop;
+    drawEmptyState(body, "All set", emptyPhrase());
     return;
   }
-  int start = getRotationStep4h() % g_cache.count;
-  drawListInColumn(c, 0, 3, true, start);
+
+  int contentTop = drawHeader(c, g_cache.header, 20, FONT_B12);
+
+  const int visibleCount = min(g_cache.count, 3);
+
+  if (g_cache.count > visibleCount) {
+    char moreBuf[24];
+    snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
+    drawTopRightSmallNote(c, moreBuf, c.y + 12);
+  }
+
+  int contentBottom = c.y + c.h - 10;
+  drawCenteredItemList(c, 0, visibleCount, contentTop, contentBottom - contentTop, FONT_B12);
 }
 
 static void renderMedium(const Cell& c) {
-  drawHeader(c);
   if (g_cache.count <= 0) {
-    drawEmptyState(c, g_cache.header, emptyPhrase());
+    int contentTop = drawHeader(c, g_cache.header, 26, FONT_B12);
+    Cell body = c;
+    body.y = contentTop;
+    body.h = c.y + c.h - contentTop;
+    drawEmptyState(body, "All set", emptyPhrase());
     return;
   }
-  int start = getRotationStep4h() % g_cache.count;
-  drawListInColumn(c, 0, 5, true, start);
+
+  int contentTop = drawHeader(c, g_cache.header, 26, FONT_B12);
+
+  const int visibleCount = min(g_cache.count, 5);
+
+  if (g_cache.count > visibleCount) {
+    char moreBuf[24];
+    snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
+    drawTopRightSmallNote(c, moreBuf, c.y + 14);
+  }
+
+  int contentBottom = c.y + c.h - 14;
+  drawCenteredItemList(c, 0, visibleCount, contentTop, contentBottom - contentTop, FONT_B12);
 }
 
 static void renderLarge(const Cell& c) {
-  drawHeader(c);
   if (g_cache.count <= 0) {
-    drawEmptyState(c, g_cache.header, emptyPhrase());
+    int contentTop = drawHeader(c, g_cache.header, 28, FONT_B12);
+    Cell body = c;
+    body.y = contentTop;
+    body.h = c.y + c.h - contentTop;
+    drawEmptyState(body, "All set", emptyPhrase());
     return;
   }
-  int start = getRotationStep4h() % g_cache.count;
 
-  int gap = 10;
-  int colW = (c.w - gap) / 2;
-  Cell left{c.x, c.y, colW, c.h, c.slot, c.size};
-  Cell right{c.x + colW + gap, c.y, c.w - colW - gap, c.h, c.slot, c.size};
-  drawListInColumn(left, 0, 5, true, start);
-  drawListInColumn(right, 5, 7, false, start);
+  const int gapX = 14;
+
+  int leftW = (c.w - gapX) / 2;
+  int rightW = c.w - gapX - leftW;
+
+  Cell left = c;
+  left.x = c.x;
+  left.y = c.y;
+  left.w = leftW;
+  left.h = c.h;
+
+  Cell right = c;
+  right.x = c.x + leftW + gapX;
+  right.y = c.y;
+  right.w = rightW;
+  right.h = c.h;
+
+  renderMedium(left);
+
+  const int topPad = 28;
+  int listTop = right.y + topPad;
+  int listBottom = right.y + right.h - 18;
+
+  int remainingStart = min(5, g_cache.count);
+  int visibleRight = min(max(0, g_cache.count - remainingStart), 7);
+
+  if (visibleRight <= 0) {
+    visibleRight = min(g_cache.count, 7);
+    remainingStart = 0;
+  }
+
+  drawLeftItemList(right, remainingStart, visibleRight, listTop, listBottom, FONT_B12);
 }
 
 static void renderXL(const Cell& c) {
-  drawHeader(c);
   if (g_cache.count <= 0) {
-    drawEmptyState(c, g_cache.header, emptyPhrase());
+    int contentTop = drawHeader(c, g_cache.header, 34, FONT_B18);
+    Cell body = c;
+    body.y = contentTop;
+    body.h = c.y + c.h - contentTop;
+    drawEmptyState(body, "All set", emptyPhrase());
     return;
   }
-  int start = getRotationStep4h() % g_cache.count;
 
-  int colGap = 10;
-  int rowGap = 10;
-  int leftW = (c.w * 52) / 100;
-  Cell topLeft{c.x, c.y + 4, leftW, (c.h - rowGap) / 2, c.slot, c.size};
-  Cell bottomLeft{c.x, c.y + topLeft.h + rowGap, leftW, c.h - topLeft.h - rowGap, c.slot, c.size};
-  Cell right{c.x + leftW + colGap, c.y + 4, c.w - leftW - colGap, c.h - 4, c.slot, c.size};
+  const int gapX = 14;
+  int leftW = (c.w - gapX) / 2;
+  int rightW = c.w - gapX - leftW;
 
-  drawListInColumn(topLeft, 0, 5, true, start);
-  drawListInColumn(bottomLeft, 5, 5, false, start);
-  drawListInColumn(right, 10, 12, false, start);
+  int leftX = c.x;
+  int rightX = c.x + leftW + gapX;
+
+  const int gapY = 14;
+  int topH = (c.h - gapY) / 2;
+  int bottomH = c.h - gapY - topH;
+
+  Cell topLeft = c;
+  topLeft.x = leftX;
+  topLeft.y = c.y;
+  topLeft.w = leftW;
+  topLeft.h = topH;
+
+  renderMedium(topLeft);
+
+  Cell bottomLeft = c;
+  bottomLeft.x = leftX;
+  bottomLeft.y = c.y + topH + gapY;
+  bottomLeft.w = leftW;
+  bottomLeft.h = bottomH;
+
+  int bottomTop = drawHeader(bottomLeft, "Next items", 26, FONT_B12);
+  int bottomVisible = min(max(0, g_cache.count - 5), 5);
+  if (bottomVisible <= 0) bottomVisible = min(g_cache.count, 5);
+  int bottomStart = (g_cache.count > 5) ? 5 : 0;
+  drawCenteredItemList(bottomLeft, bottomStart, bottomVisible, bottomTop, bottomLeft.y + bottomLeft.h - bottomTop - 12, FONT_B12);
+
+  Cell right = c;
+  right.x = rightX;
+  right.y = c.y;
+  right.w = rightW;
+  right.h = c.h;
+
+  int rightTop = drawHeader(right, "Grocery overview", 34, FONT_B12);
+  int visibleRight = min(g_cache.count, 12);
+  drawLeftItemList(right, 0, visibleRight, rightTop + 6, right.y + right.h - 22, FONT_B12);
 }
 
 void setConfig(const FrameConfig* cfg) {
@@ -380,17 +629,18 @@ void setConfig(const FrameConfig* cfg) {
 void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
   ensureLoaded();
+
   if (!g_cache.ok) {
-    drawEmptyState(c, "Handleliste", "Kunne ikke hente varer");
+    drawEmptyState(c, "Grocery List", "Could not fetch items");
     return;
   }
 
   switch (c.size) {
-    case CELL_SMALL: renderSmall(c); break;
+    case CELL_SMALL:  renderSmall(c); break;
     case CELL_MEDIUM: renderMedium(c); break;
-    case CELL_LARGE: renderLarge(c); break;
-    case CELL_XL: renderXL(c); break;
-    default: renderMedium(c); break;
+    case CELL_LARGE:  renderLarge(c); break;
+    case CELL_XL:     renderXL(c); break;
+    default:          renderMedium(c); break;
   }
 }
 
