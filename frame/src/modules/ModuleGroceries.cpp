@@ -373,22 +373,17 @@ static void drawCenteredBulletLine(const Cell& c,
   d.setFont(nullptr);
 }
 
-static void drawAlignedMoreLine(int centerY,
-                                const char* text,
-                                const GFXfont* font,
-                                int anchorTextStartX) {
+static void drawCenteredMoreLine(const Cell& c,
+                                 int centerY,
+                                 const char* text,
+                                 const GFXfont* font) {
   if (!text || !text[0]) return;
 
   int16_t tx1, ty1;
   uint16_t tw, th;
   measureText(text, font, tx1, ty1, tw, th);
-  (void)tx1;
-  (void)tw;
 
-  int drawX = anchorTextStartX;
-  if (text[0] == '+' && text[1] >= '0' && text[1] <= '9') {
-    drawX -= textWidth("+", font);
-  }
+  int drawX = c.x + c.w / 2 - (int)tw / 2 - tx1;
 
   drawLeft(drawX,
            centerY - (int)th / 2 - ty1,
@@ -444,6 +439,74 @@ static int drawCenteredItemList(const Cell& c,
   }
 
   return anchorTextStartX;
+}
+
+static void drawCenteredItemColumns(const Cell& c,
+                                    int visibleCount,
+                                    int yTop,
+                                    int totalH,
+                                    const GFXfont* lineFont,
+                                    int lineGap,
+                                    const char* moreText) {
+  if (g_cache.count <= 0 || visibleCount <= 0) return;
+
+  if (visibleCount <= 6) {
+    drawCenteredItemList(c, 0, visibleCount, yTop, totalH, lineFont, lineGap);
+    return;
+  }
+
+  const int lineH = fontLineHeight(lineFont);
+  const int rowsPerColumn = 6;
+  const int leftCount = min(rowsPerColumn, visibleCount);
+  const int rightCount = min(rowsPerColumn, max(0, visibleCount - leftCount));
+  const int rowCount = max(leftCount, rightCount);
+  const int moreRows = (moreText && moreText[0]) ? 1 : 0;
+  const int rowStep = lineH + lineGap;
+  const int blockH = rowCount * lineH + max(0, rowCount - 1) * lineGap + moreRows * rowStep;
+  const int startY = yTop + max(0, (totalH - blockH) / 2);
+  const int dotR = 3;
+  const int gap = 10;
+  const int columnGap = 8;
+  const int columnW = (c.w - columnGap) / 2;
+  const int rotation = getRotationStep4h();
+
+  for (int col = 0; col < 2; col++) {
+    const int colCount = (col == 0) ? leftCount : rightCount;
+    if (colCount <= 0) continue;
+
+    const int colX = c.x + col * (columnW + columnGap);
+    const int colCenterX = colX + columnW / 2;
+    const int maxTextW = max(12, columnW - dotR * 2 - gap - 10);
+    char lines[6][128];
+    int longestW = 0;
+
+    for (int i = 0; i < colCount; i++) {
+      lines[i][0] = '\0';
+
+      int idx = wrapIndex(rotation + col * rowsPerColumn + i, g_cache.count);
+
+      char raw[128] = {0};
+      formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, lineFont);
+      int w = textWidth(lines[i], lineFont);
+      if (w > longestW) longestW = w;
+    }
+
+    int totalLongestW = dotR * 2 + gap + longestW;
+    int anchorTextStartX = colCenterX - totalLongestW / 2 + dotR * 2 + gap;
+
+    for (int i = 0; i < colCount; i++) {
+      if (!lines[i][0]) continue;
+      int centerY = startY + i * rowStep + lineH / 2;
+      drawCenteredBulletLine(c, centerY, lines[i], lineFont, anchorTextStartX);
+    }
+  }
+
+  if (moreRows > 0) {
+    int moreCenterY = startY + rowCount * rowStep + lineH / 2;
+    drawCenteredMoreLine(c, moreCenterY, moreText, lineFont);
+  }
 }
 
 static void drawLeftItemList(const Cell& c,
@@ -656,7 +719,7 @@ static void renderSmall(const Cell& c) {
   }
 }
 
-static void renderMedium(const Cell& c) {
+static void renderMedium(const Cell& c, bool useTwoColumns = true) {
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
@@ -710,36 +773,61 @@ static void renderMedium(const Cell& c) {
     return;
   }
 
-  const int maxRows = 7;
-  const bool hasMore = g_cache.count > maxRows;
-  const int visibleCount = min(g_cache.count, hasMore ? maxRows - 1 : maxRows);
+  int contentBottom = c.y + c.h - 14;
+  int contentH = contentBottom - contentTop;
+  if (contentH <= 8) return;
+
+  if (!useTwoColumns) {
+    const int maxRows = 7;
+    const bool hasMore = g_cache.count > maxRows;
+    const int visibleCount = min(g_cache.count, hasMore ? maxRows - 1 : maxRows);
+
+    char moreBuf[24] = {0};
+    const int renderedRows = visibleCount + (hasMore ? 1 : 0);
+
+    if (hasMore) {
+      snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
+    }
+
+    int lineH = fontLineHeight(FONT_B9);
+    int blockH = renderedRows * lineH + max(0, renderedRows - 1) * COMPACT_CENTERED_LIST_LINE_GAP;
+    int listStartY = contentTop + max(0, (contentH - blockH) / 2);
+
+    drawCenteredItemList(
+      c,
+      0,
+      visibleCount,
+      listStartY,
+      visibleCount * lineH + max(0, visibleCount - 1) * COMPACT_CENTERED_LIST_LINE_GAP,
+      FONT_B9,
+      COMPACT_CENTERED_LIST_LINE_GAP
+    );
+
+    if (hasMore) {
+      int moreCenterY = listStartY + visibleCount * (lineH + COMPACT_CENTERED_LIST_LINE_GAP) + lineH / 2;
+      drawCenteredMoreLine(c, moreCenterY, moreBuf, FONT_B9);
+    }
+    return;
+  }
+
+  const int maxVisibleItems = 12;
+  const int visibleCount = min(g_cache.count, maxVisibleItems);
+  const bool hasMore = g_cache.count > visibleCount;
 
   char moreBuf[24] = {0};
-  const int renderedRows = visibleCount + (hasMore ? 1 : 0);
-
   if (hasMore) {
     snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
   }
 
-  int contentBottom = c.y + c.h - 14;
-  int lineH = fontLineHeight(FONT_B9);
-  int blockH = renderedRows * lineH + max(0, renderedRows - 1) * COMPACT_CENTERED_LIST_LINE_GAP;
-  int listStartY = contentTop + max(0, (contentBottom - contentTop - blockH) / 2);
-
-  int anchorTextStartX = drawCenteredItemList(
+  drawCenteredItemColumns(
     c,
-    0,
     visibleCount,
-    listStartY,
-    visibleCount * lineH + max(0, visibleCount - 1) * COMPACT_CENTERED_LIST_LINE_GAP,
+    contentTop,
+    contentH,
     FONT_B9,
-    COMPACT_CENTERED_LIST_LINE_GAP
+    COMPACT_CENTERED_LIST_LINE_GAP,
+    moreBuf
   );
-
-  if (hasMore) {
-    int moreCenterY = listStartY + visibleCount * (lineH + COMPACT_CENTERED_LIST_LINE_GAP) + lineH / 2;
-    drawAlignedMoreLine(moreCenterY, moreBuf, FONT_B9, anchorTextStartX);
-  }
 }
 
 static void drawWeeklyMenu(const Cell& c) {
@@ -849,7 +937,7 @@ static void renderXL(const Cell& c) {
   topLeft.w = leftW;
   topLeft.h = topH;
 
-  renderMedium(topLeft);
+  renderMedium(topLeft, false);
 
   Cell bottomLeft = c;
   bottomLeft.x = leftX;
