@@ -121,6 +121,7 @@ static int fontLineHeight(const GFXfont* font) {
 
 static const int ORIGINAL_CENTERED_LIST_LINE_GAP = 12;
 static const int COMPACT_CENTERED_LIST_LINE_GAP = 8;
+static const int LIST_HEADER_GAP = 18;
 
 static int leftListLineHeight(const GFXfont* font) {
   return fontLineHeight(font) + ((font == FONT_B9) ? 5 : 12);
@@ -447,11 +448,14 @@ static void drawCenteredItemColumns(const Cell& c,
                                     int totalH,
                                     const GFXfont* lineFont,
                                     int lineGap,
-                                    const char* moreText) {
+                                    const char* moreText,
+                                    bool lockToTop = false) {
   if (g_cache.count <= 0 || visibleCount <= 0) return;
 
   if (visibleCount <= 6) {
-    drawCenteredItemList(c, 0, visibleCount, yTop, totalH, lineFont, lineGap);
+    const int lineH = fontLineHeight(lineFont);
+    const int blockH = visibleCount * lineH + max(0, visibleCount - 1) * lineGap;
+    drawCenteredItemList(c, 0, visibleCount, yTop, lockToTop ? blockH : totalH, lineFont, lineGap);
     return;
   }
 
@@ -462,7 +466,7 @@ static void drawCenteredItemColumns(const Cell& c,
   const int moreRows = (moreText && moreText[0]) ? 1 : 0;
   const int rowStep = lineH + lineGap;
   const int blockH = rowCount * lineH + max(0, rowCount - 1) * lineGap + moreRows * rowStep;
-  const int startY = yTop + max(0, (totalH - blockH) / 2);
+  const int startY = lockToTop ? yTop : yTop + max(0, (totalH - blockH) / 2);
   const int dotR = 3;
   const int gap = 10;
   const int columnGap = 8;
@@ -506,33 +510,6 @@ static void drawCenteredItemColumns(const Cell& c,
     int moreCenterY = startY + rowCount * rowStep + lineH / 2;
     drawCenteredMoreLine(c, moreCenterY, moreText, lineFont);
   }
-}
-
-static int centeredItemColumnsFirstRowCenterY(int visibleCount,
-                                              int yTop,
-                                              int totalH,
-                                              const GFXfont* lineFont,
-                                              int lineGap,
-                                              const char* moreText) {
-  if (visibleCount <= 0) return -1;
-
-  const int lineH = fontLineHeight(lineFont);
-
-  if (visibleCount <= 6) {
-    const int blockH = visibleCount * lineH + max(0, visibleCount - 1) * lineGap;
-    const int startY = yTop + (totalH - blockH) / 2;
-    return startY + lineH / 2;
-  }
-
-  const int leftCount = (visibleCount + 1) / 2;
-  const int rightCount = visibleCount / 2;
-  const int rowCount = max(leftCount, rightCount);
-  const int moreRows = (moreText && moreText[0]) ? 1 : 0;
-  const int rowStep = lineH + lineGap;
-  const int blockH = rowCount * lineH + max(0, rowCount - 1) * lineGap + moreRows * rowStep;
-  const int startY = yTop + max(0, (totalH - blockH) / 2);
-
-  return startY + lineH / 2;
 }
 
 static void drawLeftItemList(const Cell& c,
@@ -811,15 +788,13 @@ static void renderMedium(const Cell& c, bool useTwoColumns = true, int* firstRow
     const int visibleCount = min(g_cache.count, hasMore ? maxRows - 1 : maxRows);
 
     char moreBuf[24] = {0};
-    const int renderedRows = visibleCount + (hasMore ? 1 : 0);
 
     if (hasMore) {
       snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
     }
 
     int lineH = fontLineHeight(FONT_B9);
-    int blockH = renderedRows * lineH + max(0, renderedRows - 1) * COMPACT_CENTERED_LIST_LINE_GAP;
-    int listStartY = contentTop + max(0, (contentH - blockH) / 2);
+    int listStartY = contentTop + LIST_HEADER_GAP;
 
     if (firstRowCenterY && visibleCount > 0) {
       *firstRowCenterY = listStartY + lineH / 2;
@@ -851,29 +826,25 @@ static void renderMedium(const Cell& c, bool useTwoColumns = true, int* firstRow
     snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
   }
 
-  if (firstRowCenterY) {
-    *firstRowCenterY = centeredItemColumnsFirstRowCenterY(
-      visibleCount,
-      contentTop,
-      contentH,
-      FONT_B9,
-      COMPACT_CENTERED_LIST_LINE_GAP,
-      moreBuf
-    );
+  int listStartY = contentTop + LIST_HEADER_GAP;
+
+  if (firstRowCenterY && visibleCount > 0) {
+    *firstRowCenterY = listStartY + fontLineHeight(FONT_B9) / 2;
   }
 
   drawCenteredItemColumns(
     c,
     visibleCount,
-    contentTop,
+    listStartY,
     contentH,
     FONT_B9,
     COMPACT_CENTERED_LIST_LINE_GAP,
-    moreBuf
+    moreBuf,
+    true
   );
 }
 
-static void drawWeeklyMenu(const Cell& c, int alignFirstRowCenterY = -1) {
+static void drawWeeklyMenu(const Cell& c) {
   int contentTop = drawHeader(c, "Weekly Menu", 28, FONT_B12);
 
   if (g_cache.dinnerCount <= 0) {
@@ -890,12 +861,9 @@ static void drawWeeklyMenu(const Cell& c, int alignFirstRowCenterY = -1) {
   const int lineH = leftListLineHeight(FONT_B9);
   const int availableH = c.y + c.h - 18 - contentTop;
   const int visibleCount = min(g_cache.dinnerCount, min(7, max(1, availableH / lineH)));
-  const int centeredStartY = contentTop + max(0, (availableH - visibleCount * lineH) / 2);
-  const int alignedStartY = alignFirstRowCenterY - lineH / 2;
+  const int lockedStartY = contentTop + LIST_HEADER_GAP;
   const int maxStartY = contentTop + max(0, availableH - visibleCount * lineH);
-  const int startY = (alignFirstRowCenterY >= 0)
-    ? min(max(alignedStartY, contentTop), maxStartY)
-    : centeredStartY;
+  const int startY = min(lockedStartY, maxStartY);
   const int availableW = max(0, c.w - padX * 2);
 
   char labels[7][10] = {};
@@ -972,10 +940,9 @@ static void renderLarge(const Cell& c) {
   right.w = rightW;
   right.h = c.h;
 
-  int groceryFirstRowCenterY = -1;
-  renderMedium(left, true, &groceryFirstRowCenterY);
+  renderMedium(left, true);
 
-  drawWeeklyMenu(right, groceryFirstRowCenterY);
+  drawWeeklyMenu(right);
 }
 
 static void renderXL(const Cell& c) {
