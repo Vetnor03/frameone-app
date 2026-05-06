@@ -385,7 +385,12 @@ static void drawAlignedMoreLine(int centerY,
   (void)tx1;
   (void)tw;
 
-  drawLeft(anchorTextStartX,
+  int drawX = anchorTextStartX;
+  if (text[0] == '+' && text[1] >= '0' && text[1] <= '9') {
+    drawX -= textWidth("+", font);
+  }
+
+  drawLeft(drawX,
            centerY - (int)th / 2 - ty1,
            text,
            font,
