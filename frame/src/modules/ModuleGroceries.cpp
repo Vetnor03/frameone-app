@@ -373,31 +373,33 @@ static void drawCenteredBulletLine(const Cell& c,
   d.setFont(nullptr);
 }
 
-static void drawCenteredMoreLine(const Cell& c,
-                                 int centerY,
-                                 const char* text,
-                                 const GFXfont* font) {
+static void drawAlignedMoreLine(int centerY,
+                                const char* text,
+                                const GFXfont* font,
+                                int anchorTextStartX) {
   if (!text || !text[0]) return;
 
   int16_t tx1, ty1;
   uint16_t tw, th;
   measureText(text, font, tx1, ty1, tw, th);
+  (void)tx1;
+  (void)tw;
 
-  drawLeft(c.x + c.w / 2 - (int)tw / 2 - tx1,
+  drawLeft(anchorTextStartX,
            centerY - (int)th / 2 - ty1,
            text,
            font,
            Theme::ink());
 }
 
-static void drawCenteredItemList(const Cell& c,
+static int drawCenteredItemList(const Cell& c,
                                  int startOffset,
                                  int visibleCount,
                                  int yTop,
                                  int totalH,
                                  const GFXfont* lineFont,
                                  int lineGap) {
-  if (g_cache.count <= 0 || visibleCount <= 0) return;
+  if (g_cache.count <= 0 || visibleCount <= 0) return c.x + c.w / 2;
 
   const int lineH = fontLineHeight(lineFont);
   const int dotR = 3;
@@ -435,6 +437,8 @@ static void drawCenteredItemList(const Cell& c,
     int centerY = startY + i * (lineH + lineGap) + lineH / 2;
     drawCenteredBulletLine(c, centerY, lines[i], lineFont, anchorTextStartX);
   }
+
+  return anchorTextStartX;
 }
 
 static void drawLeftItemList(const Cell& c,
@@ -717,7 +721,7 @@ static void renderMedium(const Cell& c) {
   int blockH = renderedRows * lineH + max(0, renderedRows - 1) * COMPACT_CENTERED_LIST_LINE_GAP;
   int listStartY = contentTop + max(0, (contentBottom - contentTop - blockH) / 2);
 
-  drawCenteredItemList(
+  int anchorTextStartX = drawCenteredItemList(
     c,
     0,
     visibleCount,
@@ -729,7 +733,7 @@ static void renderMedium(const Cell& c) {
 
   if (hasMore) {
     int moreCenterY = listStartY + visibleCount * (lineH + COMPACT_CENTERED_LIST_LINE_GAP) + lineH / 2;
-    drawCenteredMoreLine(c, moreCenterY, moreBuf, FONT_B9);
+    drawAlignedMoreLine(moreCenterY, moreBuf, FONT_B9, anchorTextStartX);
   }
 }
 
