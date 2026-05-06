@@ -636,7 +636,9 @@ void setup() {
 
   Layout::drawWithContent(g_cfg.layout, g_cfg);
 
+  Serial.println("[status] post-render status begin");
   postDeviceStatus(batt, pwr, true);
+  Serial.println("[status] post-render status done");
 
   UpdateChecker::saveApplied(updatedAt);
   if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);

@@ -13,6 +13,7 @@
 #include "ModuleStocks.h"
 
 #include <GxEPD2_GFX.h>
+#include <Arduino.h>
 
 // Easy battery UI test switch:
 // false = real behavior (<20% icon, charging icon when charging)
@@ -54,7 +55,10 @@ void draw(LayoutKey key) {
   const int quarterY = y + h / 4;
   const int midX = x + w / 2;
 
+  Serial.println("[display] full update begin");
   DisplayCore::beginFrameUpdate();
+  Serial.print("[display] update mode=");
+  Serial.println(DisplayCore::isFullRefreshThisCycle() ? "full" : "partial");
   do {
     // FULL SCREEN fill so outside matte area uses theme color too
     d.fillScreen(Theme::paper());
@@ -82,6 +86,7 @@ void draw(LayoutKey key) {
     DisplayCore::drawBatteryOverlay(FORCE_SHOW_BATTERY_UI);
 
   } while (DisplayCore::nextFrameUpdate());
+  Serial.println("[display] full update done");
 }
 
 int buildCells(LayoutKey key, Cell* outCells, int maxCells) {
@@ -161,7 +166,10 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   const int quarterY = y + h / 4;
   const int midX = x + w / 2;
 
+  Serial.println("[display] full update begin");
   DisplayCore::beginFrameUpdate();
+  Serial.print("[display] update mode=");
+  Serial.println(DisplayCore::isFullRefreshThisCycle() ? "full" : "partial");
   do {
     // FULL SCREEN fill so outside matte area matches theme
     d.fillScreen(Theme::paper());
@@ -201,6 +209,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
     DisplayCore::drawBatteryOverlay(FORCE_SHOW_BATTERY_UI);
 
   } while (DisplayCore::nextFrameUpdate());
+  Serial.println("[display] full update done");
 }
 
 } // namespace Layout
