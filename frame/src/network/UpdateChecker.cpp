@@ -172,12 +172,17 @@ void UpdateChecker::saveSurfSig(const String& sig) {
   prefs.putString("surf_sig", sig);
 }
 
+bool UpdateChecker::hasLastUsbPresent() {
+  return prefs.getBool("usb_seen", false);
+}
+
 bool UpdateChecker::getLastUsbPresent() {
   return prefs.getBool("usb_prev", false);
 }
 
 void UpdateChecker::saveUsbPresent(bool usbPresent) {
   prefs.putBool("usb_prev", usbPresent);
+  prefs.putBool("usb_seen", true);
 }
 
 int UpdateChecker::getLastBatteryPercent() {

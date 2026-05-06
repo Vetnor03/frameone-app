@@ -25,6 +25,7 @@ namespace UpdateChecker {
   void saveSurfSig(const String& sig);
   bool hasSurfChanged(const FrameConfig& cfg, const String& deviceToken, String& outSig);
 
+  bool hasLastUsbPresent();
   bool getLastUsbPresent();
   void saveUsbPresent(bool usbPresent);
 
