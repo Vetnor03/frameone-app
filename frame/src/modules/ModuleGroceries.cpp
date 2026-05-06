@@ -108,9 +108,8 @@ static int fontLineHeight(const GFXfont* font) {
   return 14;
 }
 
-static int listLineGap(const GFXfont* font) {
-  return (font == FONT_B9) ? 8 : 12;
-}
+static const int ORIGINAL_CENTERED_LIST_LINE_GAP = 12;
+static const int COMPACT_CENTERED_LIST_LINE_GAP = 8;
 
 static int leftListLineHeight(const GFXfont* font) {
   return fontLineHeight(font) + ((font == FONT_B9) ? 5 : 12);
@@ -333,11 +332,11 @@ static void drawCenteredItemList(const Cell& c,
                                  int visibleCount,
                                  int yTop,
                                  int totalH,
-                                 const GFXfont* lineFont) {
+                                 const GFXfont* lineFont,
+                                 int lineGap) {
   if (g_cache.count <= 0 || visibleCount <= 0) return;
 
   const int lineH = fontLineHeight(lineFont);
-  const int lineGap = listLineGap(lineFont);
   const int dotR = 3;
   const int gap = 10;
 
@@ -509,7 +508,57 @@ static void renderSmall(const Cell& c) {
   }
 
   int contentBottom = c.y + c.h - 10;
-  drawCenteredItemList(c, 0, visibleCount, contentTop, contentBottom - contentTop, FONT_B12);
+  int contentH = contentBottom - contentTop;
+  if (contentH <= 8) return;
+
+  const int dividerInsetTop = 8;
+  const int dividerInsetBottom = 8;
+  const int dividerY = contentTop + dividerInsetTop;
+  const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
+
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  if (visibleCount == 2) {
+    int divX = c.x + c.w / 2;
+    d.drawFastVLine(divX, dividerY, dividerH, ink);
+  } else if (visibleCount == 3) {
+    int div1X = c.x + c.w / 3;
+    int div2X = c.x + (c.w * 2) / 3;
+    d.drawFastVLine(div1X, dividerY, dividerH, ink);
+    d.drawFastVLine(div2X, dividerY, dividerH, ink);
+  }
+
+  const int rotation = getRotationStep4h();
+  const int textPadX = 8;
+
+  for (int i = 0; i < visibleCount; i++) {
+    int idx = wrapIndex(rotation + i, g_cache.count);
+
+    int secX0 = c.x + (c.w * i) / visibleCount;
+    int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
+    int secW = secX1 - secX0;
+
+    char raw[128] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+    char fit[128] = {0};
+    fitTextToWidth(raw, fit, sizeof(fit), secW - textPadX * 2 - 4, FONT_B12);
+
+    int16_t tx1, ty1;
+    uint16_t tw, th;
+    measureText(fit, FONT_B12, tx1, ty1, tw, th);
+
+    int cx = secX0 + secW / 2;
+    int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
+
+    d.setFont(FONT_B12);
+    d.setTextColor(ink);
+    d.setTextSize(1);
+    d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
+    d.print(fit);
+    d.setFont(nullptr);
+  }
 }
 
 static void renderMedium(const Cell& c) {
@@ -582,7 +631,8 @@ static void renderMedium(const Cell& c) {
     visibleCount,
     contentTop,
     contentBottom - contentTop,
-    FONT_B9
+    FONT_B9,
+    COMPACT_CENTERED_LIST_LINE_GAP
   );
 }
 
@@ -669,7 +719,15 @@ static void renderXL(const Cell& c) {
   int bottomVisible = min(max(0, g_cache.count - 5), 5);
   if (bottomVisible <= 0) bottomVisible = min(g_cache.count, 5);
   int bottomStart = (g_cache.count > 5) ? 5 : 0;
-  drawCenteredItemList(bottomLeft, bottomStart, bottomVisible, bottomTop, bottomLeft.y + bottomLeft.h - bottomTop - 12, FONT_B12);
+  drawCenteredItemList(
+    bottomLeft,
+    bottomStart,
+    bottomVisible,
+    bottomTop,
+    bottomLeft.y + bottomLeft.h - bottomTop - 12,
+    FONT_B12,
+    ORIGINAL_CENTERED_LIST_LINE_GAP
+  );
 
   Cell right = c;
   right.x = rightX;
