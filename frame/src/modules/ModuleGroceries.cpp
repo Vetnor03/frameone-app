@@ -509,6 +509,34 @@ static void drawCenteredItemColumns(const Cell& c,
   }
 }
 
+static int centeredItemColumnsFirstRowCenterY(int visibleCount,
+                                              int yTop,
+                                              int totalH,
+                                              const GFXfont* lineFont,
+                                              int lineGap,
+                                              const char* moreText) {
+  if (visibleCount <= 0) return -1;
+
+  const int lineH = fontLineHeight(lineFont);
+
+  if (visibleCount <= 6) {
+    const int blockH = visibleCount * lineH + max(0, visibleCount - 1) * lineGap;
+    const int startY = yTop + (totalH - blockH) / 2;
+    return startY + lineH / 2;
+  }
+
+  const int rowsPerColumn = 6;
+  const int leftCount = min(rowsPerColumn, visibleCount);
+  const int rightCount = min(rowsPerColumn, max(0, visibleCount - leftCount));
+  const int rowCount = max(leftCount, rightCount);
+  const int moreRows = (moreText && moreText[0]) ? 1 : 0;
+  const int rowStep = lineH + lineGap;
+  const int blockH = rowCount * lineH + max(0, rowCount - 1) * lineGap + moreRows * rowStep;
+  const int startY = yTop + max(0, (totalH - blockH) / 2);
+
+  return startY + lineH / 2;
+}
+
 static void drawLeftItemList(const Cell& c,
                              int startOffset,
                              int visibleCount,
@@ -719,9 +747,11 @@ static void renderSmall(const Cell& c) {
   }
 }
 
-static void renderMedium(const Cell& c, bool useTwoColumns = true) {
+static void renderMedium(const Cell& c, bool useTwoColumns = true, int* firstRowCenterY = nullptr) {
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
+
+  if (firstRowCenterY) *firstRowCenterY = -1;
 
   char mainHeader[96] = {0};
   char topLabel[32] = {0};
@@ -793,6 +823,10 @@ static void renderMedium(const Cell& c, bool useTwoColumns = true) {
     int blockH = renderedRows * lineH + max(0, renderedRows - 1) * COMPACT_CENTERED_LIST_LINE_GAP;
     int listStartY = contentTop + max(0, (contentH - blockH) / 2);
 
+    if (firstRowCenterY && visibleCount > 0) {
+      *firstRowCenterY = listStartY + lineH / 2;
+    }
+
     drawCenteredItemList(
       c,
       0,
@@ -819,6 +853,17 @@ static void renderMedium(const Cell& c, bool useTwoColumns = true) {
     snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
   }
 
+  if (firstRowCenterY) {
+    *firstRowCenterY = centeredItemColumnsFirstRowCenterY(
+      visibleCount,
+      contentTop,
+      contentH,
+      FONT_B9,
+      COMPACT_CENTERED_LIST_LINE_GAP,
+      moreBuf
+    );
+  }
+
   drawCenteredItemColumns(
     c,
     visibleCount,
@@ -830,7 +875,7 @@ static void renderMedium(const Cell& c, bool useTwoColumns = true) {
   );
 }
 
-static void drawWeeklyMenu(const Cell& c) {
+static void drawWeeklyMenu(const Cell& c, int alignFirstRowCenterY = -1) {
   int contentTop = drawHeader(c, "Weekly Menu", 28, FONT_B12);
 
   if (g_cache.dinnerCount <= 0) {
@@ -847,7 +892,12 @@ static void drawWeeklyMenu(const Cell& c) {
   const int lineH = leftListLineHeight(FONT_B9);
   const int availableH = c.y + c.h - 18 - contentTop;
   const int visibleCount = min(g_cache.dinnerCount, min(7, max(1, availableH / lineH)));
-  const int startY = contentTop + max(0, (availableH - visibleCount * lineH) / 2);
+  const int centeredStartY = contentTop + max(0, (availableH - visibleCount * lineH) / 2);
+  const int alignedStartY = alignFirstRowCenterY - lineH / 2;
+  const int maxStartY = contentTop + max(0, availableH - visibleCount * lineH);
+  const int startY = (alignFirstRowCenterY >= 0)
+    ? min(max(alignedStartY, contentTop), maxStartY)
+    : centeredStartY;
   const int availableW = max(0, c.w - padX * 2);
 
   char labels[7][10] = {};
@@ -924,9 +974,10 @@ static void renderLarge(const Cell& c) {
   right.w = rightW;
   right.h = c.h;
 
-  renderMedium(left);
+  int groceryFirstRowCenterY = -1;
+  renderMedium(left, true, &groceryFirstRowCenterY);
 
-  drawWeeklyMenu(right);
+  drawWeeklyMenu(right, groceryFirstRowCenterY);
 }
 
 static void renderXL(const Cell& c) {
