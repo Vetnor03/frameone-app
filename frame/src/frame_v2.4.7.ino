@@ -57,6 +57,7 @@ struct PowerSenseDebug {
   int raw;
   int highCount;
   bool usbPresent;
+  bool stable;
 };
 
 static void ensureDisplay() {
@@ -199,7 +200,11 @@ static PowerSenseDebug readPowerSenseDebug() {
 
   // Confirmed behavior:
   // HIGH while USB plugged in => USB present is active HIGH.
-  out.usbPresent = (out.raw == HIGH);
+  // Use the sampled majority rather than the first raw read; a noisy edge or
+  // floating PWR_SENS line otherwise looks like a USB toggle and forces a
+  // redraw on every wake just to update the battery/charging overlay.
+  out.usbPresent = (highCount >= 7);
+  out.stable = (highCount <= 1 || highCount >= 9);
 
   return out;
 }
@@ -234,13 +239,16 @@ static void logPowerSenseDebug(const BatteryState& batt, const PowerSenseDebug& 
   Serial.println("/10");
 
   Serial.print("pwr_sense_interpreted: ");
-  if (pwr.highCount >= 8) {
+  if (pwr.highCount >= 9) {
     Serial.println("HIGH");
-  } else if (pwr.highCount <= 2) {
+  } else if (pwr.highCount <= 1) {
     Serial.println("LOW");
   } else {
     Serial.println("UNSTABLE");
   }
+
+  Serial.print("pwr_sense_is_stable: ");
+  Serial.println(pwr.stable ? "true" : "false");
 
   Serial.print("is_usb_present: ");
   Serial.println(pwr.usbPresent ? "true" : "false");
@@ -504,10 +512,14 @@ void setup() {
   String reminderSig;
   String surfSig;
 
+  const bool hasLastUsbPresent = UpdateChecker::hasLastUsbPresent();
   const bool lastUsbPresent = UpdateChecker::getLastUsbPresent();
   const int lastBatteryPercent = UpdateChecker::getLastBatteryPercent();
 
-  const bool usbChanged = (pwr.usbPresent != lastUsbPresent);
+  const bool usbChanged =
+    pwr.stable &&
+    hasLastUsbPresent &&
+    (pwr.usbPresent != lastUsbPresent);
 
   bool batteryJumpChanged = false;
   if (lastBatteryPercent >= 0) {
@@ -588,7 +600,7 @@ void setup() {
     Serial.println("😴 No change -> keep current ePaper image");
 
     postDeviceStatus(batt, pwr, false);
-    UpdateChecker::saveUsbPresent(pwr.usbPresent);
+    if (pwr.stable) UpdateChecker::saveUsbPresent(pwr.usbPresent);
     UpdateChecker::saveBatteryPercent(batt.percent);
     goToSleep(pwr.usbPresent);
     return;
@@ -630,7 +642,7 @@ void setup() {
   if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);
   if (surfSig.length() > 0) UpdateChecker::saveSurfSig(surfSig);
   UpdateChecker::saveFirmwareVersion(FW_VER);
-  UpdateChecker::saveUsbPresent(pwr.usbPresent);
+  if (pwr.stable) UpdateChecker::saveUsbPresent(pwr.usbPresent);
   UpdateChecker::saveBatteryPercent(batt.percent);
 
   if (forcePeriodic) {
