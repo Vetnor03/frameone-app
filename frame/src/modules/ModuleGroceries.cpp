@@ -841,40 +841,59 @@ static void drawWeeklyMenu(const Cell& c) {
     return;
   }
 
-  auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
   const int padX = 12;
+  const int labelGap = 16;
   const int lineH = leftListLineHeight(FONT_B9);
   const int availableH = c.y + c.h - 18 - contentTop;
   const int visibleCount = min(g_cache.dinnerCount, min(7, max(1, availableH / lineH)));
   const int startY = contentTop + max(0, (availableH - visibleCount * lineH) / 2);
-  const int labelW = 34;
+  const int availableW = max(0, c.w - padX * 2);
+
+  char labels[7][10] = {};
+  char titles[7][96] = {};
+  int labelW = 0;
 
   for (int i = 0; i < visibleCount; i++) {
     const DinnerPlanItem& dinner = g_cache.dinners[i];
     if (!dinner.used) continue;
 
-    char titleFit[96] = {0};
-    fitTextToWidth(dinner.title, titleFit, sizeof(titleFit), c.w - padX * 2 - labelW - 8, FONT_B9);
+    snprintf(labels[i], sizeof(labels[i]), "%s:", dinner.dayLabel);
+    labelW = max(labelW, textWidth(labels[i], FONT_B9));
+  }
+
+  const int maxTitleW = max(0, availableW - labelW - labelGap);
+  int longestRowW = 0;
+
+  for (int i = 0; i < visibleCount; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[i];
+    if (!dinner.used) continue;
+
+    fitTextToWidth(dinner.title, titles[i], sizeof(titles[i]), maxTitleW, FONT_B9);
+    int rowW = labelW + labelGap + textWidth(titles[i], FONT_B9);
+    longestRowW = max(longestRowW, rowW);
+  }
+
+  const int listX = c.x + padX + max(0, (availableW - longestRowW) / 2);
+
+  for (int i = 0; i < visibleCount; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[i];
+    if (!dinner.used) continue;
 
     int rowY = startY + i * lineH;
     int centerY = rowY + lineH / 2;
 
     int16_t lx1, ly1;
     uint16_t lw, lh;
-    measureText(dinner.dayLabel, FONT_B9, lx1, ly1, lw, lh);
+    measureText(labels[i], FONT_B9, lx1, ly1, lw, lh);
     int labelBaseline = centerY - (int)lh / 2 - ly1;
-    drawLeft(c.x + padX - lx1, labelBaseline, dinner.dayLabel, FONT_B9, ink);
+    drawLeft(listX - lx1, labelBaseline, labels[i], FONT_B9, ink);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
-    measureText(titleFit, FONT_B9, tx1, ty1, tw, th);
+    measureText(titles[i], FONT_B9, tx1, ty1, tw, th);
     int textBaseline = centerY - (int)th / 2 - ty1;
-    drawLeft(c.x + padX + labelW, textBaseline, titleFit, FONT_B9, ink);
-
-    if (i < visibleCount - 1) {
-      d.drawFastHLine(c.x + padX, rowY + lineH - 2, c.w - padX * 2, ink);
-    }
+    drawLeft(listX + labelW + labelGap - tx1, textBaseline, titles[i], FONT_B9, ink);
   }
 }
 
