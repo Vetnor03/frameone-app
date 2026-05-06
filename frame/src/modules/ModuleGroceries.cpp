@@ -590,7 +590,7 @@ static bool fetchGroceries() {
     return false;
   }
 
-  StaticJsonDocument<16384> doc;
+  DynamicJsonDocument doc(32768);
   if (deserializeJson(doc, body)) {
     g_cache.loaded = true;
     g_cache.ok = false;
