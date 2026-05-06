@@ -108,6 +108,14 @@ static int fontLineHeight(const GFXfont* font) {
   return 14;
 }
 
+static int listLineGap(const GFXfont* font) {
+  return (font == FONT_B9) ? 8 : 12;
+}
+
+static int leftListLineHeight(const GFXfont* font) {
+  return fontLineHeight(font) + ((font == FONT_B9) ? 5 : 12);
+}
+
 static void drawLeft(int x, int baselineY, const char* text, const GFXfont* font, uint16_t color) {
   auto& d = DisplayCore::get();
   d.setFont(font);
@@ -329,7 +337,7 @@ static void drawCenteredItemList(const Cell& c,
   if (g_cache.count <= 0 || visibleCount <= 0) return;
 
   const int lineH = fontLineHeight(lineFont);
-  const int lineGap = 12;
+  const int lineGap = listLineGap(lineFont);
   const int dotR = 3;
   const int gap = 10;
 
@@ -379,7 +387,7 @@ static void drawLeftItemList(const Cell& c,
   const uint16_t ink = Theme::ink();
 
   const int padX = 18;
-  const int lineH = 30;
+  const int lineH = leftListLineHeight(font);
   const int dotR = 3;
   const int gap = 12;
 
@@ -402,7 +410,11 @@ static void drawLeftItemList(const Cell& c,
     int centerY = rowY + lineH / 2;
 
     d.fillCircle(c.x + padX + dotR, centerY, dotR, ink);
-    drawLeft(c.x + padX + dotR * 2 + gap, centerY + 5, fit, font, ink);
+    int16_t tx1, ty1;
+    uint16_t tw, th;
+    measureText(fit, font, tx1, ty1, tw, th);
+    int textBaseline = centerY - (int)th / 2 - ty1;
+    drawLeft(c.x + padX + dotR * 2 + gap, textBaseline, fit, font, ink);
   }
 }
 
@@ -554,7 +566,7 @@ static void renderMedium(const Cell& c) {
     return;
   }
 
-  const int visibleCount = min(g_cache.count, 5);
+  const int visibleCount = min(g_cache.count, 7);
 
   if (g_cache.count > visibleCount) {
     char moreBuf[24];
@@ -570,7 +582,7 @@ static void renderMedium(const Cell& c) {
     visibleCount,
     contentTop,
     contentBottom - contentTop,
-    FONT_B12
+    FONT_B9
   );
 }
 
@@ -608,14 +620,14 @@ static void renderLarge(const Cell& c) {
   int listBottom = right.y + right.h - 18;
 
   int remainingStart = min(5, g_cache.count);
-  int visibleRight = min(max(0, g_cache.count - remainingStart), 7);
+  int visibleRight = min(max(0, g_cache.count - remainingStart), 9);
 
   if (visibleRight <= 0) {
-    visibleRight = min(g_cache.count, 7);
+    visibleRight = min(g_cache.count, 9);
     remainingStart = 0;
   }
 
-  drawLeftItemList(right, remainingStart, visibleRight, listTop, listBottom, FONT_B12);
+  drawLeftItemList(right, remainingStart, visibleRight, listTop, listBottom, FONT_B9);
 }
 
 static void renderXL(const Cell& c) {
