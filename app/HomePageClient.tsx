@@ -5096,6 +5096,35 @@ function GroceriesModuleSettingsTab({
   }
 
 
+  async function recordGroceryPurchaseInsight(name: string, quantity: number, category: GroceryCategory) {
+    if (!activeDeviceId) return
+    const normalizedName = name.trim()
+    if (!normalizedName) return
+
+    const { error } = await supabase.rpc('record_grocery_purchase', {
+      device_id: activeDeviceId,
+      item_name: normalizedName,
+      qty: Math.max(1, Number(quantity) || 1),
+      category,
+    })
+
+    if (error) console.error('Failed to record grocery purchase insight', { error, item: { name: normalizedName, quantity, category } })
+  }
+
+  async function markGroceryProbablyOutInsight(name: string) {
+    if (!activeDeviceId) return
+    const normalizedName = name.trim()
+    if (!normalizedName) return
+
+    const { error } = await supabase.rpc('mark_grocery_item_probably_out', {
+      device_id: activeDeviceId,
+      item_name: normalizedName,
+    })
+
+    if (error) console.error('Failed to mark grocery item probably out', { error, item: { name: normalizedName } })
+  }
+
+
 
   async function syncMainGroceriesFromDinnerPlan(days: DinnerPlanDay[]) {
     if (!activeDeviceId) return
@@ -5133,6 +5162,7 @@ function GroceriesModuleSettingsTab({
           .update({ quantity: Math.max(Number(existing.quantity ?? 1) || 1, item.quantity), updated_at: new Date().toISOString() })
           .eq('id', existing.id)
         if (updateError) console.error('Failed to update grocery item from dinner sync', { updateError, item })
+        else void markGroceryProbablyOutInsight(item.name)
       } else {
         const { error: insertError } = await supabase
           .from('grocery_items')
@@ -5145,6 +5175,7 @@ function GroceriesModuleSettingsTab({
             checked_at: null,
           })
         if (insertError) console.error('Failed to insert grocery item from dinner sync', { insertError, item })
+        else void markGroceryProbablyOutInsight(item.name)
       }
     }
 
@@ -5303,6 +5334,7 @@ function GroceriesModuleSettingsTab({
 
     setItems((prev) => prev.filter((item) => item.id !== optimisticId))
     await rememberHistoryItem(normalizedName, category, nowIso)
+    void markGroceryProbablyOutInsight(normalizedName)
     await loadHistory()
   }
 
@@ -5315,6 +5347,7 @@ function GroceriesModuleSettingsTab({
         items: day.items.map((x) => x.name.trim().toLowerCase() === item.name.trim().toLowerCase() && x.category === item.category ? { ...x, isChecked: nextChecked, checkedAt: nextChecked ? nowIso : null, updatedAt: nowIso } : x),
       }))
       void persistDinnerPlan(next)
+      if (nextChecked) void recordGroceryPurchaseInsight(item.name, item.quantity, item.category)
       return
     }
     const nextChecked = !item.isChecked
@@ -5347,6 +5380,8 @@ function GroceriesModuleSettingsTab({
       await loadGroceries({ preserveScroll: true })
       return
     }
+
+    if (nextChecked) void recordGroceryPurchaseInsight(item.name, item.quantity, item.category)
   }
 
   async function adjustQuantity(item: GroceryItem, delta: number) {

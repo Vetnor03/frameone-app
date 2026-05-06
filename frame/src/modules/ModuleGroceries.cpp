@@ -38,7 +38,23 @@ struct DinnerPlanItem {
   char title[80] = {0};
 };
 
+struct RunningLowInsight {
+  bool used = false;
+  char name[80] = {0};
+  char label[48] = {0};
+};
+
+struct RecipeInsight {
+  bool used = false;
+  char name[80] = {0};
+  int missingCount = 0;
+  char missing[2][60] = {{0}};
+};
+
 static const int MAX_DINNER_ITEMS = 14;
+static const int MAX_RUNNING_LOW_INSIGHTS = 3;
+static const int MAX_RECIPE_INSIGHTS = 2;
+static const int MAX_RECIPE_MISSING = 2;
 
 struct GroceryCache {
   bool loaded = false;
@@ -47,6 +63,11 @@ struct GroceryCache {
   GroceryItem items[MAX_ITEMS];
   int dinnerCount = 0;
   DinnerPlanItem dinners[MAX_DINNER_ITEMS];
+  int runningLowCount = 0;
+  RunningLowInsight runningLow[MAX_RUNNING_LOW_INSIGHTS];
+  int recipeCount = 0;
+  RecipeInsight recipes[MAX_RECIPE_INSIGHTS];
+  bool languageNo = false;
   char header[96] = {0};
 };
 
@@ -595,6 +616,58 @@ static bool fetchGroceries() {
 
   g_cache.count = idx;
 
+  const char* language = doc["settings_json"]["language"] | "en";
+  g_cache.languageNo = language && (strcmp(language, "no") == 0 || strcmp(language, "nb") == 0 || strcmp(language, "nb-NO") == 0);
+
+  JsonVariant insights = doc["settings_json"]["modules"]["groceries_insights"]["insights"];
+  if (insights.isNull()) insights = doc["settings_json"]["modules"]["groceries_insights"];
+  if (insights.isNull()) insights = doc["settings_json"]["modules"]["groceries"]["insights"];
+
+  JsonArray runningLowArr = insights["running_low"].as<JsonArray>();
+  int runningLowIdx = 0;
+  if (!runningLowArr.isNull()) {
+    for (JsonObject it : runningLowArr) {
+      if (runningLowIdx >= MAX_RUNNING_LOW_INSIGHTS) break;
+      const char* nm = it["name"] | "";
+      const char* label = it["label"] | "";
+      if (!nm || !nm[0]) continue;
+
+      g_cache.runningLow[runningLowIdx].used = true;
+      utf8ToLatin1(g_cache.runningLow[runningLowIdx].name, sizeof(g_cache.runningLow[runningLowIdx].name), nm);
+      utf8ToLatin1(g_cache.runningLow[runningLowIdx].label, sizeof(g_cache.runningLow[runningLowIdx].label), label && label[0] ? label : (g_cache.languageNo ? "F\xC3\xB8lger med" : "Watching"));
+      runningLowIdx++;
+    }
+  }
+  g_cache.runningLowCount = runningLowIdx;
+
+  JsonArray recipesArr = insights["recipes"].as<JsonArray>();
+  int recipeIdx = 0;
+  if (!recipesArr.isNull()) {
+    for (JsonObject it : recipesArr) {
+      if (recipeIdx >= MAX_RECIPE_INSIGHTS) break;
+      const char* nm = it["name"] | "";
+      if (!nm || !nm[0]) continue;
+
+      g_cache.recipes[recipeIdx].used = true;
+      utf8ToLatin1(g_cache.recipes[recipeIdx].name, sizeof(g_cache.recipes[recipeIdx].name), nm);
+
+      JsonArray missingArr = it["missing"].as<JsonArray>();
+      int missingIdx = 0;
+      if (!missingArr.isNull()) {
+        for (JsonVariant missing : missingArr) {
+          if (missingIdx >= MAX_RECIPE_MISSING) break;
+          const char* missingName = missing | "";
+          if (!missingName || !missingName[0]) continue;
+          utf8ToLatin1(g_cache.recipes[recipeIdx].missing[missingIdx], sizeof(g_cache.recipes[recipeIdx].missing[missingIdx]), missingName);
+          missingIdx++;
+        }
+      }
+      g_cache.recipes[recipeIdx].missingCount = missingIdx;
+      recipeIdx++;
+    }
+  }
+  g_cache.recipeCount = recipeIdx;
+
   JsonArray dinnerArr = doc["settings_json"]["modules"]["dinner_planner"].as<JsonArray>();
   if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["modules"]["dinnerPlanner"].as<JsonArray>();
   if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["dinner_planner"].as<JsonArray>();
@@ -988,6 +1061,94 @@ static void drawLargeWeeklyMenu(const Cell& c, const char* header, bool startAft
   }
 }
 
+
+static void drawInsightHeader(const Cell& c, const char* title) {
+  const int maxW = max(20, c.w - 18);
+  char fit[64] = {0};
+  fitTextToWidth(title, fit, sizeof(fit), maxW, FONT_B12);
+
+  int16_t x1, y1;
+  uint16_t tw, th;
+  measureText(fit, FONT_B12, x1, y1, tw, th);
+  drawLeft(c.x + 8 - x1, c.y + 18 - y1, fit, FONT_B12, Theme::ink());
+}
+
+static void drawRunningLowInsights(const Cell& c) {
+  const uint16_t ink = Theme::ink();
+  const int padX = 8;
+  drawInsightHeader(c, g_cache.languageNo ? "Kj" "\xF8" "kkenminne" : "Kitchen memory");
+
+  if (g_cache.runningLowCount <= 0) {
+    const char* placeholder = g_cache.languageNo ? "Alt ser greit ut" : "All stocked";
+    char fit[80] = {0};
+    fitTextToWidth(placeholder, fit, sizeof(fit), max(20, c.w - padX * 2), FONT_B9);
+    drawLeft(c.x + padX, c.y + 52, fit, FONT_B9, ink);
+    return;
+  }
+
+  const int nameW = max(44, (c.w * 54) / 100);
+  const int labelW = max(30, c.w - padX * 2 - nameW - 8);
+  const int rowH = 24;
+  int y = c.y + 50;
+
+  for (int i = 0; i < g_cache.runningLowCount; i++) {
+    const RunningLowInsight& item = g_cache.runningLow[i];
+    if (!item.used) continue;
+
+    char nameFit[80] = {0};
+    char labelFit[56] = {0};
+    fitTextToWidth(item.name, nameFit, sizeof(nameFit), nameW, FONT_B9);
+    fitTextToWidth(item.label, labelFit, sizeof(labelFit), labelW, FONT_B9);
+
+    drawLeft(c.x + padX, y, nameFit, FONT_B9, ink);
+    drawLeft(c.x + padX + nameW + 8, y, labelFit, FONT_B9, ink);
+    y += rowH;
+  }
+}
+
+static void drawRecipeInsights(const Cell& c) {
+  const uint16_t ink = Theme::ink();
+  const int padX = 8;
+  drawInsightHeader(c, g_cache.languageNo ? "Middagsid" "\xE9" "er" : "Meal ideas");
+
+  if (g_cache.recipeCount <= 0) {
+    const char* placeholder = g_cache.languageNo ? "Legg til varer for tips" : "Add items for ideas";
+    char fit[96] = {0};
+    fitTextToWidth(placeholder, fit, sizeof(fit), max(20, c.w - padX * 2), FONT_B9);
+    drawLeft(c.x + padX, c.y + 52, fit, FONT_B9, ink);
+    return;
+  }
+
+  int y = c.y + 48;
+  const int maxW = max(20, c.w - padX * 2);
+
+  for (int i = 0; i < g_cache.recipeCount; i++) {
+    const RecipeInsight& recipe = g_cache.recipes[i];
+    if (!recipe.used) continue;
+
+    char nameFit[96] = {0};
+    fitTextToWidth(recipe.name, nameFit, sizeof(nameFit), maxW, FONT_B9);
+    drawLeft(c.x + padX, y, nameFit, FONT_B9, ink);
+    y += 17;
+
+    if (recipe.missingCount > 0) {
+      char missingText[160] = {0};
+      safeCopy(missingText, sizeof(missingText), g_cache.languageNo ? "mangler: " : "missing: ");
+      for (int j = 0; j < recipe.missingCount; j++) {
+        if (j > 0) strlcat(missingText, ", ", sizeof(missingText));
+        strlcat(missingText, recipe.missing[j], sizeof(missingText));
+      }
+
+      char missingFit[160] = {0};
+      fitTextToWidth(missingText, missingFit, sizeof(missingFit), maxW, FONT_B9);
+      drawLeft(c.x + padX, y, missingFit, FONT_B9, ink);
+      y += 23;
+    } else {
+      y += 13;
+    }
+  }
+}
+
 static void renderLarge(const Cell& c) {
   if (g_cache.count <= 0 && g_cache.dinnerCount <= 0) {
     int contentTop = drawHeader(c, g_cache.header, 28, FONT_B12);
@@ -1025,63 +1186,41 @@ static void renderLarge(const Cell& c) {
 }
 
 static void renderXL(const Cell& c) {
-  if (g_cache.count <= 0) {
-    int contentTop = drawHeader(c, g_cache.header, 34, FONT_B18);
-    Cell body = c;
-    body.y = contentTop;
-    body.h = c.y + c.h - contentTop;
-    drawEmptyState(body, "All set", emptyPhrase());
-    return;
-  }
-
-  const int gapX = 14;
-  int leftW = (c.w - gapX) / 2;
-  int rightW = c.w - gapX - leftW;
-
-  int leftX = c.x;
-  int rightX = c.x + leftW + gapX;
-
-  const int gapY = 14;
+  const int gapY = 16;
   int topH = (c.h - gapY) / 2;
   int bottomH = c.h - gapY - topH;
 
-  Cell topLeft = c;
-  topLeft.x = leftX;
-  topLeft.y = c.y;
-  topLeft.w = leftW;
-  topLeft.h = topH;
+  Cell top = c;
+  top.x = c.x;
+  top.y = c.y;
+  top.w = c.w;
+  top.h = topH;
 
-  renderMedium(topLeft, false);
+  renderMedium(top, true);
+
+  const int bottomY = c.y + topH + gapY;
+  const int gapX = 18;
+  const int leftW = (c.w - gapX) / 2;
+  const int rightW = c.w - gapX - leftW;
 
   Cell bottomLeft = c;
-  bottomLeft.x = leftX;
-  bottomLeft.y = c.y + topH + gapY;
+  bottomLeft.x = c.x;
+  bottomLeft.y = bottomY;
   bottomLeft.w = leftW;
   bottomLeft.h = bottomH;
 
-  int bottomTop = drawHeader(bottomLeft, "Next items", 26, FONT_B12);
-  int bottomVisible = min(max(0, g_cache.count - 5), 5);
-  if (bottomVisible <= 0) bottomVisible = min(g_cache.count, 5);
-  int bottomStart = (g_cache.count > 5) ? 5 : 0;
-  drawCenteredItemList(
-    bottomLeft,
-    bottomStart,
-    bottomVisible,
-    bottomTop,
-    bottomLeft.y + bottomLeft.h - bottomTop - 12,
-    FONT_B12,
-    ORIGINAL_CENTERED_LIST_LINE_GAP
-  );
+  Cell bottomRight = c;
+  bottomRight.x = c.x + leftW + gapX;
+  bottomRight.y = bottomY;
+  bottomRight.w = rightW;
+  bottomRight.h = bottomH;
 
-  Cell right = c;
-  right.x = rightX;
-  right.y = c.y;
-  right.w = rightW;
-  right.h = c.h;
+  auto& d = DisplayCore::get();
+  const int dividerX = c.x + leftW + gapX / 2;
+  d.drawFastVLine(dividerX, bottomY + 8, max(8, bottomH - 16), Theme::ink());
 
-  int rightTop = drawHeader(right, "Grocery overview", 34, FONT_B12);
-  int visibleRight = min(g_cache.count, 12);
-  drawLeftItemList(right, 0, visibleRight, rightTop + 6, right.y + right.h - 22, FONT_B12);
+  drawRunningLowInsights(bottomLeft);
+  drawRecipeInsights(bottomRight);
 }
 
 void setConfig(const FrameConfig* cfg) {

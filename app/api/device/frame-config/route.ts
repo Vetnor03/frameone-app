@@ -68,6 +68,117 @@ function normalizeCurrency(value: any): string {
     .slice(0, 8)
 }
 
+
+type GroceryInsightsPayload = {
+  running_low: Array<{ name: string; status: string; label: string }>
+  recipes: Array<{ name: string; match_score?: number; missing: string[] }>
+}
+
+function groceryStatusLabel(status: string, language: string) {
+  const normalized = status.trim().toLowerCase()
+  const noLabels: Record<string, string> = {
+    due_soon: 'Snart tomt',
+    overdue: 'Pleier å trengs',
+    probably_out: 'På handlelisten',
+    learning: 'Lærer mønster',
+  }
+  const enLabels: Record<string, string> = {
+    due_soon: 'Due soon',
+    overdue: 'Usually needed',
+    probably_out: 'On list',
+    learning: 'Learning pattern',
+  }
+  const labels = language === 'no' || language === 'nb' || language === 'nb-NO' ? noLabels : enLabels
+  return labels[normalized] || (language === 'no' || language === 'nb' || language === 'nb-NO' ? 'Følger med' : 'Watching')
+}
+
+function asStringArray(value: any) {
+  if (Array.isArray(value)) return value.map((x) => asString(x, '').trim()).filter(Boolean)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return []
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) return parsed.map((x) => asString(x, '').trim()).filter(Boolean)
+    } catch {
+      // Plain comma-separated strings are also accepted from views.
+    }
+    return trimmed.split(',').map((x) => x.trim()).filter(Boolean)
+  }
+  return []
+}
+
+function firstString(row: any, keys: string[], def = '') {
+  for (const key of keys) {
+    const value = asString(row?.[key], '').trim()
+    if (value) return value
+  }
+  return def
+}
+
+async function fetchGroceryInsights(supabase: any, deviceId: string, language: string): Promise<GroceryInsightsPayload> {
+  const empty: GroceryInsightsPayload = { running_low: [], recipes: [] }
+
+  const [runningLowResult, recipeResult] = await Promise.allSettled([
+    supabase
+      .from('grocery_running_low')
+      .select('*')
+      .eq('device_id', deviceId)
+      .limit(6),
+    supabase
+      .from('grocery_recipe_suggestions')
+      .select('*')
+      .eq('device_id', deviceId)
+      .limit(6),
+  ])
+
+  if (runningLowResult.status === 'fulfilled') {
+    const { data, error } = runningLowResult.value
+    if (error) {
+      console.error('Failed to load grocery_running_low insights', { deviceId, error })
+    } else {
+      empty.running_low = (data || [])
+        .map((row: any) => {
+          const name = firstString(row, ['name', 'item_name', 'display_name', 'canonical_name']).slice(0, 80)
+          const status = firstString(row, ['status', 'item_status', 'memory_status'], 'learning').slice(0, 32)
+          if (!name) return null
+          return { name, status, label: groceryStatusLabel(status, language) }
+        })
+        .filter(Boolean)
+        .slice(0, 3) as GroceryInsightsPayload['running_low']
+    }
+  } else {
+    console.error('Failed to load grocery_running_low insights', { deviceId, error: runningLowResult.reason })
+  }
+
+  if (recipeResult.status === 'fulfilled') {
+    const { data, error } = recipeResult.value
+    if (error) {
+      console.error('Failed to load grocery_recipe_suggestions insights', { deviceId, error })
+    } else {
+      empty.recipes = (data || [])
+        .map((row: any) => {
+          const name = firstString(row, ['name', 'recipe_name', 'title']).slice(0, 80)
+          if (!name) return null
+          const scoreRaw = row?.match_score ?? row?.score ?? row?.match
+          const score = Number(scoreRaw)
+          const missing = asStringArray(row?.missing ?? row?.missing_ingredients ?? row?.missing_items).slice(0, 2).map((x) => x.slice(0, 60))
+          return {
+            name,
+            ...(Number.isFinite(score) ? { match_score: Math.max(0, Math.min(1, score)) } : {}),
+            missing,
+          }
+        })
+        .filter(Boolean)
+        .slice(0, 2) as GroceryInsightsPayload['recipes']
+    }
+  } else {
+    console.error('Failed to load grocery_recipe_suggestions insights', { deviceId, error: recipeResult.reason })
+  }
+
+  return empty
+}
+
 function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; category: string; updated_at: string | null }>) {
   const stable = items
     .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.category}|${x.updated_at ?? ''}`)
@@ -297,7 +408,10 @@ export async function GET(req: Request) {
         updated_at: x.updated_at ? String(x.updated_at) : null,
       }))
 
+    const groceryInsights = await fetchGroceryInsights(supabase, device_id, asString(settings_json.language, 'en'))
+
     settings_json.modules.groceries = activeGroceries
+    settings_json.modules.groceries_insights = { insights: groceryInsights }
     settings_json.modules.groceries_signature = groceriesSignature(activeGroceries)
 
     // -------------------------------
