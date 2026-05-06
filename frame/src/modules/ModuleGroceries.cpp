@@ -456,9 +456,8 @@ static void drawCenteredItemColumns(const Cell& c,
   }
 
   const int lineH = fontLineHeight(lineFont);
-  const int rowsPerColumn = 6;
-  const int leftCount = min(rowsPerColumn, visibleCount);
-  const int rightCount = min(rowsPerColumn, max(0, visibleCount - leftCount));
+  const int leftCount = (visibleCount + 1) / 2;
+  const int rightCount = visibleCount / 2;
   const int rowCount = max(leftCount, rightCount);
   const int moreRows = (moreText && moreText[0]) ? 1 : 0;
   const int rowStep = lineH + lineGap;
@@ -483,7 +482,7 @@ static void drawCenteredItemColumns(const Cell& c,
     for (int i = 0; i < colCount; i++) {
       lines[i][0] = '\0';
 
-      int idx = wrapIndex(rotation + col * rowsPerColumn + i, g_cache.count);
+      int idx = wrapIndex(rotation + (col == 0 ? i : leftCount + i), g_cache.count);
 
       char raw[128] = {0};
       formatItem(g_cache.items[idx], raw, sizeof(raw));
@@ -525,9 +524,8 @@ static int centeredItemColumnsFirstRowCenterY(int visibleCount,
     return startY + lineH / 2;
   }
 
-  const int rowsPerColumn = 6;
-  const int leftCount = min(rowsPerColumn, visibleCount);
-  const int rightCount = min(rowsPerColumn, max(0, visibleCount - leftCount));
+  const int leftCount = (visibleCount + 1) / 2;
+  const int rightCount = visibleCount / 2;
   const int rowCount = max(leftCount, rightCount);
   const int moreRows = (moreText && moreText[0]) ? 1 : 0;
   const int rowStep = lineH + lineGap;
