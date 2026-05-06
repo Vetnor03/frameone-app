@@ -31,11 +31,22 @@ struct GroceryItem {
   int qty = 1;
 };
 
+struct DinnerPlanItem {
+  bool used = false;
+  char date[11] = {0};
+  char dayLabel[8] = {0};
+  char title[80] = {0};
+};
+
+static const int MAX_DINNER_ITEMS = 14;
+
 struct GroceryCache {
   bool loaded = false;
   bool ok = false;
   int count = 0;
   GroceryItem items[MAX_ITEMS];
+  int dinnerCount = 0;
+  DinnerPlanItem dinners[MAX_DINNER_ITEMS];
   char header[96] = {0};
 };
 
@@ -176,6 +187,41 @@ static bool getTodayYmd(char* out, size_t outSize) {
   localtime_r(&now, &tmv);
   strftime(out, outSize, "%Y-%m-%d", &tmv);
   return true;
+}
+
+static bool parseYmd10(const char* s, int& y, int& m, int& d) {
+  if (!s || strlen(s) < 10 || s[4] != '-' || s[7] != '-') return false;
+
+  for (int i = 0; i < 10; i++) {
+    if (i == 4 || i == 7) continue;
+    if (s[i] < '0' || s[i] > '9') return false;
+  }
+
+  y = (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0');
+  m = (s[5] - '0') * 10 + (s[6] - '0');
+  d = (s[8] - '0') * 10 + (s[9] - '0');
+  return y >= 1970 && m >= 1 && m <= 12 && d >= 1 && d <= 31;
+}
+
+static void dinnerDayLabel(const char* ymd, char* out, size_t outSize) {
+  if (!out || outSize == 0) return;
+  safeCopy(out, outSize, "Menu");
+
+  int y = 0;
+  int m = 0;
+  int d = 0;
+  if (!parseYmd10(ymd, y, m, d)) return;
+
+  struct tm tmv = {};
+  tmv.tm_year = y - 1900;
+  tmv.tm_mon = m - 1;
+  tmv.tm_mday = d;
+  tmv.tm_hour = 12;
+
+  if (mktime(&tmv) == (time_t)-1) return;
+
+  static const char* labels[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+  safeCopy(out, outSize, labels[tmv.tm_wday]);
 }
 
 static bool extractTodayDinnerTitle(JsonVariant src, const char* todayYmd, char* out, size_t outSize) {
@@ -327,6 +373,23 @@ static void drawCenteredBulletLine(const Cell& c,
   d.setFont(nullptr);
 }
 
+static void drawCenteredMoreLine(const Cell& c,
+                                 int centerY,
+                                 const char* text,
+                                 const GFXfont* font) {
+  if (!text || !text[0]) return;
+
+  int16_t tx1, ty1;
+  uint16_t tw, th;
+  measureText(text, font, tx1, ty1, tw, th);
+
+  drawLeft(c.x + c.w / 2 - (int)tw / 2 - tx1,
+           centerY - (int)th / 2 - ty1,
+           text,
+           font,
+           Theme::ink());
+}
+
 static void drawCenteredItemList(const Cell& c,
                                  int startOffset,
                                  int visibleCount,
@@ -456,6 +519,29 @@ static bool fetchGroceries() {
   }
 
   g_cache.count = idx;
+
+  JsonArray dinnerArr = doc["settings_json"]["modules"]["dinner_planner"].as<JsonArray>();
+  if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["modules"]["dinnerPlanner"].as<JsonArray>();
+  if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["dinner_planner"].as<JsonArray>();
+  if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["dinnerPlanner"].as<JsonArray>();
+
+  int dinnerIdx = 0;
+  if (!dinnerArr.isNull()) {
+    for (JsonObject it : dinnerArr) {
+      if (dinnerIdx >= MAX_DINNER_ITEMS) break;
+
+      const char* date = it["date"] | it["day"] | it["planned_date"] | "";
+      const char* title = it["title"] | it["name"] | it["dish"] | it["meal"] | "";
+      if (!date || !date[0] || !title || !title[0]) continue;
+
+      g_cache.dinners[dinnerIdx].used = true;
+      safeCopy(g_cache.dinners[dinnerIdx].date, sizeof(g_cache.dinners[dinnerIdx].date), date);
+      dinnerDayLabel(date, g_cache.dinners[dinnerIdx].dayLabel, sizeof(g_cache.dinners[dinnerIdx].dayLabel));
+      utf8ToLatin1(g_cache.dinners[dinnerIdx].title, sizeof(g_cache.dinners[dinnerIdx].title), title);
+      dinnerIdx++;
+    }
+  }
+  g_cache.dinnerCount = dinnerIdx;
 
   char todayYmd[16] = {0};
   char dinnerTitle[80] = {0};
@@ -615,29 +701,88 @@ static void renderMedium(const Cell& c) {
     return;
   }
 
-  const int visibleCount = min(g_cache.count, 7);
+  const int maxRows = 7;
+  const bool hasMore = g_cache.count > maxRows;
+  const int visibleCount = min(g_cache.count, hasMore ? maxRows - 1 : maxRows);
 
-  if (g_cache.count > visibleCount) {
-    char moreBuf[24];
+  char moreBuf[24] = {0};
+  const int renderedRows = visibleCount + (hasMore ? 1 : 0);
+
+  if (hasMore) {
     snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
-    drawTopRightSmallNote(c, moreBuf, c.y + 14);
   }
 
   int contentBottom = c.y + c.h - 14;
+  int lineH = fontLineHeight(FONT_B9);
+  int blockH = renderedRows * lineH + max(0, renderedRows - 1) * COMPACT_CENTERED_LIST_LINE_GAP;
+  int listStartY = contentTop + max(0, (contentBottom - contentTop - blockH) / 2);
 
   drawCenteredItemList(
     c,
     0,
     visibleCount,
-    contentTop,
-    contentBottom - contentTop,
+    listStartY,
+    visibleCount * lineH + max(0, visibleCount - 1) * COMPACT_CENTERED_LIST_LINE_GAP,
     FONT_B9,
     COMPACT_CENTERED_LIST_LINE_GAP
   );
+
+  if (hasMore) {
+    int moreCenterY = listStartY + visibleCount * (lineH + COMPACT_CENTERED_LIST_LINE_GAP) + lineH / 2;
+    drawCenteredMoreLine(c, moreCenterY, moreBuf, FONT_B9);
+  }
+}
+
+static void drawWeeklyMenu(const Cell& c) {
+  int contentTop = drawHeader(c, "Weekly Menu", 28, FONT_B12);
+
+  if (g_cache.dinnerCount <= 0) {
+    Cell body = c;
+    body.y = contentTop;
+    body.h = c.y + c.h - contentTop;
+    drawEmptyState(body, "No menu", "Plan dinners first");
+    return;
+  }
+
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+  const int padX = 12;
+  const int lineH = leftListLineHeight(FONT_B9);
+  const int availableH = c.y + c.h - 18 - contentTop;
+  const int visibleCount = min(g_cache.dinnerCount, min(7, max(1, availableH / lineH)));
+  const int startY = contentTop + max(0, (availableH - visibleCount * lineH) / 2);
+  const int labelW = 34;
+
+  for (int i = 0; i < visibleCount; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[i];
+    if (!dinner.used) continue;
+
+    char titleFit[96] = {0};
+    fitTextToWidth(dinner.title, titleFit, sizeof(titleFit), c.w - padX * 2 - labelW - 8, FONT_B9);
+
+    int rowY = startY + i * lineH;
+    int centerY = rowY + lineH / 2;
+
+    int16_t lx1, ly1;
+    uint16_t lw, lh;
+    measureText(dinner.dayLabel, FONT_B9, lx1, ly1, lw, lh);
+    int labelBaseline = centerY - (int)lh / 2 - ly1;
+    drawLeft(c.x + padX - lx1, labelBaseline, dinner.dayLabel, FONT_B9, ink);
+
+    int16_t tx1, ty1;
+    uint16_t tw, th;
+    measureText(titleFit, FONT_B9, tx1, ty1, tw, th);
+    int textBaseline = centerY - (int)th / 2 - ty1;
+    drawLeft(c.x + padX + labelW, textBaseline, titleFit, FONT_B9, ink);
+
+    if (i < visibleCount - 1) {
+      d.drawFastHLine(c.x + padX, rowY + lineH - 2, c.w - padX * 2, ink);
+    }
+  }
 }
 
 static void renderLarge(const Cell& c) {
-  if (g_cache.count <= 0) {
+  if (g_cache.count <= 0 && g_cache.dinnerCount <= 0) {
     int contentTop = drawHeader(c, g_cache.header, 28, FONT_B12);
     Cell body = c;
     body.y = contentTop;
@@ -665,19 +810,7 @@ static void renderLarge(const Cell& c) {
 
   renderMedium(left);
 
-  const int topPad = 28;
-  int listTop = right.y + topPad;
-  int listBottom = right.y + right.h - 18;
-
-  int remainingStart = min(5, g_cache.count);
-  int visibleRight = min(max(0, g_cache.count - remainingStart), 9);
-
-  if (visibleRight <= 0) {
-    visibleRight = min(g_cache.count, 9);
-    remainingStart = 0;
-  }
-
-  drawLeftItemList(right, remainingStart, visibleRight, listTop, listBottom, FONT_B9);
+  drawWeeklyMenu(right);
 }
 
 static void renderXL(const Cell& c) {
