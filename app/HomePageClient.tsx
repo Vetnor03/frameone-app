@@ -1755,54 +1755,54 @@ function LandscapeFrameMirror({
 
   return (
     <main
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--fg)]"
+      className="fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--fg)]"
       style={themeVarsForMirror(theme)}
       aria-label={language === 'no' ? 'Landskapsvisning av frame' : 'Landscape frame mirror'}
     >
-      <div className="flex h-full w-full flex-col items-center justify-center px-[max(16px,env(safe-area-inset-left))] py-[max(10px,env(safe-area-inset-top))]">
-        <div className="relative w-[min(100vw-32px,(100vh-42px)*1.7778)] aspect-video rounded-[22px] border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] p-3 shadow-2xl">
-          {snapshot ? (
-            <FrameLayoutRenderer
-              layoutKey={snapshot.layoutKey}
-              cells={snapshot.cells}
-              onCellTap={() => {}}
-              language={language}
-              frameClassName={snapshot.fontSize === 'large' ? 'text-[115%]' : ''}
-              renderCellContent={(module, slot, size) => {
-                if (!module) {
-                  return <div className="text-[color:var(--fg-40)] tracking-widest text-sm">—</div>
-                }
+      <div className="h-full w-full pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]">
+        {snapshot ? (
+          <FrameLayoutRenderer
+            layoutKey={snapshot.layoutKey}
+            cells={snapshot.cells}
+            onCellTap={() => {}}
+            language={language}
+            frameClassName={`pointer-events-none ${snapshot.fontSize === 'large' ? 'text-[115%]' : ''}`}
+            renderCellContent={(module, slot, size) => {
+              if (!module) {
+                return <div className="text-[color:var(--fg-40)] tracking-widest text-sm">—</div>
+              }
 
-                const detail = frameModuleDetail(
-                  module,
-                  slot,
-                  snapshot.modulesJson,
-                  language,
-                  snapshot.cells,
-                  snapshot.renderAt ?? snapshot.updatedAt
-                )
-                const primarySize = size === 'large' ? 'text-3xl' : size === 'medium' ? 'text-xl' : 'text-lg'
+              const detail = frameModuleDetail(
+                module,
+                slot,
+                snapshot.modulesJson,
+                language,
+                snapshot.cells,
+                snapshot.renderAt ?? snapshot.updatedAt
+              )
+              const primarySize = size === 'large' ? 'text-[clamp(2rem,8vw,4.5rem)]' : size === 'medium' ? 'text-[clamp(1.4rem,5vw,3rem)]' : 'text-[clamp(1rem,3.5vw,2rem)]'
 
-                return (
-                  <div className="flex h-full w-full flex-col items-center justify-center px-4 text-center">
-                    <div className="text-[10px] uppercase tracking-[0.28em] text-[color:var(--fg-50)]">{moduleLabel(language, module)}</div>
-                    <div className={`mt-2 max-w-full truncate font-semibold tracking-widest text-[color:var(--fg)] ${primarySize}`}>
-                      {detail.primary}
-                    </div>
-                    {detail.secondary && <div className="mt-2 max-w-full truncate text-sm tracking-widest text-[color:var(--fg-60)]">{detail.secondary}</div>}
-                    {detail.tertiary && <div className="mt-1 max-w-full truncate text-xs tracking-widest text-[color:var(--fg-40)]">{detail.tertiary}</div>}
+              return (
+                <div className="flex h-full w-full flex-col items-center justify-center px-[clamp(1rem,4vw,3rem)] text-center">
+                  <div className="text-[clamp(0.55rem,1.4vw,0.8rem)] uppercase tracking-[0.28em] text-[color:var(--fg-50)]">{moduleLabel(language, module)}</div>
+                  <div className={`mt-[clamp(0.4rem,1.2vw,0.9rem)] max-w-full truncate font-semibold tracking-widest text-[color:var(--fg)] ${primarySize}`}>
+                    {detail.primary}
                   </div>
-                )
-              }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-xs tracking-[0.3em] text-[color:var(--fg-50)]">
-              {t.loadingFrame}
-            </div>
-          )}
-        </div>
+                  {detail.secondary && <div className="mt-[clamp(0.35rem,1vw,0.75rem)] max-w-full truncate text-[clamp(0.75rem,2vw,1.25rem)] tracking-widest text-[color:var(--fg-60)]">{detail.secondary}</div>}
+                  {detail.tertiary && <div className="mt-1 max-w-full truncate text-[clamp(0.65rem,1.5vw,0.9rem)] tracking-widest text-[color:var(--fg-40)]">{detail.tertiary}</div>}
+                </div>
+              )
+            }}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs tracking-[0.3em] text-[color:var(--fg-50)]">
+            {t.loadingFrame}
+          </div>
+        )}
+      </div>
 
-        <div className="mt-3 h-4 text-[10px] tracking-[0.28em] text-[color:var(--fg-40)]">{updatedLabel}</div>
+      <div className="pointer-events-none fixed bottom-[max(8px,env(safe-area-inset-bottom))] right-[max(10px,env(safe-area-inset-right))] z-[101] rounded-full bg-[color:var(--app-bg)]/70 px-2 py-1 text-[9px] tracking-[0.22em] text-[color:var(--fg-40)] backdrop-blur">
+        {updatedLabel}
       </div>
     </main>
   )
