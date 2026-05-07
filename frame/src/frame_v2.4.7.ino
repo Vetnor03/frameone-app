@@ -13,6 +13,7 @@
 #include "Theme.h"
 #include "TimeSync.h"
 #include "BatteryManager.h"
+#include "PowerSenseDebug.h"
 
 // Modules
 #include "ModuleDate.h"
@@ -57,13 +58,6 @@ static FrameConfig g_cfg;
 
 // Only initialize the display if we actually need to draw
 static bool g_displayReady = false;
-
-struct PowerSenseDebug {
-  int raw;
-  int highCount;
-  bool usbPresent;
-  bool stable;
-};
 
 static void ensureDisplay() {
   if (!g_displayReady) {
