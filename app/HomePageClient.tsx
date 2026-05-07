@@ -295,6 +295,12 @@ type DeviceStatusMeta = {
 
 type JsonRecord = Record<string, unknown>
 
+type MirrorBatteryState = {
+  percent: number | null
+  isCharging: boolean | null
+  isUsbPresent: boolean | null
+}
+
 type PhysicalFrameSnapshot = {
   theme: 'dark' | 'light'
   language: AppLanguage
@@ -302,6 +308,7 @@ type PhysicalFrameSnapshot = {
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: JsonRecord
+  runtimeData: JsonRecord
   updatedAt: string | null
   renderAt: string | null
 }
@@ -695,7 +702,7 @@ function isJsonRecord(value: unknown): value is JsonRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function normalizePhysicalFrameSnapshot(payload: unknown, renderAt: string | null): PhysicalFrameSnapshot {
+function normalizePhysicalFrameSnapshot(payload: unknown, renderAt: string | null, runtimeData: JsonRecord = {}): PhysicalFrameSnapshot {
   const body = isJsonRecord(payload) ? payload : {}
   const settings = isJsonRecord(body.settings_json) ? body.settings_json : {}
   const layoutKey = normalizeLayoutKey(settings.layout)
@@ -708,9 +715,112 @@ function normalizePhysicalFrameSnapshot(payload: unknown, renderAt: string | nul
     layoutKey,
     cells: cellsArrayToMap(layoutKey, Array.isArray(settings.cells) ? settings.cells as { slot: number; module: string }[] : []),
     modulesJson: rawModules,
+    runtimeData,
     updatedAt: body.updated_at ? String(body.updated_at) : null,
     renderAt,
   }
+}
+
+async function fetchJsonOrNull(url: string): Promise<unknown | null> {
+  try {
+    const resp = await fetch(url, { cache: 'no-store' })
+    if (!resp.ok) return null
+    return await resp.json()
+  } catch {
+    return null
+  }
+}
+
+function activeSlotsForModule(snapshot: PhysicalFrameSnapshot, module: ModuleKey) {
+  return Object.keys(snapshot.cells)
+    .map(Number)
+    .filter((slot) => snapshot.cells[slot] === module)
+    .sort((a, b) => a - b)
+}
+
+async function loadPhysicalFrameRuntimeData(deviceId: string, snapshot: PhysicalFrameSnapshot): Promise<JsonRecord> {
+  const activeModules = new Set(Object.values(snapshot.cells).filter(Boolean) as ModuleKey[])
+  const runtimeData: JsonRecord = {}
+  const tasks: Promise<void>[] = []
+
+  if (activeModules.has('reminders')) {
+    tasks.push(
+      fetchJsonOrNull(`/api/device/reminders?device_id=${encodeURIComponent(deviceId)}&limit=8`).then((data) => {
+        if (data) runtimeData.reminders = data
+      })
+    )
+  }
+
+  if (activeModules.has('countdown')) {
+    tasks.push(
+      fetchJsonOrNull(`/api/device/countdown?device_id=${encodeURIComponent(deviceId)}`).then((data) => {
+        if (data) runtimeData.countdown = data
+      })
+    )
+  }
+
+  for (const slot of activeSlotsForModule(snapshot, 'weather')) {
+    const cfg = pickModuleConfig(snapshot.modulesJson, 'weather', snapshot.cells, slot)
+    const lat = Number(cfg?.lat)
+    const lon = Number(cfg?.lon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat === 0 || lon === 0) continue
+
+    const units = String(cfg?.units || 'metric') === 'imperial' ? 'fahrenheit' : 'celsius'
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(String(lat))}` +
+      `&longitude=${encodeURIComponent(String(lon))}` +
+      `&current=temperature_2m,weather_code,relative_humidity_2m` +
+      `&daily=temperature_2m_min,temperature_2m_max,weather_code` +
+      `&temperature_unit=${units}&timezone=auto&forecast_days=1`
+
+    tasks.push(
+      fetchJsonOrNull(url).then((data) => {
+        if (!data) return
+        runtimeData[`weather:${slot}`] = data
+      })
+    )
+  }
+
+  for (const slot of activeSlotsForModule(snapshot, 'surf')) {
+    const cfg = pickModuleConfig(snapshot.modulesJson, 'surf', snapshot.cells, slot)
+    const spotId = asMirrorString(cfg?.spotId)
+    const spot = asMirrorString(cfg?.spot)
+    if (!spotId && !spot) continue
+
+    const surfSettings = isJsonRecord(snapshot.modulesJson.surf_settings) ? snapshot.modulesJson.surf_settings : {}
+    const params = new URLSearchParams()
+    if (spotId) params.set('spotId', spotId)
+    if (spot) params.set('spot', spot)
+    params.set('hours', '4')
+    if (surfSettings.fuelPenalty === true) params.set('fuelPenalty', '1')
+    if (Number.isFinite(Number(surfSettings.homeLat))) params.set('homeLat', String(surfSettings.homeLat))
+    if (Number.isFinite(Number(surfSettings.homeLon))) params.set('homeLon', String(surfSettings.homeLon))
+
+    tasks.push(
+      fetchJsonOrNull(`/api/surf/score?${params.toString()}`).then((data) => {
+        if (!data) return
+        runtimeData[`surf:${slot}`] = data
+      })
+    )
+  }
+
+  for (const slot of activeSlotsForModule(snapshot, 'soccer')) {
+    const cfg = pickModuleConfig(snapshot.modulesJson, 'soccer', snapshot.cells, slot)
+    const teamId = String(cfg?.teamId ?? cfg?.team_id ?? '').trim()
+    const teamKey = String(cfg?.teamKey ?? cfg?.team_key ?? cfg?.team ?? '').trim()
+    const teamParam = teamId || teamKey
+    if (!teamParam) continue
+
+    tasks.push(
+      fetchJsonOrNull(`/api/soccer/frame?teamId=${encodeURIComponent(teamParam)}`).then((data) => {
+        if (!data) return
+        runtimeData[`soccer:${slot}`] = data
+      })
+    )
+  }
+
+  await Promise.allSettled(tasks)
+  return runtimeData
 }
 
 function isSpotReadyForExperience(spotLabel: string, spotId: string) {
@@ -727,6 +837,7 @@ export default function HomePage() {
   const searchParams = useSearchParams()
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
+  const [mirrorBattery, setMirrorBattery] = useState<MirrorBatteryState>({ percent: null, isCharging: null, isUsbPresent: null })
   const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
   const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
   const physicalFrameRenderAtRef = useRef<string | null>(null)
@@ -1015,6 +1126,11 @@ export default function HomePage() {
       const data = await resp.json()
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+      setMirrorBattery({
+        percent: normalizeBatteryPercent(data?.battery_percent),
+        isCharging: normalizeBoolean(data?.is_charging),
+        isUsbPresent: normalizeBoolean(data?.is_usb_present),
+      })
       return renderIso || null
     } catch {
       setLastUpdatedAt(null)
@@ -1027,7 +1143,9 @@ export default function HomePage() {
     if (!resp.ok) throw new Error('Failed to load frame snapshot')
 
     const payload = await resp.json()
-    const snapshot = normalizePhysicalFrameSnapshot(payload, renderAt)
+    const baseSnapshot = normalizePhysicalFrameSnapshot(payload, renderAt)
+    const runtimeData = await loadPhysicalFrameRuntimeData(deviceId, baseSnapshot)
+    const snapshot = { ...baseSnapshot, runtimeData }
     physicalFrameSnapshotRef.current = snapshot
     setPhysicalFrameSnapshot(snapshot)
     physicalFrameRenderAtRef.current = renderAt
@@ -1444,7 +1562,7 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={physicalFrameSnapshot}
         fallbackLanguage={language}
-        lastUpdatedAt={lastUpdatedAt}
+        battery={mirrorBattery}
       />
     )
   }
@@ -1676,15 +1794,69 @@ function asMirrorString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function runtimeDataForSlot(runtimeData: JsonRecord, module: ModuleKey, slot: number): JsonRecord | null {
+  const keyed = runtimeData[`${module}:${slot}`]
+  if (isJsonRecord(keyed)) return keyed
+  const shared = runtimeData[module]
+  return isJsonRecord(shared) ? shared : null
+}
+
+function readNumber(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function readPath(root: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((acc, key) => {
+    if (!isJsonRecord(acc) && !Array.isArray(acc)) return undefined
+    return (acc as Record<string, unknown>)[key]
+  }, root)
+}
+
+function firstNumber(root: unknown, paths: string[]): number | null {
+  for (const path of paths) {
+    const value = readNumber(readPath(root, path))
+    if (value != null) return value
+  }
+  return null
+}
+
+function firstString(root: unknown, paths: string[]): string {
+  for (const path of paths) {
+    const value = asMirrorString(readPath(root, path))
+    if (value) return value
+  }
+  return ''
+}
+
+function wmoWeatherLabel(code: number | null, language: AppLanguage) {
+  if (code == null) return ''
+  if (code === 0) return language === 'no' ? 'Klart' : 'Clear'
+  if (code === 1 || code === 2 || code === 3) return language === 'no' ? 'Skyet' : 'Cloudy'
+  if (code === 45 || code === 48) return language === 'no' ? 'Tåke' : 'Fog'
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return language === 'no' ? 'Regn' : 'Rain'
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return language === 'no' ? 'Snø' : 'Snow'
+  if (code >= 95) return language === 'no' ? 'Torden' : 'Thunder'
+  return language === 'no' ? 'Vær' : 'Weather'
+}
+
+function formatSignedPercent(value: number | null) {
+  if (value == null) return ''
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(Math.abs(value) >= 10 ? 0 : 1)}%`
+}
+
 function frameModuleDetail(
   module: ModuleKey,
   slot: number,
   modulesJson: JsonRecord,
+  runtimeData: JsonRecord,
   language: AppLanguage,
   cells: Record<number, ModuleKey | null>,
   snapshotTime: string | null
 ): { primary: string; secondary?: string; tertiary?: string } {
   const cfg = pickModuleConfig(modulesJson, module, cells, slot)
+  const live = runtimeDataForSlot(runtimeData, module, slot)
   const label = moduleLabel(language, module)
 
   if (module === 'date') {
@@ -1697,23 +1869,62 @@ function frameModuleDetail(
 
   if (module === 'weather') {
     const location = asMirrorString(cfg?.label) || asMirrorString(cfg?.location)
+    const temp = firstNumber(live, ['current.temperature_2m', 'current.temp'])
+    const code = firstNumber(live, ['current.weather_code', 'current.wmo', 'daily.weather_code.0'])
+    const low = firstNumber(live, ['daily.temperature_2m_min.0'])
+    const high = firstNumber(live, ['daily.temperature_2m_max.0'])
+    const unit = String(cfg?.units || 'metric') === 'imperial' ? '°F' : '°C'
+    if (temp != null) {
+      return {
+        primary: `${Math.round(temp)}${unit}`,
+        secondary: wmoWeatherLabel(code, language) || location || label,
+        tertiary: low != null && high != null ? `${Math.round(low)}° / ${Math.round(high)}° · ${location}` : location,
+      }
+    }
     return { primary: location || (language === 'no' ? 'Sted ikke satt' : 'Location not set'), secondary: label }
   }
 
   if (module === 'surf') {
     const spot = asMirrorString(cfg?.spot) || asMirrorString(cfg?.label)
+    const rating = firstNumber(live, ['rating', 'score', 'picked.rating', 'picked.score', 'forecast.rating'])
+    const height = firstNumber(live, ['wave.height_m', 'wave_height_m', 'picked.wave.height_m', 'picked.wave_height_m', 'forecast.wave_height_m'])
+    const period = firstNumber(live, ['wave.period_s', 'wave_period_s', 'picked.wave.period_s', 'picked.wave_period_s', 'forecast.wave_period_s'])
+    const wind = firstNumber(live, ['wind.speed_ms', 'wind_speed_ms', 'picked.wind.speed_ms', 'picked.wind_speed_ms'])
+    if (rating != null || height != null) {
+      return {
+        primary: rating != null ? `${Math.round(rating)}/6` : `${height?.toFixed(1)}m`,
+        secondary: [height != null ? `${height.toFixed(1)}m` : '', period != null ? `${Math.round(period)}s` : '', wind != null ? `${Math.round(wind)} m/s` : ''].filter(Boolean).join(' · '),
+        tertiary: spot || label,
+      }
+    }
     return { primary: spot || (language === 'no' ? 'Spot ikke satt' : 'Spot not set'), secondary: label }
   }
 
   if (module === 'soccer') {
     const team = asMirrorString(cfg?.teamName) || asMirrorString(cfg?.team) || asMirrorString(cfg?.name)
+    const nextHome = firstString(live, ['next.homeShort', 'next.home'])
+    const nextAway = firstString(live, ['next.awayShort', 'next.away'])
+    const lastScore = firstString(live, ['last.score'])
+    const standing = firstNumber(live, ['standing.position'])
+    if (nextHome || nextAway || lastScore) {
+      return {
+        primary: nextHome && nextAway ? `${nextHome} - ${nextAway}` : team || label,
+        secondary: lastScore ? `${language === 'no' ? 'Siste' : 'Last'} ${lastScore}` : firstString(live, ['next.competitionCode', 'next.competition']),
+        tertiary: standing != null ? `#${standing}` : team,
+      }
+    }
     return { primary: team || (language === 'no' ? 'Lag ikke satt' : 'Team not set'), secondary: label }
   }
 
   if (module === 'stocks') {
     const symbol = asMirrorString(cfg?.symbol)
     const name = asMirrorString(cfg?.name)
-    return { primary: symbol || name || (language === 'no' ? 'Investering ikke satt' : 'Investment not set'), secondary: name && symbol ? name : label }
+    const price = firstNumber(live, ['quote.price', 'quote.c', 'price'])
+    const changePercent = firstNumber(live, ['quote.changePercent', 'quote.dp', 'changePercent'])
+    return {
+      primary: price != null ? `${symbol || name} ${price.toFixed(price >= 100 ? 0 : 2)}` : symbol || name || (language === 'no' ? 'Investering ikke satt' : 'Investment not set'),
+      secondary: changePercent != null ? formatSignedPercent(changePercent) : name && symbol ? name : label,
+    }
   }
 
   if (module === 'groceries') {
@@ -1727,13 +1938,27 @@ function frameModuleDetail(
   }
 
   if (module === 'countdown') {
-    const title = asMirrorString(cfg?.title) || asMirrorString(cfg?.eventTitle) || asMirrorString(cfg?.name)
-    return { primary: title || (language === 'no' ? 'Neste hendelse' : 'Next event'), secondary: label }
+    const items = Array.isArray(live?.items) ? live.items.filter(isJsonRecord) : []
+    const first = items[0]
+    const title = asMirrorString(first?.title) || asMirrorString(cfg?.title) || asMirrorString(cfg?.eventTitle) || asMirrorString(cfg?.name)
+    const daysLeft = readNumber(first?.days_left)
+    return {
+      primary: daysLeft != null ? String(daysLeft) : title || (language === 'no' ? 'Neste hendelse' : 'Next event'),
+      secondary: daysLeft != null ? (language === 'no' ? 'dager igjen' : 'days left') : label,
+      tertiary: daysLeft != null ? title : asMirrorString(first?.display_date),
+    }
   }
 
   if (module === 'reminders') {
-    const title = asMirrorString(cfg?.title) || asMirrorString(cfg?.name)
-    return { primary: title || (language === 'no' ? 'Påminnelser' : 'Reminders'), secondary: label }
+    const items = Array.isArray(live?.items) ? live.items.filter(isJsonRecord) : []
+    const first = items[0]
+    const count = items.length
+    const title = asMirrorString(first?.title) || asMirrorString(cfg?.title) || asMirrorString(cfg?.name)
+    return {
+      primary: count > 0 ? title : (language === 'no' ? 'Ingen påminnelser' : 'No reminders'),
+      secondary: first ? [asMirrorString(first.display_date), asMirrorString(first.display_time)].filter(Boolean).join(' · ') : label,
+      tertiary: count > 1 ? `+${count - 1}` : undefined,
+    }
   }
 
   return { primary: label }
@@ -1742,16 +1967,15 @@ function frameModuleDetail(
 function LandscapeFrameMirror({
   snapshot,
   fallbackLanguage,
-  lastUpdatedAt,
+  battery,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
-  lastUpdatedAt: string | null
+  battery: MirrorBatteryState
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const t = tx(language)
   const theme = snapshot?.theme ?? 'dark'
-  const updatedLabel = lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
 
   return (
     <main
@@ -1776,6 +2000,7 @@ function LandscapeFrameMirror({
                 module,
                 slot,
                 snapshot.modulesJson,
+                snapshot.runtimeData,
                 language,
                 snapshot.cells,
                 snapshot.renderAt ?? snapshot.updatedAt
@@ -1784,8 +2009,7 @@ function LandscapeFrameMirror({
 
               return (
                 <div className="flex h-full w-full flex-col items-center justify-center px-[clamp(1rem,4vw,3rem)] text-center">
-                  <div className="text-[clamp(0.55rem,1.4vw,0.8rem)] uppercase tracking-[0.28em] text-[color:var(--fg-50)]">{moduleLabel(language, module)}</div>
-                  <div className={`mt-[clamp(0.4rem,1.2vw,0.9rem)] max-w-full truncate font-semibold tracking-widest text-[color:var(--fg)] ${primarySize}`}>
+                  <div className={`max-w-full truncate font-semibold tracking-widest text-[color:var(--fg)] ${primarySize}`}>
                     {detail.primary}
                   </div>
                   {detail.secondary && <div className="mt-[clamp(0.35rem,1vw,0.75rem)] max-w-full truncate text-[clamp(0.75rem,2vw,1.25rem)] tracking-widest text-[color:var(--fg-60)]">{detail.secondary}</div>}
@@ -1801,10 +2025,25 @@ function LandscapeFrameMirror({
         )}
       </div>
 
-      <div className="pointer-events-none fixed bottom-[max(8px,env(safe-area-inset-bottom))] right-[max(10px,env(safe-area-inset-right))] z-[101] rounded-full bg-[color:var(--app-bg)]/70 px-2 py-1 text-[9px] tracking-[0.22em] text-[color:var(--fg-40)] backdrop-blur">
-        {updatedLabel}
-      </div>
+      <MirrorBatteryBadge battery={battery} />
     </main>
+  )
+}
+
+function MirrorBatteryBadge({ battery }: { battery: MirrorBatteryState }) {
+  const pct = battery.percent
+  const fillWidth = pct == null ? 0 : Math.max(5, Math.min(100, pct))
+  const charging = battery.isCharging === true || battery.isUsbPresent === true
+
+  return (
+    <div className="pointer-events-none fixed right-[max(12px,env(safe-area-inset-right))] top-[max(10px,env(safe-area-inset-top))] z-[101] flex items-center gap-2 rounded-full bg-[color:var(--app-bg)]/70 px-2.5 py-1 text-[10px] font-semibold tracking-widest text-[color:var(--fg-70)] backdrop-blur">
+      {pct != null && <span>{pct}%</span>}
+      {charging && <span className="text-[#2aa3ff]">↯</span>}
+      <span className="relative h-3 w-6 rounded-[3px] border border-[color:var(--fg-70)] p-[2px]">
+        <span className="absolute -right-[3px] top-1/2 h-1.5 w-[2px] -translate-y-1/2 rounded-r bg-[color:var(--fg-70)]" />
+        <span className="block h-full rounded-[1px] bg-[color:var(--fg-70)]" style={{ width: `${fillWidth}%` }} />
+      </span>
+    </div>
   )
 }
 
