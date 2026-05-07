@@ -79,6 +79,7 @@ struct WeatherCache {
 };
 
 static const int MAX_INSTANCES = 4;
+static const uint32_t WEATHER_RETRY_BACKOFF_MS = 60000UL;
 
 static const FrameConfig* g_cfg = nullptr;
 static WeatherInstanceConfig g_inst[MAX_INSTANCES];
@@ -1268,7 +1269,9 @@ static void tick(int idx) {
   if (cfg.lat == 0 || cfg.lon == 0) return;
 
   uint32_t now = millis();
-  bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
+  bool needs = cache.valid
+    ? ((now - cache.fetchedAtMs) > cfg.refreshMs)
+    : (cache.fetchedAtMs == 0 || (now - cache.fetchedAtMs) > WEATHER_RETRY_BACKOFF_MS);
   if (!needs) return;
 
   WeatherCache fresh = cache;
@@ -1276,6 +1279,10 @@ static void tick(int idx) {
     fresh.valid = true;
     fresh.fetchedAtMs = now;
     cache = fresh;
+  } else if (!cache.valid) {
+    // Remember failed first-load attempts so the paged e-paper draw loop does
+    // not retry the same blocking HTTP request for every display page.
+    cache.fetchedAtMs = now;
   }
 }
 
@@ -2172,6 +2179,15 @@ void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
   ensureDefaultsOnce();
   applyConfigFromFrameConfig();
+}
+
+void preload(const String& moduleName) {
+  ensureDefaultsOnce();
+  if (g_cfg) applyConfigFromFrameConfig();
+
+  uint8_t id = parseInstanceId(moduleName);
+  int idx = instIndex(id);
+  tick(idx);
 }
 
 void render(const Cell& c, const String& moduleName) {
