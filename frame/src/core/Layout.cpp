@@ -169,11 +169,22 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   const int quarterY = y + h / 4;
   const int midX = x + w / 2;
 
+  Cell cells[8];
+  int n = buildCells(key, cells, 8);
+
   bool hasGroceries = false;
-  for (int i = 0; i < cfg.assignCount; i++) {
-    if (strncmp(cfg.assigns[i].module, "groceries", 9) == 0) {
+  for (int i = 0; i < n; i++) {
+    String mod = ModuleRenderer::moduleForSlot(cfg.assigns, cfg.assignCount, cells[i].slot);
+    if (mod.startsWith("weather")) {
+      Serial.print("[weather] preload before display update module=");
+      Serial.println(mod);
+      ModuleWeather::preload(mod);
+    } else if (mod.startsWith("surf")) {
+      Serial.print("[surf] preload before display update module=");
+      Serial.println(mod);
+      ModuleSurf::preload(mod, cells[i].size);
+    } else if (mod.startsWith("groceries")) {
       hasGroceries = true;
-      break;
     }
   }
 
@@ -206,9 +217,6 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
       drawHLine(halfY, hx0, hx1);
       drawVLine(midX, vy0, vy1);
     }
-
-    Cell cells[8];
-    int n = buildCells(key, cells, 8);
 
     ModuleRenderer::renderPlaceholders(cfg.assigns, cfg.assignCount, cells, n);
 
