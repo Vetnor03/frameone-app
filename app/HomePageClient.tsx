@@ -10,7 +10,7 @@ import SoccerTeamSheet from './components/SoccerTeamSheet'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
-type CellSize = 'small' | 'medium' | 'large'
+type CellSize = 'small' | 'medium' | 'large' | 'xl'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
 
@@ -293,6 +293,34 @@ type DeviceStatusMeta = {
   last_render_at: string | null
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type PhysicalFrameCell = {
+  key: ModuleKey
+  instanceId: number | null
+  stored: string
+}
+
+type PhysicalFrameSnapshot = {
+  theme: 'dark' | 'light'
+  language: AppLanguage
+  fontSize: AppFontSize
+  layoutKey: LayoutKey
+  cells: Record<number, ModuleKey | null>
+  cellAssignments: Record<number, PhysicalFrameCell | null>
+  modulesJson: Record<string, any>
+  runtimeData?: Record<string, any>
+  updatedAt: string | null
+  renderAt: string | null
+}
+
+type MirrorBatteryState = {
+  battery_percent: number | null
+  is_charging: boolean | null
+  is_usb_present: boolean | null
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 type DeviceStatusRow = {
   device_id: string
   current_version: string | null
@@ -514,6 +542,213 @@ function cellsArrayToMap(layout: LayoutKey, arr: { slot: number; module: string 
   return base
 }
 
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function storedModuleToPhysicalCell(moduleStr: string): PhysicalFrameCell | null {
+  const raw = String(moduleStr || '').trim()
+  const key = baseModuleKeyFromStored(raw)
+  if (!key) return null
+
+  const idRaw = raw.split(':')[1]
+  const id = idRaw === undefined ? null : Number(idRaw)
+  const instanceId = id != null && Number.isFinite(id) && id > 0 ? Math.floor(id) : null
+
+  return {
+    key,
+    instanceId,
+    stored: raw,
+  }
+}
+
+function cellsArrayToPhysicalAssignments(layout: LayoutKey, arr: { slot: number; module: string }[]) {
+  const base: Record<number, PhysicalFrameCell | null> = {}
+  for (const slot of Object.keys(emptyCellsFor(layout)).map(Number)) base[slot] = null
+
+  for (const c of arr || []) {
+    if (!c) continue
+    if (!Object.prototype.hasOwnProperty.call(base, String(c.slot))) continue
+    base[c.slot] = storedModuleToPhysicalCell(c.module)
+  }
+
+  return base
+}
+
+function normalizePhysicalFrameSnapshot(
+  payload: any,
+  renderAt: string | null,
+  fallbackLanguage: AppLanguage
+): PhysicalFrameSnapshot {
+  const settings = payload?.settings_json && typeof payload.settings_json === 'object' ? payload.settings_json : {}
+  const layoutRaw = String(settings.layout || 'default')
+  const layoutKey: LayoutKey =
+    layoutRaw === 'pyramid' || layoutRaw === 'square' || layoutRaw === 'full' ? layoutRaw : 'default'
+  const languageRaw = String(settings.language || fallbackLanguage || 'en')
+  const language: AppLanguage = languageRaw === 'no' ? 'no' : 'en'
+  const fontSizeRaw = String(settings.fontSize || 'normal')
+  const fontSize: AppFontSize = fontSizeRaw === 'large' ? 'large' : 'normal'
+  const theme: 'dark' | 'light' = settings.theme === 'light' ? 'light' : 'dark'
+  const cellsRaw = Array.isArray(settings.cells) ? settings.cells : []
+  const modulesJson = settings.modules && typeof settings.modules === 'object' ? settings.modules : {}
+
+  return {
+    theme,
+    language,
+    fontSize,
+    layoutKey,
+    cells: cellsArrayToMap(layoutKey, cellsRaw),
+    cellAssignments: cellsArrayToPhysicalAssignments(layoutKey, cellsRaw),
+    modulesJson,
+    updatedAt: payload?.updated_at ? String(payload.updated_at) : null,
+    renderAt,
+  }
+}
+
+function usePhoneLandscapeMirror() {
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const query = '(orientation: landscape) and (pointer: coarse) and (max-height: 540px)'
+    const mql = window.matchMedia(query)
+    const update = () => setEnabled(mql.matches)
+
+    update()
+    mql.addEventListener('change', update)
+    window.addEventListener('resize', update)
+
+    return () => {
+      mql.removeEventListener('change', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
+  return enabled
+}
+
+function firstArrayItem(value: any): any | null {
+  return Array.isArray(value) && value.length > 0 ? value[0] : null
+}
+
+function moduleConfigById(list: any, id: number | null): any | null {
+  if (!Array.isArray(list)) return null
+  if (id == null) return firstArrayItem(list)
+  return list.find((x) => Number(x?.id) === id) ?? firstArrayItem(list)
+}
+
+function shortDateLabel(language: AppLanguage, ymd: string | null | undefined) {
+  if (!ymd) return ''
+  const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return String(ymd)
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(y, m - 1, d)
+  )
+}
+
+function weatherCodeLabel(code: any, language: AppLanguage) {
+  const c = Number(code)
+  if (!Number.isFinite(c)) return language === 'no' ? 'Vær' : 'Weather'
+  if (c === 0 || c === 1) return language === 'no' ? 'Sol' : 'Sunny'
+  if (c === 2 || c === 3) return language === 'no' ? 'Skyet' : 'Cloudy'
+  if (c === 45 || c === 48) return language === 'no' ? 'Tåke' : 'Fog'
+  if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return language === 'no' ? 'Regn' : 'Rain'
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return language === 'no' ? 'Snø' : 'Snow'
+  if (c >= 95) return language === 'no' ? 'Torden' : 'Thunder'
+  return language === 'no' ? 'Vær' : 'Weather'
+}
+
+async function loadMirrorRuntimeData(deviceId: string, snapshot: PhysicalFrameSnapshot): Promise<Record<string, any>> {
+  const runtime: Record<string, any> = {}
+  const assignments = Object.values(snapshot.cellAssignments).filter(Boolean) as PhysicalFrameCell[]
+  const hasModule = (key: ModuleKey) => assignments.some((a) => a.key === key)
+
+  if (hasModule('weather')) {
+    const weatherById: Record<number, any> = {}
+    const weatherConfigs = Array.isArray(snapshot.modulesJson.weather) ? snapshot.modulesJson.weather : []
+    await Promise.all(
+      weatherConfigs.map(async (cfg: any) => {
+        const lat = Number(cfg?.lat)
+        const lon = Number(cfg?.lon)
+        const id = Number(cfg?.id)
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(id)) return
+        try {
+          const tempUnit = cfg?.units === 'imperial' ? 'fahrenheit' : 'celsius'
+          const windUnit = cfg?.units === 'imperial' ? 'mph' : 'ms'
+          const url =
+            `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}` +
+            `&longitude=${encodeURIComponent(lon)}` +
+            `&current=temperature_2m,weather_code,wind_speed_10m,precipitation` +
+            `&daily=temperature_2m_max,temperature_2m_min` +
+            `&forecast_days=1&temperature_unit=${tempUnit}&wind_speed_unit=${windUnit}`
+          const resp = await fetch(url, { cache: 'no-store' })
+          if (resp.ok) weatherById[id] = await resp.json()
+        } catch {}
+      })
+    )
+    runtime.weatherById = weatherById
+  }
+
+  if (hasModule('surf')) {
+    const surfById: Record<number, any> = {}
+    const surfSettings = snapshot.modulesJson.surf_settings || {}
+    const surfConfigs = Array.isArray(snapshot.modulesJson.surf) ? snapshot.modulesJson.surf : []
+    await Promise.all(
+      surfConfigs.map(async (cfg: any) => {
+        const id = Number(cfg?.id)
+        if (!Number.isFinite(id)) return
+        const params = new URLSearchParams()
+        if (cfg?.spotId) params.set('spotId', String(cfg.spotId))
+        else if (cfg?.spot) params.set('spot', String(cfg.spot))
+        else return
+        params.set('hours', '12')
+        if (surfSettings?.fuelPenalty) params.set('fuelPenalty', '1')
+        if (Number.isFinite(Number(surfSettings?.homeLat))) params.set('homeLat', String(surfSettings.homeLat))
+        if (Number.isFinite(Number(surfSettings?.homeLon))) params.set('homeLon', String(surfSettings.homeLon))
+        try {
+          const resp = await fetch(`/api/surf/score?${params.toString()}`, { cache: 'no-store' })
+          if (resp.ok) surfById[id] = await resp.json()
+        } catch {}
+      })
+    )
+    runtime.surfById = surfById
+  }
+
+  if (hasModule('reminders')) {
+    try {
+      const resp = await fetch(`/api/device/reminders?device_id=${encodeURIComponent(deviceId)}&limit=6`, { cache: 'no-store' })
+      if (resp.ok) runtime.reminders = await resp.json()
+    } catch {}
+  }
+
+  if (hasModule('countdown')) {
+    try {
+      const resp = await fetch(`/api/device/countdown?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+      if (resp.ok) runtime.countdown = await resp.json()
+    } catch {}
+  }
+
+  if (hasModule('soccer')) {
+    const soccerById: Record<number, any> = {}
+    const soccerConfigs = Array.isArray(snapshot.modulesJson.soccer) ? snapshot.modulesJson.soccer : []
+    await Promise.all(
+      soccerConfigs.map(async (cfg: any) => {
+        const id = Number(cfg?.id)
+        const teamId = String(cfg?.teamId || cfg?.team || '').trim()
+        if (!Number.isFinite(id) || !teamId) return
+        try {
+          const resp = await fetch(`/api/soccer/frame?teamId=${encodeURIComponent(teamId)}`, { cache: 'no-store' })
+          if (resp.ok) soccerById[id] = await resp.json()
+        } catch {}
+      })
+    )
+    runtime.soccerById = soccerById
+  }
+
+  return runtime
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 function makeEmptyCellsByLayout() {
   return {
     default: emptyCellsFor('default'),
@@ -657,6 +892,14 @@ export default function HomePage() {
   const searchParams = useSearchParams()
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
+  const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
+  const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
+  const [mirrorBattery, setMirrorBattery] = useState<MirrorBatteryState>({
+    battery_percent: null,
+    is_charging: null,
+    is_usb_present: null,
+  })
+  const mirrorRenderAtRef = useRef<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
   const [dirty, setDirty] = useState(false)
@@ -929,15 +1172,80 @@ export default function HomePage() {
   async function loadDeviceStatus(deviceId: string) {
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
-      if (!resp.ok) return
+      if (!resp.ok) return null
 
       const data = await resp.json()
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+      return data
     } catch {
       setLastUpdatedAt(null)
+      return null
     }
   }
+
+  const loadPhysicalFrameSnapshot = useCallback(
+    async (deviceId: string, renderAt: string | null) => {
+      const resp = await fetch(`/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+      if (!resp.ok) throw new Error('Failed to load physical frame config')
+
+      const payload = await resp.json()
+      const snapshotBase = normalizePhysicalFrameSnapshot(payload, renderAt, language)
+      const runtimeData = await loadMirrorRuntimeData(deviceId, snapshotBase)
+      const snapshot = { ...snapshotBase, runtimeData }
+
+      mirrorRenderAtRef.current = renderAt
+      setPhysicalFrameSnapshot(snapshot)
+      return snapshot
+    },
+    [language]
+  )
+
+  const refreshPhysicalFrameState = useCallback(
+    async (deviceId: string) => {
+      const status = await loadDeviceStatus(deviceId)
+      const renderAt = status?.last_render_at ? String(status.last_render_at) : null
+
+      setMirrorBattery({
+        battery_percent: normalizeBatteryPercent(status?.battery_percent),
+        is_charging: normalizeBoolean(status?.is_charging),
+        is_usb_present: normalizeBoolean(status?.is_usb_present),
+      })
+
+      if (!physicalFrameSnapshot || (renderAt && renderAt !== mirrorRenderAtRef.current)) {
+        await loadPhysicalFrameSnapshot(deviceId, renderAt)
+      }
+    },
+    [loadPhysicalFrameSnapshot, physicalFrameSnapshot]
+  )
+
+
+  useEffect(() => {
+    if (!activeDeviceId) {
+      setPhysicalFrameSnapshot(null)
+      mirrorRenderAtRef.current = null
+      return
+    }
+    if (activeTab !== 'frame' && !isPhoneLandscapeMirror) return
+
+    let cancelled = false
+
+    const refresh = async () => {
+      try {
+        if (!cancelled) await refreshPhysicalFrameState(activeDeviceId)
+      } catch {
+        // Keep the previous mirror snapshot on transient network/API failures.
+      }
+    }
+
+    refresh()
+    const t = window.setInterval(refresh, 15000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(t)
+    }
+  }, [activeDeviceId, activeTab, isPhoneLandscapeMirror, refreshPhysicalFrameState])
 
   async function loadDeviceSettings(deviceId: string) {
     const { data, error } = await supabase
@@ -1328,6 +1636,16 @@ async function handleSelectTab(k: TabKey) {
   setActiveTab(k)
 }
 
+  if (isPhoneLandscapeMirror) {
+    return (
+      <LandscapeFrameMirror
+        snapshot={physicalFrameSnapshot}
+        fallbackLanguage={language}
+        battery={mirrorBattery}
+      />
+    )
+  }
+
   return (
     <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
@@ -1501,6 +1819,313 @@ async function handleSelectTab(k: TabKey) {
     </main>
   )
 }
+
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function LandscapeFrameMirror({
+  snapshot,
+  fallbackLanguage,
+  battery,
+}: {
+  snapshot: PhysicalFrameSnapshot | null
+  fallbackLanguage: AppLanguage
+  battery: MirrorBatteryState
+}) {
+  const language = snapshot?.language ?? fallbackLanguage
+  const theme = snapshot?.theme ?? 'dark'
+  const isLight = theme === 'light'
+
+  return (
+    <main
+      data-theme={theme}
+      className={`fixed inset-0 z-[100] h-[100dvh] w-[100vw] overflow-hidden font-sans ${
+        isLight ? 'bg-[#f4f1e8] text-[#151515]' : 'bg-[#050f14] text-[#f3f7f2]'
+      }`}
+      style={{ colorScheme: theme }}
+      aria-label={language === 'no' ? 'Frame-speil' : 'Frame mirror'}
+    >
+      {snapshot ? (
+        <PhysicalMirrorLayout snapshot={snapshot} />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[3.5vw] tracking-[0.35em] opacity-60">
+          {language === 'no' ? 'LASTER FRAME' : 'LOADING FRAME'}
+        </div>
+      )}
+      <MirrorBatteryBadge battery={battery} />
+    </main>
+  )
+}
+
+function PhysicalMirrorLayout({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
+  const cells = mirrorCellsForLayout(snapshot.layoutKey)
+
+  return (
+    <div className="relative h-full w-full select-none" role="img" aria-label="Physical frame preview">
+      {cells.map((cell) => (
+        <div
+          key={cell.slot}
+          className="absolute overflow-hidden"
+          style={{ left: cell.left, top: cell.top, width: cell.width, height: cell.height }}
+        >
+          <MirrorCellContent snapshot={snapshot} slot={cell.slot} size={cell.size} />
+        </div>
+      ))}
+      <PhysicalMirrorDividers layoutKey={snapshot.layoutKey} />
+    </div>
+  )
+}
+
+function mirrorCellsForLayout(layoutKey: LayoutKey): Array<{ slot: number; size: CellSize; left: string; top: string; width: string; height: string }> {
+  if (layoutKey === 'full') return [{ slot: 0, size: 'xl', left: '0%', top: '0%', width: '100%', height: '100%' }]
+  if (layoutKey === 'pyramid') {
+    return [
+      { slot: 0, size: 'small', left: '0%', top: '0%', width: '100%', height: '25%' },
+      { slot: 1, size: 'small', left: '0%', top: '25%', width: '100%', height: '25%' },
+      { slot: 2, size: 'medium', left: '0%', top: '50%', width: '50%', height: '50%' },
+      { slot: 3, size: 'medium', left: '50%', top: '50%', width: '50%', height: '50%' },
+    ]
+  }
+  if (layoutKey === 'square') {
+    return [
+      { slot: 0, size: 'medium', left: '0%', top: '0%', width: '50%', height: '50%' },
+      { slot: 1, size: 'medium', left: '50%', top: '0%', width: '50%', height: '50%' },
+      { slot: 2, size: 'medium', left: '0%', top: '50%', width: '50%', height: '50%' },
+      { slot: 3, size: 'medium', left: '50%', top: '50%', width: '50%', height: '50%' },
+    ]
+  }
+  return [
+    { slot: 0, size: 'small', left: '0%', top: '0%', width: '100%', height: '25%' },
+    { slot: 1, size: 'small', left: '0%', top: '25%', width: '100%', height: '25%' },
+    { slot: 2, size: 'large', left: '0%', top: '50%', width: '100%', height: '50%' },
+  ]
+}
+
+function PhysicalMirrorDividers({ layoutKey }: { layoutKey: LayoutKey }) {
+  const lineClass = 'absolute bg-current opacity-90 pointer-events-none'
+  if (layoutKey === 'full') return null
+  if (layoutKey === 'pyramid') {
+    return (
+      <>
+        <div className={`${lineClass} h-px left-[2.5%] right-[2.5%] top-[25%]`} />
+        <div className={`${lineClass} h-px left-[2.5%] right-[2.5%] top-[50%]`} />
+        <div className={`${lineClass} w-px left-1/2 top-[51.25%] bottom-[1.25%]`} />
+      </>
+    )
+  }
+  if (layoutKey === 'square') {
+    return (
+      <>
+        <div className={`${lineClass} h-px left-[2.5%] right-[2.5%] top-1/2`} />
+        <div className={`${lineClass} w-px left-1/2 top-[2.5%] bottom-[2.5%]`} />
+      </>
+    )
+  }
+  return (
+    <>
+      <div className={`${lineClass} h-px left-[2.5%] right-[2.5%] top-[25%]`} />
+      <div className={`${lineClass} h-px left-[2.5%] right-[2.5%] top-[50%]`} />
+    </>
+  )
+}
+
+function MirrorCellContent({ snapshot, slot, size }: { snapshot: PhysicalFrameSnapshot; slot: number; size: CellSize }) {
+  const assignment = snapshot.cellAssignments[slot]
+  const padClass = size === 'small' ? 'px-[4vw] py-[1.4vw]' : size === 'xl' ? 'px-[8vw] py-[7vh]' : 'px-[4.5vw] py-[4vh]'
+
+  if (!assignment) {
+    return <div className={`${padClass} flex h-full w-full items-center justify-center text-[2vw] tracking-[0.28em] opacity-30`}>—</div>
+  }
+
+  return (
+    <div className={`${padClass} h-full w-full`}>
+      {renderPhysicalMirrorModule(snapshot, assignment, size)}
+    </div>
+  )
+}
+
+function renderPhysicalMirrorModule(snapshot: PhysicalFrameSnapshot, assignment: PhysicalFrameCell, size: CellSize) {
+  if (assignment.key === 'date') return <MirrorDateModule snapshot={snapshot} size={size} />
+  if (assignment.key === 'weather') return <MirrorWeatherModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.key === 'surf') return <MirrorSurfModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.key === 'reminders') return <MirrorRemindersModule snapshot={snapshot} size={size} />
+  if (assignment.key === 'countdown') return <MirrorCountdownModule snapshot={snapshot} size={size} />
+  if (assignment.key === 'soccer') return <MirrorSoccerModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.key === 'stocks') return <MirrorStocksModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.key === 'groceries') return <MirrorGroceriesModule snapshot={snapshot} size={size} />
+  return null
+}
+
+function MirrorKicker({ children }: { children: React.ReactNode }) {
+  return <div className="text-[1.4vw] uppercase tracking-[0.35em] opacity-55">{children}</div>
+}
+
+function MirrorDateModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
+  const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
+  const locale = snapshot.language === 'no' ? 'nb-NO' : 'en-US'
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)
+  const month = new Intl.DateTimeFormat(locale, { month: 'long' }).format(now)
+  const holiday = Array.isArray(snapshot.modulesJson?.date?.holidays) ? snapshot.modulesJson.date.holidays[0] : null
+  const daySize = size === 'xl' ? 'text-[23vh]' : size === 'large' ? 'text-[13vh]' : size === 'medium' ? 'text-[8vh]' : 'text-[5.5vh]'
+
+  return (
+    <div className="flex h-full w-full items-center justify-center gap-[3vw]">
+      <div className={`${daySize} leading-none font-semibold tabular-nums`}>{now.getDate()}</div>
+      <div className="min-w-0">
+        <div className="text-[3.2vw] font-semibold capitalize leading-none tracking-[0.05em]">{weekday}</div>
+        <div className="mt-[1vh] text-[2vw] capitalize opacity-70">{month} {now.getFullYear()}</div>
+        {holiday?.name && <div className="mt-[1vh] truncate text-[1.45vw] opacity-55">{shortDateLabel(snapshot.language, holiday.date)} · {holiday.name}</div>}
+      </div>
+    </div>
+  )
+}
+
+function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
+  const cfg = moduleConfigById(snapshot.modulesJson.weather, assignment.instanceId)
+  const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
+  const data = snapshot.runtimeData?.weatherById?.[id]
+  const temp = data?.current?.temperature_2m
+  const max = data?.daily?.temperature_2m_max?.[0]
+  const min = data?.daily?.temperature_2m_min?.[0]
+  const unit = cfg?.units === 'imperial' ? '°F' : '°C'
+  const headline = Number.isFinite(Number(temp)) ? `${Math.round(Number(temp))}${unit}` : '--'
+
+  return (
+    <div className="flex h-full w-full items-center justify-between gap-[3vw]">
+      <div className="min-w-0">
+        <MirrorKicker>{cfg?.label || (snapshot.language === 'no' ? 'Vær' : 'Weather')}</MirrorKicker>
+        <div className={`${size === 'small' ? 'text-[5vh]' : 'text-[9vh]'} mt-[0.4vh] font-semibold leading-none tabular-nums`}>{headline}</div>
+      </div>
+      <div className="min-w-0 text-right">
+        <div className="text-[2.4vw] font-semibold">{weatherCodeLabel(data?.current?.weather_code, snapshot.language)}</div>
+        <div className="mt-[0.8vh] text-[1.5vw] opacity-65">
+          {Number.isFinite(Number(max)) && Number.isFinite(Number(min)) ? `${Math.round(Number(max))}/${Math.round(Number(min))}${unit}` : ''}
+        </div>
+        {data?.current?.wind_speed_10m != null && <div className="mt-[0.4vh] text-[1.35vw] opacity-55">Wind {Math.round(Number(data.current.wind_speed_10m))}</div>}
+      </div>
+    </div>
+  )
+}
+
+function MirrorSurfModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
+  const cfg = moduleConfigById(snapshot.modulesJson.surf, assignment.instanceId)
+  const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
+  const data = snapshot.runtimeData?.surfById?.[id]
+  const rating = data?.rating ?? data?.score ?? '--'
+  const wave = data?.forecast?.wave_height_range_label || data?.forecast?.wave_height_range_minmax_label || data?.ui?.wave_bucket || '--'
+
+  return (
+    <div className="flex h-full w-full items-center justify-between gap-[3vw]">
+      <div className="min-w-0">
+        <MirrorKicker>{cfg?.spot || cfg?.spotId || 'Surf'}</MirrorKicker>
+        <div className={`${size === 'small' ? 'text-[4.6vh]' : 'text-[7vh]'} mt-[0.6vh] font-semibold leading-none`}>{rating}</div>
+      </div>
+      <div className="min-w-0 text-right text-[1.7vw] leading-tight">
+        <div className="font-semibold">{wave}</div>
+        <div className="mt-[0.6vh] opacity-65">{data?.ui?.period_bucket || data?.line1 || ''}</div>
+        <div className="mt-[0.4vh] opacity-55">{data?.ui?.wind_bucket || data?.line2 || ''}</div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorRemindersModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
+  const items = Array.isArray(snapshot.runtimeData?.reminders?.items) ? snapshot.runtimeData.reminders.items : []
+  const shown = items.slice(0, size === 'small' ? 1 : 3)
+  return (
+    <div className="flex h-full w-full flex-col justify-center">
+      <MirrorKicker>{snapshot.language === 'no' ? 'Påminnelser' : 'Reminders'}</MirrorKicker>
+      {shown.length === 0 ? <div className="mt-[1vh] text-[2.4vw] opacity-55">—</div> : shown.map((item: any) => (
+        <div key={item.reminder_id || item.title} className="mt-[0.8vh] flex items-baseline justify-between gap-[2vw]">
+          <div className="truncate text-[2.3vw] font-semibold">{item.title}</div>
+          <div className="shrink-0 text-[1.35vw] opacity-60">{item.display_date || item.display_time}</div>
+        </div>
+      ))}
+      {items.length > shown.length && <div className="mt-[0.6vh] text-[1.2vw] opacity-50">+{items.length - shown.length}</div>}
+    </div>
+  )
+}
+
+function MirrorCountdownModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
+  const items = Array.isArray(snapshot.runtimeData?.countdown?.items) ? snapshot.runtimeData.countdown.items : []
+  const item = items.find((x: any) => !x.is_past) || items[0]
+  return (
+    <div className="flex h-full w-full items-center justify-center gap-[2.5vw]">
+      <div className={`${size === 'small' ? 'text-[5vh]' : 'text-[10vh]'} font-semibold leading-none tabular-nums`}>{item?.days_left ?? '--'}</div>
+      <div className="min-w-0">
+        <MirrorKicker>{snapshot.language === 'no' ? 'Dager igjen' : 'Days left'}</MirrorKicker>
+        <div className="mt-[0.7vh] truncate text-[2.4vw] font-semibold">{item?.title || (snapshot.language === 'no' ? 'Nedtelling' : 'Countdown')}</div>
+        <div className="mt-[0.3vh] text-[1.35vw] opacity-60">{item?.display_date || shortDateLabel(snapshot.language, item?.target_date)}</div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorSoccerModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
+  const cfg = moduleConfigById(snapshot.modulesJson.soccer, assignment.instanceId)
+  const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
+  const data = snapshot.runtimeData?.soccerById?.[id]
+  const match = data?.next || data?.last
+  return (
+    <div className="flex h-full w-full flex-col justify-center">
+      <MirrorKicker>{cfg?.teamName || cfg?.team || data?.teamKey || 'Soccer'}</MirrorKicker>
+      <div className="mt-[0.8vh] truncate text-[2.5vw] font-semibold">{match ? `${match.homeShort || match.homeName || ''} - ${match.awayShort || match.awayName || ''}` : '--'}</div>
+      <div className="mt-[0.7vh] text-[1.5vw] opacity-65">{match?.score || match?.dateLabel || data?.standing?.summary || ''}</div>
+      {size !== 'small' && data?.standing?.position && <div className="mt-[0.5vh] text-[1.35vw] opacity-55">#{data.standing.position} · {data.competitionName}</div>}
+    </div>
+  )
+}
+
+function MirrorStocksModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
+  const cfg = moduleConfigById(snapshot.modulesJson.stocks, assignment.instanceId)
+  return (
+    <div className="flex h-full w-full items-center justify-between gap-[2vw]">
+      <div className="min-w-0">
+        <MirrorKicker>{snapshot.language === 'no' ? 'Investering' : 'Investment'}</MirrorKicker>
+        <div className={`${size === 'small' ? 'text-[4.8vh]' : 'text-[7vh]'} mt-[0.5vh] truncate font-semibold leading-none`}>{cfg?.symbol || '--'}</div>
+      </div>
+      <div className="min-w-0 text-right">
+        <div className="truncate text-[1.8vw] font-semibold">{cfg?.name || cfg?.assetType || ''}</div>
+        <div className="mt-[0.5vh] text-[1.25vw] uppercase opacity-55">{cfg?.chartRange || 'day'} · {cfg?.currency || 'USD'}</div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorGroceriesModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
+  const items = Array.isArray(snapshot.modulesJson.groceries) ? snapshot.modulesJson.groceries : []
+  const shown = items.slice(0, size === 'small' ? 1 : size === 'medium' ? 3 : 5)
+  return (
+    <div className="flex h-full w-full flex-col justify-center">
+      <MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Groceries'} · {items.length}</MirrorKicker>
+      {shown.length === 0 ? <div className="mt-[1vh] text-[2.4vw] opacity-55">—</div> : shown.map((item: any, idx: number) => (
+        <div key={`${item?.name}-${idx}`} className="mt-[0.65vh] flex items-baseline gap-[1vw] text-[2vw]">
+          <span className="opacity-45">□</span>
+          <span className="truncate font-semibold">{item?.name || ''}</span>
+          {Number(item?.quantity) > 1 && <span className="shrink-0 text-[1.25vw] opacity-60">×{item.quantity}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MirrorBatteryBadge({ battery }: { battery: MirrorBatteryState }) {
+  const charging = battery.is_charging || battery.is_usb_present
+  const pct = battery.battery_percent
+  const fill = pct == null ? 55 : Math.max(5, Math.min(100, pct))
+
+  return (
+    <div className="pointer-events-none absolute right-[2.2vw] top-[2.2vh] z-20 flex items-center gap-[0.5vw] opacity-65">
+      {charging && <span className="text-[1.4vw] leading-none">⚡</span>}
+      <div className="relative h-[1.4vh] w-[3.2vw] rounded-[0.25vw] border border-current">
+        <div className="absolute -right-[0.35vw] top-1/2 h-[0.65vh] w-[0.25vw] -translate-y-1/2 rounded-r-sm bg-current" />
+        <div className="absolute bottom-[18%] left-[8%] top-[18%] bg-current" style={{ width: `${fill * 0.84}%` }} />
+      </div>
+      {pct != null && <span className="text-[1vw] tabular-nums">{pct}%</span>}
+    </div>
+  )
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function SaveToast({ visible, text }: { visible: boolean; text: string }) {
   return (
