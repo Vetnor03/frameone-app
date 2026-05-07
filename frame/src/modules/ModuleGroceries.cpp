@@ -595,6 +595,96 @@ static void drawLeftItemList(const Cell& c,
   }
 }
 
+
+static bool loadGroceriesFromConfig() {
+  if (!g_cfg) return false;
+
+  clearCache();
+
+  g_cache.languageNo = g_cfg->groceries.languageNo;
+
+  int itemCount = min((int)g_cfg->groceries.itemCount, MAX_ITEMS);
+  for (int i = 0; i < itemCount; i++) {
+    const GroceryFrameItem& src = g_cfg->groceries.items[i];
+    if (!src.name[0]) continue;
+
+    GroceryItem& dst = g_cache.items[g_cache.count];
+    dst.used = true;
+    utf8ToLatin1(dst.name, sizeof(dst.name), src.name);
+    dst.qty = max(1, src.qty);
+    g_cache.count++;
+  }
+
+  int dinnerCount = min((int)g_cfg->groceries.dinnerCount, MAX_DINNER_ITEMS);
+  for (int i = 0; i < dinnerCount; i++) {
+    const DinnerPlanFrameItem& src = g_cfg->groceries.dinners[i];
+    if (!src.date[0] || !src.title[0]) continue;
+
+    DinnerPlanItem& dst = g_cache.dinners[g_cache.dinnerCount];
+    dst.used = true;
+    safeCopy(dst.date, sizeof(dst.date), src.date);
+    dinnerDayLabel(src.date, dst.dayLabel, sizeof(dst.dayLabel));
+    utf8ToLatin1(dst.title, sizeof(dst.title), src.title);
+    g_cache.dinnerCount++;
+  }
+
+  int runningLowCount = min((int)g_cfg->groceries.runningLowCount, MAX_RUNNING_LOW_INSIGHTS);
+  for (int i = 0; i < runningLowCount; i++) {
+    const GroceryRunningLowFrameInsight& src = g_cfg->groceries.runningLow[i];
+    if (!src.name[0]) continue;
+
+    RunningLowInsight& dst = g_cache.runningLow[g_cache.runningLowCount];
+    dst.used = true;
+    utf8ToLatin1(dst.name, sizeof(dst.name), src.name);
+    utf8ToLatin1(dst.label, sizeof(dst.label), src.label[0] ? src.label : (g_cache.languageNo ? "Følger med" : "Watching"));
+    g_cache.runningLowCount++;
+  }
+
+  int recipeCount = min((int)g_cfg->groceries.recipeCount, MAX_RECIPE_INSIGHTS);
+  for (int i = 0; i < recipeCount; i++) {
+    const GroceryRecipeFrameInsight& src = g_cfg->groceries.recipes[i];
+    if (!src.name[0]) continue;
+
+    RecipeInsight& dst = g_cache.recipes[g_cache.recipeCount];
+    dst.used = true;
+    utf8ToLatin1(dst.name, sizeof(dst.name), src.name);
+
+    int missingCount = min((int)src.missingCount, MAX_RECIPE_MISSING);
+    for (int j = 0; j < missingCount; j++) {
+      if (!src.missing[j][0]) continue;
+      utf8ToLatin1(dst.missing[dst.missingCount], sizeof(dst.missing[dst.missingCount]), src.missing[j]);
+      dst.missingCount++;
+    }
+
+    g_cache.recipeCount++;
+  }
+
+  char todayYmd[16] = {0};
+  bool hasTodayDinner = false;
+  char dinnerTitle[80] = {0};
+
+  if (getTodayYmd(todayYmd, sizeof(todayYmd))) {
+    for (int i = 0; i < g_cache.dinnerCount; i++) {
+      if (!g_cache.dinners[i].used || strcmp(g_cache.dinners[i].date, todayYmd) != 0) continue;
+      safeCopy(dinnerTitle, sizeof(dinnerTitle), g_cache.dinners[i].title);
+      hasTodayDinner = true;
+      break;
+    }
+  }
+
+  if (hasTodayDinner) {
+    char titleFit[80] = {0};
+    fitTextToWidth(dinnerTitle, titleFit, sizeof(titleFit), 210, FONT_B12);
+    snprintf(g_cache.header, sizeof(g_cache.header), "Today's Dinner: %s", titleFit);
+  } else {
+    safeCopy(g_cache.header, sizeof(g_cache.header), "Grocery List");
+  }
+
+  g_cache.ok = true;
+  g_cache.loaded = true;
+  return true;
+}
+
 static bool fetchGroceries() {
   clearCache();
 
@@ -744,7 +834,9 @@ static bool fetchGroceries() {
 }
 
 static void ensureLoaded() {
-  if (!g_cache.loaded) fetchGroceries();
+  if (g_cache.loaded) return;
+  if (loadGroceriesFromConfig()) return;
+  fetchGroceries();
 }
 
 static void renderSmall(const Cell& c) {

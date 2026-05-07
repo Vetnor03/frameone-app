@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
-const MAX_GROCERY_ITEMS_FOR_FRAME = 40
+const MAX_GROCERY_ITEMS_FOR_FRAME = 24
 
 type HolidayItem = { date: string; name: string }
 
@@ -140,7 +140,7 @@ async function fetchGroceryInsights(supabase: any, deviceId: string, language: s
     } else {
       empty.running_low = (data || [])
         .map((row: any) => {
-          const name = firstString(row, ['name', 'item_name', 'display_name', 'canonical_name']).slice(0, 80)
+          const name = firstString(row, ['name', 'item_name', 'display_name', 'canonical_name']).slice(0, 48)
           const status = firstString(row, ['status', 'item_status', 'memory_status'], 'learning').slice(0, 32)
           if (!name) return null
           return { name, status, label: groceryStatusLabel(status, language) }
@@ -159,11 +159,11 @@ async function fetchGroceryInsights(supabase: any, deviceId: string, language: s
     } else {
       empty.recipes = (data || [])
         .map((row: any) => {
-          const name = firstString(row, ['name', 'recipe_name', 'title']).slice(0, 80)
+          const name = firstString(row, ['name', 'recipe_name', 'title']).slice(0, 48)
           if (!name) return null
           const scoreRaw = row?.match_score ?? row?.score ?? row?.match
           const score = Number(scoreRaw)
-          const missing = asStringArray(row?.missing ?? row?.missing_ingredients ?? row?.missing_items).slice(0, 2).map((x) => x.slice(0, 60))
+          const missing = asStringArray(row?.missing ?? row?.missing_ingredients ?? row?.missing_items).slice(0, 2).map((x) => x.slice(0, 48))
           return {
             name,
             ...(Number.isFinite(score) ? { match_score: Math.max(0, Math.min(1, score)) } : {}),
@@ -402,7 +402,7 @@ export async function GET(req: Request) {
       .slice(0, 120)
       .map((x: any) => ({
         id: String(x.id),
-        name: asString(x.name, '').slice(0, 80),
+        name: asString(x.name, '').slice(0, 48),
         quantity: Math.max(1, Number(x.quantity ?? 1) || 1),
         category: normalizeGroceryCategory(x.category).slice(0, 24),
         updated_at: x.updated_at ? String(x.updated_at) : null,

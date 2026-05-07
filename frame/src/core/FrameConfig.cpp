@@ -92,6 +92,15 @@ static void resetSoccer(FrameConfig& out) {
   }
 }
 
+
+static void resetGroceries(FrameConfig& out) {
+  out.groceries = GroceriesModuleConfig{};
+}
+
+static bool isNorwegianLanguage(const char* language) {
+  return language && (strcmp(language, "no") == 0 || strcmp(language, "nb") == 0 || strcmp(language, "nb-NO") == 0);
+}
+
 static void resetStocks(FrameConfig& out) {
   out.stocksCount = 0;
   for (int i = 0; i < 4; i++) {
@@ -133,6 +142,7 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
   resetSurf(out);
   resetSoccer(out);
   resetStocks(out);
+  resetGroceries(out);
 
   String url = String(BASE_URL) + "/api/device/frame-config?device_id=" + DeviceIdentity::getDeviceId();
 
@@ -174,6 +184,9 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
   // layout
   const char* layoutStr = settings["layout"] | "default";
   out.layout = parseLayout(String(layoutStr));
+
+  const char* languageStr = settings["language"] | "en";
+  out.groceries.languageNo = isNorwegianLanguage(languageStr);
 
   // cells
   JsonArray cells = settings["cells"].as<JsonArray>();
@@ -363,6 +376,90 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
         dst.refreshMs = refreshMs;
 
         out.stocksCount++;
+      }
+    }
+
+
+    // ===== modules.groceries + dinner planner =====
+    JsonArray groceryArr = modules["groceries"].as<JsonArray>();
+    if (!groceryArr.isNull()) {
+      for (JsonObject item : groceryArr) {
+        if (out.groceries.itemCount >= 40) break;
+
+        const char* name = item["name"] | "";
+        if (!name || !name[0]) continue;
+
+        GroceryFrameItem& dst = out.groceries.items[out.groceries.itemCount];
+        strlcpy(dst.name, name, sizeof(dst.name));
+        dst.qty = max(1, (int)(item["quantity"] | 1));
+        out.groceries.itemCount++;
+      }
+    }
+
+    JsonVariant groceryInsights = modules["groceries_insights"]["insights"];
+    if (groceryInsights.isNull()) groceryInsights = modules["groceries_insights"];
+    if (groceryInsights.isNull()) groceryInsights = modules["groceries"]["insights"];
+
+    JsonArray runningLowArr;
+    if (!groceryInsights.isNull()) runningLowArr = groceryInsights["running_low"].as<JsonArray>();
+    if (!runningLowArr.isNull()) {
+      for (JsonObject item : runningLowArr) {
+        if (out.groceries.runningLowCount >= 3) break;
+
+        const char* name = item["name"] | "";
+        if (!name || !name[0]) continue;
+
+        const char* label = item["label"] | "";
+        GroceryRunningLowFrameInsight& dst = out.groceries.runningLow[out.groceries.runningLowCount];
+        strlcpy(dst.name, name, sizeof(dst.name));
+        strlcpy(dst.label, label && label[0] ? label : (out.groceries.languageNo ? "Følger med" : "Watching"), sizeof(dst.label));
+        out.groceries.runningLowCount++;
+      }
+    }
+
+    JsonArray recipesArr;
+    if (!groceryInsights.isNull()) recipesArr = groceryInsights["recipes"].as<JsonArray>();
+    if (!recipesArr.isNull()) {
+      for (JsonObject item : recipesArr) {
+        if (out.groceries.recipeCount >= 2) break;
+
+        const char* name = item["name"] | "";
+        if (!name || !name[0]) continue;
+
+        GroceryRecipeFrameInsight& dst = out.groceries.recipes[out.groceries.recipeCount];
+        strlcpy(dst.name, name, sizeof(dst.name));
+
+        JsonArray missingArr = item["missing"].as<JsonArray>();
+        if (!missingArr.isNull()) {
+          for (JsonVariant missing : missingArr) {
+            if (dst.missingCount >= 2) break;
+            const char* missingName = missing | "";
+            if (!missingName || !missingName[0]) continue;
+            strlcpy(dst.missing[dst.missingCount], missingName, sizeof(dst.missing[dst.missingCount]));
+            dst.missingCount++;
+          }
+        }
+
+        out.groceries.recipeCount++;
+      }
+    }
+
+    JsonArray dinnerArr = modules["dinner_planner"].as<JsonArray>();
+    if (dinnerArr.isNull()) dinnerArr = modules["dinnerPlanner"].as<JsonArray>();
+    if (dinnerArr.isNull()) dinnerArr = settings["dinner_planner"].as<JsonArray>();
+    if (dinnerArr.isNull()) dinnerArr = settings["dinnerPlanner"].as<JsonArray>();
+    if (!dinnerArr.isNull()) {
+      for (JsonObject item : dinnerArr) {
+        if (out.groceries.dinnerCount >= 14) break;
+
+        const char* date = item["date"] | item["day"] | item["planned_date"] | "";
+        const char* title = item["title"] | item["name"] | item["dish"] | item["meal"] | "";
+        if (!date || !date[0] || !title || !title[0]) continue;
+
+        DinnerPlanFrameItem& dst = out.groceries.dinners[out.groceries.dinnerCount];
+        strlcpy(dst.date, date, sizeof(dst.date));
+        strlcpy(dst.title, title, sizeof(dst.title));
+        out.groceries.dinnerCount++;
       }
     }
 

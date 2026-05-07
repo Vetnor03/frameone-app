@@ -89,6 +89,41 @@ struct StocksModuleConfig {
   uint32_t refreshMs = 900000UL;  // default 15 min
 };
 
+
+// ===== Groceries module data (parsed from settings_json.modules.groceries + insights) =====
+struct GroceryFrameItem {
+  char name[81] = {0};
+  int qty = 1;
+};
+
+struct DinnerPlanFrameItem {
+  char date[11] = {0};
+  char title[81] = {0};
+};
+
+struct GroceryRunningLowFrameInsight {
+  char name[81] = {0};
+  char label[33] = {0};
+};
+
+struct GroceryRecipeFrameInsight {
+  char name[81] = {0};
+  uint8_t missingCount = 0;
+  char missing[2][61] = {{0}};
+};
+
+struct GroceriesModuleConfig {
+  bool languageNo = false;
+  GroceryFrameItem items[40];
+  uint8_t itemCount = 0;
+  DinnerPlanFrameItem dinners[14];
+  uint8_t dinnerCount = 0;
+  GroceryRunningLowFrameInsight runningLow[3];
+  uint8_t runningLowCount = 0;
+  GroceryRecipeFrameInsight recipes[2];
+  uint8_t recipeCount = 0;
+};
+
 struct FrameConfig {
   LayoutKey layout = LAYOUT_DEFAULT;
   ThemeKey theme = THEME_DARK;
@@ -117,6 +152,9 @@ struct FrameConfig {
 
   // Surf global settings
   SurfSettingsConfig surfSettings;
+
+  // Groceries data
+  GroceriesModuleConfig groceries;
 };
 
 namespace FrameConfigApi {
