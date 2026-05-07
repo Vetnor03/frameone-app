@@ -37,7 +37,6 @@
 static const FrameConfig* g_cfg = nullptr;
 
 static const int MAX_INSTANCES = 4;
-static const uint32_t SURF_RETRY_BACKOFF_MS = 60000UL;
 
 static const char* TODAYS_BEST_ID    = "__todays_best__";
 static const char* TODAYS_BEST_LABEL = "Today's Best";
@@ -1225,12 +1224,10 @@ static void tick(int idx, CellSize wantSize) {
   const bool wantDayparts = (wantSize == CELL_LARGE);
   const bool wantDaily = (wantSize == CELL_XL);
 
-  bool needs = cache.valid
-    ? ((now - cache.fetchedAtMs) > cfg.refreshMs)
-    : (cache.fetchedAtMs == 0 || (now - cache.fetchedAtMs) > SURF_RETRY_BACKOFF_MS);
+  bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
 
-  if (cache.valid && !needs && wantDayparts && !cache.hasDayparts) needs = true;
-  if (cache.valid && !needs && wantDaily && !cache.hasDaily) needs = true;
+  if (!needs && wantDayparts && !cache.hasDayparts) needs = true;
+  if (!needs && wantDaily && !cache.hasDaily) needs = true;
 
   if (!needs) return;
 
@@ -1239,10 +1236,6 @@ static void tick(int idx, CellSize wantSize) {
     fresh.valid = true;
     fresh.fetchedAtMs = now;
     cache = fresh;
-  } else if (!cache.valid) {
-    // Remember failed first-load attempts so the paged e-paper draw loop does
-    // not retry the same blocking HTTP request for every display page.
-    cache.fetchedAtMs = now;
   }
 }
 
@@ -2476,15 +2469,6 @@ void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
   ensureDefaultsOnce();
   applyConfigFromFrameConfig();
-}
-
-void preload(const String& moduleName, CellSize size) {
-  ensureDefaultsOnce();
-  if (g_cfg) applyConfigFromFrameConfig();
-
-  uint8_t id = parseInstanceId(moduleName);
-  int idx = instIndex(id);
-  tick(idx, size);
 }
 
 void render(const Cell& c, const String& moduleName) {

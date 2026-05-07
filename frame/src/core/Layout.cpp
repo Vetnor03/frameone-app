@@ -11,11 +11,8 @@
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleStocks.h"
-#include "ModuleGroceries.h"
 
 #include <GxEPD2_GFX.h>
-#include <Arduino.h>
-#include <string.h>
 
 // Easy battery UI test switch:
 // false = real behavior (<20% icon, charging icon when charging)
@@ -57,10 +54,7 @@ void draw(LayoutKey key) {
   const int quarterY = y + h / 4;
   const int midX = x + w / 2;
 
-  Serial.println("[display] full update begin");
   DisplayCore::beginFrameUpdate();
-  Serial.print("[display] update mode=");
-  Serial.println(DisplayCore::isFullRefreshThisCycle() ? "full" : "partial");
   do {
     // FULL SCREEN fill so outside matte area uses theme color too
     d.fillScreen(Theme::paper());
@@ -88,7 +82,6 @@ void draw(LayoutKey key) {
     DisplayCore::drawBatteryOverlay(FORCE_SHOW_BATTERY_UI);
 
   } while (DisplayCore::nextFrameUpdate());
-  Serial.println("[display] full update done");
 }
 
 int buildCells(LayoutKey key, Cell* outCells, int maxCells) {
@@ -154,7 +147,6 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   ModuleWeather::setConfig(&cfg);
   ModuleSurf::setConfig(&cfg);
   ModuleStocks::setConfig(&cfg);
-  ModuleGroceries::setConfig(&cfg);
 
   const int x = FRAME_X;
   const int y = FRAME_Y;
@@ -169,34 +161,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   const int quarterY = y + h / 4;
   const int midX = x + w / 2;
 
-  Cell cells[8];
-  int n = buildCells(key, cells, 8);
-
-  bool hasGroceries = false;
-  for (int i = 0; i < n; i++) {
-    String mod = ModuleRenderer::moduleForSlot(cfg.assigns, cfg.assignCount, cells[i].slot);
-    if (mod.startsWith("weather")) {
-      Serial.print("[weather] preload before display update module=");
-      Serial.println(mod);
-      ModuleWeather::preload(mod);
-    } else if (mod.startsWith("surf")) {
-      Serial.print("[surf] preload before display update module=");
-      Serial.println(mod);
-      ModuleSurf::preload(mod, cells[i].size);
-    } else if (mod.startsWith("groceries")) {
-      hasGroceries = true;
-    }
-  }
-
-  if (hasGroceries) {
-    Serial.println("[groceries] preload before display update");
-    ModuleGroceries::preload();
-  }
-
-  Serial.println("[display] full update begin");
   DisplayCore::beginFrameUpdate();
-  Serial.print("[display] update mode=");
-  Serial.println(DisplayCore::isFullRefreshThisCycle() ? "full" : "partial");
   do {
     // FULL SCREEN fill so outside matte area matches theme
     d.fillScreen(Theme::paper());
@@ -218,6 +183,9 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
       drawVLine(midX, vy0, vy1);
     }
 
+    Cell cells[8];
+    int n = buildCells(key, cells, 8);
+
     ModuleRenderer::renderPlaceholders(cfg.assigns, cfg.assignCount, cells, n);
 
 #if DEBUG_DRAW_SLOTS
@@ -233,7 +201,6 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
     DisplayCore::drawBatteryOverlay(FORCE_SHOW_BATTERY_UI);
 
   } while (DisplayCore::nextFrameUpdate());
-  Serial.println("[display] full update done");
 }
 
 } // namespace Layout

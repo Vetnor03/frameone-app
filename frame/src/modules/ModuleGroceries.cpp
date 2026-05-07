@@ -24,17 +24,10 @@ namespace ModuleGroceries {
 
 static const FrameConfig* g_cfg = nullptr;
 static const int MAX_ITEMS = 40;
-static const int MAX_DINNER_ITEMS = 14;
-static const int MAX_RUNNING_LOW_INSIGHTS = 3;
-static const int MAX_RECIPE_INSIGHTS = 2;
-static const int MAX_RECIPE_MISSING = 2;
-static const size_t MAX_ITEM_NAME_LEN = 32;
-static const size_t MAX_INSIGHT_LABEL_LEN = 24;
-static const size_t MAX_LINE_TEXT_LEN = 64;
 
 struct GroceryItem {
   bool used = false;
-  char name[MAX_ITEM_NAME_LEN + 1] = {0};
+  char name[80] = {0};
   int qty = 1;
 };
 
@@ -47,16 +40,21 @@ struct DinnerPlanItem {
 
 struct RunningLowInsight {
   bool used = false;
-  char name[MAX_ITEM_NAME_LEN + 1] = {0};
-  char label[MAX_INSIGHT_LABEL_LEN + 1] = {0};
+  char name[80] = {0};
+  char label[48] = {0};
 };
 
 struct RecipeInsight {
   bool used = false;
-  char name[MAX_ITEM_NAME_LEN + 1] = {0};
+  char name[80] = {0};
   int missingCount = 0;
-  char missing[MAX_RECIPE_MISSING][MAX_ITEM_NAME_LEN + 1] = {{0}};
+  char missing[2][60] = {{0}};
 };
+
+static const int MAX_DINNER_ITEMS = 14;
+static const int MAX_RUNNING_LOW_INSIGHTS = 3;
+static const int MAX_RECIPE_INSIGHTS = 2;
+static const int MAX_RECIPE_MISSING = 2;
 
 struct GroceryCache {
   bool loaded = false;
@@ -74,24 +72,6 @@ struct GroceryCache {
 };
 
 static GroceryCache g_cache;
-
-static char g_lineScratch[8][MAX_LINE_TEXT_LEN];
-static int g_widthScratch[8];
-static char g_colLineScratch[6][MAX_LINE_TEXT_LEN];
-static char g_rawScratch[MAX_LINE_TEXT_LEN];
-static char g_fitScratch[MAX_LINE_TEXT_LEN];
-static char g_ellipsisScratch[MAX_LINE_TEXT_LEN];
-static char g_missingTextScratch[MAX_LINE_TEXT_LEN];
-static char g_missingFitScratch[MAX_LINE_TEXT_LEN];
-static char g_dinnerLabelsScratch[7][10];
-static char g_dinnerTitlesScratch[7][MAX_LINE_TEXT_LEN];
-static int g_dinnerIndexesScratch[7];
-
-static size_t groceriesJsonCapacity(size_t bodyLen) {
-  size_t cap = bodyLen + 4096;
-  if (cap < 8192) cap = 8192;
-  return cap;
-}
 
 static void safeCopy(char* dst, size_t dstSize, const char* src) {
   if (!dst || dstSize == 0) return;
@@ -190,15 +170,16 @@ static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWi
   }
 
   for (int n = (int)strlen(src); n >= 1; n--) {
+    char buf[160] = {0};
     int take = n;
-    if (take > (int)sizeof(g_ellipsisScratch) - 4) take = (int)sizeof(g_ellipsisScratch) - 4;
+    if (take > (int)sizeof(buf) - 4) take = (int)sizeof(buf) - 4;
 
-    memcpy(g_ellipsisScratch, src, take);
-    g_ellipsisScratch[take] = '\0';
-    strcat(g_ellipsisScratch, "...");
+    memcpy(buf, src, take);
+    buf[take] = '\0';
+    strcat(buf, "...");
 
-    if (textWidth(g_ellipsisScratch, font) <= maxWidth) {
-      safeCopy(dst, dstSize, g_ellipsisScratch);
+    if (textWidth(buf, font) <= maxWidth) {
+      safeCopy(dst, dstSize, buf);
       return;
     }
   }
@@ -449,34 +430,34 @@ static int drawCenteredItemList(const Cell& c,
   int blockH = visibleCount * lineH + (visibleCount - 1) * lineGap;
   int startY = yTop + (totalH - blockH) / 2;
 
+  char lines[8][128];
+  int widths[8] = {0};
   int longestW = 0;
 
   if (visibleCount > 8) visibleCount = 8;
-  memset(g_lineScratch, 0, sizeof(g_lineScratch));
-  memset(g_widthScratch, 0, sizeof(g_widthScratch));
 
   int rotation = getRotationStep4h();
 
   for (int i = 0; i < visibleCount; i++) {
-    g_lineScratch[i][0] = '\0';
+    lines[i][0] = '\0';
 
     int idx = wrapIndex(rotation + startOffset + i, g_cache.count);
 
-    g_rawScratch[0] = '\0';
-    formatItem(g_cache.items[idx], g_rawScratch, sizeof(g_rawScratch));
+    char raw[128] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-    fitTextToWidth(g_rawScratch, g_lineScratch[i], sizeof(g_lineScratch[i]), c.w - 50, lineFont);
-    g_widthScratch[i] = textWidth(g_lineScratch[i], lineFont);
-    if (g_widthScratch[i] > longestW) longestW = g_widthScratch[i];
+    fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 50, lineFont);
+    widths[i] = textWidth(lines[i], lineFont);
+    if (widths[i] > longestW) longestW = widths[i];
   }
 
   int totalLongestW = dotR * 2 + gap + longestW;
   int anchorTextStartX = c.x + (c.w - totalLongestW) / 2 + dotR * 2 + gap;
 
   for (int i = 0; i < visibleCount; i++) {
-    if (!g_lineScratch[i][0]) continue;
+    if (!lines[i][0]) continue;
     int centerY = startY + i * (lineH + lineGap) + lineH / 2;
-    drawCenteredBulletLine(c, centerY, g_lineScratch[i], lineFont, anchorTextStartX);
+    drawCenteredBulletLine(c, centerY, lines[i], lineFont, anchorTextStartX);
   }
 
   return anchorTextStartX;
@@ -520,19 +501,19 @@ static void drawCenteredItemColumns(const Cell& c,
     const int colX = c.x + col * (columnW + columnGap);
     const int colCenterX = colX + columnW / 2;
     const int maxTextW = max(12, columnW - dotR * 2 - gap - 10);
+    char lines[6][128];
     int longestW = 0;
-    memset(g_colLineScratch, 0, sizeof(g_colLineScratch));
 
     for (int i = 0; i < colCount; i++) {
-      g_colLineScratch[i][0] = '\0';
+      lines[i][0] = '\0';
 
       int idx = wrapIndex(rotation + (col == 0 ? i : leftCount + i), g_cache.count);
 
-      g_rawScratch[0] = '\0';
-      formatItem(g_cache.items[idx], g_rawScratch, sizeof(g_rawScratch));
+      char raw[128] = {0};
+      formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-      fitTextToWidth(g_rawScratch, g_colLineScratch[i], sizeof(g_colLineScratch[i]), maxTextW, lineFont);
-      int w = textWidth(g_colLineScratch[i], lineFont);
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, lineFont);
+      int w = textWidth(lines[i], lineFont);
       if (w > longestW) longestW = w;
     }
 
@@ -540,9 +521,9 @@ static void drawCenteredItemColumns(const Cell& c,
     int anchorTextStartX = colCenterX - totalLongestW / 2 + dotR * 2 + gap;
 
     for (int i = 0; i < colCount; i++) {
-      if (!g_colLineScratch[i][0]) continue;
+      if (!lines[i][0]) continue;
       int centerY = startY + i * rowStep + lineH / 2;
-      drawCenteredBulletLine(c, centerY, g_colLineScratch[i], lineFont, anchorTextStartX);
+      drawCenteredBulletLine(c, centerY, lines[i], lineFont, anchorTextStartX);
     }
   }
 
@@ -577,11 +558,11 @@ static void drawLeftItemList(const Cell& c,
   for (int i = 0; i < visibleCount; i++) {
     int idx = wrapIndex(rotation + startOffset + i, g_cache.count);
 
-    g_rawScratch[0] = '\0';
-    formatItem(g_cache.items[idx], g_rawScratch, sizeof(g_rawScratch));
+    char raw[128] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-    g_fitScratch[0] = '\0';
-    fitTextToWidth(g_rawScratch, g_fitScratch, sizeof(g_fitScratch), c.w - padX * 2 - gap - dotR * 2, font);
+    char fit[128] = {0};
+    fitTextToWidth(raw, fit, sizeof(fit), c.w - padX * 2 - gap - dotR * 2, font);
 
     int rowY = startY + i * lineH;
     int centerY = rowY + lineH / 2;
@@ -589,9 +570,9 @@ static void drawLeftItemList(const Cell& c,
     d.fillCircle(c.x + padX + dotR, centerY, dotR, ink);
     int16_t tx1, ty1;
     uint16_t tw, th;
-    measureText(g_fitScratch, font, tx1, ty1, tw, th);
+    measureText(fit, font, tx1, ty1, tw, th);
     int textBaseline = centerY - (int)th / 2 - ty1;
-    drawLeft(c.x + padX + dotR * 2 + gap, textBaseline, g_fitScratch, font, ink);
+    drawLeft(c.x + padX + dotR * 2 + gap, textBaseline, fit, font, ink);
   }
 }
 
@@ -609,7 +590,7 @@ static bool fetchGroceries() {
     return false;
   }
 
-  DynamicJsonDocument doc(groceriesJsonCapacity(body.length()));
+  StaticJsonDocument<16384> doc;
   if (deserializeJson(doc, body)) {
     g_cache.loaded = true;
     g_cache.ok = false;
@@ -638,13 +619,11 @@ static bool fetchGroceries() {
   const char* language = doc["settings_json"]["language"] | "en";
   g_cache.languageNo = language && (strcmp(language, "no") == 0 || strcmp(language, "nb") == 0 || strcmp(language, "nb-NO") == 0);
 
-  Serial.println("[groceries] parse insights begin");
   JsonVariant insights = doc["settings_json"]["modules"]["groceries_insights"]["insights"];
   if (insights.isNull()) insights = doc["settings_json"]["modules"]["groceries_insights"];
   if (insights.isNull()) insights = doc["settings_json"]["modules"]["groceries"]["insights"];
 
-  JsonArray runningLowArr;
-  if (!insights.isNull()) runningLowArr = insights["running_low"].as<JsonArray>();
+  JsonArray runningLowArr = insights["running_low"].as<JsonArray>();
   int runningLowIdx = 0;
   if (!runningLowArr.isNull()) {
     for (JsonObject it : runningLowArr) {
@@ -661,8 +640,7 @@ static bool fetchGroceries() {
   }
   g_cache.runningLowCount = runningLowIdx;
 
-  JsonArray recipesArr;
-  if (!insights.isNull()) recipesArr = insights["recipes"].as<JsonArray>();
+  JsonArray recipesArr = insights["recipes"].as<JsonArray>();
   int recipeIdx = 0;
   if (!recipesArr.isNull()) {
     for (JsonObject it : recipesArr) {
@@ -689,10 +667,6 @@ static bool fetchGroceries() {
     }
   }
   g_cache.recipeCount = recipeIdx;
-  Serial.print("[groceries] parse insights done running_low=");
-  Serial.print(g_cache.runningLowCount);
-  Serial.print(" recipes=");
-  Serial.println(g_cache.recipeCount);
 
   JsonArray dinnerArr = doc["settings_json"]["modules"]["dinner_planner"].as<JsonArray>();
   if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["modules"]["dinnerPlanner"].as<JsonArray>();
@@ -799,15 +773,15 @@ static void renderSmall(const Cell& c) {
     int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
     int secW = secX1 - secX0;
 
-    g_rawScratch[0] = '\0';
-    formatItem(g_cache.items[idx], g_rawScratch, sizeof(g_rawScratch));
+    char raw[128] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
 
-    g_fitScratch[0] = '\0';
-    fitTextToWidth(g_rawScratch, g_fitScratch, sizeof(g_fitScratch), secW - textPadX * 2 - 4, FONT_B12);
+    char fit[128] = {0};
+    fitTextToWidth(raw, fit, sizeof(fit), secW - textPadX * 2 - 4, FONT_B12);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
-    measureText(g_fitScratch, FONT_B12, tx1, ty1, tw, th);
+    measureText(fit, FONT_B12, tx1, ty1, tw, th);
 
     int cx = secX0 + secW / 2;
     int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
@@ -816,7 +790,7 @@ static void renderSmall(const Cell& c) {
     d.setTextColor(ink);
     d.setTextSize(1);
     d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
-    d.print(g_fitScratch);
+    d.print(fit);
     d.setFont(nullptr);
   }
 }
@@ -1016,9 +990,7 @@ static void drawLargeWeeklyMenu(const Cell& c, const char* header, bool startAft
   const int availableH = c.y + c.h - 18 - contentTop;
   const int availableW = max(0, c.w - padX * 2);
 
-  memset(g_dinnerIndexesScratch, 0, sizeof(g_dinnerIndexesScratch));
-  memset(g_dinnerLabelsScratch, 0, sizeof(g_dinnerLabelsScratch));
-  memset(g_dinnerTitlesScratch, 0, sizeof(g_dinnerTitlesScratch));
+  int dinnerIndexes[7] = {0};
   int filteredCount = 0;
 
   for (int i = 0; i < g_cache.dinnerCount && filteredCount < 7; i++) {
@@ -1026,7 +998,7 @@ static void drawLargeWeeklyMenu(const Cell& c, const char* header, bool startAft
     if (!dinner.used) continue;
     if (hasTodayYmd && strcmp(dinner.date, todayYmd) <= 0) continue;
 
-    g_dinnerIndexesScratch[filteredCount++] = i;
+    dinnerIndexes[filteredCount++] = i;
   }
 
   if (filteredCount <= 0 && hasTodayYmd) {
@@ -1042,32 +1014,34 @@ static void drawLargeWeeklyMenu(const Cell& c, const char* header, bool startAft
   const int maxStartY = contentTop + max(0, availableH - visibleCount * lineH);
   const int startY = min(lockedStartY, maxStartY);
 
+  char labels[7][10] = {};
+  char titles[7][96] = {};
   int labelW = 0;
 
   for (int i = 0; i < visibleCount; i++) {
-    const DinnerPlanItem& dinner = g_cache.dinners[filteredCount > 0 ? g_dinnerIndexesScratch[i] : i];
+    const DinnerPlanItem& dinner = g_cache.dinners[filteredCount > 0 ? dinnerIndexes[i] : i];
     if (!dinner.used) continue;
 
-    snprintf(g_dinnerLabelsScratch[i], sizeof(g_dinnerLabelsScratch[i]), "%s:", dinner.dayLabel);
-    labelW = max(labelW, textWidth(g_dinnerLabelsScratch[i], FONT_B9));
+    snprintf(labels[i], sizeof(labels[i]), "%s:", dinner.dayLabel);
+    labelW = max(labelW, textWidth(labels[i], FONT_B9));
   }
 
   const int maxTitleW = max(0, availableW - labelW - labelGap);
   int longestRowW = 0;
 
   for (int i = 0; i < visibleCount; i++) {
-    const DinnerPlanItem& dinner = g_cache.dinners[filteredCount > 0 ? g_dinnerIndexesScratch[i] : i];
+    const DinnerPlanItem& dinner = g_cache.dinners[filteredCount > 0 ? dinnerIndexes[i] : i];
     if (!dinner.used) continue;
 
-    fitTextToWidth(dinner.title, g_dinnerTitlesScratch[i], sizeof(g_dinnerTitlesScratch[i]), maxTitleW, FONT_B9);
-    int rowW = labelW + labelGap + textWidth(g_dinnerTitlesScratch[i], FONT_B9);
+    fitTextToWidth(dinner.title, titles[i], sizeof(titles[i]), maxTitleW, FONT_B9);
+    int rowW = labelW + labelGap + textWidth(titles[i], FONT_B9);
     longestRowW = max(longestRowW, rowW);
   }
 
   const int listX = c.x + padX + max(0, (availableW - longestRowW) / 2);
 
   for (int i = 0; i < visibleCount; i++) {
-    const DinnerPlanItem& dinner = g_cache.dinners[filteredCount > 0 ? g_dinnerIndexesScratch[i] : i];
+    const DinnerPlanItem& dinner = g_cache.dinners[filteredCount > 0 ? dinnerIndexes[i] : i];
     if (!dinner.used) continue;
 
     int rowY = startY + i * lineH;
@@ -1075,28 +1049,28 @@ static void drawLargeWeeklyMenu(const Cell& c, const char* header, bool startAft
 
     int16_t lx1, ly1;
     uint16_t lw, lh;
-    measureText(g_dinnerLabelsScratch[i], FONT_B9, lx1, ly1, lw, lh);
+    measureText(labels[i], FONT_B9, lx1, ly1, lw, lh);
     int labelBaseline = centerY - (int)lh / 2 - ly1;
-    drawLeft(listX - lx1, labelBaseline, g_dinnerLabelsScratch[i], FONT_B9, ink);
+    drawLeft(listX - lx1, labelBaseline, labels[i], FONT_B9, ink);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
-    measureText(g_dinnerTitlesScratch[i], FONT_B9, tx1, ty1, tw, th);
+    measureText(titles[i], FONT_B9, tx1, ty1, tw, th);
     int textBaseline = centerY - (int)th / 2 - ty1;
-    drawLeft(listX + labelW + labelGap - tx1, textBaseline, g_dinnerTitlesScratch[i], FONT_B9, ink);
+    drawLeft(listX + labelW + labelGap - tx1, textBaseline, titles[i], FONT_B9, ink);
   }
 }
 
 
 static void drawInsightHeader(const Cell& c, const char* title) {
   const int maxW = max(20, c.w - 18);
-  g_fitScratch[0] = '\0';
-  fitTextToWidth(title, g_fitScratch, sizeof(g_fitScratch), maxW, FONT_B12);
+  char fit[64] = {0};
+  fitTextToWidth(title, fit, sizeof(fit), maxW, FONT_B12);
 
   int16_t x1, y1;
   uint16_t tw, th;
-  measureText(g_fitScratch, FONT_B12, x1, y1, tw, th);
-  drawLeft(c.x + 8 - x1, c.y + 18 - y1, g_fitScratch, FONT_B12, Theme::ink());
+  measureText(fit, FONT_B12, x1, y1, tw, th);
+  drawLeft(c.x + 8 - x1, c.y + 18 - y1, fit, FONT_B12, Theme::ink());
 }
 
 static void drawRunningLowInsights(const Cell& c) {
@@ -1106,9 +1080,9 @@ static void drawRunningLowInsights(const Cell& c) {
 
   if (g_cache.runningLowCount <= 0) {
     const char* placeholder = g_cache.languageNo ? "Alt ser greit ut" : "All stocked";
-    g_fitScratch[0] = '\0';
-    fitTextToWidth(placeholder, g_fitScratch, sizeof(g_fitScratch), max(20, c.w - padX * 2), FONT_B9);
-    drawLeft(c.x + padX, c.y + 52, g_fitScratch, FONT_B9, ink);
+    char fit[80] = {0};
+    fitTextToWidth(placeholder, fit, sizeof(fit), max(20, c.w - padX * 2), FONT_B9);
+    drawLeft(c.x + padX, c.y + 52, fit, FONT_B9, ink);
     return;
   }
 
@@ -1121,13 +1095,13 @@ static void drawRunningLowInsights(const Cell& c) {
     const RunningLowInsight& item = g_cache.runningLow[i];
     if (!item.used) continue;
 
-    g_lineScratch[0][0] = '\0';
-    g_lineScratch[1][0] = '\0';
-    fitTextToWidth(item.name, g_lineScratch[0], sizeof(g_lineScratch[0]), nameW, FONT_B9);
-    fitTextToWidth(item.label, g_lineScratch[1], sizeof(g_lineScratch[1]), labelW, FONT_B9);
+    char nameFit[80] = {0};
+    char labelFit[56] = {0};
+    fitTextToWidth(item.name, nameFit, sizeof(nameFit), nameW, FONT_B9);
+    fitTextToWidth(item.label, labelFit, sizeof(labelFit), labelW, FONT_B9);
 
-    drawLeft(c.x + padX, y, g_lineScratch[0], FONT_B9, ink);
-    drawLeft(c.x + padX + nameW + 8, y, g_lineScratch[1], FONT_B9, ink);
+    drawLeft(c.x + padX, y, nameFit, FONT_B9, ink);
+    drawLeft(c.x + padX + nameW + 8, y, labelFit, FONT_B9, ink);
     y += rowH;
   }
 }
@@ -1139,9 +1113,9 @@ static void drawRecipeInsights(const Cell& c) {
 
   if (g_cache.recipeCount <= 0) {
     const char* placeholder = g_cache.languageNo ? "Legg til varer for tips" : "Add items for ideas";
-    g_fitScratch[0] = '\0';
-    fitTextToWidth(placeholder, g_fitScratch, sizeof(g_fitScratch), max(20, c.w - padX * 2), FONT_B9);
-    drawLeft(c.x + padX, c.y + 52, g_fitScratch, FONT_B9, ink);
+    char fit[96] = {0};
+    fitTextToWidth(placeholder, fit, sizeof(fit), max(20, c.w - padX * 2), FONT_B9);
+    drawLeft(c.x + padX, c.y + 52, fit, FONT_B9, ink);
     return;
   }
 
@@ -1152,22 +1126,22 @@ static void drawRecipeInsights(const Cell& c) {
     const RecipeInsight& recipe = g_cache.recipes[i];
     if (!recipe.used) continue;
 
-    g_fitScratch[0] = '\0';
-    fitTextToWidth(recipe.name, g_fitScratch, sizeof(g_fitScratch), maxW, FONT_B9);
-    drawLeft(c.x + padX, y, g_fitScratch, FONT_B9, ink);
+    char nameFit[96] = {0};
+    fitTextToWidth(recipe.name, nameFit, sizeof(nameFit), maxW, FONT_B9);
+    drawLeft(c.x + padX, y, nameFit, FONT_B9, ink);
     y += 17;
 
     if (recipe.missingCount > 0) {
-      g_missingTextScratch[0] = '\0';
-      safeCopy(g_missingTextScratch, sizeof(g_missingTextScratch), g_cache.languageNo ? "mangler: " : "missing: ");
+      char missingText[160] = {0};
+      safeCopy(missingText, sizeof(missingText), g_cache.languageNo ? "mangler: " : "missing: ");
       for (int j = 0; j < recipe.missingCount; j++) {
-        if (j > 0) strlcat(g_missingTextScratch, ", ", sizeof(g_missingTextScratch));
-        strlcat(g_missingTextScratch, recipe.missing[j], sizeof(g_missingTextScratch));
+        if (j > 0) strlcat(missingText, ", ", sizeof(missingText));
+        strlcat(missingText, recipe.missing[j], sizeof(missingText));
       }
 
-      g_missingFitScratch[0] = '\0';
-      fitTextToWidth(g_missingTextScratch, g_missingFitScratch, sizeof(g_missingFitScratch), maxW, FONT_B9);
-      drawLeft(c.x + padX, y, g_missingFitScratch, FONT_B9, ink);
+      char missingFit[160] = {0};
+      fitTextToWidth(missingText, missingFit, sizeof(missingFit), maxW, FONT_B9);
+      drawLeft(c.x + padX, y, missingFit, FONT_B9, ink);
       y += 23;
     } else {
       y += 13;
@@ -1212,7 +1186,6 @@ static void renderLarge(const Cell& c) {
 }
 
 static void renderXL(const Cell& c) {
-  Serial.println("[groceries] render XL begin");
   const int gapY = 16;
   int topH = (c.h - gapY) / 2;
   int bottomH = c.h - gapY - topH;
@@ -1248,17 +1221,12 @@ static void renderXL(const Cell& c) {
 
   drawRunningLowInsights(bottomLeft);
   drawRecipeInsights(bottomRight);
-  Serial.println("[groceries] render XL done");
 }
 
 void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
   (void)g_cfg;
   g_cache.loaded = false;
-}
-
-void preload() {
-  ensureLoaded();
 }
 
 void render(const Cell& c, const String& moduleName) {

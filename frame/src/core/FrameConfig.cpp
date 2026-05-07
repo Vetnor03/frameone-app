@@ -22,13 +22,6 @@ static ThemeKey parseTheme(const String& s) {
   return THEME_DARK;
 }
 
-static size_t frameConfigJsonCapacity(size_t bodyLen) {
-  size_t cap = bodyLen + 2048;
-  if (cap < 8192) cap = 8192;
-  if (cap > 32768) cap = 32768;
-  return cap;
-}
-
 // Parse "YYYY-MM-DD" into integers.
 static bool parseIsoDate(const char* iso, uint16_t& y, uint8_t& m, uint8_t& d) {
   if (!iso) return false;
@@ -153,7 +146,7 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
     return false;
   }
 
-  DynamicJsonDocument doc(frameConfigJsonCapacity(body.length()));
+  StaticJsonDocument<8192> doc;
 
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
