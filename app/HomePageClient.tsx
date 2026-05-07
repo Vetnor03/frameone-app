@@ -1955,7 +1955,7 @@ function MirrorCellContent({ snapshot, slot, size }: { snapshot: PhysicalFrameSn
   const padClass = size === 'small' ? 'px-[4vw] py-[1.4vw]' : size === 'xl' ? 'px-[8vw] py-[7vh]' : 'px-[4.5vw] py-[4vh]'
 
   if (!assignment) {
-    return <div className={`${padClass} flex h-full w-full items-center justify-center text-[2vw] tracking-[0.28em] opacity-30`}>—</div>
+    return <div className={`${padClass} flex h-full w-full items-center justify-center text-[2vw] tracking-[0.28em] opacity-30`}>+</div>
   }
 
   return (
@@ -2256,37 +2256,133 @@ function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: Physica
   )
 }
 
-function ratingDots(value: any) {
+function ratingDots(value: any, options?: { rounded?: boolean; large?: boolean }) {
   const n = Math.max(0, Math.min(6, Math.round(Number(value) || 0)))
-  return <div className="flex justify-center gap-[0.3vw]">{Array.from({ length: 6 }, (_, i) => <span key={i} className={`h-[1.3vh] w-[1.3vh] rounded-full border border-current ${i < n ? 'bg-current' : ''}`} />)}</div>
+  const shape = options?.rounded ? 'rounded-[0.35vh]' : 'rounded-full'
+  const size = options?.large ? 'h-[2vh] w-[2.8vh]' : 'h-[1.3vh] w-[1.9vh]'
+  return <div className="flex justify-center gap-[0.3vw]">{Array.from({ length: 6 }, (_, i) => <span key={i} className={`${size} ${shape} border border-current ${i < n ? 'bg-current' : ''}`} />)}</div>
 }
 
-function surfColumnItems(items: any[]) {
-  return fourColumnForecast(items.slice(0, 4).map((item: any, idx: number) => ({
-    title: item?.label || ['Morning', 'Noon', 'Afternoon', 'Evening'][idx] || '--',
-    icon: '',
-    a: item?.rating != null ? String(item.rating) : '--',
-    b: item?.wave_height_range_label || '--',
-    c: item?.wind_speed_ms != null ? `${item.wind_speed_ms} wind` : '',
-  })))
+function surfRatingLabel(value: any) {
+  const n = Math.round(Number(value) || 0)
+  if (n <= 1) return 'Flat'
+  if (n === 2) return 'Poor'
+  if (n === 3) return 'Poor to fair'
+  if (n === 4) return 'Fair'
+  if (n === 5) return 'Good'
+  return 'Legendary'
+}
+
+function directionTowards(value: any) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return (n + 180) % 360
+}
+
+function DirectionArrow({ degrees }: { degrees: number | null }) {
+  return <div className="mx-auto text-[2vw] leading-none" style={{ transform: `rotate(${degrees ?? 0}deg)` }}>↑</div>
+}
+
+function WavePeriodIcon({ seconds }: { seconds: any }) {
+  const period = Number(seconds)
+  const peaks = !Number.isFinite(period) ? 3 : period >= 12 ? 2 : period >= 8 ? 3 : 4
+  return <div className="flex h-[2vh] items-center justify-center gap-[0.12vw]">{Array.from({ length: peaks }, (_, i) => <span key={i} className="h-[1.1vh] w-[0.55vw] rounded-t-full border-t border-current" />)}</div>
+}
+
+function WindIconBox() {
+  return <div className="mx-auto flex h-[2.2vh] w-[2.2vw] items-center justify-center rounded-sm border border-current text-[1vw]">≈</div>
+}
+
+function SurfColumns({ items, fallbackLabels }: { items: any[]; fallbackLabels: string[] }) {
+  const cols = fallbackLabels.map((label, idx) => items[idx] || { label, rating: null, wave_height_range_label: '--' })
+  return (
+    <div className="grid h-full grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-stretch text-center">
+      {cols.map((item: any, idx: number) => (
+        <React.Fragment key={`${item?.label || fallbackLabels[idx]}-${idx}`}>
+          <div className="flex min-w-0 flex-col items-center justify-center gap-[0.8vh] px-[1vw]">
+            <div className="text-[1.25vw] font-semibold opacity-70">{item?.label || fallbackLabels[idx]}</div>
+            <div className="text-[1.45vw] font-semibold">{item?.rating != null ? surfRatingLabel(item.rating) : '--'}</div>
+            {ratingDots(item?.rating, { rounded: true })}
+            <div className="text-[1.25vw] opacity-70">{item?.wave_height_range_label || '--'}</div>
+          </div>
+          {idx < cols.length - 1 && <div className="my-[10%] w-px bg-current opacity-50" />}
+        </React.Fragment>
+      ))}
+    </div>
+  )
 }
 
 function MirrorSurfModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
   const cfg = moduleConfigById(snapshot.modulesJson.surf, assignment.instanceId)
   const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
   const data = snapshot.runtimeData?.surfById?.[id]
-  const rating = data?.rating ?? data?.score ?? '--'
+  const rating = data?.rating ?? data?.score ?? null
+  const ratingText = rating != null ? surfRatingLabel(rating) : '--'
+  const resolvedSpot = data?.spot || (cfg?.spotId === '__todays_best__' ? '' : cfg?.spot) || cfg?.spotId || 'Surf'
+  const isTodaysBest = cfg?.spotId === '__todays_best__' || data?.spotId === '__todays_best__'
   const wave = data?.forecast?.wave_height_range_label || data?.forecast?.wave_height_range_minmax_label || data?.ui?.wave_bucket || '--'
-  const details = [data?.ui?.period_bucket || data?.line1 || '-- period', data?.ui?.wind_bucket || data?.line2 || '-- wind', data?.weather_label || 'conditions']
-  const dayparts = Array.isArray(data?.dayparts) && data.dayparts.length >= 4 ? data.dayparts : ['Morning', 'Noon', 'Afternoon', 'Evening'].map((label) => ({ label, rating: null, wave_height_range_label: '--', wind_speed_ms: null }))
-  const daily = Array.isArray(data?.daily) && data.daily.length >= 4 ? data.daily : dayparts
+  const dayparts = Array.isArray(data?.dayparts) && data.dayparts.length >= 4 ? data.dayparts : []
+  const daily = Array.isArray(data?.daily) && data.daily.length >= 4 ? data.daily : []
+  const swellPeriod = data?.inputs?.swell_period_s
+  const windSpeed = data?.inputs?.wind_speed_ms
+  const waveTowards = directionTowards(data?.inputs?.swell_direction_deg)
+  const windTowards = directionTowards(data?.inputs?.wind_direction_deg)
 
-  if (size === 'small') return <div className="flex h-full flex-col justify-center gap-[1.4vh] text-center"><MirrorTitle>{cfg?.spot || cfg?.spotId || 'Surf'}</MirrorTitle><div className="text-[2vw] font-semibold">{rating} · {wave}</div></div>
-  if (size === 'medium') {
-    return <div className="flex h-full flex-col"><MirrorTitle>{cfg?.spot || 'Surf'}</MirrorTitle><div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] items-center"><div className="space-y-[1vh] text-center"><div className="text-[2.2vw] font-semibold">{rating}</div>{ratingDots(rating)}<div className="text-[1.35vw] opacity-70">{wave}</div></div><div className="h-[70%] w-px bg-current opacity-50" /><div className="space-y-[1vh] text-center text-[1.3vw] opacity-75">{details.map((d) => <div key={d}>{d}</div>)}</div></div></div>
+  if (size === 'small') {
+    return (
+      <div className="flex h-full flex-col justify-center gap-[1.4vh] text-center">
+        <MirrorTitle>{resolvedSpot}</MirrorTitle>
+        <ThreeValueRow values={[ratingText, ratingDots(rating, { rounded: true }), wave]} />
+      </div>
+    )
   }
-  if (size === 'large') return <div className="flex h-full flex-col"><MirrorTitle>{cfg?.spot || 'Surf'}</MirrorTitle><div className="min-h-0 flex-1">{surfColumnItems(dayparts)}</div></div>
-  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><div className="grid min-h-0 grid-cols-3 items-center text-center"><div className="px-[1vw] text-[1.2vw] opacity-65">{cfg?.spotId === '__todays_best__' ? `Best next 4hrs: ${data?.spot || cfg?.spot || ''}` : cfg?.spot || data?.spot || 'Surf'}</div><div className="space-y-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[3vw] font-semibold">{rating}</div>{ratingDots(rating)}<div className="text-[1.4vw] opacity-70">{wave}</div></div><div className="space-y-[0.8vh] px-[1vw] text-[1.25vw] opacity-70">{details.map((d) => <div key={d}>{d}</div>)}</div></div><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="min-h-0">{surfColumnItems(daily.slice(1, 5))}</div></div>
+
+  if (size === 'medium') {
+    return (
+      <div className="relative flex h-full flex-col pt-[0.2vh]">
+        {isTodaysBest && <div className="absolute left-0 top-0 text-[0.95vw] opacity-60">Todays best</div>}
+        <div className="pt-[1.2vh]"><MirrorTitle>{resolvedSpot}</MirrorTitle></div>
+        <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] items-center pt-[1vh]">
+          <div className="grid h-[72%] grid-rows-3 items-center text-center">
+            <div className="text-[1.65vw] font-semibold">{ratingText}</div>
+            <div>{ratingDots(rating, { rounded: true })}</div>
+            <div className="text-[1.3vw] opacity-75">{wave}</div>
+          </div>
+          <div className="h-[72%] w-px bg-current opacity-50" />
+          <div className="grid h-[72%] grid-rows-3 items-center text-center">
+            <div className="text-[1.45vw] font-semibold">Details:</div>
+            <div className="grid grid-cols-2 items-center">
+              <DirectionArrow degrees={waveTowards} />
+              <DirectionArrow degrees={windTowards} />
+            </div>
+            <div className="grid grid-cols-2 items-end text-[1.1vw] opacity-75">
+              <div className="space-y-[0.5vh]"><WavePeriodIcon seconds={swellPeriod} /><div>{Number.isFinite(Number(swellPeriod)) ? `${Math.round(Number(swellPeriod))} s` : '-- s'}</div></div>
+              <div className="space-y-[0.5vh]"><WindIconBox /><div>{Number.isFinite(Number(windSpeed)) ? `${Math.round(Number(windSpeed))} m/s` : '-- m/s'}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (size === 'large') {
+    return <div className="flex h-full flex-col"><MirrorTitle>{resolvedSpot}</MirrorTitle><div className="min-h-0 flex-1"><SurfColumns items={dayparts} fallbackLabels={['Morning', 'Noon', 'Afternoon', 'Evening']} /></div></div>
+  }
+
+  return (
+    <div className="grid h-full grid-rows-[1fr_auto_1fr]">
+      <div className="grid min-h-0 grid-cols-3 items-center text-center">
+        <div className="px-[1vw] text-[1.2vw] opacity-65">{isTodaysBest ? `Todays best: ${resolvedSpot}` : resolvedSpot}</div>
+        <div className="space-y-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[2vw] font-semibold">{ratingText}</div>{ratingDots(rating, { rounded: true, large: true })}<div className="text-[1.4vw] opacity-70">{wave}</div></div>
+        <div className="grid grid-cols-2 items-center gap-[1vw] px-[1vw] text-center text-[1.1vw] opacity-75">
+          <div className="space-y-[0.5vh]"><DirectionArrow degrees={waveTowards} /><WavePeriodIcon seconds={swellPeriod} /><div>{Number.isFinite(Number(swellPeriod)) ? `${Math.round(Number(swellPeriod))} s` : '-- s'}</div></div>
+          <div className="space-y-[0.5vh]"><DirectionArrow degrees={windTowards} /><WindIconBox /><div>{Number.isFinite(Number(windSpeed)) ? `${Math.round(Number(windSpeed))} m/s` : '-- m/s'}</div></div>
+        </div>
+      </div>
+      <div className="mx-[2.5%] h-px bg-current opacity-80" />
+      <div className="min-h-0"><SurfColumns items={daily.slice(1, 5)} fallbackLabels={['Tomorrow', 'Day 2', 'Day 3', 'Day 4']} /></div>
+    </div>
+  )
 }
 
 function reminderBucketHeader(item: any, language: AppLanguage) {
