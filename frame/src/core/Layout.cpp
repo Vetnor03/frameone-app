@@ -11,9 +11,11 @@
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleStocks.h"
+#include "ModuleGroceries.h"
 
 #include <GxEPD2_GFX.h>
 #include <Arduino.h>
+#include <string.h>
 
 // Easy battery UI test switch:
 // false = real behavior (<20% icon, charging icon when charging)
@@ -152,6 +154,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   ModuleWeather::setConfig(&cfg);
   ModuleSurf::setConfig(&cfg);
   ModuleStocks::setConfig(&cfg);
+  ModuleGroceries::setConfig(&cfg);
 
   const int x = FRAME_X;
   const int y = FRAME_Y;
@@ -165,6 +168,19 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   const int halfY = y + h / 2;
   const int quarterY = y + h / 4;
   const int midX = x + w / 2;
+
+  bool hasGroceries = false;
+  for (int i = 0; i < cfg.assignCount; i++) {
+    if (strncmp(cfg.assigns[i].module, "groceries", 9) == 0) {
+      hasGroceries = true;
+      break;
+    }
+  }
+
+  if (hasGroceries) {
+    Serial.println("[groceries] preload before display update");
+    ModuleGroceries::preload();
+  }
 
   Serial.println("[display] full update begin");
   DisplayCore::beginFrameUpdate();
