@@ -1257,6 +1257,10 @@ void setConfig(const FrameConfig* cfg) {
   g_cache.loaded = false;
 }
 
+void preload() {
+  ensureLoaded();
+}
+
 void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
   ensureLoaded();

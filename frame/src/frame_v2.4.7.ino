@@ -21,11 +21,16 @@
 #include "ModuleReminders.h"
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
+#include "ModuleGroceries.h"
 #include "FirmwareUpdater.h"
 
 #include <Preferences.h>
 #include <time.h>
 #include <esp_sleep.h>
+
+// Grocery/dinner rendering and JSON parsing can temporarily need more stack than
+// the ESP32 Arduino loopTask default, especially while GxEPD paged drawing is active.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 // Change this string whenever you want to force one redraw after flashing/OTA
 static const char* FW_VER = "v2.4.8";
@@ -628,6 +633,7 @@ void setup() {
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
+  ModuleGroceries::setConfig(&g_cfg);
 
   ensureDisplay();
 
