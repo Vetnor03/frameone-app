@@ -13,7 +13,6 @@
 #include "Theme.h"
 #include "TimeSync.h"
 #include "BatteryManager.h"
-#include "PowerSenseDebug.h"
 
 // Modules
 #include "ModuleDate.h"
@@ -22,16 +21,11 @@
 #include "ModuleReminders.h"
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
-#include "ModuleGroceries.h"
 #include "FirmwareUpdater.h"
 
 #include <Preferences.h>
 #include <time.h>
 #include <esp_sleep.h>
-
-// Grocery/dinner rendering and JSON parsing can temporarily need more stack than
-// the ESP32 Arduino loopTask default, especially while GxEPD paged drawing is active.
-SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 // Change this string whenever you want to force one redraw after flashing/OTA
 static const char* FW_VER = "v2.4.8";
@@ -58,6 +52,13 @@ static FrameConfig g_cfg;
 
 // Only initialize the display if we actually need to draw
 static bool g_displayReady = false;
+
+struct PowerSenseDebug {
+  int raw;
+  int highCount;
+  bool usbPresent;
+  bool stable;
+};
 
 static void ensureDisplay() {
   if (!g_displayReady) {
@@ -627,7 +628,6 @@ void setup() {
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
-  ModuleGroceries::setConfig(&g_cfg);
 
   ensureDisplay();
 
@@ -636,9 +636,7 @@ void setup() {
 
   Layout::drawWithContent(g_cfg.layout, g_cfg);
 
-  Serial.println("[status] post-render status begin");
   postDeviceStatus(batt, pwr, true);
-  Serial.println("[status] post-render status done");
 
   UpdateChecker::saveApplied(updatedAt);
   if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);

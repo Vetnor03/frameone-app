@@ -8,7 +8,6 @@ export const runtime = 'nodejs'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
-const MAX_GROCERY_ITEMS_FOR_FRAME = 40
 
 type HolidayItem = { date: string; name: string }
 
@@ -405,14 +404,13 @@ export async function GET(req: Request) {
         name: asString(x.name, '').slice(0, 80),
         quantity: Math.max(1, Number(x.quantity ?? 1) || 1),
         category: normalizeGroceryCategory(x.category).slice(0, 24),
+        checked: false,
         updated_at: x.updated_at ? String(x.updated_at) : null,
       }))
 
     const groceryInsights = await fetchGroceryInsights(supabase, device_id, asString(settings_json.language, 'en'))
 
     settings_json.modules.groceries = activeGroceries
-      .slice(0, MAX_GROCERY_ITEMS_FOR_FRAME)
-      .map(({ name, quantity }) => ({ name, quantity }))
     settings_json.modules.groceries_insights = { insights: groceryInsights }
     settings_json.modules.groceries_signature = groceriesSignature(activeGroceries)
 
