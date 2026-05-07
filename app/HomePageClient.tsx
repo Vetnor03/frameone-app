@@ -295,9 +295,9 @@ type DeviceStatusMeta = {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type PhysicalFrameCell = {
-  key: ModuleKey
+  moduleName: ModuleKey
   instanceId: number | null
-  stored: string
+  moduleString: string
 }
 
 type PhysicalFrameSnapshot = {
@@ -554,9 +554,9 @@ function storedModuleToPhysicalCell(moduleStr: string): PhysicalFrameCell | null
   const instanceId = id != null && Number.isFinite(id) && id > 0 ? Math.floor(id) : null
 
   return {
-    key,
+    moduleName: key,
     instanceId,
-    stored: raw,
+    moduleString: raw,
   }
 }
 
@@ -657,10 +657,29 @@ function weatherCodeLabel(code: any, language: AppLanguage) {
   return language === 'no' ? 'Vær' : 'Weather'
 }
 
+function weatherCodeIcon(code: any) {
+  const c = Number(code)
+  if (!Number.isFinite(c)) return '○'
+  if (c === 0 || c === 1) return '☀'
+  if (c === 2) return '◐'
+  if (c === 3 || c === 45 || c === 48) return '☁'
+  if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return '☂'
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return '✳'
+  if (c >= 95) return '⚡'
+  return '☁'
+}
+
+function weatherDayLabel(ymd: string | null | undefined, index: number) {
+  if (index === 0) return 'Today'
+  const d = dateFromYmd(ymd)
+  if (!d) return ['Today', 'Fri', 'Sat', 'Sun'][index] || shortWeekdayName(new Date())
+  return shortWeekdayName(d)
+}
+
 async function loadMirrorRuntimeData(deviceId: string, snapshot: PhysicalFrameSnapshot): Promise<Record<string, any>> {
   const runtime: Record<string, any> = {}
   const assignments = Object.values(snapshot.cellAssignments).filter(Boolean) as PhysicalFrameCell[]
-  const hasModule = (key: ModuleKey) => assignments.some((a) => a.key === key)
+  const hasModule = (key: ModuleKey) => assignments.some((a) => a.moduleName === key)
 
   if (hasModule('weather')) {
     const weatherById: Record<number, any> = {}
@@ -677,9 +696,9 @@ async function loadMirrorRuntimeData(deviceId: string, snapshot: PhysicalFrameSn
           const url =
             `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}` +
             `&longitude=${encodeURIComponent(lon)}` +
-            `&current=temperature_2m,weather_code,wind_speed_10m,precipitation` +
-            `&daily=temperature_2m_max,temperature_2m_min` +
-            `&forecast_days=1&temperature_unit=${tempUnit}&wind_speed_unit=${windUnit}`
+            `&current=temperature_2m,weather_code,wind_speed_10m,precipitation,relative_humidity_2m` +
+            `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,wind_speed_10m_max,sunrise,sunset` +
+            `&forecast_days=5&timezone=auto&temperature_unit=${tempUnit}&wind_speed_unit=${windUnit}`
           const resp = await fetch(url, { cache: 'no-store' })
           if (resp.ok) weatherById[id] = await resp.json()
         } catch {}
@@ -701,6 +720,9 @@ async function loadMirrorRuntimeData(deviceId: string, snapshot: PhysicalFrameSn
         else if (cfg?.spot) params.set('spot', String(cfg.spot))
         else return
         params.set('hours', '12')
+        params.set('dayparts', '1')
+        params.set('daily', '1')
+        params.set('days', '5')
         if (surfSettings?.fuelPenalty) params.set('fuelPenalty', '1')
         if (Number.isFinite(Number(surfSettings?.homeLat))) params.set('homeLat', String(surfSettings.homeLat))
         if (Number.isFinite(Number(surfSettings?.homeLon))) params.set('homeLon', String(surfSettings.homeLon))
@@ -1944,14 +1966,14 @@ function MirrorCellContent({ snapshot, slot, size }: { snapshot: PhysicalFrameSn
 }
 
 function renderPhysicalMirrorModule(snapshot: PhysicalFrameSnapshot, assignment: PhysicalFrameCell, size: CellSize) {
-  if (assignment.key === 'date') return <MirrorDateModule snapshot={snapshot} size={size} />
-  if (assignment.key === 'weather') return <MirrorWeatherModule snapshot={snapshot} assignment={assignment} size={size} />
-  if (assignment.key === 'surf') return <MirrorSurfModule snapshot={snapshot} assignment={assignment} size={size} />
-  if (assignment.key === 'reminders') return <MirrorRemindersModule snapshot={snapshot} size={size} />
-  if (assignment.key === 'countdown') return <MirrorCountdownModule snapshot={snapshot} size={size} />
-  if (assignment.key === 'soccer') return <MirrorSoccerModule snapshot={snapshot} assignment={assignment} size={size} />
-  if (assignment.key === 'stocks') return <MirrorStocksModule snapshot={snapshot} assignment={assignment} size={size} />
-  if (assignment.key === 'groceries') return <MirrorGroceriesModule snapshot={snapshot} size={size} />
+  if (assignment.moduleName === 'date') return <MirrorDateModule snapshot={snapshot} size={size} />
+  if (assignment.moduleName === 'weather') return <MirrorWeatherModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.moduleName === 'surf') return <MirrorSurfModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.moduleName === 'reminders') return <MirrorRemindersModule snapshot={snapshot} size={size} />
+  if (assignment.moduleName === 'countdown') return <MirrorCountdownModule snapshot={snapshot} size={size} />
+  if (assignment.moduleName === 'soccer') return <MirrorSoccerModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.moduleName === 'stocks') return <MirrorStocksModule snapshot={snapshot} assignment={assignment} size={size} />
+  if (assignment.moduleName === 'groceries') return <MirrorGroceriesModule snapshot={snapshot} size={size} />
   return null
 }
 
@@ -1986,6 +2008,34 @@ function dateFromYmd(ymd: string | null | undefined) {
   const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number)
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null
   return new Date(y, m - 1, d)
+}
+
+const MIRROR_WEEKDAYS_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MIRROR_MONTHS_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+function mirrorWeekdayName(d: Date) {
+  return MIRROR_WEEKDAYS_EN[d.getDay()] || ''
+}
+
+function mirrorMonthName(d: Date) {
+  return MIRROR_MONTHS_EN[d.getMonth()] || ''
+}
+
+function shortWeekdayName(d: Date) {
+  return mirrorWeekdayName(d).slice(0, 3)
 }
 
 function monthMatrix(monthDate: Date, forceSixRows = false) {
@@ -2047,13 +2097,12 @@ function MiniCalendar({
 
 function HeroDate({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
   const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
-  const locale = snapshot.language === 'no' ? 'nb-NO' : 'en-US'
   return (
     <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center">
       <div className="text-[1.5vw] opacity-65">{now.getFullYear()}</div>
-      <div className="text-[2vw] font-semibold capitalize leading-none">{new Intl.DateTimeFormat(locale, { month: 'long' }).format(now)}</div>
+      <div className="text-[2vw] font-semibold capitalize leading-none">{mirrorMonthName(now)}</div>
       <div className="text-[9vh] font-semibold leading-[0.9] tabular-nums">{now.getDate()}</div>
-      <Badge>{new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)}</Badge>
+      <Badge>{mirrorWeekdayName(now)}</Badge>
     </div>
   )
 }
@@ -2069,12 +2118,11 @@ function holidayNodes(snapshot: PhysicalFrameSnapshot) {
 
 function MirrorDateModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
   const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
-  const locale = snapshot.language === 'no' ? 'nb-NO' : 'en-US'
 
   if (size === 'small') {
     return (
       <div className="flex h-full items-center justify-center text-center text-[3.3vh] font-semibold leading-none">
-        {new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)} {now.getDate()}. {new Intl.DateTimeFormat(locale, { month: 'long' }).format(now)}
+        {mirrorWeekdayName(now)} {now.getDate()}. {mirrorMonthName(now)}
       </div>
     )
   }
@@ -2153,27 +2201,40 @@ function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: Physica
   const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
   const data = snapshot.runtimeData?.weatherById?.[id]
   const temp = data?.current?.temperature_2m
-  const max = data?.daily?.temperature_2m_max?.[0]
-  const min = data?.daily?.temperature_2m_min?.[0]
   const unit = cfg?.units === 'imperial' ? '°F' : '°C'
-  const hiLo = Number.isFinite(Number(max)) && Number.isFinite(Number(min)) ? `${Math.round(Number(min))}/${Math.round(Number(max))}${unit}` : '--'
+  const day = data?.daily || {}
+  const max = day?.temperature_2m_max?.[0]
+  const min = day?.temperature_2m_min?.[0]
+  const hasHiLo = Number.isFinite(Number(max)) && Number.isFinite(Number(min))
+  const hiLo = hasHiLo ? `${Math.round(Number(min))}/${Math.round(Number(max))}${unit}` : '--'
   const currentTemp = Number.isFinite(Number(temp)) ? `${Math.round(Number(temp))}${unit}` : hiLo
+  const firstValue = cfg?.hiLo !== false && hasHiLo ? hiLo : currentTemp
   const wind = data?.current?.wind_speed_10m != null ? `${Math.round(Number(data.current.wind_speed_10m))} wind` : '-- wind'
   const precip = data?.current?.precipitation != null ? `${Number(data.current.precipitation).toFixed(1)} mm` : '-- rain'
-  const icon = weatherCodeLabel(data?.current?.weather_code, snapshot.language)
-  const forecasts = ['Today', 'Fri', 'Sat', 'Sun'].map((title) => ({ title, icon: '☁', a: hiLo, b: wind, c: precip }))
+  const currentCode = data?.current?.weather_code ?? day?.weather_code?.[0]
+  const icon = weatherCodeIcon(currentCode)
+  const condition = weatherCodeLabel(currentCode, snapshot.language)
+  const suggestion = snapshot.language === 'no' ? `Kle deg for ${condition.toLowerCase()} og resten av dagen.` : `Dress for ${condition.toLowerCase()} and the rest of the day.`
+  const forecasts = Array.from({ length: 4 }, (_, idx) => {
+    const lo = day?.temperature_2m_min?.[idx]
+    const hi = day?.temperature_2m_max?.[idx]
+    const range = Number.isFinite(Number(lo)) && Number.isFinite(Number(hi)) ? `${Math.round(Number(lo))}/${Math.round(Number(hi))}${unit}` : '--'
+    const dayWind = day?.wind_speed_10m_max?.[idx] != null ? `${Math.round(Number(day.wind_speed_10m_max[idx]))} wind` : wind
+    const dayPrecip = day?.precipitation_sum?.[idx] != null ? `${Number(day.precipitation_sum[idx]).toFixed(1)} mm` : precip
+    return { title: weatherDayLabel(day?.time?.[idx], idx), icon: weatherCodeIcon(day?.weather_code?.[idx]), a: range, b: dayWind, c: dayPrecip }
+  })
 
   if (size === 'small') {
-    return <div className="flex h-full flex-col justify-center gap-[1.4vh]"><MirrorTitle>{cfg?.label || 'Weather'}</MirrorTitle><ThreeValueRow values={[currentTemp, wind, precip]} /></div>
+    return <div className="flex h-full flex-col justify-center gap-[1.4vh]"><MirrorTitle>{cfg?.label || 'Weather'}</MirrorTitle><ThreeValueRow values={[firstValue, wind, precip]} /></div>
   }
 
   if (size === 'medium') {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-[1.2vw] text-[2.2vw] font-semibold"><span>{Math.round(Number(min)) || '--'}°</span><span className="h-[3vh] w-px bg-current opacity-50" /><span>{Math.round(Number(max)) || '--'}°</span></div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-[1.2vw] text-[2.2vw] font-semibold"><span>{Number.isFinite(Number(min)) ? `${Math.round(Number(min))}°` : '--'}</span><span className="h-[3vh] w-px bg-current opacity-50" /><span>{Number.isFinite(Number(max)) ? `${Math.round(Number(max))}°` : '--'}</span></div>
+        <div className="max-w-[82%] text-[1.25vw] leading-tight opacity-70">{suggestion}</div>
+        <div className="text-[6vw] leading-none">{icon}</div>
         <div className="text-[1.25vw] opacity-65">{wind} · {precip}</div>
-        <div className="text-[6vw] leading-none">☁</div>
-        <div className="max-w-[80%] text-[1.25vw] leading-tight opacity-70">{icon}. {snapshot.language === 'no' ? 'Ta med jakke etter været.' : 'Dress for changing weather.'}</div>
       </div>
     )
   }
@@ -2185,9 +2246,9 @@ function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: Physica
   return (
     <div className="grid h-full grid-rows-[1fr_auto_1fr]">
       <div className="grid min-h-0 grid-cols-3 items-center text-center">
-        <div className="space-y-[0.8vh] text-[1.25vw]"><div className="text-[2vw] font-semibold">{hiLo}</div><div>{wind}</div><div>{precip}</div><div className="opacity-60">Sun 08:00 / 16:00</div></div>
-        <div className="flex flex-col items-center gap-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[7vw] leading-none">☁</div><div className="text-[3vw] font-semibold">{currentTemp}</div></div>
-        <div className="px-[2vw] text-[1.35vw] leading-snug opacity-70">{icon}. {snapshot.language === 'no' ? 'Kle deg for vind og nedbør gjennom dagen.' : 'Clothing suggestion based on wind, rain, and rest-of-day temperatures.'}</div>
+        <div className="space-y-[0.8vh] text-[1.25vw]"><div className="text-[2vw] font-semibold">{hiLo}</div><div>{wind}</div><div>{precip}</div><div className="opacity-60">{day?.sunrise?.[0]?.slice(11, 16) || '--:--'} / {day?.sunset?.[0]?.slice(11, 16) || '--:--'}</div><div className="opacity-60">{data?.current?.relative_humidity_2m ?? '--'}% humidity</div></div>
+        <div className="flex flex-col items-center gap-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[7vw] leading-none">{icon}</div><div className="text-[3vw] font-semibold">{currentTemp}</div></div>
+        <div className="px-[2vw] text-[1.35vw] leading-snug opacity-70">{suggestion}</div>
       </div>
       <div className="mx-[2.5%] h-px bg-current opacity-80" />
       <div className="min-h-0">{fourColumnForecast(forecasts)}</div>
@@ -2200,6 +2261,16 @@ function ratingDots(value: any) {
   return <div className="flex justify-center gap-[0.3vw]">{Array.from({ length: 6 }, (_, i) => <span key={i} className={`h-[1.3vh] w-[1.3vh] rounded-full border border-current ${i < n ? 'bg-current' : ''}`} />)}</div>
 }
 
+function surfColumnItems(items: any[]) {
+  return fourColumnForecast(items.slice(0, 4).map((item: any, idx: number) => ({
+    title: item?.label || ['Morning', 'Noon', 'Afternoon', 'Evening'][idx] || '--',
+    icon: '',
+    a: item?.rating != null ? String(item.rating) : '--',
+    b: item?.wave_height_range_label || '--',
+    c: item?.wind_speed_ms != null ? `${item.wind_speed_ms} wind` : '',
+  })))
+}
+
 function MirrorSurfModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
   const cfg = moduleConfigById(snapshot.modulesJson.surf, assignment.instanceId)
   const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
@@ -2207,27 +2278,40 @@ function MirrorSurfModule({ snapshot, assignment, size }: { snapshot: PhysicalFr
   const rating = data?.rating ?? data?.score ?? '--'
   const wave = data?.forecast?.wave_height_range_label || data?.forecast?.wave_height_range_minmax_label || data?.ui?.wave_bucket || '--'
   const details = [data?.ui?.period_bucket || data?.line1 || '-- period', data?.ui?.wind_bucket || data?.line2 || '-- wind', data?.weather_label || 'conditions']
-  const dayparts = ['Morning', 'Noon', 'Afternoon', 'Evening'].map((title) => ({ title, icon: '', a: String(rating), b: wave, c: details[1] }))
+  const dayparts = Array.isArray(data?.dayparts) && data.dayparts.length >= 4 ? data.dayparts : ['Morning', 'Noon', 'Afternoon', 'Evening'].map((label) => ({ label, rating: null, wave_height_range_label: '--', wind_speed_ms: null }))
+  const daily = Array.isArray(data?.daily) && data.daily.length >= 4 ? data.daily : dayparts
 
   if (size === 'small') return <div className="flex h-full flex-col justify-center gap-[1.4vh] text-center"><MirrorTitle>{cfg?.spot || cfg?.spotId || 'Surf'}</MirrorTitle><div className="text-[2vw] font-semibold">{rating} · {wave}</div></div>
   if (size === 'medium') {
     return <div className="flex h-full flex-col"><MirrorTitle>{cfg?.spot || 'Surf'}</MirrorTitle><div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] items-center"><div className="space-y-[1vh] text-center"><div className="text-[2.2vw] font-semibold">{rating}</div>{ratingDots(rating)}<div className="text-[1.35vw] opacity-70">{wave}</div></div><div className="h-[70%] w-px bg-current opacity-50" /><div className="space-y-[1vh] text-center text-[1.3vw] opacity-75">{details.map((d) => <div key={d}>{d}</div>)}</div></div></div>
   }
-  if (size === 'large') return <div className="flex h-full flex-col"><MirrorTitle>{cfg?.spot || 'Surf'}</MirrorTitle><div className="min-h-0 flex-1">{fourColumnForecast(dayparts)}</div></div>
-  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><div className="grid min-h-0 grid-cols-3 items-center text-center"><div className="px-[1vw] text-[1.2vw] opacity-65">{cfg?.spotId === '__todays_best__' ? `Best next 4hrs: ${cfg?.spot || ''}` : cfg?.spot || 'Surf'}</div><div className="space-y-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[3vw] font-semibold">{rating}</div>{ratingDots(rating)}<div className="text-[1.4vw] opacity-70">{wave}</div></div><div className="space-y-[0.8vh] px-[1vw] text-[1.25vw] opacity-70">{details.map((d) => <div key={d}>{d}</div>)}</div></div><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="min-h-0">{fourColumnForecast(dayparts)}</div></div>
+  if (size === 'large') return <div className="flex h-full flex-col"><MirrorTitle>{cfg?.spot || 'Surf'}</MirrorTitle><div className="min-h-0 flex-1">{surfColumnItems(dayparts)}</div></div>
+  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><div className="grid min-h-0 grid-cols-3 items-center text-center"><div className="px-[1vw] text-[1.2vw] opacity-65">{cfg?.spotId === '__todays_best__' ? `Best next 4hrs: ${data?.spot || cfg?.spot || ''}` : cfg?.spot || data?.spot || 'Surf'}</div><div className="space-y-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[3vw] font-semibold">{rating}</div>{ratingDots(rating)}<div className="text-[1.4vw] opacity-70">{wave}</div></div><div className="space-y-[0.8vh] px-[1vw] text-[1.25vw] opacity-70">{details.map((d) => <div key={d}>{d}</div>)}</div></div><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="min-h-0">{surfColumnItems(daily.slice(1, 5))}</div></div>
 }
 
-function bucketReminders(items: any[], language: AppLanguage) {
-  const first = items[0]
-  const header = first?.display_date || (language === 'no' ? 'Påminnelser' : 'Reminders')
-  return { header, items }
+function reminderBucketHeader(item: any, language: AppLanguage) {
+  const days = Number(item?.days_until)
+  const d = dateFromYmd(item?.occurrence_date)
+  if (Number.isFinite(days)) {
+    if (days <= 0) return language === 'no' ? 'I dag' : 'Today'
+    if (days === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
+    if (days < 7 && d) return language === 'no' ? `På ${mirrorWeekdayName(d)}` : `On ${mirrorWeekdayName(d)}`
+    if (days < 14 && d) return language === 'no' ? `${mirrorWeekdayName(d)} neste uke` : `${mirrorWeekdayName(d)} next week`
+  }
+  return item?.display_date || (language === 'no' ? 'Påminnelser' : 'Reminders')
 }
 
-function ReminderBucket({ snapshot, maxItems, bottomNote = true }: { snapshot: PhysicalFrameSnapshot; maxItems: number; bottomNote?: boolean }) {
+function reminderIsTodayTomorrow(item: any) {
+  const days = Number(item?.days_until)
+  return Number.isFinite(days) && days <= 1
+}
+
+function ReminderBucket({ snapshot, maxItems, bottomNote = true }: { snapshot: PhysicalFrameSnapshot; maxItems?: number; bottomNote?: boolean }) {
   const items = Array.isArray(snapshot.runtimeData?.reminders?.items) ? snapshot.runtimeData.reminders.items : []
-  const bucket = bucketReminders(items, snapshot.language)
-  const shown = items.slice(0, maxItems)
-  return <div className="relative flex h-full flex-col justify-center text-center"><MirrorTitle>{bucket.header}</MirrorTitle>{items.length > shown.length && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - shown.length} more</div>}<div className="mt-[1.5vh] grid flex-1 items-center" style={{ gridTemplateColumns: `repeat(${Math.max(1, shown.length || 1)}, minmax(0,1fr))` }}>{fitList(shown.map((item: any) => <div key={item.reminder_id || item.title} className="truncate border-current px-[1vw] text-[1.55vw] font-semibold">{item.title}</div>))}</div>{bottomNote && <div className="text-[1.1vw] opacity-55">{snapshot.language === 'no' ? 'I morgen' : 'Tomorrow'}: {items.filter((x: any) => String(x.display_date || '').toLowerCase().includes('tomorrow')).length}</div>}</div>
+  const header = reminderBucketHeader(items[0], snapshot.language)
+  const visibleCount = maxItems ?? (reminderIsTodayTomorrow(items[0]) ? 4 : 3)
+  const shown = items.slice(0, visibleCount)
+  return <div className="relative flex h-full flex-col justify-center text-center"><MirrorTitle>{header}</MirrorTitle>{items.length > shown.length && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - shown.length} more</div>}<div className="mt-[1.5vh] grid flex-1 items-center divide-x divide-current/50" style={{ gridTemplateColumns: `repeat(${Math.max(1, shown.length || 1)}, minmax(0,1fr))` }}>{fitList(shown.map((item: any) => <div key={item.reminder_id || item.title} className="truncate px-[1vw] text-[1.55vw] font-semibold">{item.title}</div>))}</div>{bottomNote && header === 'Today' && <div className="text-[1.1vw] opacity-55">Tomorrow: {items.filter((x: any) => Number(x.days_until) === 1).length}</div>}</div>
 }
 
 function MirrorRemindersModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
@@ -2235,9 +2319,9 @@ function MirrorRemindersModule({ snapshot, size }: { snapshot: PhysicalFrameSnap
   const highlightYmds = items.map((x: any) => x.occurrence_date).filter(Boolean)
   const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
   if (size === 'small') return <ReminderBucket snapshot={snapshot} maxItems={3} />
-  if (size === 'medium') return <ReminderBucket snapshot={snapshot} maxItems={4} />
-  if (size === 'large') return <TwoPanel><ReminderBucket snapshot={snapshot} maxItems={4} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} /></TwoPanel>
-  return <QuadrantGrid><ReminderBucket snapshot={snapshot} maxItems={4} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /><div className="flex h-full flex-col items-center justify-center gap-[0.7vh] text-center">{fitList(items.slice(1, 6).map((item: any) => <div key={item.reminder_id} className="truncate text-[1.4vw]">{item.title}</div>))}</div><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth() + 1, 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /></QuadrantGrid>
+  if (size === 'medium') return <ReminderBucket snapshot={snapshot} />
+  if (size === 'large') return <TwoPanel><ReminderBucket snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} /></TwoPanel>
+  return <QuadrantGrid><ReminderBucket snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /><div className="flex h-full flex-col items-center justify-center gap-[0.7vh] text-center">{fitList(items.slice(1, 6).map((item: any) => <div key={item.reminder_id} className="truncate text-[1.4vw]">{item.title}</div>))}</div><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth() + 1, 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /></QuadrantGrid>
 }
 
 function countdownItems(snapshot: PhysicalFrameSnapshot) {
@@ -2261,7 +2345,7 @@ function MirrorCountdownModule({ snapshot, size }: { snapshot: PhysicalFrameSnap
   const { hero } = countdownItems(snapshot)
   const heroDate = dateFromYmd(hero?.target_date)
   const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
-  if (size === 'small') return <div className="flex h-full items-center justify-center truncate text-center text-[2.4vw] font-semibold">{hero ? `${hero.title} in ${hero.days_left} ${snapshot.language === 'no' ? 'dager' : 'days'}` : '—'}</div>
+  if (size === 'small') return <div className="flex h-full items-center justify-center truncate text-center text-[2.4vw] font-semibold">{hero ? `${hero.title} · ${hero.days_left === 0 ? (snapshot.language === 'no' ? 'i dag' : 'today') : `${hero.days_left} ${snapshot.language === 'no' ? 'dager igjen' : 'days left'}`} · ${hero.display_date || shortDateLabel(snapshot.language, hero.target_date) || ''}` : '—'}</div>
   if (size === 'medium') return <HeroCountdown snapshot={snapshot} />
   if (size === 'large') return <TwoPanel><HeroCountdown snapshot={snapshot} /><ComingUp snapshot={snapshot} /></TwoPanel>
   return <QuadrantGrid><HeroCountdown snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={[heroDate ? toDateInputValue(heroDate) : '']} /><ComingUp snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth() + 1, 1)} language={snapshot.language} highlightYmds={[heroDate ? toDateInputValue(heroDate) : '']} /></QuadrantGrid>
@@ -2278,6 +2362,25 @@ function StandingsTable({ data, rows }: { data: any; rows: number }) {
   return <div className="flex h-full flex-col justify-center text-[1vw]"><div className="grid grid-cols-[0.7fr_2fr_1fr_1fr_1fr] gap-[0.4vw] border-b border-current/50 pb-[0.5vh] font-semibold opacity-70"><span>P</span><span>Team</span><span>Pts</span><span>Gap</span><span>GD</span></div>{fitList(table.map((row: any) => <div key={`${row.position}-${row.teamShort}`} className="grid grid-cols-[0.7fr_2fr_1fr_1fr_1fr] gap-[0.4vw] py-[0.28vh]"><span>{row.position}</span><span className="truncate">{row.teamShort || row.teamName}</span><span>{row.points}</span><span>{row.gap ?? '-'}</span><span>{row.goalDifference ?? '-'}</span></div>))}</div>
 }
 
+function SoccerXLLeft({ data, cfg }: { data: any; cfg: any }) {
+  const next = data?.next
+  const last = data?.last
+  const scorer = data?.topScorer?.name || data?.lastScorers?.[0]?.name || '--'
+  const standing = data?.standing || {}
+  return (
+    <div className="flex h-full flex-col justify-center gap-[1vh] text-center">
+      <MirrorTitle>{cfg?.teamName || data?.teamKey || 'Team'}</MirrorTitle>
+      <div className="text-[1.15vw] opacity-60">{data?.competitionName || data?.domesticCompetitionCode || 'Competition'}</div>
+      <div className="truncate text-[1.65vw] font-semibold">{next ? `${next.homeShort || next.homeName || ''} vs ${next.awayShort || next.awayName || ''}` : 'No next fixture'}</div>
+      <div className="text-[1.15vw] opacity-65">{next?.dateLabel || next?.kickoffLabel || '--'}</div>
+      <div className="h-px bg-current opacity-50" />
+      <div className="grid grid-cols-3 gap-[1vw] text-[1.15vw]"><div><div className="opacity-55">Position</div><div className="font-semibold">{standing.position ? `#${standing.position}` : '--'}</div></div><div><div className="opacity-55">Points</div><div className="font-semibold">{standing.points ?? '--'}</div></div><div><div className="opacity-55">GD</div><div className="font-semibold">{standing.goalDifference ?? '--'}</div></div></div>
+      <div className="truncate text-[1.15vw]"><span className="opacity-55">Top scorer</span> {scorer}</div>
+      <div className="truncate text-[1.15vw]"><span className="opacity-55">Last</span> {last ? `${last.homeShort || last.homeName || ''} - ${last.awayShort || last.awayName || ''} ${last.score || ''}` : '--'}</div>
+    </div>
+  )
+}
+
 function MirrorSoccerModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
   const cfg = moduleConfigById(snapshot.modulesJson.soccer, assignment.instanceId)
   const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
@@ -2285,18 +2388,31 @@ function MirrorSoccerModule({ snapshot, assignment, size }: { snapshot: Physical
   const next = data?.next
   if (size === 'small') return <div className="flex h-full flex-col justify-center gap-[1vh] text-center"><div className="truncate text-[1.8vw] font-semibold">{next ? `${next.homeShort || next.homeName || ''} vs ${next.awayShort || next.awayName || ''}` : cfg?.teamName || data?.teamKey || 'Soccer'}</div><ThreeValueRow values={[next?.dateLabel || '--', data?.standing?.position ? `#${data.standing.position}` : '--', data?.standing?.points ? `${data.standing.points} pts` : '--']} /></div>
   if (size === 'medium') return <SoccerPanel data={data} />
-  return <TwoPanel><SoccerPanel data={data} /><StandingsTable data={data} rows={size === 'xl' ? 12 : 6} /></TwoPanel>
+  if (size === 'xl') return <TwoPanel><SoccerXLLeft data={data} cfg={cfg} /><StandingsTable data={data} rows={12} /></TwoPanel>
+  return <TwoPanel><SoccerPanel data={data} /><StandingsTable data={data} rows={6} /></TwoPanel>
 }
 
 function MirrorStocksModule({ snapshot, assignment, size }: { snapshot: PhysicalFrameSnapshot; assignment: PhysicalFrameCell; size: CellSize }) {
   const cfg = moduleConfigById(snapshot.modulesJson.stocks, assignment.instanceId)
+  const id = Number(cfg?.id ?? assignment.instanceId ?? 1)
+  const live = snapshot.runtimeData?.stocksById?.[id]
   const title = cfg?.name || cfg?.symbol || 'Investment'
-  const values = [cfg?.symbol || '--', cfg?.chartRange || 'day', cfg?.purchasePrice ? `${cfg.purchasePrice}` : cfg?.currency || 'USD']
-  const chart = <div className="mx-auto h-full min-h-[6vh] w-[86%] rounded-sm border border-current/60 opacity-70" />
+  const price = live?.price != null ? `${live.price}` : '--'
+  const dayPct = live?.day_percent != null ? `${Number(live.day_percent).toFixed(2)}%` : '--'
+  const third = live?.position_percent != null ? `${Number(live.position_percent).toFixed(2)}%` : live?.range_percent != null ? `${Number(live.range_percent).toFixed(2)}%` : '--'
+  const values = [price, dayPct, third]
+  const chart = <div className="mx-auto flex h-full min-h-[6vh] w-[86%] items-center justify-center rounded-sm border border-current/60 text-[1vw] opacity-70">{live ? '' : 'Config only'}</div>
   if (size === 'small') return <div className="flex h-full flex-col justify-center gap-[1.5vh]"><MirrorTitle>{title}</MirrorTitle><ThreeValueRow values={values} /></div>
   if (size === 'medium') return <div className="flex h-full flex-col justify-between gap-[1vh]"><MirrorTitle>{title}</MirrorTitle><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div><ThreeValueRow values={values} /></div>
-  const details = ['Open', 'High', 'Low', 'Prev close', 'Change', cfg?.purchasePrice ? 'Pos %' : 'Range %']
-  if (size === 'large') return <TwoPanel><div className="flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorTitle>{title}</MirrorTitle>{details.map((d, i) => <div key={d} className="text-[1.2vw]"><span className="opacity-55">{d}</span> <span className="font-semibold">{values[i % values.length]}</span></div>)}</div><div className="flex h-full flex-col gap-[1vh]"><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div></div></TwoPanel>
+  const details = [
+    ['Open', live?.open],
+    ['High', live?.high],
+    ['Low', live?.low],
+    ['Prev close', live?.previous_close],
+    ['Change', live?.change],
+    [live?.position_percent != null ? 'Pos %' : 'Range %', third],
+  ]
+  if (size === 'large') return <TwoPanel><div className="flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorTitle>{title}</MirrorTitle>{details.map(([label, value]: any[]) => <div key={label} className="text-[1.2vw]"><span className="opacity-55">{label}</span> <span className="font-semibold">{value ?? '--'}</span></div>)}</div><div className="flex h-full flex-col gap-[1vh]"><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div></div></TwoPanel>
   return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><div className="flex min-h-0 flex-col justify-center gap-[1.2vh]"><MirrorTitle>{title}</MirrorTitle><ThreeValueRow values={values} /><div className="grid grid-cols-3 text-center text-[1.15vw] opacity-70"><div>High / Low</div><div>Open / Prev</div><div>Change / Day</div></div></div><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="flex min-h-0 flex-col gap-[1vh] pt-[1vh]"><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div>{chart}</div></div>
 }
 
@@ -2305,12 +2421,19 @@ function groceryDinner(snapshot: PhysicalFrameSnapshot) {
   return dinners
 }
 
-function GroceryList({ snapshot, max = 12 }: { snapshot: PhysicalFrameSnapshot; max?: number }) {
+function todayDinner(snapshot: PhysicalFrameSnapshot) {
+  const today = toDateInputValue(new Date())
+  const dinners = groceryDinner(snapshot)
+  return dinners.find((d: any) => d?.date === today) || dinners[0] || null
+}
+
+function GroceryList({ snapshot, max = 12, showDinnerHeader = false }: { snapshot: PhysicalFrameSnapshot; max?: number; showDinnerHeader?: boolean }) {
   const items = Array.isArray(snapshot.modulesJson.groceries) ? snapshot.modulesJson.groceries : []
+  const dinner = showDinnerHeader ? todayDinner(snapshot) : null
   const shown = items.slice(0, max)
   const cols = max > 7 ? 3 : 1
   const groups = splitRows(shown, cols)
-  return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Grocery List'}</MirrorKicker>{items.length > shown.length && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - shown.length} items</div>}<div className={`grid gap-x-[1vw] ${cols === 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>{groups.map((group, i) => <div key={i} className="space-y-[0.45vh]">{fitList(group.map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate text-[1.25vw]">{item?.name}{Number(item?.quantity) > 1 ? ` ×${item.quantity}` : ''}</div>))}</div>)}</div></div>
+  return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center">{dinner ? <><MirrorKicker>{snapshot.language === 'no' ? 'Dagens middag' : "Today's Dinner"}</MirrorKicker><div className="truncate text-[1.75vw] font-semibold">{dinner.title}</div></> : <MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Grocery List'}</MirrorKicker>}{items.length > shown.length && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - shown.length} items</div>}<div className={`grid gap-x-[1vw] ${cols === 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>{groups.map((group, i) => <div key={i} className="space-y-[0.45vh]">{fitList(group.map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate text-[1.25vw]">{item?.name}{Number(item?.quantity) > 1 ? ` ×${item.quantity}` : ''}</div>))}</div>)}</div></div>
 }
 
 function DinnerList({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
@@ -2321,27 +2444,31 @@ function DinnerList({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
 function MirrorGroceriesModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
   const items = Array.isArray(snapshot.modulesJson.groceries) ? snapshot.modulesJson.groceries : []
   if (size === 'small') return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Groceries'}</MirrorKicker>{items.length > 3 && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - 3} items</div>}<div className="grid grid-cols-3 items-center divide-x divide-current/50">{fitList(items.slice(0, 3).map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate px-[1vw] text-[1.4vw] font-semibold">{item?.name}</div>))}</div></div>
-  if (size === 'medium') return <GroceryList snapshot={snapshot} max={12} />
+  if (size === 'medium') return <GroceryList snapshot={snapshot} max={12} showDinnerHeader />
   if (size === 'large') return <TwoPanel><GroceryList snapshot={snapshot} max={12} /><DinnerList snapshot={snapshot} /></TwoPanel>
   const insights = snapshot.modulesJson.groceries_insights?.insights || {}
   const low = Array.isArray(insights.running_low) ? insights.running_low : []
   const recipes = Array.isArray(insights.recipes) ? insights.recipes : []
-  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><GroceryList snapshot={snapshot} max={12} /><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="grid min-h-0 grid-cols-[1fr_auto_1fr] pt-[1vh]"><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Running low</MirrorKicker>{fitList(low.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.2vw]">{x.name} <span className="opacity-55">{x.label}</span></div>))}</div><div className="my-[10%] w-px bg-current opacity-50" /><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Meal ideas</MirrorKicker>{fitList(recipes.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.2vw]">{x.name}</div>))}</div></div></div>
+  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><GroceryList snapshot={snapshot} max={12} showDinnerHeader /><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="grid min-h-0 grid-cols-[1fr_auto_1fr] pt-[1vh]"><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Running low</MirrorKicker>{fitList(low.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.2vw]">{x.name} <span className="opacity-55">{x.label}</span></div>))}</div><div className="my-[10%] w-px bg-current opacity-50" /><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Meal ideas</MirrorKicker>{fitList(recipes.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.2vw]">{x.name}</div>))}</div></div></div>
 }
 
 function MirrorBatteryBadge({ battery }: { battery: MirrorBatteryState }) {
   const charging = battery.is_charging || battery.is_usb_present
   const pct = battery.battery_percent
-  const fill = pct == null ? 55 : Math.max(6, Math.min(100, pct))
+  if (pct == null) return null
+  if (!charging && pct >= 20) return null
+
+  const critical = pct < 10 && !charging
+  const fill = Math.max(6, Math.min(100, pct))
 
   return (
     <div className="pointer-events-none absolute right-[2.1vw] top-[2.2vh] z-20 flex items-center gap-[0.55vw] opacity-70">
-      {pct != null && <span className="text-[1.15vw] tabular-nums leading-none">{pct}%</span>}
+      {charging && <span className="text-[1.35vw] leading-none">⚡</span>}
+      {critical ? <span className="text-[1.05vw] leading-none">Charge now</span> : charging ? <span className="text-[1.15vw] tabular-nums leading-none">{pct}%</span> : null}
       <div className="relative h-[2.05vh] w-[2.95vw] rounded-[0.35vw] border-[1.5px] border-current">
         <div className="absolute -right-[0.32vw] top-1/2 h-[0.9vh] w-[0.28vw] -translate-y-1/2 rounded-r-sm bg-current" />
         <div className="absolute bottom-[16%] left-[10%] top-[16%] rounded-[0.18vw] bg-current" style={{ width: `${fill * 0.78}%` }} />
       </div>
-      {charging && <span className="text-[1.35vw] leading-none">⚡</span>}
     </div>
   )
 }
