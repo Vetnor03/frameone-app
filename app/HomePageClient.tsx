@@ -1952,10 +1952,10 @@ function PhysicalMirrorDividers({ layoutKey }: { layoutKey: LayoutKey }) {
 
 function MirrorCellContent({ snapshot, slot, size }: { snapshot: PhysicalFrameSnapshot; slot: number; size: CellSize }) {
   const assignment = snapshot.cellAssignments[slot]
-  const padClass = size === 'small' ? 'px-[4vw] py-[1.4vw]' : size === 'xl' ? 'px-[8vw] py-[7vh]' : 'px-[4.5vw] py-[4vh]'
+  const padClass = size === 'small' ? 'px-[2.5vw] py-[0.8vw]' : size === 'xl' ? 'px-[5vw] py-[4vh]' : 'px-[2.75vw] py-[2vh]'
 
   if (!assignment) {
-    return <div className={`${padClass} flex h-full w-full items-center justify-center text-[2vw] tracking-[0.28em] opacity-30`}>+</div>
+    return <div className={`${padClass} flex h-full w-full items-center justify-center text-[2.8vw] tracking-[0.24em] opacity-30`}>+</div>
   }
 
   return (
@@ -1978,20 +1978,20 @@ function renderPhysicalMirrorModule(snapshot: PhysicalFrameSnapshot, assignment:
 }
 
 function MirrorKicker({ children }: { children: React.ReactNode }) {
-  return <div className="text-[1.15vw] uppercase tracking-[0.28em] opacity-60">{children}</div>
+  return <div className="text-[1.75vw] uppercase tracking-[0.28em] opacity-60">{children}</div>
 }
 
 function MirrorTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-center">
-      <div className="truncate text-[1.85vw] font-semibold leading-none">{children}</div>
-      <div className="mx-auto mt-[0.65vh] h-px w-[7vw] bg-current opacity-75" />
+      <div className="truncate text-[2.35vw] font-semibold leading-none">{children}</div>
+      <div className="mx-auto mt-[0.65vh] h-px w-[9vw] bg-current opacity-75" />
     </div>
   )
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex bg-current px-[1vw] py-[0.45vh] text-[1.25vw] font-semibold leading-none text-[color:var(--badge-ink,#050f14)]">{children}</span>
+  return <span className="inline-flex bg-current px-[1vw] py-[0.45vh] text-[1.9vw] font-semibold leading-none text-[color:var(--badge-ink,#050f14)]">{children}</span>
 }
 
 function fitList(items: React.ReactNode[], empty: React.ReactNode = '—') {
@@ -2072,19 +2072,19 @@ function MiniCalendar({
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-center px-[2vw]">
-      <div className="mb-[1vh] text-center text-[1.45vw] font-semibold capitalize">
+      <div className="mb-[1vh] text-center text-[2.15vw] font-semibold capitalize">
         {new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(monthDate)}
       </div>
-      <div className="grid grid-cols-7 gap-y-[0.35vh] text-center text-[0.95vw] opacity-55">
+      <div className="grid grid-cols-7 gap-y-[0.35vh] text-center text-[1.45vw] opacity-55">
         {weekdays.map((d, idx) => <div key={`${d}-${idx}`}>{d}</div>)}
       </div>
-      <div className="mt-[0.45vh] grid grid-cols-7 gap-y-[0.35vh] text-center text-[1.05vw] tabular-nums">
+      <div className="mt-[0.45vh] grid grid-cols-7 gap-y-[0.35vh] text-center text-[1.3vw] tabular-nums">
         {cells.map((c, idx) => {
           const isToday = c.ymd === today
           const marked = !!c.ymd && highlights.has(c.ymd)
           return (
             <div key={`${c.ymd || 'x'}-${idx}`} className="flex items-center justify-center">
-              <span className={`inline-flex h-[2.25vh] min-w-[2.25vh] items-center justify-center rounded-full ${isToday ? 'bg-current text-[color:var(--badge-ink,#050f14)]' : marked ? 'ring-1 ring-current' : ''}`}>
+              <span className={`inline-flex h-[2.75vh] min-w-[2.75vh] items-center justify-center rounded-full ${isToday ? 'bg-current text-[color:var(--badge-ink,#050f14)]' : marked ? 'ring-1 ring-current' : ''}`}>
                 {c.day ?? ''}
               </span>
             </div>
@@ -2099,9 +2099,9 @@ function HeroDate({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
   const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
   return (
     <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center">
-      <div className="text-[1.5vw] opacity-65">{now.getFullYear()}</div>
-      <div className="text-[2vw] font-semibold capitalize leading-none">{mirrorMonthName(now)}</div>
-      <div className="text-[9vh] font-semibold leading-[0.9] tabular-nums">{now.getDate()}</div>
+      <div className="text-[1.9vw] opacity-65">{now.getFullYear()}</div>
+      <div className="text-[2.6vw] font-semibold capitalize leading-none">{mirrorMonthName(now)}</div>
+      <div className="text-[11vh] font-semibold leading-[0.9] tabular-nums">{now.getDate()}</div>
       <Badge>{mirrorWeekdayName(now)}</Badge>
     </div>
   )
@@ -2110,7 +2110,7 @@ function HeroDate({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
 function holidayNodes(snapshot: PhysicalFrameSnapshot) {
   const holidays = Array.isArray(snapshot.modulesJson?.date?.holidays) ? snapshot.modulesJson.date.holidays : []
   return fitList(holidays.slice(0, 4).map((h: any) => (
-    <div key={`${h.date}-${h.name}`} className="truncate text-[1.55vw]">
+    <div key={`${h.date}-${h.name}`} className="truncate text-[1.9vw]">
       <span className="opacity-55">{shortDateLabel(snapshot.language, h.date)}</span> {h.name}
     </div>
   )))
@@ -2121,7 +2121,7 @@ function MirrorDateModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot;
 
   if (size === 'small') {
     return (
-      <div className="flex h-full items-center justify-center text-center text-[3.3vh] font-semibold leading-none">
+      <div className="flex h-full items-center justify-center text-center text-[4.2vh] font-semibold leading-none">
         {mirrorWeekdayName(now)} {now.getDate()}. {mirrorMonthName(now)}
       </div>
     )
@@ -2183,11 +2183,11 @@ function fourColumnForecast(items: Array<{ title: string; icon?: string; a?: str
       {items.map((item, idx) => (
         <React.Fragment key={`${item.title}-${idx}`}>
           <div className="flex min-w-0 flex-col items-center justify-center gap-[0.9vh] px-[1vw]">
-            <div className="text-[1.25vw] font-semibold opacity-70">{item.title}</div>
-            <div className="text-[3.2vw] leading-none">{item.icon || '○'}</div>
-            <div className="text-[1.35vw] font-semibold">{item.a || '--'}</div>
-            <div className="text-[1.1vw] opacity-65">{item.b || ''}</div>
-            <div className="text-[1.1vw] opacity-65">{item.c || ''}</div>
+            <div className="text-[2.05vw] font-semibold opacity-70">{item.title}</div>
+            <div className="text-[4.1vw] leading-none">{item.icon || '○'}</div>
+            <div className="text-[2.15vw] font-semibold">{item.a || '--'}</div>
+            <div className="text-[1.7vw] opacity-65">{item.b || ''}</div>
+            <div className="text-[1.7vw] opacity-65">{item.c || ''}</div>
           </div>
           {idx < items.length - 1 && <div className="my-[10%] w-px bg-current opacity-50" />}
         </React.Fragment>
@@ -2231,10 +2231,10 @@ function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: Physica
   if (size === 'medium') {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-[1.2vw] text-[2.2vw] font-semibold"><span>{Number.isFinite(Number(min)) ? `${Math.round(Number(min))}°` : '--'}</span><span className="h-[3vh] w-px bg-current opacity-50" /><span>{Number.isFinite(Number(max)) ? `${Math.round(Number(max))}°` : '--'}</span></div>
-        <div className="max-w-[82%] text-[1.25vw] leading-tight opacity-70">{suggestion}</div>
-        <div className="text-[6vw] leading-none">{icon}</div>
-        <div className="text-[1.25vw] opacity-65">{wind} · {precip}</div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-[1.2vw] text-[2.9vw] font-semibold"><span>{Number.isFinite(Number(min)) ? `${Math.round(Number(min))}°` : '--'}</span><span className="h-[3vh] w-px bg-current opacity-50" /><span>{Number.isFinite(Number(max)) ? `${Math.round(Number(max))}°` : '--'}</span></div>
+        <div className="max-w-[82%] text-[1.6vw] leading-tight opacity-70">{suggestion}</div>
+        <div className="text-[7.8vw] leading-none">{icon}</div>
+        <div className="text-[1.55vw] opacity-65">{wind} · {precip}</div>
       </div>
     )
   }
@@ -2246,9 +2246,9 @@ function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: Physica
   return (
     <div className="grid h-full grid-rows-[1fr_auto_1fr]">
       <div className="grid min-h-0 grid-cols-3 items-center text-center">
-        <div className="space-y-[0.8vh] text-[1.25vw]"><div className="text-[2vw] font-semibold">{hiLo}</div><div>{wind}</div><div>{precip}</div><div className="opacity-60">{day?.sunrise?.[0]?.slice(11, 16) || '--:--'} / {day?.sunset?.[0]?.slice(11, 16) || '--:--'}</div><div className="opacity-60">{data?.current?.relative_humidity_2m ?? '--'}% humidity</div></div>
-        <div className="flex flex-col items-center gap-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[7vw] leading-none">{icon}</div><div className="text-[3vw] font-semibold">{currentTemp}</div></div>
-        <div className="px-[2vw] text-[1.35vw] leading-snug opacity-70">{suggestion}</div>
+        <div className="space-y-[0.8vh] text-[1.55vw]"><div className="text-[2.6vw] font-semibold">{hiLo}</div><div>{wind}</div><div>{precip}</div><div className="opacity-60">{day?.sunrise?.[0]?.slice(11, 16) || '--:--'} / {day?.sunset?.[0]?.slice(11, 16) || '--:--'}</div><div className="opacity-60">{data?.current?.relative_humidity_2m ?? '--'}% humidity</div></div>
+        <div className="flex flex-col items-center gap-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[8.7vw] leading-none">{icon}</div><div className="text-[3.8vw] font-semibold">{currentTemp}</div></div>
+        <div className="px-[2vw] text-[1.7vw] leading-snug opacity-70">{suggestion}</div>
       </div>
       <div className="mx-[2.5%] h-px bg-current opacity-80" />
       <div className="min-h-0">{fourColumnForecast(forecasts)}</div>
@@ -2259,7 +2259,7 @@ function MirrorWeatherModule({ snapshot, assignment, size }: { snapshot: Physica
 function ratingDots(value: any, options?: { rounded?: boolean; large?: boolean }) {
   const n = Math.max(0, Math.min(6, Math.round(Number(value) || 0)))
   const shape = options?.rounded ? 'rounded-[0.35vh]' : 'rounded-full'
-  const size = options?.large ? 'h-[2vh] w-[2.8vh]' : 'h-[1.3vh] w-[1.9vh]'
+  const size = options?.large ? 'h-[2.5vh] w-[3.6vh]' : 'h-[1.7vh] w-[2.5vh]'
   return <div className="flex justify-center gap-[0.3vw]">{Array.from({ length: 6 }, (_, i) => <span key={i} className={`${size} ${shape} border border-current ${i < n ? 'bg-current' : ''}`} />)}</div>
 }
 
@@ -2280,17 +2280,17 @@ function directionTowards(value: any) {
 }
 
 function DirectionArrow({ degrees }: { degrees: number | null }) {
-  return <div className="mx-auto text-[2vw] leading-none" style={{ transform: `rotate(${degrees ?? 0}deg)` }}>↑</div>
+  return <div className="mx-auto text-[2.8vw] leading-none" style={{ transform: `rotate(${degrees ?? 0}deg)` }}>↑</div>
 }
 
 function WavePeriodIcon({ seconds }: { seconds: any }) {
   const period = Number(seconds)
   const peaks = !Number.isFinite(period) ? 3 : period >= 12 ? 2 : period >= 8 ? 3 : 4
-  return <div className="flex h-[2vh] items-center justify-center gap-[0.12vw]">{Array.from({ length: peaks }, (_, i) => <span key={i} className="h-[1.1vh] w-[0.55vw] rounded-t-full border-t border-current" />)}</div>
+  return <div className="flex h-[2.6vh] items-center justify-center gap-[0.12vw]">{Array.from({ length: peaks }, (_, i) => <span key={i} className="h-[1.5vh] w-[0.75vw] rounded-t-full border-t border-current" />)}</div>
 }
 
 function WindIconBox() {
-  return <div className="mx-auto flex h-[2.2vh] w-[2.2vw] items-center justify-center rounded-sm border border-current text-[1vw]">≈</div>
+  return <div className="mx-auto flex h-[2.9vh] w-[2.9vw] items-center justify-center rounded-sm border border-current text-[1.7vw]">≈</div>
 }
 
 function SurfColumns({ items, fallbackLabels }: { items: any[]; fallbackLabels: string[] }) {
@@ -2300,10 +2300,10 @@ function SurfColumns({ items, fallbackLabels }: { items: any[]; fallbackLabels: 
       {cols.map((item: any, idx: number) => (
         <React.Fragment key={`${item?.label || fallbackLabels[idx]}-${idx}`}>
           <div className="flex min-w-0 flex-col items-center justify-center gap-[0.8vh] px-[1vw]">
-            <div className="text-[1.25vw] font-semibold opacity-70">{item?.label || fallbackLabels[idx]}</div>
-            <div className="text-[1.45vw] font-semibold">{item?.rating != null ? surfRatingLabel(item.rating) : '--'}</div>
+            <div className="text-[2.05vw] font-semibold opacity-70">{item?.label || fallbackLabels[idx]}</div>
+            <div className="text-[1.85vw] font-semibold">{item?.rating != null ? surfRatingLabel(item.rating) : '--'}</div>
             {ratingDots(item?.rating, { rounded: true })}
-            <div className="text-[1.25vw] opacity-70">{item?.wave_height_range_label || '--'}</div>
+            <div className="text-[1.55vw] opacity-70">{item?.wave_height_range_label || '--'}</div>
           </div>
           {idx < cols.length - 1 && <div className="my-[10%] w-px bg-current opacity-50" />}
         </React.Fragment>
@@ -2340,22 +2340,22 @@ function MirrorSurfModule({ snapshot, assignment, size }: { snapshot: PhysicalFr
   if (size === 'medium') {
     return (
       <div className="relative flex h-full flex-col pt-[0.2vh]">
-        {isTodaysBest && <div className="absolute left-0 top-0 text-[0.95vw] opacity-60">Todays best</div>}
+        {isTodaysBest && <div className="absolute left-0 top-0 text-[1.5vw] opacity-60">Todays best</div>}
         <div className="pt-[1.2vh]"><MirrorTitle>{resolvedSpot}</MirrorTitle></div>
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] items-center pt-[1vh]">
           <div className="grid h-[72%] grid-rows-3 items-center text-center">
-            <div className="text-[1.65vw] font-semibold">{ratingText}</div>
+            <div className="text-[2.15vw] font-semibold">{ratingText}</div>
             <div>{ratingDots(rating, { rounded: true })}</div>
             <div className="text-[1.3vw] opacity-75">{wave}</div>
           </div>
           <div className="h-[72%] w-px bg-current opacity-50" />
           <div className="grid h-[72%] grid-rows-3 items-center text-center">
-            <div className="text-[1.45vw] font-semibold">Details:</div>
+            <div className="text-[1.85vw] font-semibold">Details:</div>
             <div className="grid grid-cols-2 items-center">
               <DirectionArrow degrees={waveTowards} />
               <DirectionArrow degrees={windTowards} />
             </div>
-            <div className="grid grid-cols-2 items-end text-[1.1vw] opacity-75">
+            <div className="grid grid-cols-2 items-end text-[1.75vw] opacity-75">
               <div className="space-y-[0.5vh]"><WavePeriodIcon seconds={swellPeriod} /><div>{Number.isFinite(Number(swellPeriod)) ? `${Math.round(Number(swellPeriod))} s` : '-- s'}</div></div>
               <div className="space-y-[0.5vh]"><WindIconBox /><div>{Number.isFinite(Number(windSpeed)) ? `${Math.round(Number(windSpeed))} m/s` : '-- m/s'}</div></div>
             </div>
@@ -2372,9 +2372,9 @@ function MirrorSurfModule({ snapshot, assignment, size }: { snapshot: PhysicalFr
   return (
     <div className="grid h-full grid-rows-[1fr_auto_1fr]">
       <div className="grid min-h-0 grid-cols-3 items-center text-center">
-        <div className="px-[1vw] text-[1.2vw] opacity-65">{isTodaysBest ? `Todays best: ${resolvedSpot}` : resolvedSpot}</div>
-        <div className="space-y-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[2vw] font-semibold">{ratingText}</div>{ratingDots(rating, { rounded: true, large: true })}<div className="text-[1.4vw] opacity-70">{wave}</div></div>
-        <div className="grid grid-cols-2 items-center gap-[1vw] px-[1vw] text-center text-[1.1vw] opacity-75">
+        <div className="px-[1vw] text-[1.5vw] opacity-65">{isTodaysBest ? `Todays best: ${resolvedSpot}` : resolvedSpot}</div>
+        <div className="space-y-[1vh]"><MirrorTitle>Today</MirrorTitle><div className="text-[2.6vw] font-semibold">{ratingText}</div>{ratingDots(rating, { rounded: true, large: true })}<div className="text-[1.75vw] opacity-70">{wave}</div></div>
+        <div className="grid grid-cols-2 items-center gap-[1vw] px-[1vw] text-center text-[1.75vw] opacity-75">
           <div className="space-y-[0.5vh]"><DirectionArrow degrees={waveTowards} /><WavePeriodIcon seconds={swellPeriod} /><div>{Number.isFinite(Number(swellPeriod)) ? `${Math.round(Number(swellPeriod))} s` : '-- s'}</div></div>
           <div className="space-y-[0.5vh]"><DirectionArrow degrees={windTowards} /><WindIconBox /><div>{Number.isFinite(Number(windSpeed)) ? `${Math.round(Number(windSpeed))} m/s` : '-- m/s'}</div></div>
         </div>
@@ -2407,7 +2407,7 @@ function ReminderBucket({ snapshot, maxItems, bottomNote = true }: { snapshot: P
   const header = reminderBucketHeader(items[0], snapshot.language)
   const visibleCount = maxItems ?? (reminderIsTodayTomorrow(items[0]) ? 4 : 3)
   const shown = items.slice(0, visibleCount)
-  return <div className="relative flex h-full flex-col justify-center text-center"><MirrorTitle>{header}</MirrorTitle>{items.length > shown.length && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - shown.length} more</div>}<div className="mt-[1.5vh] grid flex-1 items-center divide-x divide-current/50" style={{ gridTemplateColumns: `repeat(${Math.max(1, shown.length || 1)}, minmax(0,1fr))` }}>{fitList(shown.map((item: any) => <div key={item.reminder_id || item.title} className="truncate px-[1vw] text-[1.55vw] font-semibold">{item.title}</div>))}</div>{bottomNote && header === 'Today' && <div className="text-[1.1vw] opacity-55">Tomorrow: {items.filter((x: any) => Number(x.days_until) === 1).length}</div>}</div>
+  return <div className="relative flex h-full flex-col justify-center text-center"><MirrorTitle>{header}</MirrorTitle>{items.length > shown.length && <div className="absolute right-0 top-0 text-[1.3vw] opacity-60">+{items.length - shown.length} more</div>}<div className="mt-[1.5vh] grid flex-1 items-center divide-x divide-current/50" style={{ gridTemplateColumns: `repeat(${Math.max(1, shown.length || 1)}, minmax(0,1fr))` }}>{fitList(shown.map((item: any) => <div key={item.reminder_id || item.title} className="truncate px-[1vw] text-[1.9vw] font-semibold">{item.title}</div>))}</div>{bottomNote && header === 'Today' && <div className="text-[1.7vw] opacity-55">Tomorrow: {items.filter((x: any) => Number(x.days_until) === 1).length}</div>}</div>
 }
 
 function MirrorRemindersModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
@@ -2417,7 +2417,7 @@ function MirrorRemindersModule({ snapshot, size }: { snapshot: PhysicalFrameSnap
   if (size === 'small') return <ReminderBucket snapshot={snapshot} maxItems={3} />
   if (size === 'medium') return <ReminderBucket snapshot={snapshot} />
   if (size === 'large') return <TwoPanel><ReminderBucket snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} /></TwoPanel>
-  return <QuadrantGrid><ReminderBucket snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /><div className="flex h-full flex-col items-center justify-center gap-[0.7vh] text-center">{fitList(items.slice(1, 6).map((item: any) => <div key={item.reminder_id} className="truncate text-[1.4vw]">{item.title}</div>))}</div><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth() + 1, 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /></QuadrantGrid>
+  return <QuadrantGrid><ReminderBucket snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /><div className="flex h-full flex-col items-center justify-center gap-[0.7vh] text-center">{fitList(items.slice(1, 6).map((item: any) => <div key={item.reminder_id} className="truncate text-[1.75vw]">{item.title}</div>))}</div><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth() + 1, 1)} language={snapshot.language} highlightYmds={highlightYmds} forceSixRows /></QuadrantGrid>
 }
 
 function countdownItems(snapshot: PhysicalFrameSnapshot) {
@@ -2428,20 +2428,20 @@ function countdownItems(snapshot: PhysicalFrameSnapshot) {
 
 function HeroCountdown({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
   const { hero } = countdownItems(snapshot)
-  return <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center"><div className="max-w-full truncate text-[2vw] font-semibold">{hero?.title || (snapshot.language === 'no' ? 'Nedtelling' : 'Countdown')}</div><div className="text-[9vh] font-semibold leading-[0.9] tabular-nums">{hero?.days_left ?? '--'}</div><div className="text-[1.45vw] uppercase tracking-[0.25em] opacity-65">{snapshot.language === 'no' ? 'dager' : 'days'}</div><Badge>{hero?.display_date || shortDateLabel(snapshot.language, hero?.target_date) || '—'}</Badge></div>
+  return <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center"><div className="max-w-full truncate text-[2.6vw] font-semibold">{hero?.title || (snapshot.language === 'no' ? 'Nedtelling' : 'Countdown')}</div><div className="text-[11vh] font-semibold leading-[0.9] tabular-nums">{hero?.days_left ?? '--'}</div><div className="text-[1.8vw] uppercase tracking-[0.25em] opacity-65">{snapshot.language === 'no' ? 'dager' : 'days'}</div><Badge>{hero?.display_date || shortDateLabel(snapshot.language, hero?.target_date) || '—'}</Badge></div>
 }
 
 function ComingUp({ snapshot, skipHero = true }: { snapshot: PhysicalFrameSnapshot; skipHero?: boolean }) {
   const { items, hero } = countdownItems(snapshot)
   const list = (skipHero ? items.filter((x: any) => x !== hero) : items).slice(0, 4)
-  return <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center"><MirrorKicker>Coming up</MirrorKicker>{fitList(list.map((item: any) => <div key={item.id} className="truncate text-[1.45vw]">• {item.title} <span className="opacity-55">{item.days_left}d</span></div>))}</div>
+  return <div className="flex h-full flex-col items-center justify-center gap-[1vh] text-center"><MirrorKicker>Coming up</MirrorKicker>{fitList(list.map((item: any) => <div key={item.id} className="truncate text-[1.8vw]">• {item.title} <span className="opacity-55">{item.days_left}d</span></div>))}</div>
 }
 
 function MirrorCountdownModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
   const { hero } = countdownItems(snapshot)
   const heroDate = dateFromYmd(hero?.target_date)
   const now = snapshot.renderAt ? new Date(snapshot.renderAt) : new Date()
-  if (size === 'small') return <div className="flex h-full items-center justify-center truncate text-center text-[2.4vw] font-semibold">{hero ? `${hero.title} · ${hero.days_left === 0 ? (snapshot.language === 'no' ? 'i dag' : 'today') : `${hero.days_left} ${snapshot.language === 'no' ? 'dager igjen' : 'days left'}`} · ${hero.display_date || shortDateLabel(snapshot.language, hero.target_date) || ''}` : '—'}</div>
+  if (size === 'small') return <div className="flex h-full items-center justify-center truncate text-center text-[3vw] font-semibold">{hero ? `${hero.title} · ${hero.days_left === 0 ? (snapshot.language === 'no' ? 'i dag' : 'today') : `${hero.days_left} ${snapshot.language === 'no' ? 'dager igjen' : 'days left'}`} · ${hero.display_date || shortDateLabel(snapshot.language, hero.target_date) || ''}` : '—'}</div>
   if (size === 'medium') return <HeroCountdown snapshot={snapshot} />
   if (size === 'large') return <TwoPanel><HeroCountdown snapshot={snapshot} /><ComingUp snapshot={snapshot} /></TwoPanel>
   return <QuadrantGrid><HeroCountdown snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth(), 1)} language={snapshot.language} highlightYmds={[heroDate ? toDateInputValue(heroDate) : '']} /><ComingUp snapshot={snapshot} /><MiniCalendar monthDate={new Date(now.getFullYear(), now.getMonth() + 1, 1)} language={snapshot.language} highlightYmds={[heroDate ? toDateInputValue(heroDate) : '']} /></QuadrantGrid>
@@ -2450,12 +2450,12 @@ function MirrorCountdownModule({ snapshot, size }: { snapshot: PhysicalFrameSnap
 function SoccerPanel({ data }: { data: any }) {
   const next = data?.next
   const last = data?.last
-  return <div className="grid h-full grid-rows-7 items-center text-center text-[1.35vw]"><div>{next?.dateLabel || next?.kickoffLabel || 'Next'}</div><div className="truncate text-[1.7vw] font-semibold">{next ? `${next.homeShort || next.homeName || ''} vs ${next.awayShort || next.awayName || ''}` : data?.teamKey || 'Team'}</div><div>{data?.standing?.position ? `#${data.standing.position}` : '--'} · {data?.standing?.points ?? '--'} pts</div><div className="h-px bg-current opacity-50" /><div className="opacity-60">Last</div><div className="truncate">{last ? `${last.homeShort || last.homeName || ''} - ${last.awayShort || last.awayName || ''}` : '--'}</div><div className="font-semibold">{last?.score || '--'}</div></div>
+  return <div className="grid h-full grid-rows-7 items-center text-center text-[1.7vw]"><div>{next?.dateLabel || next?.kickoffLabel || 'Next'}</div><div className="truncate text-[2.15vw] font-semibold">{next ? `${next.homeShort || next.homeName || ''} vs ${next.awayShort || next.awayName || ''}` : data?.teamKey || 'Team'}</div><div>{data?.standing?.position ? `#${data.standing.position}` : '--'} · {data?.standing?.points ?? '--'} pts</div><div className="h-px bg-current opacity-50" /><div className="opacity-60">Last</div><div className="truncate">{last ? `${last.homeShort || last.homeName || ''} - ${last.awayShort || last.awayName || ''}` : '--'}</div><div className="font-semibold">{last?.score || '--'}</div></div>
 }
 
 function StandingsTable({ data, rows }: { data: any; rows: number }) {
   const table = Array.isArray(data?.table) ? data.table.slice(0, rows) : []
-  return <div className="flex h-full flex-col justify-center text-[1vw]"><div className="grid grid-cols-[0.7fr_2fr_1fr_1fr_1fr] gap-[0.4vw] border-b border-current/50 pb-[0.5vh] font-semibold opacity-70"><span>P</span><span>Team</span><span>Pts</span><span>Gap</span><span>GD</span></div>{fitList(table.map((row: any) => <div key={`${row.position}-${row.teamShort}`} className="grid grid-cols-[0.7fr_2fr_1fr_1fr_1fr] gap-[0.4vw] py-[0.28vh]"><span>{row.position}</span><span className="truncate">{row.teamShort || row.teamName}</span><span>{row.points}</span><span>{row.gap ?? '-'}</span><span>{row.goalDifference ?? '-'}</span></div>))}</div>
+  return <div className="flex h-full flex-col justify-center text-[1.55vw]"><div className="grid grid-cols-[0.7fr_2fr_1fr_1fr_1fr] gap-[0.4vw] border-b border-current/50 pb-[0.5vh] font-semibold opacity-70"><span>P</span><span>Team</span><span>Pts</span><span>Gap</span><span>GD</span></div>{fitList(table.map((row: any) => <div key={`${row.position}-${row.teamShort}`} className="grid grid-cols-[0.7fr_2fr_1fr_1fr_1fr] gap-[0.4vw] py-[0.28vh]"><span>{row.position}</span><span className="truncate">{row.teamShort || row.teamName}</span><span>{row.points}</span><span>{row.gap ?? '-'}</span><span>{row.goalDifference ?? '-'}</span></div>))}</div>
 }
 
 function SoccerXLLeft({ data, cfg }: { data: any; cfg: any }) {
@@ -2466,13 +2466,13 @@ function SoccerXLLeft({ data, cfg }: { data: any; cfg: any }) {
   return (
     <div className="flex h-full flex-col justify-center gap-[1vh] text-center">
       <MirrorTitle>{cfg?.teamName || data?.teamKey || 'Team'}</MirrorTitle>
-      <div className="text-[1.15vw] opacity-60">{data?.competitionName || data?.domesticCompetitionCode || 'Competition'}</div>
-      <div className="truncate text-[1.65vw] font-semibold">{next ? `${next.homeShort || next.homeName || ''} vs ${next.awayShort || next.awayName || ''}` : 'No next fixture'}</div>
-      <div className="text-[1.15vw] opacity-65">{next?.dateLabel || next?.kickoffLabel || '--'}</div>
+      <div className="text-[1.45vw] opacity-60">{data?.competitionName || data?.domesticCompetitionCode || 'Competition'}</div>
+      <div className="truncate text-[2.15vw] font-semibold">{next ? `${next.homeShort || next.homeName || ''} vs ${next.awayShort || next.awayName || ''}` : 'No next fixture'}</div>
+      <div className="text-[1.45vw] opacity-65">{next?.dateLabel || next?.kickoffLabel || '--'}</div>
       <div className="h-px bg-current opacity-50" />
-      <div className="grid grid-cols-3 gap-[1vw] text-[1.15vw]"><div><div className="opacity-55">Position</div><div className="font-semibold">{standing.position ? `#${standing.position}` : '--'}</div></div><div><div className="opacity-55">Points</div><div className="font-semibold">{standing.points ?? '--'}</div></div><div><div className="opacity-55">GD</div><div className="font-semibold">{standing.goalDifference ?? '--'}</div></div></div>
-      <div className="truncate text-[1.15vw]"><span className="opacity-55">Top scorer</span> {scorer}</div>
-      <div className="truncate text-[1.15vw]"><span className="opacity-55">Last</span> {last ? `${last.homeShort || last.homeName || ''} - ${last.awayShort || last.awayName || ''} ${last.score || ''}` : '--'}</div>
+      <div className="grid grid-cols-3 gap-[1vw] text-[1.45vw]"><div><div className="opacity-55">Position</div><div className="font-semibold">{standing.position ? `#${standing.position}` : '--'}</div></div><div><div className="opacity-55">Points</div><div className="font-semibold">{standing.points ?? '--'}</div></div><div><div className="opacity-55">GD</div><div className="font-semibold">{standing.goalDifference ?? '--'}</div></div></div>
+      <div className="truncate text-[1.45vw]"><span className="opacity-55">Top scorer</span> {scorer}</div>
+      <div className="truncate text-[1.45vw]"><span className="opacity-55">Last</span> {last ? `${last.homeShort || last.homeName || ''} - ${last.awayShort || last.awayName || ''} ${last.score || ''}` : '--'}</div>
     </div>
   )
 }
@@ -2497,9 +2497,9 @@ function MirrorStocksModule({ snapshot, assignment, size }: { snapshot: Physical
   const dayPct = live?.day_percent != null ? `${Number(live.day_percent).toFixed(2)}%` : '--'
   const third = live?.position_percent != null ? `${Number(live.position_percent).toFixed(2)}%` : live?.range_percent != null ? `${Number(live.range_percent).toFixed(2)}%` : '--'
   const values = [price, dayPct, third]
-  const chart = <div className="mx-auto flex h-full min-h-[6vh] w-[86%] items-center justify-center rounded-sm border border-current/60 text-[1vw] opacity-70">{live ? '' : 'Config only'}</div>
+  const chart = <div className="mx-auto flex h-full min-h-[6vh] w-[86%] items-center justify-center rounded-sm border border-current/60 text-[1.55vw] opacity-70">{live ? '' : 'Config only'}</div>
   if (size === 'small') return <div className="flex h-full flex-col justify-center gap-[1.5vh]"><MirrorTitle>{title}</MirrorTitle><ThreeValueRow values={values} /></div>
-  if (size === 'medium') return <div className="flex h-full flex-col justify-between gap-[1vh]"><MirrorTitle>{title}</MirrorTitle><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div><ThreeValueRow values={values} /></div>
+  if (size === 'medium') return <div className="flex h-full flex-col justify-between gap-[1vh]"><MirrorTitle>{title}</MirrorTitle><div className="text-center text-[1.5vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div><ThreeValueRow values={values} /></div>
   const details = [
     ['Open', live?.open],
     ['High', live?.high],
@@ -2508,8 +2508,8 @@ function MirrorStocksModule({ snapshot, assignment, size }: { snapshot: Physical
     ['Change', live?.change],
     [live?.position_percent != null ? 'Pos %' : 'Range %', third],
   ]
-  if (size === 'large') return <TwoPanel><div className="flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorTitle>{title}</MirrorTitle>{details.map(([label, value]: any[]) => <div key={label} className="text-[1.2vw]"><span className="opacity-55">{label}</span> <span className="font-semibold">{value ?? '--'}</span></div>)}</div><div className="flex h-full flex-col gap-[1vh]"><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div></div></TwoPanel>
-  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><div className="flex min-h-0 flex-col justify-center gap-[1.2vh]"><MirrorTitle>{title}</MirrorTitle><ThreeValueRow values={values} /><div className="grid grid-cols-3 text-center text-[1.15vw] opacity-70"><div>High / Low</div><div>Open / Prev</div><div>Change / Day</div></div></div><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="flex min-h-0 flex-col gap-[1vh] pt-[1vh]"><div className="text-center text-[1.2vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div>{chart}</div></div>
+  if (size === 'large') return <TwoPanel><div className="flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorTitle>{title}</MirrorTitle>{details.map(([label, value]: any[]) => <div key={label} className="text-[1.5vw]"><span className="opacity-55">{label}</span> <span className="font-semibold">{value ?? '--'}</span></div>)}</div><div className="flex h-full flex-col gap-[1vh]"><div className="text-center text-[1.5vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div><div className="min-h-0 flex-1">{chart}</div></div></TwoPanel>
+  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><div className="flex min-h-0 flex-col justify-center gap-[1.2vh]"><MirrorTitle>{title}</MirrorTitle><ThreeValueRow values={values} /><div className="grid grid-cols-3 text-center text-[1.45vw] opacity-70"><div>High / Low</div><div>Open / Prev</div><div>Change / Day</div></div></div><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="flex min-h-0 flex-col gap-[1vh] pt-[1vh]"><div className="text-center text-[1.5vw] uppercase opacity-60">{cfg?.chartRange || 'day'}</div>{chart}</div></div>
 }
 
 function groceryDinner(snapshot: PhysicalFrameSnapshot) {
@@ -2529,23 +2529,23 @@ function GroceryList({ snapshot, max = 12, showDinnerHeader = false }: { snapsho
   const shown = items.slice(0, max)
   const cols = max > 7 ? 3 : 1
   const groups = splitRows(shown, cols)
-  return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center">{dinner ? <><MirrorKicker>{snapshot.language === 'no' ? 'Dagens middag' : "Today's Dinner"}</MirrorKicker><div className="truncate text-[1.75vw] font-semibold">{dinner.title}</div></> : <MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Grocery List'}</MirrorKicker>}{items.length > shown.length && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - shown.length} items</div>}<div className={`grid gap-x-[1vw] ${cols === 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>{groups.map((group, i) => <div key={i} className="space-y-[0.45vh]">{fitList(group.map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate text-[1.25vw]">{item?.name}{Number(item?.quantity) > 1 ? ` ×${item.quantity}` : ''}</div>))}</div>)}</div></div>
+  return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center">{dinner ? <><MirrorKicker>{snapshot.language === 'no' ? 'Dagens middag' : "Today's Dinner"}</MirrorKicker><div className="truncate text-[2.15vw] font-semibold">{dinner.title}</div></> : <MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Grocery List'}</MirrorKicker>}{items.length > shown.length && <div className="absolute right-0 top-0 text-[1.3vw] opacity-60">+{items.length - shown.length} items</div>}<div className={`grid gap-x-[1vw] ${cols === 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>{groups.map((group, i) => <div key={i} className="space-y-[0.45vh]">{fitList(group.map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate text-[1.55vw]">{item?.name}{Number(item?.quantity) > 1 ? ` ×${item.quantity}` : ''}</div>))}</div>)}</div></div>
 }
 
 function DinnerList({ snapshot }: { snapshot: PhysicalFrameSnapshot }) {
   const dinners = groceryDinner(snapshot).slice(0, 7)
-  return <div className="flex h-full flex-col justify-center gap-[0.7vh]"><MirrorKicker>{snapshot.language === 'no' ? 'Dagens middag' : "Today's Dinner"}</MirrorKicker>{fitList(dinners.map((d: any) => <div key={`${d.date}-${d.title}`} className="grid grid-cols-[3.5vw_1fr] gap-[1vw] text-[1.15vw]"><span className="opacity-55">{shortDateLabel(snapshot.language, d.date)}</span><span className="truncate">{d.title}</span></div>))}</div>
+  return <div className="flex h-full flex-col justify-center gap-[0.7vh]"><MirrorKicker>{snapshot.language === 'no' ? 'Dagens middag' : "Today's Dinner"}</MirrorKicker>{fitList(dinners.map((d: any) => <div key={`${d.date}-${d.title}`} className="grid grid-cols-[3.5vw_1fr] gap-[1vw] text-[1.45vw]"><span className="opacity-55">{shortDateLabel(snapshot.language, d.date)}</span><span className="truncate">{d.title}</span></div>))}</div>
 }
 
 function MirrorGroceriesModule({ snapshot, size }: { snapshot: PhysicalFrameSnapshot; size: CellSize }) {
   const items = Array.isArray(snapshot.modulesJson.groceries) ? snapshot.modulesJson.groceries : []
-  if (size === 'small') return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Groceries'}</MirrorKicker>{items.length > 3 && <div className="absolute right-0 top-0 text-[1vw] opacity-60">+{items.length - 3} items</div>}<div className="grid grid-cols-3 items-center divide-x divide-current/50">{fitList(items.slice(0, 3).map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate px-[1vw] text-[1.4vw] font-semibold">{item?.name}</div>))}</div></div>
+  if (size === 'small') return <div className="relative flex h-full flex-col justify-center gap-[1vh] text-center"><MirrorKicker>{snapshot.language === 'no' ? 'Handleliste' : 'Groceries'}</MirrorKicker>{items.length > 3 && <div className="absolute right-0 top-0 text-[1.3vw] opacity-60">+{items.length - 3} items</div>}<div className="grid grid-cols-3 items-center divide-x divide-current/50">{fitList(items.slice(0, 3).map((item: any, idx: number) => <div key={`${item?.name}-${idx}`} className="truncate px-[1vw] text-[2.15vw] font-semibold">{item?.name}</div>))}</div></div>
   if (size === 'medium') return <GroceryList snapshot={snapshot} max={12} showDinnerHeader />
   if (size === 'large') return <TwoPanel><GroceryList snapshot={snapshot} max={12} /><DinnerList snapshot={snapshot} /></TwoPanel>
   const insights = snapshot.modulesJson.groceries_insights?.insights || {}
   const low = Array.isArray(insights.running_low) ? insights.running_low : []
   const recipes = Array.isArray(insights.recipes) ? insights.recipes : []
-  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><GroceryList snapshot={snapshot} max={12} showDinnerHeader /><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="grid min-h-0 grid-cols-[1fr_auto_1fr] pt-[1vh]"><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Running low</MirrorKicker>{fitList(low.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.2vw]">{x.name} <span className="opacity-55">{x.label}</span></div>))}</div><div className="my-[10%] w-px bg-current opacity-50" /><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Meal ideas</MirrorKicker>{fitList(recipes.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.2vw]">{x.name}</div>))}</div></div></div>
+  return <div className="grid h-full grid-rows-[1fr_auto_1fr]"><GroceryList snapshot={snapshot} max={12} showDinnerHeader /><div className="mx-[2.5%] h-px bg-current opacity-80" /><div className="grid min-h-0 grid-cols-[1fr_auto_1fr] pt-[1vh]"><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Running low</MirrorKicker>{fitList(low.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.5vw]">{x.name} <span className="opacity-55">{x.label}</span></div>))}</div><div className="my-[10%] w-px bg-current opacity-50" /><div className="flex flex-col items-center justify-center gap-[0.7vh] text-center"><MirrorKicker>Meal ideas</MirrorKicker>{fitList(recipes.slice(0, 3).map((x: any) => <div key={x.name} className="truncate text-[1.5vw]">{x.name}</div>))}</div></div></div>
 }
 
 function MirrorBatteryBadge({ battery }: { battery: MirrorBatteryState }) {
@@ -2559,8 +2559,8 @@ function MirrorBatteryBadge({ battery }: { battery: MirrorBatteryState }) {
 
   return (
     <div className="pointer-events-none absolute right-[2.1vw] top-[2.2vh] z-20 flex items-center gap-[0.55vw] opacity-70">
-      {charging && <span className="text-[1.35vw] leading-none">⚡</span>}
-      {critical ? <span className="text-[1.05vw] leading-none">Charge now</span> : charging ? <span className="text-[1.15vw] tabular-nums leading-none">{pct}%</span> : null}
+      {charging && <span className="text-[1.7vw] leading-none">⚡</span>}
+      {critical ? <span className="text-[1.3vw] leading-none">Charge now</span> : charging ? <span className="text-[1.45vw] tabular-nums leading-none">{pct}%</span> : null}
       <div className="relative h-[2.05vh] w-[2.95vw] rounded-[0.35vw] border-[1.5px] border-current">
         <div className="absolute -right-[0.32vw] top-1/2 h-[0.9vh] w-[0.28vw] -translate-y-1/2 rounded-r-sm bg-current" />
         <div className="absolute bottom-[16%] left-[10%] top-[16%] rounded-[0.18vw] bg-current" style={{ width: `${fill * 0.78}%` }} />
