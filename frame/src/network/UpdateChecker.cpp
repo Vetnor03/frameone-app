@@ -4,6 +4,7 @@
 #include "DeviceIdentity.h"
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include <string.h>
 
 static Preferences prefs;
 
@@ -116,6 +117,23 @@ namespace {
   String reminderHashSig(const String& body) {
     return toHex8(fnv1a32(body));
   }
+
+  bool hasActiveModulePrefix(const FrameConfig& cfg, const char* prefix) {
+    if (!prefix || !prefix[0]) return false;
+
+    const size_t prefixLen = strlen(prefix);
+    for (int i = 0; i < cfg.assignCount && i < 8; i++) {
+      const char* module = cfg.assigns[i].module;
+      if (!module || !module[0]) continue;
+      if (strncmp(module, prefix, prefixLen) != 0) continue;
+
+      char next = module[prefixLen];
+      if (next == '\0' || next == ':') return true;
+    }
+
+    return false;
+  }
+
 }
 
 void UpdateChecker::begin() {
@@ -253,7 +271,7 @@ bool UpdateChecker::hasRemindersChanged(const String& deviceToken, String& outSi
 bool UpdateChecker::hasSurfChanged(const FrameConfig& cfg, const String& deviceToken, String& outSig) {
   outSig = "";
 
-  if (cfg.surfCount == 0) {
+  if (cfg.surfCount == 0 || !hasActiveModulePrefix(cfg, "surf")) {
     outSig = "__NO_SURF__";
     return outSig != getLastSurfSig();
   }
