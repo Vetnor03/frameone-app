@@ -22,6 +22,14 @@ type GroceryPayload = {
   updated_at: string
 }
 
+type GroceryItemPayloadItem = GroceryPayload['items'][number]
+
+type DinnerPlanNoteItem = {
+  name: string
+  quantity: number
+  isChecked: boolean
+}
+
 function getBearerToken(req: Request) {
   const h = req.headers.get('authorization') || ''
   const m = h.match(/^Bearer\s+(.+)$/i)
@@ -70,6 +78,55 @@ function clampQuantity(value: unknown) {
   return Math.max(1, Math.round(n))
 }
 
+function normalizeItemKey(name: string) {
+  return name.trim().toLocaleLowerCase()
+}
+
+function addPayloadItem(
+  aggregate: Map<string, GroceryItemPayloadItem>,
+  item: GroceryItemPayloadItem,
+) {
+  const name = item.name.trim().slice(0, 80)
+  if (!name) return
+  const quantity = clampQuantity(item.quantity)
+  const key = normalizeItemKey(name)
+  const existing = aggregate.get(key)
+
+  if (existing) {
+    // Dinner-plan items are eventually synced into grocery_items by the app. Use the
+    // highest matching quantity instead of summing duplicates from both sources.
+    existing.quantity = Math.max(existing.quantity, quantity)
+    return
+  }
+
+  aggregate.set(key, { name, quantity })
+}
+
+function parseDinnerPlanNoteItems(note: unknown): DinnerPlanNoteItem[] {
+  if (typeof note !== 'string' || !note.trim()) return []
+
+  try {
+    const parsed = JSON.parse(note) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+        const row = item as Record<string, unknown>
+        const name = asString(row.name, '').trim().slice(0, 80)
+        if (!name) return null
+        return {
+          name,
+          quantity: clampQuantity(row.quantity),
+          isChecked: row.isChecked === true || row.is_checked === true,
+        }
+      })
+      .filter(Boolean) as DinnerPlanNoteItem[]
+  } catch {
+    return []
+  }
+}
+
 function groceryStatusLabel(status: string, language: string) {
   const normalized = status.trim().toLowerCase()
   const noLabels: Record<string, string> = {
@@ -93,6 +150,7 @@ function jsonResponse(payload: GroceryPayload, deviceId: string) {
   const json = JSON.stringify(payload)
   const bytes = Buffer.byteLength(json, 'utf8')
   console.info('/api/device/groceries response size', { device_id: deviceId, bytes })
+  console.info('/api/device/groceries response body', json)
   return new NextResponse(json, {
     status: 200,
     headers: {
@@ -151,7 +209,7 @@ export async function GET(req: Request) {
         .limit(MAX_ITEMS),
       supabase
         .from('dinner_plan_days')
-        .select('date, title')
+        .select('date, title, note')
         .eq('device_id', device_id)
         .gte('date', todayIso)
         .order('date', { ascending: true })
@@ -185,13 +243,25 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: dinnerError.message }, { status: 500 })
     }
 
-    const items = (itemRows || [])
-      .map((row: Record<string, unknown>) => ({
+    const itemAggregate = new Map<string, GroceryItemPayloadItem>()
+
+    for (const row of itemRows || []) {
+      addPayloadItem(itemAggregate, {
         name: asString(row?.name, '').trim().slice(0, 80),
         quantity: clampQuantity(row?.quantity),
-      }))
-      .filter((row: { name: string }) => !!row.name)
-      .slice(0, MAX_ITEMS)
+      })
+    }
+
+    for (const row of dinnerRows || []) {
+      const date = asString(row?.date, '').slice(0, 10)
+      if (!isIsoDate(date) || date < todayIso) continue
+      for (const item of parseDinnerPlanNoteItems(row?.note)) {
+        if (item.isChecked) continue
+        addPayloadItem(itemAggregate, item)
+      }
+    }
+
+    const items = [...itemAggregate.values()].slice(0, MAX_ITEMS)
 
     const dinner_plan = (dinnerRows || [])
       .map((row: Record<string, unknown>) => ({
