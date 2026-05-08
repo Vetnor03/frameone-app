@@ -579,7 +579,7 @@ static void drawLeftItemList(const Cell& c,
 static bool fetchGroceries() {
   clearCache();
 
-  String url = String(BASE_URL) + "/api/device/frame-config?device_id=" + DeviceIdentity::getDeviceId();
+  String url = String(BASE_URL) + "/api/device/groceries?device_id=" + DeviceIdentity::getDeviceId();
 
   int code = 0;
   String body;
@@ -590,14 +590,19 @@ static bool fetchGroceries() {
     return false;
   }
 
-  StaticJsonDocument<16384> doc;
-  if (deserializeJson(doc, body)) {
+  DynamicJsonDocument doc(8192);
+  DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    Serial.print("groceries JSON parse failed; body length=");
+    Serial.print(body.length());
+    Serial.print(" error=");
+    Serial.println(err.c_str());
     g_cache.loaded = true;
     g_cache.ok = false;
     return false;
   }
 
-  JsonArray arr = doc["settings_json"]["modules"]["groceries"].as<JsonArray>();
+  JsonArray arr = doc["items"].as<JsonArray>();
 
   int idx = 0;
   if (!arr.isNull()) {
@@ -616,12 +621,10 @@ static bool fetchGroceries() {
 
   g_cache.count = idx;
 
-  const char* language = doc["settings_json"]["language"] | "en";
+  const char* language = doc["language"] | "en";
   g_cache.languageNo = language && (strcmp(language, "no") == 0 || strcmp(language, "nb") == 0 || strcmp(language, "nb-NO") == 0);
 
-  JsonVariant insights = doc["settings_json"]["modules"]["groceries_insights"]["insights"];
-  if (insights.isNull()) insights = doc["settings_json"]["modules"]["groceries_insights"];
-  if (insights.isNull()) insights = doc["settings_json"]["modules"]["groceries"]["insights"];
+  JsonVariant insights = doc["insights"];
 
   JsonArray runningLowArr = insights["running_low"].as<JsonArray>();
   int runningLowIdx = 0;
@@ -668,18 +671,15 @@ static bool fetchGroceries() {
   }
   g_cache.recipeCount = recipeIdx;
 
-  JsonArray dinnerArr = doc["settings_json"]["modules"]["dinner_planner"].as<JsonArray>();
-  if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["modules"]["dinnerPlanner"].as<JsonArray>();
-  if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["dinner_planner"].as<JsonArray>();
-  if (dinnerArr.isNull()) dinnerArr = doc["settings_json"]["dinnerPlanner"].as<JsonArray>();
+  JsonArray dinnerArr = doc["dinner_plan"].as<JsonArray>();
 
   int dinnerIdx = 0;
   if (!dinnerArr.isNull()) {
     for (JsonObject it : dinnerArr) {
       if (dinnerIdx >= MAX_DINNER_ITEMS) break;
 
-      const char* date = it["date"] | it["day"] | it["planned_date"] | "";
-      const char* title = it["title"] | it["name"] | it["dish"] | it["meal"] | "";
+      const char* date = it["date"] | "";
+      const char* title = it["title"] | "";
       if (!date || !date[0] || !title || !title[0]) continue;
 
       g_cache.dinners[dinnerIdx].used = true;
@@ -695,13 +695,16 @@ static bool fetchGroceries() {
   char dinnerTitle[80] = {0};
   bool hasTodayDinner = false;
 
-  if (getTodayYmd(todayYmd, sizeof(todayYmd))) {
-    hasTodayDinner =
-      extractTodayDinnerTitle(doc["settings_json"]["modules"]["dinnerPlanner"], todayYmd, dinnerTitle, sizeof(dinnerTitle)) ||
-      extractTodayDinnerTitle(doc["settings_json"]["modules"]["dinner_planner"], todayYmd, dinnerTitle, sizeof(dinnerTitle)) ||
-      extractTodayDinnerTitle(doc["settings_json"]["modules"]["dinner"], todayYmd, dinnerTitle, sizeof(dinnerTitle)) ||
-      extractTodayDinnerTitle(doc["settings_json"]["dinnerPlanner"], todayYmd, dinnerTitle, sizeof(dinnerTitle)) ||
-      extractTodayDinnerTitle(doc["settings_json"]["dinner_planner"], todayYmd, dinnerTitle, sizeof(dinnerTitle));
+  if (getTodayYmd(todayYmd, sizeof(todayYmd)) && !dinnerArr.isNull()) {
+    for (JsonObject it : dinnerArr) {
+      const char* date = it["date"] | "";
+      const char* title = it["title"] | "";
+      if (date && title && strcmp(date, todayYmd) == 0 && title[0]) {
+        utf8ToLatin1(dinnerTitle, sizeof(dinnerTitle), title);
+        hasTodayDinner = true;
+        break;
+      }
+    }
   }
 
   if (hasTodayDinner) {

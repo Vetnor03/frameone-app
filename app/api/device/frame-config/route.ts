@@ -2,7 +2,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
-import { createHash } from 'crypto'
 
 export const runtime = 'nodejs'
 
@@ -40,11 +39,6 @@ function asString(v: any, def: string) {
   return typeof v === 'string' ? v : def
 }
 
-function normalizeGroceryCategory(value: any) {
-  const raw = asString(value, 'other').trim()
-  if (raw === 'paalegg') return 'cold_cuts'
-  return raw
-}
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
@@ -69,123 +63,6 @@ function normalizeCurrency(value: any): string {
 }
 
 
-type GroceryInsightsPayload = {
-  running_low: Array<{ name: string; status: string; label: string }>
-  recipes: Array<{ name: string; match_score?: number; missing: string[] }>
-}
-
-function groceryStatusLabel(status: string, language: string) {
-  const normalized = status.trim().toLowerCase()
-  const noLabels: Record<string, string> = {
-    due_soon: 'Snart tomt',
-    overdue: 'Pleier å trengs',
-    probably_out: 'På handlelisten',
-    learning: 'Lærer mønster',
-  }
-  const enLabels: Record<string, string> = {
-    due_soon: 'Due soon',
-    overdue: 'Usually needed',
-    probably_out: 'On list',
-    learning: 'Learning pattern',
-  }
-  const labels = language === 'no' || language === 'nb' || language === 'nb-NO' ? noLabels : enLabels
-  return labels[normalized] || (language === 'no' || language === 'nb' || language === 'nb-NO' ? 'Følger med' : 'Watching')
-}
-
-function asStringArray(value: any) {
-  if (Array.isArray(value)) return value.map((x) => asString(x, '').trim()).filter(Boolean)
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (!trimmed) return []
-    try {
-      const parsed = JSON.parse(trimmed)
-      if (Array.isArray(parsed)) return parsed.map((x) => asString(x, '').trim()).filter(Boolean)
-    } catch {
-      // Plain comma-separated strings are also accepted from views.
-    }
-    return trimmed.split(',').map((x) => x.trim()).filter(Boolean)
-  }
-  return []
-}
-
-function firstString(row: any, keys: string[], def = '') {
-  for (const key of keys) {
-    const value = asString(row?.[key], '').trim()
-    if (value) return value
-  }
-  return def
-}
-
-async function fetchGroceryInsights(supabase: any, deviceId: string, language: string): Promise<GroceryInsightsPayload> {
-  const empty: GroceryInsightsPayload = { running_low: [], recipes: [] }
-
-  const [runningLowResult, recipeResult] = await Promise.allSettled([
-    supabase
-      .from('grocery_running_low')
-      .select('*')
-      .eq('device_id', deviceId)
-      .limit(6),
-    supabase
-      .from('grocery_recipe_suggestions')
-      .select('*')
-      .eq('device_id', deviceId)
-      .limit(6),
-  ])
-
-  if (runningLowResult.status === 'fulfilled') {
-    const { data, error } = runningLowResult.value
-    if (error) {
-      console.error('Failed to load grocery_running_low insights', { deviceId, error })
-    } else {
-      empty.running_low = (data || [])
-        .map((row: any) => {
-          const name = firstString(row, ['name', 'item_name', 'display_name', 'canonical_name']).slice(0, 80)
-          const status = firstString(row, ['status', 'item_status', 'memory_status'], 'learning').slice(0, 32)
-          if (!name) return null
-          return { name, status, label: groceryStatusLabel(status, language) }
-        })
-        .filter(Boolean)
-        .slice(0, 3) as GroceryInsightsPayload['running_low']
-    }
-  } else {
-    console.error('Failed to load grocery_running_low insights', { deviceId, error: runningLowResult.reason })
-  }
-
-  if (recipeResult.status === 'fulfilled') {
-    const { data, error } = recipeResult.value
-    if (error) {
-      console.error('Failed to load grocery_recipe_suggestions insights', { deviceId, error })
-    } else {
-      empty.recipes = (data || [])
-        .map((row: any) => {
-          const name = firstString(row, ['name', 'recipe_name', 'title']).slice(0, 80)
-          if (!name) return null
-          const scoreRaw = row?.match_score ?? row?.score ?? row?.match
-          const score = Number(scoreRaw)
-          const missing = asStringArray(row?.missing ?? row?.missing_ingredients ?? row?.missing_items).slice(0, 2).map((x) => x.slice(0, 60))
-          return {
-            name,
-            ...(Number.isFinite(score) ? { match_score: Math.max(0, Math.min(1, score)) } : {}),
-            missing,
-          }
-        })
-        .filter(Boolean)
-        .slice(0, 2) as GroceryInsightsPayload['recipes']
-    }
-  } else {
-    console.error('Failed to load grocery_recipe_suggestions insights', { deviceId, error: recipeResult.reason })
-  }
-
-  return empty
-}
-
-function groceriesSignature(items: Array<{ id: string; name: string; quantity: number; category: string; updated_at: string | null }>) {
-  const stable = items
-    .map((x) => `${x.id}|${x.name}|${x.quantity ?? ''}|${x.category}|${x.updated_at ?? ''}`)
-    .sort()
-    .join('||')
-  return createHash('sha256').update(stable).digest('hex').slice(0, 16)
-}
 
 export async function GET(req: Request) {
   try {
@@ -377,63 +254,6 @@ export async function GET(req: Request) {
 
     settings_json.modules.stocks = sanitizedStocks
 
-    // -------------------------------
-    // ✅ Groceries payload for firmware
-    // -------------------------------
-    const { data: groceriesData, error: groceriesError } = await supabase
-      .from('grocery_items')
-      .select('id, name, quantity, category, is_checked, checked_at, updated_at')
-      .eq('device_id', device_id)
-      .order('updated_at', { ascending: false })
-
-    if (groceriesError) {
-      return NextResponse.json({ error: groceriesError.message }, { status: 500 })
-    }
-
-    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
-    const activeGroceries = (groceriesData || [])
-      .filter((x: any) => {
-        if (!x?.is_checked) return true
-        if (!x?.checked_at) return false
-        return new Date(String(x.checked_at)).getTime() >= twentyFourHoursAgo
-      })
-      .filter((x: any) => !x?.is_checked)
-      .slice(0, 120)
-      .map((x: any) => ({
-        id: String(x.id),
-        name: asString(x.name, '').slice(0, 80),
-        quantity: Math.max(1, Number(x.quantity ?? 1) || 1),
-        category: normalizeGroceryCategory(x.category).slice(0, 24),
-        checked: false,
-        updated_at: x.updated_at ? String(x.updated_at) : null,
-      }))
-
-    const groceryInsights = await fetchGroceryInsights(supabase, device_id, asString(settings_json.language, 'en'))
-
-    settings_json.modules.groceries = activeGroceries
-    settings_json.modules.groceries_insights = { insights: groceryInsights }
-    settings_json.modules.groceries_signature = groceriesSignature(activeGroceries)
-
-    // -------------------------------
-    // ✅ Dinner plan payload for firmware ("Today's dinner" header)
-    // -------------------------------
-    const { data: dinnerPlanData, error: dinnerPlanError } = await supabase
-      .from('dinner_plan_days')
-      .select('date,title')
-      .eq('device_id', device_id)
-      .order('date', { ascending: true })
-
-    if (dinnerPlanError) {
-      return NextResponse.json({ error: dinnerPlanError.message }, { status: 500 })
-    }
-
-    settings_json.modules.dinner_planner = (dinnerPlanData || [])
-      .map((row: any) => ({
-        date: asString(row?.date, '').slice(0, 10),
-        title: asString(row?.title, '').trim().slice(0, 80),
-      }))
-      .filter((row: { date: string; title: string }) => isIsoDate(row.date) && !!row.title)
-      .slice(0, 14)
 
     // -------------------------------
     // ✅ Holidays injection (unchanged from your version)
