@@ -296,58 +296,35 @@ static void drawEmptyState(const Cell& c, const char* line1, const char* line2) 
 }
 
 static bool fetchGroceries() {
-  Serial.println("🛒 FETCH 1: entered");
-  Serial.print("Free heap at fetch start: ");
-  Serial.println(ESP.getFreeHeap());
-
   clearCache();
-
-  Serial.println("🛒 FETCH 2: cache cleared");
 
   String url = String(BASE_URL) + "/api/device/groceries?device_id=" + DeviceIdentity::getDeviceId();
 
   int code = 0;
   String body;
 
-  Serial.println("🛒 FETCH 3: before HTTP");
-  Serial.println(url);
-
   bool httpOk = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
 
-  Serial.print("🛒 FETCH 4: after HTTP, ok=");
-  Serial.print(httpOk ? "true" : "false");
-  Serial.print(" code=");
-  Serial.println(code);
-
-  Serial.print("Body length: ");
-  Serial.println(body.length());
-
-  Serial.print("Free heap after HTTP: ");
-  Serial.println(ESP.getFreeHeap());
-
   if (!httpOk || code != 200) {
-    Serial.println("❌ Groceries HTTP failed");
+    Serial.print("❌ Groceries HTTP failed, code=");
+    Serial.println(code);
 
     g_cache.loaded = true;
     g_cache.ok = false;
     return false;
   }
 
-  Serial.println("🛒 FETCH 5: before JSON parse");
-
   DynamicJsonDocument doc(8192);
 
+  const size_t bodyLength = body.length();
   DeserializationError err = deserializeJson(doc, body);
-
-  Serial.println("🛒 FETCH 6: after JSON parse");
 
   body = String();
 
-  Serial.print("Free heap after body free: ");
-  Serial.println(ESP.getFreeHeap());
-
   if (err) {
-    Serial.print("❌ Groceries JSON parse failed: ");
+    Serial.print("❌ Groceries JSON parse failed, body length=");
+    Serial.print(bodyLength);
+    Serial.print(": ");
     Serial.println(err.c_str());
 
     g_cache.loaded = true;
@@ -355,13 +332,8 @@ static bool fetchGroceries() {
     return false;
   }
 
-  Serial.print("JSON memory used: ");
-  Serial.println(doc.memoryUsage());
-
   bool ok = doc["ok"] | false;
   if (!ok) {
-    Serial.println("❌ Groceries endpoint returned ok=false");
-
     g_cache.loaded = true;
     g_cache.ok = false;
     return false;
@@ -375,8 +347,6 @@ static bool fetchGroceries() {
   );
 
   safeCopy(g_cache.header, sizeof(g_cache.header), g_cache.languageNo ? "Handleliste" : "Grocery List");
-
-  Serial.println("🛒 FETCH 7: parse items");
 
   JsonArray items = doc["items"].as<JsonArray>();
   int idx = 0;
@@ -397,8 +367,6 @@ static bool fetchGroceries() {
   }
 
   g_cache.count = idx;
-
-  Serial.println("🛒 FETCH 8: parse dinner plan");
 
   JsonArray dinners = doc["dinner_plan"].as<JsonArray>();
   int dinnerIdx = 0;
@@ -423,8 +391,6 @@ static bool fetchGroceries() {
 
   g_cache.dinnerCount = dinnerIdx;
 
-  Serial.println("🛒 FETCH 9: parse running low");
-
   JsonArray runningLow = doc["insights"]["running_low"].as<JsonArray>();
   int runningIdx = 0;
 
@@ -446,8 +412,6 @@ static bool fetchGroceries() {
   }
 
   g_cache.runningLowCount = runningIdx;
-
-  Serial.println("🛒 FETCH 10: parse recipes");
 
   JsonArray recipes = doc["insights"]["recipes"].as<JsonArray>();
   int recipeIdx = 0;
@@ -489,18 +453,6 @@ static bool fetchGroceries() {
   }
 
   g_cache.recipeCount = recipeIdx;
-
-  Serial.print("🛒 FETCH DONE items=");
-  Serial.print(g_cache.count);
-  Serial.print(" dinners=");
-  Serial.print(g_cache.dinnerCount);
-  Serial.print(" runningLow=");
-  Serial.print(g_cache.runningLowCount);
-  Serial.print(" recipes=");
-  Serial.println(g_cache.recipeCount);
-
-  Serial.print("Free heap at fetch end: ");
-  Serial.println(ESP.getFreeHeap());
 
   g_cache.loaded = true;
   g_cache.ok = true;
@@ -583,25 +535,12 @@ void setConfig(const FrameConfig* cfg) {
 void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
 
-  Serial.println("🛒 RENDER: groceries render entered");
-  Serial.print("Free heap before ensureLoaded: ");
-  Serial.println(ESP.getFreeHeap());
-
   ensureLoaded();
-
-  Serial.print("Free heap after ensureLoaded: ");
-  Serial.println(ESP.getFreeHeap());
 
   if (!g_cache.ok) {
     drawEmptyState(c, "Grocery List", "Fetch failed");
-    Serial.println("🛒 RENDER: fetch failed");
     return;
   }
-
-  Serial.print("Groceries count: ");
-  Serial.println(g_cache.count);
-  Serial.print("Dinner count: ");
-  Serial.println(g_cache.dinnerCount);
 
   switch (c.size) {
     case CELL_SMALL:  renderSmall(c); break;
@@ -610,8 +549,6 @@ void render(const Cell& c, const String& moduleName) {
     case CELL_XL:     renderXL(c); break;
     default:          renderMedium(c); break;
   }
-
-  Serial.println("🛒 RENDER: groceries render done");
 }
 
 } // namespace ModuleGroceries
