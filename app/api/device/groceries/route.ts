@@ -150,6 +150,7 @@ function jsonResponse(payload: GroceryPayload, deviceId: string) {
   const json = JSON.stringify(payload)
   const bytes = Buffer.byteLength(json, 'utf8')
   console.info('/api/device/groceries response size', { device_id: deviceId, bytes })
+  console.info('/api/device/groceries final items count', { device_id: deviceId, items: payload.items.length })
   console.info('/api/device/groceries response body', json)
   return new NextResponse(json, {
     status: 200,
@@ -163,6 +164,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
     const device_id = String(url.searchParams.get('device_id') || '').trim()
+    console.info('/api/device/groceries device_id received', { device_id })
 
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
@@ -177,13 +179,19 @@ export async function GET(req: Request) {
 
     const { data: device, error: deviceError } = await supabase
       .from('devices')
-      .select('device_id, device_token')
+      .select('id, device_id, device_token')
       .eq('device_id', device_id)
       .maybeSingle()
 
     if (deviceError || !device || device.device_token !== token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    console.info('/api/device/groceries resolved device', {
+      received_device_id: device_id,
+      resolved_device_id: device.device_id,
+      internal_id: (device as Record<string, unknown>).id ?? null,
+    })
 
     const { data: settingsData, error: settingsError } = await supabase
       .from('device_settings')
@@ -199,7 +207,16 @@ export async function GET(req: Request) {
     const language = asString(settings.language, 'en').slice(0, 16) || 'en'
     const todayIso = isoDateOnly(new Date())
 
-    const [itemsResult, dinnerResult, runningLowResult, recipesResult] = await Promise.allSettled([
+    const [itemsCountResult, activeItemsCountResult, itemsResult, dinnerResult, runningLowResult, recipesResult] = await Promise.allSettled([
+      supabase
+        .from('grocery_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('device_id', device_id),
+      supabase
+        .from('grocery_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('device_id', device_id)
+        .eq('is_checked', false),
       supabase
         .from('grocery_items')
         .select('name, quantity, updated_at')
@@ -226,6 +243,22 @@ export async function GET(req: Request) {
         .limit(MAX_RECIPES),
     ])
 
+    if (itemsCountResult.status === 'rejected') {
+      console.error('Failed to count grocery_items rows', { device_id, error: itemsCountResult.reason })
+    } else if (itemsCountResult.value.error) {
+      console.error('Failed to count grocery_items rows', { device_id, error: itemsCountResult.value.error })
+    } else {
+      console.info('/api/device/groceries grocery_items rows found', { device_id, count: itemsCountResult.value.count ?? 0 })
+    }
+
+    if (activeItemsCountResult.status === 'rejected') {
+      console.error('Failed to count active grocery_items rows', { device_id, error: activeItemsCountResult.reason })
+    } else if (activeItemsCountResult.value.error) {
+      console.error('Failed to count active grocery_items rows', { device_id, error: activeItemsCountResult.value.error })
+    } else {
+      console.info('/api/device/groceries active unchecked grocery_items rows found', { device_id, count: activeItemsCountResult.value.count ?? 0 })
+    }
+
     if (itemsResult.status === 'rejected') {
       return NextResponse.json({ error: String(itemsResult.reason) }, { status: 500 })
     }
@@ -243,6 +276,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: dinnerError.message }, { status: 500 })
     }
 
+    console.info('/api/device/groceries active grocery_items rows loaded', { device_id, count: (itemRows || []).length })
+    console.info('/api/device/groceries dinner_plan_days rows found', { device_id, count: (dinnerRows || []).length })
+    console.info('/api/device/groceries dinner_plan_days.note exists', {
+      device_id,
+      exists: (dinnerRows || []).some((row: Record<string, unknown>) => typeof row?.note === 'string' && !!row.note.trim()),
+      rows_with_note: (dinnerRows || []).filter((row: Record<string, unknown>) => typeof row?.note === 'string' && !!row.note.trim()).length,
+    })
+
     const itemAggregate = new Map<string, GroceryItemPayloadItem>()
 
     for (const row of itemRows || []) {
@@ -252,14 +293,19 @@ export async function GET(req: Request) {
       })
     }
 
+    let parsedDinnerNoteGroceryCount = 0
+
     for (const row of dinnerRows || []) {
       const date = asString(row?.date, '').slice(0, 10)
       if (!isIsoDate(date) || date < todayIso) continue
       for (const item of parseDinnerPlanNoteItems(row?.note)) {
         if (item.isChecked) continue
+        parsedDinnerNoteGroceryCount += 1
         addPayloadItem(itemAggregate, item)
       }
     }
+
+    console.info('/api/device/groceries parsed grocery count from dinner notes', { device_id, count: parsedDinnerNoteGroceryCount })
 
     const items = [...itemAggregate.values()].slice(0, MAX_ITEMS)
 
