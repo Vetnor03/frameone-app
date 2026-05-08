@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_ITEMS = 40
 const MAX_DINNER_PLAN = 14
+const MAX_INSIGHT_HISTORY = 80
+const RUNNING_LOW_MAX = 3
+const RECIPE_MAX = 2
+const RECIPE_MISSING_MAX = 2
 
 type GroceryPayload = {
   ok: true
@@ -25,6 +29,12 @@ type DinnerPlanNoteItem = {
   name: string
   quantity: number
   isChecked: boolean
+}
+
+type InsightSourceRows = {
+  historyRows: Array<Record<string, unknown>>
+  checkedRows: Array<Record<string, unknown>>
+  dinnerHistoryRows: Array<Record<string, unknown>>
 }
 
 function getBearerToken(req: Request) {
@@ -100,6 +110,221 @@ function parseDinnerPlanNoteItems(note: unknown): DinnerPlanNoteItem[] {
   }
 }
 
+
+function daysAgoIso(days: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString()
+}
+
+function compactInsightName(value: unknown, maxLength = 28) {
+  const name = asString(value, '').replace(/\s+/g, ' ').trim()
+  if (!name || name.length > maxLength) return ''
+  return name
+}
+
+function compactMealName(value: unknown) {
+  return compactInsightName(value, 32)
+}
+
+function normalizeInsightKey(name: string) {
+  return name.trim().toLocaleLowerCase()
+}
+
+function addUniqueName(target: Map<string, string>, value: unknown, maxLength = 28) {
+  const name = compactInsightName(value, maxLength)
+  if (!name) return
+  const key = normalizeInsightKey(name)
+  if (!target.has(key)) target.set(key, name)
+}
+
+function labelForRunningLow(language: string) {
+  return language.toLocaleLowerCase().startsWith('no') || language.toLocaleLowerCase().startsWith('nb') || language.toLocaleLowerCase().startsWith('nn')
+    ? 'Lav snart'
+    : 'Low soon'
+}
+
+function buildRunningLowInsight(
+  language: string,
+  items: GroceryPayload['items'],
+  dinnerRows: Array<Record<string, unknown>>,
+  sources: Pick<InsightSourceRows, 'historyRows' | 'checkedRows'>,
+): GroceryPayload['insights']['running_low'] {
+  const activeKeys = new Set(items.map((item) => normalizeInsightKey(item.name)))
+  const scores = new Map<string, { name: string; score: number; signals: number; lastUsed: string }>()
+
+  const addScore = (nameValue: unknown, score: number, signal: boolean, lastUsed = '') => {
+    const name = compactInsightName(nameValue)
+    if (!name) return
+    const key = normalizeInsightKey(name)
+    if (activeKeys.has(key)) return
+    const existing = scores.get(key) || { name, score: 0, signals: 0, lastUsed: '' }
+    existing.score += score
+    if (signal) existing.signals += 1
+    if (lastUsed && lastUsed > existing.lastUsed) existing.lastUsed = lastUsed
+    scores.set(key, existing)
+  }
+
+  for (const row of sources.historyRows) {
+    const usageCount = Math.max(0, Number(row?.usage_count ?? 0) || 0)
+    const lastUsed = asString(row?.last_used_at, '')
+    if (usageCount < 2) continue
+    addScore(row?.name, Math.min(8, usageCount * 2), true, lastUsed)
+  }
+
+  const checkedCounts = new Map<string, { name: string; count: number; lastUsed: string }>()
+  for (const row of sources.checkedRows) {
+    const name = compactInsightName(row?.name)
+    if (!name) continue
+    const key = normalizeInsightKey(name)
+    if (activeKeys.has(key)) continue
+    const checkedAt = asString(row?.checked_at, '') || asString(row?.updated_at, '')
+    const existing = checkedCounts.get(key) || { name, count: 0, lastUsed: '' }
+    existing.count += 1
+    if (checkedAt && checkedAt > existing.lastUsed) existing.lastUsed = checkedAt
+    checkedCounts.set(key, existing)
+  }
+  for (const entry of checkedCounts.values()) {
+    if (entry.count < 2) continue
+    addScore(entry.name, Math.min(6, entry.count * 3), true, entry.lastUsed)
+  }
+
+  const dinnerIngredientCounts = new Map<string, { name: string; count: number }>()
+  for (const row of dinnerRows) {
+    for (const item of parseDinnerPlanNoteItems(row?.note)) {
+      const name = compactInsightName(item.name)
+      if (!name || activeKeys.has(normalizeInsightKey(name))) continue
+      const key = normalizeInsightKey(name)
+      const existing = dinnerIngredientCounts.get(key) || { name, count: 0 }
+      existing.count += 1
+      dinnerIngredientCounts.set(key, existing)
+    }
+  }
+  for (const entry of dinnerIngredientCounts.values()) {
+    if (entry.count < 2) continue
+    addScore(entry.name, Math.min(4, entry.count), true)
+  }
+
+  const label = labelForRunningLow(language)
+  return [...scores.values()]
+    .filter((item) => item.score >= 4 && item.signals > 0)
+    .sort((a, b) => b.score - a.score || b.lastUsed.localeCompare(a.lastUsed) || a.name.localeCompare(b.name))
+    .slice(0, RUNNING_LOW_MAX)
+    .map((item) => ({ name: item.name, label }))
+}
+
+function buildRecipeInsights(
+  items: GroceryPayload['items'],
+  dinnerPlan: GroceryPayload['dinner_plan'],
+  dinnerRows: Array<Record<string, unknown>>,
+): GroceryPayload['insights']['recipes'] {
+  const available = new Set(items.map((item) => normalizeInsightKey(item.name)))
+  const plannedTitles = new Set(dinnerPlan.map((day) => normalizeInsightKey(day.title)))
+  const candidates = new Map<string, { name: string; missing: string[]; score: number; lastDate: string }>()
+
+  for (const row of dinnerRows) {
+    const name = compactMealName(row?.title)
+    if (!name) continue
+    const key = normalizeInsightKey(name)
+    if (plannedTitles.has(key)) continue
+
+    const ingredientMap = new Map<string, string>()
+    for (const item of parseDinnerPlanNoteItems(row?.note)) addUniqueName(ingredientMap, item.name)
+    const ingredients = [...ingredientMap.entries()]
+    if (ingredients.length < 2) continue
+
+    const missing = ingredients.filter(([ingredientKey]) => !available.has(ingredientKey)).map(([, ingredientName]) => ingredientName)
+    const overlap = ingredients.length - missing.length
+    if (overlap < 1 || missing.length < 1 || missing.length > RECIPE_MISSING_MAX) continue
+
+    const date = asString(row?.date, '').slice(0, 10)
+    const score = overlap * 2 + ingredients.length - missing.length + (date ? 1 : 0)
+    const existing = candidates.get(key)
+    if (!existing || score > existing.score || date > existing.lastDate) {
+      candidates.set(key, { name, missing: missing.slice(0, RECIPE_MISSING_MAX), score, lastDate: date })
+    }
+  }
+
+  return [...candidates.values()]
+    .sort((a, b) => b.score - a.score || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name))
+    .slice(0, RECIPE_MAX)
+    .map((recipe) => ({ name: recipe.name, missing: recipe.missing }))
+}
+
+async function loadInsightSourceRows(
+  supabase: SupabaseClient,
+  storageDeviceIds: string[],
+): Promise<InsightSourceRows> {
+  const sinceCheckedIso = daysAgoIso(90)
+  const sinceDinnerIso = isoDateOnly(new Date(Date.now() - 180 * 24 * 60 * 60 * 1000))
+
+  const [historyResult, checkedResult, dinnerHistoryResult] = await Promise.allSettled([
+    supabase
+      .from('grocery_item_history')
+      .select('name, usage_count, last_used_at')
+      .in('device_id', storageDeviceIds)
+      .gte('last_used_at', daysAgoIso(180))
+      .order('usage_count', { ascending: false })
+      .order('last_used_at', { ascending: false })
+      .limit(MAX_INSIGHT_HISTORY),
+    supabase
+      .from('grocery_items')
+      .select('name, checked_at, updated_at')
+      .in('device_id', storageDeviceIds)
+      .eq('is_checked', true)
+      .gte('checked_at', sinceCheckedIso)
+      .order('checked_at', { ascending: false })
+      .limit(MAX_INSIGHT_HISTORY),
+    supabase
+      .from('dinner_plan_days')
+      .select('date, title, note')
+      .in('device_id', storageDeviceIds)
+      .gte('date', sinceDinnerIso)
+      .order('date', { ascending: false })
+      .limit(MAX_INSIGHT_HISTORY),
+  ])
+
+  const rowsFrom = (result: PromiseSettledResult<{ data: unknown; error: { message?: string } | null }>) => {
+    if (result.status !== 'fulfilled' || result.value.error || !Array.isArray(result.value.data)) return []
+    return result.value.data as Array<Record<string, unknown>>
+  }
+
+  return {
+    historyRows: rowsFrom(historyResult),
+    checkedRows: rowsFrom(checkedResult),
+    dinnerHistoryRows: rowsFrom(dinnerHistoryResult),
+  }
+}
+
+async function buildGroceryInsights(params: {
+  supabase: SupabaseClient
+  storageDeviceIds: string[]
+  language: string
+  items: GroceryPayload['items']
+  dinnerPlan: GroceryPayload['dinner_plan']
+  dinnerRows: Array<Record<string, unknown>>
+}): Promise<GroceryPayload['insights']> {
+  try {
+    const sources = await loadInsightSourceRows(params.supabase, params.storageDeviceIds)
+    const dinnerInsightRows = [...params.dinnerRows, ...sources.dinnerHistoryRows]
+    const running_low = buildRunningLowInsight(params.language, params.items, dinnerInsightRows, sources)
+    const recipes = buildRecipeInsights(params.items, params.dinnerPlan, dinnerInsightRows)
+    console.log('GROCERIES_INSIGHTS', {
+      runningLow: running_low.length,
+      recipes: recipes.length,
+    })
+    return { running_low, recipes }
+  } catch {
+    const running_low: GroceryPayload['insights']['running_low'] = []
+    const recipes: GroceryPayload['insights']['recipes'] = []
+    console.log('GROCERIES_INSIGHTS', {
+      runningLow: running_low.length,
+      recipes: recipes.length,
+    })
+    return { running_low, recipes }
+  }
+}
+
 function jsonErrorResponse(payload: { error: string }, init: { status: number }) {
   const json = JSON.stringify(payload)
   return new NextResponse(json, {
@@ -110,10 +335,8 @@ function jsonErrorResponse(payload: { error: string }, init: { status: number })
   })
 }
 
-function jsonResponse(payload: GroceryPayload, deviceId: string) {
+function jsonResponse(payload: GroceryPayload) {
   const json = JSON.stringify(payload)
-  const bytes = Buffer.byteLength(json, 'utf8')
-  console.info('/api/device/groceries response size', { device_id: deviceId, bytes })
   return new NextResponse(json, {
     status: 200,
     headers: {
@@ -239,10 +462,14 @@ export async function GET(req: Request) {
       .filter((row: { date: string; title: string }) => isIsoDate(row.date) && row.date >= todayIso && !!row.title)
       .slice(0, MAX_DINNER_PLAN)
 
-    // Keep the existing response shape, but do not include raw history/memory/purchase-derived data
-    // in the firmware groceries payload. The app UI suggestions/insights use separate tables/views.
-    const running_low: GroceryPayload['insights']['running_low'] = []
-    const recipes: GroceryPayload['insights']['recipes'] = []
+    const insights = await buildGroceryInsights({
+      supabase,
+      storageDeviceIds,
+      language,
+      items,
+      dinnerPlan: dinner_plan,
+      dinnerRows: (dinnerRows || []) as Array<Record<string, unknown>>,
+    })
 
     const updatedCandidates = [
       settingsData?.updated_at ? String(settingsData.updated_at) : '',
@@ -256,12 +483,9 @@ export async function GET(req: Request) {
       language,
       items,
       dinner_plan,
-      insights: {
-        running_low,
-        recipes,
-      },
+      insights,
       updated_at,
-    }, device_id)
+    })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
     return jsonErrorResponse({ error: message }, { status: 500 })
