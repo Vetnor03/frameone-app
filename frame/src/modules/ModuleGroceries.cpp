@@ -295,6 +295,19 @@ static void drawEmptyState(const Cell& c, const char* line1, const char* line2) 
   drawLeft(c.x + c.w / 2 - w2 / 2, cy + 22, line2, FONT_B9, ink);
 }
 
+static void drawHeaderEmptyLine(const Cell& c, int contentTop, const char* text) {
+  const uint16_t ink = Theme::ink();
+
+  char fit[64] = {0};
+  fitTextToWidth(text, fit, sizeof(fit), c.w - 32, FONT_B9);
+
+  int w = textWidth(fit, FONT_B9);
+  int lineH = fontLineHeight(FONT_B9);
+  int y = contentTop + 6 + lineH;
+
+  drawLeft(c.x + c.w / 2 - w / 2, y, fit, FONT_B9, ink);
+}
+
 static bool fetchGroceries() {
   clearCache();
 
@@ -447,7 +460,6 @@ static bool fetchGroceries() {
       }
 
       g_cache.recipes[recipeIdx].missingCount = missingIdx;
-
       recipeIdx++;
     }
   }
@@ -471,10 +483,7 @@ static void drawSimpleList(const Cell& c, int maxItems, const GFXfont* font) {
   int contentTop = drawHeader(c, g_cache.header, 28, FONT_B12);
 
   if (g_cache.count <= 0) {
-    Cell body = c;
-    body.y = contentTop;
-    body.h = c.y + c.h - contentTop;
-    drawEmptyState(body, "All set", emptyPhrase());
+    drawHeaderEmptyLine(c, contentTop, emptyPhrase());
     return;
   }
 
@@ -514,91 +523,575 @@ static void renderSmall(const Cell& c) {
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
-  const int sidePad = 26;
-  const int topPad = 18;
-  const int headerGap = 10;
-  const int bottomPad = 14;
+  char headerText[64] = {0};
+  bool usedDinnerTitle = false;
 
-  const char* title = g_cache.languageNo ? "Handleliste" : "Groceries";
-  char headerBuf[64] = {0};
-  snprintf(headerBuf, sizeof(headerBuf), "%s %d", title, g_cache.count);
+  if (g_cache.dinnerCount > 0) {
+    char todayYmd[16] = {0};
+    time_t now = time(nullptr);
 
-  char headerFit[64] = {0};
-  fitTextToWidth(headerBuf, headerFit, sizeof(headerFit), c.w - sidePad * 2, FONT_B12);
+    if (now > 0) {
+      struct tm tmv;
+      localtime_r(&now, &tmv);
+      strftime(todayYmd, sizeof(todayYmd), "%Y-%m-%d", &tmv);
 
-  int16_t hx1, hy1;
-  uint16_t hw, hh;
-  measureText(headerFit, FONT_B12, hx1, hy1, hw, hh);
+      for (int i = 0; i < g_cache.dinnerCount; i++) {
+        if (!g_cache.dinners[i].used) continue;
 
-  int headerBaseline = c.y + topPad - hy1;
-  int headerX = c.x + c.w / 2 - (int)hw / 2 - hx1;
-  drawLeft(headerX, headerBaseline, headerFit, FONT_B12, ink);
+        if (strcmp(g_cache.dinners[i].date, todayYmd) == 0) {
+          safeCopy(headerText, sizeof(headerText), g_cache.dinners[i].title);
+          usedDinnerTitle = true;
+          break;
+        }
+      }
+    }
+  }
 
-  const int contentTop = headerBaseline + hy1 + (int)hh + headerGap;
-  const int contentBottom = c.y + c.h - bottomPad;
-  const int contentH = contentBottom - contentTop;
-  if (contentH <= 8) return;
+  if (!usedDinnerTitle) {
+    safeCopy(headerText, sizeof(headerText), g_cache.header);
+  }
+
+  int contentTop = drawHeader(c, headerText, 20, FONT_B12);
 
   if (g_cache.count <= 0) {
-    const char* emptyText = g_cache.languageNo ? "+" : "Add groceries";
-
-    char emptyFit[32] = {0};
-    fitTextToWidth(emptyText, emptyFit, sizeof(emptyFit), c.w - sidePad * 2, FONT_B9);
-
-    int16_t ex1, ey1;
-    uint16_t ew, eh;
-    measureText(emptyFit, FONT_B9, ex1, ey1, ew, eh);
-
-    int baseline = contentTop + (contentH - (int)eh) / 2 - ey1;
-    int x = c.x + c.w / 2 - (int)ew / 2 - ex1;
-    drawLeft(x, baseline, emptyFit, FONT_B9, ink);
+    drawHeaderEmptyLine(c, contentTop, emptyPhrase());
     return;
   }
 
   const int visibleCount = min(g_cache.count, 3);
-  const int rowH = max(18, contentH / visibleCount);
-  const int listH = rowH * visibleCount;
-  const int listTop = contentTop + max(0, (contentH - listH) / 2);
-  const int textMaxW = c.w - sidePad * 2;
+
+  if (g_cache.count > visibleCount) {
+    char moreBuf[24] = {0};
+    snprintf(moreBuf, sizeof(moreBuf), "+%d", g_cache.count - visibleCount);
+
+    int16_t mx1, my1;
+    uint16_t mw, mh;
+    measureText(moreBuf, FONT_B9, mx1, my1, mw, mh);
+
+    drawLeft(c.x + c.w - 12 - (int)mw - mx1, c.y + 12 - my1, moreBuf, FONT_B9, ink);
+  }
+
+  int contentBottom = c.y + c.h - 10;
+  int contentH = contentBottom - contentTop;
+  if (contentH <= 8) return;
+
+  const int dividerInsetTop = 8;
+  const int dividerInsetBottom = 8;
+  const int dividerY = contentTop + dividerInsetTop;
+  const int dividerH = max(8, contentH - dividerInsetTop - dividerInsetBottom);
+
+  if (visibleCount == 2) {
+    d.drawFastVLine(c.x + c.w / 2, dividerY, dividerH, ink);
+  } else if (visibleCount == 3) {
+    d.drawFastVLine(c.x + c.w / 3, dividerY, dividerH, ink);
+    d.drawFastVLine(c.x + (c.w * 2) / 3, dividerY, dividerH, ink);
+  }
 
   const int rotation = getRotationStep4h();
+  const int textPadX = 8;
 
   for (int i = 0; i < visibleCount; i++) {
     int idx = wrapIndex(rotation + i, g_cache.count);
+
+    int secX0 = c.x + (c.w * i) / visibleCount;
+    int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
+    int secW = secX1 - secX0;
 
     char raw[72] = {0};
     formatItem(g_cache.items[idx], raw, sizeof(raw));
 
     char fit[72] = {0};
-    fitTextToWidth(raw, fit, sizeof(fit), textMaxW, FONT_B9);
-
-    int rowTop = listTop + i * rowH;
+    fitTextToWidth(raw, fit, sizeof(fit), secW - textPadX * 2 - 4, FONT_B12);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
-    measureText(fit, FONT_B9, tx1, ty1, tw, th);
+    measureText(fit, FONT_B12, tx1, ty1, tw, th);
 
-    int baseline = rowTop + (rowH - (int)th) / 2 - ty1;
-    int x = c.x + c.w / 2 - (int)tw / 2 - tx1;
-    drawLeft(x, baseline, fit, FONT_B9, ink);
+    int cx = secX0 + secW / 2;
+    int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
 
-    if (i < visibleCount - 1) {
-      int dividerY = rowTop + rowH;
-      d.drawFastHLine(c.x + sidePad, dividerY, c.w - sidePad * 2, ink);
+    d.setFont(FONT_B12);
+    d.setTextColor(ink);
+    d.setTextSize(1);
+    d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
+    d.print(fit);
+    d.setFont(nullptr);
+  }
+}
+
+static void drawGroceryColumns(const Cell& c, int contentTop, int maxVisibleItems) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  if (g_cache.count <= 0) {
+    drawHeaderEmptyLine(c, contentTop, emptyPhrase());
+    return;
+  }
+
+  const int visibleCount = min(g_cache.count, maxVisibleItems);
+  const bool hasMore = g_cache.count > visibleCount;
+
+  const int lineH = fontLineHeight(FONT_B9);
+  const int lineGap = 8;
+  const int rowStep = lineH + lineGap;
+  const int listTop = contentTop + 6;
+  const int rotation = getRotationStep4h();
+
+  const int dotR = 3;
+  const int gap = 10;
+
+  if (visibleCount <= 6) {
+    char lines[6][72];
+    int longestW = 0;
+
+    for (int i = 0; i < visibleCount; i++) {
+      lines[i][0] = '\0';
+
+      int idx = wrapIndex(rotation + i, g_cache.count);
+
+      char raw[72] = {0};
+      formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), c.w - 52, FONT_B9);
+
+      int w = textWidth(lines[i], FONT_B9);
+      if (w > longestW) longestW = w;
     }
+
+    int totalW = dotR * 2 + gap + longestW;
+    int textX = c.x + (c.w - totalW) / 2 + dotR * 2 + gap;
+
+    for (int i = 0; i < visibleCount; i++) {
+      if (!lines[i][0]) continue;
+
+      int centerY = listTop + i * rowStep + lineH / 2;
+
+      int16_t tx1, ty1;
+      uint16_t tw, th;
+      measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+
+      int baseline = centerY - (int)th / 2 - ty1;
+
+      d.fillCircle(textX - gap - dotR, centerY, dotR, ink);
+      drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+    }
+
+    return;
+  }
+
+  const int columnGap = 8;
+  const int columnW = (c.w - columnGap) / 2;
+
+  const int leftCount = (visibleCount + 1) / 2;
+  const int rightCount = visibleCount / 2;
+  const int rowCount = max(leftCount, rightCount);
+
+  for (int col = 0; col < 2; col++) {
+    int colCount = (col == 0) ? leftCount : rightCount;
+    if (colCount <= 0) continue;
+
+    int colX = c.x + col * (columnW + columnGap);
+    int colCenterX = colX + columnW / 2;
+    int maxTextW = max(12, columnW - dotR * 2 - gap - 10);
+
+    char lines[6][72];
+    int longestW = 0;
+
+    for (int i = 0; i < colCount; i++) {
+      lines[i][0] = '\0';
+
+      int itemOffset = (col == 0) ? i : leftCount + i;
+      int idx = wrapIndex(rotation + itemOffset, g_cache.count);
+
+      char raw[72] = {0};
+      formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+      fitTextToWidth(raw, lines[i], sizeof(lines[i]), maxTextW, FONT_B9);
+
+      int w = textWidth(lines[i], FONT_B9);
+      if (w > longestW) longestW = w;
+    }
+
+    int totalW = dotR * 2 + gap + longestW;
+    int textX = colCenterX - totalW / 2 + dotR * 2 + gap;
+
+    for (int i = 0; i < colCount; i++) {
+      if (!lines[i][0]) continue;
+
+      int centerY = listTop + i * rowStep + lineH / 2;
+
+      int16_t tx1, ty1;
+      uint16_t tw, th;
+      measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+
+      int baseline = centerY - (int)th / 2 - ty1;
+
+      d.fillCircle(textX - gap - dotR, centerY, dotR, ink);
+      drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+    }
+  }
+
+  if (hasMore) {
+    char moreBuf[24] = {0};
+    snprintf(moreBuf, sizeof(moreBuf), "+%d items", g_cache.count - visibleCount);
+
+    int moreCenterY = listTop + rowCount * rowStep + lineH / 2;
+
+    int16_t mx1, my1;
+    uint16_t mw, mh;
+    measureText(moreBuf, FONT_B9, mx1, my1, mw, mh);
+
+    drawLeft(
+      c.x + c.w / 2 - (int)mw / 2 - mx1,
+      moreCenterY - (int)mh / 2 - my1,
+      moreBuf,
+      FONT_B9,
+      ink
+    );
   }
 }
 
 static void renderMedium(const Cell& c) {
-  drawSimpleList(c, 6, FONT_B9);
+  const uint16_t ink = Theme::ink();
+
+  char headerText[64] = {0};
+  char topLabel[32] = {0};
+  bool usedDinnerTitle = false;
+
+  if (g_cache.dinnerCount > 0) {
+    char todayYmd[16] = {0};
+    time_t now = time(nullptr);
+
+    if (now > 0) {
+      struct tm tmv;
+      localtime_r(&now, &tmv);
+      strftime(todayYmd, sizeof(todayYmd), "%Y-%m-%d", &tmv);
+
+      for (int i = 0; i < g_cache.dinnerCount; i++) {
+        if (!g_cache.dinners[i].used) continue;
+
+        if (strcmp(g_cache.dinners[i].date, todayYmd) == 0) {
+          safeCopy(headerText, sizeof(headerText), g_cache.dinners[i].title);
+          safeCopy(topLabel, sizeof(topLabel), g_cache.languageNo ? "Middag i dag" : "Today's Dinner");
+          usedDinnerTitle = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!usedDinnerTitle) {
+    safeCopy(headerText, sizeof(headerText), g_cache.header);
+  }
+
+  int headerTopPad = usedDinnerTitle ? 32 : 26;
+
+  if (usedDinnerTitle && topLabel[0]) {
+    char labelFit[32] = {0};
+    fitTextToWidth(topLabel, labelFit, sizeof(labelFit), c.w - 24, FONT_B9);
+
+    int16_t lx1, ly1;
+    uint16_t lw, lh;
+    measureText(labelFit, FONT_B9, lx1, ly1, lw, lh);
+
+    int labelBaseline = c.y + 12 - ly1;
+    drawLeft(c.x + c.w / 2 - (int)lw / 2 - lx1, labelBaseline, labelFit, FONT_B9, ink);
+  }
+
+  int contentTop = drawHeader(c, headerText, headerTopPad, FONT_B12);
+  drawGroceryColumns(c, contentTop, 12);
+}
+
+static void drawDinnerPlanList(const Cell& right, int rightTop) {
+  const uint16_t ink = Theme::ink();
+
+  char todayYmd[16] = {0};
+  bool hasTodayYmd = false;
+
+  time_t now = time(nullptr);
+  if (now > 0) {
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    strftime(todayYmd, sizeof(todayYmd), "%Y-%m-%d", &tmv);
+    hasTodayYmd = true;
+  }
+
+  int dinnerIndexes[7] = {0};
+  int dinnerCount = 0;
+
+  for (int i = 0; i < g_cache.dinnerCount && dinnerCount < 7; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[i];
+    if (!dinner.used) continue;
+
+    if (hasTodayYmd && strcmp(dinner.date, todayYmd) <= 0) {
+      continue;
+    }
+
+    dinnerIndexes[dinnerCount++] = i;
+  }
+
+  if (dinnerCount <= 0) {
+    drawHeaderEmptyLine(right, rightTop, g_cache.languageNo ? "Ingen middager planlagt" : "No dinners planned");
+    return;
+  }
+
+  const int lineH = fontLineHeight(FONT_B9);
+  const int lineGap = 8;
+  const int rowStep = lineH + lineGap;
+  const int listTop = rightTop + 6;
+  const int maxRows = min(dinnerCount, 7);
+
+  char labels[7][10] = {};
+  char titles[7][48] = {};
+
+  int labelW = 0;
+  int longestTitleW = 0;
+
+  for (int i = 0; i < maxRows; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[dinnerIndexes[i]];
+
+    snprintf(labels[i], sizeof(labels[i]), "%s:", dinner.dayLabel);
+    labelW = max(labelW, textWidth(labels[i], FONT_B9));
+  }
+
+  const int labelGap = 14;
+  const int maxTitleW = max(20, right.w - 20 - labelW - labelGap);
+
+  for (int i = 0; i < maxRows; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[dinnerIndexes[i]];
+    fitTextToWidth(dinner.title, titles[i], sizeof(titles[i]), maxTitleW, FONT_B9);
+
+    int titleW = textWidth(titles[i], FONT_B9);
+    if (titleW > longestTitleW) longestTitleW = titleW;
+  }
+
+  const int totalContentW = labelW + labelGap + longestTitleW;
+  const int startX = right.x + (right.w - totalContentW) / 2;
+
+  for (int i = 0; i < maxRows; i++) {
+    int centerY = listTop + i * rowStep + lineH / 2;
+
+    int16_t lx1, ly1;
+    uint16_t lw, lh;
+    measureText(labels[i], FONT_B9, lx1, ly1, lw, lh);
+
+    int labelBaseline = centerY - (int)lh / 2 - ly1;
+    drawLeft(startX - lx1, labelBaseline, labels[i], FONT_B9, ink);
+
+    int16_t tx1, ty1;
+    uint16_t tw, th;
+    measureText(titles[i], FONT_B9, tx1, ty1, tw, th);
+
+    int titleBaseline = centerY - (int)th / 2 - ty1;
+    drawLeft(startX + labelW + labelGap - tx1, titleBaseline, titles[i], FONT_B9, ink);
+  }
 }
 
 static void renderLarge(const Cell& c) {
-  drawSimpleList(c, 10, FONT_B12);
+  const int gapX = 14;
+  const int leftW = (c.w - gapX) / 2;
+  const int rightW = c.w - gapX - leftW;
+
+  Cell left = c;
+  left.x = c.x;
+  left.w = leftW;
+
+  Cell right = c;
+  right.x = c.x + leftW + gapX;
+  right.w = rightW;
+
+  int leftTop = drawHeader(left, g_cache.languageNo ? "Handleliste" : "Grocery List", 26, FONT_B12);
+  drawGroceryColumns(left, leftTop, 12);
+
+  char todayYmd[16] = {0};
+  bool hasTodayYmd = false;
+
+  time_t now = time(nullptr);
+  if (now > 0) {
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    strftime(todayYmd, sizeof(todayYmd), "%Y-%m-%d", &tmv);
+    hasTodayYmd = true;
+  }
+
+  char rightHeader[64] = {0};
+  safeCopy(rightHeader, sizeof(rightHeader), g_cache.languageNo ? "Ukemeny" : "Weekly Menu");
+
+  for (int i = 0; i < g_cache.dinnerCount; i++) {
+    const DinnerPlanItem& dinner = g_cache.dinners[i];
+    if (!dinner.used) continue;
+
+    if (hasTodayYmd && strcmp(dinner.date, todayYmd) == 0) {
+      safeCopy(rightHeader, sizeof(rightHeader), dinner.title);
+      break;
+    }
+  }
+
+  int rightTop = drawHeader(right, rightHeader, 26, FONT_B12);
+  drawDinnerPlanList(right, rightTop);
+}
+
+static void drawRunningLowList(const Cell& left, int leftTop) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  if (g_cache.runningLowCount <= 0) {
+    drawHeaderEmptyLine(left, leftTop, g_cache.languageNo ? "Alt ser bra ut" : "All stocked");
+    return;
+  }
+
+  const int visibleCount = min(g_cache.runningLowCount, MAX_RUNNING_LOW_INSIGHTS);
+  const int lineH = fontLineHeight(FONT_B9);
+  const int lineGap = 8;
+  const int rowStep = lineH + lineGap;
+  const int listTop = leftTop + 6;
+  const int dotR = 3;
+  const int dotGap = 10;
+
+  char lines[MAX_RUNNING_LOW_INSIGHTS][72];
+  int longestW = 0;
+
+  for (int i = 0; i < visibleCount; i++) {
+    lines[i][0] = '\0';
+
+    char raw[72] = {0};
+    if (g_cache.runningLow[i].label[0]) {
+      snprintf(raw, sizeof(raw), "%s - %s", g_cache.runningLow[i].name, g_cache.runningLow[i].label);
+    } else {
+      safeCopy(raw, sizeof(raw), g_cache.runningLow[i].name);
+    }
+
+    fitTextToWidth(raw, lines[i], sizeof(lines[i]), left.w - 52, FONT_B9);
+
+    int w = textWidth(lines[i], FONT_B9);
+    if (w > longestW) longestW = w;
+  }
+
+  int totalW = dotR * 2 + dotGap + longestW;
+  int textX = left.x + (left.w - totalW) / 2 + dotR * 2 + dotGap;
+
+  for (int i = 0; i < visibleCount; i++) {
+    if (!lines[i][0]) continue;
+
+    int centerY = listTop + i * rowStep + lineH / 2;
+
+    int16_t tx1, ty1;
+    uint16_t tw, th;
+    measureText(lines[i], FONT_B9, tx1, ty1, tw, th);
+
+    int baseline = centerY - (int)th / 2 - ty1;
+
+    d.fillCircle(textX - dotGap - dotR, centerY, dotR, ink);
+    drawLeft(textX, baseline, lines[i], FONT_B9, ink);
+  }
+}
+
+static void drawMealIdeasList(const Cell& right, int rightTop) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  if (g_cache.recipeCount <= 0) {
+    const int lineH = fontLineHeight(FONT_B9);
+    const int listTop = rightTop + 6;
+
+    const char* line1 = g_cache.languageNo ? "L\xE6rer kj\xF8kkenet ditt" : "Learning your kitchen";
+    const char* line2 = g_cache.languageNo ? "Legg til varer over tid" : "Add groceries over time";
+
+    char fit1[72] = {0};
+    char fit2[72] = {0};
+
+    fitTextToWidth(line1, fit1, sizeof(fit1), right.w - 32, FONT_B9);
+    fitTextToWidth(line2, fit2, sizeof(fit2), right.w - 32, FONT_B9);
+
+    int w1 = textWidth(fit1, FONT_B9);
+    int w2 = textWidth(fit2, FONT_B9);
+
+    drawLeft(right.x + right.w / 2 - w1 / 2, listTop + lineH, fit1, FONT_B9, ink);
+    drawLeft(right.x + right.w / 2 - w2 / 2, listTop + lineH * 2 + 8, fit2, FONT_B9, ink);
+    return;
+  }
+
+  const int lineH = fontLineHeight(FONT_B9);
+  const int rowGap = 16;
+  const int startY = rightTop + 10;
+  const int padX = 16;
+  const int visibleCount = min(g_cache.recipeCount, MAX_RECIPE_INSIGHTS);
+
+  int y = startY;
+
+  for (int i = 0; i < visibleCount; i++) {
+    const RecipeInsight& recipe = g_cache.recipes[i];
+    if (!recipe.used) continue;
+
+    char recipeFit[72] = {0};
+    fitTextToWidth(recipe.name, recipeFit, sizeof(recipeFit), right.w - padX * 2 - 18, FONT_B9);
+
+    d.fillCircle(right.x + padX, y - 5, 3, ink);
+    drawLeft(right.x + padX + 14, y, recipeFit, FONT_B9, ink);
+
+    y += lineH + 2;
+
+    if (recipe.missingCount > 0) {
+      char missingBuf[96] = {0};
+      safeCopy(missingBuf, sizeof(missingBuf), g_cache.languageNo ? "mangler: " : "missing: ");
+
+      for (int j = 0; j < recipe.missingCount; j++) {
+        if (j > 0) strlcat(missingBuf, ", ", sizeof(missingBuf));
+        strlcat(missingBuf, recipe.missing[j], sizeof(missingBuf));
+      }
+
+      char missingFit[96] = {0};
+      fitTextToWidth(missingBuf, missingFit, sizeof(missingFit), right.w - padX * 2 - 14, FONT_B9);
+
+      drawLeft(right.x + padX + 14, y, missingFit, FONT_B9, ink);
+      y += lineH;
+    }
+
+    y += rowGap;
+  }
 }
 
 static void renderXL(const Cell& c) {
-  drawSimpleList(c, 12, FONT_B12);
+  const int gapY = 16;
+
+  int topH = (c.h - gapY) / 2;
+  int bottomH = c.h - gapY - topH;
+
+  Cell top = c;
+  top.x = c.x;
+  top.y = c.y;
+  top.w = c.w;
+  top.h = topH;
+
+  Cell bottom = c;
+  bottom.x = c.x;
+  bottom.y = c.y + topH + gapY;
+  bottom.w = c.w;
+  bottom.h = bottomH;
+
+  renderLarge(top);
+
+  const int gapX = 18;
+  const int leftW = (bottom.w - gapX) / 2;
+  const int rightW = bottom.w - gapX - leftW;
+
+  Cell left = bottom;
+  left.x = bottom.x;
+  left.y = bottom.y;
+  left.w = leftW;
+  left.h = bottom.h;
+
+  Cell right = bottom;
+  right.x = bottom.x + leftW + gapX;
+  right.y = bottom.y;
+  right.w = rightW;
+  right.h = bottom.h;
+
+  int leftTop = drawHeader(left, g_cache.languageNo ? "Snart tom" : "Running Low", 26, FONT_B12);
+  drawRunningLowList(left, leftTop);
+
+  int rightTop = drawHeader(right, g_cache.languageNo ? "Middagstips" : "Meal Ideas", 26, FONT_B12);
+  drawMealIdeasList(right, rightTop);
 }
 
 void setConfig(const FrameConfig* cfg) {
