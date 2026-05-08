@@ -6,9 +6,6 @@ export const dynamic = 'force-dynamic'
 
 const MAX_ITEMS = 40
 const MAX_DINNER_PLAN = 14
-const MAX_RUNNING_LOW = 3
-const MAX_RECIPES = 2
-const MAX_MISSING_PER_RECIPE = 2
 
 type GroceryPayload = {
   ok: true
@@ -38,30 +35,6 @@ function getBearerToken(req: Request) {
 
 function asString(value: unknown, def = '') {
   return typeof value === 'string' ? value : def
-}
-
-function asStringArray(value: unknown) {
-  if (Array.isArray(value)) return value.map((x) => asString(x, '').trim()).filter(Boolean)
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (!trimmed) return []
-    try {
-      const parsed = JSON.parse(trimmed) as unknown
-      if (Array.isArray(parsed)) return parsed.map((x) => asString(x, '').trim()).filter(Boolean)
-    } catch {
-      // Plain comma-separated strings are accepted from display-ready views.
-    }
-    return trimmed.split(',').map((x) => x.trim()).filter(Boolean)
-  }
-  return []
-}
-
-function firstString(row: Record<string, unknown> | null | undefined, keys: string[], def = '') {
-  for (const key of keys) {
-    const value = asString(row?.[key], '').trim()
-    if (value) return value
-  }
-  return def
 }
 
 function isIsoDate(s: string) {
@@ -125,25 +98,6 @@ function parseDinnerPlanNoteItems(note: unknown): DinnerPlanNoteItem[] {
   } catch {
     return []
   }
-}
-
-function groceryStatusLabel(status: string, language: string) {
-  const normalized = status.trim().toLowerCase()
-  const noLabels: Record<string, string> = {
-    due_soon: 'Snart tomt',
-    overdue: 'Pleier å trengs',
-    probably_out: 'På handlelisten',
-    learning: 'Lærer mønster',
-  }
-  const enLabels: Record<string, string> = {
-    due_soon: 'Due soon',
-    overdue: 'Usually needed',
-    probably_out: 'On list',
-    learning: 'Learning pattern',
-  }
-  const isNorwegian = language === 'no' || language === 'nb' || language === 'nb-NO'
-  const labels = isNorwegian ? noLabels : enLabels
-  return labels[normalized] || (isNorwegian ? 'Følger med' : 'Watching')
 }
 
 function logFinalJsonResponse(json: string, context: Record<string, unknown>) {
@@ -214,52 +168,51 @@ export async function GET(req: Request) {
     })
     console.info('GROCERIES_DIAG_START', { device_id })
 
+    const appStorageDeviceId = String((device as Record<string, unknown>).id ?? '').trim()
+    const storageDeviceIds = Array.from(new Set([appStorageDeviceId, device_id].filter(Boolean)))
     const todayIso = isoDateOnly(new Date())
 
-    const [settingsResult, itemsCountResult, activeItemsCountResult, dinnerCountResult, itemsResult, dinnerResult, runningLowResult, recipesResult] = await Promise.allSettled([
+    console.info('/api/device/groceries app grocery storage source', {
+      received_device_id: device_id,
+      app_storage_device_ids: storageDeviceIds,
+      source: 'public.grocery_items plus public.dinner_plan_days.note using device_members device_id values',
+    })
+
+    const [settingsResult, itemsCountResult, activeItemsCountResult, dinnerCountResult, itemsResult, dinnerResult] = await Promise.allSettled([
       supabase
         .from('device_settings')
-        .select('settings_json, updated_at')
-        .eq('device_id', device_id)
-        .maybeSingle(),
+        .select('settings_json, updated_at, device_id')
+        .in('device_id', storageDeviceIds)
+        .order('updated_at', { ascending: false })
+        .limit(1),
       supabase
         .from('grocery_items')
         .select('id', { count: 'exact', head: true })
-        .eq('device_id', device_id),
+        .in('device_id', storageDeviceIds),
       supabase
         .from('grocery_items')
         .select('id', { count: 'exact', head: true })
-        .eq('device_id', device_id)
+        .in('device_id', storageDeviceIds)
         .eq('is_checked', false),
       supabase
         .from('dinner_plan_days')
         .select('date', { count: 'exact', head: true })
-        .eq('device_id', device_id)
+        .in('device_id', storageDeviceIds)
         .gte('date', todayIso),
       supabase
         .from('grocery_items')
         .select('name, quantity, updated_at')
-        .eq('device_id', device_id)
+        .in('device_id', storageDeviceIds)
         .eq('is_checked', false)
         .order('updated_at', { ascending: false })
         .limit(MAX_ITEMS),
       supabase
         .from('dinner_plan_days')
         .select('date, title, note')
-        .eq('device_id', device_id)
+        .in('device_id', storageDeviceIds)
         .gte('date', todayIso)
         .order('date', { ascending: true })
         .limit(MAX_DINNER_PLAN),
-      supabase
-        .from('grocery_running_low')
-        .select('*')
-        .eq('device_id', device_id)
-        .limit(MAX_RUNNING_LOW),
-      supabase
-        .from('grocery_recipe_suggestions')
-        .select('*')
-        .eq('device_id', device_id)
-        .limit(MAX_RECIPES),
     ])
 
     if (itemsCountResult.status === 'rejected') {
@@ -296,12 +249,13 @@ export async function GET(req: Request) {
       return jsonErrorResponse({ error: String(settingsResult.reason) }, { status: 500 }, { device_id })
     }
 
-    const { data: settingsData, error: settingsError } = settingsResult.value
+    const { data: settingsRows, error: settingsError } = settingsResult.value
     if (settingsError) {
       console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'device_settings', error: settingsError })
       return jsonErrorResponse({ error: settingsError.message }, { status: 500 }, { device_id })
     }
 
+    const settingsData = Array.isArray(settingsRows) ? settingsRows[0] : null
     const settings = settingsData?.settings_json && typeof settingsData.settings_json === 'object' ? settingsData.settings_json as Record<string, unknown> : {}
     const language = asString(settings.language, 'en').slice(0, 16) || 'en'
 
@@ -368,50 +322,10 @@ export async function GET(req: Request) {
       .filter((row: { date: string; title: string }) => isIsoDate(row.date) && row.date >= todayIso && !!row.title)
       .slice(0, MAX_DINNER_PLAN)
 
-    let running_low: GroceryPayload['insights']['running_low'] = []
-    if (runningLowResult.status === 'fulfilled') {
-      const { data, error } = runningLowResult.value
-      if (error) {
-        console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_running_low', error })
-        console.error('Failed to load grocery_running_low insights', { device_id, error })
-      } else {
-        running_low = (data || [])
-          .map((row: Record<string, unknown>) => {
-            const name = firstString(row, ['name', 'item_name', 'display_name', 'canonical_name']).slice(0, 80)
-            const label = firstString(row, ['label', 'display_label'], '').slice(0, 48)
-            const status = firstString(row, ['status', 'item_status', 'memory_status'], 'learning').slice(0, 32)
-            if (!name) return null
-            return { name, label: label || groceryStatusLabel(status, language) }
-          })
-          .filter(Boolean)
-          .slice(0, MAX_RUNNING_LOW) as GroceryPayload['insights']['running_low']
-      }
-    } else {
-      console.error('Failed to load grocery_running_low insights', { device_id, error: runningLowResult.reason })
-    }
-
-    let recipes: GroceryPayload['insights']['recipes'] = []
-    if (recipesResult.status === 'fulfilled') {
-      const { data, error } = recipesResult.value
-      if (error) {
-        console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_recipe_suggestions', error })
-        console.error('Failed to load grocery_recipe_suggestions insights', { device_id, error })
-      } else {
-        recipes = (data || [])
-          .map((row: Record<string, unknown>) => {
-            const name = firstString(row, ['name', 'recipe_name', 'title']).slice(0, 80)
-            if (!name) return null
-            const missing = asStringArray(row?.missing ?? row?.missing_ingredients ?? row?.missing_items)
-              .slice(0, MAX_MISSING_PER_RECIPE)
-              .map((x) => x.slice(0, 60))
-            return { name, missing }
-          })
-          .filter(Boolean)
-          .slice(0, MAX_RECIPES) as GroceryPayload['insights']['recipes']
-      }
-    } else {
-      console.error('Failed to load grocery_recipe_suggestions insights', { device_id, error: recipesResult.reason })
-    }
+    // Keep the existing response shape, but do not include raw history/memory/purchase-derived data
+    // in the firmware groceries payload. The app UI suggestions/insights use separate tables/views.
+    const running_low: GroceryPayload['insights']['running_low'] = []
+    const recipes: GroceryPayload['insights']['recipes'] = []
 
     const updatedCandidates = [
       settingsData?.updated_at ? String(settingsData.updated_at) : '',
