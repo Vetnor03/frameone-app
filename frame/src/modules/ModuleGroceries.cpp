@@ -511,7 +511,82 @@ static void drawSimpleList(const Cell& c, int maxItems, const GFXfont* font) {
 }
 
 static void renderSmall(const Cell& c) {
-  drawSimpleList(c, 3, FONT_B9);
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+
+  const int sidePad = 26;
+  const int topPad = 18;
+  const int headerGap = 10;
+  const int bottomPad = 14;
+
+  const char* title = g_cache.languageNo ? "Handleliste" : "Groceries";
+  char headerBuf[64] = {0};
+  snprintf(headerBuf, sizeof(headerBuf), "%s %d", title, g_cache.count);
+
+  char headerFit[64] = {0};
+  fitTextToWidth(headerBuf, headerFit, sizeof(headerFit), c.w - sidePad * 2, FONT_B12);
+
+  int16_t hx1, hy1;
+  uint16_t hw, hh;
+  measureText(headerFit, FONT_B12, hx1, hy1, hw, hh);
+
+  int headerBaseline = c.y + topPad - hy1;
+  int headerX = c.x + c.w / 2 - (int)hw / 2 - hx1;
+  drawLeft(headerX, headerBaseline, headerFit, FONT_B12, ink);
+
+  const int contentTop = headerBaseline + hy1 + (int)hh + headerGap;
+  const int contentBottom = c.y + c.h - bottomPad;
+  const int contentH = contentBottom - contentTop;
+  if (contentH <= 8) return;
+
+  if (g_cache.count <= 0) {
+    const char* emptyText = g_cache.languageNo ? "+" : "Add groceries";
+
+    char emptyFit[32] = {0};
+    fitTextToWidth(emptyText, emptyFit, sizeof(emptyFit), c.w - sidePad * 2, FONT_B9);
+
+    int16_t ex1, ey1;
+    uint16_t ew, eh;
+    measureText(emptyFit, FONT_B9, ex1, ey1, ew, eh);
+
+    int baseline = contentTop + (contentH - (int)eh) / 2 - ey1;
+    int x = c.x + c.w / 2 - (int)ew / 2 - ex1;
+    drawLeft(x, baseline, emptyFit, FONT_B9, ink);
+    return;
+  }
+
+  const int visibleCount = min(g_cache.count, 3);
+  const int rowH = max(18, contentH / visibleCount);
+  const int listH = rowH * visibleCount;
+  const int listTop = contentTop + max(0, (contentH - listH) / 2);
+  const int textMaxW = c.w - sidePad * 2;
+
+  const int rotation = getRotationStep4h();
+
+  for (int i = 0; i < visibleCount; i++) {
+    int idx = wrapIndex(rotation + i, g_cache.count);
+
+    char raw[72] = {0};
+    formatItem(g_cache.items[idx], raw, sizeof(raw));
+
+    char fit[72] = {0};
+    fitTextToWidth(raw, fit, sizeof(fit), textMaxW, FONT_B9);
+
+    int rowTop = listTop + i * rowH;
+
+    int16_t tx1, ty1;
+    uint16_t tw, th;
+    measureText(fit, FONT_B9, tx1, ty1, tw, th);
+
+    int baseline = rowTop + (rowH - (int)th) / 2 - ty1;
+    int x = c.x + c.w / 2 - (int)tw / 2 - tx1;
+    drawLeft(x, baseline, fit, FONT_B9, ink);
+
+    if (i < visibleCount - 1) {
+      int dividerY = rowTop + rowH;
+      d.drawFastHLine(c.x + sidePad, dividerY, c.w - sidePad * 2, ink);
+    }
+  }
 }
 
 static void renderMedium(const Cell& c) {
