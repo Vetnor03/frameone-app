@@ -146,12 +146,28 @@ function groceryStatusLabel(status: string, language: string) {
   return labels[normalized] || (isNorwegian ? 'Følger med' : 'Watching')
 }
 
+function logFinalJsonResponse(json: string, context: Record<string, unknown>) {
+  console.info('GROCERIES_DIAG_FINAL_RESPONSE', { ...context, json })
+  console.info('/api/device/groceries response body', json)
+}
+
+function jsonErrorResponse(payload: { error: string }, init: { status: number }, context: Record<string, unknown> = {}) {
+  const json = JSON.stringify(payload)
+  logFinalJsonResponse(json, { ...context, status: init.status })
+  return new NextResponse(json, {
+    status: init.status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+    },
+  })
+}
+
 function jsonResponse(payload: GroceryPayload, deviceId: string) {
   const json = JSON.stringify(payload)
   const bytes = Buffer.byteLength(json, 'utf8')
   console.info('/api/device/groceries response size', { device_id: deviceId, bytes })
   console.info('/api/device/groceries final items count', { device_id: deviceId, items: payload.items.length })
-  console.info('/api/device/groceries response body', json)
+  logFinalJsonResponse(json, { device_id: deviceId, status: 200 })
   return new NextResponse(json, {
     status: 200,
     headers: {
@@ -167,12 +183,12 @@ export async function GET(req: Request) {
     console.info('/api/device/groceries device_id received', { device_id })
 
     if (!device_id) {
-      return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
+      return jsonErrorResponse({ error: 'Missing device_id' }, { status: 400 }, { device_id })
     }
 
     const token = getBearerToken(req)
     if (!token) {
-      return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
+      return jsonErrorResponse({ error: 'Missing bearer token' }, { status: 401 }, { device_id })
     }
 
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -183,8 +199,12 @@ export async function GET(req: Request) {
       .eq('device_id', device_id)
       .maybeSingle()
 
+    if (deviceError) {
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'devices', error: deviceError })
+    }
+
     if (deviceError || !device || device.device_token !== token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return jsonErrorResponse({ error: 'Unauthorized' }, { status: 401 }, { device_id })
     }
 
     console.info('/api/device/groceries resolved device', {
@@ -192,22 +212,16 @@ export async function GET(req: Request) {
       resolved_device_id: device.device_id,
       internal_id: (device as Record<string, unknown>).id ?? null,
     })
+    console.info('GROCERIES_DIAG_START', { device_id })
 
-    const { data: settingsData, error: settingsError } = await supabase
-      .from('device_settings')
-      .select('settings_json, updated_at')
-      .eq('device_id', device_id)
-      .maybeSingle()
-
-    if (settingsError) {
-      return NextResponse.json({ error: settingsError.message }, { status: 500 })
-    }
-
-    const settings = settingsData?.settings_json && typeof settingsData.settings_json === 'object' ? settingsData.settings_json as Record<string, unknown> : {}
-    const language = asString(settings.language, 'en').slice(0, 16) || 'en'
     const todayIso = isoDateOnly(new Date())
 
-    const [itemsCountResult, activeItemsCountResult, itemsResult, dinnerResult, runningLowResult, recipesResult] = await Promise.allSettled([
+    const [settingsResult, itemsCountResult, activeItemsCountResult, dinnerCountResult, itemsResult, dinnerResult, runningLowResult, recipesResult] = await Promise.allSettled([
+      supabase
+        .from('device_settings')
+        .select('settings_json, updated_at')
+        .eq('device_id', device_id)
+        .maybeSingle(),
       supabase
         .from('grocery_items')
         .select('id', { count: 'exact', head: true })
@@ -217,6 +231,11 @@ export async function GET(req: Request) {
         .select('id', { count: 'exact', head: true })
         .eq('device_id', device_id)
         .eq('is_checked', false),
+      supabase
+        .from('dinner_plan_days')
+        .select('date', { count: 'exact', head: true })
+        .eq('device_id', device_id)
+        .gte('date', todayIso),
       supabase
         .from('grocery_items')
         .select('name, quantity, updated_at')
@@ -246,37 +265,68 @@ export async function GET(req: Request) {
     if (itemsCountResult.status === 'rejected') {
       console.error('Failed to count grocery_items rows', { device_id, error: itemsCountResult.reason })
     } else if (itemsCountResult.value.error) {
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_items_total_count', error: itemsCountResult.value.error })
       console.error('Failed to count grocery_items rows', { device_id, error: itemsCountResult.value.error })
     } else {
+      console.info('GROCERIES_DIAG_COUNT_RESULT', { device_id, query: 'grocery_items_total_count', count: itemsCountResult.value.count ?? 0 })
       console.info('/api/device/groceries grocery_items rows found', { device_id, count: itemsCountResult.value.count ?? 0 })
     }
 
     if (activeItemsCountResult.status === 'rejected') {
       console.error('Failed to count active grocery_items rows', { device_id, error: activeItemsCountResult.reason })
     } else if (activeItemsCountResult.value.error) {
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_items_active_unchecked_count', error: activeItemsCountResult.value.error })
       console.error('Failed to count active grocery_items rows', { device_id, error: activeItemsCountResult.value.error })
     } else {
+      console.info('GROCERIES_DIAG_COUNT_RESULT', { device_id, query: 'grocery_items_active_unchecked_count', count: activeItemsCountResult.value.count ?? 0 })
       console.info('/api/device/groceries active unchecked grocery_items rows found', { device_id, count: activeItemsCountResult.value.count ?? 0 })
     }
 
+    if (dinnerCountResult.status === 'rejected') {
+      console.error('Failed to count dinner_plan_days rows', { device_id, error: dinnerCountResult.reason })
+    } else if (dinnerCountResult.value.error) {
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'dinner_plan_days_count', error: dinnerCountResult.value.error })
+      console.error('Failed to count dinner_plan_days rows', { device_id, error: dinnerCountResult.value.error })
+    } else {
+      console.info('GROCERIES_DIAG_COUNT_RESULT', { device_id, query: 'dinner_plan_days_count', count: dinnerCountResult.value.count ?? 0 })
+      console.info('/api/device/groceries dinner_plan_days rows found', { device_id, count: dinnerCountResult.value.count ?? 0 })
+    }
+
+    if (settingsResult.status === 'rejected') {
+      return jsonErrorResponse({ error: String(settingsResult.reason) }, { status: 500 }, { device_id })
+    }
+
+    const { data: settingsData, error: settingsError } = settingsResult.value
+    if (settingsError) {
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'device_settings', error: settingsError })
+      return jsonErrorResponse({ error: settingsError.message }, { status: 500 }, { device_id })
+    }
+
+    const settings = settingsData?.settings_json && typeof settingsData.settings_json === 'object' ? settingsData.settings_json as Record<string, unknown> : {}
+    const language = asString(settings.language, 'en').slice(0, 16) || 'en'
+
     if (itemsResult.status === 'rejected') {
-      return NextResponse.json({ error: String(itemsResult.reason) }, { status: 500 })
+      return jsonErrorResponse({ error: String(itemsResult.reason) }, { status: 500 }, { device_id })
     }
     if (dinnerResult.status === 'rejected') {
-      return NextResponse.json({ error: String(dinnerResult.reason) }, { status: 500 })
+      return jsonErrorResponse({ error: String(dinnerResult.reason) }, { status: 500 }, { device_id })
     }
 
     const { data: itemRows, error: itemsError } = itemsResult.value
     if (itemsError) {
-      return NextResponse.json({ error: itemsError.message }, { status: 500 })
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_items_active_unchecked_rows', error: itemsError })
+      return jsonErrorResponse({ error: itemsError.message }, { status: 500 }, { device_id })
     }
 
     const { data: dinnerRows, error: dinnerError } = dinnerResult.value
     if (dinnerError) {
-      return NextResponse.json({ error: dinnerError.message }, { status: 500 })
+      console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'dinner_plan_days_rows', error: dinnerError })
+      return jsonErrorResponse({ error: dinnerError.message }, { status: 500 }, { device_id })
     }
 
+    console.info('GROCERIES_DIAG_COUNT_RESULT', { device_id, query: 'grocery_items_active_unchecked_rows_loaded', count: (itemRows || []).length })
     console.info('/api/device/groceries active grocery_items rows loaded', { device_id, count: (itemRows || []).length })
+    console.info('GROCERIES_DIAG_COUNT_RESULT', { device_id, query: 'dinner_plan_days_rows_loaded', count: (dinnerRows || []).length })
     console.info('/api/device/groceries dinner_plan_days rows found', { device_id, count: (dinnerRows || []).length })
     console.info('/api/device/groceries dinner_plan_days.note exists', {
       device_id,
@@ -305,6 +355,7 @@ export async function GET(req: Request) {
       }
     }
 
+    console.info('GROCERIES_DIAG_COUNT_RESULT', { device_id, query: 'parsed_dinner_note_grocery_count', count: parsedDinnerNoteGroceryCount })
     console.info('/api/device/groceries parsed grocery count from dinner notes', { device_id, count: parsedDinnerNoteGroceryCount })
 
     const items = [...itemAggregate.values()].slice(0, MAX_ITEMS)
@@ -321,6 +372,7 @@ export async function GET(req: Request) {
     if (runningLowResult.status === 'fulfilled') {
       const { data, error } = runningLowResult.value
       if (error) {
+        console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_running_low', error })
         console.error('Failed to load grocery_running_low insights', { device_id, error })
       } else {
         running_low = (data || [])
@@ -342,6 +394,7 @@ export async function GET(req: Request) {
     if (recipesResult.status === 'fulfilled') {
       const { data, error } = recipesResult.value
       if (error) {
+        console.error('GROCERIES_DIAG_SUPABASE_ERROR', { device_id, query: 'grocery_recipe_suggestions', error })
         console.error('Failed to load grocery_recipe_suggestions insights', { device_id, error })
       } else {
         recipes = (data || [])
@@ -380,6 +433,7 @@ export async function GET(req: Request) {
     }, device_id)
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('GROCERIES_DIAG_ROUTE_ERROR', { error: e })
+    return jsonErrorResponse({ error: message }, { status: 500 })
   }
 }
