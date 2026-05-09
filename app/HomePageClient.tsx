@@ -1507,6 +1507,7 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={physicalFrameSnapshot}
         fallbackLanguage={language}
+        theme={theme}
         status={activeFrameStatus}
       />
     )
@@ -2152,14 +2153,15 @@ function frameModuleDetail(
 function LandscapeFrameMirror({
   snapshot,
   fallbackLanguage,
+  theme,
   status,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
+  theme: 'dark' | 'light'
   status: MemberRow | null
 }) {
   const language = snapshot?.language ?? fallbackLanguage
-  const theme = snapshot?.theme ?? 'dark'
   const isDark = theme === 'dark'
   const background = isDark ? '#061b24' : '#eef2f6'
   const frameBackground = background
