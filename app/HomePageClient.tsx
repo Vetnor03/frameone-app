@@ -7,6 +7,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
+import FrameMirror from './components/frame-mirror/FrameMirror'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -1273,6 +1274,23 @@ export default function HomePage() {
   const appBg = 'var(--app-bg)'
   const appText = 'text-[color:var(--fg)]'
 
+  const activeFrameStatus = useMemo(
+    () => frames.find((frame) => frame.device_id === activeDeviceId) || null,
+    [activeDeviceId, frames]
+  )
+
+  const frameMirrorFallback = useMemo(
+    () => ({
+      layout: layoutKey,
+      cells: cellsByLayout[layoutKey],
+      modules: modulesJson,
+      language,
+      batteryPercent: activeFrameStatus?.battery_percent ?? null,
+      isCharging: activeFrameStatus?.is_charging ?? null,
+    }),
+    [activeFrameStatus, cellsByLayout, language, layoutKey, modulesJson]
+  )
+
   useEffect(() => {
     if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting || autoPersistingRef.current) return
     if (activeTab === 'settings') return
@@ -1329,7 +1347,9 @@ async function handleSelectTab(k: TabKey) {
 }
 
   return (
-    <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
+    <>
+      <FrameMirror activeDeviceId={activeDeviceId} fallback={frameMirrorFallback} />
+      <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
         {booting ? (
           <div className="flex-1 flex items-center justify-center text-[color:var(--fg-40)] tracking-widest">
@@ -1498,7 +1518,8 @@ async function handleSelectTab(k: TabKey) {
           </>
         )}
       </div>
-    </main>
+      </main>
+    </>
   )
 }
 
