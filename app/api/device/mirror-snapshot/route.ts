@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { spotIdFromLabel } from '@/app/lib/surf/spots'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -115,7 +116,8 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
 
 async function surfDetail(origin: string, cfg: UnknownRecord, bearer: string, language: string): Promise<Detail> {
   const spot = asString(cfg.spot || cfg.label).trim()
-  const spotId = asString(cfg.spotId || cfg.id).trim()
+  const configuredSpotId = asString(cfg.spotId).trim()
+  const spotId = configuredSpotId || (spot ? spotIdFromLabel(spot) ?? '' : '')
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
   const url = new URL('/api/surf/score', origin)
@@ -179,15 +181,41 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   }
 }
 
-async function groceriesDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
-  const url = new URL('/api/device/groceries', origin)
-  url.searchParams.set('device_id', deviceId)
-  const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
-  const items = Array.isArray(data.items) ? data.items.map(asRecord) : []
+async function groceriesDetail(supabase: SupabaseClient, deviceId: string, language: string): Promise<Detail> {
+  const { data: device } = await supabase
+    .from('devices')
+    .select('id')
+    .eq('device_id', deviceId)
+    .maybeSingle()
+
+  const appStorageDeviceId = String((device as Record<string, unknown> | null)?.id ?? '').trim()
+  const storageDeviceIds = Array.from(new Set([appStorageDeviceId, deviceId].filter(Boolean)))
+
+  const { data, error } = await supabase
+    .from('grocery_items')
+    .select('name, quantity, updated_at')
+    .in('device_id', storageDeviceIds)
+    .eq('is_checked', false)
+    .order('updated_at', { ascending: false })
+    .limit(40)
+
+  if (error) throw new Error(error.message)
+
+  const items = Array.isArray(data) ? data.map(asRecord) : []
+  const preview = items
+    .slice(0, 2)
+    .map((item) => {
+      const name = asString(item.name).trim()
+      const quantity = asNumber(item.quantity) ?? 1
+      return quantity > 1 ? `${name} ×${quantity}` : name
+    })
+    .filter(Boolean)
+    .join(', ')
+
   return {
     primary: items.length ? `${items.length}` : '0',
     secondary: language === 'no' ? 'varer' : 'items',
-    tertiary: items.slice(0, 2).map((item) => asString(item.name)).filter(Boolean).join(', '),
+    tertiary: preview,
   }
 }
 
@@ -245,7 +273,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
-        else if (parsed.base === 'groceries' && deviceToken) detailsBySlot[String(slot)] = await groceriesDetail(origin, deviceId, deviceToken, language)
+        else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = { primary: asString(cfg.title || cfg.name, 'COUNTDOWN'), secondary: language === 'no' ? 'Nedtelling' : 'Countdown' }
       } catch {
         // Leave this slot to the client-side config fallback if live data is unavailable.
