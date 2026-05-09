@@ -1459,7 +1459,6 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={physicalFrameSnapshot}
         fallbackLanguage={language}
-        lastUpdatedAt={lastUpdatedAt}
       />
     )
   }
@@ -2104,11 +2103,9 @@ function frameModuleDetail(
 function LandscapeFrameMirror({
   snapshot,
   fallbackLanguage,
-  lastUpdatedAt,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
-  lastUpdatedAt: string | null
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const theme = snapshot?.theme ?? 'dark'
@@ -2154,35 +2151,23 @@ function LandscapeFrameMirror({
 
   return (
     <main
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden px-[4vw] py-[4vh]"
+      className="fixed inset-0 z-[100] overflow-hidden"
       style={mirrorStyle}
     >
-      <div
-        className="relative w-full aspect-[16/9]"
-        style={{ maxWidth: 'min(96vw, calc(92vh * 16 / 9))' }}
-      >
-        <div
-          className="absolute inset-0 rounded-[3vw] border shadow-2xl overflow-hidden"
-          style={{ background: frameBackground, borderColor }}
-        >
-          {snapshot ? (
-            <FrameLayoutRenderer
-              layoutKey={snapshot.layoutKey}
-              cells={snapshot.cells}
-              language={language}
-              renderCellContent={renderMirrorCell}
-              frameClassName="pointer-events-none select-none"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-sm tracking-[0.35em] uppercase" style={{ color: mutedColor }}>
-              {tx(language).loadingFrame}
-            </div>
-          )}
-        </div>
-
-        <div className="absolute left-4 bottom-3 text-[10px] tracking-[0.24em] uppercase" style={{ color: mutedColor }}>
-          {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
-        </div>
+      <div className="w-screen h-screen overflow-hidden" style={{ background: frameBackground }}>
+        {snapshot ? (
+          <FrameLayoutRenderer
+            layoutKey={snapshot.layoutKey}
+            cells={snapshot.cells}
+            language={language}
+            renderCellContent={renderMirrorCell}
+            frameClassName="pointer-events-none select-none"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-sm tracking-[0.35em] uppercase" style={{ color: mutedColor }}>
+            {tx(language).loadingFrame}
+          </div>
+        )}
       </div>
     </main>
   )
