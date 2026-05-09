@@ -5,7 +5,19 @@ import { spotIdFromLabel } from '@/app/lib/surf/spots'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type Detail = { primary: string; secondary?: string; tertiary?: string }
+type Detail = {
+  primary: string
+  secondary?: string
+  tertiary?: string
+  module?: string
+  rating?: number
+  waveRange?: string
+  swellPeriodS?: number
+  windSpeedMs?: number
+  isTodaysBest?: boolean
+  swellDirectionDeg?: number
+  windDirectionDeg?: number
+}
 type UnknownRecord = Record<string, unknown>
 
 const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
@@ -128,10 +140,23 @@ async function surfDetail(origin: string, cfg: UnknownRecord, bearer: string, la
   url.searchParams.set('hours', '24')
 
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${bearer}` } }))
+  const forecast = asRecord(data.forecast)
+  const inputs = asRecord(data.inputs)
+  const rating = asNumber(data.rating) ?? asNumber(data.score) ?? undefined
+  const waveRange = asString(forecast.wave_height_range_label || data.line1 || data.line2, '')
+
   return {
-    primary: String(data.rating ?? data.score ?? '--'),
+    module: 'surf',
+    primary: String(rating ?? '--'),
     secondary: asString(data.spot, spot || (language === 'no' ? 'Surf' : 'Surf')),
-    tertiary: asString(data.line1 || asRecord(data.forecast).wave_height_range_label || data.line2, ''),
+    tertiary: waveRange,
+    rating,
+    waveRange,
+    swellPeriodS: asNumber(inputs.swell_period_s) ?? undefined,
+    windSpeedMs: asNumber(inputs.wind_speed_ms) ?? undefined,
+    swellDirectionDeg: asNumber(inputs.swell_direction_deg) ?? undefined,
+    windDirectionDeg: asNumber(inputs.wind_direction_deg) ?? undefined,
+    isTodaysBest: spotId === '__todays_best__',
   }
 }
 
