@@ -422,26 +422,53 @@ static int jsonDocFinalRating1to6(const JsonDocument& doc) {
   return -1;
 }
 
+static bool jsonObjectExperienceInfluencesDisplay(JsonObjectConst exp) {
+  if (!exp) return false;
+
+  if (jsonToBoolLoose(exp["matched"])) return true;
+
+  float confidence = exp["confidence"] | NAN;
+  int usedRecords = jsonToInt(exp["used_records"], 0);
+  float experienceRating = exp["experience_rating_float"] | NAN;
+
+  return isfinite(confidence) &&
+         confidence > 0.001f &&
+         usedRecords > 0 &&
+         isfinite(experienceRating) &&
+         experienceRating >= 1.0f &&
+         experienceRating <= 6.0f;
+}
+
 static bool jsonObjectRatingFromExperience(JsonObjectConst obj) {
   if (!obj) return false;
 
-  // STRICT RULE:
-  // Only show experience-style dice when backend explicitly says matched=true.
-  if (jsonToBoolLoose(obj["breakdown"]["experience"]["matched"])) return true;
-  if (jsonToBoolLoose(obj["experience"]["matched"])) return true;
-  if (jsonToBoolLoose(obj["picked"]["breakdown"]["experience"]["matched"])) return true;
-  if (jsonToBoolLoose(obj["picked"]["experience"]["matched"])) return true;
+  JsonObjectConst exp = obj["breakdown"]["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+
+  exp = obj["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+
+  exp = obj["picked"]["breakdown"]["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+
+  exp = obj["picked"]["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
 
   return false;
 }
 
 static bool jsonDocRatingFromExperience(const JsonDocument& doc) {
-  // STRICT RULE:
-  // Only show experience-style dice when backend explicitly says matched=true.
-  if (jsonToBoolLoose(doc["breakdown"]["experience"]["matched"])) return true;
-  if (jsonToBoolLoose(doc["experience"]["matched"])) return true;
-  if (jsonToBoolLoose(doc["picked"]["breakdown"]["experience"]["matched"])) return true;
-  if (jsonToBoolLoose(doc["picked"]["experience"]["matched"])) return true;
+  JsonObjectConst exp = doc["breakdown"]["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+
+  exp = doc["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+
+  exp = doc["picked"]["breakdown"]["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+
+  exp = doc["picked"]["experience"].as<JsonObjectConst>();
+  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
 
   return false;
 }
@@ -1416,7 +1443,6 @@ static void drawExperienceDiceStripSized(int x, int yTop,
   if (filled < 0) filled = 0;
   if (filled > 6) filled = 6;
 
-  uint16_t bg = Theme::paper();
 
   const int dieY = yTop + (stripH - dieS) / 2;
   const int usedW = 6 * dieS + 5 * gap;
@@ -1426,12 +1452,8 @@ static void drawExperienceDiceStripSized(int x, int yTop,
   for (int i = 0; i < 6; i++) {
     int rx = startX + i * (dieS + gap);
 
-    if (i < filled) {
-      d.fillRoundRect(rx, dieY, dieS, dieS, rr, col);
-      drawDiePipsAt(rx, dieY, dieS, i + 1, bg);
-    } else {
-      d.drawRoundRect(rx, dieY, dieS, dieS, rr, col);
-    }
+    d.drawRoundRect(rx, dieY, dieS, dieS, rr, col);
+    if (i < filled) drawDiePipsAt(rx, dieY, dieS, i + 1, col);
   }
 }
 
@@ -1684,13 +1706,17 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
 
   drawTextCenteredAt(x + w / 2, headerBaselineY, "Details:", FONT_B12, ink);
 
-  const int arrowLenWave = clampi(slotW - 14, 22, 48);
-  const int arrowLenWind = clampi(windW - 14, 22, 48);
+  const int arrowLenWave = clampi(slotW - 4, 28, 62);
+  const int arrowLenWind = clampi(windW - 4, 28, 62);
 
   int waveArrowCx = waveX + slotW / 2;
   int windArrowCx = windX + windW / 2;
 
-  const int arrowY = ratingCenterY - 10;
+  const int arrowLenMax = (arrowLenWave > arrowLenWind) ? arrowLenWave : arrowLenWind;
+  const int arrowHeadLenMax = clampi(arrowLenMax / 3, 10, 22);
+  const int arrowDownReachMax = (arrowLenMax + arrowHeadLenMax) / 2;
+  const int arrowY = ratingCenterY - 18;
+  const int arrowLowestY = arrowY + arrowDownReachMax;
 
   if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
   else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
@@ -1712,10 +1738,12 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
   fontBoxMetrics(FONT_B9, wy1, wh);
 
   int textTop = bottomTextBaselineY + py1;
-  int iconBottom = textTop - 8;
   int iconH = 18;
-  int iconTop = iconBottom - iconH;
+  int iconCenterY = (arrowLowestY + textTop) / 2;
+  int iconTop = iconCenterY - iconH / 2;
 
+  if (iconTop < arrowLowestY + 4) iconTop = arrowLowestY + 4;
+  if (iconTop + iconH > textTop - 4) iconTop = textTop - 4 - iconH;
   if (iconTop < headerBaselineY + 12) iconTop = headerBaselineY + 12;
 
   const int waveIconW = 28;
