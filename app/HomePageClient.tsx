@@ -263,6 +263,17 @@ function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; sub
   ]
 }
 
+type PhysicalFrameSnapshot = {
+  theme: 'dark' | 'light'
+  language: AppLanguage
+  fontSize: AppFontSize
+  layoutKey: LayoutKey
+  cells: Record<number, ModuleKey | null>
+  modulesJson: Record<string, unknown>
+  updatedAt: string | null
+  renderAt: string | null
+}
+
 type SettingsJson = {
   theme?: 'dark' | 'light'
   language?: AppLanguage
@@ -421,6 +432,72 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   }
 
   return directMap
+}
+
+
+function isTheme(value: unknown): value is 'dark' | 'light' {
+  return value === 'dark' || value === 'light'
+}
+
+function isLanguage(value: unknown): value is AppLanguage {
+  return value === 'en' || value === 'no'
+}
+
+function isFontSize(value: unknown): value is AppFontSize {
+  return value === 'normal' || value === 'large'
+}
+
+function isLayoutKey(value: unknown): value is LayoutKey {
+  return value === 'default' || value === 'pyramid' || value === 'square' || value === 'full'
+}
+
+function modulesRecordFromUnknown(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function normalizePhysicalFrameSnapshot(settings: unknown, updatedAt: string | null, renderAt: string | null): PhysicalFrameSnapshot {
+  const json = modulesRecordFromUnknown(settings)
+  const layoutKey = isLayoutKey(json.layout) ? json.layout : 'default'
+  const cells = cellsArrayToMap(
+    layoutKey,
+    Array.isArray(json.cells) ? (json.cells as { slot: number; module: string }[]) : []
+  )
+
+  return {
+    theme: isTheme(json.theme) ? json.theme : 'dark',
+    language: isLanguage(json.language) ? json.language : 'en',
+    fontSize: isFontSize(json.fontSize) ? json.fontSize : 'normal',
+    layoutKey,
+    cells,
+    modulesJson: modulesRecordFromUnknown(json.modules),
+    updatedAt,
+    renderAt,
+  }
+}
+
+function usePhoneLandscapeMirror() {
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const query = '(orientation: landscape) and (pointer: coarse) and (max-height: 540px)'
+    const mql = window.matchMedia(query)
+    const update = () => setEnabled(mql.matches)
+
+    update()
+    mql.addEventListener('change', update)
+    window.addEventListener('resize', update)
+    window.addEventListener('orientationchange', update)
+
+    return () => {
+      mql.removeEventListener('change', update)
+      window.removeEventListener('resize', update)
+      window.removeEventListener('orientationchange', update)
+    }
+  }, [])
+
+  return enabled
 }
 
 function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
@@ -657,6 +734,10 @@ export default function HomePage() {
   const searchParams = useSearchParams()
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
+  const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
+  const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
+  const physicalFrameRenderAtRef = useRef<string | null>(null)
+  const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
   const [dirty, setDirty] = useState(false)
@@ -698,6 +779,10 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    physicalFrameSnapshotRef.current = physicalFrameSnapshot
+  }, [physicalFrameSnapshot])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme
     document.documentElement.style.colorScheme = theme
 
@@ -707,16 +792,18 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!activeDeviceId) return
-    if (activeTab !== 'frame') return
+    if (activeTab !== 'frame' && !isPhoneLandscapeMirror) return
 
-    loadDeviceStatus(activeDeviceId)
+    refreshPhysicalFrameState(activeDeviceId)
 
     const t = window.setInterval(() => {
-      loadDeviceStatus(activeDeviceId)
+      refreshPhysicalFrameState(activeDeviceId)
     }, 15000)
 
     return () => window.clearInterval(t)
-  }, [activeDeviceId, activeTab])
+    // refreshPhysicalFrameState is intentionally omitted so polling is keyed only by device/tab/mirror mode.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeviceId, activeTab, isPhoneLandscapeMirror])
 
   useEffect(() => {
     return () => {
@@ -926,16 +1013,49 @@ export default function HomePage() {
     return `${prefix} ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
-  async function loadDeviceStatus(deviceId: string) {
+  async function loadDeviceStatus(deviceId: string): Promise<string | null> {
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
-      if (!resp.ok) return
+      if (!resp.ok) {
+        setLastUpdatedAt(null)
+        return null
+      }
 
       const data = await resp.json()
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+      return renderIso || null
     } catch {
       setLastUpdatedAt(null)
+      return null
+    }
+  }
+
+  async function loadPhysicalFrameSnapshot(deviceId: string, renderAt: string | null) {
+    const resp = await fetch(`/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+    if (!resp.ok) return
+
+    const data = await resp.json()
+    const snapshot = normalizePhysicalFrameSnapshot(
+      data?.settings_json,
+      data?.updated_at ? String(data.updated_at) : null,
+      renderAt
+    )
+
+    setPhysicalFrameSnapshot(snapshot)
+    physicalFrameRenderAtRef.current = renderAt
+  }
+
+  async function refreshPhysicalFrameState(deviceId: string) {
+    const renderAt = await loadDeviceStatus(deviceId)
+
+    if (!physicalFrameSnapshotRef.current) {
+      await loadPhysicalFrameSnapshot(deviceId, renderAt)
+      return
+    }
+
+    if (renderAt && renderAt !== physicalFrameRenderAtRef.current) {
+      await loadPhysicalFrameSnapshot(deviceId, renderAt)
     }
   }
 
@@ -1081,6 +1201,9 @@ export default function HomePage() {
       const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
 
       setActiveDeviceId(selected)
+      setPhysicalFrameSnapshot(null)
+      physicalFrameSnapshotRef.current = null
+      physicalFrameRenderAtRef.current = null
 
       if (selected) {
         await loadDeviceSettings(selected)
@@ -1096,6 +1219,9 @@ export default function HomePage() {
 
   async function selectDevice(id: string) {
     setActiveDeviceId(id)
+    setPhysicalFrameSnapshot(null)
+    physicalFrameSnapshotRef.current = null
+    physicalFrameRenderAtRef.current = null
     if (typeof window !== 'undefined') localStorage.setItem('activeDeviceId', id)
     await loadDeviceSettings(id)
   }
@@ -1327,6 +1453,16 @@ async function handleSelectTab(k: TabKey) {
 
   setActiveTab(k)
 }
+
+  if (isPhoneLandscapeMirror) {
+    return (
+      <LandscapeFrameMirror
+        snapshot={physicalFrameSnapshot}
+        fallbackLanguage={language}
+        lastUpdatedAt={lastUpdatedAt}
+      />
+    )
+  }
 
   return (
     <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
@@ -1618,6 +1754,72 @@ function TabBar({
   )
 }
 
+type FrameCellRenderer = (
+  module: ModuleKey | null | undefined,
+  slot: number,
+  size: CellSize
+) => React.ReactNode
+
+function FrameLayoutRenderer({
+  layoutKey,
+  cells,
+  onCellTap,
+  language,
+  renderCellContent,
+  frameClassName,
+}: {
+  layoutKey: LayoutKey
+  cells: Record<number, ModuleKey | null>
+  onCellTap?: (slot: number) => void
+  language: AppLanguage
+  renderCellContent?: FrameCellRenderer
+  frameClassName?: string
+}) {
+  if (layoutKey === 'pyramid') {
+    return (
+      <LayoutPyramid
+        language={language}
+        cells={cells}
+        onCellTap={onCellTap}
+        renderCellContent={renderCellContent}
+        frameClassName={frameClassName}
+      />
+    )
+  }
+  if (layoutKey === 'square') {
+    return (
+      <LayoutSquare
+        language={language}
+        cells={cells}
+        onCellTap={onCellTap}
+        renderCellContent={renderCellContent}
+        frameClassName={frameClassName}
+      />
+    )
+  }
+  if (layoutKey === 'full') {
+    return (
+      <LayoutFull
+        language={language}
+        cells={cells}
+        onCellTap={onCellTap}
+        renderCellContent={renderCellContent}
+        frameClassName={frameClassName}
+      />
+    )
+  }
+
+  return (
+    <LayoutDefault
+      language={language}
+      cells={cells}
+      onCellTap={onCellTap}
+      renderCellContent={renderCellContent}
+      frameClassName={frameClassName}
+    />
+  )
+}
+
 function FrameTab(props: {
   title: string
   subtitle: string
@@ -1648,10 +1850,7 @@ function FrameTab(props: {
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        {layoutKey === 'default' && <LayoutDefault language={language} cells={cells} onCellTap={onCellTap} />}
-        {layoutKey === 'pyramid' && <LayoutPyramid language={language} cells={cells} onCellTap={onCellTap} />}
-        {layoutKey === 'square' && <LayoutSquare language={language} cells={cells} onCellTap={onCellTap} />}
-        {layoutKey === 'full' && <LayoutFull language={language} cells={cells} onCellTap={onCellTap} />}
+        <FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />
       </div>
     </div>
   )
@@ -1661,27 +1860,31 @@ function LayoutDefault({
   cells,
   onCellTap,
   language,
+  renderCellContent,
+  frameClassName,
 }: {
   cells: Record<number, ModuleKey | null>
-  onCellTap: (slot: number) => void
+  onCellTap?: (slot: number) => void
   language: AppLanguage
+  renderCellContent?: FrameCellRenderer
+  frameClassName?: string
 }) {
   return (
-    <FramePreview>
+    <FramePreview className={frameClassName}>
       <div className="h-1/2 flex flex-col">
         <div className="flex-1">
-          <CellButton language={language} slot={0} size="small" module={cells[0]} onTap={onCellTap} />
+          <CellButton language={language} slot={0} size="small" module={cells[0]} onTap={onCellTap} renderCellContent={renderCellContent} />
         </div>
         <HLine />
         <div className="flex-1">
-          <CellButton language={language} slot={1} size="small" module={cells[1]} onTap={onCellTap} />
+          <CellButton language={language} slot={1} size="small" module={cells[1]} onTap={onCellTap} renderCellContent={renderCellContent} />
         </div>
       </div>
 
       <HLine />
 
       <div className="h-1/2">
-        <CellButton language={language} slot={2} size="large" module={cells[2]} onTap={onCellTap} />
+        <CellButton language={language} slot={2} size="large" module={cells[2]} onTap={onCellTap} renderCellContent={renderCellContent} />
       </div>
     </FramePreview>
   )
@@ -1691,29 +1894,33 @@ function LayoutPyramid({
   cells,
   onCellTap,
   language,
+  renderCellContent,
+  frameClassName,
 }: {
   cells: Record<number, ModuleKey | null>
-  onCellTap: (slot: number) => void
+  onCellTap?: (slot: number) => void
   language: AppLanguage
+  renderCellContent?: FrameCellRenderer
+  frameClassName?: string
 }) {
   return (
-    <FramePreview>
+    <FramePreview className={frameClassName}>
       <div className="h-1/2 flex flex-col">
         <div className="flex-1">
-          <CellButton language={language} slot={0} size="small" module={cells[0]} onTap={onCellTap} />
+          <CellButton language={language} slot={0} size="small" module={cells[0]} onTap={onCellTap} renderCellContent={renderCellContent} />
         </div>
         <HLine />
         <div className="flex-1">
-          <CellButton language={language} slot={1} size="small" module={cells[1]} onTap={onCellTap} />
+          <CellButton language={language} slot={1} size="small" module={cells[1]} onTap={onCellTap} renderCellContent={renderCellContent} />
         </div>
       </div>
 
       <HLine />
 
       <div className="h-1/2 grid grid-cols-[1fr_auto_1fr]">
-        <CellButton language={language} slot={2} size="medium" module={cells[2]} onTap={onCellTap} />
+        <CellButton language={language} slot={2} size="medium" module={cells[2]} onTap={onCellTap} renderCellContent={renderCellContent} />
         <VLine />
-        <CellButton language={language} slot={3} size="medium" module={cells[3]} onTap={onCellTap} />
+        <CellButton language={language} slot={3} size="medium" module={cells[3]} onTap={onCellTap} renderCellContent={renderCellContent} />
       </div>
     </FramePreview>
   )
@@ -1723,26 +1930,30 @@ function LayoutSquare({
   cells,
   onCellTap,
   language,
+  renderCellContent,
+  frameClassName,
 }: {
   cells: Record<number, ModuleKey | null>
-  onCellTap: (slot: number) => void
+  onCellTap?: (slot: number) => void
   language: AppLanguage
+  renderCellContent?: FrameCellRenderer
+  frameClassName?: string
 }) {
   return (
-    <FramePreview>
+    <FramePreview className={frameClassName}>
       <div className="h-full grid grid-rows-[1fr_auto_1fr]">
         <div className="grid grid-cols-[1fr_auto_1fr]">
-          <CellButton language={language} slot={0} size="medium" module={cells[0]} onTap={onCellTap} />
+          <CellButton language={language} slot={0} size="medium" module={cells[0]} onTap={onCellTap} renderCellContent={renderCellContent} />
           <VLine />
-          <CellButton language={language} slot={1} size="medium" module={cells[1]} onTap={onCellTap} />
+          <CellButton language={language} slot={1} size="medium" module={cells[1]} onTap={onCellTap} renderCellContent={renderCellContent} />
         </div>
 
         <HLine />
 
         <div className="grid grid-cols-[1fr_auto_1fr]">
-          <CellButton language={language} slot={2} size="medium" module={cells[2]} onTap={onCellTap} />
+          <CellButton language={language} slot={2} size="medium" module={cells[2]} onTap={onCellTap} renderCellContent={renderCellContent} />
           <VLine />
-          <CellButton language={language} slot={3} size="medium" module={cells[3]} onTap={onCellTap} />
+          <CellButton language={language} slot={3} size="medium" module={cells[3]} onTap={onCellTap} renderCellContent={renderCellContent} />
         </div>
       </div>
     </FramePreview>
@@ -1753,15 +1964,19 @@ function LayoutFull({
   cells,
   onCellTap,
   language,
+  renderCellContent,
+  frameClassName,
 }: {
   cells: Record<number, ModuleKey | null>
-  onCellTap: (slot: number) => void
+  onCellTap?: (slot: number) => void
   language: AppLanguage
+  renderCellContent?: FrameCellRenderer
+  frameClassName?: string
 }) {
   return (
-    <FramePreview>
+    <FramePreview className={frameClassName}>
       <div className="h-full">
-        <CellButton language={language} slot={0} size="large" module={cells[0]} onTap={onCellTap} />
+        <CellButton language={language} slot={0} size="large" module={cells[0]} onTap={onCellTap} renderCellContent={renderCellContent} />
       </div>
     </FramePreview>
   )
@@ -1769,27 +1984,207 @@ function LayoutFull({
 
 function CellButton({
   slot,
+  size,
   module,
   onTap,
   language,
+  renderCellContent,
 }: {
   slot: number
   size: CellSize
   module: ModuleKey | null | undefined
-  onTap: (slot: number) => void
+  onTap?: (slot: number) => void
   language: AppLanguage
+  renderCellContent?: FrameCellRenderer
 }) {
+  const content = renderCellContent ? renderCellContent(module, slot, size) : null
   const label = module ? moduleLabel(language, module) : '+'
+  const body = content ?? (
+    <div
+      className={`tracking-widest ${
+        module ? 'text-[color:var(--fg)] font-semibold text-lg' : 'text-[color:var(--fg-50)] text-2xl'
+      }`}
+    >
+      {label}
+    </div>
+  )
+
+  if (!onTap) {
+    return <div className="w-full h-full flex items-center justify-center">{body}</div>
+  }
+
   return (
     <button onClick={() => onTap(slot)} className="w-full h-full flex items-center justify-center">
-      <div
-        className={`tracking-widest ${
-          module ? 'text-[color:var(--fg)] font-semibold text-lg' : 'text-[color:var(--fg-50)] text-2xl'
-        }`}
-      >
-        {label}
-      </div>
+      {body}
     </button>
+  )
+}
+
+
+function moduleConfigForSlot(
+  module: ModuleKey,
+  slot: number,
+  cells: Record<number, ModuleKey | null>,
+  modulesJson: Record<string, unknown>
+): Record<string, unknown> {
+  const moduleSlots = Object.keys(cells)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .filter((cellSlot) => cells[cellSlot] === module)
+  const instanceId = Math.max(1, moduleSlots.indexOf(slot) + 1)
+  const raw = modulesJson[module]
+
+  if (Array.isArray(raw)) {
+    const exact = raw.find((item) => modulesRecordFromUnknown(item).id === instanceId)
+    return modulesRecordFromUnknown(exact ?? raw[instanceId - 1])
+  }
+
+  return modulesRecordFromUnknown(raw)
+}
+
+function frameModuleDetail(
+  module: ModuleKey,
+  slot: number,
+  modulesJson: Record<string, unknown>,
+  language: AppLanguage,
+  cells: Record<number, ModuleKey | null>
+): { primary: string; secondary?: string; tertiary?: string } {
+  const cfg = moduleConfigForSlot(module, slot, cells, modulesJson)
+  const t = tx(language)
+
+  if (module === 'date') {
+    return {
+      primary: new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }).format(new Date()),
+      secondary: language === 'no' ? 'Dato' : 'Date',
+    }
+  }
+
+  if (module === 'weather') {
+    const label = String(cfg.label ?? '').trim()
+    return { primary: t.modules.weather, secondary: label || (language === 'no' ? 'Lagret sted' : 'Saved location') }
+  }
+
+  if (module === 'surf') {
+    const spot = String(cfg.spot ?? cfg.label ?? '').trim()
+    return { primary: t.modules.surf, secondary: spot || (language === 'no' ? 'Lagret spot' : 'Saved spot') }
+  }
+
+  if (module === 'soccer') {
+    const team = String(cfg.teamName ?? cfg.team ?? '').trim()
+    const competition = String(cfg.competitionName ?? '').trim()
+    return { primary: team || t.modules.soccer, secondary: competition || (language === 'no' ? 'Lagret lag' : 'Saved team') }
+  }
+
+  if (module === 'stocks') {
+    const symbol = String(cfg.symbol ?? '').trim().toUpperCase()
+    const name = String(cfg.name ?? '').trim()
+    return { primary: symbol || t.modules.stocks, secondary: name || (language === 'no' ? 'Lagret investering' : 'Saved investment') }
+  }
+
+  if (module === 'groceries') {
+    return { primary: t.modules.groceries, secondary: language === 'no' ? 'Synkronisert med frame' : 'Synced with frame' }
+  }
+
+  if (module === 'countdown') {
+    const title = String(cfg.title ?? cfg.name ?? '').trim()
+    return { primary: title || t.modules.countdown, secondary: language === 'no' ? 'Lagret nedtelling' : 'Saved countdown' }
+  }
+
+  if (module === 'reminders') {
+    return { primary: t.modules.reminders, secondary: language === 'no' ? 'Lagrede påminnelser' : 'Saved reminders' }
+  }
+
+  return { primary: moduleLabel(language, module) }
+}
+
+function LandscapeFrameMirror({
+  snapshot,
+  fallbackLanguage,
+  lastUpdatedAt,
+}: {
+  snapshot: PhysicalFrameSnapshot | null
+  fallbackLanguage: AppLanguage
+  lastUpdatedAt: string | null
+}) {
+  const language = snapshot?.language ?? fallbackLanguage
+  const theme = snapshot?.theme ?? 'dark'
+  const isDark = theme === 'dark'
+  const background = isDark ? '#061b24' : '#eef2f6'
+  const frameBackground = isDark ? '#092635' : '#f8fafc'
+  const textColor = isDark ? '#eef8ff' : '#07141c'
+  const mutedColor = isDark ? 'rgba(238,248,255,0.58)' : 'rgba(7,20,28,0.58)'
+  const borderColor = isDark ? 'rgba(238,248,255,0.18)' : 'rgba(7,20,28,0.16)'
+  const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15', string> = {
+    background,
+    color: textColor,
+    '--fg': textColor,
+    '--fg-50': mutedColor,
+    '--bd-15': borderColor,
+  }
+
+  const renderMirrorCell: FrameCellRenderer = (module, slot, size) => {
+    if (!snapshot || !module) {
+      return <div className="text-sm tracking-widest opacity-35">—</div>
+    }
+
+    const detail = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+    const primarySize = size === 'large' ? 'text-[clamp(1.8rem,7vw,4.5rem)]' : 'text-[clamp(1rem,3vw,2rem)]'
+    const secondarySize = size === 'large' ? 'text-[clamp(0.85rem,2vw,1.4rem)]' : 'text-[clamp(0.65rem,1.6vw,1rem)]'
+
+    return (
+      <div className="max-w-full px-3 text-center leading-tight">
+        <div className={`${primarySize} font-semibold tracking-[0.14em] uppercase truncate`}>{detail.primary}</div>
+        {detail.secondary && (
+          <div className={`${secondarySize} mt-2 tracking-[0.18em] uppercase truncate`} style={{ color: mutedColor }}>
+            {detail.secondary}
+          </div>
+        )}
+        {detail.tertiary && (
+          <div className="mt-1 text-[clamp(0.6rem,1.3vw,0.9rem)] tracking-[0.12em] truncate" style={{ color: mutedColor }}>
+            {detail.tertiary}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <main
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden px-[4vw] py-[4vh]"
+      style={mirrorStyle}
+    >
+      <div
+        className="relative w-full aspect-[16/9]"
+        style={{ maxWidth: 'min(96vw, calc(92vh * 16 / 9))' }}
+      >
+        <div
+          className="absolute inset-0 rounded-[3vw] border shadow-2xl overflow-hidden"
+          style={{ background: frameBackground, borderColor }}
+        >
+          {snapshot ? (
+            <FrameLayoutRenderer
+              layoutKey={snapshot.layoutKey}
+              cells={snapshot.cells}
+              language={language}
+              renderCellContent={renderMirrorCell}
+              frameClassName="pointer-events-none select-none"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-sm tracking-[0.35em] uppercase" style={{ color: mutedColor }}>
+              {tx(language).loadingFrame}
+            </div>
+          )}
+        </div>
+
+        <div className="absolute left-4 bottom-3 text-[10px] tracking-[0.24em] uppercase" style={{ color: mutedColor }}>
+          {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
+        </div>
+      </div>
+    </main>
   )
 }
 
@@ -9360,8 +9755,8 @@ function WeatherLocationSheet({
   )
 }
 
-function FramePreview({ children }: { children: React.ReactNode }) {
-  return <div className="w-full h-full flex flex-col">{children}</div>
+function FramePreview({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`w-full h-full flex flex-col ${className}`}>{children}</div>
 }
 function HLine() {
   return <div className="h-px bg-[color:var(--bd-15)]" />
