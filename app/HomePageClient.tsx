@@ -2348,7 +2348,7 @@ function LandscapeFrameMirror({
             {spotName}
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] grid-rows-[auto_auto_minmax(0,1fr)_auto] items-center gap-y-[clamp(0.22rem,0.65vw,0.45rem)] pt-[clamp(0.45rem,1.1vw,0.75rem)] pb-[clamp(0.16rem,0.45vw,0.32rem)]">
+          <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center pt-[clamp(0.45rem,1.1vw,0.75rem)] pb-[clamp(0.16rem,0.45vw,0.32rem)]">
             <div className="col-start-1 row-start-1 min-w-0 pr-[clamp(0.45rem,1.25vw,0.9rem)]">
               <div className="max-w-full truncate text-[clamp(0.66rem,1.55vw,1rem)] font-semibold tracking-[0.14em] uppercase">
                 {mirrorSurfRatingWord(rating)}
@@ -2359,24 +2359,24 @@ function LandscapeFrameMirror({
               <MirrorSurfRatingBars rating={rating} muted={mutedColor} />
             </div>
 
-            <div className="col-start-1 row-start-4 min-w-0 pr-[clamp(0.45rem,1.25vw,0.9rem)]">
+            <div className="col-start-1 row-start-5 min-w-0 pr-[clamp(0.45rem,1.25vw,0.9rem)]">
               <div className="max-w-full truncate text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
                 {waveRange}
               </div>
             </div>
 
-            <div className="col-start-2 row-span-4 row-start-1 mx-[clamp(0.35rem,1vw,0.8rem)] h-full w-px" style={{ backgroundColor: borderColor }} />
+            <div className="col-start-2 row-span-5 row-start-1 mx-[clamp(0.35rem,1vw,0.8rem)] h-full w-px" style={{ backgroundColor: borderColor }} />
 
             <div className="col-start-3 row-start-1 min-w-0 pl-[clamp(0.45rem,1.25vw,0.9rem)] text-[clamp(0.66rem,1.55vw,1rem)] font-semibold tracking-[0.14em] uppercase">
               Details:
             </div>
 
-            <div className="col-start-3 row-start-2 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)]">
+            <div className="col-start-3 row-start-3 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)]">
               <div className="flex min-w-0 justify-center text-[clamp(1rem,2.4vw,1.55rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
               <div className="flex min-w-0 justify-center text-[clamp(1rem,2.4vw,1.55rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
             </div>
 
-            <div className="col-start-3 row-start-3 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] self-center pl-[clamp(0.45rem,1.25vw,0.9rem)]">
+            <div className="col-start-3 row-start-4 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] self-center pl-[clamp(0.45rem,1.25vw,0.9rem)]">
               <div className="flex min-w-0 justify-center" title="Wave period">
                 <MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} />
               </div>
@@ -2385,7 +2385,7 @@ function LandscapeFrameMirror({
               </div>
             </div>
 
-            <div className="col-start-3 row-start-4 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
+            <div className="col-start-3 row-start-5 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
               <div className="truncate">{formatMirrorMetric(detail.swellPeriodS, 's')}</div>
               <div className="truncate">{formatMirrorMetric(detail.windSpeedMs, 'm/s')}</div>
             </div>
