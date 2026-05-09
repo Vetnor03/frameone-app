@@ -2210,18 +2210,18 @@ function LandscapeFrameMirror({
     >
       <div className="relative w-screen h-screen overflow-hidden" style={{ background: frameBackground }}>
         <div
-          className="absolute right-[max(1rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.45)]"
+          className="pointer-events-none absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.5rem,env(safe-area-inset-top))] z-10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-white/70 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
           aria-label={
             batteryPercent !== null
               ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}`
               : `${batteryLabel} unavailable`
           }
         >
-          <span className="text-[clamp(0.75rem,2vw,1rem)] font-semibold leading-none tracking-[0.08em]">
+          <span className="text-[clamp(0.6rem,1.45vw,0.78rem)] font-medium leading-none tracking-[0.06em]">
             {batteryPercent !== null ? `${batteryPercent}%` : '--%'}
           </span>
-          <BatteryIcon percent={batteryPercent ?? 0} className="h-[clamp(0.85rem,2.2vw,1.15rem)] w-[clamp(1.35rem,3.6vw,1.85rem)] opacity-95" />
-          {isCharging && <ChargingBoltIcon className="h-[clamp(0.9rem,2.3vw,1.2rem)] w-[clamp(0.65rem,1.6vw,0.85rem)] text-white" />}
+          <BatteryIcon percent={batteryPercent ?? 0} className="h-[clamp(0.65rem,1.55vw,0.85rem)] w-[clamp(1.05rem,2.55vw,1.35rem)] opacity-75" />
+          {isCharging && <ChargingBoltIcon className="h-[clamp(0.7rem,1.65vw,0.9rem)] w-[clamp(0.5rem,1.15vw,0.65rem)] text-white opacity-75" />}
         </div>
 
         {snapshot ? (
