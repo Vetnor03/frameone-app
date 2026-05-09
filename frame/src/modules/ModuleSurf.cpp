@@ -1249,7 +1249,7 @@ static const char* ratingToWord(int rating1to6) {
     case 3: return "Poor to Fair";
     case 4: return "Fair";
     case 5: return "Good";
-    case 6: return "Legendary";
+    case 6: return "Epic";
     default: return "--";
   }
 }
@@ -1609,7 +1609,7 @@ static void drawTodaysBestOverlay(const Cell& c, const SurfCache& data, uint16_t
   d.setFont(FONT_B9);
   d.setTextColor(ink);
   d.setCursor(c.x + padX, c.y + padY + 8);
-  d.print("Todays best");
+  d.print("Best next 4h:");
   d.setFont(nullptr);
 }
 
@@ -1690,8 +1690,7 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
   int waveArrowCx = waveX + slotW / 2;
   int windArrowCx = windX + windW / 2;
 
-  // Keep the arrow row vertically aligned with the rating rectangles on the left half.
-  const int arrowY = ratingCenterY;
+  const int arrowY = ratingCenterY - 10;
 
   if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
   else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
@@ -1713,13 +1712,11 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
   fontBoxMetrics(FONT_B9, wy1, wh);
 
   int textTop = bottomTextBaselineY + py1;
+  int iconBottom = textTop - 8;
   int iconH = 18;
-  // Center the icons between the arrow row and the bottom metric row for even stacks.
-  int iconCenterY = arrowY + (textTop - arrowY) / 2;
-  int iconTop = iconCenterY - iconH / 2;
+  int iconTop = iconBottom - iconH;
 
   if (iconTop < headerBaselineY + 12) iconTop = headerBaselineY + 12;
-  if (iconTop + iconH > textTop - 4) iconTop = textTop - 4 - iconH;
 
   const int waveIconW = 28;
   const int windIconW = 36;
@@ -1845,9 +1842,8 @@ static void renderCommon(const Cell& c,
     const int rr = vs.rr;
     const int diceSize = vs.diceSize;
 
-    const bool mediumUseExperienceDice = false;
-    int visualW = ratingVisualWidthPxSized(mediumUseExperienceDice, rectW, rectGap, diceSize);
-    int visualH = ratingVisualHeightPxSized(mediumUseExperienceDice, rectH, diceSize);
+    int visualW = ratingVisualWidthPxSized(data.ratingFromExperience, rectW, rectGap, diceSize);
+    int visualH = ratingVisualHeightPxSized(data.ratingFromExperience, rectH, diceSize);
 
     const int bottomPad = 35;
     const int gapHeaderToVisual = 40;
@@ -1872,7 +1868,7 @@ static void renderCommon(const Cell& c,
     drawTextCenteredAt(cxLeft, headerBaselineY, ratingToWord(data.rating), FONT_B12, ink);
 
     drawRatingVisualSized(cxLeft - visualW / 2, visualY,
-                          data.rating, mediumUseExperienceDice, data.experienceDiceValue,
+                          data.rating, data.ratingFromExperience, data.experienceDiceValue,
                           ink, rectW, rectH, rectGap, rr, diceSize);
 
     drawTextCenteredAt(cxLeft, bottomWaveBaseline, waveRange, FONT_B9, ink);
