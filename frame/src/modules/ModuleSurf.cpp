@@ -422,53 +422,26 @@ static int jsonDocFinalRating1to6(const JsonDocument& doc) {
   return -1;
 }
 
-static bool jsonObjectExperienceInfluencesDisplay(JsonObjectConst exp) {
-  if (!exp) return false;
-
-  if (jsonToBoolLoose(exp["matched"])) return true;
-
-  float confidence = exp["confidence"] | NAN;
-  int usedRecords = jsonToInt(exp["used_records"], 0);
-  float experienceRating = exp["experience_rating_float"] | NAN;
-
-  return isfinite(confidence) &&
-         confidence > 0.001f &&
-         usedRecords > 0 &&
-         isfinite(experienceRating) &&
-         experienceRating >= 1.0f &&
-         experienceRating <= 6.0f;
-}
-
 static bool jsonObjectRatingFromExperience(JsonObjectConst obj) {
   if (!obj) return false;
 
-  JsonObjectConst exp = obj["breakdown"]["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
-
-  exp = obj["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
-
-  exp = obj["picked"]["breakdown"]["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
-
-  exp = obj["picked"]["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+  // STRICT RULE:
+  // Only show experience-style dice when backend explicitly says matched=true.
+  if (jsonToBoolLoose(obj["breakdown"]["experience"]["matched"])) return true;
+  if (jsonToBoolLoose(obj["experience"]["matched"])) return true;
+  if (jsonToBoolLoose(obj["picked"]["breakdown"]["experience"]["matched"])) return true;
+  if (jsonToBoolLoose(obj["picked"]["experience"]["matched"])) return true;
 
   return false;
 }
 
 static bool jsonDocRatingFromExperience(const JsonDocument& doc) {
-  JsonObjectConst exp = doc["breakdown"]["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
-
-  exp = doc["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
-
-  exp = doc["picked"]["breakdown"]["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
-
-  exp = doc["picked"]["experience"].as<JsonObjectConst>();
-  if (jsonObjectExperienceInfluencesDisplay(exp)) return true;
+  // STRICT RULE:
+  // Only show experience-style dice when backend explicitly says matched=true.
+  if (jsonToBoolLoose(doc["breakdown"]["experience"]["matched"])) return true;
+  if (jsonToBoolLoose(doc["experience"]["matched"])) return true;
+  if (jsonToBoolLoose(doc["picked"]["breakdown"]["experience"]["matched"])) return true;
+  if (jsonToBoolLoose(doc["picked"]["experience"]["matched"])) return true;
 
   return false;
 }
@@ -1443,6 +1416,7 @@ static void drawExperienceDiceStripSized(int x, int yTop,
   if (filled < 0) filled = 0;
   if (filled > 6) filled = 6;
 
+  uint16_t bg = Theme::paper();
 
   const int dieY = yTop + (stripH - dieS) / 2;
   const int usedW = 6 * dieS + 5 * gap;
@@ -1452,8 +1426,12 @@ static void drawExperienceDiceStripSized(int x, int yTop,
   for (int i = 0; i < 6; i++) {
     int rx = startX + i * (dieS + gap);
 
-    d.drawRoundRect(rx, dieY, dieS, dieS, rr, col);
-    if (i < filled) drawDiePipsAt(rx, dieY, dieS, i + 1, col);
+    if (i < filled) {
+      d.fillRoundRect(rx, dieY, dieS, dieS, rr, col);
+      drawDiePipsAt(rx, dieY, dieS, i + 1, bg);
+    } else {
+      d.drawRoundRect(rx, dieY, dieS, dieS, rr, col);
+    }
   }
 }
 
