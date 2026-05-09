@@ -316,6 +316,42 @@ type DeviceStatusRow = {
   last_refresh_at?: string | null
 }
 
+
+function BatteryIcon({ percent, className = 'h-3.5 w-[18px] opacity-80' }: { percent: number; className?: string }) {
+  const p = Math.max(0, Math.min(100, percent))
+  const bars = p >= 75 ? 3 : p >= 35 ? 2 : p >= 10 ? 1 : 0
+
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 20 12"
+      className={className}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="1" y="1" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="17.4" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" />
+      {bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+      {bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+      {bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
+    </svg>
+  )
+}
+
+function ChargingBoltIcon({ className = 'h-3.5 w-2.5 opacity-90' }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 8 12"
+      className={className}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M4.7 0.9 1.9 6h2l-0.6 5.1 2.8-5.1h-2Z" fill="currentColor" />
+    </svg>
+  )
+}
+
 function normalizeBatteryPercent(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') return null
   const n = Number(value)
@@ -813,6 +849,7 @@ export default function HomePage() {
   }, [])
 
   const layoutMeta = allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0]
+  const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
 
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
@@ -1023,6 +1060,17 @@ export default function HomePage() {
 
       const data = await resp.json()
       const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
+      const status: Omit<MemberRow, 'device_id' | 'role'> = {
+        current_version: data?.current_version ?? null,
+        battery_percent: normalizeBatteryPercent(data?.battery_percent),
+        battery_voltage: normalizeBatteryVoltage(data?.battery_voltage),
+        is_charging: normalizeBoolean(data?.is_charging),
+        is_usb_present: normalizeBoolean(data?.is_usb_present),
+      }
+
+      setFrames((current) =>
+        current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
+      )
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
       return renderIso || null
     } catch {
@@ -1459,6 +1507,7 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={physicalFrameSnapshot}
         fallbackLanguage={language}
+        status={activeFrameStatus}
       />
     )
   }
@@ -2103,9 +2152,11 @@ function frameModuleDetail(
 function LandscapeFrameMirror({
   snapshot,
   fallbackLanguage,
+  status,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
+  status: MemberRow | null
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const theme = snapshot?.theme ?? 'dark'
@@ -2115,6 +2166,9 @@ function LandscapeFrameMirror({
   const textColor = isDark ? '#eef8ff' : '#07141c'
   const mutedColor = isDark ? 'rgba(238,248,255,0.58)' : 'rgba(7,20,28,0.58)'
   const borderColor = isDark ? 'rgba(238,248,255,0.18)' : 'rgba(7,20,28,0.16)'
+  const batteryPercent = normalizeBatteryPercent(status?.battery_percent)
+  const isCharging = status?.is_usb_present === true || status?.is_charging === true
+  const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
   const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15', string> = {
     background,
     color: textColor,
@@ -2154,7 +2208,22 @@ function LandscapeFrameMirror({
       className="fixed inset-0 z-[100] overflow-hidden"
       style={mirrorStyle}
     >
-      <div className="w-screen h-screen overflow-hidden" style={{ background: frameBackground }}>
+      <div className="relative w-screen h-screen overflow-hidden" style={{ background: frameBackground }}>
+        <div
+          className="absolute right-[max(1rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.45)]"
+          aria-label={
+            batteryPercent !== null
+              ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}`
+              : `${batteryLabel} unavailable`
+          }
+        >
+          <span className="text-[clamp(0.75rem,2vw,1rem)] font-semibold leading-none tracking-[0.08em]">
+            {batteryPercent !== null ? `${batteryPercent}%` : '--%'}
+          </span>
+          <BatteryIcon percent={batteryPercent ?? 0} className="h-[clamp(0.85rem,2.2vw,1.15rem)] w-[clamp(1.35rem,3.6vw,1.85rem)] opacity-95" />
+          {isCharging && <ChargingBoltIcon className="h-[clamp(0.9rem,2.3vw,1.2rem)] w-[clamp(0.65rem,1.6vw,0.85rem)] text-white" />}
+        </div>
+
         {snapshot ? (
           <FrameLayoutRenderer
             layoutKey={snapshot.layoutKey}
@@ -2544,41 +2613,6 @@ function MyFramesSection({
 
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
-
-  function BatteryIcon({ percent }: { percent: number }) {
-    const p = Math.max(0, Math.min(100, percent))
-    const bars = p >= 75 ? 3 : p >= 35 ? 2 : p >= 10 ? 1 : 0
-
-    return (
-      <svg
-        aria-hidden
-        viewBox="0 0 20 12"
-        className="h-3.5 w-[18px] opacity-80"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <rect x="1" y="1" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="17.4" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" />
-        {bars >= 1 && <rect x="3.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
-        {bars >= 2 && <rect x="7.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
-        {bars >= 3 && <rect x="11.1" y="3" width="3.2" height="6" rx="0.8" fill="currentColor" />}
-      </svg>
-    )
-  }
-
-  function ChargingBoltIcon() {
-    return (
-      <svg
-        aria-hidden
-        viewBox="0 0 8 12"
-        className="h-3.5 w-2.5 opacity-90"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M4.7 0.9 1.9 6h2l-0.6 5.1 2.8-5.1h-2Z" fill="currentColor" />
-      </svg>
-    )
-  }
 
   async function reload() {
     setLoading(true)
