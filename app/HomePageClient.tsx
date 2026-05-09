@@ -2365,12 +2365,12 @@ function LandscapeFrameMirror({
 
             <div className="mx-[clamp(0.35rem,1vw,0.8rem)] h-full w-px" style={{ backgroundColor: borderColor }} />
 
-            <div className="flex min-w-0 flex-col pl-[clamp(0.45rem,1.25vw,0.9rem)]">
+            <div className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] items-center pl-[clamp(0.45rem,1.25vw,0.9rem)]">
               <div className="text-[clamp(0.66rem,1.55vw,1rem)] font-semibold tracking-[0.14em] uppercase">
                 Details:
               </div>
 
-              <div className="flex min-h-0 flex-1 items-center justify-center pt-[clamp(0.08rem,0.3vw,0.2rem)]">
+              <div className="flex min-h-0 items-center justify-center py-[clamp(0.3rem,0.95vw,0.7rem)]">
                 <div className="grid w-full gap-y-[clamp(0.04rem,0.16vw,0.12rem)]">
                   <div className="grid w-full grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)]">
                     <div className="flex min-w-0 justify-center text-[clamp(1rem,2.4vw,1.55rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
@@ -2385,12 +2385,12 @@ function LandscapeFrameMirror({
                       <MirrorSurfWindIcon />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
-                    <div className="truncate">{formatMirrorMetric(detail.swellPeriodS, 's')}</div>
-                    <div className="truncate">{formatMirrorMetric(detail.windSpeedMs, 'm/s')}</div>
-                  </div>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
+                <div className="truncate">{formatMirrorMetric(detail.swellPeriodS, 's')}</div>
+                <div className="truncate">{formatMirrorMetric(detail.windSpeedMs, 'm/s')}</div>
               </div>
             </div>
           </div>
