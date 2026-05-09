@@ -2376,7 +2376,7 @@ function LandscapeFrameMirror({
                   <div className="flex min-w-0 justify-center text-[clamp(1rem,2.4vw,1.55rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
                 </div>
 
-                <div className="absolute inset-x-0 bottom-0 grid translate-y-[clamp(0.55rem,1.25vw,0.9rem)] grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)]">
+                <div className="absolute inset-x-0 bottom-0 grid translate-y-[clamp(0.85rem,1.85vw,1.3rem)] grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)]">
                   <div className="flex min-w-0 justify-center" title="Wave period">
                     <MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} />
                   </div>
