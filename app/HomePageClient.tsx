@@ -263,6 +263,8 @@ function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; sub
   ]
 }
 
+type MirrorModuleDetail = { primary: string; secondary?: string; tertiary?: string }
+
 type PhysicalFrameSnapshot = {
   theme: 'dark' | 'light'
   language: AppLanguage
@@ -270,6 +272,7 @@ type PhysicalFrameSnapshot = {
   layoutKey: LayoutKey
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, unknown>
+  detailsBySlot: Record<string, MirrorModuleDetail>
   updatedAt: string | null
   renderAt: string | null
 }
@@ -506,6 +509,7 @@ function normalizePhysicalFrameSnapshot(settings: unknown, updatedAt: string | n
     layoutKey,
     cells,
     modulesJson: modulesRecordFromUnknown(json.modules),
+    detailsBySlot: {},
     updatedAt,
     renderAt,
   }
@@ -1079,6 +1083,31 @@ export default function HomePage() {
     }
   }
 
+
+  async function loadMirrorDetailsBySlot(deviceId: string): Promise<Record<string, MirrorModuleDetail>> {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) return {}
+
+      const resp = await fetch(`/api/device/mirror-snapshot?device_id=${encodeURIComponent(deviceId)}`, {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (!resp.ok) return {}
+
+      const data = await resp.json()
+      return modulesRecordFromUnknown(data?.detailsBySlot) as Record<string, MirrorModuleDetail>
+    } catch {
+      return {}
+    }
+  }
+
   async function loadPhysicalFrameSnapshot(deviceId: string, renderAt: string | null) {
     const resp = await fetch(`/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
     if (!resp.ok) return
@@ -1090,7 +1119,9 @@ export default function HomePage() {
       renderAt
     )
 
-    setPhysicalFrameSnapshot(snapshot)
+    const detailsBySlot = await loadMirrorDetailsBySlot(deviceId)
+
+    setPhysicalFrameSnapshot({ ...snapshot, detailsBySlot })
     physicalFrameRenderAtRef.current = renderAt
   }
 
@@ -2184,7 +2215,7 @@ function LandscapeFrameMirror({
       return <div className="text-sm tracking-widest opacity-35">—</div>
     }
 
-    const detail = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+    const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const primarySize = size === 'large' ? 'text-[clamp(1.8rem,7vw,4.5rem)]' : 'text-[clamp(1rem,3vw,2rem)]'
     const secondarySize = size === 'large' ? 'text-[clamp(0.85rem,2vw,1.4rem)]' : 'text-[clamp(0.65rem,1.6vw,1rem)]'
 
