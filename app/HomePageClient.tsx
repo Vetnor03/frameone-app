@@ -2355,7 +2355,7 @@ function LandscapeFrameMirror({
               </div>
             </div>
 
-            <div className="col-start-1 row-start-2 flex min-w-0 items-center justify-center pr-[clamp(0.45rem,1.25vw,0.9rem)]">
+            <div className="col-start-1 row-start-3 flex min-w-0 items-center justify-center self-center pr-[clamp(0.45rem,1.25vw,0.9rem)]">
               <MirrorSurfRatingBars rating={rating} muted={mutedColor} />
             </div>
 
