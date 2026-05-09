@@ -2231,9 +2231,50 @@ function formatMirrorMetric(value: number | undefined, suffix: string) {
   return `${Math.round(n)}${suffix}`
 }
 
-function mirrorArrowStyle(degrees: number | undefined): React.CSSProperties {
-  const n = Number(degrees)
-  return Number.isFinite(n) ? { transform: `rotate(${n + 45}deg)` } : {}
+function mirrorDirectionToStyle(degreesFrom: number | undefined): React.CSSProperties {
+  const n = Number(degreesFrom)
+  if (!Number.isFinite(n)) return { opacity: 0.35 }
+  return { transform: `rotate(${(n + 180) % 360}deg)` }
+}
+
+function mirrorWavePeakCount(periodSeconds: number | undefined) {
+  const n = Number(periodSeconds)
+  if (!Number.isFinite(n) || n <= 0) return 3
+  if (n < 8) return 4
+  if (n < 12) return 3
+  return 2
+}
+
+function MirrorSurfWaveIcon({ periodSeconds }: { periodSeconds: number | undefined }) {
+  const peaks = mirrorWavePeakCount(periodSeconds)
+  const items = Array.from({ length: peaks })
+  return (
+    <svg className="h-[clamp(1rem,2.2vw,1.45rem)] w-[clamp(2rem,4.2vw,3.2rem)]" viewBox="0 0 64 28" aria-hidden="true">
+      {items.map((_, index) => {
+        const gap = peaks === 4 ? 2 : 3
+        const width = (64 - gap * (peaks - 1)) / peaks
+        const x = index * (width + gap)
+        return (
+          <path
+            key={index}
+            d={`M ${x} 22 C ${x + width * 0.18} 10, ${x + width * 0.46} 5, ${x + width * 0.72} 10 C ${x + width * 0.56} 12, ${x + width * 0.5} 17, ${x + width * 0.74} 22 Z`}
+            fill="currentColor"
+          />
+        )
+      })}
+      <rect x="1" y="21" width="62" height="3" rx="1.5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function MirrorSurfWindIcon() {
+  return (
+    <svg className="h-[clamp(1rem,2.2vw,1.45rem)] w-[clamp(2rem,4.2vw,3.2rem)]" viewBox="0 0 64 28" aria-hidden="true">
+      <rect x="4" y="5" width="46" height="4" rx="2" fill="currentColor" />
+      <rect x="10" y="13" width="50" height="4" rx="2" fill="currentColor" />
+      <rect x="24" y="21" width="32" height="4" rx="2" fill="currentColor" />
+    </svg>
+  )
 }
 
 function LandscapeFrameMirror({
@@ -2293,38 +2334,56 @@ function LandscapeFrameMirror({
     if (module === 'surf' && size === 'medium') {
       const rating = detail.rating ?? Number(detail.primary)
       const waveRange = detail.waveRange || detail.tertiary || '--'
+      const spotName = detail.secondary || detail.primary || 'Surf'
 
       return (
-        <div className="grid h-full w-full grid-cols-[1fr_auto_1fr] items-center px-[clamp(0.7rem,2.2vw,1.6rem)] py-[clamp(0.45rem,1.5vw,1.1rem)] leading-tight">
-          <div className="flex min-w-0 flex-col items-center justify-center gap-[clamp(0.45rem,1.4vw,0.95rem)] text-center">
-            <div className="max-w-full truncate text-[clamp(0.72rem,1.9vw,1.15rem)] font-semibold tracking-[0.14em] uppercase">
-              {mirrorSurfRatingWord(rating)}
+        <div className="relative flex h-full w-full flex-col px-[clamp(0.7rem,2.2vw,1.6rem)] py-[clamp(0.45rem,1.5vw,1.1rem)] text-center leading-tight">
+          {detail.isTodaysBest && (
+            <div className="absolute left-[clamp(0.45rem,1.4vw,0.9rem)] top-[clamp(0.3rem,0.9vw,0.65rem)] max-w-[42%] truncate text-[clamp(0.45rem,1vw,0.68rem)] font-semibold tracking-[0.16em] uppercase" style={{ color: mutedColor }}>
+              Today&apos;s best
             </div>
-            <MirrorSurfRatingBars rating={rating} muted={mutedColor} />
-            <div className="max-w-full truncate text-[clamp(0.62rem,1.45vw,0.88rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
-              {waveRange}
-            </div>
+          )}
+
+          <div className="mx-auto max-w-[78%] truncate border-b-2 pb-[clamp(0.12rem,0.4vw,0.24rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.14em] uppercase" style={{ borderColor: textColor }}>
+            {spotName}
           </div>
 
-          <div className="mx-[clamp(0.45rem,1.4vw,1rem)] h-[72%] w-px" style={{ backgroundColor: borderColor }} />
-
-          <div className="grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1.1vw,0.9rem)] text-center">
-            <div className="flex min-w-0 flex-col items-center gap-[clamp(0.35rem,1vw,0.7rem)]">
-              <div className="text-[clamp(0.55rem,1.25vw,0.8rem)] font-semibold tracking-[0.18em] uppercase" style={{ color: mutedColor }}>
-                Wave
+          <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] items-stretch pt-[clamp(0.45rem,1.1vw,0.75rem)]">
+            <div className="grid min-w-0 grid-rows-[auto_auto_1fr_auto] items-center gap-y-[clamp(0.28rem,0.85vw,0.62rem)] pr-[clamp(0.45rem,1.25vw,0.9rem)]">
+              <div className="max-w-full truncate text-[clamp(0.66rem,1.55vw,1rem)] font-semibold tracking-[0.14em] uppercase">
+                {mirrorSurfRatingWord(rating)}
               </div>
-              <div className="text-[clamp(1rem,2.5vw,1.6rem)] leading-none" style={mirrorArrowStyle(detail.swellDirectionDeg)}>↙</div>
-              <div className="text-[clamp(0.62rem,1.45vw,0.9rem)] tracking-[0.12em]">
-                {formatMirrorMetric(detail.swellPeriodS, 's')}
+              <MirrorSurfRatingBars rating={rating} muted={mutedColor} />
+              <div aria-hidden="true" />
+              <div className="max-w-full truncate text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
+                {waveRange}
               </div>
             </div>
-            <div className="flex min-w-0 flex-col items-center gap-[clamp(0.35rem,1vw,0.7rem)]">
-              <div className="text-[clamp(0.55rem,1.25vw,0.8rem)] font-semibold tracking-[0.18em] uppercase" style={{ color: mutedColor }}>
-                Wind
+
+            <div className="mx-[clamp(0.35rem,1vw,0.8rem)] h-full w-px" style={{ backgroundColor: borderColor }} />
+
+            <div className="grid min-w-0 grid-rows-[auto_auto_1fr_auto] items-center gap-y-[clamp(0.28rem,0.85vw,0.62rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)]">
+              <div className="text-[clamp(0.66rem,1.55vw,1rem)] font-semibold tracking-[0.14em] uppercase">
+                Details:
               </div>
-              <div className="text-[clamp(1rem,2.5vw,1.6rem)] leading-none" style={mirrorArrowStyle(detail.windDirectionDeg)}>↙</div>
-              <div className="text-[clamp(0.62rem,1.45vw,0.9rem)] tracking-[0.12em]">
-                {formatMirrorMetric(detail.windSpeedMs, 'm/s')}
+
+              <div className="grid grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)]">
+                <div className="flex min-w-0 justify-center text-[clamp(1rem,2.4vw,1.55rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
+                <div className="flex min-w-0 justify-center text-[clamp(1rem,2.4vw,1.55rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
+              </div>
+
+              <div className="grid grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)]">
+                <div className="flex min-w-0 justify-center" title="Wave period">
+                  <MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} />
+                </div>
+                <div className="flex min-w-0 justify-center" title="Wind strength">
+                  <MirrorSurfWindIcon />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
+                <div className="truncate">{formatMirrorMetric(detail.swellPeriodS, 's')}</div>
+                <div className="truncate">{formatMirrorMetric(detail.windSpeedMs, 'm/s')}</div>
               </div>
             </div>
           </div>
