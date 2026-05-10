@@ -2468,21 +2468,25 @@ function LandscapeFrameMirror({
       const visibleItems = mirrorGroceriesVisibleItems(detail)
       const header = mirrorGroceriesHeader(detail, language)
 
+      const headerOffsetStyle = { transform: 'translateY(clamp(-5px, -0.45vw, -3px))' }
+      const contentOffsetStyle = { transform: 'translateY(clamp(3px, 0.45vw, 5px))' }
+
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.22rem,0.65vw,0.42rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
           <div
             className="max-w-full truncate border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.08em]"
+            style={headerOffsetStyle}
             title={header}
           >
             {header}
           </div>
 
           {visibleItems.length <= 0 ? (
-            <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ color: mutedColor }}>
+            <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ ...contentOffsetStyle, color: mutedColor }}>
               {mirrorGroceriesEmptyMessage(language)}
             </div>
           ) : (
-            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center">
+            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center" style={contentOffsetStyle}>
               {visibleItems.map((item, index) => (
                 <React.Fragment key={`${item}-${index}`}>
                   {index > 0 && (
