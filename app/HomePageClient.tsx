@@ -2571,7 +2571,12 @@ function LandscapeFrameMirror({
       const visibleItems = mirrorGroceriesVisibleItems(detail)
       const header = mirrorGroceriesHeader(detail, language)
 
-      const headerOffsetStyle = { transform: 'translateY(clamp(-5px, -0.45vw, -3px))' }
+      const hasVisibleItems = visibleItems.length > 0
+      const headerOffsetStyle = {
+        transform: hasVisibleItems
+          ? 'translateY(clamp(1px, 0.25vw, 3px))'
+          : 'translateY(clamp(-5px, -0.45vw, -3px))',
+      }
       const contentOffsetStyle = { transform: 'translateY(clamp(3px, 0.45vw, 5px))' }
 
       return (
