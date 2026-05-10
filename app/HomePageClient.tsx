@@ -2660,7 +2660,7 @@ function LandscapeFrameMirror({
             </div>
 
             <div className="col-start-1 row-start-5 min-w-0 pr-[clamp(0.45rem,1.25vw,0.9rem)]">
-              <div className="max-w-full truncate text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
+              <div className="max-w-full truncate text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]">
                 {waveRange}
               </div>
             </div>
@@ -2685,7 +2685,7 @@ function LandscapeFrameMirror({
               </div>
             </div>
 
-            <div className="col-start-3 row-start-5 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
+            <div className="col-start-3 row-start-5 grid min-w-0 grid-cols-2 items-center gap-x-[clamp(0.35rem,1vw,0.8rem)] pl-[clamp(0.45rem,1.25vw,0.9rem)] text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]">
               <div className="truncate">{formatMirrorMetric(detail.swellPeriodS, 's')}</div>
               <div className="truncate">{formatMirrorMetric(detail.windSpeedMs, 'm/s')}</div>
             </div>
