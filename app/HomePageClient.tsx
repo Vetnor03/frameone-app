@@ -284,6 +284,7 @@ type MirrorModuleDetail = {
   swellDirectionDeg?: number
   windDirectionDeg?: number
   groceryItems?: string[]
+  dinnerTodayTitle?: string
 }
 
 type PhysicalFrameSnapshot = {
@@ -2238,6 +2239,12 @@ function mirrorGroceriesEmptyMessage(language: AppLanguage) {
   return messages[mirrorGroceriesRotationStep() % messages.length]
 }
 
+function mirrorGroceriesHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
+  if (dinnerTitle) return dinnerTitle
+  return language === 'no' ? 'Handleliste' : 'Grocery List'
+}
+
 function mirrorGroceriesItems(detail: MirrorModuleDetail) {
   const rawItems = Array.isArray(detail.groceryItems) ? detail.groceryItems : []
   return rawItems.map((item) => String(item).trim()).filter(Boolean)
@@ -2457,38 +2464,42 @@ function LandscapeFrameMirror({
 
     if (module === 'groceries' && size === 'small' && Array.isArray(detail.groceryItems)) {
       const visibleItems = mirrorGroceriesVisibleItems(detail)
-
-      if (visibleItems.length <= 0) {
-        return (
-          <div className="flex h-full w-full items-center justify-center px-[clamp(0.6rem,1.6vw,1rem)] text-center leading-none">
-            <div className="max-w-full truncate text-[clamp(0.8rem,2.1vw,1.18rem)] font-semibold tracking-[0.12em]" style={{ color: mutedColor }}>
-              {mirrorGroceriesEmptyMessage(language)}
-            </div>
-          </div>
-        )
-      }
+      const header = mirrorGroceriesHeader(detail, language)
 
       return (
-        <div className="flex h-full w-full items-center justify-center px-[clamp(0.45rem,1.2vw,0.8rem)] leading-none">
-          <div className="flex h-full w-full min-w-0 items-center justify-center">
-            {visibleItems.map((item, index) => (
-              <React.Fragment key={`${item}-${index}`}>
-                {index > 0 && (
-                  <div
-                    className="pointer-events-none h-[42%] w-px shrink-0"
-                    style={{ backgroundColor: borderColor }}
-                    aria-hidden="true"
-                  />
-                )}
-                <div
-                  className="flex min-w-0 flex-1 items-center justify-center truncate px-[clamp(0.35rem,1vw,0.65rem)] text-center text-[clamp(0.78rem,2vw,1.15rem)] font-semibold tracking-[0.08em]"
-                  title={item}
-                >
-                  <span className="block max-w-full truncate">{item}</span>
-                </div>
-              </React.Fragment>
-            ))}
+        <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.22rem,0.65vw,0.42rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
+          <div
+            className="max-w-full truncate border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.7vw,1rem)] font-semibold tracking-[0.08em]"
+            title={header}
+          >
+            {header}
           </div>
+
+          {visibleItems.length <= 0 ? (
+            <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ color: mutedColor }}>
+              {mirrorGroceriesEmptyMessage(language)}
+            </div>
+          ) : (
+            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center">
+              {visibleItems.map((item, index) => (
+                <React.Fragment key={`${item}-${index}`}>
+                  {index > 0 && (
+                    <div
+                      className="pointer-events-none h-[46%] w-px shrink-0"
+                      style={{ backgroundColor: borderColor }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <div
+                    className="flex min-w-0 flex-1 items-center justify-center truncate px-[clamp(0.3rem,0.85vw,0.55rem)] text-center text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.06em]"
+                    title={item}
+                  >
+                    <span className="block max-w-full truncate">{item}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
         </div>
       )
     }

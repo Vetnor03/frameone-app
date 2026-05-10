@@ -20,6 +20,7 @@ type Detail = {
   swellDirectionDeg?: number
   windDirectionDeg?: number
   groceryItems?: string[]
+  dinnerTodayTitle?: string
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -42,6 +43,10 @@ function asString(value: unknown, fallback = '') {
 function asNumber(value: unknown): number | null {
   const n = Number(value)
   return Number.isFinite(n) ? n : null
+}
+
+function isoDateOnly(d: Date) {
+  return d.toISOString().slice(0, 10)
 }
 
 function splitStoredModule(value: unknown) {
@@ -271,17 +276,30 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const appStorageDeviceId = String((device as Record<string, unknown> | null)?.id ?? '').trim()
   const storageDeviceIds = Array.from(new Set([appStorageDeviceId, deviceId].filter(Boolean)))
 
-  const { data, error } = await supabase
-    .from('grocery_items')
-    .select('name, quantity, updated_at')
-    .in('device_id', storageDeviceIds)
-    .eq('is_checked', false)
-    .order('updated_at', { ascending: false })
-    .limit(40)
+  const todayIso = isoDateOnly(new Date())
 
-  if (error) throw new Error(error.message)
+  const [itemsResult, dinnerResult] = await Promise.all([
+    supabase
+      .from('grocery_items')
+      .select('name, quantity, updated_at')
+      .in('device_id', storageDeviceIds)
+      .eq('is_checked', false)
+      .order('updated_at', { ascending: false })
+      .limit(40),
+    supabase
+      .from('dinner_plan_days')
+      .select('title')
+      .in('device_id', storageDeviceIds)
+      .eq('date', todayIso)
+      .limit(1),
+  ])
 
-  const items = Array.isArray(data) ? data.map(asRecord) : []
+  if (itemsResult.error) throw new Error(itemsResult.error.message)
+  if (dinnerResult.error) throw new Error(dinnerResult.error.message)
+
+  const items = Array.isArray(itemsResult.data) ? itemsResult.data.map(asRecord) : []
+  const dinnerRows = Array.isArray(dinnerResult.data) ? dinnerResult.data.map(asRecord) : []
+  const dinnerTodayTitle = asString(dinnerRows[0]?.title).trim()
   const groceryItems = items
     .map((item) => {
       const name = asString(item.name).trim()
@@ -304,6 +322,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
     secondary: language === 'no' ? 'varer' : 'items',
     tertiary: preview,
     groceryItems,
+    dinnerTodayTitle: dinnerTodayTitle || undefined,
   }
 }
 
