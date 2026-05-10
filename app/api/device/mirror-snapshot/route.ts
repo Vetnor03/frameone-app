@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
+import { buildMediumWeatherDetail, formatWeatherTemp } from '@/app/lib/weatherMirror'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,12 @@ type Detail = {
   windDirectionDeg?: number
   groceryItems?: string[]
   dinnerTodayTitle?: string
+  weatherLowTemp?: string
+  weatherHighTemp?: string
+  weatherAdvice?: string
+  weatherWindLine?: string
+  weatherPrecipLine?: string
+  weatherWmo?: number | null
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -68,9 +75,7 @@ function moduleConfig(modules: UnknownRecord, base: string, id: number) {
 }
 
 function formatTemp(value: unknown, units: string) {
-  const n = asNumber(value)
-  if (n == null) return '--°'
-  return `${Math.round(n)}°${units === 'imperial' ? 'F' : 'C'}`
+  return formatWeatherTemp(value, units === 'imperial' ? 'imperial' : 'metric')
 }
 
 function formatPrice(value: unknown, currency: string) {
@@ -136,32 +141,144 @@ async function fetchJson(url: string, init?: RequestInit) {
   return resp.json() as Promise<unknown>
 }
 
+function arrayNumberAt(values: unknown, index: number): number | null {
+  return Array.isArray(values) ? asNumber(values[index]) : null
+}
+
+function arrayStringAt(values: unknown, index: number): string {
+  return Array.isArray(values) ? asString(values[index]) : ''
+}
+
+function hhmmFromIso(value: string) {
+  const match = /T(\d{2}:\d{2})/.exec(value)
+  return match ? match[1] : ''
+}
+
+function wmoSeverityRank(wmo: number) {
+  if (wmo === 95 || wmo === 96 || wmo === 99) return 90
+  if ((wmo >= 71 && wmo <= 77) || wmo === 85 || wmo === 86) return 100
+  if (wmo === 66 || wmo === 67) return 85
+  if ((wmo >= 51 && wmo <= 65) || (wmo >= 80 && wmo <= 82)) return 80
+  if (wmo === 45 || wmo === 48) return 60
+  if (wmo === 3) return 40
+  if (wmo === 1 || wmo === 2) return 30
+  if (wmo === 0) return 10
+  return 20
+}
+
+function mostSevereWmo(codes: number[]) {
+  if (codes.length <= 0) return null
+  return codes.reduce((best, next) => (wmoSeverityRank(next) > wmoSeverityRank(best) ? next : best), codes[0])
+}
+
+function localHourFromIso(value: string) {
+  const match = /T(\d{2})/.exec(value)
+  return match ? Number(match[1]) : null
+}
+
+function computeRestOfToday(data: UnknownRecord) {
+  const current = asRecord(data.current)
+  const hourly = asRecord(data.hourly)
+  const currentTime = asString(current.time)
+  const currentDate = currentTime.slice(0, 10)
+  const currentHour = localHourFromIso(currentTime)
+  const times = Array.isArray(hourly.time) ? hourly.time : []
+
+  let restHiC: number | null = null
+  let restLoC: number | null = null
+  let restWindMaxMs: number | null = null
+  let restPrecipMm = 0
+  let sawPrecip = false
+  const restWmos: number[] = []
+
+  times.forEach((rawTime, index) => {
+    const time = asString(rawTime)
+    if (!time.startsWith(currentDate)) return
+    const hour = localHourFromIso(time)
+    if (currentHour != null && hour != null && hour < currentHour) return
+
+    const temp = arrayNumberAt(hourly.temperature_2m, index)
+    if (temp != null) {
+      restHiC = restHiC == null ? temp : Math.max(restHiC, temp)
+      restLoC = restLoC == null ? temp : Math.min(restLoC, temp)
+    }
+
+    const wind = arrayNumberAt(hourly.wind_speed_10m, index)
+    if (wind != null) restWindMaxMs = restWindMaxMs == null ? wind : Math.max(restWindMaxMs, wind)
+
+    const precip = arrayNumberAt(hourly.precipitation, index)
+    if (precip != null) {
+      sawPrecip = true
+      restPrecipMm += precip
+    }
+
+    const wmo = arrayNumberAt(hourly.weather_code, index)
+    if (wmo != null) restWmos.push(Math.round(wmo))
+  })
+
+  const restWmo = mostSevereWmo(restWmos)
+  return {
+    restValid: restHiC != null || restLoC != null || restWindMaxMs != null || sawPrecip || restWmo != null,
+    restHiC,
+    restLoC,
+    restWindMaxMs,
+    restPrecipMm: sawPrecip ? restPrecipMm : null,
+    restWmo,
+  }
+}
+
 async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Detail> {
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
   const label = asString(cfg.label).trim()
   const units = asString(cfg.units, 'metric').toLowerCase() === 'imperial' ? 'imperial' : 'metric'
+  const showHiLo = cfg.hiLo == null ? true : truthy(cfg.hiLo)
   if (lat == null || lon == null) return { primary: 'WEATHER', secondary: label || (language === 'no' ? 'Lagret sted' : 'Saved location') }
 
-  const tempUnit = units === 'imperial' ? 'fahrenheit' : 'celsius'
   const url = new URL('https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(lat))
   url.searchParams.set('longitude', String(lon))
   url.searchParams.set('current', 'temperature_2m,weather_code,relative_humidity_2m')
-  url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min')
+  url.searchParams.set('hourly', 'temperature_2m,weather_code,wind_speed_10m,precipitation')
+  url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,wind_speed_10m_max,sunrise,sunset')
   url.searchParams.set('forecast_days', '1')
-  url.searchParams.set('temperature_unit', tempUnit)
+  url.searchParams.set('temperature_unit', 'celsius')
+  url.searchParams.set('wind_speed_unit', 'ms')
+  url.searchParams.set('precipitation_unit', 'mm')
+  url.searchParams.set('timezone', 'auto')
 
   const data = asRecord(await fetchJson(url.toString()))
   const current = asRecord(data.current)
   const daily = asRecord(data.daily)
-  const mins = Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min : []
-  const maxs = Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max : []
+  const currentTempC = asNumber(current.temperature_2m)
+  const hiC = arrayNumberAt(daily.temperature_2m_max, 0)
+  const loC = arrayNumberAt(daily.temperature_2m_min, 0)
+  const windMaxMs = arrayNumberAt(daily.wind_speed_10m_max, 0)
+  const precipMm = arrayNumberAt(daily.precipitation_sum, 0)
+  const wmo = arrayNumberAt(daily.weather_code, 0)
+  const currentTime = asString(current.time)
+  const sunriseHHMM = hhmmFromIso(arrayStringAt(daily.sunrise, 0))
+  const sunsetHHMM = hhmmFromIso(arrayStringAt(daily.sunset, 0))
+  const medium = buildMediumWeatherDetail({
+    units,
+    showHiLo,
+    currentTempC,
+    hiC,
+    loC,
+    windMaxMs,
+    precipMm,
+    wmo,
+    ...computeRestOfToday(data),
+    sunriseHHMM,
+    sunsetHHMM,
+    localHour: localHourFromIso(currentTime),
+  })
 
   return {
-    primary: formatTemp(current.temperature_2m, units),
+    primary: formatTemp(currentTempC, units),
     secondary: label || (language === 'no' ? 'Vær' : 'Weather'),
-    tertiary: `${formatTemp(mins[0], units)} / ${formatTemp(maxs[0], units)}`,
+    tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
+    ...medium,
   }
 }
 
