@@ -19,6 +19,7 @@ type Detail = {
   ratingFromExperience?: boolean
   swellDirectionDeg?: number
   windDirectionDeg?: number
+  groceryItems?: string[]
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -281,6 +282,13 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   if (error) throw new Error(error.message)
 
   const items = Array.isArray(data) ? data.map(asRecord) : []
+  const groceryItems = items
+    .map((item) => {
+      const name = asString(item.name).trim()
+      const quantity = asNumber(item.quantity) ?? 1
+      return quantity > 1 ? `${quantity}x ${name}` : name
+    })
+    .filter(Boolean)
   const preview = items
     .slice(0, 2)
     .map((item) => {
@@ -295,6 +303,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
     primary: items.length ? `${items.length}` : '0',
     secondary: language === 'no' ? 'varer' : 'items',
     tertiary: preview,
+    groceryItems,
   }
 }
 
