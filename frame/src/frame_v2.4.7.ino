@@ -463,18 +463,30 @@ void setup() {
     Preferences prefs;
     prefs.begin("frame", false);
     bool shelfDone = prefs.getBool("shelf_done", false);
+    bool shelfPendingDisconnect = prefs.getBool("shelf_pending_disconnect", false);
 
-    if (!hasWifi && !hasToken && !shelfDone) {
+    if (hasWifi || hasToken) {
+      if (shelfPendingDisconnect) prefs.putBool("shelf_pending_disconnect", false);
+    } else if (!shelfDone) {
       if (!pwrEarly.usbPresent) {
+        Serial.println("Shelf screen ready: USB is disconnected");
+        Theme::set(THEME_DARK);
         ensureDisplay();
         DisplayCore::drawShelfScreen(DeviceIdentity::getDeviceId());
         prefs.putBool("shelf_done", true);
+        prefs.putBool("shelf_pending_disconnect", false);
         prefs.end();
         goToShelfSleep(pwrEarly.usbPresent);
         return;
-      } else {
-        prefs.putBool("shelf_done", true);
       }
+
+      if (!shelfPendingDisconnect) {
+        Serial.println("Shelf screen pending: waiting for USB disconnect after first upload");
+        prefs.putBool("shelf_pending_disconnect", true);
+      }
+      prefs.end();
+      goToShelfSleep(pwrEarly.usbPresent);
+      return;
     }
 
     prefs.end();

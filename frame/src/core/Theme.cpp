@@ -2,8 +2,8 @@
 #include <GxEPD2_GFX.h>
 
 static ThemeKey g_theme = THEME_DARK;
-static uint16_t g_paper = GxEPD_WHITE;
-static uint16_t g_ink = GxEPD_BLACK;
+static uint16_t g_paper = GxEPD_BLACK;
+static uint16_t g_ink = GxEPD_WHITE;
 
 void Theme::set(ThemeKey t) {
   g_theme = t;

@@ -3,6 +3,7 @@
 #include "WiFiManager.h"
 #include "DisplayCore.h"
 #include "Config.h"
+#include "Theme.h"
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -22,20 +23,33 @@ static String htmlPage(const String& msg) {
   String s;
   s += "<!doctype html><html><head>";
   s += "<meta name='viewport' content='width=device-width,initial-scale=1'/>";
+  s += "<meta name='theme-color' content='#061b24'/>";
   s += "<title>Connect your frame</title>";
-  s += "</head><body style='font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif; padding:20px; max-width:520px; margin:0 auto; color:#111;'>";
-  s += "<h2 style='margin-bottom:8px;'>Connect your frame</h2>";
-  s += "<p style='margin-top:0; opacity:.75;'>Choose the Wi-Fi network your frame should use.</p>";
-  if (msg.length()) s += "<p style='color:#0a84ff; font-weight:600;'>" + msg + "</p>";
+  s += "<style>";
+  s += ":root{color-scheme:dark;background:#061b24;color:#f4fbff;}";
+  s += "body{font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:20px;max-width:520px;margin:0 auto;background:#061b24;color:#f4fbff;}";
+  s += ".card{background:#0b2733;border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.3);}";
+  s += "h2{margin:0 0 8px;font-size:28px;}p{line-height:1.45}.muted{margin-top:0;color:rgba(244,251,255,.72)}";
+  s += ".msg{color:#6fd3ff;font-weight:700;background:rgba(42,163,255,.12);border:1px solid rgba(111,211,255,.28);padding:10px 12px;border-radius:14px;}";
+  s += "label{display:block;margin:14px 0 6px;color:rgba(244,251,255,.84);font-weight:650;}";
+  s += "input{width:100%;box-sizing:border-box;font-size:16px;padding:13px 12px;margin:0 0 8px;border:1px solid rgba(255,255,255,.18);border-radius:14px;background:#04141b;color:#f4fbff;outline:none;}";
+  s += "input:focus{border-color:#2aa3ff;box-shadow:0 0 0 3px rgba(42,163,255,.18)}";
+  s += "button{width:100%;padding:14px;font-size:16px;font-weight:800;background:#2aa3ff;color:#00131c;border:none;border-radius:14px;}";
+  s += ".foot{color:rgba(244,251,255,.62);margin-top:14px;}";
+  s += "</style>";
+  s += "</head><body><main class='card'>";
+  s += "<h2>Connect your frame</h2>";
+  s += "<p class='muted'>Choose the Wi-Fi network your frame should use.</p>";
+  if (msg.length()) s += "<p class='msg'>" + msg + "</p>";
   s += "<form method='POST' action='/save'>";
-  s += "<label style='display:block; margin:14px 0 6px;'>Wi-Fi name</label>";
-  s += "<input name='ssid' style='width:100%; box-sizing:border-box; font-size:16px; padding:12px; margin:0 0 8px; border:1px solid #ccc; border-radius:12px;' placeholder='Your Wi-Fi name' required />";
-  s += "<label style='display:block; margin:14px 0 6px;'>Password</label>";
-  s += "<input name='pass' type='password' style='width:100%; box-sizing:border-box; font-size:16px; padding:12px; margin:0 0 14px; border:1px solid #ccc; border-radius:12px;' placeholder='Wi-Fi password' />";
-  s += "<button style='width:100%; padding:14px; font-size:16px; font-weight:700; background:#111; color:white; border:none; border-radius:12px;'>Connect frame</button>";
+  s += "<label>Wi-Fi name</label>";
+  s += "<input name='ssid' placeholder='Your Wi-Fi name' required />";
+  s += "<label>Password</label>";
+  s += "<input name='pass' type='password' placeholder='Wi-Fi password' />";
+  s += "<button>Connect frame</button>";
   s += "</form>";
-  s += "<p style='opacity:.65; margin-top:14px;'>After saving, the frame will restart and continue setup.</p>";
-  s += "</body></html>";
+  s += "<p class='foot'>After saving, the frame will restart and continue setup.</p>";
+  s += "</main></body></html>";
   return s;
 }
 
@@ -129,6 +143,8 @@ static void drawWrappedLine(const String& line, int x, int& y, int maxW, const G
 namespace ProvisioningPortal {
 
 void runBlocking() {
+  Theme::set(THEME_DARK);
+
   // Create AP name Frame-Setup-XXXX using last 2 bytes of MAC
   uint8_t mac[6];
   WiFi.macAddress(mac);
@@ -145,8 +161,8 @@ void runBlocking() {
   display.setFullWindow();
   display.firstPage();
   do {
-    display.fillScreen(GxEPD_WHITE);
-    display.setTextColor(GxEPD_BLACK);
+    display.fillScreen(Theme::paper());
+    display.setTextColor(Theme::ink());
     DisplayCore::drawFrameBorder();
 
     const int left = 28;
@@ -166,7 +182,7 @@ void runBlocking() {
     y += 8;
     drawWrappedLine("3) Enter your home Wi-Fi", left, y, maxW, &FreeMonoBold12pt7b, 24);
 
-    display.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, GxEPD_BLACK);
+    display.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, Theme::ink());
 
     display.setFont(&FreeMonoBold9pt7b);
     display.setCursor(FRAME_X + left, FRAME_Y + FRAME_H - 18);
