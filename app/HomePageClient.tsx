@@ -2202,6 +2202,15 @@ function frameModuleDetail(
 }
 
 
+function formatSmallMirrorDate(language: AppLanguage) {
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const now = new Date()
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)
+  const month = new Intl.DateTimeFormat(locale, { month: 'short' }).format(now)
+
+  return `${weekday} ${now.getDate()}. ${month}`
+}
+
 function mirrorSurfRatingWord(rating: number | undefined) {
   switch (Math.round(Number(rating))) {
     case 1: return 'Flat'
@@ -2407,6 +2416,16 @@ function LandscapeFrameMirror({
     }
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+
+    if (module === 'date' && size === 'small') {
+      return (
+        <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
+          <div className="max-w-full text-[clamp(0.95rem,2.6vw,1.55rem)] font-semibold tracking-[0.08em]">
+            {formatSmallMirrorDate(language)}
+          </div>
+        </div>
+      )
+    }
 
     if (module === 'surf' && size === 'small' && detail.isTodaysBest) {
       return (
