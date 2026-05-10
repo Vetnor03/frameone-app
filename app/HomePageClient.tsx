@@ -2434,8 +2434,8 @@ function LandscapeFrameMirror({
       return (
         <div className="relative flex h-full w-full flex-col px-[clamp(0.7rem,2.2vw,1.6rem)] py-[clamp(0.45rem,1.5vw,1.1rem)] text-center leading-tight">
           {detail.isTodaysBest && (
-            <div className="absolute left-[clamp(0.45rem,1.4vw,0.9rem)] top-[clamp(0.3rem,0.9vw,0.65rem)] max-w-[42%] truncate text-[clamp(0.45rem,1vw,0.68rem)] font-semibold tracking-[0.16em] uppercase" style={{ color: mutedColor }}>
-              Today&apos;s best
+            <div className="absolute left-[clamp(0.45rem,1.4vw,0.9rem)] top-[clamp(0.3rem,0.9vw,0.65rem)] max-w-[52%] truncate text-[clamp(0.45rem,1vw,0.68rem)] font-semibold tracking-[0.16em]" style={{ color: mutedColor }}>
+              Best next 4h:
             </div>
           )}
 
