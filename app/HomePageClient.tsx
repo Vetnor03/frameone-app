@@ -5269,6 +5269,11 @@ type DinnerPlanDay = {
 }
 
 const DINNER_PLAN_DAY_ORDER: DinnerPlanDay['day'][] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+type DinnerPlanWeekOffset = 0 | 1
+
+function defaultDinnerPlanWeekOffset(): DinnerPlanWeekOffset {
+  return new Date().getDay() === 0 ? 1 : 0
+}
 
 function dinnerPlanDayLabel(language: AppLanguage, day: DinnerPlanDay['day']) {
   const en: Record<DinnerPlanDay['day'], string> = {
@@ -5291,13 +5296,13 @@ function formatLocalIsoDate(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function isoDateForDinnerDay(day: DinnerPlanDay['day']): string {
+function isoDateForDinnerDay(day: DinnerPlanDay['day'], weekOffset: DinnerPlanWeekOffset = 0): string {
   const now = new Date()
   const jsDay = now.getDay() // sunday=0
   const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay
   const monday = new Date(now)
   monday.setHours(0, 0, 0, 0)
-  monday.setDate(now.getDate() + mondayOffset)
+  monday.setDate(now.getDate() + mondayOffset + weekOffset * 7)
   const targetOffset = DINNER_PLAN_DAY_ORDER.indexOf(day)
   const target = new Date(monday)
   target.setDate(monday.getDate() + targetOffset)
@@ -5336,12 +5341,6 @@ function sanitizeDinnerPlanDays(days: DinnerPlanDay[]): DinnerPlanDay[] {
       .map((item) => ({ ...item, name: stripEmoji(item.name) }))
       .filter((item) => item.name),
   }))
-}
-
-function resetPassedDinnerDays(days: DinnerPlanDay[]): DinnerPlanDay[] {
-  const jsDay = new Date().getDay()
-  const currentIndex = jsDay === 0 ? 6 : jsDay - 1
-  return days.map((day, idx) => (idx < currentIndex ? { ...day, title: '', items: [] } : day))
 }
 
 function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
@@ -5452,6 +5451,7 @@ function GroceriesModuleSettingsTab({
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
   const [dinnerPlanLockedByOtherUser, setDinnerPlanLockedByOtherUser] = useState(false)
+  const [dinnerPlanWeekOffset, setDinnerPlanWeekOffset] = useState<DinnerPlanWeekOffset>(() => defaultDinnerPlanWeekOffset())
   const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
   const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
@@ -5783,45 +5783,10 @@ function GroceriesModuleSettingsTab({
         })
     }
 
-    let dinnerChanged = false
-    const nextDinnerPlanDays = dinnerPlanDays.map((day) => {
-      const nextItems = day.items.filter((item) => {
-        if (!item.isChecked || !item.checkedAt) return true
-        const elapsed = nowMs - new Date(item.checkedAt).getTime()
-        if (elapsed < GROCERY_UNDO_WINDOW_MS) return true
-        dinnerChanged = true
-        return false
-      })
-      return nextItems.length === day.items.length ? day : { ...day, items: nextItems }
-    })
-
-    if (dinnerChanged) {
-      setDinnerPlanDays(nextDinnerPlanDays)
-      void persistDinnerPlan(nextDinnerPlanDays)
-    }
-  }, [activeDeviceId, dinnerPlanDays, items, nowMs, loadGroceries])
+  }, [activeDeviceId, items, nowMs, loadGroceries])
 
 
-  const parseDinnerPlanDays = useCallback((raw: unknown): DinnerPlanDay[] => {
-    return DINNER_PLAN_DAY_ORDER.map((day) => {
-      const found = Array.isArray(raw) ? raw.find((x: any) => x?.day === day) : null
-      const items = Array.isArray(found?.items)
-        ? found.items
-          .map((it: any) => ({
-            name: String(it?.name ?? '').trim(),
-            category: asGroceryCategory(it?.category),
-            quantity: Math.max(1, Number(it?.quantity ?? 1) || 1),
-            isChecked: !!it?.isChecked,
-            checkedAt: it?.checkedAt ? String(it.checkedAt) : null,
-            updatedAt: it?.updatedAt ? String(it.updatedAt) : null,
-          }))
-          .filter((it: { name: string }) => !!it.name)
-        : []
-      return { day, title: String(found?.title ?? '').trim(), items }
-    })
-  }, [])
-
-  const loadDinnerPlan = useCallback(async (): Promise<DinnerPlanDay[]> => {
+  const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
     if (!activeDeviceId) {
       const emptyDays = defaultDinnerPlanDays()
       setDinnerPlanDays(emptyDays)
@@ -5831,7 +5796,7 @@ function GroceriesModuleSettingsTab({
       .from('dinner_plan_days')
       .select('date,title,note')
       .eq('device_id', activeDeviceId)
-      .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day)))
+      .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day, weekOffset)))
     if (error) return defaultDinnerPlanDays()
     const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
     for (const row of data ?? []) {
@@ -5844,12 +5809,10 @@ function GroceriesModuleSettingsTab({
     }
     const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
     const normalizedDays = sanitizeDinnerPlanDays(loadedDays)
-    const resetDays = resetPassedDinnerDays(normalizedDays)
-    setDinnerPlanDays(resetDays)
-    const changed = JSON.stringify(resetDays) !== JSON.stringify(loadedDays)
-    if (changed) void persistDinnerPlan(resetDays)
-    return resetDays
-  }, [activeDeviceId, parseDinnerPlanDays])
+    setDinnerPlanWeekOffset(weekOffset)
+    setDinnerPlanDays(normalizedDays)
+    return normalizedDays
+  }, [activeDeviceId, dinnerPlanWeekOffset])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -6107,7 +6070,7 @@ function GroceriesModuleSettingsTab({
 
     await loadGroceries({ silent: true, keepAnchorUnlessUserScrolled: true })
   }
-  async function persistDinnerPlan(next: DinnerPlanDay[]) {
+  async function persistDinnerPlan(next: DinnerPlanDay[], weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset) {
     const normalized = sanitizeDinnerPlanDays(next)
     const prevByKey = new Map<string, DinnerPlanDay['items'][number]>()
     for (const day of dinnerPlanDays) {
@@ -6127,7 +6090,7 @@ function GroceriesModuleSettingsTab({
     setDinnerPlanDays(normalized)
     if (!activeDeviceId) return
 
-    const deleteDates = DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day))
+    const deleteDates = DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day, weekOffset))
     const { error: deleteError } = await supabase
       .from('dinner_plan_days')
       .delete()
@@ -6139,7 +6102,7 @@ function GroceriesModuleSettingsTab({
       .filter((d) => d.title || d.items.length > 0)
       .map((d) => ({
         device_id: activeDeviceId,
-        date: isoDateForDinnerDay(d.day),
+        date: isoDateForDinnerDay(d.day, weekOffset),
         title: d.title || dinnerPlanDayLabel('en', d.day),
         note: JSON.stringify(d.items),
       }))
@@ -6572,6 +6535,9 @@ function GroceriesModuleSettingsTab({
         <button
           onClick={() => {
             if (dinnerPlanLockedByOtherUser) return
+            const nextOffset = defaultDinnerPlanWeekOffset()
+            setDinnerPlanWeekOffset(nextOffset)
+            void loadDinnerPlan(nextOffset)
             setDinnerPlanOpen(true)
           }}
           disabled={!activeDeviceId || dinnerPlanLockedByOtherUser}
@@ -6590,7 +6556,9 @@ function GroceriesModuleSettingsTab({
         language={language}
         suggestions={suggestions}
         initialDays={dinnerPlanDays}
+        initialWeekOffset={dinnerPlanWeekOffset}
         isLocked={dinnerPlanLockedByOtherUser}
+        onWeekChange={loadDinnerPlan}
         onItemAdded={async (name, category) => {
           const nowIso = new Date().toISOString()
           await rememberHistoryItem(name, category, nowIso)
@@ -6601,9 +6569,10 @@ function GroceriesModuleSettingsTab({
           const latest = await loadDinnerPlan()
           await syncMainGroceriesFromDinnerPlan(latest)
         }}
-        onSave={async (days) => {
-          const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
-          await persistDinnerPlan(nextDays)
+        onSave={async (days, weekOffset) => {
+          const nextDays = sanitizeDinnerPlanDays(days)
+          await persistDinnerPlan(nextDays, weekOffset)
+          setDinnerPlanWeekOffset(weekOffset)
           setDinnerPlanDays(nextDays)
           setDinnerPlanOpen(false)
           await syncMainGroceriesFromDinnerPlan(nextDays)
@@ -6793,7 +6762,9 @@ function DinnerPlanSheet({
   language,
   suggestions,
   initialDays,
+  initialWeekOffset,
   isLocked,
+  onWeekChange,
   onCancel,
   onSave,
   onItemAdded,
@@ -6801,19 +6772,33 @@ function DinnerPlanSheet({
   language: AppLanguage
   suggestions: GrocerySuggestion[]
   initialDays: DinnerPlanDay[]
+  initialWeekOffset: DinnerPlanWeekOffset
   isLocked: boolean
+  onWeekChange: (weekOffset: DinnerPlanWeekOffset) => Promise<DinnerPlanDay[]>
   onCancel: () => void
-  onSave: (days: DinnerPlanDay[]) => void
+  onSave: (days: DinnerPlanDay[], weekOffset: DinnerPlanWeekOffset) => void
   onItemAdded: (name: string, category: GroceryCategory) => Promise<void>
 }) {
   const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
+  const [weekOffset, setWeekOffset] = useState<DinnerPlanWeekOffset>(initialWeekOffset)
   const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
   const [editingTarget, setEditingTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   useEffect(() => {
     setDays(initialDays.map((d) => ({ ...d, items: [...d.items] })))
   }, [initialDays])
-  const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
+  useEffect(() => {
+    setWeekOffset(initialWeekOffset)
+  }, [initialWeekOffset])
   const blocked = isLocked
+  const switchWeek = async (nextWeekOffset: DinnerPlanWeekOffset) => {
+    if (nextWeekOffset === weekOffset || blocked) return
+    setWeekOffset(nextWeekOffset)
+    setAddTargetDay(null)
+    setEditingTarget(null)
+    const nextDays = await onWeekChange(nextWeekOffset)
+    setDays(nextDays.map((d) => ({ ...d, items: [...d.items] })))
+  }
+  const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
   const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
     setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
   const adjustDayItemQty = (day: DinnerPlanDay['day'], idx: number, delta: number) =>
@@ -6834,6 +6819,26 @@ function DinnerPlanSheet({
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
+      <div className="mt-4 grid grid-cols-2 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-1" role="tablist" aria-label={language === 'no' ? 'Velg middagsplanuke' : 'Choose dinner plan week'}>
+        <button
+          type="button"
+          disabled={blocked}
+          onClick={() => void switchWeek(0)}
+          aria-pressed={weekOffset === 0}
+          className={`h-9 rounded-xl text-[10px] tracking-widest transition ${weekOffset === 0 ? 'bg-[#2aa3ff] text-white' : 'text-[color:var(--fg-55)]'}`}
+        >
+          {language === 'no' ? 'DENNE UKEN' : 'THIS WEEK'}
+        </button>
+        <button
+          type="button"
+          disabled={blocked}
+          onClick={() => void switchWeek(1)}
+          aria-pressed={weekOffset === 1}
+          className={`h-9 rounded-xl text-[10px] tracking-widest transition ${weekOffset === 1 ? 'bg-[#2aa3ff] text-white' : 'text-[color:var(--fg-55)]'}`}
+        >
+          {language === 'no' ? 'NESTE UKE' : 'NEXT WEEK'}
+        </button>
+      </div>
       {blocked ? <div className="mt-3 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER'}</div> : null}
       <div className="mt-4 overflow-y-auto pr-1">
         {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
@@ -6871,7 +6876,7 @@ function DinnerPlanSheet({
         </div>)}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button disabled={blocked} onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+        <button disabled={blocked} onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })), weekOffset)} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
         <button onClick={onCancel} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
       </div>
     </div>
