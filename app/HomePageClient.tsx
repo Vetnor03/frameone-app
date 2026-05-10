@@ -273,6 +273,14 @@ type MirrorModuleDetail = {
   swellPeriodS?: number
   windSpeedMs?: number
   isTodaysBest?: boolean
+  isExperienceBased?: boolean
+  ratingFromExperience?: boolean
+  basedOnExperience?: boolean
+  ratingSource?: string
+  source?: string
+  experience?: unknown
+  breakdown?: unknown
+  picked?: unknown
   swellDirectionDeg?: number
   windDirectionDeg?: number
 }
@@ -2225,6 +2233,93 @@ function MirrorSurfRatingBars({ rating, muted }: { rating: number | undefined; m
   )
 }
 
+type DiceRatingProps = {
+  value?: number
+  rating?: number
+  isExperienceBased: boolean
+  muted: string
+  paperColor: string
+  className?: string
+}
+
+const MIRROR_DICE_DOTS: Record<number, Array<[number, number]>> = {
+  1: [[50, 50]],
+  2: [[32, 32], [68, 68]],
+  3: [[32, 32], [50, 50], [68, 68]],
+  4: [[32, 32], [68, 32], [32, 68], [68, 68]],
+  5: [[32, 32], [68, 32], [50, 50], [32, 68], [68, 68]],
+  6: [[32, 28], [32, 50], [32, 72], [68, 28], [68, 50], [68, 72]],
+}
+
+function booleanish(value: unknown) {
+  if (value === true) return true
+  if (typeof value === 'number') return value > 0
+  if (typeof value === 'string') return ['true', '1', 'yes', 'experience', 'user_surf_experiences'].includes(value.trim().toLowerCase())
+  return false
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function isSurfExperienceBased(detail: MirrorModuleDetail | undefined) {
+  const d = recordFromUnknown(detail)
+  if (!Object.keys(d).length) return false
+  if (booleanish(d.isExperienceBased) || booleanish(d.ratingFromExperience) || booleanish(d.basedOnExperience)) return true
+  const source = String(d.ratingSource ?? d.source ?? '').toLowerCase()
+  if (source.includes('experience') || source.includes('user_surf_experiences')) return true
+
+  const experience = recordFromUnknown(d.experience)
+  if (booleanish(experience.matched) || booleanish(experience.isExperienceBased)) return true
+
+  const breakdownExperience = recordFromUnknown(recordFromUnknown(d.breakdown).experience)
+  if (booleanish(breakdownExperience.matched)) return true
+
+  const pickedExperience = recordFromUnknown(recordFromUnknown(d.picked).experience)
+  return booleanish(pickedExperience.matched)
+}
+
+function DiceRating({ value, rating, isExperienceBased, muted, paperColor, className = '' }: DiceRatingProps) {
+  const displayRating = rating ?? value
+  if (!isExperienceBased) return <MirrorSurfRatingBars rating={displayRating} muted={muted} />
+
+  const normalizedValue = Math.max(0, Math.min(6, Math.round(Number(displayRating) || 0)))
+  return (
+    <div className={`flex items-center justify-center gap-[clamp(0.12rem,0.38vw,0.28rem)] ${className}`} aria-label={`Experience-based surf rating ${normalizedValue} of 6`}>
+      {Array.from({ length: 6 }).map((_, index) => {
+        const face = index + 1
+        const filled = face <= normalizedValue
+        const dots = filled ? MIRROR_DICE_DOTS[face] ?? [] : []
+        return (
+          <span
+            key={face}
+            className="relative block h-[clamp(0.58rem,1.42vw,0.9rem)] w-[clamp(0.58rem,1.42vw,0.9rem)] shrink-0 rounded-[clamp(0.12rem,0.32vw,0.22rem)] border"
+            style={{
+              backgroundColor: filled ? 'currentColor' : 'transparent',
+              borderColor: filled ? 'currentColor' : muted,
+              borderWidth: filled ? 1 : 1.25,
+              opacity: filled ? 0.96 : 0.6,
+            }}
+          >
+            {dots.map(([left, top], dotIndex) => (
+              <span
+                key={`${face}-${dotIndex}`}
+                className="absolute h-[clamp(0.085rem,0.24vw,0.15rem)] w-[clamp(0.085rem,0.24vw,0.15rem)] rounded-full"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  transform: 'translate(-50%, -50%)',
+                  backgroundColor: paperColor,
+                }}
+              />
+            ))}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function formatMirrorMetric(value: number | undefined, suffix: string) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '--'
@@ -2356,7 +2451,7 @@ function LandscapeFrameMirror({
             </div>
 
             <div className="col-start-1 row-start-3 flex min-w-0 items-center justify-center self-center pr-[clamp(0.45rem,1.25vw,0.9rem)]">
-              <MirrorSurfRatingBars rating={rating} muted={mutedColor} />
+              <DiceRating rating={rating} isExperienceBased={isSurfExperienceBased(detail)} muted={mutedColor} paperColor={frameBackground} />
             </div>
 
             <div className="col-start-1 row-start-5 min-w-0 pr-[clamp(0.45rem,1.25vw,0.9rem)]">
