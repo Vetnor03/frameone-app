@@ -35,7 +35,7 @@ FrameDisplay& get() {
 void begin() {
   display.init(115200);
   display.setRotation(0);
-  display.setTextColor(GxEPD_BLACK);
+  display.setTextColor(Theme::ink());
 
   display.setFullWindow();
   display.firstPage();

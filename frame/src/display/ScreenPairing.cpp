@@ -2,6 +2,7 @@
 #include "ScreenPairing.h"
 #include "DisplayCore.h"
 #include "Config.h"
+#include "Theme.h"
 
 #include <Arduino.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
@@ -109,15 +110,20 @@ static int measureTextHeight(const char* text, const GFXfont* font) {
 typedef void (*DrawCb)(void* ctx);
 
 static void renderPage(DrawCb cb, void* ctx) {
+  ThemeKey previousTheme = Theme::get();
+  Theme::set(THEME_DARK);
+
   auto& d = DisplayCore::get();
   d.setFullWindow();
   d.firstPage();
   do {
-    d.fillScreen(GxEPD_WHITE);
-    d.setTextColor(GxEPD_BLACK);
+    d.fillScreen(Theme::paper());
+    d.setTextColor(Theme::ink());
     DisplayCore::drawFrameBorder();
     cb(ctx);
   } while (d.nextPage());
+
+  Theme::set(previousTheme);
 }
 
 // =======================================================
@@ -146,7 +152,7 @@ static void drawWifiSetup(void* ctx) {
   y += 8;
   drawWrappedBlock("4) Enter home Wi-Fi details", left, y, maxW, &FreeMonoBold12pt7b, 24);
 
-  d.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, GxEPD_BLACK);
+  d.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, Theme::ink());
 
   drawLeftInFrame("KEEP PHONE NEAR FRAME", left, FRAME_H - 20, &FreeMonoBold9pt7b);
 }
@@ -201,10 +207,10 @@ static void drawPairCode(void* vctx) {
   int codeBaselineY = gapMid + (codeTextH / 2);
   drawCenteredInFrame(ctx->code, codeBaselineY, &FreeMonoBold18pt7b);
 
-  d.drawLine(FRAME_X + left, footerLineY, FRAME_X + FRAME_W - left, footerLineY, GxEPD_BLACK);
+  d.drawLine(FRAME_X + left, footerLineY, FRAME_X + FRAME_W - left, footerLineY, Theme::ink());
 
   d.setFont(&FreeMonoBold9pt7b);
-  d.setTextColor(GxEPD_BLACK);
+  d.setTextColor(Theme::ink());
   d.setCursor(FRAME_X + left, footerTextY);
 
   int mins = (ctx->expiresInSec + 59) / 60;
