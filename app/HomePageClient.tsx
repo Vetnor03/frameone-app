@@ -285,6 +285,12 @@ type MirrorModuleDetail = {
   windDirectionDeg?: number
   groceryItems?: string[]
   dinnerTodayTitle?: string
+  weatherLowTemp?: string
+  weatherHighTemp?: string
+  weatherAdvice?: string
+  weatherWindLine?: string
+  weatherPrecipLine?: string
+  weatherWmo?: number | null
 }
 
 type PhysicalFrameSnapshot = {
@@ -2418,6 +2424,73 @@ function MirrorSurfWindIcon() {
   )
 }
 
+function mirrorWeatherIconKind(wmo: number | null | undefined) {
+  if (wmo === 0) return 'sun'
+  if (wmo === 1 || wmo === 2) return 'partly'
+  if (wmo === 45 || wmo === 48) return 'fog'
+  if (wmo != null && ((wmo >= 51 && wmo <= 65) || (wmo >= 80 && wmo <= 82))) return 'rain'
+  if (wmo === 66 || wmo === 67) return 'sleet'
+  if (wmo != null && ((wmo >= 71 && wmo <= 77) || wmo === 85 || wmo === 86)) return 'snow'
+  if (wmo === 95 || wmo === 96 || wmo === 99) return 'thunder'
+  return 'cloud'
+}
+
+function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
+  const kind = mirrorWeatherIconKind(wmo)
+  return (
+    <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" aria-hidden="true">
+      {(kind === 'sun' || kind === 'partly') && (
+        <g transform={kind === 'partly' ? 'translate(18 -12) scale(0.72)' : undefined}>
+          <circle cx="50" cy="50" r="17" fill="currentColor" />
+          {Array.from({ length: 8 }).map((_, index) => {
+            const angle = (index * Math.PI) / 4
+            const x1 = 50 + Math.cos(angle) * 27
+            const y1 = 50 + Math.sin(angle) * 27
+            const x2 = 50 + Math.cos(angle) * 39
+            const y2 = 50 + Math.sin(angle) * 39
+            return <line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+          })}
+        </g>
+      )}
+      {kind !== 'sun' && (
+        <g>
+          {kind === 'partly' && <path d="M28 64 C23 64 19 60 19 55 C19 50 23 46 29 46 C31 35 40 28 51 28 C64 28 74 38 75 51 C82 52 87 57 87 64 C87 72 81 78 72 78 H30 C23 78 17 72 17 65 C17 64 17 64 17 63" fill="var(--mirror-bg)" stroke="var(--mirror-bg)" strokeWidth="13" strokeLinejoin="round" />}
+          <path d="M28 64 C23 64 19 60 19 55 C19 50 23 46 29 46 C31 35 40 28 51 28 C64 28 74 38 75 51 C82 52 87 57 87 64 C87 72 81 78 72 78 H30 C23 78 17 72 17 65 C17 64 17 64 17 63" fill="currentColor" />
+        </g>
+      )}
+      {(kind === 'rain' || kind === 'sleet') && (
+        <g fill="currentColor">
+          <path d="M34 87 C28 78 28 75 34 66 C40 75 40 78 34 87 Z" />
+          <path d="M52 90 C46 81 46 78 52 69 C58 78 58 81 52 90 Z" />
+          {kind === 'rain' && <path d="M70 87 C64 78 64 75 70 66 C76 75 76 78 70 87 Z" />}
+        </g>
+      )}
+      {(kind === 'snow' || kind === 'sleet') && (
+        <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
+          {(kind === 'sleet' ? [70] : [34, 52, 70]).map((cx, index) => {
+            const cy = kind === 'sleet' ? 80 : index === 1 ? 86 : 82
+            return (
+              <g key={index}>
+                <line x1={cx - 6} y1={cy} x2={cx + 6} y2={cy} />
+                <line x1={cx} y1={cy - 6} x2={cx} y2={cy + 6} />
+                <line x1={cx - 4} y1={cy - 4} x2={cx + 4} y2={cy + 4} />
+                <line x1={cx - 4} y1={cy + 4} x2={cx + 4} y2={cy - 4} />
+              </g>
+            )
+          })}
+        </g>
+      )}
+      {kind === 'thunder' && <path d="M54 61 L42 86 H54 L48 100 L70 72 H58 L66 61 Z" fill="currentColor" />}
+      {kind === 'fog' && (
+        <g stroke="currentColor" strokeWidth="5" strokeLinecap="round">
+          <line x1="20" y1="84" x2="82" y2="84" />
+          <line x1="26" y1="94" x2="76" y2="94" />
+        </g>
+      )}
+    </svg>
+  )
+}
+
 function LandscapeFrameMirror({
   snapshot,
   fallbackLanguage,
@@ -2439,12 +2512,13 @@ function LandscapeFrameMirror({
   const batteryPercent = normalizeBatteryPercent(status?.battery_percent)
   const isCharging = status?.is_usb_present === true || status?.is_charging === true
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
-  const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15', string> = {
+  const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15' | '--mirror-bg', string> = {
     background,
     color: textColor,
     '--fg': textColor,
     '--fg-50': mutedColor,
     '--bd-15': borderColor,
+    '--mirror-bg': frameBackground,
   }
 
   const renderMirrorCell: FrameCellRenderer = (module, slot, size) => {
@@ -2453,6 +2527,33 @@ function LandscapeFrameMirror({
     }
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+
+    if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
+      return (
+        <div className="flex h-full w-full flex-col items-center px-[clamp(0.55rem,1.7vw,1.2rem)] pt-[clamp(0.75rem,2vw,1.25rem)] pb-[clamp(0.95rem,2.4vw,1.45rem)] text-center leading-tight">
+          <div className="flex shrink-0 items-center justify-center text-[clamp(0.88rem,2.05vw,1.35rem)] font-semibold tracking-[0.08em]">
+            <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherLowTemp}</span>
+            <span className="h-[clamp(1.05rem,2.25vw,1.45rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+            <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherHighTemp}</span>
+          </div>
+
+          <div className="mt-[clamp(0.4rem,1vw,0.65rem)] flex min-h-[clamp(2.05rem,5.1vw,3.15rem)] w-full shrink-0 items-center justify-center px-[clamp(0.25rem,0.8vw,0.55rem)] text-[clamp(0.55rem,1.25vw,0.82rem)] font-medium tracking-[0.035em]">
+            <div className="line-clamp-2 max-w-full">{detail.weatherAdvice}</div>
+          </div>
+
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center py-[clamp(0.25rem,0.9vw,0.65rem)]">
+            <div className="aspect-square h-full max-h-full w-auto max-w-[78%]">
+              <MirrorWeatherIcon wmo={detail.weatherWmo} />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-col items-center justify-center gap-[clamp(0.12rem,0.45vw,0.3rem)] text-[clamp(0.55rem,1.25vw,0.82rem)] font-medium tracking-[0.06em]">
+            <div className="max-w-full truncate">{detail.weatherWindLine || 'Calm winds'}</div>
+            <div className="max-w-full truncate">{detail.weatherPrecipLine || 'Mostly dry'}</div>
+          </div>
+        </div>
+      )
+    }
 
     if (module === 'date' && size === 'small') {
       return (
