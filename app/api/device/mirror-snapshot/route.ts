@@ -159,7 +159,13 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
   }
 }
 
-async function surfDetail(origin: string, cfg: UnknownRecord, bearer: string, language: string): Promise<Detail> {
+async function surfDetail(
+  origin: string,
+  cfg: UnknownRecord,
+  bearer: string,
+  language: string,
+  surfSettings: UnknownRecord
+): Promise<Detail> {
   const spot = asString(cfg.spot || cfg.label).trim()
   const configuredSpotId = asString(cfg.spotId).trim()
   const spotId = configuredSpotId || (spot ? spotIdFromLabel(spot) ?? '' : '')
@@ -170,7 +176,19 @@ async function surfDetail(origin: string, cfg: UnknownRecord, bearer: string, la
   else if (spot) url.searchParams.set('spot', spot)
   if (lat != null) url.searchParams.set('lat', String(lat))
   if (lon != null) url.searchParams.set('lon', String(lon))
-  url.searchParams.set('hours', '24')
+  // Match the physical frame firmware, which asks for the best surf in the next 4 hours.
+  url.searchParams.set('hours', '4')
+
+  if (spotId === '__todays_best__') {
+    const fuelPenalty = truthy(surfSettings.fuelPenalty)
+    const homeLat = asNumber(surfSettings.homeLat)
+    const homeLon = asNumber(surfSettings.homeLon)
+    url.searchParams.set('fuelPenalty', fuelPenalty ? '1' : '0')
+    if (fuelPenalty && homeLat != null && homeLon != null && homeLat !== 0 && homeLon !== 0) {
+      url.searchParams.set('homeLat', String(homeLat))
+      url.searchParams.set('homeLon', String(homeLon))
+    }
+  }
 
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${bearer}` } }))
   const forecast = asRecord(data.forecast)
@@ -330,7 +348,7 @@ export async function GET(req: Request) {
       try {
         if (parsed.base === 'date') detailsBySlot[String(slot)] = { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
         else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language)
-        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, bearer, language)
+        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, bearer, language, asRecord(modules.surf_settings))
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
