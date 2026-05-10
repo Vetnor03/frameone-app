@@ -283,6 +283,7 @@ type MirrorModuleDetail = {
   picked?: unknown
   swellDirectionDeg?: number
   windDirectionDeg?: number
+  groceryItems?: string[]
 }
 
 type PhysicalFrameSnapshot = {
@@ -2223,6 +2224,33 @@ function mirrorSurfRatingWord(rating: number | undefined) {
   }
 }
 
+const MIRROR_GROCERIES_EMPTY_MESSAGES: Record<AppLanguage, string[]> = {
+  en: ['Fridge is stacked', 'Kitchen looks good', 'Nothing missing', 'Shopping done', 'All stocked up'],
+  no: ['Kjøleskapet er fullt', 'Kjøkkenet ser bra ut', 'Ingenting mangler', 'Handelen er ferdig', 'Alt er på lager'],
+}
+
+function mirrorGroceriesRotationStep() {
+  return Math.floor(Date.now() / (4 * 60 * 60 * 1000))
+}
+
+function mirrorGroceriesEmptyMessage(language: AppLanguage) {
+  const messages = MIRROR_GROCERIES_EMPTY_MESSAGES[language] ?? MIRROR_GROCERIES_EMPTY_MESSAGES.en
+  return messages[mirrorGroceriesRotationStep() % messages.length]
+}
+
+function mirrorGroceriesItems(detail: MirrorModuleDetail) {
+  const rawItems = Array.isArray(detail.groceryItems) ? detail.groceryItems : []
+  return rawItems.map((item) => String(item).trim()).filter(Boolean)
+}
+
+function mirrorGroceriesVisibleItems(detail: MirrorModuleDetail) {
+  const items = mirrorGroceriesItems(detail)
+  if (items.length <= 3) return items
+
+  const start = mirrorGroceriesRotationStep() % items.length
+  return Array.from({ length: 3 }, (_, index) => items[(start + index) % items.length])
+}
+
 function MirrorSurfRatingBars({ rating, muted }: { rating: number | undefined; muted: string }) {
   const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
   return (
@@ -2422,6 +2450,44 @@ function LandscapeFrameMirror({
         <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
           <div className="max-w-full text-[clamp(0.95rem,2.6vw,1.55rem)] font-semibold tracking-[0.08em]">
             {formatSmallMirrorDate(language)}
+          </div>
+        </div>
+      )
+    }
+
+    if (module === 'groceries' && size === 'small' && Array.isArray(detail.groceryItems)) {
+      const visibleItems = mirrorGroceriesVisibleItems(detail)
+
+      if (visibleItems.length <= 0) {
+        return (
+          <div className="flex h-full w-full items-center justify-center px-[clamp(0.6rem,1.6vw,1rem)] text-center leading-none">
+            <div className="max-w-full truncate text-[clamp(0.8rem,2.1vw,1.18rem)] font-semibold tracking-[0.12em]" style={{ color: mutedColor }}>
+              {mirrorGroceriesEmptyMessage(language)}
+            </div>
+          </div>
+        )
+      }
+
+      return (
+        <div className="flex h-full w-full items-center justify-center px-[clamp(0.45rem,1.2vw,0.8rem)] leading-none">
+          <div className="flex h-full w-full min-w-0 items-center justify-center">
+            {visibleItems.map((item, index) => (
+              <React.Fragment key={`${item}-${index}`}>
+                {index > 0 && (
+                  <div
+                    className="pointer-events-none h-[42%] w-px shrink-0"
+                    style={{ backgroundColor: borderColor }}
+                    aria-hidden="true"
+                  />
+                )}
+                <div
+                  className="flex min-w-0 flex-1 items-center justify-center truncate px-[clamp(0.35rem,1vw,0.65rem)] text-center text-[clamp(0.78rem,2vw,1.15rem)] font-semibold tracking-[0.08em]"
+                  title={item}
+                >
+                  <span className="block max-w-full truncate">{item}</span>
+                </div>
+              </React.Fragment>
+            ))}
           </div>
         </div>
       )
