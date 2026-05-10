@@ -2469,7 +2469,7 @@ function LandscapeFrameMirror({
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.22rem,0.65vw,0.42rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
           <div
-            className="max-w-full truncate border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.7vw,1rem)] font-semibold tracking-[0.08em]"
+            className="max-w-full truncate border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.08em]"
             title={header}
           >
             {header}
