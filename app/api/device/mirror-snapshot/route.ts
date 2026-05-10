@@ -15,6 +15,8 @@ type Detail = {
   swellPeriodS?: number
   windSpeedMs?: number
   isTodaysBest?: boolean
+  isExperienceBased?: boolean
+  ratingFromExperience?: boolean
   swellDirectionDeg?: number
   windDirectionDeg?: number
 }
@@ -70,6 +72,37 @@ function formatPrice(value: unknown, currency: string) {
   if (n == null) return '--'
   const digits = Math.abs(n) >= 100 ? 2 : 2
   return `${currency} ${n.toFixed(digits)}`
+}
+
+
+function truthy(value: unknown) {
+  if (value === true) return true
+  if (typeof value === 'number') return value > 0
+  if (typeof value === 'string') return ['true', '1', 'yes'].includes(value.trim().toLowerCase())
+  return false
+}
+
+function isSurfScoreExperienceBased(payload: UnknownRecord) {
+  const breakdown = asRecord(payload.breakdown)
+  const experience = asRecord(breakdown.experience)
+  const topExperience = asRecord(payload.experience)
+  const picked = asRecord(payload.picked)
+  const pickedBreakdown = asRecord(picked.breakdown)
+  const pickedExperience = asRecord(picked.experience)
+  const source = asString(payload.ratingSource || payload.source).toLowerCase()
+
+  return (
+    truthy(payload.isExperienceBased) ||
+    truthy(payload.ratingFromExperience) ||
+    truthy(payload.basedOnExperience) ||
+    source.includes('experience') ||
+    source.includes('user_surf_experiences') ||
+    truthy(experience.matched) ||
+    truthy(experience.isExperienceBased) ||
+    truthy(topExperience.matched) ||
+    truthy(pickedExperience.matched) ||
+    truthy(asRecord(pickedBreakdown.experience).matched)
+  )
 }
 
 function formatPercent(value: unknown) {
@@ -144,6 +177,7 @@ async function surfDetail(origin: string, cfg: UnknownRecord, bearer: string, la
   const inputs = asRecord(data.inputs)
   const rating = asNumber(data.rating) ?? asNumber(data.score) ?? undefined
   const waveRange = asString(forecast.wave_height_range_label || data.line1 || data.line2, '')
+  const isExperienceBased = isSurfScoreExperienceBased(data)
 
   return {
     module: 'surf',
@@ -152,6 +186,8 @@ async function surfDetail(origin: string, cfg: UnknownRecord, bearer: string, la
     tertiary: waveRange,
     rating,
     waveRange,
+    isExperienceBased,
+    ratingFromExperience: isExperienceBased,
     swellPeriodS: asNumber(inputs.swell_period_s) ?? undefined,
     windSpeedMs: asNumber(inputs.wind_speed_ms) ?? undefined,
     swellDirectionDeg: asNumber(inputs.swell_direction_deg) ?? undefined,
