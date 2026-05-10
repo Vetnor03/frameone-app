@@ -9,7 +9,6 @@ namespace DisplayCore {
   // Return the real type (no casts needed)
   FrameDisplay& get();
 
-  void drawFrameBorder();
   void drawSmallTextTopLeftInFrame(const char* text);
   void drawCenteredTextInFrame(const char* text, int big);
 

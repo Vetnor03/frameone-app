@@ -163,7 +163,6 @@ void runBlocking() {
   do {
     display.fillScreen(Theme::paper());
     display.setTextColor(Theme::ink());
-    DisplayCore::drawFrameBorder();
 
     const int left = 28;
     const int maxW = FRAME_W - (left * 2);

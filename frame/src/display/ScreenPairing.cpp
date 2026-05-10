@@ -119,7 +119,6 @@ static void renderPage(DrawCb cb, void* ctx) {
   do {
     d.fillScreen(Theme::paper());
     d.setTextColor(Theme::ink());
-    DisplayCore::drawFrameBorder();
     cb(ctx);
   } while (d.nextPage());
 
