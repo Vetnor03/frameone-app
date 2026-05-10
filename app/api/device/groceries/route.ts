@@ -55,6 +55,61 @@ function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10)
 }
 
+function parseIsoDate(isoDate: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
+  if (!match) return null
+  const [, year, month, day] = match
+  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0))
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function addIsoDays(isoDate: string, days: number): string {
+  const parsed = parseIsoDate(isoDate)
+  if (!parsed) return isoDate
+  parsed.setUTCDate(parsed.getUTCDate() + days)
+  return isoDateOnly(parsed)
+}
+
+function mondayWeekStartIso(isoDate: string): string {
+  const parsed = parseIsoDate(isoDate)
+  if (!parsed) return isoDate
+  const jsDay = parsed.getUTCDay()
+  const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay
+  parsed.setUTCDate(parsed.getUTCDate() + mondayOffset)
+  return isoDateOnly(parsed)
+}
+
+function isValidTimeZone(tz: string) {
+  if (!tz || tz.length > 64) return false
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date())
+    return true
+  } catch {
+    return false
+  }
+}
+
+function localDateInTimeZone(timeZone: string, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  return year && month && day ? `${year}-${month}-${day}` : isoDateOnly(now)
+}
+
+function resolveTodayIso(url: URL) {
+  const localDate = String(url.searchParams.get('local_date') || '').trim()
+  if (isIsoDate(localDate)) return localDate
+  const requestedTz = String(url.searchParams.get('tz') || '').trim()
+  const timeZone = isValidTimeZone(requestedTz) ? requestedTz : 'Europe/Oslo'
+  return localDateInTimeZone(timeZone)
+}
+
 function clampQuantity(value: unknown) {
   const n = Number(value ?? 1)
   if (!Number.isFinite(n) || n < 1) return 1
@@ -376,7 +431,9 @@ export async function GET(req: Request) {
 
     const appStorageDeviceId = String((device as Record<string, unknown>).id ?? '').trim()
     const storageDeviceIds = Array.from(new Set([appStorageDeviceId, device_id].filter(Boolean)))
-    const todayIso = isoDateOnly(new Date())
+    const todayIso = resolveTodayIso(url)
+    const activeWeekStartIso = mondayWeekStartIso(todayIso)
+    const activeWeekEndIso = addIsoDays(activeWeekStartIso, 6)
 
     const [settingsResult, itemsResult, dinnerResult] = await Promise.allSettled([
       supabase
@@ -394,9 +451,10 @@ export async function GET(req: Request) {
         .limit(MAX_ITEMS),
       supabase
         .from('dinner_plan_days')
-        .select('date, title, note')
+        .select('date, title, note, week_start_date')
         .in('device_id', storageDeviceIds)
-        .gte('date', todayIso)
+        .gte('date', activeWeekStartIso)
+        .lte('date', activeWeekEndIso)
         .order('date', { ascending: true })
         .limit(MAX_DINNER_PLAN),
     ])
@@ -459,7 +517,7 @@ export async function GET(req: Request) {
         date: asString(row?.date, '').slice(0, 10),
         title: asString(row?.title, '').trim().slice(0, 80),
       }))
-      .filter((row: { date: string; title: string }) => isIsoDate(row.date) && row.date >= todayIso && !!row.title)
+      .filter((row: { date: string; title: string }) => isIsoDate(row.date) && row.date >= activeWeekStartIso && row.date <= activeWeekEndIso && !!row.title)
       .slice(0, MAX_DINNER_PLAN)
 
     const insights = await buildGroceryInsights({

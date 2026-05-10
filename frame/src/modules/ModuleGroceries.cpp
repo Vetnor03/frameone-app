@@ -313,6 +313,17 @@ static bool fetchGroceries() {
 
   String url = String(BASE_URL) + "/api/device/groceries?device_id=" + DeviceIdentity::getDeviceId();
 
+  time_t now = time(nullptr);
+  if (now > 0) {
+    struct tm tmv = {};
+    localtime_r(&now, &tmv);
+    char localDate[16] = {0};
+    if (strftime(localDate, sizeof(localDate), "%Y-%m-%d", &tmv) > 0) {
+      url += "&local_date=";
+      url += localDate;
+    }
+  }
+
   int code = 0;
   String body;
 

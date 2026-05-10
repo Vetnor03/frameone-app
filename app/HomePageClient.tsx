@@ -5291,21 +5291,43 @@ function formatLocalIsoDate(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function isoDateForDinnerDay(day: DinnerPlanDay['day']): string {
-  const now = new Date()
-  const jsDay = now.getDay() // sunday=0
+function parseLocalIsoDate(isoDate: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
+  if (!match) return new Date(Number.NaN)
+  const [, year, month, day] = match
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
+  return Number.isNaN(parsed.getTime()) ? new Date(Number.NaN) : parsed
+}
+
+function addLocalDays(date: Date, days: number): Date {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function getMondayWeekStart(date: Date): Date {
+  const weekStart = new Date(date)
+  weekStart.setHours(0, 0, 0, 0)
+  const jsDay = weekStart.getDay() // sunday=0
   const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay
-  const monday = new Date(now)
-  monday.setHours(0, 0, 0, 0)
-  monday.setDate(now.getDate() + mondayOffset)
-  const targetOffset = DINNER_PLAN_DAY_ORDER.indexOf(day)
-  const target = new Date(monday)
-  target.setDate(monday.getDate() + targetOffset)
-  return formatLocalIsoDate(target)
+  weekStart.setDate(weekStart.getDate() + mondayOffset)
+  return weekStart
+}
+
+function getNextWeekMonday(date: Date): Date {
+  return addLocalDays(getMondayWeekStart(date), 7)
+}
+
+function dateForDinnerDayInWeek(day: DinnerPlanDay['day'], weekStartDate: Date): string {
+  return formatLocalIsoDate(addLocalDays(weekStartDate, DINNER_PLAN_DAY_ORDER.indexOf(day)))
+}
+
+function isoDateForDinnerDay(day: DinnerPlanDay['day']): string {
+  return dateForDinnerDayInWeek(day, getMondayWeekStart(new Date()))
 }
 
 function dinnerDayFromIsoDate(isoDate: string): DinnerPlanDay['day'] | null {
-  const parsed = new Date(`${isoDate}T12:00:00Z`)
+  const parsed = parseLocalIsoDate(isoDate)
   if (Number.isNaN(parsed.getTime())) return null
   const jsDay = parsed.getDay()
   const map: Record<number, DinnerPlanDay['day']> = {
@@ -5320,6 +5342,27 @@ function dinnerDayFromIsoDate(isoDate: string): DinnerPlanDay['day'] | null {
   return map[jsDay] ?? null
 }
 
+function getTodayDinnerFromCurrentWeek(days: DinnerPlanDay[], today = new Date()): string {
+  const todayIso = formatLocalIsoDate(today)
+  const weekStart = getMondayWeekStart(today)
+  const day = DINNER_PLAN_DAY_ORDER.find((candidate) => dateForDinnerDayInWeek(candidate, weekStart) === todayIso)
+  if (!day) return ''
+  return days.find((entry) => entry.day === day)?.title.trim() ?? ''
+}
+
+function formatDisplayedWeekRange(language: AppLanguage, weekStartDate: Date): string {
+  const weekEndDate = addLocalDays(weekStartDate, 6)
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const sameMonth = weekStartDate.getMonth() === weekEndDate.getMonth() && weekStartDate.getFullYear() === weekEndDate.getFullYear()
+  const sameYear = weekStartDate.getFullYear() === weekEndDate.getFullYear()
+  const startFormat = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameMonth ? {} : { year: sameYear ? undefined : 'numeric' as const }),
+  })
+  const endFormat = new Intl.DateTimeFormat(locale, { month: sameMonth ? undefined : 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' })
+  return `${startFormat.format(weekStartDate)}–${endFormat.format(weekEndDate)}`
+}
 
 function stripEmoji(value: string): string {
   return value
@@ -5338,11 +5381,6 @@ function sanitizeDinnerPlanDays(days: DinnerPlanDay[]): DinnerPlanDay[] {
   }))
 }
 
-function resetPassedDinnerDays(days: DinnerPlanDay[]): DinnerPlanDay[] {
-  const jsDay = new Date().getDay()
-  const currentIndex = jsDay === 0 ? 6 : jsDay - 1
-  return days.map((day, idx) => (idx < currentIndex ? { ...day, title: '', items: [] } : day))
-}
 
 function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
   if (typeof rawNote !== 'string' || !rawNote.trim()) return []
@@ -5453,6 +5491,7 @@ function GroceriesModuleSettingsTab({
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
   const [dinnerPlanLockedByOtherUser, setDinnerPlanLockedByOtherUser] = useState(false)
   const [dinnerPlanDays, setDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
+  const [nextDinnerPlanDays, setNextDinnerPlanDays] = useState<DinnerPlanDay[]>(defaultDinnerPlanDays())
   const [dinnerPlanMainEditTarget, setDinnerPlanMainEditTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
@@ -5802,54 +5841,56 @@ function GroceriesModuleSettingsTab({
   }, [activeDeviceId, dinnerPlanDays, items, nowMs, loadGroceries])
 
 
-  const parseDinnerPlanDays = useCallback((raw: unknown): DinnerPlanDay[] => {
-    return DINNER_PLAN_DAY_ORDER.map((day) => {
-      const found = Array.isArray(raw) ? raw.find((x: any) => x?.day === day) : null
-      const items = Array.isArray(found?.items)
-        ? found.items
-          .map((it: any) => ({
-            name: String(it?.name ?? '').trim(),
-            category: asGroceryCategory(it?.category),
-            quantity: Math.max(1, Number(it?.quantity ?? 1) || 1),
-            isChecked: !!it?.isChecked,
-            checkedAt: it?.checkedAt ? String(it.checkedAt) : null,
-            updatedAt: it?.updatedAt ? String(it.updatedAt) : null,
-          }))
-          .filter((it: { name: string }) => !!it.name)
-        : []
-      return { day, title: String(found?.title ?? '').trim(), items }
-    })
-  }, [])
-
-  const loadDinnerPlan = useCallback(async (): Promise<DinnerPlanDay[]> => {
+  const loadDinnerPlanForWeek = useCallback(async (weekStartDate: Date, setWeekDays?: (days: DinnerPlanDay[]) => void): Promise<DinnerPlanDay[]> => {
+    const emptyDays = defaultDinnerPlanDays()
     if (!activeDeviceId) {
-      const emptyDays = defaultDinnerPlanDays()
-      setDinnerPlanDays(emptyDays)
+      setWeekDays?.(emptyDays)
       return emptyDays
     }
+
+    const weekStartIso = formatLocalIsoDate(weekStartDate)
+    const weekEndIso = formatLocalIsoDate(addLocalDays(weekStartDate, 6))
     const { data, error } = await supabase
       .from('dinner_plan_days')
-      .select('date,title,note')
+      .select('date,title,note,week_start_date')
       .eq('device_id', activeDeviceId)
-      .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day)))
-    if (error) return defaultDinnerPlanDays()
+      .gte('date', weekStartIso)
+      .lte('date', weekEndIso)
+      .order('date', { ascending: true })
+    if (error) return emptyDays
+
     const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
     for (const row of data ?? []) {
-      const day = dinnerDayFromIsoDate(String(row.date))
+      const date = String(row.date ?? '').slice(0, 10)
+      if (date < weekStartIso || date > weekEndIso) continue
+      const day = dinnerDayFromIsoDate(date)
       if (!day) continue
       byDay.set(day, {
         title: String(row.title ?? '').trim(),
         items: parseDinnerItemsNote(row.note),
       })
     }
-    const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
-    const normalizedDays = sanitizeDinnerPlanDays(loadedDays)
-    const resetDays = resetPassedDinnerDays(normalizedDays)
-    setDinnerPlanDays(resetDays)
-    const changed = JSON.stringify(resetDays) !== JSON.stringify(loadedDays)
-    if (changed) void persistDinnerPlan(resetDays)
-    return resetDays
-  }, [activeDeviceId, parseDinnerPlanDays])
+    const loadedDays = sanitizeDinnerPlanDays(DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] })))
+    setWeekDays?.(loadedDays)
+    return loadedDays
+  }, [activeDeviceId])
+
+  const loadDinnerPlan = useCallback(async (): Promise<DinnerPlanDay[]> => {
+    const today = new Date()
+    const currentWeekStart = getMondayWeekStart(today)
+    const nextWeekStart = getNextWeekMonday(today)
+    if (!activeDeviceId) {
+      const emptyDays = defaultDinnerPlanDays()
+      setDinnerPlanDays(emptyDays)
+      setNextDinnerPlanDays(emptyDays)
+      return emptyDays
+    }
+    const [currentDays] = await Promise.all([
+      loadDinnerPlanForWeek(currentWeekStart, setDinnerPlanDays),
+      loadDinnerPlanForWeek(nextWeekStart, setNextDinnerPlanDays),
+    ])
+    return currentDays
+  }, [activeDeviceId, loadDinnerPlanForWeek])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -5926,6 +5967,8 @@ function GroceriesModuleSettingsTab({
   }, [dinnerPlanLockedByOtherUser, dinnerPlanOpen, loadDinnerPlan])
 
   const hasDinnerPlan = useMemo(() => dinnerPlanDays.some((x) => x.title || x.items.length > 0), [dinnerPlanDays])
+  const hasNextDinnerPlan = useMemo(() => nextDinnerPlanDays.some((x) => x.title || x.items.length > 0), [nextDinnerPlanDays])
+  const todayDinnerTitle = useMemo(() => getTodayDinnerFromCurrentWeek(dinnerPlanDays), [dinnerPlanDays])
   const dinnerPlanOtherItems = useMemo(
     () => dinnerPlanDays.flatMap((d) => d.items).filter((x) => x.category === 'other'),
     [dinnerPlanDays]
@@ -6107,10 +6150,17 @@ function GroceriesModuleSettingsTab({
 
     await loadGroceries({ silent: true, keepAnchorUnlessUserScrolled: true })
   }
-  async function persistDinnerPlan(next: DinnerPlanDay[]) {
+  async function persistDinnerPlan(next: DinnerPlanDay[], week: 'current' | 'next' = 'current') {
     const normalized = sanitizeDinnerPlanDays(next)
+    const previousDays = week === 'next' ? nextDinnerPlanDays : dinnerPlanDays
+    const setWeekDays = week === 'next' ? setNextDinnerPlanDays : setDinnerPlanDays
+    const today = new Date()
+    const weekStartDate = week === 'next' ? getNextWeekMonday(today) : getMondayWeekStart(today)
+    const weekStartIso = formatLocalIsoDate(weekStartDate)
+    const weekEndIso = formatLocalIsoDate(addLocalDays(weekStartDate, 6))
+
     const prevByKey = new Map<string, DinnerPlanDay['items'][number]>()
-    for (const day of dinnerPlanDays) {
+    for (const day of previousDays) {
       for (const item of day.items) prevByKey.set(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`, item)
     }
     const nextByKey = new Map<string, DinnerPlanDay['items'][number]>()
@@ -6124,22 +6174,23 @@ function GroceriesModuleSettingsTab({
       .filter(([key]) => !prevByKey.has(key))
       .map(([, item]) => item)
 
-    setDinnerPlanDays(normalized)
+    setWeekDays(normalized)
     if (!activeDeviceId) return
 
-    const deleteDates = DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day))
     const { error: deleteError } = await supabase
       .from('dinner_plan_days')
       .delete()
       .eq('device_id', activeDeviceId)
-      .in('date', deleteDates)
-    if (deleteError) console.error('Failed to clear dinner plan days', { deleteError })
+      .gte('date', weekStartIso)
+      .lte('date', weekEndIso)
+    if (deleteError) console.error('Failed to clear dinner plan days', { deleteError, weekStartIso, weekEndIso })
 
     const payload = normalized
       .filter((d) => d.title || d.items.length > 0)
       .map((d) => ({
         device_id: activeDeviceId,
-        date: isoDateForDinnerDay(d.day),
+        week_start_date: weekStartIso,
+        date: dateForDinnerDayInWeek(d.day, weekStartDate),
         title: d.title || dinnerPlanDayLabel('en', d.day),
         note: JSON.stringify(d.items),
       }))
@@ -6163,7 +6214,7 @@ function GroceriesModuleSettingsTab({
         await loadHistory()
       }
 
-      if (removedItems.length > 0) {
+      if (week === 'current' && removedItems.length > 0) {
         for (const item of removedItems) {
           const { error } = await supabase
             .from('grocery_items')
@@ -6175,7 +6226,7 @@ function GroceriesModuleSettingsTab({
         }
       }
 
-      await syncMainGroceriesFromDinnerPlan(normalized)
+      if (week === 'current') await syncMainGroceriesFromDinnerPlan(normalized)
     })()
   }
   function isDinnerVirtualId(id: string) {
@@ -6569,6 +6620,15 @@ function GroceriesModuleSettingsTab({
         >
           {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
         </button>
+        {todayDinnerTitle ? (
+          <div className="mt-4 text-[11px] text-[color:var(--fg-45)]">
+            {language === 'no' ? `I dag: ${todayDinnerTitle}` : `Today: ${todayDinnerTitle}`}
+          </div>
+        ) : !hasNextDinnerPlan ? (
+          <div className="mt-4 text-[11px] text-[color:var(--fg-35)]">
+            {language === 'no' ? 'Neste uke er ikke planlagt ennå' : 'Next week not planned yet'}
+          </div>
+        ) : null}
         <button
           onClick={() => {
             if (dinnerPlanLockedByOtherUser) return
@@ -6581,32 +6641,25 @@ function GroceriesModuleSettingsTab({
         >
           {dinnerPlanLockedByOtherUser
             ? (language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER')
-            : (language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN'))}
+            : (language === 'no' ? 'PLANLEGG MIDDAGER' : 'PLAN DINNERS')}
         </button>
       </div>
     </div>
     {dinnerPlanOpen && activeDeviceId && (
       <DinnerPlanSheet
         language={language}
-        suggestions={suggestions}
-        initialDays={dinnerPlanDays}
+        currentWeekDays={dinnerPlanDays}
+        nextWeekDays={nextDinnerPlanDays}
+        todayDinnerTitle={todayDinnerTitle}
         isLocked={dinnerPlanLockedByOtherUser}
-        onItemAdded={async (name, category) => {
-          const nowIso = new Date().toISOString()
-          await rememberHistoryItem(name, category, nowIso)
-          await loadHistory()
-        }}
         onCancel={async () => {
           setDinnerPlanOpen(false)
-          const latest = await loadDinnerPlan()
-          await syncMainGroceriesFromDinnerPlan(latest)
+          await loadDinnerPlan()
         }}
-        onSave={async (days) => {
-          const nextDays = resetPassedDinnerDays(sanitizeDinnerPlanDays(days))
-          await persistDinnerPlan(nextDays)
-          setDinnerPlanDays(nextDays)
+        onSave={async (week, days) => {
+          const nextDays = sanitizeDinnerPlanDays(days)
+          await persistDinnerPlan(nextDays, week)
           setDinnerPlanOpen(false)
-          await syncMainGroceriesFromDinnerPlan(nextDays)
         }}
       />
     )}
@@ -6791,114 +6844,93 @@ function GroceriesDraftSheet({
 
 function DinnerPlanSheet({
   language,
-  suggestions,
-  initialDays,
+  currentWeekDays,
+  nextWeekDays,
+  todayDinnerTitle,
   isLocked,
   onCancel,
   onSave,
-  onItemAdded,
 }: {
   language: AppLanguage
-  suggestions: GrocerySuggestion[]
-  initialDays: DinnerPlanDay[]
+  currentWeekDays: DinnerPlanDay[]
+  nextWeekDays: DinnerPlanDay[]
+  todayDinnerTitle: string
   isLocked: boolean
   onCancel: () => void
-  onSave: (days: DinnerPlanDay[]) => void
-  onItemAdded: (name: string, category: GroceryCategory) => Promise<void>
+  onSave: (week: 'current' | 'next', days: DinnerPlanDay[]) => void
 }) {
-  const [days, setDays] = useState<DinnerPlanDay[]>(() => initialDays.map((d) => ({ ...d, items: [...d.items] })))
-  const [addTargetDay, setAddTargetDay] = useState<DinnerPlanDay['day'] | null>(null)
-  const [editingTarget, setEditingTarget] = useState<{ day: DinnerPlanDay['day']; idx: number } | null>(null)
-  useEffect(() => {
-    setDays(initialDays.map((d) => ({ ...d, items: [...d.items] })))
-  }, [initialDays])
-  const setTitle = (day: DinnerPlanDay['day'], title: string) => setDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
+  const [selectedWeek, setSelectedWeek] = useState<'current' | 'next'>(() => (new Date().getDay() === 0 ? 'next' : 'current'))
+  const [currentDays, setCurrentDays] = useState<DinnerPlanDay[]>(() => currentWeekDays.map((d) => ({ ...d, items: [...d.items] })))
+  const [nextDays, setNextDays] = useState<DinnerPlanDay[]>(() => nextWeekDays.map((d) => ({ ...d, items: [...d.items] })))
   const blocked = isLocked
-  const addItemToDay = (day: DinnerPlanDay['day'], name: string, quantity: number, category: GroceryCategory) =>
-    setDays((prev) => prev.map((x) => x.day === day ? { ...x, items: [...x.items, { name: name.trim(), quantity: Math.max(1, quantity), category, isChecked: false, checkedAt: null, updatedAt: new Date().toISOString() }] } : x))
-  const adjustDayItemQty = (day: DinnerPlanDay['day'], idx: number, delta: number) =>
-    setDays((prev) =>
-      prev.map((x) => {
-        if (x.day !== day) return x
-        const current = x.items[idx]
-        if (delta < 0 && current && current.quantity <= 1) {
-          const confirmed = window.confirm(language === 'no' ? 'Fjerne denne varen fra dagen?' : 'Remove this item from this day?')
-          if (!confirmed) return x
-        }
-        const items = x.items
-          .map((it, i) => (i === idx ? { ...it, quantity: Math.max(0, it.quantity + delta), updatedAt: new Date().toISOString() } : it))
-          .filter((it) => it.quantity > 0)
-        return { ...x, items }
-      })
-    )
+  const today = new Date()
+  const currentWeekStart = getMondayWeekStart(today)
+  const nextWeekStart = getNextWeekMonday(today)
+  const selectedDays = selectedWeek === 'current' ? currentDays : nextDays
+  const selectedWeekStart = selectedWeek === 'current' ? currentWeekStart : nextWeekStart
+  const isSundayEditingNextWeek = today.getDay() === 0 && selectedWeek === 'next' && !!todayDinnerTitle
+
+  useEffect(() => {
+    setCurrentDays(currentWeekDays.map((d) => ({ ...d, items: [...d.items] })))
+  }, [currentWeekDays])
+
+  useEffect(() => {
+    setNextDays(nextWeekDays.map((d) => ({ ...d, items: [...d.items] })))
+  }, [nextWeekDays])
+
+  const updateSelectedDays = (updater: (prev: DinnerPlanDay[]) => DinnerPlanDay[]) => {
+    if (selectedWeek === 'current') setCurrentDays(updater)
+    else setNextDays(updater)
+  }
+
+  const setTitle = (day: DinnerPlanDay['day'], title: string) => updateSelectedDays((prev) => prev.map((x) => x.day === day ? { ...x, title } : x))
+
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[90vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}</div></div>
       {blocked ? <div className="mt-3 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER'}</div> : null}
+      <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] p-1">
+        {(['current', 'next'] as const).map((week) => (
+          <button
+            key={week}
+            disabled={blocked}
+            onClick={() => setSelectedWeek(week)}
+            className={`h-10 rounded-xl text-[11px] tracking-widest transition ${selectedWeek === week ? 'bg-[#2aa3ff]/15 text-[#2aa3ff] border border-[#2aa3ff]/70' : 'text-[color:var(--fg-55)] border border-transparent'}`}
+          >
+            {week === 'current' ? (language === 'no' ? 'DENNE UKEN' : 'THIS WEEK') : (language === 'no' ? 'NESTE UKE' : 'NEXT WEEK')}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 text-center text-[12px] text-[color:var(--fg-55)]">{formatDisplayedWeekRange(language, selectedWeekStart)}</div>
+      {isSundayEditingNextWeek ? (
+        <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] px-3 py-2 text-[11px] leading-5 text-[color:var(--fg-55)]">
+          {language === 'no'
+            ? `Dagens middag er fortsatt ${todayDinnerTitle}. Den blir på rammen til midnatt.`
+            : `Today’s dinner is still ${todayDinnerTitle}. It will stay on the frame until midnight.`}
+        </div>
+      ) : null}
       <div className="mt-4 overflow-y-auto pr-1">
-        {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
-          <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
-          <input disabled={blocked} value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
-          <div className="mt-2">
-            {[...GROCERY_CATEGORY_LIST_ORDER].sort((a, b) => {
-              const aItems = day.items.filter((item) => item.category === a)
-              const bItems = day.items.filter((item) => item.category === b)
-              const aAllChecked = aItems.length > 0 && aItems.every((x) => x.isChecked)
-              const bAllChecked = bItems.length > 0 && bItems.every((x) => x.isChecked)
-              if (aAllChecked !== bAllChecked) return aAllChecked ? 1 : -1
-              return GROCERY_CATEGORY_LIST_ORDER.indexOf(a) - GROCERY_CATEGORY_LIST_ORDER.indexOf(b)
-            }).map((c) => {
-              const categoryItems = day.items.map((item, idx) => ({ item, idx })).filter((x) => x.item.category === c)
-              if (categoryItems.length === 0) return null
-              return <div key={`${day.day}-${c}`} className="mb-2">
-                <div className="px-1 pb-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{groceryCategoryLabel(language, c)}</div>
-                <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] divide-y divide-[color:var(--bd-10)]">
-                  {categoryItems.map(({ item, idx }) => (
-                    <div key={`${day.day}-${c}-${idx}`} className="px-3 py-2 flex items-center gap-3">
-                      <button disabled={blocked} onClick={() => setEditingTarget({ day: day.day, idx })} className="min-w-0 flex-1 text-left text-[color:var(--fg-90)]">{item.name}</button>
-                      <div className="shrink-0 flex items-center gap-2.5">
-                        <button disabled={blocked} onClick={() => adjustDayItemQty(day.day, idx, -1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">−</button>
-                        <div className="text-sm w-8 text-center [font-variant-numeric:tabular-nums] text-[color:var(--fg-55)]">{item.quantity}</div>
-                        <button disabled={blocked} onClick={() => adjustDayItemQty(day.day, idx, +1)} className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-65)]">+</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            })}
+        {selectedDays.map((day) => (
+          <div key={`${selectedWeek}-${day.day}`} className="mb-2.5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-02)] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
+              <div className="text-[10px] text-[color:var(--fg-35)]">{dateForDinnerDayInWeek(day.day, selectedWeekStart).slice(5)}</div>
+            </div>
+            <input
+              disabled={blocked}
+              value={day.title}
+              onChange={(e) => setTitle(day.day, e.target.value)}
+              placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'}
+              className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]/80"
+            />
           </div>
-          <button disabled={blocked} onClick={() => setAddTargetDay(day.day)} className="mt-2 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</button>
-        </div>)}
+        ))}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button disabled={blocked} onClick={() => onSave(days.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+        <button disabled={blocked} onClick={() => onSave(selectedWeek, selectedDays.map((d) => ({ ...d, title: d.title.trim(), items: d.items.filter((i) => i.name.trim()) })))} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
         <button onClick={onCancel} className="h-11 rounded-2xl border border-[color:var(--bd-10)] tracking-widest text-xs text-[color:var(--fg-65)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
       </div>
     </div>
-    {addTargetDay ? (
-      <DinnerPlanAddItemSheet
-        language={language}
-        suggestions={suggestions}
-        onClose={() => setAddTargetDay(null)}
-        onAdd={(name, quantity, category) => {
-          addItemToDay(addTargetDay, name, quantity, category)
-          void onItemAdded(name, category)
-          setAddTargetDay(null)
-        }}
-      />
-    ) : null}
-    {editingTarget ? (
-      <DinnerPlanAddItemSheet
-        language={language}
-        suggestions={suggestions}
-        initialItem={days.find((d) => d.day === editingTarget.day)?.items[editingTarget.idx] ?? null}
-        onClose={() => setEditingTarget(null)}
-        onAdd={(name, quantity, category) => {
-          setDays((prev) => prev.map((d) => d.day === editingTarget.day ? { ...d, items: d.items.map((it, i) => i === editingTarget.idx ? { ...it, name, quantity, category, updatedAt: new Date().toISOString() } : it) } : d))
-          setEditingTarget(null)
-        }}
-      />
-    ) : null}
   </div>
 }
 

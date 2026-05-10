@@ -56,6 +56,24 @@ function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10)
 }
 
+function localDateInTimeZone(timeZone = 'Europe/Oslo', now = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now)
+    const year = parts.find((part) => part.type === 'year')?.value
+    const month = parts.find((part) => part.type === 'month')?.value
+    const day = parts.find((part) => part.type === 'day')?.value
+    if (year && month && day) return `${year}-${month}-${day}`
+  } catch {
+    // Use UTC only as a final formatting fallback if Intl cannot resolve Europe/Oslo.
+  }
+  return isoDateOnly(now)
+}
+
 function splitStoredModule(value: unknown) {
   const raw = String(value ?? '').trim()
   const [baseRaw, idRaw] = raw.split(':', 2)
@@ -513,7 +531,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const appStorageDeviceId = String((device as Record<string, unknown> | null)?.id ?? '').trim()
   const storageDeviceIds = Array.from(new Set([appStorageDeviceId, deviceId].filter(Boolean)))
 
-  const todayIso = isoDateOnly(new Date())
+  const todayIso = localDateInTimeZone('Europe/Oslo')
 
   const [itemsResult, dinnerResult] = await Promise.all([
     supabase
