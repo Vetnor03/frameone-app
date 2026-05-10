@@ -52,8 +52,10 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function isoDateOnly(d: Date) {
-  return d.toISOString().slice(0, 10)
+function isoDateInTimeZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || ''
+  return `${get('year')}-${get('month')}-${get('day')}`
 }
 
 function splitStoredModule(value: unknown) {
@@ -513,7 +515,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const appStorageDeviceId = String((device as Record<string, unknown> | null)?.id ?? '').trim()
   const storageDeviceIds = Array.from(new Set([appStorageDeviceId, deviceId].filter(Boolean)))
 
-  const todayIso = isoDateOnly(new Date())
+  const todayIso = isoDateInTimeZone(new Date(), 'Europe/Oslo')
 
   const [itemsResult, dinnerResult] = await Promise.all([
     supabase

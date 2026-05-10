@@ -55,6 +55,31 @@ function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10)
 }
 
+function normalizeTimeZone(raw: string | null) {
+  const tz = String(raw || '').trim()
+  if (!tz || tz === 'auto') return 'Europe/Oslo'
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date())
+    return tz
+  } catch {
+    return 'Europe/Oslo'
+  }
+}
+
+function getDatePartsInTimeZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || ''
+  return { year: get('year'), month: get('month'), day: get('day') }
+}
+
+function todayIsoForRequest(url: URL) {
+  const localDate = String(url.searchParams.get('local_date') || '').trim().slice(0, 10)
+  if (isIsoDate(localDate)) return localDate
+  const timeZone = normalizeTimeZone(url.searchParams.get('tz'))
+  const { year, month, day } = getDatePartsInTimeZone(new Date(), timeZone)
+  return `${year}-${month}-${day}`
+}
+
 function clampQuantity(value: unknown) {
   const n = Number(value ?? 1)
   if (!Number.isFinite(n) || n < 1) return 1
@@ -376,7 +401,7 @@ export async function GET(req: Request) {
 
     const appStorageDeviceId = String((device as Record<string, unknown>).id ?? '').trim()
     const storageDeviceIds = Array.from(new Set([appStorageDeviceId, device_id].filter(Boolean)))
-    const todayIso = isoDateOnly(new Date())
+    const todayIso = todayIsoForRequest(url)
 
     const [settingsResult, itemsResult, dinnerResult] = await Promise.allSettled([
       supabase
