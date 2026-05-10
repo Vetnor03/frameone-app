@@ -2437,38 +2437,40 @@ function mirrorWeatherIconKind(wmo: number | null | undefined) {
 
 function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
   const kind = mirrorWeatherIconKind(wmo)
+  const cloudPath = 'M27 61 C22 61 18 57 18 52 C18 47 22 43 28 43 C31 33 40 27 51 27 C63 27 73 36 75 48 C82 49 87 55 87 62 C87 70 81 76 72 76 H30 C23 76 17 70 17 63 C17 62 17 61 18 60'
+
   return (
-    <svg className="h-full w-full overflow-hidden" viewBox="0 0 100 100" aria-hidden="true">
+    <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" aria-hidden="true">
       {(kind === 'sun' || kind === 'partly') && (
-        <g transform={kind === 'partly' ? 'translate(18 -12) scale(0.72)' : undefined}>
-          <circle cx="50" cy="50" r="17" fill="currentColor" />
+        <g transform={kind === 'partly' ? 'translate(21 0) scale(0.66)' : undefined}>
+          <circle cx="50" cy="50" r="16" fill="currentColor" />
           {Array.from({ length: 8 }).map((_, index) => {
             const angle = (index * Math.PI) / 4
-            const x1 = 50 + Math.cos(angle) * 27
-            const y1 = 50 + Math.sin(angle) * 27
-            const x2 = 50 + Math.cos(angle) * 39
-            const y2 = 50 + Math.sin(angle) * 39
+            const x1 = 50 + Math.cos(angle) * 26
+            const y1 = 50 + Math.sin(angle) * 26
+            const x2 = 50 + Math.cos(angle) * 37
+            const y2 = 50 + Math.sin(angle) * 37
             return <line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
           })}
         </g>
       )}
       {kind !== 'sun' && (
         <g>
-          {kind === 'partly' && <path d="M28 64 C23 64 19 60 19 55 C19 50 23 46 29 46 C31 35 40 28 51 28 C64 28 74 38 75 51 C82 52 87 57 87 64 C87 72 81 78 72 78 H30 C23 78 17 72 17 65 C17 64 17 64 17 63" fill="var(--mirror-bg)" stroke="var(--mirror-bg)" strokeWidth="13" strokeLinejoin="round" />}
-          <path d="M28 64 C23 64 19 60 19 55 C19 50 23 46 29 46 C31 35 40 28 51 28 C64 28 74 38 75 51 C82 52 87 57 87 64 C87 72 81 78 72 78 H30 C23 78 17 72 17 65 C17 64 17 64 17 63" fill="currentColor" />
+          {kind === 'partly' && <path d={cloudPath} fill="var(--mirror-bg)" stroke="var(--mirror-bg)" strokeWidth="12" strokeLinejoin="round" />}
+          <path d={cloudPath} fill="currentColor" />
         </g>
       )}
       {(kind === 'rain' || kind === 'sleet') && (
         <g fill="currentColor">
-          <path d="M34 87 C28 78 28 75 34 66 C40 75 40 78 34 87 Z" />
-          <path d="M52 90 C46 81 46 78 52 69 C58 78 58 81 52 90 Z" />
-          {kind === 'rain' && <path d="M70 87 C64 78 64 75 70 66 C76 75 76 78 70 87 Z" />}
+          <path d="M34 91 C28 82 28 78 34 69 C40 78 40 82 34 91 Z" />
+          <path d="M52 94 C46 85 46 81 52 72 C58 81 58 85 52 94 Z" />
+          {kind === 'rain' && <path d="M70 91 C64 82 64 78 70 69 C76 78 76 82 70 91 Z" />}
         </g>
       )}
       {(kind === 'snow' || kind === 'sleet') && (
         <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
           {(kind === 'sleet' ? [70] : [34, 52, 70]).map((cx, index) => {
-            const cy = kind === 'sleet' ? 80 : index === 1 ? 86 : 82
+            const cy = kind === 'sleet' ? 84 : index === 1 ? 89 : 85
             return (
               <g key={index}>
                 <line x1={cx - 6} y1={cy} x2={cx + 6} y2={cy} />
@@ -2480,10 +2482,10 @@ function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
           })}
         </g>
       )}
-      {kind === 'thunder' && <path d="M54 61 L42 86 H54 L48 100 L70 72 H58 L66 61 Z" fill="currentColor" />}
+      {kind === 'thunder' && <path d="M55 61 L43 85 H55 L50 96 L70 70 H59 L66 61 Z" fill="currentColor" />}
       {kind === 'fog' && (
         <g stroke="currentColor" strokeWidth="5" strokeLinecap="round">
-          <line x1="20" y1="84" x2="82" y2="84" />
+          <line x1="20" y1="85" x2="82" y2="85" />
           <line x1="26" y1="94" x2="76" y2="94" />
         </g>
       )}
@@ -2642,7 +2644,7 @@ function LandscapeFrameMirror({
             </div>
           )}
 
-          <div className="mx-auto max-w-[78%] truncate border-b-2 pb-[clamp(0.12rem,0.4vw,0.24rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.14em] uppercase" style={{ borderColor: textColor }}>
+          <div className="mx-auto max-w-[78%] truncate border-b border-current pb-[clamp(0.12rem,0.4vw,0.24rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.14em] uppercase" style={{ borderColor: textColor }}>
             {spotName}
           </div>
 
