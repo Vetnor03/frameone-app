@@ -5811,23 +5811,7 @@ function GroceriesModuleSettingsTab({
         })
     }
 
-    let dinnerChanged = false
-    const nextDinnerPlanDays = dinnerPlanDays.map((day) => {
-      const nextItems = day.items.filter((item) => {
-        if (!item.isChecked || !item.checkedAt) return true
-        const elapsed = nowMs - new Date(item.checkedAt).getTime()
-        if (elapsed < GROCERY_UNDO_WINDOW_MS) return true
-        dinnerChanged = true
-        return false
-      })
-      return nextItems.length === day.items.length ? day : { ...day, items: nextItems }
-    })
-
-    if (dinnerChanged) {
-      setDinnerPlanDays(nextDinnerPlanDays)
-      void persistDinnerPlan(nextDinnerPlanDays)
-    }
-  }, [activeDeviceId, dinnerPlanDays, items, nowMs, loadGroceries])
+  }, [activeDeviceId, items, nowMs, loadGroceries])
 
 
   const buildDinnerPlanFromRows = useCallback((rows: Array<{ date?: unknown; title?: unknown; note?: unknown }>): DinnerPlanDay[] => {
@@ -5968,6 +5952,7 @@ function GroceriesModuleSettingsTab({
     const aggregate = new Map<string, { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }>()
     for (const day of dinnerPlanDays) {
       for (const item of day.items) {
+        if (item.isChecked && item.checkedAt && nowMs - new Date(item.checkedAt).getTime() >= GROCERY_UNDO_WINDOW_MS) continue
         const key = `${item.category}__${item.name.trim().toLowerCase()}`
         const existing = aggregate.get(key)
         if (existing) {
@@ -5985,7 +5970,7 @@ function GroceriesModuleSettingsTab({
       byCategory.set(entry.category, list)
     }
     return GROCERY_CATEGORY_LIST_ORDER.map((category) => ({ category, items: byCategory.get(category) || [] })).filter((g) => g.items.length > 0)
-  }, [dinnerPlanDays])
+  }, [dinnerPlanDays, nowMs])
   const groupsForDisplay = useMemo(() => {
     const sortGroups = (groups: Array<{ category: GroceryCategory; items: GroceryItem[] }>) =>
       groups
