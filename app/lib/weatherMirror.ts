@@ -71,8 +71,18 @@ function isShowersLikeWmo(wmo: number | null | undefined) {
   return wmo != null && wmo >= 80 && wmo <= 82
 }
 
-function shouldLabelSnowByTemp(hiC: number | null) {
-  return hiC != null && hiC <= 0
+function shouldLabelSnowByTemp(loC: number | null, hiC: number | null) {
+  return loC != null && hiC != null && hiC <= 0
+}
+
+export function normalizeDisplayWmoForTemps(wmo: number | null, loC: number | null, hiC: number | null) {
+  if (!isSnowWmo(wmo)) return wmo
+  if (loC == null || hiC == null) return wmo
+
+  // Match the frame firmware: avoid showing snow for clearly above-freezing
+  // selected periods, where mixed hourly data should present as rain instead.
+  if (loC >= 1 || hiC >= 3) return 63
+  return wmo
 }
 
 function hasMeaningfulRainSignal(precipMm: number | null, wmo: number | null) {
@@ -94,11 +104,12 @@ export function buildWeatherWindLine(windMaxMs: unknown) {
   return 'Calm winds'
 }
 
-export function buildWeatherPrecipLine(precipMm: unknown, wmoValue: unknown, hiCValue: unknown) {
+export function buildWeatherPrecipLine(precipMm: unknown, wmoValue: unknown, loCValue: unknown, hiCValue: unknown) {
   const precip = finiteNumber(precipMm)
   const wmo = finiteNumber(wmoValue)
+  const loC = finiteNumber(loCValue)
   const hiC = finiteNumber(hiCValue)
-  const snowy = isSnowWmo(wmo) || shouldLabelSnowByTemp(hiC)
+  const snowy = isSnowWmo(wmo) || shouldLabelSnowByTemp(loC, hiC)
 
   if (snowy) {
     if (precip == null || precip <= PRECIP_LIGHT_MM) return 'Mostly dry'
@@ -166,7 +177,7 @@ export function buildWeatherClothingAdvice(input: MediumWeatherInput) {
   if (refTemp != null && sunDown) refTemp -= 2
 
   const time = clothingTimePhrase(input.localHour)
-  const snowy = isSnowWmo(wmo) || shouldLabelSnowByTemp(hiC)
+  const snowy = isSnowWmo(wmo) || shouldLabelSnowByTemp(loC, hiC)
   const lightRain = hasLightRainSignal(precipMm, wmo)
   const rainy = hasMeaningfulRainSignal(precipMm, wmo)
   const heavyRain = precipMm != null && precipMm >= PRECIP_HEAVY_MM
@@ -212,7 +223,8 @@ export function buildMediumWeatherDetail(input: MediumWeatherInput): MediumWeath
   const loC = finiteNumber(useRest ? input.restLoC : input.loC)
   const windMaxMs = finiteNumber(useRest ? input.restWindMaxMs : input.windMaxMs)
   const precipMm = finiteNumber(useRest ? input.restPrecipMm : input.precipMm)
-  const wmo = finiteNumber(useRest ? input.restWmo : input.wmo)
+  const rawWmo = finiteNumber(useRest ? input.restWmo : input.wmo)
+  const wmo = normalizeDisplayWmoForTemps(rawWmo, loC, hiC)
   const currentTempC = finiteNumber(input.currentTempC)
 
   let lowTemp: string
@@ -230,7 +242,7 @@ export function buildMediumWeatherDetail(input: MediumWeatherInput): MediumWeath
     weatherHighTemp: highTemp,
     weatherAdvice: buildWeatherClothingAdvice({ ...input, hiC, loC, windMaxMs, precipMm, wmo }),
     weatherWindLine: buildWeatherWindLine(windMaxMs),
-    weatherPrecipLine: buildWeatherPrecipLine(precipMm, wmo, hiC),
+    weatherPrecipLine: buildWeatherPrecipLine(precipMm, wmo, loC, hiC),
     weatherWmo: wmo,
   }
 }

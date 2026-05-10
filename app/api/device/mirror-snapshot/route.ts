@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
-import { buildMediumWeatherDetail, formatWeatherTemp } from '@/app/lib/weatherMirror'
+import { buildMediumWeatherDetail, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -166,9 +166,61 @@ function wmoSeverityRank(wmo: number) {
   return 20
 }
 
-function mostSevereWmo(codes: number[]) {
-  if (codes.length <= 0) return null
-  return codes.reduce((best, next) => (wmoSeverityRank(next) > wmoSeverityRank(best) ? next : best), codes[0])
+function isPrecipWmo(wmo: number) {
+  return (
+    (wmo >= 51 && wmo <= 67) ||
+    (wmo >= 71 && wmo <= 77) ||
+    (wmo >= 80 && wmo <= 82) ||
+    wmo === 85 ||
+    wmo === 86 ||
+    wmo === 95 ||
+    wmo === 96 ||
+    wmo === 99
+  )
+}
+
+type WmoCount = { wmo: number; count: number }
+
+function chooseDominantWmo(counts: WmoCount[], fallbackWmo: number | null, precipMm: number | null) {
+  let chosen = fallbackWmo
+
+  if (counts.length > 0) {
+    let best = counts[0]
+    let bestRank = wmoSeverityRank(best.wmo)
+
+    for (const item of counts.slice(1)) {
+      const rank = wmoSeverityRank(item.wmo)
+      if (item.count > best.count || (item.count === best.count && rank > bestRank)) {
+        best = item
+        bestRank = rank
+      }
+    }
+    chosen = best.wmo
+
+    if (precipMm != null && precipMm > 2.0) {
+      let precipBest: WmoCount | null = null
+      let precipBestRank = -1
+
+      for (const item of counts) {
+        if (!isPrecipWmo(item.wmo)) continue
+        const rank = wmoSeverityRank(item.wmo)
+        if (precipBest == null || item.count > precipBest.count || (item.count === precipBest.count && rank > precipBestRank)) {
+          precipBest = item
+          precipBestRank = rank
+        }
+      }
+
+      if (precipBest) chosen = precipBest.wmo
+    }
+  }
+
+  return chosen
+}
+
+function addWmoCount(counts: WmoCount[], wmo: number) {
+  const existing = counts.find((item) => item.wmo === wmo)
+  if (existing) existing.count += 1
+  else counts.push({ wmo, count: 1 })
 }
 
 function localHourFromIso(value: string) {
@@ -176,7 +228,13 @@ function localHourFromIso(value: string) {
   return match ? Number(match[1]) : null
 }
 
-function computeRestOfToday(data: UnknownRecord) {
+function computeSelectedWeatherPeriods(data: UnknownRecord, fallbackFullDay: {
+  hiC: number | null
+  loC: number | null
+  windMaxMs: number | null
+  precipMm: number | null
+  wmo: number | null
+}) {
   const current = asRecord(data.current)
   const hourly = asRecord(data.hourly)
   const currentTime = asString(current.time)
@@ -184,46 +242,112 @@ function computeRestOfToday(data: UnknownRecord) {
   const currentHour = localHourFromIso(currentTime)
   const times = Array.isArray(hourly.time) ? hourly.time : []
 
+  if (currentDate.length < 10) {
+    const normalizedWmo = normalizeDisplayWmoForTemps(fallbackFullDay.wmo, fallbackFullDay.loC, fallbackFullDay.hiC)
+    return {
+      ...fallbackFullDay,
+      wmo: normalizedWmo,
+      restValid: false,
+      restHiC: fallbackFullDay.hiC,
+      restLoC: fallbackFullDay.loC,
+      restWindMaxMs: fallbackFullDay.windMaxMs,
+      restPrecipMm: fallbackFullDay.precipMm,
+      restWmo: normalizedWmo,
+    }
+  }
+
+  let hiC: number | null = null
+  let loC: number | null = null
+  let windMaxMs: number | null = null
+  let precipMm = 0
+  let sawPrecip = false
+  let sawFullDay = false
+  const wmoCounts: WmoCount[] = []
+
   let restHiC: number | null = null
   let restLoC: number | null = null
   let restWindMaxMs: number | null = null
   let restPrecipMm = 0
-  let sawPrecip = false
-  const restWmos: number[] = []
+  let sawRestPrecip = false
+  let sawRestToday = false
+  const restWmoCounts: WmoCount[] = []
 
   times.forEach((rawTime, index) => {
     const time = asString(rawTime)
     if (!time.startsWith(currentDate)) return
     const hour = localHourFromIso(time)
-    if (currentHour != null && hour != null && hour < currentHour) return
+    if (hour == null || hour < 0 || hour >= 24) return
 
     const temp = arrayNumberAt(hourly.temperature_2m, index)
+    if (temp != null) {
+      hiC = hiC == null ? temp : Math.max(hiC, temp)
+      loC = loC == null ? temp : Math.min(loC, temp)
+    }
+
+    const wind = arrayNumberAt(hourly.wind_speed_10m, index)
+    if (wind != null) windMaxMs = windMaxMs == null ? wind : Math.max(windMaxMs, wind)
+
+    const precip = arrayNumberAt(hourly.precipitation, index)
+    if (precip != null) {
+      sawPrecip = true
+      if (precip > 0) precipMm += precip
+    }
+
+    const wmo = arrayNumberAt(hourly.weather_code, index)
+    if (wmo != null) addWmoCount(wmoCounts, Math.round(wmo))
+    sawFullDay = true
+
+    const isRestOfToday = currentHour != null && hour >= currentHour
+    if (!isRestOfToday) return
+
     if (temp != null) {
       restHiC = restHiC == null ? temp : Math.max(restHiC, temp)
       restLoC = restLoC == null ? temp : Math.min(restLoC, temp)
     }
 
-    const wind = arrayNumberAt(hourly.wind_speed_10m, index)
     if (wind != null) restWindMaxMs = restWindMaxMs == null ? wind : Math.max(restWindMaxMs, wind)
 
-    const precip = arrayNumberAt(hourly.precipitation, index)
     if (precip != null) {
-      sawPrecip = true
-      restPrecipMm += precip
+      sawRestPrecip = true
+      if (precip > 0) restPrecipMm += precip
     }
 
-    const wmo = arrayNumberAt(hourly.weather_code, index)
-    if (wmo != null) restWmos.push(Math.round(wmo))
+    if (wmo != null) addWmoCount(restWmoCounts, Math.round(wmo))
+    sawRestToday = true
   })
 
-  const restWmo = mostSevereWmo(restWmos)
+  const selectedHiC = sawFullDay && hiC != null ? hiC : fallbackFullDay.hiC
+  const selectedLoC = sawFullDay && loC != null ? loC : fallbackFullDay.loC
+  const selectedWindMaxMs = sawFullDay && windMaxMs != null ? windMaxMs : fallbackFullDay.windMaxMs
+  const selectedPrecipMm = sawFullDay && sawPrecip ? precipMm : fallbackFullDay.precipMm
+  const selectedWmo = normalizeDisplayWmoForTemps(
+    chooseDominantWmo(wmoCounts, fallbackFullDay.wmo, selectedPrecipMm),
+    selectedLoC,
+    selectedHiC,
+  )
+
+  const restSelectedHiC = sawRestToday && restHiC != null ? restHiC : selectedHiC
+  const restSelectedLoC = sawRestToday && restLoC != null ? restLoC : selectedLoC
+  const restSelectedWindMaxMs = sawRestToday && restWindMaxMs != null ? restWindMaxMs : selectedWindMaxMs
+  const restSelectedPrecipMm = sawRestToday && sawRestPrecip ? restPrecipMm : selectedPrecipMm
+  const restSelectedWmo = normalizeDisplayWmoForTemps(
+    chooseDominantWmo(restWmoCounts, selectedWmo, restSelectedPrecipMm),
+    restSelectedLoC,
+    restSelectedHiC,
+  )
+
   return {
-    restValid: restHiC != null || restLoC != null || restWindMaxMs != null || sawPrecip || restWmo != null,
-    restHiC,
-    restLoC,
-    restWindMaxMs,
-    restPrecipMm: sawPrecip ? restPrecipMm : null,
-    restWmo,
+    hiC: selectedHiC,
+    loC: selectedLoC,
+    windMaxMs: selectedWindMaxMs,
+    precipMm: selectedPrecipMm,
+    wmo: selectedWmo,
+    restValid: sawRestToday,
+    restHiC: restSelectedHiC,
+    restLoC: restSelectedLoC,
+    restWindMaxMs: restSelectedWindMaxMs,
+    restPrecipMm: restSelectedPrecipMm,
+    restWmo: restSelectedWmo,
   }
 }
 
@@ -259,16 +383,12 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
   const currentTime = asString(current.time)
   const sunriseHHMM = hhmmFromIso(arrayStringAt(daily.sunrise, 0))
   const sunsetHHMM = hhmmFromIso(arrayStringAt(daily.sunset, 0))
+  const selectedPeriods = computeSelectedWeatherPeriods(data, { hiC, loC, windMaxMs, precipMm, wmo })
   const medium = buildMediumWeatherDetail({
     units,
     showHiLo,
     currentTempC,
-    hiC,
-    loC,
-    windMaxMs,
-    precipMm,
-    wmo,
-    ...computeRestOfToday(data),
+    ...selectedPeriods,
     sunriseHHMM,
     sunsetHHMM,
     localHour: localHourFromIso(currentTime),
