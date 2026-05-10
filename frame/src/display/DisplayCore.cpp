@@ -11,9 +11,6 @@ static FrameDisplay display(
   GxEPD2_750_T7(EPAPER_CS, EPAPER_DC, EPAPER_RST, EPAPER_BUSY)
 );
 
-// Persist across deep sleep (ESP32)
-RTC_DATA_ATTR static uint16_t g_refreshCycleCounter = 0;
-
 // State for current draw cycle
 static bool g_forceFullNext = false;
 static bool g_fullThisCycle = true;
@@ -22,9 +19,6 @@ static bool g_fullThisCycle = true;
 static int g_batteryPercent = -1;
 static bool g_batteryIsCharging = false;
 static bool g_batteryUsbPresent = false;
-
-// Every N draws, do a full refresh (ghosting cleanup)
-static const uint16_t FULL_EVERY_N = 10;
 
 namespace DisplayCore {
 
@@ -171,30 +165,19 @@ bool isFullRefreshThisCycle() {
   return g_fullThisCycle;
 }
 
-// Pick partial vs full and start the firstPage() loop.
-// IMPORTANT: this does NOT draw anything. Your Layout code draws inside the loop.
+// Start the firstPage() loop using the full display window.
+// The dashboard paints the whole panel so the area outside the configured
+// view area always matches the active theme background.
 void beginFrameUpdate() {
-  bool periodicFull = ((g_refreshCycleCounter % FULL_EVERY_N) == 0);
-  g_fullThisCycle = g_forceFullNext || periodicFull;
-
+  g_fullThisCycle = true;
   g_forceFullNext = false;
-  g_refreshCycleCounter++;
 
-  if (g_fullThisCycle) {
-    display.setFullWindow();
-  } else {
-    display.setPartialWindow(FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
-  }
-
+  display.setFullWindow();
   display.firstPage();
 }
 
 bool nextFrameUpdate() {
   return display.nextPage();
-}
-
-void drawFrameBorder() {
-  display.drawRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H, Theme::ink());
 }
 
 void drawSmallTextTopLeftInFrame(const char* text) {
