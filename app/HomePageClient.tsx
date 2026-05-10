@@ -2240,9 +2240,11 @@ function mirrorGroceriesEmptyMessage(language: AppLanguage) {
 }
 
 function mirrorGroceriesHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
-  if (dinnerTitle) return dinnerTitle
-  return language === 'no' ? 'Handleliste' : 'Grocery List'
+  if (dinnerTitle) return dinnerTitle.toLocaleUpperCase(locale)
+  const listHeader = language === 'no' ? 'Handleliste:' : 'Grocery List:'
+  return listHeader.toLocaleUpperCase(locale)
 }
 
 function mirrorGroceriesItems(detail: MirrorModuleDetail) {
