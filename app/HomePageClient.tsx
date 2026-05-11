@@ -5961,8 +5961,20 @@ function GroceriesModuleSettingsTab({
   }, [])
 
   useEffect(() => {
-    const handle = window.setInterval(() => setNowMs(Date.now()), 60_000)
-    return () => window.clearInterval(handle)
+    const refreshNow = () => setNowMs(Date.now())
+    const handle = window.setInterval(refreshNow, 60_000)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshNow()
+    }
+    window.addEventListener('focus', refreshNow)
+    window.addEventListener('pageshow', refreshNow)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.clearInterval(handle)
+      window.removeEventListener('focus', refreshNow)
+      window.removeEventListener('pageshow', refreshNow)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -6006,12 +6018,8 @@ function GroceriesModuleSettingsTab({
   }, [activeDeviceId, items, nowMs, loadGroceries])
 
 
-  const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
-    if (!activeDeviceId) {
-      const emptyDays = defaultDinnerPlanDays()
-      setDinnerPlanDays(emptyDays)
-      return emptyDays
-    }
+  const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
+    if (!activeDeviceId) return defaultDinnerPlanDays()
     const { data, error } = await supabase
       .from('dinner_plan_days')
       .select('date,title,note')
@@ -6028,11 +6036,15 @@ function GroceriesModuleSettingsTab({
       })
     }
     const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
-    const normalizedDays = sanitizeDinnerPlanDays(loadedDays)
+    return sanitizeDinnerPlanDays(loadedDays)
+  }, [activeDeviceId])
+
+  const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
+    const normalizedDays = await fetchDinnerPlanDays(weekOffset)
     setDinnerPlanWeekOffset(weekOffset)
     setDinnerPlanDays(normalizedDays)
     return normalizedDays
-  }, [activeDeviceId, dinnerPlanWeekOffset])
+  }, [dinnerPlanWeekOffset, fetchDinnerPlanDays])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -6139,12 +6151,14 @@ function GroceriesModuleSettingsTab({
       }
     }
     for (const entry of aggregate.values()) {
+      const groceryItem = { id: `dinner-${entry.category}-${entry.name}`, ...entry }
+      if (!groceryIsVisible(groceryItem, nowMs)) continue
       const list = byCategory.get(entry.category) || []
-      list.push({ id: `dinner-${entry.category}-${entry.name}`, ...entry })
+      list.push(groceryItem)
       byCategory.set(entry.category, list)
     }
     return GROCERY_CATEGORY_LIST_ORDER.map((category) => ({ category, items: byCategory.get(category) || [] })).filter((g) => g.items.length > 0)
-  }, [dinnerPlanDays])
+  }, [dinnerPlanDays, nowMs])
   const groupsForDisplay = useMemo(() => {
     const sortGroups = (groups: Array<{ category: GroceryCategory; items: GroceryItem[] }>) =>
       groups
@@ -6239,15 +6253,31 @@ function GroceriesModuleSettingsTab({
     if (!activeDeviceId) return
 
     const aggregate = new Map<string, { name: string; category: GroceryCategory; quantity: number }>()
+    const checkedItems = new Map<string, { name: string; category: GroceryCategory }>()
     for (const day of days) {
       for (const item of day.items) {
         const normalizedName = item.name.trim()
         if (!normalizedName) continue
         const key = `${item.category}__${normalizedName.toLowerCase()}`
+        if (item.isChecked) {
+          checkedItems.set(key, { name: normalizedName, category: item.category })
+          continue
+        }
         const existing = aggregate.get(key)
         if (existing) existing.quantity += Math.max(1, item.quantity)
         else aggregate.set(key, { name: normalizedName, category: item.category, quantity: Math.max(1, item.quantity) })
       }
+    }
+
+    for (const [key, item] of checkedItems.entries()) {
+      if (aggregate.has(key)) continue
+      const { error } = await supabase
+        .from('grocery_items')
+        .delete()
+        .eq('device_id', activeDeviceId)
+        .ilike('name', item.name)
+        .eq('category', item.category)
+      if (error) console.error('Failed to remove checked dinner item from main grocery list', { error, item })
     }
 
     for (const item of aggregate.values()) {
@@ -6778,23 +6808,26 @@ function GroceriesModuleSettingsTab({
         initialDays={dinnerPlanDays}
         initialWeekOffset={dinnerPlanWeekOffset}
         isLocked={dinnerPlanLockedByOtherUser}
-        onWeekChange={loadDinnerPlan}
+        onWeekChange={fetchDinnerPlanDays}
         onItemAdded={async (name, category) => {
           const nowIso = new Date().toISOString()
           await rememberHistoryItem(name, category, nowIso)
           await loadHistory()
         }}
         onCancel={async () => {
+          const displayOffset = defaultDinnerPlanWeekOffset()
           setDinnerPlanOpen(false)
-          const latest = await loadDinnerPlan()
+          const latest = await loadDinnerPlan(displayOffset)
           await syncMainGroceriesFromDinnerPlan(latest)
         }}
         onSave={async (days, weekOffset) => {
           const nextDays = sanitizeDinnerPlanDays(days)
           await persistDinnerPlan(nextDays, weekOffset)
-          setDinnerPlanWeekOffset(weekOffset)
-          setDinnerPlanDays(nextDays)
           setDinnerPlanOpen(false)
+          const displayOffset = defaultDinnerPlanWeekOffset()
+          if (weekOffset !== displayOffset) {
+            await loadDinnerPlan(displayOffset)
+          }
           await syncMainGroceriesFromDinnerPlan(nextDays)
         }}
       />
