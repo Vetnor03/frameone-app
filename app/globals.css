@@ -136,12 +136,58 @@ a {
 }
 
 /* Short app launch splash */
+.remind-app-shell {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+  transition:
+    opacity 720ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 720ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 720ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+
+.remind-app-shell-booting {
+  opacity: 0;
+  transform: translateY(14px) scale(0.985);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.remind-app-shell-ready {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+.remind-splash-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--app-bg);
+  opacity: 1;
+  transition: opacity 720ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity;
+}
+
+.remind-splash-overlay-hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .remind-splash {
   width: min(70vw, 300px);
   display: flex;
   align-items: center;
   justify-content: center;
   animation: remind-splash-settle 980ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.remind-splash-overlay-hiding .remind-splash {
+  animation: remind-splash-farewell 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .remind-splash-logo {
@@ -217,7 +263,18 @@ a {
   }
 }
 
+@keyframes remind-splash-farewell {
+  from {
+    transform: scale(1) translateY(0);
+  }
+  to {
+    transform: scale(1.04) translateY(-10px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .remind-app-shell,
+  .remind-splash-overlay,
   .remind-splash,
   .remind-logo-frame,
   .remind-logo-r,
