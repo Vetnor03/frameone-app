@@ -16,8 +16,8 @@
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <g filter="url(#softShadow)">
     <rect x="250" y="185" width="524" height="528" fill="none" stroke="#f8fafc" stroke-width="24"/>
-    <path d="M318 716 V382 H442 C526 382 575 424 575 485 C575 548 526 582 444 582 H318" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
-    <path d="M414 582 L528 713 H774" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M318 716V382H442C526 382 575 424 575 485C575 548 526 582 444 582H318" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M376 582L484 713H774" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
     <text x="606" y="650" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="116" font-weight="700" filter="url(#glow)">e</text>
     <text x="260" y="828" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="500" letter-spacing="116" filter="url(#glow)">mind</text>
   </g>

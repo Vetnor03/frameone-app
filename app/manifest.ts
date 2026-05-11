@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'FRAME',
-    short_name: 'FRAME',
+    name: 'Re-mind',
+    short_name: 'Re-mind',
     start_url: '/', // ✅ let app decide based on auth
     display: 'standalone',
     orientation: 'portrait',

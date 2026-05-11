@@ -20,80 +20,49 @@ export function createRemindIconImageResponse(size: number) {
           background: BACKGROUND,
         }}
       >
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 1024 1024"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <defs>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000" floodOpacity="0.38" />
+            </filter>
+          </defs>
+          <g filter="url(#softShadow)">
+            <rect x="250" y="185" width="524" height="528" fill="none" stroke={WHITE} strokeWidth="24" />
+            <path
+              d="M318 716V382H442C526 382 575 424 575 485C575 548 526 582 444 582H318"
+              fill="none"
+              stroke={WHITE}
+              strokeWidth="24"
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+            />
+            <path
+              d="M376 582L484 713H774"
+              fill="none"
+              stroke={WHITE}
+              strokeWidth="24"
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+            />
+          </g>
+        </svg>
         <div
           style={{
             position: 'absolute',
-            left: px(250),
-            top: px(185),
-            width: px(524),
-            height: px(528),
-            border: `${px(24)}px solid ${WHITE}`,
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(318),
-            top: px(382),
-            width: px(124),
-            height: px(334),
-            borderLeft: `${px(24)}px solid ${WHITE}`,
-            borderTop: `${px(24)}px solid ${WHITE}`,
-            borderBottom: `${px(24)}px solid ${WHITE}`,
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(420),
-            top: px(382),
-            width: px(155),
-            height: px(200),
-            borderTop: `${px(24)}px solid ${WHITE}`,
-            borderRight: `${px(24)}px solid ${WHITE}`,
-            borderBottom: `${px(24)}px solid ${WHITE}`,
-            borderTopRightRadius: px(105),
-            borderBottomRightRadius: px(105),
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(447),
-            top: px(639),
-            width: px(171),
-            height: px(24),
-            background: WHITE,
-            transform: 'rotate(58deg)',
-            transformOrigin: 'left center',
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(528),
-            top: px(689),
-            width: px(246),
-            height: px(24),
-            background: WHITE,
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(610),
+            left: px(606),
             top: px(556),
             color: WHITE,
             fontFamily: 'Arial, Helvetica, sans-serif',
             fontSize: px(116),
             fontWeight: 700,
             lineHeight: 1,
-            textShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            textShadow: `0 0 ${px(4)}px rgba(255, 255, 255, 0.32), 0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
           }}
         >
           e
@@ -110,7 +79,7 @@ export function createRemindIconImageResponse(size: number) {
               fontSize: px(88),
               fontWeight: 500,
               lineHeight: 1,
-              textShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+              textShadow: `0 0 ${px(4)}px rgba(255, 255, 255, 0.32), 0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
             }}
           >
             {letter}
