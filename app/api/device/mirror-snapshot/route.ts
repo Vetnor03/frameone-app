@@ -21,6 +21,7 @@ type Detail = {
   swellDirectionDeg?: number
   windDirectionDeg?: number
   groceryItems?: string[]
+  reminderItems?: string[]
   dinnerTodayTitle?: string
   weatherLowTemp?: string
   weatherHighTemp?: string
@@ -495,11 +496,20 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   url.searchParams.set('limit', '3')
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
   const items = Array.isArray(data.items) ? data.items.map(asRecord) : []
+  const reminderItems = items
+    .map((item) => {
+      const title = asString(item.title).trim()
+      const displayTime = asString(item.display_time).trim()
+      if (!title) return ''
+      return displayTime ? `${title} ${displayTime}` : title
+    })
+    .filter(Boolean)
   const first = items[0]
   return {
     primary: first ? asString(first.title, language === 'no' ? 'Påminnelse' : 'Reminder') : (language === 'no' ? 'Ingen' : 'None'),
     secondary: language === 'no' ? 'Påminnelser' : 'Reminders',
     tertiary: first ? asString(first.display_date || first.display_time, '') : undefined,
+    reminderItems,
   }
 }
 

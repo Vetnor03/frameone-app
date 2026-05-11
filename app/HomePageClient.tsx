@@ -284,6 +284,7 @@ type MirrorModuleDetail = {
   swellDirectionDeg?: number
   windDirectionDeg?: number
   groceryItems?: string[]
+  reminderItems?: string[]
   dinnerTodayTitle?: string
   weatherLowTemp?: string
   weatherHighTemp?: string
@@ -2358,6 +2359,19 @@ function mirrorGroceriesVisibleItems(detail: MirrorModuleDetail) {
   return Array.from({ length: 3 }, (_, index) => items[(start + index) % items.length])
 }
 
+function mirrorRemindersHeader(language: AppLanguage) {
+  return language === 'no' ? 'Påminnelser' : 'Reminders'
+}
+
+function mirrorReminderItems(detail: MirrorModuleDetail) {
+  const rawItems = Array.isArray(detail.reminderItems) ? detail.reminderItems : []
+  return rawItems.map((item) => String(item).trim()).filter(Boolean).slice(0, 3)
+}
+
+function mirrorRemindersEmptyMessage(language: AppLanguage) {
+  return language === 'no' ? 'Alt gjort' : 'All done'
+}
+
 function MirrorSurfRatingBars({ rating, muted }: { rating: number | undefined; muted: string }) {
   const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
   return (
@@ -2659,9 +2673,11 @@ function LandscapeFrameMirror({
       )
     }
 
-    if (module === 'groceries' && size === 'small' && Array.isArray(detail.groceryItems)) {
-      const visibleItems = mirrorGroceriesVisibleItems(detail)
-      const header = mirrorGroceriesHeader(detail, language)
+    if ((module === 'groceries' || module === 'reminders') && size === 'small') {
+      const isGroceries = module === 'groceries'
+      const visibleItems = isGroceries ? mirrorGroceriesVisibleItems(detail) : mirrorReminderItems(detail)
+      const header = isGroceries ? mirrorGroceriesHeader(detail, language) : mirrorRemindersHeader(language)
+      const emptyMessage = isGroceries ? mirrorGroceriesEmptyMessage(language) : mirrorRemindersEmptyMessage(language)
 
       const hasVisibleItems = visibleItems.length > 0
       const headerOffsetStyle = {
@@ -2683,7 +2699,7 @@ function LandscapeFrameMirror({
 
           {visibleItems.length <= 0 ? (
             <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ ...contentOffsetStyle, color: mutedColor }}>
-              {mirrorGroceriesEmptyMessage(language)}
+              {emptyMessage}
             </div>
           ) : (
             <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center" style={contentOffsetStyle}>
