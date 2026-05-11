@@ -811,7 +811,8 @@ function ReMindSplash({ language }: { language: AppLanguage }) {
         <svg className="remind-splash-logo" viewBox="0 0 256 256" aria-hidden="true">
           <path className="remind-logo-frame" d="M64 192H82V154H98L122 192H192V64H64V192Z" />
           <path className="remind-logo-r" d="M82 154V112H106C126 112 138 120 138 136S126 154 106 154H82" />
-          <text className="remind-logo-word" x="130" y="181">e - m i n d</text>
+          <text className="remind-logo-e" x="130" y="181">e</text>
+          <text className="remind-logo-mind" x="97" y="225">mind</text>
         </svg>
       </div>
     </div>

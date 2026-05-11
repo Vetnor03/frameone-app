@@ -171,14 +171,23 @@ a {
   animation-delay: 120ms;
 }
 
-.remind-logo-word {
+.remind-logo-e,
+.remind-logo-mind {
   fill: currentColor;
-  font-size: 14px;
   font-family: Arial, Helvetica, sans-serif;
   font-weight: 500;
-  letter-spacing: 8px;
   opacity: 0;
   animation: remind-fade-up 360ms ease-out 680ms forwards;
+}
+
+.remind-logo-e {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.remind-logo-mind {
+  font-size: 18px;
+  letter-spacing: 0.34em;
 }
 
 @keyframes remind-logo-draw {
@@ -209,7 +218,8 @@ a {
   .remind-splash,
   .remind-logo-frame,
   .remind-logo-r,
-  .remind-logo-word {
+  .remind-logo-e,
+  .remind-logo-mind {
     animation: none;
     opacity: 1;
     transform: none;
