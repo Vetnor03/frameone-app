@@ -2666,8 +2666,8 @@ function LandscapeFrameMirror({
       const hasVisibleItems = visibleItems.length > 0
       const headerOffsetStyle = {
         transform: hasVisibleItems
-          ? 'translateY(clamp(1px, 0.25vw, 3px))'
-          : 'translateY(clamp(-5px, -0.45vw, -3px))',
+          ? 'translateY(clamp(5px, 0.7vw, 8px))'
+          : 'translateY(clamp(1px, 0.25vw, 3px))',
       }
       const contentOffsetStyle = { transform: 'translateY(clamp(3px, 0.45vw, 5px))' }
 
