@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og'
 
-const BACKGROUND = 'radial-gradient(circle at 50% 42%, #082636 0%, #041620 54%, #010913 100%)'
+const BACKGROUND = 'radial-gradient(circle at 52% 48%, #071d27 0%, #04141e 52%, #010913 100%)'
 const WHITE = '#f8fafc'
 
 export function createRemindIconImageResponse(size: number) {
@@ -20,93 +20,71 @@ export function createRemindIconImageResponse(size: number) {
           background: BACKGROUND,
         }}
       >
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 1024 1024"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <defs>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000" floodOpacity="0.38" />
+            </filter>
+          </defs>
+          <g filter="url(#softShadow)">
+            <rect x="250" y="185" width="524" height="528" fill="none" stroke={WHITE} strokeWidth="24" />
+            <path
+              d="M318 716V382H442C526 382 575 424 575 485C575 548 526 582 444 582H318"
+              fill="none"
+              stroke={WHITE}
+              strokeWidth="24"
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+            />
+            <path
+              d="M376 582L484 713H774"
+              fill="none"
+              stroke={WHITE}
+              strokeWidth="24"
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+            />
+          </g>
+        </svg>
         <div
           style={{
             position: 'absolute',
-            left: px(242),
-            top: px(150),
-            width: px(540),
-            height: px(540),
-            border: `${px(26)}px solid ${WHITE}`,
-            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(344),
-            top: px(332),
-            width: px(132),
-            height: px(318),
-            borderLeft: `${px(26)}px solid ${WHITE}`,
-            borderTop: `${px(26)}px solid ${WHITE}`,
-            borderBottom: `${px(26)}px solid ${WHITE}`,
-            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(450),
-            top: px(332),
-            width: px(184),
-            height: px(190),
-            borderTop: `${px(26)}px solid ${WHITE}`,
-            borderRight: `${px(26)}px solid ${WHITE}`,
-            borderBottom: `${px(26)}px solid ${WHITE}`,
-            borderTopRightRadius: px(102),
-            borderBottomRightRadius: px(102),
-            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(472),
-            top: px(552),
-            width: px(188),
-            height: px(26),
-            background: WHITE,
-            transform: 'rotate(52deg)',
-            transformOrigin: 'left center',
-            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(626),
-            top: px(552),
+            left: px(606),
+            top: px(556),
             color: WHITE,
             fontFamily: 'Arial, Helvetica, sans-serif',
-            fontSize: px(126),
+            fontSize: px(116),
             fontWeight: 700,
             lineHeight: 1,
-            textShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
+            textShadow: `0 0 ${px(4)}px rgba(255, 255, 255, 0.32), 0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
           }}
         >
           e
         </div>
-        <div
-          style={{
-            position: 'absolute',
-            left: px(0),
-            top: px(768),
-            width: px(1024),
-            color: WHITE,
-            fontFamily: 'Arial, Helvetica, sans-serif',
-            fontSize: px(86),
-            fontWeight: 600,
-            lineHeight: 1,
-            display: 'flex',
-            justifyContent: 'center',
-            textAlign: 'center',
-            letterSpacing: px(1),
-            textShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
-          }}
-        >
-          Re-mind
-        </div>
+        {['m', 'i', 'n', 'd'].map((letter, index) => (
+          <div
+            key={letter}
+            style={{
+              position: 'absolute',
+              left: px(265 + index * 160),
+              top: px(742),
+              color: WHITE,
+              fontFamily: 'Arial, Helvetica, sans-serif',
+              fontSize: px(88),
+              fontWeight: 500,
+              lineHeight: 1,
+              textShadow: `0 0 ${px(4)}px rgba(255, 255, 255, 0.32), 0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            }}
+          >
+            {letter}
+          </div>
+        ))}
       </div>
     ),
     {

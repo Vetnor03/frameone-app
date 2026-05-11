@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="76%">
-      <stop offset="0" stop-color="#082636"/>
-      <stop offset="0.54" stop-color="#041620"/>
+    <radialGradient id="bg" cx="52%" cy="48%" r="76%">
+      <stop offset="0" stop-color="#071d27"/>
+      <stop offset="0.52" stop-color="#04141e"/>
       <stop offset="1" stop-color="#010913"/>
     </radialGradient>
     <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.36"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.38"/>
     </filter>
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="0" stdDeviation="1.8" flood-color="#fff" flood-opacity="0.24"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="1.8" flood-color="#fff" flood-opacity="0.32"/>
     </filter>
   </defs>
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <g filter="url(#softShadow)">
-    <rect x="242" y="150" width="540" height="540" fill="none" stroke="#f8fafc" stroke-width="26"/>
-    <path d="M344 650V332H476C574 332 634 376 634 427C634 480 574 522 478 522H344" fill="none" stroke="#f8fafc" stroke-width="26" stroke-linecap="square" stroke-linejoin="miter"/>
-    <path d="M472 552L626 650" fill="none" stroke="#f8fafc" stroke-width="26" stroke-linecap="square" stroke-linejoin="miter"/>
-    <text x="626" y="650" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="126" font-weight="700" filter="url(#glow)">e</text>
-    <text x="512" y="860" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="86" font-weight="600" text-anchor="middle" letter-spacing="1" filter="url(#glow)">Re-mind</text>
+    <rect x="250" y="185" width="524" height="528" fill="none" stroke="#f8fafc" stroke-width="24"/>
+    <path d="M318 716V382H442C526 382 575 424 575 485C575 548 526 582 444 582H318" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M376 582L484 713H774" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
+    <text x="606" y="650" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="116" font-weight="700" filter="url(#glow)">e</text>
+    <text x="260" y="828" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="500" letter-spacing="116" filter="url(#glow)">mind</text>
   </g>
 </svg>

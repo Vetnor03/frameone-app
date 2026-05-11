@@ -809,10 +809,15 @@ function ReMindSplash({ language }: { language: AppLanguage }) {
     >
       <div className="remind-splash text-[color:var(--fg)]">
         <svg className="remind-splash-logo" viewBox="0 0 256 256" aria-hidden="true">
-          <path className="remind-logo-frame" d="M61 173V38H196V173H61Z" />
-          <path className="remind-logo-r" d="M86 163V83H119C144 83 159 94 159 107C159 120 144 131 120 131H86M118 139L156 163" />
-          <text className="remind-logo-e" x="157" y="163">e</text>
-          <text className="remind-logo-word" x="128" y="220">Re-mind</text>
+          <path className="remind-logo-frame" d="M64 192H82V154H98L122 192H192V64H64V192Z" />
+          <path className="remind-logo-r" d="M82 154V112H106C126 112 138 120 138 136S126 154 106 154H82" />
+          <text className="remind-logo-e" x="148" y="181">e</text>
+          <g className="remind-logo-mind" aria-hidden="true">
+            <text x="70" y="226">m</text>
+            <text x="110" y="226">i</text>
+            <text x="154" y="226">n</text>
+            <text x="196" y="226">d</text>
+          </g>
         </svg>
       </div>
     </div>
