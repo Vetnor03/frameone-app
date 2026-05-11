@@ -285,6 +285,7 @@ type MirrorModuleDetail = {
   windDirectionDeg?: number
   groceryItems?: string[]
   reminderItems?: string[]
+  reminderHeader?: string
   dinnerTodayTitle?: string
   weatherLowTemp?: string
   weatherHighTemp?: string
@@ -2359,8 +2360,13 @@ function mirrorGroceriesVisibleItems(detail: MirrorModuleDetail) {
   return Array.from({ length: 3 }, (_, index) => items[(start + index) % items.length])
 }
 
-function mirrorRemindersHeader(language: AppLanguage) {
-  return language === 'no' ? 'Påminnelser' : 'Reminders'
+function mirrorRemindersHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const header = typeof detail.reminderHeader === 'string' ? detail.reminderHeader.trim() : ''
+  if (header) return header.toLocaleUpperCase(locale)
+
+  const fallbackDate = typeof detail.tertiary === 'string' ? detail.tertiary.trim() : ''
+  return fallbackDate ? fallbackDate.toLocaleUpperCase(locale) : (language === 'no' ? 'PÅMINNELSER' : 'REMINDERS')
 }
 
 function mirrorReminderItems(detail: MirrorModuleDetail) {
@@ -2676,7 +2682,7 @@ function LandscapeFrameMirror({
     if ((module === 'groceries' || module === 'reminders') && size === 'small') {
       const isGroceries = module === 'groceries'
       const visibleItems = isGroceries ? mirrorGroceriesVisibleItems(detail) : mirrorReminderItems(detail)
-      const header = isGroceries ? mirrorGroceriesHeader(detail, language) : mirrorRemindersHeader(language)
+      const header = isGroceries ? mirrorGroceriesHeader(detail, language) : mirrorRemindersHeader(detail, language)
       const emptyMessage = isGroceries ? mirrorGroceriesEmptyMessage(language) : mirrorRemindersEmptyMessage(language)
 
       const hasVisibleItems = visibleItems.length > 0
