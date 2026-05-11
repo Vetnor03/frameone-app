@@ -137,7 +137,7 @@ a {
 
 /* Short app launch splash */
 .remind-splash {
-  width: min(46vw, 190px);
+  width: min(70vw, 300px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -156,7 +156,7 @@ a {
 .remind-logo-r {
   fill: none;
   stroke: currentColor;
-  stroke-width: 6.5;
+  stroke-width: 7;
   stroke-linejoin: miter;
   stroke-linecap: square;
   vector-effect: non-scaling-stroke;
@@ -179,17 +179,18 @@ a {
 }
 
 .remind-logo-e {
-  fill: var(--fg-70);
-  font-size: 16px;
+  fill: currentColor;
+  font-size: 34px;
   font-weight: 700;
   letter-spacing: 0;
 }
 
 .remind-logo-mind {
-  fill: var(--fg-50);
-  font-size: 14px;
-  font-weight: 400;
+  fill: currentColor;
+  font-size: 28px;
+  font-weight: 600;
   letter-spacing: 0;
+  text-anchor: middle;
 }
 
 @keyframes remind-logo-draw {

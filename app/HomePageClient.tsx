@@ -811,12 +811,12 @@ function ReMindSplash({ language }: { language: AppLanguage }) {
         <svg className="remind-splash-logo" viewBox="0 0 256 256" aria-hidden="true">
           <path className="remind-logo-frame" d="M64 192H82V154H98L122 192H192V64H64V192Z" />
           <path className="remind-logo-r" d="M82 154V112H106C126 112 138 120 138 136S126 154 106 154H82" />
-          <text className="remind-logo-e" x="132" y="180">e</text>
+          <text className="remind-logo-e" x="148" y="181">e</text>
           <g className="remind-logo-mind" aria-hidden="true">
-            <text x="107" y="220">m</text>
-            <text x="121" y="220">i</text>
-            <text x="135" y="220">n</text>
-            <text x="149" y="220">d</text>
+            <text x="70" y="226">m</text>
+            <text x="110" y="226">i</text>
+            <text x="154" y="226">n</text>
+            <text x="196" y="226">d</text>
           </g>
         </svg>
       </div>
