@@ -137,16 +137,15 @@ a {
 
 /* Short app launch splash */
 .remind-splash {
-  width: min(72vw, 260px);
+  width: min(70vw, 280px);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  animation: remind-splash-settle 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  justify-content: center;
+  animation: remind-splash-settle 980ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .remind-splash-logo {
-  width: min(54vw, 190px);
+  width: min(58vw, 220px);
   height: auto;
   overflow: visible;
   color: var(--fg);
@@ -161,65 +160,30 @@ a {
   stroke-linejoin: miter;
   stroke-linecap: square;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 620;
-  stroke-dashoffset: 620;
-  animation: remind-logo-draw 640ms ease-out forwards;
+  stroke-dasharray: 720;
+  stroke-dashoffset: 720;
+  animation: remind-logo-draw 980ms ease-out forwards;
 }
 
 .remind-logo-r {
   stroke-dasharray: 260;
   stroke-dashoffset: 260;
-  animation-delay: 90ms;
+  animation-delay: 120ms;
 }
 
 .remind-logo-word {
   fill: currentColor;
-  font-size: 13px;
+  font-size: 14px;
   font-family: Arial, Helvetica, sans-serif;
   font-weight: 500;
   letter-spacing: 8px;
   opacity: 0;
-  animation: remind-fade-up 360ms ease-out 360ms forwards;
-}
-
-.remind-splash-word {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.02em;
-  font-size: 1.15rem;
-  font-weight: 600;
-  letter-spacing: 0.42em;
-  text-transform: uppercase;
-  margin-right: -0.42em;
-}
-
-.remind-splash-word span {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(8px);
-  animation: remind-letter-in 360ms ease-out forwards;
-}
-
-.remind-splash-tagline {
-  color: var(--fg-50);
-  font-size: 0.72rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  opacity: 0;
-  animation: remind-fade-up 320ms ease-out 520ms forwards;
+  animation: remind-fade-up 360ms ease-out 680ms forwards;
 }
 
 @keyframes remind-logo-draw {
   to {
     stroke-dashoffset: 0;
-  }
-}
-
-@keyframes remind-letter-in {
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -245,9 +209,7 @@ a {
   .remind-splash,
   .remind-logo-frame,
   .remind-logo-r,
-  .remind-logo-word,
-  .remind-splash-word span,
-  .remind-splash-tagline {
+  .remind-logo-word {
     animation: none;
     opacity: 1;
     transform: none;

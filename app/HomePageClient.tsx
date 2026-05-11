@@ -43,8 +43,7 @@ const UI = {
     saved: 'SAVED',
     saving: 'SAVING…',
     update: 'UPDATE',
-    loadingFrame: 'OPENING RE-MIND…',
-    splashTagline: 'Welcome back',
+    loadingFrame: 'LOADING FRAME…',
 
     selectWidget: 'ADD TILE',
     clearCell: 'CLEAR CELL',
@@ -157,8 +156,7 @@ const UI = {
     saved: 'LAGRET',
     saving: 'LAGRER…',
     update: 'OPPDATER',
-    loadingFrame: 'ÅPNER RE-MIND…',
-    splashTagline: 'Velkommen tilbake',
+    loadingFrame: 'LASTER FRAME…',
 
     selectWidget: 'ADD TILE',
     clearCell: 'TØM FELT',
@@ -810,20 +808,11 @@ function ReMindSplash({ language }: { language: AppLanguage }) {
       aria-label={tx(language).loadingFrame}
     >
       <div className="remind-splash text-[color:var(--fg)]">
-        <svg className="remind-splash-logo" viewBox="0 0 220 170" aria-hidden="true">
-          <path className="remind-logo-frame" d="M44 148H24V22h172v126h-96L74 108H44v40Z" />
-          <path className="remind-logo-r" d="M44 108V72h38c23 0 38 13 38 32s-15 36-38 36H44" />
-          <text className="remind-logo-word" x="122" y="132">e - m i n d</text>
+        <svg className="remind-splash-logo" viewBox="0 0 256 256" aria-hidden="true">
+          <path className="remind-logo-frame" d="M64 192H82V154H98L122 192H192V64H64V192Z" />
+          <path className="remind-logo-r" d="M82 154V112H106C126 112 138 120 138 136S126 154 106 154H82" />
+          <text className="remind-logo-word" x="130" y="181">e - m i n d</text>
         </svg>
-
-        <div className="remind-splash-word" aria-hidden="true">
-          {'Re-Mind'.split('').map((letter, index) => (
-            <span key={`${letter}-${index}`} style={{ animationDelay: `${index * 55}ms` }}>
-              {letter}
-            </span>
-          ))}
-        </div>
-        <div className="remind-splash-tagline">{tx(language).splashTagline}</div>
       </div>
     </div>
   )
@@ -1379,6 +1368,17 @@ export default function HomePage() {
 
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null
+    let cancelled = false
+    const bootStartedAt = performance.now()
+
+    async function finishBoot() {
+      const minimumSplashMs = 1350
+      const remaining = minimumSplashMs - (performance.now() - bootStartedAt)
+      if (remaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remaining))
+      }
+      if (!cancelled) setBooting(false)
+    }
 
     ;(async () => {
       setBooting(true)
@@ -1440,10 +1440,11 @@ export default function HomePage() {
         await loadDeviceSettings(selected)
       }
 
-      setBooting(false)
+      await finishBoot()
     })()
 
     return () => {
+      cancelled = true
       if (unsub) unsub.unsubscribe()
     }
   }, [router])
