@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FRAME",
-  description: "FRAME controller",
+  title: "Re-mind",
+  description: "Re-mind controller",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "FRAME",
+    title: "Re-mind",
   },
 };
 

@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og'
 
-const BACKGROUND = 'radial-gradient(circle at 52% 48%, #071d27 0%, #04141e 52%, #010913 100%)'
+const BACKGROUND = 'radial-gradient(circle at 50% 42%, #082636 0%, #041620 54%, #010913 100%)'
 const WHITE = '#f8fafc'
 
 export function createRemindIconImageResponse(size: number) {
@@ -23,99 +23,90 @@ export function createRemindIconImageResponse(size: number) {
         <div
           style={{
             position: 'absolute',
-            left: px(250),
-            top: px(185),
-            width: px(524),
-            height: px(528),
-            border: `${px(24)}px solid ${WHITE}`,
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            left: px(242),
+            top: px(150),
+            width: px(540),
+            height: px(540),
+            border: `${px(26)}px solid ${WHITE}`,
+            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            left: px(318),
-            top: px(382),
-            width: px(124),
-            height: px(334),
-            borderLeft: `${px(24)}px solid ${WHITE}`,
-            borderTop: `${px(24)}px solid ${WHITE}`,
-            borderBottom: `${px(24)}px solid ${WHITE}`,
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            left: px(344),
+            top: px(332),
+            width: px(132),
+            height: px(318),
+            borderLeft: `${px(26)}px solid ${WHITE}`,
+            borderTop: `${px(26)}px solid ${WHITE}`,
+            borderBottom: `${px(26)}px solid ${WHITE}`,
+            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            left: px(420),
-            top: px(382),
-            width: px(155),
-            height: px(200),
-            borderTop: `${px(24)}px solid ${WHITE}`,
-            borderRight: `${px(24)}px solid ${WHITE}`,
-            borderBottom: `${px(24)}px solid ${WHITE}`,
-            borderTopRightRadius: px(105),
-            borderBottomRightRadius: px(105),
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            left: px(450),
+            top: px(332),
+            width: px(184),
+            height: px(190),
+            borderTop: `${px(26)}px solid ${WHITE}`,
+            borderRight: `${px(26)}px solid ${WHITE}`,
+            borderBottom: `${px(26)}px solid ${WHITE}`,
+            borderTopRightRadius: px(102),
+            borderBottomRightRadius: px(102),
+            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            left: px(447),
-            top: px(639),
-            width: px(171),
-            height: px(24),
+            left: px(472),
+            top: px(552),
+            width: px(188),
+            height: px(26),
             background: WHITE,
-            transform: 'rotate(58deg)',
+            transform: 'rotate(52deg)',
             transformOrigin: 'left center',
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            boxShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            left: px(528),
-            top: px(689),
-            width: px(246),
-            height: px(24),
-            background: WHITE,
-            boxShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: px(610),
-            top: px(556),
+            left: px(626),
+            top: px(552),
             color: WHITE,
             fontFamily: 'Arial, Helvetica, sans-serif',
-            fontSize: px(116),
+            fontSize: px(126),
             fontWeight: 700,
             lineHeight: 1,
-            textShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
+            textShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
           }}
         >
           e
         </div>
-        {['m', 'i', 'n', 'd'].map((letter, index) => (
-          <div
-            key={letter}
-            style={{
-              position: 'absolute',
-              left: px(265 + index * 160),
-              top: px(742),
-              color: WHITE,
-              fontFamily: 'Arial, Helvetica, sans-serif',
-              fontSize: px(88),
-              fontWeight: 500,
-              lineHeight: 1,
-              textShadow: `0 ${px(4)}px ${px(8)}px rgba(0, 0, 0, 0.38)`,
-            }}
-          >
-            {letter}
-          </div>
-        ))}
+        <div
+          style={{
+            position: 'absolute',
+            left: px(0),
+            top: px(768),
+            width: px(1024),
+            color: WHITE,
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontSize: px(86),
+            fontWeight: 600,
+            lineHeight: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            textAlign: 'center',
+            letterSpacing: px(1),
+            textShadow: `0 ${px(8)}px ${px(18)}px rgba(0, 0, 0, 0.36)`,
+          }}
+        >
+          Re-mind
+        </div>
       </div>
     ),
     {
