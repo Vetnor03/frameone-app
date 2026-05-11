@@ -5437,10 +5437,12 @@ type GrocerySuggestion = {
 
 
 
+type DinnerPlanItem = { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }
+
 type DinnerPlanDay = {
   day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
   title: string
-  items: { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }[]
+  items: DinnerPlanItem[]
 }
 
 const DINNER_PLAN_DAY_ORDER: DinnerPlanDay['day'][] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -5539,11 +5541,31 @@ function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
 
 const GROCERY_UNDO_WINDOW_MS = 10 * 60 * 1000
 
-function groceryCheckedExpiresAtMs(item: GroceryItem) {
+function checkedItemExpiresAtMs(item: Pick<GroceryItem, 'isChecked' | 'checkedAt'>) {
   if (!item.isChecked || !item.checkedAt) return null
   const checkedAtMs = new Date(item.checkedAt).getTime()
   if (Number.isNaN(checkedAtMs)) return null
   return checkedAtMs + GROCERY_UNDO_WINDOW_MS
+}
+
+function groceryCheckedExpiresAtMs(item: GroceryItem) {
+  return checkedItemExpiresAtMs(item)
+}
+
+function dinnerPlanItemCheckedExpiresAtMs(item: DinnerPlanItem) {
+  return checkedItemExpiresAtMs(item)
+}
+
+function dinnerPlanItemIsExpired(item: DinnerPlanItem, nowMs: number) {
+  const expiresAtMs = dinnerPlanItemCheckedExpiresAtMs(item)
+  return expiresAtMs != null && nowMs >= expiresAtMs
+}
+
+function stripExpiredDinnerPlanItems(days: DinnerPlanDay[], nowMs = Date.now()): DinnerPlanDay[] {
+  return days.map((day) => ({
+    ...day,
+    items: day.items.filter((item) => !dinnerPlanItemIsExpired(item, nowMs)),
+  }))
 }
 
 function groceryCheckedExpiryCutoffIso(nowMs = Date.now()) {
@@ -5978,9 +6000,13 @@ function GroceriesModuleSettingsTab({
   }, [])
 
   useEffect(() => {
-    const nextExpiryMs = items
+    const groceryExpiryTimes = items
       .map((item) => groceryCheckedExpiresAtMs(item))
       .filter((value): value is number => value != null)
+    const dinnerExpiryTimes = dinnerPlanDays
+      .flatMap((day) => day.items.map((item) => dinnerPlanItemCheckedExpiresAtMs(item)))
+      .filter((value): value is number => value != null)
+    const nextExpiryMs = [...groceryExpiryTimes, ...dinnerExpiryTimes]
       .reduce<number | null>((soonest, expiresAtMs) => (soonest == null || expiresAtMs < soonest ? expiresAtMs : soonest), null)
 
     if (nextExpiryMs == null) return
@@ -5988,7 +6014,7 @@ function GroceriesModuleSettingsTab({
     const delayMs = Math.max(0, nextExpiryMs - Date.now()) + 250
     const handle = window.setTimeout(() => setNowMs(Date.now()), delayMs)
     return () => window.clearTimeout(handle)
-  }, [items])
+  }, [items, dinnerPlanDays])
 
   useEffect(() => {
     if (!activeDeviceId) return
@@ -6017,6 +6043,43 @@ function GroceriesModuleSettingsTab({
 
   }, [activeDeviceId, items, nowMs, loadGroceries])
 
+  useEffect(() => {
+    if (!activeDeviceId) return
+
+    const cleanedDinnerPlanDays = stripExpiredDinnerPlanItems(dinnerPlanDays, nowMs)
+    const beforeCount = dinnerPlanDays.reduce((count, day) => count + day.items.length, 0)
+    const afterCount = cleanedDinnerPlanDays.reduce((count, day) => count + day.items.length, 0)
+    if (beforeCount === afterCount) return
+
+    setDinnerPlanDays(cleanedDinnerPlanDays)
+
+    const deleteDates = DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day, dinnerPlanWeekOffset))
+    void (async () => {
+      const { error: deleteError } = await supabase
+        .from('dinner_plan_days')
+        .delete()
+        .eq('device_id', activeDeviceId)
+        .in('date', deleteDates)
+      if (deleteError) {
+        console.error('Failed to clear expired checked dinner plan items', { deleteError })
+        return
+      }
+
+      const payload = cleanedDinnerPlanDays
+        .filter((day) => day.title || day.items.length > 0)
+        .map((day) => ({
+          device_id: activeDeviceId,
+          date: isoDateForDinnerDay(day.day, dinnerPlanWeekOffset),
+          title: day.title || dinnerPlanDayLabel('en', day.day),
+          note: JSON.stringify(day.items),
+        }))
+      if (payload.length <= 0) return
+
+      const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
+      if (error) console.error('Failed to persist expired checked dinner plan cleanup', { error })
+    })()
+  }, [activeDeviceId, dinnerPlanDays, dinnerPlanWeekOffset, nowMs])
+
 
   const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
     if (!activeDeviceId) return defaultDinnerPlanDays()
@@ -6036,7 +6099,7 @@ function GroceriesModuleSettingsTab({
       })
     }
     const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
-    return sanitizeDinnerPlanDays(loadedDays)
+    return stripExpiredDinnerPlanItems(sanitizeDinnerPlanDays(loadedDays))
   }, [activeDeviceId])
 
   const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
@@ -6320,8 +6383,12 @@ function GroceriesModuleSettingsTab({
 
     await loadGroceries({ silent: true, keepAnchorUnlessUserScrolled: true })
   }
-  async function persistDinnerPlan(next: DinnerPlanDay[], weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset) {
-    const normalized = sanitizeDinnerPlanDays(next)
+  async function persistDinnerPlan(
+    next: DinnerPlanDay[],
+    weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset,
+    options: { syncGroceries?: boolean } = {},
+  ) {
+    const normalized = stripExpiredDinnerPlanItems(sanitizeDinnerPlanDays(next))
     const prevByKey = new Map<string, DinnerPlanDay['items'][number]>()
     for (const day of dinnerPlanDays) {
       for (const item of day.items) prevByKey.set(`${day.day}__${item.category}__${item.name.trim().toLowerCase()}`, item)
@@ -6360,6 +6427,8 @@ function GroceriesModuleSettingsTab({
       const { error } = await supabase.from('dinner_plan_days').upsert(payload, { onConflict: 'device_id,date' })
       if (error) console.error('Failed to persist dinner plan', { error })
     }
+
+    if (options.syncGroceries === false) return
 
     // Keep dinner-plan save snappy for the active editor by moving heavy grocery/history sync
     // to background work after the core dinner_plan_days write has completed.
@@ -6477,6 +6546,33 @@ function GroceriesModuleSettingsTab({
     await loadHistory()
   }
 
+
+  function setMatchingDinnerPlanItemsChecked(item: GroceryItem, nextChecked: boolean, checkedAtIso: string | null) {
+    const itemName = item.name.trim().toLowerCase()
+    if (!itemName) return
+
+    let changed = false
+    const next = dinnerPlanDays.map((day) => {
+      let dayChanged = false
+      const nextItems = day.items.map((dinnerItem) => {
+        const isMatch = dinnerItem.name.trim().toLowerCase() === itemName && dinnerItem.category === item.category
+        if (!isMatch || dinnerItem.isChecked === nextChecked) return dinnerItem
+        changed = true
+        dayChanged = true
+        return {
+          ...dinnerItem,
+          isChecked: nextChecked,
+          checkedAt: nextChecked ? checkedAtIso : null,
+          updatedAt: checkedAtIso ?? new Date().toISOString(),
+        }
+      })
+      return dayChanged ? { ...day, items: nextItems } : day
+    })
+
+    if (!changed) return
+    void persistDinnerPlan(next, dinnerPlanWeekOffset, { syncGroceries: false })
+  }
+
   async function toggleChecked(item: GroceryItem) {
     if (isDinnerVirtualId(item.id)) {
       const nextChecked = !item.isChecked
@@ -6520,6 +6616,7 @@ function GroceriesModuleSettingsTab({
       return
     }
 
+    setMatchingDinnerPlanItemsChecked(item, nextChecked, nextChecked ? nowIso : null)
     if (nextChecked) void recordGroceryPurchaseInsight(item.name, item.quantity, item.category)
   }
 
