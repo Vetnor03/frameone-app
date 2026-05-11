@@ -588,18 +588,23 @@ export async function GET(req: Request) {
     if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 })
     if (!member) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
-    const [{ data: settingsRow, error: settingsError }, { data: deviceRow, error: deviceError }] = await Promise.all([
-      supabase.from('device_settings').select('settings_json, updated_at').eq('device_id', deviceId).maybeSingle(),
+    const [{ data: deviceRow, error: deviceError }, { data: statusRow, error: statusError }] = await Promise.all([
       supabase.from('devices').select('device_token').eq('device_id', deviceId).maybeSingle(),
+      supabase
+        .from('device_status')
+        .select('current_version, battery_percent, battery_voltage, is_charging, is_usb_present, last_seen_at, last_render_at, last_refresh_at')
+        .eq('device_id', deviceId)
+        .maybeSingle(),
     ])
-    if (settingsError) return NextResponse.json({ error: settingsError.message }, { status: 500 })
     if (deviceError) return NextResponse.json({ error: deviceError.message }, { status: 500 })
+    if (statusError) return NextResponse.json({ error: statusError.message }, { status: 500 })
 
-    const settings = asRecord(settingsRow?.settings_json)
+    const origin = appOrigin(req)
+    const frameConfig = asRecord(await fetchJson(`${origin}/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`))
+    const settings = asRecord(frameConfig.settings_json)
     const modules = asRecord(settings.modules)
     const cells = Array.isArray(settings.cells) ? settings.cells.map(asRecord) : []
     const language = asString(settings.language, 'en') === 'no' ? 'no' : 'en'
-    const origin = appOrigin(req)
     const deviceToken = asString(deviceRow?.device_token)
     const detailsBySlot: Record<string, Detail> = {}
 
@@ -624,7 +629,21 @@ export async function GET(req: Request) {
       }
     }))
 
-    return NextResponse.json({ device_id: deviceId, updated_at: settingsRow?.updated_at ?? null, detailsBySlot })
+    return NextResponse.json({
+      device_id: deviceId,
+      updated_at: frameConfig.updated_at ?? null,
+      settings_json: settings,
+      detailsBySlot,
+      status: {
+        current_version: statusRow?.current_version ?? null,
+        battery_percent: statusRow?.battery_percent ?? null,
+        battery_voltage: statusRow?.battery_voltage ?? null,
+        is_charging: statusRow?.is_charging ?? null,
+        is_usb_present: statusRow?.is_usb_present ?? null,
+        last_seen_at: statusRow?.last_seen_at ?? statusRow?.last_refresh_at ?? null,
+        last_render_at: statusRow?.last_render_at ?? statusRow?.last_refresh_at ?? null,
+      },
+    })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
