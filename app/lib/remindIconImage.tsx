@@ -35,21 +35,11 @@ export function createRemindIconImageResponse(size: number) {
           <g filter="url(#softShadow)">
             <rect x="250" y="185" width="524" height="528" fill="none" stroke={WHITE} strokeWidth="24" />
             <path
-              d="M318 716V382H442C526 382 575 424 575 485C575 548 526 582 444 582H318"
-              fill="none"
-              stroke={WHITE}
-              strokeWidth="24"
-              strokeLinecap="square"
-              strokeLinejoin="miter"
+              d="M306 716V382H442C532 382 586 424 586 485C586 548 532 592 444 592H306V558H444C514 558 550 531 550 485C550 439 514 416 442 416H330V716Z"
+              fill={WHITE}
+              fillRule="evenodd"
             />
-            <path
-              d="M376 582L484 713H774"
-              fill="none"
-              stroke={WHITE}
-              strokeWidth="24"
-              strokeLinecap="square"
-              strokeLinejoin="miter"
-            />
+            <path d="M376 592H413L508 716H469Z" fill={WHITE} />
           </g>
         </svg>
         <div
