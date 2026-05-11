@@ -22,6 +22,7 @@ type Detail = {
   windDirectionDeg?: number
   groceryItems?: string[]
   reminderItems?: string[]
+  reminderHeader?: string
   dinnerTodayTitle?: string
   weatherLowTemp?: string
   weatherHighTemp?: string
@@ -490,13 +491,49 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
   }
 }
 
+
+function formatReminderMirrorHeader(item: UnknownRecord | undefined, language: string) {
+  if (!item) return language === 'no' ? 'PÅMINNELSER' : 'REMINDERS'
+
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const daysUntil = asNumber(item.days_until)
+  const occurrenceYmd = asString(item.occurrence_date).trim()
+
+  if (daysUntil === 0) return language === 'no' ? 'I DAG' : 'TODAY'
+  if (daysUntil === 1) return language === 'no' ? 'I MORGEN' : 'TOMORROW'
+
+  if (occurrenceYmd) {
+    const date = new Date(`${occurrenceYmd}T12:00:00`)
+    if (!Number.isNaN(date.getTime())) {
+      if (daysUntil != null && daysUntil > 1 && daysUntil <= 14) {
+        const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
+        const prefix = language === 'no' ? 'NESTE' : 'NEXT'
+        return `${prefix} ${weekday}`.toLocaleUpperCase(locale)
+      }
+
+      return new Intl.DateTimeFormat(locale, {
+        day: '2-digit',
+        month: 'short',
+      }).format(date).replace('.', '').toLocaleUpperCase(locale)
+    }
+  }
+
+  const displayDate = asString(item.display_date).trim()
+  return displayDate ? displayDate.toLocaleUpperCase(locale) : (language === 'no' ? 'PÅMINNELSER' : 'REMINDERS')
+}
+
 async function remindersDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
-  url.searchParams.set('limit', '3')
+  url.searchParams.set('limit', '20')
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
   const items = Array.isArray(data.items) ? data.items.map(asRecord) : []
-  const reminderItems = items
+  const first = items[0]
+  const firstOccurrenceDate = first ? asString(first.occurrence_date).trim() : ''
+  const visibleItems = firstOccurrenceDate
+    ? items.filter((item) => asString(item.occurrence_date).trim() === firstOccurrenceDate).slice(0, 3)
+    : items.slice(0, 3)
+  const reminderItems = visibleItems
     .map((item) => {
       const title = asString(item.title).trim()
       const displayTime = asString(item.display_time).trim()
@@ -504,12 +541,12 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
       return displayTime ? `${title} ${displayTime}` : title
     })
     .filter(Boolean)
-  const first = items[0]
   return {
     primary: first ? asString(first.title, language === 'no' ? 'Påminnelse' : 'Reminder') : (language === 'no' ? 'Ingen' : 'None'),
     secondary: language === 'no' ? 'Påminnelser' : 'Reminders',
     tertiary: first ? asString(first.display_date || first.display_time, '') : undefined,
     reminderItems,
+    reminderHeader: formatReminderMirrorHeader(first, language),
   }
 }
 
