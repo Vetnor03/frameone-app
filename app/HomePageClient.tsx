@@ -805,6 +805,7 @@ export default function HomePage() {
   const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
   const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
   const physicalFrameRenderAtRef = useRef<string | null>(null)
+  const physicalFrameSnapshotSignatureRef = useRef<string | null>(null)
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
@@ -862,13 +863,56 @@ export default function HomePage() {
     if (!activeDeviceId) return
     if (activeTab !== 'frame' && !isPhoneLandscapeMirror) return
 
-    refreshPhysicalFrameState(activeDeviceId)
+    let statusTimer: number | null = null
+    let snapshotTimer: number | null = null
 
-    const t = window.setInterval(() => {
-      refreshPhysicalFrameState(activeDeviceId)
-    }, 15000)
+    const isPollingAllowed = () => !isPhoneLandscapeMirror || document.visibilityState === 'visible'
 
-    return () => window.clearInterval(t)
+    const refreshStatus = (forceSnapshot = false) => {
+      if (!isPollingAllowed()) return
+      refreshPhysicalFrameState(activeDeviceId, { forceSnapshot })
+    }
+
+    const start = () => {
+      if (!isPollingAllowed()) return
+      if (statusTimer == null) {
+        refreshStatus(true)
+        statusTimer = window.setInterval(() => refreshStatus(false), 15000)
+      }
+      if (snapshotTimer == null) {
+        snapshotTimer = window.setInterval(() => refreshStatus(true), 60000)
+      }
+    }
+
+    const stop = () => {
+      if (statusTimer != null) {
+        window.clearInterval(statusTimer)
+        statusTimer = null
+      }
+      if (snapshotTimer != null) {
+        window.clearInterval(snapshotTimer)
+        snapshotTimer = null
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (isPollingAllowed()) {
+        refreshStatus(true)
+        start()
+      } else {
+        stop()
+      }
+    }
+
+    start()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
+    }
     // refreshPhysicalFrameState is intentionally omitted so polling is keyed only by device/tab/mirror mode.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeviceId, activeTab, isPhoneLandscapeMirror])
@@ -1112,13 +1156,53 @@ export default function HomePage() {
   }
 
 
-  async function loadMirrorDetailsBySlot(deviceId: string): Promise<Record<string, MirrorModuleDetail>> {
+  function applyDeviceStatus(deviceId: string, data: Record<string, unknown>) {
+    const renderIso = data?.last_render_at ? String(data.last_render_at) : ''
+    const status: Omit<MemberRow, 'device_id' | 'role'> = {
+      current_version: typeof data?.current_version === 'string' ? data.current_version : null,
+      battery_percent: normalizeBatteryPercent(data?.battery_percent as number | string | null | undefined),
+      battery_voltage: normalizeBatteryVoltage(data?.battery_voltage as number | string | null | undefined),
+      is_charging: normalizeBoolean(data?.is_charging as boolean | string | number | null | undefined),
+      is_usb_present: normalizeBoolean(data?.is_usb_present as boolean | string | number | null | undefined),
+    }
+
+    setFrames((current) =>
+      current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
+    )
+    setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+    return renderIso || null
+  }
+
+  function stableSnapshotString(value: unknown): string {
+    if (Array.isArray(value)) return `[${value.map((item) => stableSnapshotString(item)).join(',')}]`
+    if (value && typeof value === 'object') {
+      const record = value as Record<string, unknown>
+      return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSnapshotString(record[key])}`).join(',')}}`
+    }
+    return JSON.stringify(value)
+  }
+
+  function snapshotSignature(snapshot: PhysicalFrameSnapshot) {
+    return stableSnapshotString({
+      theme: snapshot.theme,
+      language: snapshot.language,
+      fontSize: snapshot.fontSize,
+      layoutKey: snapshot.layoutKey,
+      cells: snapshot.cells,
+      modulesJson: snapshot.modulesJson,
+      detailsBySlot: snapshot.detailsBySlot,
+      updatedAt: snapshot.updatedAt,
+      renderAt: snapshot.renderAt,
+    })
+  }
+
+  async function loadMirrorSnapshot(deviceId: string): Promise<PhysicalFrameSnapshot | null> {
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession()
 
-      if (!session?.access_token) return {}
+      if (!session?.access_token) return null
 
       const resp = await fetch(`/api/device/mirror-snapshot?device_id=${encodeURIComponent(deviceId)}`, {
         cache: 'no-store',
@@ -1127,41 +1211,49 @@ export default function HomePage() {
         },
       })
 
-      if (!resp.ok) return {}
+      if (!resp.ok) return null
 
       const data = await resp.json()
-      return modulesRecordFromUnknown(data?.detailsBySlot) as Record<string, MirrorModuleDetail>
+      const status = modulesRecordFromUnknown(data?.status)
+      const renderAt = status?.last_render_at ? String(status.last_render_at) : null
+      const snapshot = normalizePhysicalFrameSnapshot(
+        data?.settings_json,
+        data?.updated_at ? String(data.updated_at) : null,
+        renderAt
+      )
+
+      applyDeviceStatus(deviceId, status)
+
+      return {
+        ...snapshot,
+        detailsBySlot: modulesRecordFromUnknown(data?.detailsBySlot) as Record<string, MirrorModuleDetail>,
+      }
     } catch {
-      return {}
+      return null
     }
   }
 
   async function loadPhysicalFrameSnapshot(deviceId: string, renderAt: string | null) {
-    const resp = await fetch(`/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
-    if (!resp.ok) return
+    const snapshot = await loadMirrorSnapshot(deviceId)
+    if (!snapshot) return
 
-    const data = await resp.json()
-    const snapshot = normalizePhysicalFrameSnapshot(
-      data?.settings_json,
-      data?.updated_at ? String(data.updated_at) : null,
-      renderAt
-    )
-
-    const detailsBySlot = await loadMirrorDetailsBySlot(deviceId)
-
-    setPhysicalFrameSnapshot({ ...snapshot, detailsBySlot })
-    physicalFrameRenderAtRef.current = renderAt
+    const nextSnapshot = { ...snapshot, renderAt: snapshot.renderAt ?? renderAt }
+    const nextSignature = snapshotSignature(nextSnapshot)
+    if (nextSignature !== physicalFrameSnapshotSignatureRef.current) {
+      setPhysicalFrameSnapshot(nextSnapshot)
+      physicalFrameSnapshotSignatureRef.current = nextSignature
+    }
+    physicalFrameRenderAtRef.current = nextSnapshot.renderAt
   }
 
-  async function refreshPhysicalFrameState(deviceId: string) {
+  async function refreshPhysicalFrameState(deviceId: string, options?: { forceSnapshot?: boolean }) {
     const renderAt = await loadDeviceStatus(deviceId)
 
-    if (!physicalFrameSnapshotRef.current) {
-      await loadPhysicalFrameSnapshot(deviceId, renderAt)
-      return
-    }
-
-    if (renderAt && renderAt !== physicalFrameRenderAtRef.current) {
+    if (
+      options?.forceSnapshot ||
+      !physicalFrameSnapshotRef.current ||
+      (renderAt && renderAt !== physicalFrameRenderAtRef.current)
+    ) {
       await loadPhysicalFrameSnapshot(deviceId, renderAt)
     }
   }
