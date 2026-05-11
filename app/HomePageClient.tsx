@@ -841,6 +841,7 @@ export default function HomePage() {
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
   const [frames, setFrames] = useState<MemberRow[]>([])
   const [booting, setBooting] = useState(true)
+  const [showSplash, setShowSplash] = useState(true)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1455,6 +1456,16 @@ export default function HomePage() {
     }
   }, [router])
 
+  useEffect(() => {
+    if (booting) {
+      setShowSplash(true)
+      return
+    }
+
+    const splashFadeTimer = window.setTimeout(() => setShowSplash(false), 720)
+    return () => window.clearTimeout(splashFadeTimer)
+  }, [booting])
+
   async function selectDevice(id: string) {
     setActiveDeviceId(id)
     setPhysicalFrameSnapshot(null)
@@ -1706,9 +1717,10 @@ async function handleSelectTab(k: TabKey) {
   return (
     <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
-        {booting ? (
-          <ReMindSplash language={language} />
-        ) : (
+        <div
+          className={`remind-app-shell ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
+          aria-hidden={booting}
+        >
           <>
             <TabBar
               tabs={tabs}
@@ -1869,6 +1881,15 @@ async function handleSelectTab(k: TabKey) {
 
             <SaveToast visible={saveToast.visible} text={saveToast.text} />
           </>
+        </div>
+
+        {showSplash && (
+          <div
+            className={`remind-splash-overlay ${booting ? '' : 'remind-splash-overlay-hiding'}`}
+            aria-hidden={!booting}
+          >
+            <ReMindSplash language={language} />
+          </div>
         )}
       </div>
     </main>
