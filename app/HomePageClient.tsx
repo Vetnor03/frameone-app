@@ -5517,6 +5517,23 @@ function parseDinnerItemsNote(rawNote: unknown): DinnerPlanDay['items'] {
 }
 
 const GROCERY_UNDO_WINDOW_MS = 10 * 60 * 1000
+
+function groceryCheckedExpiresAtMs(item: GroceryItem) {
+  if (!item.isChecked || !item.checkedAt) return null
+  const checkedAtMs = new Date(item.checkedAt).getTime()
+  if (Number.isNaN(checkedAtMs)) return null
+  return checkedAtMs + GROCERY_UNDO_WINDOW_MS
+}
+
+function groceryCheckedExpiryCutoffIso(nowMs = Date.now()) {
+  return new Date(nowMs - GROCERY_UNDO_WINDOW_MS).toISOString()
+}
+
+function groceryCheckedItemIsExpired(item: GroceryItem, nowMs: number) {
+  const expiresAtMs = groceryCheckedExpiresAtMs(item)
+  return expiresAtMs != null && nowMs >= expiresAtMs
+}
+
 const GROCERY_CATEGORY_LIST_ORDER: GroceryCategory[] = [
   'bread',
   'cold_cuts',
@@ -5576,8 +5593,7 @@ function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) 
 
 function groceryIsVisible(item: GroceryItem, nowMs: number) {
   if (!item.isChecked) return true
-  if (!item.checkedAt) return false
-  return nowMs - new Date(item.checkedAt).getTime() < GROCERY_UNDO_WINDOW_MS
+  return !groceryCheckedItemIsExpired(item, nowMs)
 }
 
 function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs: number) {
@@ -5722,6 +5738,18 @@ function GroceriesModuleSettingsTab({
 
     if (!silent) setLoading(true)
     try {
+      const cleanupCutoffIso = groceryCheckedExpiryCutoffIso()
+      const { error: cleanupError } = await supabase
+        .from('grocery_items')
+        .delete()
+        .eq('device_id', activeDeviceId)
+        .eq('is_checked', true)
+        .lte('checked_at', cleanupCutoffIso)
+
+      if (cleanupError) {
+        console.error('Failed to cleanup expired checked grocery items before loading', { error: cleanupError })
+      }
+
       const { data, error } = await supabase
         .from('grocery_items')
         .select('id, name, quantity, category, is_checked, checked_at, updated_at')
@@ -5733,7 +5761,9 @@ function GroceriesModuleSettingsTab({
         return
       }
 
-      const parsed: GroceryItem[] = (data || []).map((row: any) => groceryItemFromRow(row)).filter(Boolean) as GroceryItem[]
+      const parsed: GroceryItem[] = (data || [])
+        .map((row: any) => groceryItemFromRow(row))
+        .filter((item): item is GroceryItem => !!item && !groceryCheckedItemIsExpired(item, Date.now()))
       setItems(parsed)
     } finally {
       if (!silent) setLoading(false)
@@ -5914,21 +5944,36 @@ function GroceriesModuleSettingsTab({
     return () => window.clearInterval(handle)
   }, [])
 
+  useEffect(() => {
+    const nextExpiryMs = items
+      .map((item) => groceryCheckedExpiresAtMs(item))
+      .filter((value): value is number => value != null)
+      .reduce<number | null>((soonest, expiresAtMs) => (soonest == null || expiresAtMs < soonest ? expiresAtMs : soonest), null)
+
+    if (nextExpiryMs == null) return
+
+    const delayMs = Math.max(0, nextExpiryMs - Date.now()) + 250
+    const handle = window.setTimeout(() => setNowMs(Date.now()), delayMs)
+    return () => window.clearTimeout(handle)
+  }, [items])
 
   useEffect(() => {
     if (!activeDeviceId) return
 
     const expiredMainIds = items
-      .filter((item) => item.isChecked && item.checkedAt && nowMs - new Date(item.checkedAt).getTime() >= GROCERY_UNDO_WINDOW_MS)
+      .filter((item) => groceryCheckedItemIsExpired(item, nowMs))
       .map((item) => item.id)
       .filter((id) => !isDinnerVirtualId(id))
 
     if (expiredMainIds.length > 0) {
+      const cutoffIso = groceryCheckedExpiryCutoffIso(nowMs)
       setItems((prev) => prev.filter((item) => !expiredMainIds.includes(item.id)))
       void supabase
         .from('grocery_items')
         .delete()
         .in('id', expiredMainIds)
+        .eq('is_checked', true)
+        .lte('checked_at', cutoffIso)
         .then(({ error }) => {
           if (error) {
             console.error('Failed to auto-remove expired checked grocery items', { error, expiredMainIds })

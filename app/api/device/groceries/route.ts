@@ -10,6 +10,7 @@ const MAX_INSIGHT_HISTORY = 80
 const RUNNING_LOW_MAX = 3
 const RECIPE_MAX = 2
 const RECIPE_MISSING_MAX = 2
+const GROCERY_CHECKED_RETENTION_MS = 10 * 60 * 1000
 
 type GroceryPayload = {
   ok: true
@@ -53,6 +54,10 @@ function isIsoDate(s: string) {
 
 function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10)
+}
+
+function checkedGroceryCutoffIso(nowMs = Date.now()) {
+  return new Date(nowMs - GROCERY_CHECKED_RETENTION_MS).toISOString()
 }
 
 function clampQuantity(value: unknown) {
@@ -377,6 +382,17 @@ export async function GET(req: Request) {
     const appStorageDeviceId = String((device as Record<string, unknown>).id ?? '').trim()
     const storageDeviceIds = Array.from(new Set([appStorageDeviceId, device_id].filter(Boolean)))
     const todayIso = isoDateOnly(new Date())
+
+    const { error: cleanupError } = await supabase
+      .from('grocery_items')
+      .delete()
+      .in('device_id', storageDeviceIds)
+      .eq('is_checked', true)
+      .lte('checked_at', checkedGroceryCutoffIso())
+
+    if (cleanupError) {
+      console.error('/api/device/groceries cleanup expired checked items failed', { device_id, error: cleanupError })
+    }
 
     const [settingsResult, itemsResult, dinnerResult] = await Promise.allSettled([
       supabase
