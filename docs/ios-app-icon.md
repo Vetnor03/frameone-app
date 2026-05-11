@@ -1,33 +1,15 @@
-# iOS App Icon Generation
+# iOS App Icon
 
-The PR intentionally does **not** commit generated PNG/JPG/WebP/ICO files. The Re-mind app icon source is the text SVG at:
-
-- `ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.svg`
-
-That SVG is the source of truth for local generation. Do not redraw, re-type, move, or reinterpret the logo when updating it.
-
-## Generate the PNG app icon files locally
-
-From the repository root, run:
-
-```sh
-npm run generate:ios-icons
-```
-
-The script reads `ios/App/Assets.xcassets/AppIcon.appiconset/Contents.json` and writes every required PNG into:
-
-```text
-ios/App/Assets.xcassets/AppIcon.appiconset/
-```
-
-The generated PNGs are intentionally ignored by git.
-
-## Required manual 1024×1024 PNG location
-
-If Xcode/App Store tooling requires you to manually place the final 1024×1024 PNG, put it at exactly:
+The iOS app icon source image is the uploaded PNG at:
 
 ```text
 ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
 ```
 
-That filename is already declared as the `ios-marketing` icon in `Contents.json`. After placing it manually, run `npm run generate:ios-icons` if you also need the smaller iPhone/iPad PNG sizes regenerated from the committed SVG source.
+Do not redraw, redesign, regenerate, or replace it with generated derivatives when updating the app icon.
+
+## Asset catalog configuration
+
+`ios/App/Assets.xcassets/AppIcon.appiconset/Contents.json` is intentionally configured with a single iOS universal app icon entry that points directly to `AppIcon-1024.png`. Xcode/asset catalog tooling should derive the required iOS app icon renditions from that source during the iOS build.
+
+There is no repository script for generating iPhone/iPad icon PNG variants from SVG. If the app icon changes, replace `AppIcon-1024.png` itself and keep `Contents.json` pointed at that same file.
