@@ -43,7 +43,8 @@ const UI = {
     saved: 'SAVED',
     saving: 'SAVING…',
     update: 'UPDATE',
-    loadingFrame: 'LOADING FRAME…',
+    loadingFrame: 'OPENING RE-MIND…',
+    splashTagline: 'Welcome back',
 
     selectWidget: 'ADD TILE',
     clearCell: 'CLEAR CELL',
@@ -156,7 +157,8 @@ const UI = {
     saved: 'LAGRET',
     saving: 'LAGRER…',
     update: 'OPPDATER',
-    loadingFrame: 'LASTER FRAME…',
+    loadingFrame: 'ÅPNER RE-MIND…',
+    splashTagline: 'Velkommen tilbake',
 
     selectWidget: 'ADD TILE',
     clearCell: 'TØM FELT',
@@ -797,6 +799,34 @@ function isSpotReadyForExperience(spotLabel: string, spotId: string) {
   if (!id) return false
   if (id === '__todays_best__') return false
   return true
+}
+
+function ReMindSplash({ language }: { language: AppLanguage }) {
+  return (
+    <div
+      className="flex-1 flex items-center justify-center"
+      role="status"
+      aria-live="polite"
+      aria-label={tx(language).loadingFrame}
+    >
+      <div className="remind-splash text-[color:var(--fg)]">
+        <svg className="remind-splash-logo" viewBox="0 0 220 170" aria-hidden="true">
+          <path className="remind-logo-frame" d="M44 148H24V22h172v126h-96L74 108H44v40Z" />
+          <path className="remind-logo-r" d="M44 108V72h38c23 0 38 13 38 32s-15 36-38 36H44" />
+          <text className="remind-logo-word" x="122" y="132">e - m i n d</text>
+        </svg>
+
+        <div className="remind-splash-word" aria-hidden="true">
+          {'Re-Mind'.split('').map((letter, index) => (
+            <span key={`${letter}-${index}`} style={{ animationDelay: `${index * 55}ms` }}>
+              {letter}
+            </span>
+          ))}
+        </div>
+        <div className="remind-splash-tagline">{tx(language).splashTagline}</div>
+      </div>
+    </div>
+  )
 }
 
 export default function HomePage() {
@@ -1670,9 +1700,7 @@ async function handleSelectTab(k: TabKey) {
     <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
         {booting ? (
-          <div className="flex-1 flex items-center justify-center text-[color:var(--fg-40)] tracking-widest">
-            {tx(language).loadingFrame}
-          </div>
+          <ReMindSplash language={language} />
         ) : (
           <>
             <TabBar
