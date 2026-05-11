@@ -4,5 +4,3 @@ out/
 tsconfig.tsbuildinfo
 .env*.local
 
-# Generated iOS app icon PNGs. Regenerate locally with `npm run generate:ios-icons`.
-ios/App/Assets.xcassets/AppIcon.appiconset/*.png
