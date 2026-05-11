@@ -6018,12 +6018,8 @@ function GroceriesModuleSettingsTab({
   }, [activeDeviceId, items, nowMs, loadGroceries])
 
 
-  const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
-    if (!activeDeviceId) {
-      const emptyDays = defaultDinnerPlanDays()
-      setDinnerPlanDays(emptyDays)
-      return emptyDays
-    }
+  const fetchDinnerPlanDays = useCallback(async (weekOffset: DinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
+    if (!activeDeviceId) return defaultDinnerPlanDays()
     const { data, error } = await supabase
       .from('dinner_plan_days')
       .select('date,title,note')
@@ -6040,11 +6036,15 @@ function GroceriesModuleSettingsTab({
       })
     }
     const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
-    const normalizedDays = sanitizeDinnerPlanDays(loadedDays)
+    return sanitizeDinnerPlanDays(loadedDays)
+  }, [activeDeviceId])
+
+  const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
+    const normalizedDays = await fetchDinnerPlanDays(weekOffset)
     setDinnerPlanWeekOffset(weekOffset)
     setDinnerPlanDays(normalizedDays)
     return normalizedDays
-  }, [activeDeviceId, dinnerPlanWeekOffset])
+  }, [dinnerPlanWeekOffset, fetchDinnerPlanDays])
 
   useEffect(() => {
     loadDinnerPlan()
@@ -6808,23 +6808,26 @@ function GroceriesModuleSettingsTab({
         initialDays={dinnerPlanDays}
         initialWeekOffset={dinnerPlanWeekOffset}
         isLocked={dinnerPlanLockedByOtherUser}
-        onWeekChange={loadDinnerPlan}
+        onWeekChange={fetchDinnerPlanDays}
         onItemAdded={async (name, category) => {
           const nowIso = new Date().toISOString()
           await rememberHistoryItem(name, category, nowIso)
           await loadHistory()
         }}
         onCancel={async () => {
+          const displayOffset = defaultDinnerPlanWeekOffset()
           setDinnerPlanOpen(false)
-          const latest = await loadDinnerPlan()
+          const latest = await loadDinnerPlan(displayOffset)
           await syncMainGroceriesFromDinnerPlan(latest)
         }}
         onSave={async (days, weekOffset) => {
           const nextDays = sanitizeDinnerPlanDays(days)
           await persistDinnerPlan(nextDays, weekOffset)
-          setDinnerPlanWeekOffset(weekOffset)
-          setDinnerPlanDays(nextDays)
           setDinnerPlanOpen(false)
+          const displayOffset = defaultDinnerPlanWeekOffset()
+          if (weekOffset !== displayOffset) {
+            await loadDinnerPlan(displayOffset)
+          }
           await syncMainGroceriesFromDinnerPlan(nextDays)
         }}
       />
