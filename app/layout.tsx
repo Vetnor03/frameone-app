@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { versionedIconPath } from "./lib/iconVersion";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,13 +19,10 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: versionedIconPath("/favicon.svg"), sizes: "any", type: "image/svg+xml" },
+      { url: versionedIconPath("/remind-icon.svg"), sizes: "any", type: "image/svg+xml" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: versionedIconPath("/remind-icon.svg"), sizes: "1024x1024", type: "image/svg+xml" }],
   },
   themeColor: "#061b24",
   appleWebApp: {
