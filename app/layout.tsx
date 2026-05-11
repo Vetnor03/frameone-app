@@ -19,13 +19,10 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: versionedIconPath("/favicon.ico"), sizes: "any" },
-      { url: versionedIconPath("/favicon-16x16.png"), sizes: "16x16", type: "image/png" },
-      { url: versionedIconPath("/favicon-32x32.png"), sizes: "32x32", type: "image/png" },
-      { url: versionedIconPath("/icon-192x192.png"), sizes: "192x192", type: "image/png" },
-      { url: versionedIconPath("/icon-512x512.png"), sizes: "512x512", type: "image/png" },
+      { url: versionedIconPath("/favicon.svg"), sizes: "any", type: "image/svg+xml" },
+      { url: versionedIconPath("/remind-icon.svg"), sizes: "any", type: "image/svg+xml" },
     ],
-    apple: [{ url: versionedIconPath("/apple-touch-icon.png"), sizes: "180x180", type: "image/png" }],
+    apple: [{ url: versionedIconPath("/remind-icon.svg"), sizes: "1024x1024", type: "image/svg+xml" }],
   },
   themeColor: "#061b24",
   appleWebApp: {
