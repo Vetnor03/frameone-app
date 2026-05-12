@@ -35,6 +35,8 @@ static const int8_t CHARGE_OFF_SCORE = -2;
 static const int PERCENT_DEADBAND = 1;
 static const int MAX_DROP_PER_WAKE = 2;
 static const int MAX_RISE_PER_WAKE = 3;
+static const int FULL_DISPLAY_SNAP_PERCENT = 95;
+static const float FULL_DISPLAY_SNAP_MARGIN_V = 0.03f;
 
 // Learned calibrationc:\Users\vetle\Documents\Arduino\frame_v2.4.7\build\espressif.esp32.esp32\frame-2.4.7.bin
 static const float DEFAULT_LEARNED_FULL_V = 3.90f;
@@ -50,8 +52,16 @@ static const float MIN_FULL_LEARN_ACCEPTABLE_DROP_FROM_PEAK_V = 0.12f;
 // Display model
 static const float DISPLAY_EMPTY_V = 3.35f;
 
+// Low-battery protection model
+// DISPLAY_EMPTY_V is the user-facing empty point. Once the frame reaches it on
+// battery power, latch into a recharge-required state and stop normal work until
+// USB is present. RECOVERY_V adds hysteresis so a briefly revived cell does not
+// bounce back into normal operation immediately after unplugging.
+static const float RECHARGE_SHUTDOWN_V = DISPLAY_EMPTY_V;
+static const float RECHARGE_RECOVERY_V = 3.55f;
+
 // RTC validation
-static const uint32_t BATTERY_RTC_MAGIC = 0xBA77239A;
+static const uint32_t BATTERY_RTC_MAGIC = 0xBA77239B;
 
 struct BatteryRtcState {
   uint32_t magic;
@@ -66,6 +76,7 @@ struct BatteryRtcState {
   bool lastUsbPresent;
   int usbWakeCount;
   float usbSessionPeakVoltage;
+  bool rechargeRequired;
 };
 
 RTC_DATA_ATTR static BatteryRtcState g_batteryRtc = {
@@ -78,7 +89,8 @@ RTC_DATA_ATTR static BatteryRtcState g_batteryRtc = {
   0.0f,
   false,
   0,
-  0.0f
+  0.0f,
+  false
 };
 
 static bool g_started = false;
@@ -205,6 +217,7 @@ static void resetRtcState(float initialVoltage) {
   g_batteryRtc.lastUsbPresent = false;
   g_batteryRtc.usbWakeCount = 0;
   g_batteryRtc.usbSessionPeakVoltage = initialVoltage;
+  g_batteryRtc.rechargeRequired = initialVoltage <= RECHARGE_SHUTDOWN_V;
 }
 
 static bool rtcStateValid() {
@@ -234,6 +247,14 @@ static void updateChargingState(float newSmoothedVoltage) {
   } else if (g_batteryRtc.chargeScore <= CHARGE_OFF_SCORE) {
     g_batteryRtc.isCharging = false;
   }
+}
+
+static bool shouldSnapToFullWhilePlugged(bool usbPresent, float smoothedVoltage, int mappedPercent) {
+  if (!usbPresent) return false;
+  if (mappedPercent >= FULL_DISPLAY_SNAP_PERCENT) return true;
+
+  const float fullV = clampf(g_learnedFullVoltage, MIN_LEARNABLE_FULL_V, MAX_LEARNABLE_FULL_V);
+  return smoothedVoltage >= (fullV - FULL_DISPLAY_SNAP_MARGIN_V);
 }
 
 static int stabilizePercent(int mappedPercent, bool isCharging) {
@@ -284,6 +305,19 @@ static void learnFullCandidate(float candidateV) {
   Serial.print("V (samples=");
   Serial.print(g_learnedFullSampleCount);
   Serial.println(")");
+}
+
+static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoothedVoltage) {
+  const float effectiveVoltage = min(rawVoltage, smoothedVoltage);
+
+  if (!usbPresent && effectiveVoltage <= RECHARGE_SHUTDOWN_V) {
+    g_batteryRtc.rechargeRequired = true;
+    return;
+  }
+
+  if (usbPresent && smoothedVoltage >= RECHARGE_RECOVERY_V) {
+    g_batteryRtc.rechargeRequired = false;
+  }
 }
 
 static void handleUsbSessionLearning(bool usbPresent, float rawVoltage, float smoothedVoltage) {
@@ -370,9 +404,13 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
   g_batteryRtc.smoothedVoltage = newSmoothed;
 
   handleUsbSessionLearning(usbPresent, rawVoltage, newSmoothed);
+  updateRechargeRequired(usbPresent, rawVoltage, newSmoothed);
 
   const int mappedPercent = batteryPercentFromVoltage(newSmoothed);
-  const int stablePercent = stabilizePercent(mappedPercent, g_batteryRtc.isCharging);
+  int stablePercent = stabilizePercent(mappedPercent, g_batteryRtc.isCharging);
+  if (shouldSnapToFullWhilePlugged(usbPresent, newSmoothed, mappedPercent)) {
+    stablePercent = 100;
+  }
 
   g_batteryRtc.displayedPercent = stablePercent;
   g_batteryRtc.magic = BATTERY_RTC_MAGIC;
@@ -383,6 +421,7 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
   out.smoothedVoltage = newSmoothed;
   out.percent = stablePercent;
   out.isCharging = g_batteryRtc.isCharging;
+  out.requiresRecharge = (!usbPresent && g_batteryRtc.rechargeRequired);
   return out;
 }
 
@@ -397,6 +436,8 @@ void BatteryManager::logState(const char* label, const BatteryState& state) {
   Serial.print(state.percent);
   Serial.print("% charging=");
   Serial.print(state.isCharging ? "true" : "false");
+  Serial.print(" rechargeRequired=");
+  Serial.print(state.requiresRecharge ? "true" : "false");
   Serial.print(" learnedFull=");
   Serial.print(g_learnedFullVoltage, 3);
   Serial.print("V fullSamples=");

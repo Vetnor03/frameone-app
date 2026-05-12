@@ -6,6 +6,7 @@ struct BatteryState {
   float smoothedVoltage;
   int percent;
   bool isCharging;
+  bool requiresRecharge;
 };
 
 namespace BatteryManager {

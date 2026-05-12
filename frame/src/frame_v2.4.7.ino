@@ -150,6 +150,15 @@ static void goToShelfSleep(bool usbPresent) {
   esp_deep_sleep_start();
 }
 
+static void goToRechargeSleep(bool usbPresent) {
+  Serial.println("Battery empty: timer disabled, waiting for USB power-sense wake...");
+
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  enablePowerSenseWakeForNextSleep(usbPresent);
+
+  esp_deep_sleep_start();
+}
+
 static void resetTextStateForDashboard() {
   auto& d = DisplayCore::get();
   d.setTextSize(1);
@@ -255,6 +264,17 @@ static void logPowerSenseDebug(const BatteryState& batt, const PowerSenseDebug& 
 
   Serial.println("===================");
   Serial.println();
+}
+
+static void showRechargeAndSleep(const BatteryState& batt, const PowerSenseDebug& pwr) {
+  Serial.println("🔋 Battery empty -> show recharge screen and skip Wi-Fi/backend work");
+  logPowerSenseDebug(batt, pwr);
+
+  Theme::set(THEME_DARK);
+  ensureDisplay();
+  DisplayCore::drawRechargeScreen();
+
+  goToRechargeSleep(pwr.usbPresent);
 }
 
 // --------------------------------------
@@ -452,9 +472,16 @@ void setup() {
   BatteryManager::begin();
 
   PowerSenseDebug pwrEarly = readPowerSenseDebug();
+  BatteryState battEarly = BatteryManager::readAndUpdate(pwrEarly.usbPresent);
+  BatteryManager::logState("early", battEarly);
 
   Serial.print("device_id: ");
   Serial.println(DeviceIdentity::getDeviceId());
+
+  if (battEarly.requiresRecharge) {
+    showRechargeAndSleep(battEarly, pwrEarly);
+    return;
+  }
 
   {
     bool hasWifi = WiFiManagerV2::hasCreds();

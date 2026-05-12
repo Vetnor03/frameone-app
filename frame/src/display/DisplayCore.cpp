@@ -202,6 +202,44 @@ void drawCenteredTextInFrame(const char* text, int big) {
   display.print(text);
 }
 
+
+void drawRechargeScreen() {
+  display.setFullWindow();
+  display.firstPage();
+  do {
+    display.fillScreen(Theme::paper());
+    display.setTextColor(Theme::ink());
+
+    const char* line1 = "Re-Mind";
+    const char* line2 = "Recharge now";
+    const char* line3 = "Plug in USB to wake the frame";
+
+    int16_t x1, y1;
+    uint16_t w, h;
+
+    display.setFont(&FreeMonoBold18pt7b);
+    display.getTextBounds(line1, 0, 0, &x1, &y1, &w, &h);
+    int titleX = FRAME_X + (FRAME_W - (int)w) / 2;
+    int titleY = FRAME_Y + 150;
+    display.setCursor(titleX, titleY);
+    display.print(line1);
+
+    display.setFont(&FreeMonoBold12pt7b);
+    display.getTextBounds(line2, 0, 0, &x1, &y1, &w, &h);
+    int rechargeX = FRAME_X + (FRAME_W - (int)w) / 2;
+    int rechargeY = titleY + 62;
+    display.setCursor(rechargeX, rechargeY);
+    display.print(line2);
+
+    display.setFont(&FreeMonoBold9pt7b);
+    display.getTextBounds(line3, 0, 0, &x1, &y1, &w, &h);
+    int helperX = FRAME_X + (FRAME_W - (int)w) / 2;
+    int helperY = FRAME_Y + FRAME_H - 58;
+    display.setCursor(helperX, helperY);
+    display.print(line3);
+  } while (display.nextPage());
+}
+
 void drawShelfScreen(const String& deviceId) {
   display.setFullWindow();
   display.firstPage();
