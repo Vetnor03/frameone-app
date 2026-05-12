@@ -2624,60 +2624,112 @@ function mirrorWeatherIconKind(wmo: number | null | undefined) {
   return 'cloud'
 }
 
+function mirrorWeatherRainLineCount(wmo: number | null | undefined) {
+  if (wmo === 51 || wmo === 53 || wmo === 55) return 2
+  if (wmo === 65 || wmo === 82) return 4
+  return 3
+}
+
+function MirrorWeatherCloud({ mask = false }: { mask?: boolean }) {
+  const fill = mask ? 'var(--mirror-bg)' : 'currentColor'
+  const stroke = mask ? 'var(--mirror-bg)' : 'currentColor'
+
+  return (
+    <path
+      d="M27 63 C21.8 63 17.5 58.8 17.5 53.6 C17.5 48.3 21.8 44.1 27.1 44.1 C29.8 34.5 38.5 28.2 49.1 28.2 C60.9 28.2 70.6 36.7 72.5 48 C80.2 49.1 85.8 55.1 85.8 62.4 C85.8 70.4 79.4 76.8 71.1 76.8 H29.1 C22.8 76.8 17.8 71.8 17.8 65.7 C17.8 64.7 17.9 63.8 18.2 62.9 C20.8 63.2 23.8 63.2 27 63 Z"
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={mask ? 10 : 0}
+      strokeLinejoin="round"
+    />
+  )
+}
+
+function MirrorWeatherSun({ compact = false }: { compact?: boolean }) {
+  const transform = compact ? 'translate(20 -2) scale(0.66)' : undefined
+
+  return (
+    <g transform={transform} fill="none" stroke="currentColor" strokeWidth="5.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="50" cy="50" r="15.5" fill="currentColor" stroke="none" />
+      <line x1="50" y1="11" x2="50" y2="23" />
+      <line x1="50" y1="77" x2="50" y2="89" />
+      <line x1="11" y1="50" x2="23" y2="50" />
+      <line x1="77" y1="50" x2="89" y2="50" />
+      <line x1="22.4" y1="22.4" x2="30.9" y2="30.9" />
+      <line x1="69.1" y1="69.1" x2="77.6" y2="77.6" />
+      <line x1="77.6" y1="22.4" x2="69.1" y2="30.9" />
+      <line x1="30.9" y1="69.1" x2="22.4" y2="77.6" />
+    </g>
+  )
+}
+
+function MirrorWeatherRain({ count }: { count: number }) {
+  const drops = count === 4
+    ? [29, 43, 57, 71]
+    : count === 2
+      ? [40, 60]
+      : [34, 52, 70]
+
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="5.2" strokeLinecap="round">
+      {drops.map((x, index) => (
+        <line key={x} x1={x + 4} y1={82 + (index % 2) * 2} x2={x - 1} y2={94 + (index % 2) * 2} />
+      ))}
+    </g>
+  )
+}
+
+function MirrorWeatherSnow({ compact = false }: { compact?: boolean }) {
+  const flakes = compact ? [{ x: 75, y: 89 }] : [{ x: 33, y: 86 }, { x: 52, y: 91 }, { x: 71, y: 86 }]
+
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="3.8" strokeLinecap="round">
+      {flakes.map(({ x, y }) => (
+        <g key={`${x}-${y}`}>
+          <line x1={x - 5.5} y1={y} x2={x + 5.5} y2={y} />
+          <line x1={x} y1={y - 5.5} x2={x} y2={y + 5.5} />
+          <circle cx={x} cy={y} r="1.5" fill="currentColor" stroke="none" />
+        </g>
+      ))}
+    </g>
+  )
+}
+
+function MirrorWeatherFog() {
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="5.2" strokeLinecap="round">
+      <line x1="19" y1="84" x2="83" y2="84" />
+      <line x1="27" y1="94" x2="75" y2="94" />
+    </g>
+  )
+}
+
+function MirrorWeatherLightning() {
+  return <path d="M54 62 L43 82 H54 L49 95 L68 73 H57 L63 62 Z" fill="currentColor" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+}
+
 function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
   const kind = mirrorWeatherIconKind(wmo)
-  const cloudPath = 'M27 61 C22 61 18 57 18 52 C18 47 22 43 28 43 C31 33 40 27 51 27 C63 27 73 36 75 48 C82 49 87 55 87 62 C87 70 81 76 72 76 H30 C23 76 17 70 17 63 C17 62 17 61 18 60'
 
   return (
     <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" aria-hidden="true">
-      {(kind === 'sun' || kind === 'partly') && (
-        <g transform={kind === 'partly' ? 'translate(21 0) scale(0.66)' : undefined}>
-          <circle cx="50" cy="50" r="16" fill="currentColor" />
-          {Array.from({ length: 8 }).map((_, index) => {
-            const angle = (index * Math.PI) / 4
-            const x1 = 50 + Math.cos(angle) * 26
-            const y1 = 50 + Math.sin(angle) * 26
-            const x2 = 50 + Math.cos(angle) * 37
-            const y2 = 50 + Math.sin(angle) * 37
-            return <line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-          })}
-        </g>
-      )}
+      {(kind === 'sun' || kind === 'partly') && <MirrorWeatherSun compact={kind === 'partly'} />}
       {kind !== 'sun' && (
         <g>
-          {kind === 'partly' && <path d={cloudPath} fill="var(--mirror-bg)" stroke="var(--mirror-bg)" strokeWidth="12" strokeLinejoin="round" />}
-          <path d={cloudPath} fill="currentColor" />
+          {kind === 'partly' && <MirrorWeatherCloud mask />}
+          <MirrorWeatherCloud />
         </g>
       )}
-      {(kind === 'rain' || kind === 'sleet') && (
-        <g fill="currentColor">
-          <path d="M34 91 C28 82 28 78 34 69 C40 78 40 82 34 91 Z" />
-          <path d="M52 94 C46 85 46 81 52 72 C58 81 58 85 52 94 Z" />
-          {kind === 'rain' && <path d="M70 91 C64 82 64 78 70 69 C76 78 76 82 70 91 Z" />}
-        </g>
+      {kind === 'rain' && <MirrorWeatherRain count={mirrorWeatherRainLineCount(wmo)} />}
+      {kind === 'sleet' && (
+        <>
+          <MirrorWeatherRain count={2} />
+          <MirrorWeatherSnow compact />
+        </>
       )}
-      {(kind === 'snow' || kind === 'sleet') && (
-        <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
-          {(kind === 'sleet' ? [70] : [34, 52, 70]).map((cx, index) => {
-            const cy = kind === 'sleet' ? 84 : index === 1 ? 89 : 85
-            return (
-              <g key={index}>
-                <line x1={cx - 6} y1={cy} x2={cx + 6} y2={cy} />
-                <line x1={cx} y1={cy - 6} x2={cx} y2={cy + 6} />
-                <line x1={cx - 4} y1={cy - 4} x2={cx + 4} y2={cy + 4} />
-                <line x1={cx - 4} y1={cy + 4} x2={cx + 4} y2={cy - 4} />
-              </g>
-            )
-          })}
-        </g>
-      )}
-      {kind === 'thunder' && <path d="M55 61 L43 85 H55 L50 96 L70 70 H59 L66 61 Z" fill="currentColor" />}
-      {kind === 'fog' && (
-        <g stroke="currentColor" strokeWidth="5" strokeLinecap="round">
-          <line x1="20" y1="85" x2="82" y2="85" />
-          <line x1="26" y1="94" x2="76" y2="94" />
-        </g>
-      )}
+      {kind === 'snow' && <MirrorWeatherSnow />}
+      {kind === 'thunder' && <MirrorWeatherLightning />}
+      {kind === 'fog' && <MirrorWeatherFog />}
     </svg>
   )
 }
