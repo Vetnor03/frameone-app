@@ -15,7 +15,7 @@
   </defs>
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <g filter="url(#softShadow)" fill="none" stroke="#f8fafc" stroke-width="24" stroke-linecap="butt" stroke-linejoin="miter">
-    <rect x="268" y="203" width="488" height="504"/>
+    <rect x="268" y="254" width="488" height="453"/>
     <path d="M326 708V391H438C480 391 513 427 513 471C513 516 480 549 438 549H326"/>
     <path d="M383 549L478 708H756"/>
   </g>
