@@ -840,8 +840,9 @@ export default function HomePage() {
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
   const [frames, setFrames] = useState<MemberRow[]>([])
-  const [booting, setBooting] = useState(true)
-  const [showSplash, setShowSplash] = useState(true)
+  const [booting, setBooting] = useState(false)
+  const [showSplash, setShowSplash] = useState(false)
+  const [shouldRenderApp, setShouldRenderApp] = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1388,7 +1389,9 @@ export default function HomePage() {
     }
 
     ;(async () => {
-      setBooting(true)
+      setBooting(false)
+      setShowSplash(false)
+      setShouldRenderApp(false)
 
       const { data: sessionData } = await supabase.auth.getSession()
       const session = sessionData.session
@@ -1397,12 +1400,23 @@ export default function HomePage() {
         setFrames([])
         setActiveDeviceId(null)
         setBooting(false)
+        setShowSplash(false)
+        setShouldRenderApp(false)
         router.replace('/login')
         return
       }
 
+      setShouldRenderApp(true)
+      setShowSplash(true)
+      setBooting(true)
+
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-        if (!nextSession) router.replace('/login')
+        if (!nextSession) {
+          setShouldRenderApp(false)
+          setShowSplash(false)
+          setBooting(false)
+          router.replace('/login')
+        }
       })
       unsub = data.subscription
 
@@ -1718,8 +1732,8 @@ async function handleSelectTab(k: TabKey) {
     <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
         <div
-          className={`remind-app-shell ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
-          aria-hidden={booting}
+          className={`remind-app-shell ${!shouldRenderApp ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
+          aria-hidden={!shouldRenderApp || booting}
         >
           <>
             <TabBar
@@ -1883,7 +1897,7 @@ async function handleSelectTab(k: TabKey) {
           </>
         </div>
 
-        {showSplash && (
+        {shouldRenderApp && showSplash && (
           <div
             className={`remind-splash-overlay ${booting ? '' : 'remind-splash-overlay-hiding'}`}
             aria-hidden={!booting}
