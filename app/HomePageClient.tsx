@@ -2430,6 +2430,13 @@ function mirrorGroceriesVisibleItems(detail: MirrorModuleDetail) {
   return Array.from({ length: 3 }, (_, index) => items[(start + index) % items.length])
 }
 
+function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppLanguage) {
+  const remainingCount = Math.max(0, mirrorGroceriesItems(detail).length - 3)
+  if (remainingCount <= 0) return ''
+
+  return language === 'no' ? `+${remainingCount} varer` : `+${remainingCount} items`
+}
+
 function mirrorRemindersHeader(detail: MirrorModuleDetail, language: AppLanguage) {
   const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const header = typeof detail.reminderHeader === 'string' ? detail.reminderHeader.trim() : ''
@@ -2715,7 +2722,7 @@ function LandscapeFrameMirror({
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
       return (
         <div className="flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.55rem,1.7vw,1.2rem)] pt-[clamp(0.55rem,1.45vw,0.95rem)] pb-[clamp(0.55rem,1.45vw,0.95rem)] text-center leading-tight">
-          <div className="flex shrink-0 items-center justify-center text-[clamp(0.88rem,2.05vw,1.35rem)] font-semibold tracking-[0.08em]">
+          <div className="flex shrink-0 items-center justify-center border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.88rem,2.05vw,1.35rem)] font-semibold tracking-[0.08em]">
             <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherLowTemp}</span>
             <span className="h-[clamp(1.05rem,2.25vw,1.45rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
             <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherHighTemp}</span>
@@ -2752,6 +2759,8 @@ function LandscapeFrameMirror({
     if ((module === 'groceries' || module === 'reminders') && size === 'small') {
       const isGroceries = module === 'groceries'
       const visibleItems = isGroceries ? mirrorGroceriesVisibleItems(detail) : mirrorReminderItems(detail)
+      const overflowLabel = isGroceries ? mirrorGroceriesOverflowLabel(detail, language) : ''
+      const displayItems = overflowLabel ? [...visibleItems, overflowLabel] : visibleItems
       const header = isGroceries ? mirrorGroceriesHeader(detail, language) : mirrorRemindersHeader(detail, language)
       const emptyMessage = isGroceries ? mirrorGroceriesEmptyMessage(language) : mirrorRemindersEmptyMessage(language)
 
@@ -2773,13 +2782,13 @@ function LandscapeFrameMirror({
             {header}
           </div>
 
-          {visibleItems.length <= 0 ? (
+          {displayItems.length <= 0 ? (
             <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ ...contentOffsetStyle, color: mutedColor }}>
               {emptyMessage}
             </div>
           ) : (
             <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center" style={contentOffsetStyle}>
-              {visibleItems.map((item, index) => (
+              {displayItems.map((item, index) => (
                 <React.Fragment key={`${item}-${index}`}>
                   {index > 0 && (
                     <div
