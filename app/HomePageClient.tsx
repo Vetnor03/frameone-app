@@ -2760,7 +2760,6 @@ function LandscapeFrameMirror({
       const isGroceries = module === 'groceries'
       const visibleItems = isGroceries ? mirrorGroceriesVisibleItems(detail) : mirrorReminderItems(detail)
       const overflowLabel = isGroceries ? mirrorGroceriesOverflowLabel(detail, language) : ''
-      const displayItems = overflowLabel ? [...visibleItems, overflowLabel] : visibleItems
       const header = isGroceries ? mirrorGroceriesHeader(detail, language) : mirrorRemindersHeader(detail, language)
       const emptyMessage = isGroceries ? mirrorGroceriesEmptyMessage(language) : mirrorRemindersEmptyMessage(language)
 
@@ -2782,29 +2781,38 @@ function LandscapeFrameMirror({
             {header}
           </div>
 
-          {displayItems.length <= 0 ? (
+          {visibleItems.length <= 0 ? (
             <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ ...contentOffsetStyle, color: mutedColor }}>
               {emptyMessage}
             </div>
           ) : (
-            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center" style={contentOffsetStyle}>
-              {displayItems.map((item, index) => (
-                <React.Fragment key={`${item}-${index}`}>
-                  {index > 0 && (
+            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-stretch justify-center gap-[clamp(0.08rem,0.22vw,0.16rem)]" style={contentOffsetStyle}>
+              <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center">
+                {visibleItems.map((item, index) => (
+                  <React.Fragment key={`${item}-${index}`}>
+                    {index > 0 && (
+                      <div
+                        className="pointer-events-none h-[46%] w-px shrink-0"
+                        style={{ backgroundColor: borderColor }}
+                        aria-hidden="true"
+                      />
+                    )}
                     <div
-                      className="pointer-events-none h-[46%] w-px shrink-0"
-                      style={{ backgroundColor: borderColor }}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <div
-                    className="flex min-w-0 flex-1 items-center justify-center truncate px-[clamp(0.3rem,0.85vw,0.55rem)] text-center text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.06em]"
-                    title={item}
-                  >
-                    <span className="block max-w-full truncate">{item}</span>
+                      className="flex min-w-0 flex-1 items-center justify-center truncate px-[clamp(0.3rem,0.85vw,0.55rem)] text-center text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.06em]"
+                      title={item}
+                    >
+                      <span className="block max-w-full truncate">{item}</span>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+              {overflowLabel && (
+                <div className="grid w-full shrink-0 grid-cols-3 text-[clamp(0.5rem,1.18vw,0.72rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>
+                  <div className="col-start-2 min-w-0 truncate px-[clamp(0.3rem,0.85vw,0.55rem)] text-center" title={overflowLabel}>
+                    {overflowLabel}
                   </div>
-                </React.Fragment>
-              ))}
+                </div>
+              )}
             </div>
           )}
         </div>
