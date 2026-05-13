@@ -226,14 +226,14 @@ a {
 .remind-logo-e {
   fill: currentColor;
   font-size: 34px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
 .remind-logo-mind {
   fill: currentColor;
   font-size: 28px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0;
   text-anchor: middle;
 }
