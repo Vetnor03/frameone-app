@@ -8774,26 +8774,6 @@ function SurfModuleSettingsTab({
     setShowBottomFade(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
   }
 
-  function scrollToBottomSmooth() {
-    if (!scrollRef.current) return
-    const scroller = scrollRef.current
-
-    const target = scroller.scrollHeight - scroller.clientHeight
-    const start = scroller.scrollTop
-    const distance = target - start
-    const duration = 360
-    const startTime = performance.now()
-
-    function step(now: number) {
-      const t = Math.min(1, (now - startTime) / duration)
-      const eased = 1 - Math.pow(1 - t, 3)
-      scroller.scrollTop = start + distance * eased
-      updateFadeState()
-      if (t < 1) requestAnimationFrame(step)
-    }
-
-    requestAnimationFrame(step)
-  }
 
   useEffect(() => {
     const el = scrollRef.current
@@ -8916,11 +8896,6 @@ function SurfModuleSettingsTab({
                   requestAnimationFrame(() => {
                     if (scrollRef.current) scrollRef.current.scrollTop = 0
                   })
-                }}
-                onExpandedLatest={() => {
-                  window.setTimeout(() => {
-                    scrollToBottomSmooth()
-                  }, 80)
                 }}
               />
             </div>
@@ -9367,6 +9342,7 @@ function SurfInsightsCard({
     const total = items.length
     const fairPlus = ratings.filter((rating) => rating >= 4).length
     const avg = ratings.length ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length : 0
+    const avgLabel = avg ? formatFeelingFromRating(language, Math.round(avg)) : '--'
     const spotCounts = new Map<string, number>()
     items.forEach((item) => {
       const label = String(item.spot || '').trim()
@@ -9375,8 +9351,8 @@ function SurfInsightsCard({
     })
     const favorite = Array.from(spotCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || '--'
 
-    return { total, fairPlus, avg, favorite }
-  }, [items])
+    return { total, fairPlus, avgLabel, favorite }
+  }, [items, language])
 
   const bars = useMemo(() => buildSurfInsightBars(language, filter, items), [language, filter, items])
   const maxValue = Math.max(1, ...bars.map((bar) => bar.value))
@@ -9427,7 +9403,7 @@ function SurfInsightsCard({
         <>
           <div className="mt-5 grid grid-cols-3 gap-2">
             <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3 py-3">
-              <div className="text-[color:var(--fg-90)] font-semibold">{stats.avg ? stats.avg.toFixed(1) : '--'}</div>
+              <div className="text-[color:var(--fg-90)] font-semibold truncate">{stats.avgLabel}</div>
               <div className="mt-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'SNITT' : 'AVG'}</div>
             </div>
             <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3 py-3">
@@ -9496,13 +9472,11 @@ function SurfExperienceCard({
   refreshKey,
   onOpenLog,
   onEditExperience,
-  onExpandedLatest,
 }: {
   language: AppLanguage
   refreshKey: number
   onOpenLog: () => void
   onEditExperience: (experienceId: string) => void
-  onExpandedLatest: () => void
 }) {
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
@@ -9591,11 +9565,7 @@ function SurfExperienceCard({
           <button
             type="button"
             onClick={() => {
-              setLatestOpen((v) => {
-                const next = !v
-                if (next) onExpandedLatest()
-                return next
-              })
+              setLatestOpen((v) => !v)
             }}
             className="w-full flex items-center justify-between rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
           >
