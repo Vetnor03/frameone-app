@@ -3810,6 +3810,7 @@ type SoccerCfg = {
 }
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
+type SurfInsightsFilter = 'monthly' | 'fair' | 'spots' | 'time' | 'rating'
 
 type StockCfg = {
   id: number
@@ -9258,6 +9259,238 @@ function SurfSpotRow({
   )
 }
 
+
+const SURF_INSIGHTS_FILTERS: SurfInsightsFilter[] = ['monthly', 'fair', 'spots', 'time', 'rating']
+
+function surfInsightsFilterLabel(language: AppLanguage, filter: SurfInsightsFilter) {
+  if (language === 'no') {
+    if (filter === 'monthly') return 'Måneder'
+    if (filter === 'fair') return 'Fair+'
+    if (filter === 'spots') return 'Spots'
+    if (filter === 'time') return 'Tid'
+    return 'Følelse'
+  }
+
+  if (filter === 'monthly') return 'Months'
+  if (filter === 'fair') return 'Fair+'
+  if (filter === 'spots') return 'Spots'
+  if (filter === 'time') return 'Time'
+  return 'Rating'
+}
+
+function monthKeyFromDate(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
+}
+
+function formatSurfInsightMonth(language: AppLanguage, key: string) {
+  const [year, month] = key.split('-').map((v) => Number(v))
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return key
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', { month: 'short' }).format(new Date(year, month - 1, 1))
+}
+
+function surfTimeBucket(language: AppLanguage, d: Date) {
+  const h = d.getHours()
+  if (h >= 5 && h < 9) return language === 'no' ? 'Gryning' : 'Dawn'
+  if (h >= 9 && h < 12) return language === 'no' ? 'Morgen' : 'Morning'
+  if (h >= 12 && h < 17) return language === 'no' ? 'Ettermiddag' : 'Afternoon'
+  if (h >= 17 && h < 21) return language === 'no' ? 'Kveld' : 'Evening'
+  return language === 'no' ? 'Natt' : 'Night'
+}
+
+function buildSurfInsightBars(language: AppLanguage, filter: SurfInsightsFilter, items: SurfExperienceRowData[]) {
+  const validItems = items.filter((item) => Number.isFinite(new Date(item.logged_at).getTime()))
+
+  if (filter === 'monthly' || filter === 'fair') {
+    const now = new Date()
+    const keys: string[] = []
+    for (let i = 5; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      keys.push(monthKeyFromDate(d))
+    }
+
+    const counts = new Map(keys.map((key) => [key, 0]))
+    validItems.forEach((item) => {
+      const rating = Number(item.rating_1_6 ?? 0)
+      if (filter === 'fair' && rating < 4) return
+      const key = monthKeyFromDate(new Date(item.logged_at))
+      if (!counts.has(key)) return
+      counts.set(key, (counts.get(key) || 0) + 1)
+    })
+
+    return keys.map((key) => ({ label: formatSurfInsightMonth(language, key), value: counts.get(key) || 0 }))
+  }
+
+  if (filter === 'spots') {
+    const counts = new Map<string, number>()
+    validItems.forEach((item) => {
+      const label = String(item.spot || (language === 'no' ? 'Ukjent' : 'Unknown')).trim()
+      counts.set(label, (counts.get(label) || 0) + 1)
+    })
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 5)
+      .map(([label, value]) => ({ label, value }))
+  }
+
+  if (filter === 'time') {
+    const buckets = language === 'no' ? ['Gryning', 'Morgen', 'Ettermiddag', 'Kveld', 'Natt'] : ['Dawn', 'Morning', 'Afternoon', 'Evening', 'Night']
+    const counts = new Map(buckets.map((key) => [key, 0]))
+    validItems.forEach((item) => {
+      const bucket = surfTimeBucket(language, new Date(item.logged_at))
+      counts.set(bucket, (counts.get(bucket) || 0) + 1)
+    })
+    return buckets.map((label) => ({ label, value: counts.get(label) || 0 }))
+  }
+
+  return FEELING_OPTIONS.map((opt) => ({
+    label: feelingLabel(language, opt.key),
+    value: validItems.filter((item) => Number(item.rating_1_6) === opt.rating).length,
+  }))
+}
+
+function SurfInsightsCard({
+  language,
+  items,
+  loading,
+  onOpenLog,
+}: {
+  language: AppLanguage
+  items: SurfExperienceRowData[]
+  loading: boolean
+  onOpenLog: () => void
+}) {
+  const [filter, setFilter] = useState<SurfInsightsFilter>('monthly')
+
+  const stats = useMemo(() => {
+    const ratings = items.map((item) => Number(item.rating_1_6)).filter((rating) => Number.isFinite(rating) && rating > 0)
+    const total = items.length
+    const fairPlus = ratings.filter((rating) => rating >= 4).length
+    const avg = ratings.length ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length : 0
+    const spotCounts = new Map<string, number>()
+    items.forEach((item) => {
+      const label = String(item.spot || '').trim()
+      if (!label) return
+      spotCounts.set(label, (spotCounts.get(label) || 0) + 1)
+    })
+    const favorite = Array.from(spotCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || '--'
+
+    return { total, fairPlus, avg, favorite }
+  }, [items])
+
+  const bars = useMemo(() => buildSurfInsightBars(language, filter, items), [language, filter, items])
+  const maxValue = Math.max(1, ...bars.map((bar) => bar.value))
+  const topBar = bars.reduce<{ label: string; value: number } | null>((best, bar) => (!best || bar.value > best.value ? bar : best), null)
+
+  const helperText = (() => {
+    if (filter === 'monthly') return language === 'no' ? 'Antall surfer du har logget de siste seks månedene.' : 'Number of logged surfs during the last six months.'
+    if (filter === 'fair') return language === 'no' ? 'Surfer du vurderte som Fair eller bedre.' : 'Sessions you rated Fair or better.'
+    if (filter === 'spots') return language === 'no' ? 'Spottene du faktisk surfer mest.' : 'The spots you actually surf the most.'
+    if (filter === 'time') return language === 'no' ? 'Når på dagen du vanligvis padler ut.' : 'When during the day you usually paddle out.'
+    return language === 'no' ? 'Hvordan surfefølelsen fordeler seg.' : 'How your surf feeling is trending.'
+  })()
+
+  return (
+    <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SURF INNSIKT' : 'SURF INSIGHTS'}</div>
+          <div className="mt-2 text-[color:var(--fg-90)] text-xl font-semibold">{language === 'no' ? 'Din surfeloggbok' : 'Your surf logbook'}</div>
+        </div>
+        <div className="rounded-2xl border border-[#2aa3ff]/40 bg-[#2aa3ff]/10 px-3 py-2 text-right">
+          <div className="text-[#2aa3ff] text-lg font-semibold leading-none">{stats.total}</div>
+          <div className="mt-1 text-[10px] tracking-widest text-[color:var(--fg-50)]">{language === 'no' ? 'LOGGET' : 'LOGGED'}</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="mt-5 h-44 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] flex items-center justify-center text-sm text-[color:var(--fg-50)]">
+          {language === 'no' ? 'Bygger innsikt…' : 'Building insights…'}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="mt-5 rounded-3xl border border-dashed border-[#2aa3ff]/45 bg-[#2aa3ff]/10 p-5 text-center">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-[#2aa3ff]/15 flex items-center justify-center text-2xl">〰️</div>
+          <div className="mt-4 text-[color:var(--fg-90)] font-semibold">{language === 'no' ? 'Legg til erfaringer' : 'Add experiences'}</div>
+          <div className="mt-2 text-sm leading-6 text-[color:var(--fg-60)]">
+            {language === 'no'
+              ? 'Logg noen surfer først, så viser vi favorittspots, beste måneder, Fair+ økter og når du surfer mest.'
+              : 'Log a few sessions first, then this will show favorite spots, best months, Fair+ sessions, and your usual surf time.'}
+          </div>
+          <button
+            onClick={onOpenLog}
+            className="mt-5 w-full h-12 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-sm transition"
+          >
+            {language === 'no' ? 'LEGG TIL ERFARING' : 'ADD EXPERIENCE'}
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3 py-3">
+              <div className="text-[color:var(--fg-90)] font-semibold">{stats.avg ? stats.avg.toFixed(1) : '--'}</div>
+              <div className="mt-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'SNITT' : 'AVG'}</div>
+            </div>
+            <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3 py-3">
+              <div className="text-[color:var(--fg-90)] font-semibold">{stats.fairPlus}</div>
+              <div className="mt-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">FAIR+</div>
+            </div>
+            <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3 py-3 min-w-0">
+              <div className="text-[color:var(--fg-90)] font-semibold truncate">{stats.favorite}</div>
+              <div className="mt-1 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'TOPP' : 'TOP'}</div>
+            </div>
+          </div>
+
+          <div className="mt-5 -mx-1 flex gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
+            {SURF_INSIGHTS_FILTERS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className={`shrink-0 rounded-full border px-3 py-2 text-xs tracking-widest transition ${
+                  filter === item
+                    ? 'border-[#2aa3ff] bg-[#2aa3ff]/15 text-[#2aa3ff]'
+                    : 'border-[color:var(--bd-10)] text-[color:var(--fg-55)] bg-[color:var(--panel-05)]'
+                }`}
+              >
+                {surfInsightsFilterLabel(language, item).toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-[color:var(--fg-70)]">{helperText}</div>
+              {topBar && topBar.value > 0 && (
+                <div className="shrink-0 rounded-full bg-[#2aa3ff]/10 px-2 py-1 text-[10px] tracking-widest text-[#2aa3ff]">
+                  {topBar.label}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {bars.map((bar) => {
+                const pct = Math.max(4, Math.round((bar.value / maxValue) * 100))
+                return (
+                  <div key={bar.label} className="grid grid-cols-[88px_1fr_28px] items-center gap-3">
+                    <div className="text-xs text-[color:var(--fg-55)] truncate">{bar.label}</div>
+                    <div className="h-3 rounded-full bg-[color:var(--bd-10)] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#2aa3ff] to-[#7dd3fc] transition-all duration-300"
+                        style={{ width: `${bar.value > 0 ? pct : 0}%` }}
+                      />
+                    </div>
+                    <div className="text-right text-xs text-[color:var(--fg-70)] tabular-nums">{bar.value}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function SurfExperienceCard({
   language,
   refreshKey,
@@ -9432,6 +9665,8 @@ function SurfExperienceCard({
           )}
         </div>
       </div>
+
+      <SurfInsightsCard language={language} items={items} loading={loading} onOpenLog={onOpenLog} />
     </>
   )
 }
