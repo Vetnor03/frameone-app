@@ -295,6 +295,11 @@ type MirrorModuleDetail = {
   weatherWmo?: number | null
 }
 
+type MirrorHoliday = {
+  date: string
+  name: string
+}
+
 type PhysicalFrameSnapshot = {
   theme: 'dark' | 'light'
   language: AppLanguage
@@ -2399,12 +2404,13 @@ function mirrorMediumDateParts(language: AppLanguage) {
 
 const MIRROR_CALENDAR_WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
-function mirrorCalendarDays(now = new Date()) {
-  const year = now.getFullYear()
-  const month = now.getMonth()
+function mirrorCalendarDays(now = new Date(), monthOffset = 0) {
+  const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const year = target.getFullYear()
+  const month = target.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const mondayFirstOffset = (new Date(year, month, 1).getDay() + 6) % 7
-  const usedRows = Math.min(5, Math.max(4, Math.ceil((mondayFirstOffset + daysInMonth) / 7)))
+  const usedRows = Math.min(6, Math.max(4, Math.ceil((mondayFirstOffset + daysInMonth) / 7)))
 
   return {
     days: [
@@ -2452,10 +2458,62 @@ function MirrorMediumDateCard({
   )
 }
 
-function MirrorMonthCalendar({ textColor }: { textColor: string }) {
+function ymdKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function mirrorHolidaysFromConfig(cfg: Record<string, unknown>): MirrorHoliday[] {
+  const raw = Array.isArray(cfg.holidays) ? cfg.holidays : []
+  return raw
+    .map((item) => {
+      const record = modulesRecordFromUnknown(item)
+      const date = String(record.date ?? '').slice(0, 10)
+      const name = String(record.name ?? '').trim()
+      return date && name ? { date, name } : null
+    })
+    .filter((item): item is MirrorHoliday => !!item)
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function isMirrorHoliday(holidays: MirrorHoliday[], year: number, month: number, day: number) {
+  const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return holidays.some((holiday) => holiday.date === date)
+}
+
+function upcomingMirrorHolidays(holidays: MirrorHoliday[], today = new Date()) {
+  const todayKey = ymdKey(today)
+  const seenDates = new Set<string>()
+
+  return holidays.filter((holiday) => {
+    if (holiday.date < todayKey || seenDates.has(holiday.date)) return false
+    seenDates.add(holiday.date)
+    return true
+  }).slice(0, 5)
+}
+
+function formatMirrorHolidayDate(date: string) {
+  const [, month = '', day = ''] = date.split('-')
+  return `${day.padStart(2, '0')}.${month.padStart(2, '0')}`
+}
+
+function MirrorMonthCalendar({
+  textColor,
+  monthOffset = 0,
+  holidays = [],
+  showHolidayDots = false,
+}: {
+  textColor: string
+  monthOffset?: number
+  holidays?: MirrorHoliday[]
+  showHolidayDots?: boolean
+}) {
   const now = new Date()
-  const today = now.getDate()
-  const { days, usedRows } = mirrorCalendarDays(now)
+  const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const today = monthOffset === 0 ? now.getDate() : -1
+  const { days, usedRows } = mirrorCalendarDays(now, monthOffset)
 
   return (
     <div className="flex h-full w-full min-w-0 translate-y-[clamp(0.18rem,0.62vw,0.42rem)] items-center justify-center overflow-hidden px-0 py-[clamp(0.16rem,0.44vw,0.32rem)] leading-none">
@@ -2477,12 +2535,13 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
             const weekdayIndex = index % 7
             const isWeekend = weekdayIndex >= 5
             const isToday = day === today
+            const isHoliday = day != null && showHolidayDots && isMirrorHoliday(holidays, target.getFullYear(), target.getMonth(), day)
 
             return (
               <div key={index} className="flex min-h-0 items-center justify-center">
                 {day == null ? null : (
                   <span
-                    className="flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center rounded-full"
+                    className="relative flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center rounded-full"
                     style={{
                       backgroundColor: isToday ? '#ffffff' : 'transparent',
                       color: isToday ? '#061b24' : textColor,
@@ -2490,11 +2549,83 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
                     }}
                   >
                     {day}
+                    {isHoliday ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute bottom-[clamp(0.12rem,0.36vw,0.24rem)] h-[clamp(0.12rem,0.34vw,0.22rem)] w-[clamp(0.12rem,0.34vw,0.22rem)] rounded-full"
+                        style={{ backgroundColor: isToday ? '#061b24' : textColor }}
+                      />
+                    ) : null}
                   </span>
                 )}
               </div>
             )
           })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+function MirrorHolidayList({ holidays, language }: { holidays: MirrorHoliday[]; language: AppLanguage }) {
+  const upcoming = upcomingMirrorHolidays(holidays)
+  const emptyLabel = language === 'no' ? 'Ingen helligdager' : 'No holidays'
+
+  if (upcoming.length === 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] text-center text-[clamp(0.76rem,1.9vw,1.2rem)] font-semibold tracking-[0.08em] opacity-75">
+        {emptyLabel}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full items-end overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] pb-[clamp(0.75rem,1.9vw,1.45rem)]">
+      <div className="grid w-full gap-[clamp(0.22rem,0.65vw,0.42rem)]">
+        {upcoming.map((holiday) => (
+          <div key={`${holiday.date}-${holiday.name}`} className="grid min-w-0 grid-cols-[1fr_auto] items-baseline gap-[clamp(0.5rem,1.45vw,1rem)] leading-none">
+            <div className="min-w-0 truncate text-[clamp(0.7rem,1.8vw,1.16rem)] font-semibold tracking-[0.02em]">
+              {holiday.name}
+            </div>
+            <div className="shrink-0 text-[clamp(0.56rem,1.35vw,0.86rem)] font-medium tracking-[0.08em] opacity-80">
+              {formatMirrorHolidayDate(holiday.date)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLDateView({
+  language,
+  textColor,
+  frameBackground,
+  holidays,
+}: {
+  language: AppLanguage
+  textColor: string
+  frameBackground: string
+  holidays: MirrorHoliday[]
+}) {
+  return (
+    <div className="grid h-full w-full grid-rows-[1fr_1fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
+      <div className="grid min-h-0 grid-cols-[0.42fr_0.58fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
+        <div className="min-w-0 overflow-hidden">
+          <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
+        </div>
+        <div className="min-w-0 overflow-hidden">
+          <MirrorMonthCalendar textColor={textColor} holidays={holidays} showHolidayDots />
+        </div>
+      </div>
+
+      <div className="grid min-h-0 grid-cols-[0.42fr_0.58fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
+        <div className="min-w-0 overflow-hidden">
+          <MirrorHolidayList holidays={holidays} language={language} />
+        </div>
+        <div className="min-w-0 overflow-hidden">
+          <MirrorMonthCalendar textColor={textColor} monthOffset={1} holidays={holidays} showHolidayDots />
         </div>
       </div>
     </div>
@@ -2888,6 +3019,7 @@ function LandscapeFrameMirror({
     }
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+    const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
 
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
       return (
@@ -2913,6 +3045,17 @@ function LandscapeFrameMirror({
             <div className="max-w-full truncate">{detail.weatherPrecipLine || 'Mostly dry'}</div>
           </div>
         </div>
+      )
+    }
+
+    if (module === 'date' && size === 'large' && snapshot.layoutKey === 'full') {
+      return (
+        <MirrorXLDateView
+          language={language}
+          textColor={textColor}
+          frameBackground={frameBackground}
+          holidays={mirrorHolidaysFromConfig(cfg)}
+        />
       )
     }
 

@@ -511,7 +511,7 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
       if (isHol) {
         int dotY = cellY + cellH - 3;
-        d.fillCircle(centerX, dotY, 2, isToday ? GxEPD_BLACK : GxEPD_WHITE);
+        d.fillCircle(centerX, dotY, 2, isToday ? GxEPD_BLACK : ink);
       }
     }
   }
@@ -705,7 +705,7 @@ static void drawMonthCalendarRows(int x, int y, int w, int h,
         bool isHol = isHolidayInMonth(year, month0, day);
         if (isHol) {
           int dotY = cellY + cellH - 3;
-          d.fillCircle(centerX, dotY, 2, isToday ? GxEPD_BLACK : GxEPD_WHITE);
+          d.fillCircle(centerX, dotY, 2, isToday ? GxEPD_BLACK : ink);
         }
       }
     }
@@ -769,15 +769,38 @@ static void drawHolidayListCentered(int x, int y, int w, int h,
 
   const int lineH = 32;
   const int padL  = 26;
-  const int padR  = 26;
   const int padB  = 26;
+  const int gap   = 16;
 
   int blockH = count * lineH;
 
+  // Date column width (fixed sample)
+  int16_t dx1, dy1; uint16_t dtw, dth;
+  measureText("00.00", FONT_9, dx1, dy1, dtw, dth);
+  int dateColW = (int)dtw;
+
+  // Available width for holiday name after date column
+  int maxNameW = w - padL - dateColW - gap;
+  if (maxNameW < 60) maxNameW = 60;
+
+  // Measure widest name (NO truncation) but keep within available space
+  int actualNameW = 0;
+  for (int i = 0; i < count; i++) {
+    char nameLatin[128];
+    utf8ToLatin1(picked[i].hi->name, nameLatin, sizeof(nameLatin));
+
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(nameLatin, FONT_B12, x1, y1, tw, th);
+
+    int nw = (int)tw;
+    if (nw > actualNameW) actualNameW = nw;
+  }
+  if (actualNameW > maxNameW) actualNameW = maxNameW;
+
+  // Anchor bottom-left with padding
   int startX = x + padL;
   int startY = y + h - padB - blockH;
-  int nameX = startX;
-  int dateRightX = x + w - padR;
+
   for (int i = 0; i < count; i++) {
     const HolidayItem* hi = picked[i].hi;
 
@@ -785,39 +808,35 @@ static void drawHolidayListCentered(int x, int y, int w, int h,
     snprintf(dateStr, sizeof(dateStr), "%02d.%02d", (int)hi->day, (int)hi->month);
 
     int rowY = startY + i * lineH;
-    int baselineY = rowY + lineH / 2;
+    int baselineY = rowY + lineH / 2;  // shared baseline
 
+    // UTF-8 -> Latin1 conversion
     char nameLatin[128];
     utf8ToLatin1(hi->name, nameLatin, sizeof(nameLatin));
 
-    d.setFont(FONT_B12);
-    d.setTextColor(ink);
-    d.setCursor(nameX, baselineY);
-    d.print(nameLatin);
-
+    // ---- DATE (9pt), fixed aligned column on the left ----
     int16_t tx1, ty1; uint16_t tw, th;
     measureText(dateStr, FONT_9, tx1, ty1, tw, th);
-    int dateX = dateRightX - (int)tw;
+
+    int dateX = startX + (dateColW - (int)tw); // right-aligned within date column
 
     d.setFont(FONT_9);
     d.setTextColor(ink);
-    d.setCursor(dateX - tx1, baselineY);
+    d.setCursor(dateX - tx1, baselineY); // baseline-aligned
     d.print(dateStr);
+
+    // ---- NAME (Bold12), starts after date column + gap ----
+    int nameX = startX + dateColW + gap;
+
+    d.setFont(FONT_B12);
+    d.setTextColor(ink);
+    d.setCursor(nameX, baselineY); // baseline-aligned
+    d.print(nameLatin);
   }
 
   d.setFont(nullptr);
   d.setTextSize(1);
 }
-
-/* Forward declaration: XL reuses the LARGE layout in its top half. */
-static void drawLargeDate(const Cell& c,
-                          const char* month,
-                          const char* wday,
-                          int year,
-                          int month0,
-                          int dayNum,
-                          int todayYear, int todayMonth0, int todayDay,
-                          bool showHolidayDots);
 
 /* =========================
    XL Full Screen layout
@@ -830,37 +849,60 @@ static void drawXLDate(const Cell& c,
                        int dayNum,
                        int todayYear, int todayMonth0, int todayDay) {
   const int gapX = 14;
-  const int gapY = 14;
 
   int leftW  = (c.w - gapX) / 2;
   int rightW = c.w - gapX - leftW;
+
+  int leftX  = c.x;
   int rightX = c.x + leftW + gapX;
 
+  const int gapY = 14;
   int topH    = (c.h - gapY) / 2;
   int bottomH = c.h - gapY - topH;
+
+  int topY = c.y;
   int botY = c.y + topH + gapY;
 
-  Cell topCell = c;
-  topCell.y = c.y;
-  topCell.h = topH;
+  Cell topLeft = c;
+  topLeft.x = leftX;
+  topLeft.y = topY;
+  topLeft.w = leftW;
+  topLeft.h = topH;
+
+  int holX = leftX;
+  int holY = botY;
+  int holW = leftW;
+  int holH = bottomH;
+
+  const int padTopFeb = 26;
+  const int padBotMar = 26;
+  const int padRight  = 26;
+
+  int calX = rightX;
+  int calW = rightW - padRight;
+
+  int febY = topY + padTopFeb;
+  int febH = topH - padTopFeb;
+
+  int marY = botY;
+  int marH = bottomH - padBotMar;
 
   int nextYear = year;
   int nextMonth0 = month0 + 1;
   if (nextMonth0 >= 12) { nextMonth0 = 0; nextYear = year + 1; }
 
-  // Top half mirrors the LARGE date module exactly: date on the left,
-  // current-month calendar on the right. Holiday dots are enabled for XL.
-  drawLargeDate(topCell, month, wday, year, month0, dayNum,
-                todayYear, todayMonth0, todayDay, true);
+  drawMediumDate(topLeft, month, wday, year, dayNum);
+  drawHolidayListCentered(holX, holY, holW, holH, todayYear, todayMonth0, todayDay);
 
-  // Bottom-left: upcoming Norwegian public holidays.
-  drawHolidayListCentered(c.x, botY, leftW, bottomH, todayYear, todayMonth0, todayDay);
-
-  // Bottom-right: extend the calendar column with a full next-month calendar.
-  drawMonthCalendar(rightX, botY, rightW, bottomH,
-                    nextYear, nextMonth0,
+  drawMonthCalendar(calX, febY - 9, calW, febH + 8,
+                    year, month0,
                     todayYear, todayMonth0, todayDay,
                     true, true, true);
+
+  drawMonthCalendar(calX, marY, calW, marH,
+                    nextYear, nextMonth0,
+                    todayYear, todayMonth0, todayDay,
+                    true, true, false);
 }
 
 /* =========================
@@ -872,8 +914,7 @@ static void drawLargeDate(const Cell& c,
                           int year,
                           int month0,
                           int dayNum,
-                          int todayYear, int todayMonth0, int todayDay,
-                          bool showHolidayDots) {
+                          int todayYear, int todayMonth0, int todayDay) {
 
   const int gapX = 14;
 
@@ -922,7 +963,7 @@ static void drawLargeDate(const Cell& c,
                         true,
                         true,
                         usedRows,
-                        showHolidayDots);
+                        false); // holiday dots OFF (only today)
 }
 
 /* ========================= */
@@ -959,7 +1000,7 @@ static void renderDate(const Cell& c) {
   }
 
   if (c.size == CELL_LARGE) {
-    drawLargeDate(c, month, wday, year, month0, dayNum, todayYear, todayMonth0, todayDay, false);
+    drawLargeDate(c, month, wday, year, month0, dayNum, todayYear, todayMonth0, todayDay);
     return;
   }
 
