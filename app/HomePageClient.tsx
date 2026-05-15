@@ -2458,9 +2458,9 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
   const { days, usedRows } = mirrorCalendarDays(now)
 
   return (
-    <div className="flex h-full w-full min-w-0 items-center justify-center overflow-hidden px-[clamp(0.22rem,0.64vw,0.48rem)] py-[clamp(0.18rem,0.48vw,0.36rem)] leading-none">
-      <div className="grid h-full max-h-[min(100%,8.75rem)] w-full max-w-[min(100%,8.75rem)] grid-rows-[auto_1fr] gap-[clamp(0.12rem,0.32vw,0.24rem)]">
-        <div className="grid grid-cols-7 text-center text-[clamp(0.46rem,1.02vw,0.68rem)] font-bold tracking-[0.1em]">
+    <div className="flex h-full w-full min-w-0 items-center justify-center overflow-hidden px-[clamp(0.12rem,0.38vw,0.3rem)] py-[clamp(0.1rem,0.32vw,0.24rem)] leading-none">
+      <div className="grid h-full max-h-[min(100%,11.25rem)] w-full max-w-[min(100%,11.25rem)] grid-rows-[auto_1fr] gap-[clamp(0.16rem,0.45vw,0.34rem)]">
+        <div className="grid grid-cols-7 text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]">
           {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
             <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
               {weekday}
@@ -2469,7 +2469,7 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
         </div>
 
         <div
-          className="grid min-h-0 grid-cols-7 items-center text-center text-[clamp(0.58rem,1.34vw,0.88rem)] font-semibold tracking-[0.02em]"
+          className="grid min-h-0 grid-cols-7 items-center text-center text-[clamp(0.72rem,1.72vw,1.12rem)] font-semibold tracking-[0.02em]"
           style={{ gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))` }}
         >
           {Array.from({ length: usedRows * 7 }).map((_, index) => {
@@ -2482,7 +2482,7 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
               <div key={index} className="flex min-h-0 items-center justify-center">
                 {day == null ? null : (
                   <span
-                    className="flex aspect-square h-[clamp(1rem,2.38vw,1.56rem)] items-center justify-center rounded-full"
+                    className="flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center rounded-full"
                     style={{
                       backgroundColor: isToday ? '#ffffff' : 'transparent',
                       color: isToday ? '#061b24' : textColor,
