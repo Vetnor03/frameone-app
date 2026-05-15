@@ -2383,6 +2383,20 @@ function formatSmallMirrorDate(language: AppLanguage) {
   return `${weekday} ${now.getDate()}. ${month}`
 }
 
+function mirrorMediumDateParts(language: AppLanguage) {
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const now = new Date()
+  const month = new Intl.DateTimeFormat(locale, { month: 'long' }).format(now)
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now)
+
+  return {
+    year: String(now.getFullYear()),
+    month: month.toLocaleUpperCase(locale),
+    day: String(now.getDate()),
+    weekday: weekday.toLocaleUpperCase(locale),
+  }
+}
+
 function mirrorSurfRatingWord(rating: number | undefined) {
   switch (Math.round(Number(rating))) {
     case 1: return 'Flat'
@@ -2793,6 +2807,35 @@ function LandscapeFrameMirror({
           <div className="flex shrink-0 flex-col items-center justify-center gap-[clamp(0.1rem,0.35vw,0.24rem)] text-[clamp(0.55rem,1.25vw,0.82rem)] font-medium tracking-[0.06em]">
             <div className="max-w-full truncate">{detail.weatherWindLine || 'Calm winds'}</div>
             <div className="max-w-full truncate">{detail.weatherPrecipLine || 'Mostly dry'}</div>
+          </div>
+        </div>
+      )
+    }
+
+    if (module === 'date' && size === 'medium') {
+      const dateParts = mirrorMediumDateParts(language)
+
+      return (
+        <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.42rem,1.15vw,0.72rem)] py-[clamp(0.38rem,1vw,0.68rem)] text-center leading-none">
+          <div className="flex h-full max-h-[min(100%,11rem)] w-full max-w-[min(100%,8.4rem)] flex-col items-stretch overflow-hidden border border-current bg-transparent">
+            <div className="flex shrink-0 items-center justify-center border-b border-current px-[clamp(0.26rem,0.75vw,0.5rem)] py-[clamp(0.16rem,0.42vw,0.28rem)] text-[clamp(0.48rem,1.15vw,0.72rem)] font-medium tracking-[0.32em] opacity-75">
+              {dateParts.year}
+            </div>
+
+            <div className="flex shrink-0 items-center justify-center px-[clamp(0.28rem,0.8vw,0.52rem)] pt-[clamp(0.26rem,0.72vw,0.48rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-bold tracking-[0.12em]">
+              <span className="max-w-full truncate">{dateParts.month}</span>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] text-[clamp(2.25rem,6.8vw,4.35rem)] font-semibold tracking-[-0.08em]">
+              {dateParts.day}
+            </div>
+
+            <div
+              className="flex shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.22rem,0.58vw,0.4rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
+              style={{ backgroundColor: textColor, color: frameBackground }}
+            >
+              <span className="max-w-full truncate">{dateParts.weekday}</span>
+            </div>
           </div>
         </div>
       )
