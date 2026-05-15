@@ -2458,8 +2458,8 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
   const { days, usedRows } = mirrorCalendarDays(now)
 
   return (
-    <div className="flex h-full w-full min-w-0 translate-y-[clamp(0.28rem,0.86vw,0.58rem)] items-center justify-center overflow-hidden px-[clamp(0.04rem,0.18vw,0.14rem)] py-[clamp(0.1rem,0.32vw,0.24rem)] leading-none">
-      <div className="grid h-full max-h-[min(100%,12.15rem)] w-full max-w-[min(100%,12.85rem)] grid-rows-[auto_1fr] gap-[clamp(0.22rem,0.62vw,0.46rem)]">
+    <div className="flex h-full w-full min-w-0 translate-y-[clamp(0.18rem,0.62vw,0.42rem)] items-center justify-center overflow-hidden px-0 py-[clamp(0.16rem,0.44vw,0.32rem)] leading-none">
+      <div className="grid h-full max-h-[min(94%,11.65rem)] w-full max-w-[min(100%,14.2rem)] grid-rows-[auto_1fr] gap-[clamp(0.22rem,0.62vw,0.46rem)]">
         <div className="grid grid-cols-7 gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]">
           {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
             <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
@@ -2918,7 +2918,7 @@ function LandscapeFrameMirror({
 
     if (module === 'date' && size === 'large') {
       return (
-        <div className="grid h-full w-full grid-cols-2 items-stretch overflow-hidden">
+        <div className="grid h-full w-full grid-cols-[0.46fr_0.54fr] items-stretch overflow-hidden">
           <div className="min-w-0 overflow-hidden">
             <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
           </div>
