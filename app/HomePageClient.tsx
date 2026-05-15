@@ -2397,6 +2397,103 @@ function mirrorMediumDateParts(language: AppLanguage) {
   }
 }
 
+const MIRROR_CALENDAR_WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+
+function mirrorCalendarDays(now = new Date()) {
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const mondayFirstOffset = (new Date(year, month, 1).getDay() + 6) % 7
+
+  return [
+    ...Array.from({ length: mondayFirstOffset }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ]
+}
+
+function MirrorMediumDateCard({
+  language,
+  textColor,
+  frameBackground,
+}: {
+  language: AppLanguage
+  textColor: string
+  frameBackground: string
+}) {
+  const dateParts = mirrorMediumDateParts(language)
+
+  return (
+    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.42rem,1.15vw,0.72rem)] py-[clamp(0.28rem,0.76vw,0.52rem)] text-center leading-none">
+      <div className="flex h-full max-h-[min(100%,10.35rem)] w-full max-w-[min(100%,8.4rem)] flex-col items-stretch overflow-hidden bg-transparent">
+        <div className="flex shrink-0 items-center justify-center px-[clamp(0.26rem,0.75vw,0.5rem)] py-[clamp(0.12rem,0.32vw,0.22rem)] text-[clamp(0.48rem,1.15vw,0.72rem)] font-medium tracking-[0.32em] opacity-75">
+          {dateParts.year}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-center px-[clamp(0.28rem,0.8vw,0.52rem)] pt-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-bold tracking-[0.12em]">
+          <span className="max-w-full truncate">{dateParts.month}</span>
+        </div>
+
+        <div className="flex min-h-0 flex-1 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] text-[clamp(2.25rem,6.8vw,4.35rem)] font-semibold tracking-[-0.08em]">
+          {dateParts.day}
+        </div>
+
+        <div
+          className="flex min-h-[clamp(1.28rem,3.05vw,1.9rem)] shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.28rem,0.72vw,0.5rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
+          style={{ backgroundColor: textColor, color: frameBackground }}
+        >
+          <span className="max-w-full truncate">{dateParts.weekday}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorMonthCalendar({ textColor }: { textColor: string }) {
+  const now = new Date()
+  const today = now.getDate()
+  const days = mirrorCalendarDays(now)
+
+  return (
+    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.38rem,1.02vw,0.74rem)] py-[clamp(0.34rem,0.95vw,0.68rem)] leading-none">
+      <div className="grid h-full max-h-[min(100%,10.2rem)] w-full max-w-[min(100%,13.5rem)] grid-rows-[auto_1fr] gap-[clamp(0.2rem,0.55vw,0.4rem)]">
+        <div className="grid grid-cols-7 text-center text-[clamp(0.48rem,1.08vw,0.72rem)] font-bold tracking-[0.1em]">
+          {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
+            <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
+              {weekday}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid min-h-0 grid-cols-7 grid-rows-6 items-center text-center text-[clamp(0.58rem,1.4vw,0.92rem)] font-semibold tracking-[0.02em]">
+          {Array.from({ length: 42 }).map((_, index) => {
+            const day = days[index] ?? null
+            const weekdayIndex = index % 7
+            const isWeekend = weekdayIndex >= 5
+            const isToday = day === today
+
+            return (
+              <div key={index} className="flex min-h-0 items-center justify-center">
+                {day == null ? null : (
+                  <span
+                    className="flex aspect-square h-[clamp(1.02rem,2.42vw,1.52rem)] items-center justify-center rounded-full"
+                    style={{
+                      backgroundColor: isToday ? '#ffffff' : 'transparent',
+                      color: isToday ? '#061b24' : textColor,
+                      opacity: isToday ? 1 : isWeekend ? 0.42 : 0.88,
+                    }}
+                  >
+                    {day}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function mirrorSurfRatingWord(rating: number | undefined) {
   switch (Math.round(Number(rating))) {
     case 1: return 'Flat'
@@ -2812,33 +2909,17 @@ function LandscapeFrameMirror({
       )
     }
 
-    if (module === 'date' && size === 'medium') {
-      const dateParts = mirrorMediumDateParts(language)
-
+    if (module === 'date' && size === 'large') {
       return (
-        <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.42rem,1.15vw,0.72rem)] py-[clamp(0.28rem,0.76vw,0.52rem)] text-center leading-none">
-          <div className="flex h-full max-h-[min(100%,10.35rem)] w-full max-w-[min(100%,8.4rem)] flex-col items-stretch overflow-hidden bg-transparent">
-            <div className="flex shrink-0 items-center justify-center px-[clamp(0.26rem,0.75vw,0.5rem)] py-[clamp(0.12rem,0.32vw,0.22rem)] text-[clamp(0.48rem,1.15vw,0.72rem)] font-medium tracking-[0.32em] opacity-75">
-              {dateParts.year}
-            </div>
-
-            <div className="flex shrink-0 items-center justify-center px-[clamp(0.28rem,0.8vw,0.52rem)] pt-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-bold tracking-[0.12em]">
-              <span className="max-w-full truncate">{dateParts.month}</span>
-            </div>
-
-            <div className="flex min-h-0 flex-1 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] text-[clamp(2.25rem,6.8vw,4.35rem)] font-semibold tracking-[-0.08em]">
-              {dateParts.day}
-            </div>
-
-            <div
-              className="flex min-h-[clamp(1.28rem,3.05vw,1.9rem)] shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.28rem,0.72vw,0.5rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
-              style={{ backgroundColor: textColor, color: frameBackground }}
-            >
-              <span className="max-w-full truncate">{dateParts.weekday}</span>
-            </div>
-          </div>
+        <div className="grid h-full w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] items-stretch overflow-hidden">
+          <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
+          <MirrorMonthCalendar textColor={textColor} />
         </div>
       )
+    }
+
+    if (module === 'date' && size === 'medium') {
+      return <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
     }
 
     if (module === 'date' && size === 'small') {
