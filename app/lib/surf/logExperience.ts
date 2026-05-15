@@ -37,6 +37,14 @@ export type ChosenSurfConditions = {
   wind_dir_from_deg: number
   wind_speed_ms: number
   picked: 'primary' | 'secondary'
+  selected_swell_index: number
+  condition_signature: {
+    spotKey: string
+    swells: Array<{ index: number; height_m: number; period_s: number; direction_deg_from: number }>
+    wind_speed_ms: number
+    wind_direction_deg_from: number
+    forecast_time_utc: string
+  }
 }
 
 const SECONDARY_MIN_M = 0.05
@@ -97,8 +105,6 @@ export function getUtcHourRange(when: Date) {
 }
 
 async function fetchMarineSeriesAtTime(lat: number, lon: number, when: Date): Promise<MarineSeries> {
-  const targetHour = isoHourUTC(when)
-
   const marineUrl =
     `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}` +
     `&longitude=${lon}` +
@@ -228,7 +234,6 @@ export async function getChosenSurfConditionsAt(args: {
 
   const series = await fetchMarineSeriesAtTime(lat, lon, when)
   const targetHour = isoHourUTC(when)
-
   const mi = nearestHourIndex(series.mt, targetHour)
   const wi = nearestHourIndex(series.wt, targetHour)
 
@@ -243,5 +248,16 @@ export async function getChosenSurfConditionsAt(args: {
     wind_dir_from_deg: Number(marine.wind_direction_deg_from),
     wind_speed_ms: Number(marine.wind_speed_ms),
     picked: picked.which,
+    selected_swell_index: picked.which === 'secondary' ? 2 : 1,
+    condition_signature: {
+      spotKey,
+      swells: [
+        { index: 1, height_m: Number(marine.primary.height_m), period_s: Number(marine.primary.period_s), direction_deg_from: Number(marine.primary.direction_deg_from) },
+        ...(marine.secondary.present ? [{ index: 2, height_m: Number(marine.secondary.height_m), period_s: Number(marine.secondary.period_s), direction_deg_from: Number(marine.secondary.direction_deg_from) }] : []),
+      ],
+      wind_speed_ms: Number(marine.wind_speed_ms),
+      wind_direction_deg_from: Number(marine.wind_direction_deg_from),
+      forecast_time_utc: marine.time_utc,
+    },
   }
 }
