@@ -38,6 +38,8 @@ type MarinePoint = {
     secondary_tables_total: number | null
     primary_corrected_height: number
     secondary_corrected_height: number
+    condition_signature: any
+    contributing_swell_indexes: number[]
   }
 }
 
@@ -304,6 +306,20 @@ async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, 
           : null,
       primary_corrected_height: picked.primaryCorrectedHeight,
       secondary_corrected_height: picked.secondaryCorrectedHeight,
+      condition_signature: {
+        spotKey,
+        swells: [
+          { index: 1, height_m: primary.height, period_s: primary.period, direction_deg_from: primary.dir },
+          ...(secondary.height > 0.05 ? [{ index: 2, height_m: secondary.height, period_s: secondary.period, direction_deg_from: secondary.dir }] : []),
+        ],
+        wind_speed_ms: windSpeed,
+        wind_direction_deg_from: windDir,
+        forecast_time_utc: mt[mi],
+      },
+      contributing_swell_indexes: [
+        1,
+        ...(secondary.height > 0.05 ? [2] : []),
+      ],
     },
   }
 }
@@ -411,6 +427,15 @@ export async function POST(req: Request) {
           wave_period_s: marine.wave_period,
           wind_dir_from_deg: marine.wind_direction_10m,
           wind_speed_ms: marine.wind_speed_10m,
+          primary_swell_height_m: marine.debug.primary.height,
+          primary_swell_period_s: marine.debug.primary.period,
+          primary_swell_dir_from_deg: marine.debug.primary.dir,
+          secondary_swell_height_m: marine.debug.secondary.height,
+          secondary_swell_period_s: marine.debug.secondary.period,
+          secondary_swell_dir_from_deg: marine.debug.secondary.dir,
+          selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
+          condition_signature: marine.debug.condition_signature,
+          forecast_time_utc: marine.time,
           rating_1_6: ratingNum,
         })
         .eq('id', existingId)
@@ -430,6 +455,15 @@ export async function POST(req: Request) {
           wave_period_s: marine.wave_period,
           wind_dir_from_deg: marine.wind_direction_10m,
           wind_speed_ms: marine.wind_speed_10m,
+          primary_swell_height_m: marine.debug.primary.height,
+          primary_swell_period_s: marine.debug.primary.period,
+          primary_swell_dir_from_deg: marine.debug.primary.dir,
+          secondary_swell_height_m: marine.debug.secondary.height,
+          secondary_swell_period_s: marine.debug.secondary.period,
+          secondary_swell_dir_from_deg: marine.debug.secondary.dir,
+          selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
+          condition_signature: marine.debug.condition_signature,
+          forecast_time_utc: marine.time,
           rating_1_6: ratingNum,
         },
         debug: marine.debug,
@@ -448,6 +482,15 @@ export async function POST(req: Request) {
         wave_period_s: marine.wave_period,
         wind_dir_from_deg: marine.wind_direction_10m,
         wind_speed_ms: marine.wind_speed_10m,
+        primary_swell_height_m: marine.debug.primary.height,
+        primary_swell_period_s: marine.debug.primary.period,
+        primary_swell_dir_from_deg: marine.debug.primary.dir,
+        secondary_swell_height_m: marine.debug.secondary.height,
+        secondary_swell_period_s: marine.debug.secondary.period,
+        secondary_swell_dir_from_deg: marine.debug.secondary.dir,
+        selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
+        condition_signature: marine.debug.condition_signature,
+        forecast_time_utc: marine.time,
         rating_1_6: ratingNum,
       })
 
@@ -465,6 +508,15 @@ export async function POST(req: Request) {
         wave_period_s: marine.wave_period,
         wind_dir_from_deg: marine.wind_direction_10m,
         wind_speed_ms: marine.wind_speed_10m,
+        primary_swell_height_m: marine.debug.primary.height,
+        primary_swell_period_s: marine.debug.primary.period,
+        primary_swell_dir_from_deg: marine.debug.primary.dir,
+        secondary_swell_height_m: marine.debug.secondary.height,
+        secondary_swell_period_s: marine.debug.secondary.period,
+        secondary_swell_dir_from_deg: marine.debug.secondary.dir,
+        selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
+        condition_signature: marine.debug.condition_signature,
+        forecast_time_utc: marine.time,
         rating_1_6: ratingNum,
       },
       debug: marine.debug,

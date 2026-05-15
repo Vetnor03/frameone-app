@@ -5,6 +5,22 @@ import EXP from '../lib/surf/waveguide_experience.json'
 type Dir8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW'
 type TableKey = 'wave_dir' | 'wave_height' | 'wave_period' | 'wind_dir' | 'wind_speed'
 
+export type SwellMixComponent = {
+  index: number
+  height_m: number
+  period_s: number
+  direction_deg_from: number
+}
+
+export type NormalizedSwellMixSignature = {
+  spotKey: string
+  swells: SwellMixComponent[]
+  wind_speed_ms: number
+  wind_direction_deg_from: number
+  tide_m?: number | null
+  forecast_time_utc?: string | null
+}
+
 export type UserSurfExperienceRecord = {
   id?: string
   user_id?: string
@@ -17,6 +33,19 @@ export type UserSurfExperienceRecord = {
   wind_dir_from_deg: number
   wind_speed_ms: number
   rating_1_6: number
+  primary_swell_height_m?: number | null
+  primary_swell_period_s?: number | null
+  primary_swell_dir_from_deg?: number | null
+  secondary_swell_height_m?: number | null
+  secondary_swell_period_s?: number | null
+  secondary_swell_dir_from_deg?: number | null
+  third_swell_height_m?: number | null
+  third_swell_period_s?: number | null
+  third_swell_dir_from_deg?: number | null
+  tide_m?: number | null
+  forecast_time_utc?: string | null
+  condition_signature?: NormalizedSwellMixSignature | string | null
+  selected_swell_index?: number | null
   created_at?: string
   updated_at?: string
 }
@@ -30,6 +59,11 @@ type ScoreBreakdown = {
     swell_direction_deg_from: number
     wind_speed_ms: number
     wind_direction_deg_from: number
+    primary_swell?: SwellMixComponent | null
+    secondary_swell?: SwellMixComponent | null
+    third_swell?: SwellMixComponent | null
+    tide_m?: number | null
+    forecast_time_utc?: string | null
   }
 
   experience?: {
@@ -59,6 +93,7 @@ type ScoreBreakdown = {
     agreement?: number
     recency_factor?: number
     experience_rating_float?: number
+    match_type?: 'combined' | 'dominant_only' | 'legacy_single_swell' | 'none'
     best_record?: {
       rating_1_6: number
       source_priority: 'user' | 'legacy'
@@ -93,6 +128,16 @@ type ScoreBreakdown = {
     killSwitchApplied?: boolean
     killSwitchMultiplier?: number
   }
+
+  selectedMainSwellIndex?: number
+  contributingSwellIndexes?: number[]
+  swellMixSignature?: NormalizedSwellMixSignature
+  experienceMatchType?: 'combined' | 'dominant_only' | 'legacy_single_swell' | 'none'
+  experienceConfidence?: number
+  modelRating?: number
+  experienceRating?: number
+  finalRating?: number
+  whySelected?: string
 
   method: string
 }
@@ -473,6 +518,156 @@ function buildModelScore(args: {
   }
 }
 
+
+function swellEnergyForMix(s: SwellMixComponent) {
+  const h = Number.isFinite(s.height_m) ? s.height_m : 0
+  const period = Number.isFinite(s.period_s) ? s.period_s : 0
+  if (!(h > 0) || !(period > 0)) return 0
+  return h * period
+}
+
+function normalizeSwellComponent(raw: any, index: number): SwellMixComponent | null {
+  const height = safeNum(raw?.height_m ?? raw?.height ?? raw?.wave_height_m, 0)
+  const period = safeNum(raw?.period_s ?? raw?.period ?? raw?.wave_period_s, 0)
+  const dir = safeNum(raw?.direction_deg_from ?? raw?.dir ?? raw?.wave_dir_from_deg ?? raw?.wave_dir_deg_from, 0)
+  if (!(height > 0.01) || !(period > 0)) return null
+  return {
+    index,
+    height_m: Math.round(height * 100) / 100,
+    period_s: Math.round(period * 10) / 10,
+    direction_deg_from: Math.round(normDeg(dir)),
+  }
+}
+
+function componentHitsSpot(spotKey: string, s: SwellMixComponent) {
+  return s.height_m >= 0.35 && s.period_s >= 5 && dirBucketScore1to6('wave_dir', spotKey, s.direction_deg_from).score > 1
+}
+
+function buildSwellMixSignature(args: {
+  spotKey: string
+  swells?: SwellMixComponent[]
+  fallback: SwellMixComponent
+  windSpeed: number
+  windDirFrom: number
+  tideM?: number | null
+  forecastTimeUtc?: string | null
+}): NormalizedSwellMixSignature {
+  const source = Array.isArray(args.swells) && args.swells.length ? args.swells : [args.fallback]
+  const swells = source
+    .map((s, i) => normalizeSwellComponent(s, Number.isFinite(s?.index) ? Number(s.index) : i + 1))
+    .filter((s): s is SwellMixComponent => !!s)
+    .sort((a, b) => a.index - b.index)
+
+  return {
+    spotKey: normalizeSpotKey(args.spotKey),
+    swells,
+    wind_speed_ms: Math.round(safeNum(args.windSpeed, 0) * 10) / 10,
+    wind_direction_deg_from: Math.round(normDeg(safeNum(args.windDirFrom, 0))),
+    ...(args.tideM != null && Number.isFinite(Number(args.tideM)) ? { tide_m: Math.round(Number(args.tideM) * 100) / 100 } : {}),
+    ...(args.forecastTimeUtc ? { forecast_time_utc: String(args.forecastTimeUtc) } : {}),
+  }
+}
+
+function parseRecordSignature(r: any, spotKey: string): { signature: NormalizedSwellMixSignature; matchType: 'combined' | 'dominant_only' | 'legacy_single_swell' } {
+  let parsed: any = null
+  const rawSig = r?.condition_signature ?? r?.swell_mix_signature
+  if (rawSig) {
+    if (typeof rawSig === 'string') {
+      try { parsed = JSON.parse(rawSig) } catch { parsed = null }
+    } else if (typeof rawSig === 'object') {
+      parsed = rawSig
+    }
+  }
+
+  const parsedSwells = Array.isArray(parsed?.swells)
+    ? parsed.swells
+        .map((x: any, i: number) => normalizeSwellComponent(x, Number.isFinite(Number(x?.index)) ? Number(x.index) : i + 1))
+        .filter(Boolean) as SwellMixComponent[]
+    : []
+
+  if (parsedSwells.length) {
+    return {
+      signature: buildSwellMixSignature({
+        spotKey: String(parsed?.spotKey ?? spotKey),
+        swells: parsedSwells,
+        fallback: parsedSwells[0],
+        windSpeed: safeNum(parsed?.wind_speed_ms ?? r?.wind_speed_ms, 0),
+        windDirFrom: safeNum(parsed?.wind_direction_deg_from ?? r?.wind_dir_from_deg ?? r?.wind_dir_deg_from, 0),
+        tideM: parsed?.tide_m ?? r?.tide_m,
+        forecastTimeUtc: parsed?.forecast_time_utc ?? r?.forecast_time_utc ?? r?.logged_at,
+      }),
+      matchType: parsedSwells.length >= 2 ? 'combined' : 'dominant_only',
+    }
+  }
+
+  const fullSwells: SwellMixComponent[] = []
+  const p = normalizeSwellComponent({ height_m: r?.primary_swell_height_m, period_s: r?.primary_swell_period_s, direction_deg_from: r?.primary_swell_dir_from_deg }, 1)
+  const sec = normalizeSwellComponent({ height_m: r?.secondary_swell_height_m, period_s: r?.secondary_swell_period_s, direction_deg_from: r?.secondary_swell_dir_from_deg }, 2)
+  const third = normalizeSwellComponent({ height_m: r?.third_swell_height_m, period_s: r?.third_swell_period_s, direction_deg_from: r?.third_swell_dir_from_deg }, 3)
+  if (p) fullSwells.push(p)
+  if (sec) fullSwells.push(sec)
+  if (third) fullSwells.push(third)
+
+  if (fullSwells.length) {
+    return {
+      signature: buildSwellMixSignature({
+        spotKey,
+        swells: fullSwells,
+        fallback: fullSwells[0],
+        windSpeed: safeNum(r?.wind_speed_ms, 0),
+        windDirFrom: safeNum(r?.wind_dir_from_deg ?? r?.wind_dir_deg_from, 0),
+        tideM: r?.tide_m,
+        forecastTimeUtc: r?.forecast_time_utc ?? r?.logged_at,
+      }),
+      matchType: fullSwells.length >= 2 ? 'combined' : 'dominant_only',
+    }
+  }
+
+  const legacy = normalizeSwellComponent({ height_m: r?.wave_height_m, period_s: r?.wave_period_s, direction_deg_from: r?.wave_dir_from_deg ?? r?.wave_dir_deg_from }, Number(r?.selected_swell_index ?? 1) || 1) ?? {
+    index: Number(r?.selected_swell_index ?? 1) || 1,
+    height_m: safeNum(r?.wave_height_m, 0),
+    period_s: safeNum(r?.wave_period_s, 0),
+    direction_deg_from: safeNum(r?.wave_dir_from_deg ?? r?.wave_dir_deg_from, 0),
+  }
+
+  return {
+    signature: buildSwellMixSignature({
+      spotKey,
+      swells: [legacy],
+      fallback: legacy,
+      windSpeed: safeNum(r?.wind_speed_ms, 0),
+      windDirFrom: safeNum(r?.wind_dir_from_deg ?? r?.wind_dir_deg_from, 0),
+      tideM: r?.tide_m,
+      forecastTimeUtc: r?.forecast_time_utc ?? r?.logged_at,
+    }),
+    matchType: 'legacy_single_swell',
+  }
+}
+
+function swellMixDistance(target: NormalizedSwellMixSignature, record: NormalizedSwellMixSignature) {
+  const t = target.swells
+  const r = record.swells
+  const maxLen = Math.max(t.length, r.length, 1)
+  let sum = 0
+
+  for (let i = 0; i < maxLen; i++) {
+    const ts = t[i]
+    const rs = r[i]
+    if (ts && rs) {
+      sum += normalizedPctDistance(ts.height_m, rs.height_m, 0.25) * 1.35
+      sum += normalizedPctDistance(ts.period_s, rs.period_s, 1) * 1.15
+      sum += normalizedDirDistance(ts.direction_deg_from, rs.direction_deg_from) * 1.45
+      sum += Math.abs((swellEnergyForMix(ts) / Math.max(1, t.reduce((a, x) => a + swellEnergyForMix(x), 0))) - (swellEnergyForMix(rs) / Math.max(1, r.reduce((a, x) => a + swellEnergyForMix(x), 0)))) * 0.85
+    } else {
+      const only = ts ?? rs
+      const share = only ? swellEnergyForMix(only) / Math.max(1, (ts ? t : r).reduce((a, x) => a + swellEnergyForMix(x), 0)) : 1
+      sum += 1.15 + share
+    }
+  }
+
+  return sum / maxLen
+}
+
 // ---------------------
 // Confidence-weighted experience model
 // ---------------------
@@ -483,6 +678,7 @@ type ExperienceMatchArgs = {
   wavePeriod: number
   windSpeed: number
   windDirFrom: number
+  swellMixSignature: NormalizedSwellMixSignature
   userExperiences?: UserSurfExperienceRecord[]
   modelRating: number
 }
@@ -500,6 +696,8 @@ type ExperienceCandidate = {
   wave_dir_from_deg: number
   wind_speed_ms: number
   wind_dir_from_deg: number
+  swell_mix_signature: NormalizedSwellMixSignature
+  match_type: 'combined' | 'dominant_only' | 'legacy_single_swell'
 
   err: number
   similarity: number
@@ -533,6 +731,7 @@ type ExperienceBlendResult = {
   agreement: number
   recency_factor: number
   experience_rating_float?: number
+  match_type: 'combined' | 'dominant_only' | 'legacy_single_swell' | 'none'
   best_record?: {
     rating_1_6: number
     source_priority: 'user' | 'legacy'
@@ -545,6 +744,8 @@ type ExperienceBlendResult = {
     wave_dir_from_deg: number
     wind_speed_ms: number
     wind_dir_from_deg: number
+    swell_mix_signature?: NormalizedSwellMixSignature
+    match_type?: 'combined' | 'dominant_only' | 'legacy_single_swell'
   }
 }
 
@@ -630,36 +831,35 @@ function collectExperienceCandidates(args: ExperienceMatchArgs) {
       const rating = Math.round(Number(r?.rating_1_6 ?? 0))
       if (rating < 1 || rating > 6) continue
 
-      const waveH = safeNum(r?.wave_height_m, 0)
-      const waveP = safeNum(r?.wave_period_s, 0)
-      const waveD = safeNum(r?.wave_dir_from_deg ?? r?.wave_dir_deg_from, 0)
-      const windS = safeNum(r?.wind_speed_ms, 0)
-      const windD = safeNum(r?.wind_dir_from_deg ?? r?.wind_dir_deg_from, 0)
+      const { signature: recordSignature, matchType } = parseRecordSignature(r, args.spotKey)
+      const dominant = [...recordSignature.swells].sort((a, b) => swellEnergyForMix(b) - swellEnergyForMix(a))[0]
+      if (!dominant) continue
 
-      const dWaveH = normalizedPctDistance(args.waveH, waveH, 0.25)
-      const dWaveP = normalizedPctDistance(args.wavePeriod, waveP, 1)
-      const dWaveDir = normalizedDirDistance(args.waveDirFrom, waveD)
+      const waveH = dominant.height_m
+      const waveP = dominant.period_s
+      const waveD = dominant.direction_deg_from
+      const windS = safeNum(recordSignature.wind_speed_ms, 0)
+      const windD = safeNum(recordSignature.wind_direction_deg_from, 0)
+
+      const dMix = swellMixDistance(args.swellMixSignature, recordSignature)
       const dWindS = normalizedPctDistance(args.windSpeed, windS, 1)
       const dWindDir = normalizedDirDistance(args.windDirFrom, windD)
 
-      const err =
-        dWaveH * cfg.wave_height_weight +
-        dWaveP * cfg.wave_period_weight +
-        dWaveDir * cfg.wave_dir_weight +
-        dWindS * cfg.wind_speed_weight +
-        dWindDir * cfg.wind_dir_weight
+      const legacyPenalty = matchType === 'legacy_single_swell' ? 0.75 : matchType === 'dominant_only' ? 0.32 : 0
+      const err = dMix * 3.7 + dWindS * cfg.wind_speed_weight + dWindDir * cfg.wind_dir_weight + legacyPenalty
 
-      const pctMatchOk =
-        dWaveH <= cfg.max_pct_for_consider &&
-        dWaveP <= cfg.max_pct_for_consider &&
-        dWindS <= cfg.max_pct_for_consider
-
-      const dirMatchOk =
-        angDistDeg(args.waveDirFrom, waveD) <= cfg.max_dir_deg_for_consider &&
-        angDistDeg(args.windDirFrom, windD) <= cfg.max_dir_deg_for_consider
-
-      if (!pctMatchOk || !dirMatchOk) continue
-      if (!(err <= cfg.max_distance_for_use)) continue
+      const hasSecondaryTarget = args.swellMixSignature.swells.length >= 2
+      const hasSecondaryRecord = recordSignature.swells.length >= 2
+      const maxDistanceForUse =
+        matchType === 'combined'
+          ? cfg.max_distance_for_use
+          : matchType === 'dominant_only'
+            ? Math.max(cfg.max_distance_for_use, 3.0)
+            : Math.max(cfg.max_distance_for_use, 3.2)
+      if (hasSecondaryTarget && hasSecondaryRecord && dMix > 0.55) continue
+      if (!hasSecondaryTarget && hasSecondaryRecord && dMix > 0.75) continue
+      if (!(err <= maxDistanceForUse)) continue
+      if (dWindS > cfg.max_pct_for_consider || angDistDeg(args.windDirFrom, windD) > cfg.max_dir_deg_for_consider) continue
 
       const daysAgo = daysAgoFromIso(r?.logged_at)
       const recency =
@@ -672,8 +872,9 @@ function collectExperienceCandidates(args: ExperienceMatchArgs) {
             )
 
       const sourceWeight = sourcePriority === 'user' ? cfg.user_source_weight : cfg.legacy_source_weight
+      const signatureWeight = matchType === 'combined' ? 1 : matchType === 'dominant_only' ? 0.72 : 0.45
       const similarity = closenessFromNormDistance(err)
-      const weight = similarity * recency * sourceWeight
+      const weight = similarity * recency * sourceWeight * signatureWeight
 
       if (!(weight > 0)) continue
 
@@ -689,6 +890,8 @@ function collectExperienceCandidates(args: ExperienceMatchArgs) {
         wave_dir_from_deg: waveD,
         wind_speed_ms: windS,
         wind_dir_from_deg: windD,
+        swell_mix_signature: recordSignature,
+        match_type: matchType,
         err,
         similarity,
         weight,
@@ -735,6 +938,7 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
     recency_factor: 0,
     source: consideredUserCount > 0 ? 'user_surf_experiences' : legacyInfo.source,
     source_priority: consideredUserCount > 0 ? 'user' : 'legacy',
+    match_type: 'none',
   }
 
   if (!candidates.length) return empty
@@ -745,7 +949,6 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
   let weightSum = 0
   let ratingSum = 0
   let userWeight = 0
-  let legacyWeight = 0
   let recencyWeightSum = 0
 
   for (const c of used) {
@@ -765,7 +968,6 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
     recencyWeightSum += c.weight * recency
 
     if (c.source_priority === 'user') userWeight += c.weight
-    else legacyWeight += c.weight
   }
 
   if (!(weightSum > 0)) return empty
@@ -783,8 +985,7 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
     variance += c.weight * Math.pow(c.rating - experienceRatingFloat, 2)
   }
   variance = variance / weightSum
-  const MAX_VARIANCE = Math.pow(6 - 1, 2) / 4 // ≈ 6.25 / 4 ≈ 1.56? (but we want proper normalization)
-const agreement = clamp(1 - variance / 6.25, 0, 1)
+  const agreement = clamp(1 - variance / 6.25, 0, 1)
 
   const sqSum = used.reduce((acc, c) => acc + c.weight * c.weight, 0)
   const effectiveN = sqSum > 0 ? (weightSum * weightSum) / sqSum : 1
@@ -800,13 +1001,11 @@ const agreement = clamp(1 - variance / 6.25, 0, 1)
     recencyFactor * 0.10 +
     sourceFactor * 0.05
 
-  const hardWaveH = normalizedPctDistance(args.waveH, best.wave_height_m, 0.25) <= cfg.hard_match_pct
-  const hardWaveP = normalizedPctDistance(args.wavePeriod, best.wave_period_s, 1) <= cfg.hard_match_pct
+  const hardMix = swellMixDistance(args.swellMixSignature, best.swell_mix_signature) <= (best.match_type === 'combined' ? 0.18 : 0.30)
   const hardWindS = normalizedPctDistance(args.windSpeed, best.wind_speed_ms, 1) <= cfg.hard_match_pct
-  const hardWaveDir = angDistDeg(args.waveDirFrom, best.wave_dir_from_deg) <= cfg.hard_match_dir_deg
   const hardWindDir = angDistDeg(args.windDirFrom, best.wind_dir_from_deg) <= cfg.hard_match_dir_deg
 
-  const isHardNearMatch = hardWaveH && hardWaveP && hardWindS && hardWaveDir && hardWindDir
+  const isHardNearMatch = hardMix && hardWindS && hardWindDir
 
   if (best.source_priority === 'user' && isHardNearMatch) {
     confidence = Math.max(confidence, cfg.user_near_match_confidence_floor)
@@ -821,7 +1020,9 @@ const agreement = clamp(1 - variance / 6.25, 0, 1)
       ? Math.min(cfg.max_blend_confidence, 0.72)
       : cfg.max_blend_confidence
 
-  confidence = clamp(confidence, 0, legacyOnlyCap)
+  const signatureCap = best.match_type === 'combined' ? legacyOnlyCap : best.match_type === 'dominant_only' ? Math.min(legacyOnlyCap, 0.58) : Math.min(legacyOnlyCap, 0.38)
+
+  confidence = clamp(confidence, 0, signatureCap)
 
 const blendedFloat =
   args.modelRating * (1 - confidence) +
@@ -860,6 +1061,7 @@ const blendedFloat =
     agreement,
     recency_factor: recencyFactor,
     experience_rating_float: experienceRatingFloat,
+    match_type: best.match_type,
 
     best_record: {
       rating_1_6: best.rating,
@@ -873,6 +1075,8 @@ const blendedFloat =
       wave_dir_from_deg: best.wave_dir_from_deg,
       wind_speed_ms: best.wind_speed_ms,
       wind_dir_from_deg: best.wind_dir_from_deg,
+      swell_mix_signature: best.swell_mix_signature,
+      match_type: best.match_type,
     },
   }
 }
@@ -887,15 +1091,48 @@ export function scoreSurf(params: {
   swellDirDeg: number
   windSpeedMs: number
   windDirDeg: number
+  swells?: SwellMixComponent[]
+  selectedMainSwellIndex?: number
+  tideM?: number | null
+  forecastTimeUtc?: string | null
+  whySelected?: string
   userExperiences?: UserSurfExperienceRecord[]
 }): SurfScoreResult {
   const spotKey = normalizeSpotKey(params.spotKey)
 
-  const h = Number.isFinite(params.swellHeightM) ? params.swellHeightM : 0
-  const p = Number.isFinite(params.swellPeriodS) ? params.swellPeriodS : 0
-  const sd = Number.isFinite(params.swellDirDeg) ? params.swellDirDeg : 0
+  const fallbackSwell: SwellMixComponent = {
+    index: params.selectedMainSwellIndex ?? 1,
+    height_m: Number.isFinite(params.swellHeightM) ? params.swellHeightM : 0,
+    period_s: Number.isFinite(params.swellPeriodS) ? params.swellPeriodS : 0,
+    direction_deg_from: Number.isFinite(params.swellDirDeg) ? params.swellDirDeg : 0,
+  }
   const ws = Number.isFinite(params.windSpeedMs) ? params.windSpeedMs : 0
   const wd = Number.isFinite(params.windDirDeg) ? params.windDirDeg : 0
+
+  const rawSignature = buildSwellMixSignature({
+    spotKey,
+    swells: params.swells,
+    fallback: fallbackSwell,
+    windSpeed: ws,
+    windDirFrom: wd,
+    tideM: params.tideM,
+    forecastTimeUtc: params.forecastTimeUtc,
+  })
+  const contributingSwells = rawSignature.swells.filter((s) => componentHitsSpot(spotKey, s))
+  const scoreSwells = contributingSwells.length ? contributingSwells : rawSignature.swells
+  const selectedOverride = params.selectedMainSwellIndex != null
+    ? scoreSwells.find((s) => s.index === params.selectedMainSwellIndex)
+    : null
+  const mainSwell = selectedOverride ?? [...scoreSwells].sort((a, b) => swellEnergyForMix(b) - swellEnergyForMix(a))[0] ?? fallbackSwell
+  const selectedMainSwellIndex = params.selectedMainSwellIndex ?? mainSwell.index
+  const swellMixSignature: NormalizedSwellMixSignature = {
+    ...rawSignature,
+    swells: scoreSwells,
+  }
+
+  const h = mainSwell.height_m
+  const p = mainSwell.period_s
+  const sd = mainSwell.direction_deg_from
 
   const line1 = `${h.toFixed(1)}m @ ${Math.round(p)}s`
   const line2 = `${degToDir8(sd)} swell, ${degToDir8(wd)} wind`
@@ -916,6 +1153,7 @@ export function scoreSurf(params: {
     wavePeriod: p,
     windSpeed: ws,
     windDirFrom: wd,
+    swellMixSignature,
     userExperiences: params.userExperiences,
     modelRating: model.rating,
   })
@@ -935,6 +1173,11 @@ export function scoreSurf(params: {
         swell_direction_deg_from: sd,
         wind_speed_ms: ws,
         wind_direction_deg_from: wd,
+        primary_swell: rawSignature.swells.find((x) => x.index === 1) ?? null,
+        secondary_swell: rawSignature.swells.find((x) => x.index === 2) ?? null,
+        third_swell: rawSignature.swells.find((x) => x.index === 3) ?? null,
+        tide_m: params.tideM ?? null,
+        forecast_time_utc: params.forecastTimeUtc ?? null,
       },
       experience: {
         matched: exp.matched,
@@ -963,9 +1206,19 @@ export function scoreSurf(params: {
         agreement: exp.agreement,
         recency_factor: exp.recency_factor,
         experience_rating_float: exp.experience_rating_float,
+        match_type: exp.match_type,
         best_record: exp.best_record,
       },
       tables: model.tables,
+      selectedMainSwellIndex,
+      contributingSwellIndexes: scoreSwells.map((x) => x.index),
+      swellMixSignature,
+      experienceMatchType: exp.match_type,
+      experienceConfidence: exp.confidence,
+      modelRating: model.rating,
+      experienceRating: exp.rating_1_6,
+      finalRating,
+      whySelected: params.whySelected,
       method:
         'tables_weighted_total + experience_confidence_blend(user>legacy, recency-weighted, multi-record, dir-aware)',
     },

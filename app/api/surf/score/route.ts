@@ -736,18 +736,60 @@ function pickBestSwell(args: {
   const withDebug = <T extends { chosen: 'primary' | 'secondary'; chosenScore: ReturnType<typeof scoreSurf> }>(
     picked: T,
     whySelected: string
-  ) => ({
-    ...picked,
-    selectedSwellIndex: selectedSwellIndex(picked),
-    selectedSwellHeight: selectedSwellFromPick(marine, picked).height_m,
-    selectedSwellPeriod: selectedSwellFromPick(marine, picked).period_s,
-    selectedSwellDirection: selectedSwellFromPick(marine, picked).direction_deg_from,
-    ratingSource: scoredExperienceMatched(picked.chosenScore) ? 'experience_blend' : 'tables',
-    displayHeightSource: picked.chosen,
-    whySelected,
-    primaryMetrics,
-    secondaryMetrics,
-  })
+  ) => {
+    const main = selectedSwellFromPick(marine, picked)
+    const mainIndex = selectedSwellIndex(picked)
+    const combinedScore = scoreSurf({
+      spotKey,
+      swellHeightM: main.height_m,
+      swellPeriodS: main.period_s,
+      swellDirDeg: main.direction_deg_from,
+      windSpeedMs,
+      windDirDeg,
+      selectedMainSwellIndex: mainIndex,
+      swells: [
+        {
+          index: 1,
+          height_m: marine.primary.height_m,
+          period_s: marine.primary.period_s,
+          direction_deg_from: marine.primary.direction_deg_from,
+        },
+        ...(marine.secondary.present
+          ? [{
+              index: 2,
+              height_m: marine.secondary.height_m,
+              period_s: marine.secondary.period_s,
+              direction_deg_from: marine.secondary.direction_deg_from,
+            }]
+          : []),
+      ],
+      forecastTimeUtc: marine.time_utc,
+      whySelected,
+      userExperiences,
+    })
+
+    return {
+      ...picked,
+      chosenScore: combinedScore,
+      selectedSwellIndex: mainIndex,
+      selectedMainSwellIndex: mainIndex,
+      contributingSwellIndexes: combinedScore.breakdown?.contributingSwellIndexes ?? [mainIndex],
+      swellMixSignature: combinedScore.breakdown?.swellMixSignature ?? null,
+      experienceMatchType: combinedScore.breakdown?.experienceMatchType ?? 'none',
+      experienceConfidence: combinedScore.breakdown?.experienceConfidence ?? 0,
+      modelRating: combinedScore.breakdown?.modelRating ?? combinedScore.rating,
+      experienceRating: combinedScore.breakdown?.experienceRating ?? null,
+      finalRating: combinedScore.breakdown?.finalRating ?? combinedScore.rating,
+      selectedSwellHeight: main.height_m,
+      selectedSwellPeriod: main.period_s,
+      selectedSwellDirection: main.direction_deg_from,
+      ratingSource: scoredExperienceMatched(combinedScore) ? 'experience_blend' : 'tables',
+      displayHeightSource: picked.chosen,
+      whySelected,
+      primaryMetrics,
+      secondaryMetrics,
+    }
+  }
 
   if (!marine.secondary.present) {
     return withDebug(
@@ -1790,6 +1832,14 @@ export async function GET(req: Request) {
         picked: {
           which: pickedNow.chosen,
           selectedSwellIndex: pickedNow.selectedSwellIndex,
+          selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
+          contributingSwellIndexes: pickedNow.contributingSwellIndexes,
+          swellMixSignature: pickedNow.swellMixSignature,
+          experienceMatchType: pickedNow.experienceMatchType,
+          experienceConfidence: pickedNow.experienceConfidence,
+          modelRating: pickedNow.modelRating,
+          experienceRating: pickedNow.experienceRating,
+          finalRating: pickedNow.finalRating,
           selectedSwellHeight: pickedNow.selectedSwellHeight,
           selectedSwellPeriod: pickedNow.selectedSwellPeriod,
           selectedSwellDirection: pickedNow.selectedSwellDirection,
@@ -1842,6 +1892,14 @@ export async function GET(req: Request) {
           },
 
           selectedSwellIndex: pickedNow.selectedSwellIndex,
+          selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
+          contributingSwellIndexes: pickedNow.contributingSwellIndexes,
+          swellMixSignature: pickedNow.swellMixSignature,
+          experienceMatchType: pickedNow.experienceMatchType,
+          experienceConfidence: pickedNow.experienceConfidence,
+          modelRating: pickedNow.modelRating,
+          experienceRating: pickedNow.experienceRating,
+          finalRating: pickedNow.finalRating,
           selectedSwellHeight: pickedNow.selectedSwellHeight,
           selectedSwellPeriod: pickedNow.selectedSwellPeriod,
           selectedSwellDirection: pickedNow.selectedSwellDirection,
@@ -2017,6 +2075,14 @@ export async function GET(req: Request) {
       picked: {
         which: pickedNow.chosen,
         selectedSwellIndex: pickedNow.selectedSwellIndex,
+        selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
+        contributingSwellIndexes: pickedNow.contributingSwellIndexes,
+        swellMixSignature: pickedNow.swellMixSignature,
+        experienceMatchType: pickedNow.experienceMatchType,
+        experienceConfidence: pickedNow.experienceConfidence,
+        modelRating: pickedNow.modelRating,
+        experienceRating: pickedNow.experienceRating,
+        finalRating: pickedNow.finalRating,
         selectedSwellHeight: pickedNow.selectedSwellHeight,
         selectedSwellPeriod: pickedNow.selectedSwellPeriod,
         selectedSwellDirection: pickedNow.selectedSwellDirection,
@@ -2069,6 +2135,14 @@ export async function GET(req: Request) {
         },
 
         selectedSwellIndex: pickedNow.selectedSwellIndex,
+        selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
+        contributingSwellIndexes: pickedNow.contributingSwellIndexes,
+        swellMixSignature: pickedNow.swellMixSignature,
+        experienceMatchType: pickedNow.experienceMatchType,
+        experienceConfidence: pickedNow.experienceConfidence,
+        modelRating: pickedNow.modelRating,
+        experienceRating: pickedNow.experienceRating,
+        finalRating: pickedNow.finalRating,
         selectedSwellHeight: pickedNow.selectedSwellHeight,
         selectedSwellPeriod: pickedNow.selectedSwellPeriod,
         selectedSwellDirection: pickedNow.selectedSwellDirection,
