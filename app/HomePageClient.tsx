@@ -2816,13 +2816,13 @@ function LandscapeFrameMirror({
       const dateParts = mirrorMediumDateParts(language)
 
       return (
-        <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.42rem,1.15vw,0.72rem)] py-[clamp(0.38rem,1vw,0.68rem)] text-center leading-none">
-          <div className="flex h-full max-h-[min(100%,11rem)] w-full max-w-[min(100%,8.4rem)] flex-col items-stretch overflow-hidden border border-current bg-transparent">
-            <div className="flex shrink-0 items-center justify-center border-b border-current px-[clamp(0.26rem,0.75vw,0.5rem)] py-[clamp(0.16rem,0.42vw,0.28rem)] text-[clamp(0.48rem,1.15vw,0.72rem)] font-medium tracking-[0.32em] opacity-75">
+        <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.42rem,1.15vw,0.72rem)] py-[clamp(0.28rem,0.76vw,0.52rem)] text-center leading-none">
+          <div className="flex h-full max-h-[min(100%,10.35rem)] w-full max-w-[min(100%,8.4rem)] flex-col items-stretch overflow-hidden bg-transparent">
+            <div className="flex shrink-0 items-center justify-center px-[clamp(0.26rem,0.75vw,0.5rem)] py-[clamp(0.12rem,0.32vw,0.22rem)] text-[clamp(0.48rem,1.15vw,0.72rem)] font-medium tracking-[0.32em] opacity-75">
               {dateParts.year}
             </div>
 
-            <div className="flex shrink-0 items-center justify-center px-[clamp(0.28rem,0.8vw,0.52rem)] pt-[clamp(0.26rem,0.72vw,0.48rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-bold tracking-[0.12em]">
+            <div className="flex shrink-0 items-center justify-center px-[clamp(0.28rem,0.8vw,0.52rem)] pt-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-bold tracking-[0.12em]">
               <span className="max-w-full truncate">{dateParts.month}</span>
             </div>
 
@@ -2831,7 +2831,7 @@ function LandscapeFrameMirror({
             </div>
 
             <div
-              className="flex shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.22rem,0.58vw,0.4rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
+              className="flex min-h-[clamp(1.28rem,3.05vw,1.9rem)] shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.28rem,0.72vw,0.5rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
               style={{ backgroundColor: textColor, color: frameBackground }}
             >
               <span className="max-w-full truncate">{dateParts.weekday}</span>
