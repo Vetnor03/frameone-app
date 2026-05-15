@@ -2584,12 +2584,12 @@ function MirrorHolidayList({ holidays, language }: { holidays: MirrorHoliday[]; 
     <div className="flex h-full w-full items-end overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] pb-[clamp(0.75rem,1.9vw,1.45rem)]">
       <div className="grid w-full gap-[clamp(0.22rem,0.65vw,0.42rem)]">
         {upcoming.map((holiday) => (
-          <div key={`${holiday.date}-${holiday.name}`} className="grid min-w-0 grid-cols-[1fr_auto] items-baseline gap-[clamp(0.5rem,1.45vw,1rem)] leading-none">
-            <div className="min-w-0 truncate text-[clamp(0.7rem,1.8vw,1.16rem)] font-semibold tracking-[0.02em]">
-              {holiday.name}
-            </div>
+          <div key={`${holiday.date}-${holiday.name}`} className="grid min-w-0 grid-cols-[auto_1fr] items-baseline gap-[clamp(0.5rem,1.45vw,1rem)] leading-none">
             <div className="shrink-0 text-[clamp(0.56rem,1.35vw,0.86rem)] font-medium tracking-[0.08em] opacity-80">
               {formatMirrorHolidayDate(holiday.date)}
+            </div>
+            <div className="min-w-0 truncate text-[clamp(0.7rem,1.8vw,1.16rem)] font-semibold tracking-[0.02em]">
+              {holiday.name}
             </div>
           </div>
         ))}
