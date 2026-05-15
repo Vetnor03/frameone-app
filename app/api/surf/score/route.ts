@@ -326,6 +326,12 @@ type MarineSeries = {
 }
 
 const SECONDARY_MIN_M = 0.05
+const MIN_USABLE_SWELL_HEIGHT_M = 0.35
+const MIN_USABLE_SWELL_PERIOD_S = 5
+const NEAR_FLAT_SWELL_HEIGHT_M = 0.3
+const NEAR_FLAT_SWELL_PERIOD_S = 4
+const CLEARLY_STRONGER_ENERGY_RATIO = 1.75
+const CLEARLY_STRONGER_CORRECTED_M = 0.35
 
 function toNum(x: any) {
   const n = Number(x)
@@ -335,6 +341,42 @@ function toNum(x: any) {
 function correctedHeightForPick(h: number, p: number) {
   if (!(h > 0) || !(p > 0)) return h
   return h * (p / 10)
+}
+
+type SwellPickMetrics = {
+  height: number
+  period: number
+  correctedHeight: number
+  usable: boolean
+  nearFlat: boolean
+}
+
+function swellPickMetrics(swell: Sideswell): SwellPickMetrics {
+  const height = Number.isFinite(swell.height_m) ? swell.height_m : 0
+  const period = Number.isFinite(swell.period_s) ? swell.period_s : 0
+  const correctedHeight = correctedHeightForPick(height, period)
+
+  return {
+    height,
+    period,
+    correctedHeight,
+    usable: height >= MIN_USABLE_SWELL_HEIGHT_M && period >= MIN_USABLE_SWELL_PERIOD_S,
+    nearFlat: height <= NEAR_FLAT_SWELL_HEIGHT_M || period <= NEAR_FLAT_SWELL_PERIOD_S,
+  }
+}
+
+function clearlyStrongerEnergy(a: SwellPickMetrics, b: SwellPickMetrics) {
+  if (!a.usable || a.correctedHeight <= 0) return false
+  if (a.correctedHeight < b.correctedHeight + CLEARLY_STRONGER_CORRECTED_M) return false
+  return a.correctedHeight >= Math.max(b.correctedHeight * CLEARLY_STRONGER_ENERGY_RATIO, CLEARLY_STRONGER_CORRECTED_M)
+}
+
+function selectedSwellFromPick(marine: MarineBundle, picked: { chosen: 'primary' | 'secondary' }) {
+  return picked.chosen === 'secondary' ? marine.secondary : marine.primary
+}
+
+function selectedSwellIndex(picked: { chosen: 'primary' | 'secondary' }) {
+  return picked.chosen === 'secondary' ? 2 : 1
 }
 
 function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
@@ -678,6 +720,8 @@ function pickBestSwell(args: {
 
   const windSpeedMs = marine.wind_speed_ms
   const windDirDeg = marine.wind_direction_deg_from
+  const primaryMetrics = swellPickMetrics(marine.primary)
+  const secondaryMetrics = swellPickMetrics(marine.secondary)
 
   const primaryScore = scoreSurf({
     spotKey,
@@ -689,13 +733,32 @@ function pickBestSwell(args: {
     userExperiences,
   })
 
+  const withDebug = <T extends { chosen: 'primary' | 'secondary'; chosenScore: ReturnType<typeof scoreSurf> }>(
+    picked: T,
+    whySelected: string
+  ) => ({
+    ...picked,
+    selectedSwellIndex: selectedSwellIndex(picked),
+    selectedSwellHeight: selectedSwellFromPick(marine, picked).height_m,
+    selectedSwellPeriod: selectedSwellFromPick(marine, picked).period_s,
+    selectedSwellDirection: selectedSwellFromPick(marine, picked).direction_deg_from,
+    ratingSource: scoredExperienceMatched(picked.chosenScore) ? 'experience_blend' : 'tables',
+    displayHeightSource: picked.chosen,
+    whySelected,
+    primaryMetrics,
+    secondaryMetrics,
+  })
+
   if (!marine.secondary.present) {
-    return {
-      chosen: 'primary' as const,
-      chosenScore: primaryScore,
-      secondaryScore: null as any,
-      primaryScore,
-    }
+    return withDebug(
+      {
+        chosen: 'primary' as const,
+        chosenScore: primaryScore,
+        secondaryScore: null,
+        primaryScore,
+      },
+      'secondary swell not present'
+    )
   }
 
   const secondaryScore = scoreSurf({
@@ -708,31 +771,56 @@ function pickBestSwell(args: {
     userExperiences,
   })
 
-  const primAdj = correctedHeightForPick(marine.primary.height_m, marine.primary.period_s)
-  const secAdj = correctedHeightForPick(marine.secondary.height_m, marine.secondary.period_s)
+  const pickPrimary = (whySelected: string) =>
+    withDebug(
+      {
+        chosen: 'primary' as const,
+        chosenScore: primaryScore,
+        secondaryScore,
+        primaryScore,
+      },
+      whySelected
+    )
+
+  const pickSecondary = (whySelected: string) =>
+    withDebug(
+      {
+        chosen: 'secondary' as const,
+        chosenScore: secondaryScore,
+        secondaryScore,
+        primaryScore,
+      },
+      whySelected
+    )
+
+  if (primaryMetrics.usable && secondaryMetrics.nearFlat) {
+    return pickPrimary('primary usable; secondary is near-flat/short-period')
+  }
+
+  if (secondaryMetrics.usable && primaryMetrics.nearFlat) {
+    return pickSecondary('secondary usable; primary is near-flat/short-period')
+  }
+
+  if (clearlyStrongerEnergy(primaryMetrics, secondaryMetrics)) {
+    return pickPrimary('primary has clearly stronger usable energy')
+  }
+
+  if (clearlyStrongerEnergy(secondaryMetrics, primaryMetrics)) {
+    return pickSecondary('secondary has clearly stronger usable energy')
+  }
 
   const cmp = betterByScoredThenHeight({
     scoredA: primaryScore,
     scoredB: secondaryScore,
-    correctedHeightA: primAdj,
-    correctedHeightB: secAdj,
+    correctedHeightA: primaryMetrics.correctedHeight,
+    correctedHeightB: secondaryMetrics.correctedHeight,
   })
 
-  if (cmp > 0) {
-    return {
-      chosen: 'secondary' as const,
-      chosenScore: secondaryScore,
-      secondaryScore,
-      primaryScore,
-    }
-  }
+  if (cmp > 0) return pickSecondary('scores comparable after usable-energy gates; secondary scored higher')
 
-  return {
-    chosen: 'primary' as const,
-    chosenScore: primaryScore,
-    secondaryScore,
-    primaryScore,
-  }
+  return pickPrimary(
+    cmp < 0 ? 'scores comparable after usable-energy gates; primary scored higher' : 'scores tied; primary fallback'
+  )
 }
 
 /** ---------- Bucket lookup (independent of experience) ---------- **/
@@ -908,8 +996,8 @@ function bestWithinWindow(
     const scored = picked.chosenScore
 
     const tablesTotal = scoredTablesTotal(scored)
-    const chosenH = picked.chosen === 'secondary' ? marine.secondary.height_m : marine.primary.height_m
-    const chosenP = picked.chosen === 'secondary' ? marine.secondary.period_s : marine.primary.period_s
+    const chosenH = selectedSwellFromPick(marine, picked).height_m
+    const chosenP = selectedSwellFromPick(marine, picked).period_s
     const corr = correctedHeightForPick(chosenH, chosenP)
 
     const cand: BestPick = {
@@ -1149,8 +1237,8 @@ function buildDayparts(
 
       const tablesTotal = scoredTablesTotal(scored)
 
-      const chosenH = picked.chosen === 'secondary' ? marine.secondary.height_m : marine.primary.height_m
-      const chosenP = picked.chosen === 'secondary' ? marine.secondary.period_s : marine.primary.period_s
+      const chosenH = selectedSwellFromPick(marine, picked).height_m
+      const chosenP = selectedSwellFromPick(marine, picked).period_s
       const corr = correctedHeightForPick(chosenH, chosenP)
 
       const cand = { idx, marine, picked, scored, tablesTotal, correctedHeight: corr }
@@ -1181,9 +1269,9 @@ function buildDayparts(
     const picked = best.picked
     const scored = best.scored
 
-    const waveHeight = picked.chosen === 'secondary' ? marine.secondary.height_m : marine.primary.height_m
+    const waveHeight = selectedSwellFromPick(marine, picked).height_m
     const waveLabel = waveHeightLabelForValue(spotKeyForTables, waveHeight)
-    const swellPeriod = picked.chosen === 'secondary' ? marine.secondary.period_s : marine.primary.period_s
+    const swellPeriod = selectedSwellFromPick(marine, picked).period_s
 
     return {
       label: dp.label,
@@ -1294,9 +1382,9 @@ function evalHourAtIdx(
 
   const tablesTotal = scoredTablesTotal(scored)
 
-  const chosenH = picked.chosen === 'secondary' ? marine.secondary.height_m : marine.primary.height_m
-  const chosenP = picked.chosen === 'secondary' ? marine.secondary.period_s : marine.primary.period_s
-  const chosenDir = picked.chosen === 'secondary' ? marine.secondary.direction_deg_from : marine.primary.direction_deg_from
+  const chosenH = selectedSwellFromPick(marine, picked).height_m
+  const chosenP = selectedSwellFromPick(marine, picked).period_s
+  const chosenDir = selectedSwellFromPick(marine, picked).direction_deg_from
 
   const corr = correctedHeightForPick(chosenH, chosenP)
 
@@ -1653,7 +1741,7 @@ export async function GET(req: Request) {
       for (let off = 0; off < hours; off++) {
         const b = makeBundleAt(chosen.series, off)
         const p = pickBestSwell({ spotKey: chosen.spotLabel, marine: b, userExperiences: chosenUserExperiences })
-        const h = p.chosen === 'secondary' ? b.secondary.height_m : b.primary.height_m
+        const h = selectedSwellFromPick(b, p).height_m
         if (Number.isFinite(h)) chosenHeights.push(h)
       }
 
@@ -1665,12 +1753,13 @@ export async function GET(req: Request) {
       }
 
       const st = getSpotTables(chosen.spotLabel)
-      const waveHeightNow = pickedNow.chosen === 'secondary' ? marineNow.secondary.height_m : marineNow.primary.height_m
+      const selectedSwellNow = selectedSwellFromPick(marineNow, pickedNow)
+      const waveHeightNow = selectedSwellNow.height_m
 
       const waveBucketRaw = bucketLabelFromRangeTable(st?.wave_height ?? [], waveHeightNow)
       const periodBucketRaw = bucketLabelFromRangeTable(
         st?.wave_period ?? [],
-        pickedNow.chosen === 'secondary' ? marineNow.secondary.period_s : marineNow.primary.period_s
+        selectedSwellNow.period_s
       )
       const windBucketRaw = bucketLabelFromRangeTable(st?.wind_speed ?? [], marineNow.wind_speed_ms)
 
@@ -1698,16 +1787,22 @@ export async function GET(req: Request) {
         temp_c,
         weather_label,
 
-        picked: { which: pickedNow.chosen },
+        picked: {
+          which: pickedNow.chosen,
+          selectedSwellIndex: pickedNow.selectedSwellIndex,
+          selectedSwellHeight: pickedNow.selectedSwellHeight,
+          selectedSwellPeriod: pickedNow.selectedSwellPeriod,
+          selectedSwellDirection: pickedNow.selectedSwellDirection,
+          ratingSource: pickedNow.ratingSource,
+          displayHeightSource: pickedNow.displayHeightSource,
+          whySelected: pickedNow.whySelected,
+        },
 
         inputs: {
           time_utc: marineNow.time_utc,
           swell_height_m: waveHeightNow,
-          swell_direction_deg:
-            pickedNow.chosen === 'secondary'
-              ? marineNow.secondary.direction_deg_from
-              : marineNow.primary.direction_deg_from,
-          swell_period_s: pickedNow.chosen === 'secondary' ? marineNow.secondary.period_s : marineNow.primary.period_s,
+          swell_direction_deg: selectedSwellNow.direction_deg_from,
+          swell_period_s: selectedSwellNow.period_s,
           wind_speed_ms: marineNow.wind_speed_ms,
           wind_direction_deg: marineNow.wind_direction_deg_from,
           primary_swell: marineNow.primary,
@@ -1745,6 +1840,16 @@ export async function GET(req: Request) {
             chosen_user_experience_ids: chosenUserExperiences.map((x) => x.id),
             chosen_user_experience_logged_at: chosenUserExperiences.map((x) => x.logged_at),
           },
+
+          selectedSwellIndex: pickedNow.selectedSwellIndex,
+          selectedSwellHeight: pickedNow.selectedSwellHeight,
+          selectedSwellPeriod: pickedNow.selectedSwellPeriod,
+          selectedSwellDirection: pickedNow.selectedSwellDirection,
+          ratingSource: pickedNow.ratingSource,
+          displayHeightSource: pickedNow.displayHeightSource,
+          whySelected: pickedNow.whySelected,
+          primary_swell_metrics: pickedNow.primaryMetrics,
+          secondary_swell_metrics: pickedNow.secondaryMetrics,
 
           primary_rating: pickedNow.primaryScore?.rating ?? null,
           secondary_rating: pickedNow.secondaryScore?.rating ?? null,
@@ -1868,7 +1973,7 @@ export async function GET(req: Request) {
     for (let off = 0; off < hours; off++) {
       const b = makeBundleAt(series, off)
       const p = pickBestSwell({ spotKey: spotKeyForTables, marine: b, userExperiences: spotUserExperiences })
-      const h = p.chosen === 'secondary' ? b.secondary.height_m : b.primary.height_m
+      const h = selectedSwellFromPick(b, p).height_m
       if (Number.isFinite(h)) chosenHeights.push(h)
     }
 
@@ -1880,12 +1985,13 @@ export async function GET(req: Request) {
     }
 
     const st = getSpotTables(spotKeyForTables)
-    const waveHeightNow = pickedNow.chosen === 'secondary' ? marineNow.secondary.height_m : marineNow.primary.height_m
+    const selectedSwellNow = selectedSwellFromPick(marineNow, pickedNow)
+    const waveHeightNow = selectedSwellNow.height_m
 
     const waveBucketRaw = bucketLabelFromRangeTable(st?.wave_height ?? [], waveHeightNow)
     const periodBucketRaw = bucketLabelFromRangeTable(
       st?.wave_period ?? [],
-      pickedNow.chosen === 'secondary' ? marineNow.secondary.period_s : marineNow.primary.period_s
+      selectedSwellNow.period_s
     )
     const windBucketRaw = bucketLabelFromRangeTable(st?.wind_speed ?? [], marineNow.wind_speed_ms)
 
@@ -1908,14 +2014,22 @@ export async function GET(req: Request) {
       temp_c,
       weather_label,
 
-      picked: { which: pickedNow.chosen },
+      picked: {
+        which: pickedNow.chosen,
+        selectedSwellIndex: pickedNow.selectedSwellIndex,
+        selectedSwellHeight: pickedNow.selectedSwellHeight,
+        selectedSwellPeriod: pickedNow.selectedSwellPeriod,
+        selectedSwellDirection: pickedNow.selectedSwellDirection,
+        ratingSource: pickedNow.ratingSource,
+        displayHeightSource: pickedNow.displayHeightSource,
+        whySelected: pickedNow.whySelected,
+      },
 
       inputs: {
         time_utc: marineNow.time_utc,
         swell_height_m: waveHeightNow,
-        swell_direction_deg:
-          pickedNow.chosen === 'secondary' ? marineNow.secondary.direction_deg_from : marineNow.primary.direction_deg_from,
-        swell_period_s: pickedNow.chosen === 'secondary' ? marineNow.secondary.period_s : marineNow.primary.period_s,
+        swell_direction_deg: selectedSwellNow.direction_deg_from,
+        swell_period_s: selectedSwellNow.period_s,
         wind_speed_ms: marineNow.wind_speed_ms,
         wind_direction_deg: marineNow.wind_direction_deg_from,
         primary_swell: marineNow.primary,
@@ -1953,6 +2067,16 @@ export async function GET(req: Request) {
           user_experience_ids: spotUserExperiences.map((x) => x.id),
           user_experience_logged_at: spotUserExperiences.map((x) => x.logged_at),
         },
+
+        selectedSwellIndex: pickedNow.selectedSwellIndex,
+        selectedSwellHeight: pickedNow.selectedSwellHeight,
+        selectedSwellPeriod: pickedNow.selectedSwellPeriod,
+        selectedSwellDirection: pickedNow.selectedSwellDirection,
+        ratingSource: pickedNow.ratingSource,
+        displayHeightSource: pickedNow.displayHeightSource,
+        whySelected: pickedNow.whySelected,
+        primary_swell_metrics: pickedNow.primaryMetrics,
+        secondary_swell_metrics: pickedNow.secondaryMetrics,
 
         primary_rating: pickedNow.primaryScore?.rating ?? null,
         secondary_rating: pickedNow.secondaryScore?.rating ?? null,
