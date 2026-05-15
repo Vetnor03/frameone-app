@@ -2454,8 +2454,8 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
   const days = mirrorCalendarDays(now)
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.38rem,1.02vw,0.74rem)] py-[clamp(0.34rem,0.95vw,0.68rem)] leading-none">
-      <div className="grid h-full max-h-[min(100%,10.2rem)] w-full max-w-[min(100%,13.5rem)] grid-rows-[auto_1fr] gap-[clamp(0.2rem,0.55vw,0.4rem)]">
+    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.38rem,1.02vw,0.74rem)] py-[clamp(0.28rem,0.76vw,0.52rem)] leading-none">
+      <div className="grid h-full max-h-[min(100%,10.35rem)] w-full max-w-[min(100%,13.5rem)] grid-rows-[auto_1fr] gap-[clamp(0.2rem,0.55vw,0.4rem)]">
         <div className="grid grid-cols-7 text-center text-[clamp(0.48rem,1.08vw,0.72rem)] font-bold tracking-[0.1em]">
           {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
             <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
