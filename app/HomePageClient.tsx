@@ -2404,11 +2404,15 @@ function mirrorCalendarDays(now = new Date()) {
   const month = now.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const mondayFirstOffset = (new Date(year, month, 1).getDay() + 6) % 7
+  const usedRows = Math.min(5, Math.max(4, Math.ceil((mondayFirstOffset + daysInMonth) / 7)))
 
-  return [
-    ...Array.from({ length: mondayFirstOffset }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
-  ]
+  return {
+    days: [
+      ...Array.from({ length: mondayFirstOffset }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+    ],
+    usedRows,
+  }
 }
 
 function MirrorMediumDateCard({
@@ -2451,12 +2455,12 @@ function MirrorMediumDateCard({
 function MirrorMonthCalendar({ textColor }: { textColor: string }) {
   const now = new Date()
   const today = now.getDate()
-  const days = mirrorCalendarDays(now)
+  const { days, usedRows } = mirrorCalendarDays(now)
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.38rem,1.02vw,0.74rem)] py-[clamp(0.28rem,0.76vw,0.52rem)] leading-none">
-      <div className="grid h-full max-h-[min(100%,10.35rem)] w-full max-w-[min(100%,13.5rem)] grid-rows-[auto_1fr] gap-[clamp(0.2rem,0.55vw,0.4rem)]">
-        <div className="grid grid-cols-7 text-center text-[clamp(0.48rem,1.08vw,0.72rem)] font-bold tracking-[0.1em]">
+    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.12rem,0.34vw,0.26rem)] py-[clamp(0.1rem,0.28vw,0.22rem)] leading-none">
+      <div className="grid h-full w-full grid-rows-[auto_1fr] gap-[clamp(0.16rem,0.42vw,0.32rem)]">
+        <div className="grid grid-cols-7 text-center text-[clamp(0.58rem,1.34vw,0.9rem)] font-bold tracking-[0.1em]">
           {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
             <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
               {weekday}
@@ -2464,8 +2468,11 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
           ))}
         </div>
 
-        <div className="grid min-h-0 grid-cols-7 grid-rows-6 items-center text-center text-[clamp(0.58rem,1.4vw,0.92rem)] font-semibold tracking-[0.02em]">
-          {Array.from({ length: 42 }).map((_, index) => {
+        <div
+          className="grid min-h-0 grid-cols-7 items-center text-center text-[clamp(0.74rem,1.82vw,1.2rem)] font-semibold tracking-[0.02em]"
+          style={{ gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: usedRows * 7 }).map((_, index) => {
             const day = days[index] ?? null
             const weekdayIndex = index % 7
             const isWeekend = weekdayIndex >= 5
@@ -2475,7 +2482,7 @@ function MirrorMonthCalendar({ textColor }: { textColor: string }) {
               <div key={index} className="flex min-h-0 items-center justify-center">
                 {day == null ? null : (
                   <span
-                    className="flex aspect-square h-[clamp(1.02rem,2.42vw,1.52rem)] items-center justify-center rounded-full"
+                    className="flex aspect-square h-[clamp(1.28rem,3.2vw,2.08rem)] items-center justify-center rounded-full"
                     style={{
                       backgroundColor: isToday ? '#ffffff' : 'transparent',
                       color: isToday ? '#061b24' : textColor,
@@ -2911,7 +2918,7 @@ function LandscapeFrameMirror({
 
     if (module === 'date' && size === 'large') {
       return (
-        <div className="grid h-full w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] items-stretch overflow-hidden">
+        <div className="grid h-full w-full grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] items-stretch overflow-hidden">
           <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
           <MirrorMonthCalendar textColor={textColor} />
         </div>
