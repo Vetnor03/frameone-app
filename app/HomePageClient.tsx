@@ -2976,7 +2976,11 @@ function MirrorGroceriesLargeCard({
 
       <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
         {dinnerTitle && (
-          <div className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]" title={mirrorGroceriesTodayDinnerLabel(language)}>
+          <div
+            className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]"
+            style={{ color: mutedColor }}
+            title={mirrorGroceriesTodayDinnerLabel(language)}
+          >
             {mirrorGroceriesTodayDinnerLabel(language)}
           </div>
         )}
