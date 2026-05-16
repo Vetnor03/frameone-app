@@ -2679,19 +2679,123 @@ function mirrorGroceriesItems(detail: MirrorModuleDetail) {
   return rawItems.map((item) => String(item).trim()).filter(Boolean)
 }
 
-function mirrorGroceriesVisibleItems(detail: MirrorModuleDetail) {
+function mirrorGroceriesVisibleItems(detail: MirrorModuleDetail, maxVisibleItems = 3) {
   const items = mirrorGroceriesItems(detail)
-  if (items.length <= 3) return items
+  const visibleCount = Math.min(items.length, maxVisibleItems)
+  if (visibleCount <= 0) return []
+  if (items.length <= visibleCount) return items.slice(0, visibleCount)
 
   const start = mirrorGroceriesRotationStep() % items.length
-  return Array.from({ length: 3 }, (_, index) => items[(start + index) % items.length])
+  return Array.from({ length: visibleCount }, (_, index) => items[(start + index) % items.length])
 }
 
-function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppLanguage) {
-  const remainingCount = Math.max(0, mirrorGroceriesItems(detail).length - 3)
+function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppLanguage, maxVisibleItems = 3) {
+  const remainingCount = Math.max(0, mirrorGroceriesItems(detail).length - maxVisibleItems)
   if (remainingCount <= 0) return ''
 
   return language === 'no' ? `+${remainingCount} varer` : `+${remainingCount} items`
+}
+
+function mirrorGroceriesMediumHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
+  return dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List')
+}
+
+function mirrorGroceriesTodayDinnerLabel(language: AppLanguage) {
+  return language === 'no' ? 'Middag i dag' : "Today's Dinner"
+}
+
+function mirrorGroceriesMediumEmptyLine(language: AppLanguage) {
+  return language === 'no' ? 'Alt er klart' : 'All set'
+}
+
+function MirrorGroceryMediumList({ items, overflowLabel, mutedColor }: { items: string[]; overflowLabel: string; mutedColor: string }) {
+  if (items.length <= 0) return null
+
+  if (items.length <= 6) {
+    return (
+      <div className="flex min-h-0 flex-1 items-start justify-center pt-[clamp(0.36rem,0.9vw,0.58rem)]">
+        <div className="flex w-fit max-w-full flex-col items-start gap-[clamp(0.34rem,0.9vw,0.58rem)]">
+          {items.map((item, index) => (
+            <div key={`${item}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.15vw,0.68rem)] text-left leading-none">
+              <span className="h-[clamp(0.28rem,0.62vw,0.4rem)] w-[clamp(0.28rem,0.62vw,0.4rem)] rounded-full bg-current" aria-hidden="true" />
+              <span className="min-w-0 truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" title={item}>
+                {item}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const leftCount = Math.ceil(items.length / 2)
+  const columns = [items.slice(0, leftCount), items.slice(leftCount)]
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-start pt-[clamp(0.36rem,0.9vw,0.58rem)]">
+      <div className="grid min-h-0 w-full grid-cols-2 gap-x-[clamp(0.42rem,1.1vw,0.72rem)]">
+        {columns.map((column, columnIndex) => (
+          <div key={columnIndex} className="flex min-w-0 justify-center">
+            <div className="flex w-fit max-w-full flex-col items-start gap-[clamp(0.34rem,0.9vw,0.58rem)]">
+              {column.map((item, index) => (
+                <div key={`${item}-${columnIndex}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.15vw,0.68rem)] text-left leading-none">
+                  <span className="h-[clamp(0.28rem,0.62vw,0.4rem)] w-[clamp(0.28rem,0.62vw,0.4rem)] rounded-full bg-current" aria-hidden="true" />
+                  <span className="min-w-0 truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" title={item}>
+                    {item}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {overflowLabel && (
+        <div className="mt-[clamp(0.34rem,0.9vw,0.58rem)] max-w-full truncate text-center text-[clamp(0.58rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]" style={{ color: mutedColor }} title={overflowLabel}>
+          {overflowLabel}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MirrorGroceriesMediumCard({
+  detail,
+  language,
+  mutedColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  mutedColor: string
+}) {
+  const visibleItems = mirrorGroceriesVisibleItems(detail, 12)
+  const overflowLabel = mirrorGroceriesOverflowLabel(detail, language, 12)
+  const header = mirrorGroceriesMediumHeader(detail, language)
+  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
+  const hasDinnerTitle = dinnerTitle.length > 0
+
+  return (
+    <div className="flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)] text-center leading-none">
+      {hasDinnerTitle && (
+        <div className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]" title={mirrorGroceriesTodayDinnerLabel(language)}>
+          {mirrorGroceriesTodayDinnerLabel(language)}
+        </div>
+      )}
+
+      <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
+        {header}
+      </div>
+
+      {visibleItems.length <= 0 ? (
+        <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
+          {mirrorGroceriesMediumEmptyLine(language)}
+        </div>
+      ) : (
+        <MirrorGroceryMediumList items={visibleItems} overflowLabel={overflowLabel} mutedColor={mutedColor} />
+      )}
+    </div>
+  )
 }
 
 function mirrorRemindersHeader(detail: MirrorModuleDetail, language: AppLanguage) {
@@ -3092,6 +3196,10 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'groceries' && size === 'medium') {
+      return <MirrorGroceriesMediumCard detail={detail} language={language} mutedColor={mutedColor} />
     }
 
     if ((module === 'groceries' || module === 'reminders') && size === 'small') {
