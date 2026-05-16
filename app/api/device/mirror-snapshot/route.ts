@@ -36,6 +36,7 @@ type Detail = {
 type UnknownRecord = Record<string, unknown>
 
 const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 
 function getBearerToken(req: Request) {
   const h = req.headers.get('authorization') || ''
@@ -58,6 +59,16 @@ function asNumber(value: unknown): number | null {
 
 function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10)
+}
+
+function daysAgoIso(days: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString()
+}
+
+function isIsoAtOrAfter(value: string, cutoffIso: string) {
+  return !!value && value >= cutoffIso
 }
 
 function compactGroceryInsightName(value: unknown, maxLength = 32) {
@@ -106,13 +117,31 @@ function buildMirrorRunningLowInsights(params: {
   checkedRows: UnknownRecord[]
 }) {
   const activeKeys = new Set(params.activeNames.map(normalizeGroceryInsightKey))
+  const recentPurchaseCutoffIso = daysAgoIso(RUNNING_LOW_PURCHASE_COOLDOWN_DAYS)
+  const recentlyPurchasedKeys = new Set<string>()
   const scores = new Map<string, { name: string; score: number; lastUsed: string }>()
+
+  for (const row of params.historyRows) {
+    const name = compactGroceryInsightName(row.name, 28)
+    const lastUsed = asString(row.last_used_at)
+    if (name && isIsoAtOrAfter(lastUsed, recentPurchaseCutoffIso)) {
+      recentlyPurchasedKeys.add(normalizeGroceryInsightKey(name))
+    }
+  }
+
+  for (const row of params.checkedRows) {
+    const name = compactGroceryInsightName(row.name, 28)
+    const checkedAt = asString(row.checked_at) || asString(row.updated_at)
+    if (name && isIsoAtOrAfter(checkedAt, recentPurchaseCutoffIso)) {
+      recentlyPurchasedKeys.add(normalizeGroceryInsightKey(name))
+    }
+  }
 
   const addScore = (nameValue: unknown, score: number, lastUsed = '') => {
     const name = compactGroceryInsightName(nameValue, 28)
     if (!name) return
     const key = normalizeGroceryInsightKey(name)
-    if (activeKeys.has(key)) return
+    if (activeKeys.has(key) || recentlyPurchasedKeys.has(key)) return
     const existing = scores.get(key) ?? { name, score: 0, lastUsed: '' }
     existing.score += score
     if (lastUsed && lastUsed > existing.lastUsed) existing.lastUsed = lastUsed
@@ -130,7 +159,7 @@ function buildMirrorRunningLowInsights(params: {
     const name = compactGroceryInsightName(row.name, 28)
     if (!name) continue
     const key = normalizeGroceryInsightKey(name)
-    if (activeKeys.has(key)) continue
+    if (activeKeys.has(key) || recentlyPurchasedKeys.has(key)) continue
     const checkedAt = asString(row.checked_at) || asString(row.updated_at)
     const existing = checkedCounts.get(key) ?? { name, count: 0, lastUsed: '' }
     existing.count += 1
