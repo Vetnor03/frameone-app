@@ -2656,8 +2656,8 @@ function mirrorSurfRatingWord(rating: number | undefined) {
 }
 
 const MIRROR_GROCERIES_EMPTY_MESSAGES: Record<AppLanguage, string[]> = {
-  en: ['Fridge is stacked', 'Kitchen looks good', 'Nothing missing', 'Shopping done', 'All stocked up'],
-  no: ['Kjøleskapet er fullt', 'Kjøkkenet ser bra ut', 'Ingenting mangler', 'Handelen er ferdig', 'Alt er på lager'],
+  en: ['Fridge is stacked', 'Kitchen looks good', 'Nothing needed', 'Grocery run complete', 'Fully stocked', 'Looking good'],
+  no: ['Kjøleskapet er fullt', 'Kjøkkenet ser bra ut', 'Ingenting trengs', 'Handleturen er ferdig', 'Alt er på lager', 'Ser bra ut'],
 }
 
 function mirrorGroceriesRotationStep() {
@@ -2718,7 +2718,12 @@ function mirrorGroceriesTodayDinnerLabel(language: AppLanguage) {
 }
 
 function mirrorGroceriesMediumEmptyLine(language: AppLanguage) {
-  return language === 'no' ? 'Alt er klart' : 'All set'
+  return mirrorGroceriesEmptyMessage(language)
+}
+
+function mirrorGroceriesRunningLowLine(name: string, label: string) {
+  const normalizedLabel = label.trim().toLocaleLowerCase()
+  return normalizedLabel ? `${name} · ${normalizedLabel}` : name
 }
 
 function mirrorGroceriesRunningLow(detail: MirrorModuleDetail) {
@@ -2766,7 +2771,7 @@ function mirrorGroceriesMediumEmptyInsight(detail: MirrorModuleDetail, language:
   if (runningLow.length > 0) {
     return {
       title: language === 'no' ? 'Snart lite av' : 'Might be low on',
-      lines: runningLow.map((item) => item.label ? `${item.name} - ${item.label}` : item.name),
+      lines: runningLow.map((item) => mirrorGroceriesRunningLowLine(item.name, item.label)),
     }
   }
 
@@ -2866,7 +2871,11 @@ function MirrorGroceriesMediumPanel({
   return (
     <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
       {showDinnerLabel && (
-        <div className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]" title={mirrorGroceriesTodayDinnerLabel(language)}>
+        <div
+          className="max-w-full truncate pb-[clamp(0.22rem,0.58vw,0.4rem)] text-[clamp(0.52rem,1.16vw,0.74rem)] font-medium tracking-[0.055em]"
+          style={{ color: mutedColor }}
+          title={mirrorGroceriesTodayDinnerLabel(language)}
+        >
           {mirrorGroceriesTodayDinnerLabel(language)}
         </div>
       )}
@@ -2888,7 +2897,7 @@ function MirrorGroceriesMediumPanel({
             </div>
           </div>
         ) : (
-          <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
+          <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }} title={mirrorGroceriesMediumEmptyLine(language)}>
             {mirrorGroceriesMediumEmptyLine(language)}
           </div>
         )
@@ -2979,7 +2988,7 @@ function MirrorGroceriesLargeCard({
       <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
         {dinnerTitle && (
           <div
-            className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]"
+            className="max-w-full truncate pb-[clamp(0.22rem,0.58vw,0.4rem)] text-[clamp(0.52rem,1.16vw,0.74rem)] font-medium tracking-[0.055em]"
             style={{ color: mutedColor }}
             title={mirrorGroceriesTodayDinnerLabel(language)}
           >
@@ -3008,10 +3017,10 @@ function MirrorGroceriesRunningLowList({ detail, mutedColor, language }: { detai
     <div className="flex min-h-0 flex-1 items-start justify-center pt-[clamp(0.36rem,0.9vw,0.58rem)]">
       <div className="flex w-fit max-w-full flex-col items-start gap-[clamp(0.34rem,0.9vw,0.58rem)]">
         {runningLow.map((item, index) => {
-          const line = item.label ? `${item.name} - ${item.label}` : item.name
+          const line = mirrorGroceriesRunningLowLine(item.name, item.label)
           return (
-            <div key={`${line}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.15vw,0.68rem)] text-left leading-none">
-              <span className="h-[clamp(0.28rem,0.62vw,0.4rem)] w-[clamp(0.28rem,0.62vw,0.4rem)] rounded-full bg-current" aria-hidden="true" />
+            <div key={`${line}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.34rem,0.95vw,0.58rem)] text-left leading-none">
+              <span className="h-[clamp(0.2rem,0.46vw,0.3rem)] w-[clamp(0.2rem,0.46vw,0.3rem)] rounded-[0.08rem] bg-current opacity-80" aria-hidden="true" />
               <span className="min-w-0 truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" title={line}>
                 {line}
               </span>
@@ -3029,11 +3038,11 @@ function MirrorGroceriesMealIdeasList({ detail, mutedColor, language }: { detail
   if (mealIdeas.length <= 0) {
     return (
       <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] flex max-w-full flex-col items-center gap-[clamp(0.24rem,0.58vw,0.38rem)] text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
-        <div className="max-w-full truncate" title={language === 'no' ? 'Lærer kjøkkenet ditt' : 'Learning your kitchen'}>
-          {language === 'no' ? 'Lærer kjøkkenet ditt' : 'Learning your kitchen'}
+        <div className="max-w-full truncate" title={language === 'no' ? 'Lærer fortsatt kjøkkenet ditt' : 'Still learning your kitchen'}>
+          {language === 'no' ? 'Lærer fortsatt kjøkkenet ditt' : 'Still learning your kitchen'}
         </div>
-        <div className="max-w-full truncate" title={language === 'no' ? 'Legg til varer over tid' : 'Add groceries over time'}>
-          {language === 'no' ? 'Legg til varer over tid' : 'Add groceries over time'}
+        <div className="max-w-full truncate" title={language === 'no' ? 'Forslag kommer over tid' : 'Suggestions appear over time'}>
+          {language === 'no' ? 'Forslag kommer over tid' : 'Suggestions appear over time'}
         </div>
       </div>
     )
@@ -3098,7 +3107,7 @@ function MirrorGroceriesXLCard({ detail, language, mutedColor }: { detail: Mirro
         <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
           {dinnerTitle && (
             <div
-              className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]"
+              className="max-w-full truncate pb-[clamp(0.22rem,0.58vw,0.4rem)] text-[clamp(0.52rem,1.16vw,0.74rem)] font-medium tracking-[0.055em]"
               style={{ color: mutedColor }}
               title={mirrorGroceriesTodayDinnerLabel(language)}
             >
@@ -3706,7 +3715,7 @@ function LandscapeFrameMirror({
     >
       <div className="relative w-screen h-screen overflow-hidden" style={{ background: frameBackground }}>
         <div
-          className="pointer-events-none absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.5rem,env(safe-area-inset-top))] z-10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
+          className="pointer-events-none absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.65rem,calc(env(safe-area-inset-top)+0.15rem))] z-10 inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
           aria-label={
             batteryPercent !== null
               ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}`
@@ -3714,7 +3723,7 @@ function LandscapeFrameMirror({
           }
           style={{ color: mutedColor }}
         >
-          <span className="text-[clamp(0.6rem,1.45vw,0.78rem)] font-medium leading-none tracking-[0.06em]">
+          <span className="text-[clamp(0.6rem,1.45vw,0.78rem)] font-medium leading-none tracking-[0.06em] opacity-80">
             {batteryPercent !== null ? `${batteryPercent}%` : '--%'}
           </span>
           <BatteryIcon percent={batteryPercent ?? 0} className="h-[clamp(0.65rem,1.55vw,0.85rem)] w-[clamp(1.05rem,2.55vw,1.35rem)] opacity-75" />
