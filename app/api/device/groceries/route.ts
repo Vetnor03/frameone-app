@@ -11,6 +11,7 @@ const RUNNING_LOW_MAX = 3
 const RECIPE_MAX = 2
 const RECIPE_MISSING_MAX = 2
 const GROCERY_CHECKED_RETENTION_MS = 10 * 60 * 1000
+const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 
 type GroceryPayload = {
   ok: true
@@ -122,6 +123,10 @@ function daysAgoIso(days: number) {
   return d.toISOString()
 }
 
+function isIsoAtOrAfter(value: string, cutoffIso: string) {
+  return !!value && value >= cutoffIso
+}
+
 function compactInsightName(value: unknown, maxLength = 28) {
   const name = asString(value, '').replace(/\s+/g, ' ').trim()
   if (!name || name.length > maxLength) return ''
@@ -156,13 +161,31 @@ function buildRunningLowInsight(
   sources: Pick<InsightSourceRows, 'historyRows' | 'checkedRows'>,
 ): GroceryPayload['insights']['running_low'] {
   const activeKeys = new Set(items.map((item) => normalizeInsightKey(item.name)))
+  const recentPurchaseCutoffIso = daysAgoIso(RUNNING_LOW_PURCHASE_COOLDOWN_DAYS)
+  const recentlyPurchasedKeys = new Set<string>()
   const scores = new Map<string, { name: string; score: number; signals: number; lastUsed: string }>()
+
+  for (const row of sources.historyRows) {
+    const name = compactInsightName(row?.name)
+    const lastUsed = asString(row?.last_used_at, '')
+    if (name && isIsoAtOrAfter(lastUsed, recentPurchaseCutoffIso)) {
+      recentlyPurchasedKeys.add(normalizeInsightKey(name))
+    }
+  }
+
+  for (const row of sources.checkedRows) {
+    const name = compactInsightName(row?.name)
+    const checkedAt = asString(row?.checked_at, '') || asString(row?.updated_at, '')
+    if (name && isIsoAtOrAfter(checkedAt, recentPurchaseCutoffIso)) {
+      recentlyPurchasedKeys.add(normalizeInsightKey(name))
+    }
+  }
 
   const addScore = (nameValue: unknown, score: number, signal: boolean, lastUsed = '') => {
     const name = compactInsightName(nameValue)
     if (!name) return
     const key = normalizeInsightKey(name)
-    if (activeKeys.has(key)) return
+    if (activeKeys.has(key) || recentlyPurchasedKeys.has(key)) return
     const existing = scores.get(key) || { name, score: 0, signals: 0, lastUsed: '' }
     existing.score += score
     if (signal) existing.signals += 1
@@ -182,7 +205,7 @@ function buildRunningLowInsight(
     const name = compactInsightName(row?.name)
     if (!name) continue
     const key = normalizeInsightKey(name)
-    if (activeKeys.has(key)) continue
+    if (activeKeys.has(key) || recentlyPurchasedKeys.has(key)) continue
     const checkedAt = asString(row?.checked_at, '') || asString(row?.updated_at, '')
     const existing = checkedCounts.get(key) || { name, count: 0, lastUsed: '' }
     existing.count += 1
@@ -198,8 +221,9 @@ function buildRunningLowInsight(
   for (const row of dinnerRows) {
     for (const item of parseDinnerPlanNoteItems(row?.note)) {
       const name = compactInsightName(item.name)
-      if (!name || activeKeys.has(normalizeInsightKey(name))) continue
+      if (!name) continue
       const key = normalizeInsightKey(name)
+      if (activeKeys.has(key) || recentlyPurchasedKeys.has(key)) continue
       const existing = dinnerIngredientCounts.get(key) || { name, count: 0 }
       existing.count += 1
       dinnerIngredientCounts.set(key, existing)
