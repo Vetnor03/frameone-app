@@ -2699,8 +2699,10 @@ function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppL
 }
 
 function mirrorGroceriesMediumHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
-  return dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List')
+  const header = dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List')
+  return header.toLocaleUpperCase(locale)
 }
 
 function mirrorGroceriesTodayDinnerLabel(language: AppLanguage) {
@@ -2832,7 +2834,7 @@ function MirrorGroceriesMediumCard({
         </div>
       )}
 
-      <div className="max-w-full truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.95rem,2.25vw,1.35rem)] font-semibold tracking-[0.055em]" title={header}>
+      <div className="max-w-full truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
         {header}
       </div>
 
