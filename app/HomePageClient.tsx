@@ -287,6 +287,8 @@ type MirrorModuleDetail = {
   reminderItems?: string[]
   reminderHeader?: string
   dinnerTodayTitle?: string
+  groceryRunningLow?: Array<{ name: string; label?: string }>
+  groceryMealIdeas?: Array<{ name: string; missing?: string[] }>
   weatherLowTemp?: string
   weatherHighTemp?: string
   weatherAdvice?: string
@@ -2709,6 +2711,52 @@ function mirrorGroceriesMediumEmptyLine(language: AppLanguage) {
   return language === 'no' ? 'Alt er klart' : 'All set'
 }
 
+function mirrorGroceriesRunningLow(detail: MirrorModuleDetail) {
+  const rawItems = Array.isArray(detail.groceryRunningLow) ? detail.groceryRunningLow : []
+  return rawItems
+    .map((item) => ({
+      name: String(item?.name ?? '').trim(),
+      label: String(item?.label ?? '').trim(),
+    }))
+    .filter((item) => item.name)
+    .slice(0, 3)
+}
+
+function mirrorGroceriesMealIdeas(detail: MirrorModuleDetail) {
+  const rawItems = Array.isArray(detail.groceryMealIdeas) ? detail.groceryMealIdeas : []
+  return rawItems
+    .map((item) => ({
+      name: String(item?.name ?? '').trim(),
+      missing: Array.isArray(item?.missing) ? item.missing.map((value) => String(value).trim()).filter(Boolean).slice(0, 2) : [],
+    }))
+    .filter((item) => item.name)
+    .slice(0, 2)
+}
+
+function mirrorGroceriesMediumEmptyInsight(detail: MirrorModuleDetail, language: AppLanguage) {
+  const runningLow = mirrorGroceriesRunningLow(detail)
+  if (runningLow.length > 0) {
+    return {
+      title: language === 'no' ? 'Snart lite av' : 'Might be low on',
+      lines: runningLow.map((item) => item.label ? `${item.name} - ${item.label}` : item.name),
+    }
+  }
+
+  const mealIdeas = mirrorGroceriesMealIdeas(detail)
+  if (mealIdeas.length > 0) {
+    return {
+      title: language === 'no' ? 'Middagstips' : 'Dinner ideas',
+      lines: mealIdeas.map((item) => {
+        if (item.missing.length <= 0) return item.name
+        const missingPrefix = language === 'no' ? 'mangler' : 'missing'
+        return `${item.name} (${missingPrefix}: ${item.missing.join(', ')})`
+      }),
+    }
+  }
+
+  return null
+}
+
 function MirrorGroceryMediumList({ items, overflowLabel, mutedColor }: { items: string[]; overflowLabel: string; mutedColor: string }) {
   if (items.length <= 0) return null
 
@@ -2774,6 +2822,7 @@ function MirrorGroceriesMediumCard({
   const header = mirrorGroceriesMediumHeader(detail, language)
   const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
   const hasDinnerTitle = dinnerTitle.length > 0
+  const emptyInsight = visibleItems.length <= 0 ? mirrorGroceriesMediumEmptyInsight(detail, language) : null
 
   return (
     <div className="flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)] text-center leading-none">
@@ -2783,14 +2832,29 @@ function MirrorGroceriesMediumCard({
         </div>
       )}
 
-      <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
+      <div className="max-w-full truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
         {header}
       </div>
 
       {visibleItems.length <= 0 ? (
-        <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
-          {mirrorGroceriesMediumEmptyLine(language)}
-        </div>
+        emptyInsight ? (
+          <div className="mt-[clamp(0.44rem,1.1vw,0.74rem)] flex min-h-0 w-full flex-1 flex-col items-center justify-start gap-[clamp(0.26rem,0.7vw,0.46rem)] overflow-hidden">
+            <div className="max-w-full truncate text-[clamp(0.56rem,1.25vw,0.78rem)] font-semibold tracking-[0.075em]" style={{ color: mutedColor }} title={emptyInsight.title}>
+              {emptyInsight.title}
+            </div>
+            <div className="flex max-w-full flex-col items-center gap-[clamp(0.24rem,0.58vw,0.38rem)]">
+              {emptyInsight.lines.map((line, index) => (
+                <div key={`${line}-${index}`} className="max-w-full truncate text-[clamp(0.62rem,1.4vw,0.88rem)] font-medium tracking-[0.045em]" title={line}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
+            {mirrorGroceriesMediumEmptyLine(language)}
+          </div>
+        )
       ) : (
         <MirrorGroceryMediumList items={visibleItems} overflowLabel={overflowLabel} mutedColor={mutedColor} />
       )}

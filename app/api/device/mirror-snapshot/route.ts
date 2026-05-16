@@ -24,6 +24,8 @@ type Detail = {
   reminderItems?: string[]
   reminderHeader?: string
   dinnerTodayTitle?: string
+  groceryRunningLow?: Array<{ name: string; label?: string }>
+  groceryMealIdeas?: Array<{ name: string; missing?: string[] }>
   weatherLowTemp?: string
   weatherHighTemp?: string
   weatherAdvice?: string
@@ -56,6 +58,134 @@ function asNumber(value: unknown): number | null {
 
 function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10)
+}
+
+function compactGroceryInsightName(value: unknown, maxLength = 32) {
+  const name = asString(value, '').replace(/\s+/g, ' ').trim()
+  if (!name || name.length > maxLength) return ''
+  return name
+}
+
+function normalizeGroceryInsightKey(name: string) {
+  return name.trim().toLocaleLowerCase()
+}
+
+type DinnerPlanNoteItem = { name: string; quantity: number; isChecked: boolean }
+
+function parseDinnerPlanNoteItems(note: unknown): DinnerPlanNoteItem[] {
+  if (typeof note !== 'string' || !note.trim()) return []
+
+  try {
+    const parsed = JSON.parse(note) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((item) => {
+        const row = asRecord(item)
+        const name = compactGroceryInsightName(row.name, 80)
+        if (!name) return null
+        const quantity = Math.max(1, Math.round(asNumber(row.quantity) ?? 1))
+        return { name, quantity, isChecked: row.isChecked === true || row.is_checked === true }
+      })
+      .filter(Boolean) as DinnerPlanNoteItem[]
+  } catch {
+    return []
+  }
+}
+
+function groceryRunningLowLabel(language: string) {
+  return language.toLocaleLowerCase().startsWith('no') || language.toLocaleLowerCase().startsWith('nb') || language.toLocaleLowerCase().startsWith('nn')
+    ? 'Lav snart'
+    : 'Low soon'
+}
+
+function buildMirrorRunningLowInsights(params: {
+  language: string
+  activeNames: string[]
+  historyRows: UnknownRecord[]
+  checkedRows: UnknownRecord[]
+}) {
+  const activeKeys = new Set(params.activeNames.map(normalizeGroceryInsightKey))
+  const scores = new Map<string, { name: string; score: number; lastUsed: string }>()
+
+  const addScore = (nameValue: unknown, score: number, lastUsed = '') => {
+    const name = compactGroceryInsightName(nameValue, 28)
+    if (!name) return
+    const key = normalizeGroceryInsightKey(name)
+    if (activeKeys.has(key)) return
+    const existing = scores.get(key) ?? { name, score: 0, lastUsed: '' }
+    existing.score += score
+    if (lastUsed && lastUsed > existing.lastUsed) existing.lastUsed = lastUsed
+    scores.set(key, existing)
+  }
+
+  for (const row of params.historyRows) {
+    const usageCount = Math.max(0, asNumber(row.usage_count) ?? 0)
+    if (usageCount < 2) continue
+    addScore(row.name, Math.min(8, usageCount * 2), asString(row.last_used_at))
+  }
+
+  const checkedCounts = new Map<string, { name: string; count: number; lastUsed: string }>()
+  for (const row of params.checkedRows) {
+    const name = compactGroceryInsightName(row.name, 28)
+    if (!name) continue
+    const key = normalizeGroceryInsightKey(name)
+    if (activeKeys.has(key)) continue
+    const checkedAt = asString(row.checked_at) || asString(row.updated_at)
+    const existing = checkedCounts.get(key) ?? { name, count: 0, lastUsed: '' }
+    existing.count += 1
+    if (checkedAt && checkedAt > existing.lastUsed) existing.lastUsed = checkedAt
+    checkedCounts.set(key, existing)
+  }
+
+  for (const entry of checkedCounts.values()) {
+    if (entry.count < 2) continue
+    addScore(entry.name, Math.min(6, entry.count * 3), entry.lastUsed)
+  }
+
+  const label = groceryRunningLowLabel(params.language)
+  return [...scores.values()]
+    .filter((item) => item.score >= 4)
+    .sort((a, b) => b.score - a.score || b.lastUsed.localeCompare(a.lastUsed) || a.name.localeCompare(b.name))
+    .slice(0, 3)
+    .map((item) => ({ name: item.name, label }))
+}
+
+function buildMirrorMealIdeas(params: {
+  dinnerRows: UnknownRecord[]
+  todayIso: string
+  activeNames: string[]
+}) {
+  const activeKeys = new Set(params.activeNames.map(normalizeGroceryInsightKey))
+  const ideas = new Map<string, { name: string; missing: string[]; date: string; upcoming: boolean }>()
+
+  for (const row of params.dinnerRows) {
+    const name = compactGroceryInsightName(row.title, 32)
+    if (!name) continue
+
+    const key = normalizeGroceryInsightKey(name)
+    const date = asString(row.date).slice(0, 10)
+    const upcoming = !!date && date >= params.todayIso
+    const ingredients = parseDinnerPlanNoteItems(row.note)
+      .map((item) => item.name)
+      .filter(Boolean)
+    const missing = ingredients
+      .filter((item) => !activeKeys.has(normalizeGroceryInsightKey(item)))
+      .slice(0, 2)
+
+    const existing = ideas.get(key)
+    if (!existing || (upcoming && !existing.upcoming) || date > existing.date) {
+      ideas.set(key, { name, missing, date, upcoming })
+    }
+  }
+
+  return [...ideas.values()]
+    .sort((a, b) => {
+      if (a.upcoming !== b.upcoming) return Number(b.upcoming) - Number(a.upcoming)
+      return a.upcoming ? a.date.localeCompare(b.date) || a.name.localeCompare(b.name) : b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
+    })
+    .slice(0, 2)
+    .map((idea) => ({ name: idea.name, missing: idea.missing }))
 }
 
 function splitStoredModule(value: unknown) {
@@ -562,7 +692,10 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
 
   const todayIso = isoDateOnly(new Date())
 
-  const [itemsResult, dinnerResult] = await Promise.all([
+  const sinceCheckedIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const sinceDinnerIso = isoDateOnly(new Date(Date.now() - 180 * 24 * 60 * 60 * 1000))
+
+  const [itemsResult, dinnerResult, historyResult, checkedResult] = await Promise.all([
     supabase
       .from('grocery_items')
       .select('name, quantity, updated_at')
@@ -572,10 +705,27 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
       .limit(40),
     supabase
       .from('dinner_plan_days')
-      .select('title')
+      .select('date, title, note')
       .in('device_id', storageDeviceIds)
-      .eq('date', todayIso)
-      .limit(1),
+      .gte('date', sinceDinnerIso)
+      .order('date', { ascending: false })
+      .limit(80),
+    supabase
+      .from('grocery_item_history')
+      .select('name, usage_count, last_used_at')
+      .in('device_id', storageDeviceIds)
+      .gte('last_used_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
+      .order('usage_count', { ascending: false })
+      .order('last_used_at', { ascending: false })
+      .limit(80),
+    supabase
+      .from('grocery_items')
+      .select('name, checked_at, updated_at')
+      .in('device_id', storageDeviceIds)
+      .eq('is_checked', true)
+      .gte('checked_at', sinceCheckedIso)
+      .order('checked_at', { ascending: false })
+      .limit(80),
   ])
 
   if (itemsResult.error) throw new Error(itemsResult.error.message)
@@ -583,7 +733,9 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
 
   const items = Array.isArray(itemsResult.data) ? itemsResult.data.map(asRecord) : []
   const dinnerRows = Array.isArray(dinnerResult.data) ? dinnerResult.data.map(asRecord) : []
-  const dinnerTodayTitle = asString(dinnerRows[0]?.title).trim()
+  const historyRows = !historyResult.error && Array.isArray(historyResult.data) ? historyResult.data.map(asRecord) : []
+  const checkedRows = !checkedResult.error && Array.isArray(checkedResult.data) ? checkedResult.data.map(asRecord) : []
+  const dinnerTodayTitle = asString(dinnerRows.find((row) => asString(row.date).slice(0, 10) === todayIso)?.title).trim()
   const groceryItems = items
     .map((item) => {
       const name = asString(item.name).trim()
@@ -600,6 +752,9 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
     })
     .filter(Boolean)
     .join(', ')
+  const activeNames = items.map((item) => asString(item.name).trim()).filter(Boolean)
+  const groceryRunningLow = buildMirrorRunningLowInsights({ language, activeNames, historyRows, checkedRows })
+  const groceryMealIdeas = buildMirrorMealIdeas({ dinnerRows, todayIso, activeNames })
 
   return {
     primary: items.length ? `${items.length}` : '0',
@@ -607,6 +762,8 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
     tertiary: preview,
     groceryItems,
     dinnerTodayTitle: dinnerTodayTitle || undefined,
+    groceryRunningLow,
+    groceryMealIdeas,
   }
 }
 
