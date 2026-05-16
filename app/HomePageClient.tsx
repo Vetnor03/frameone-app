@@ -3475,72 +3475,97 @@ function mirrorStockRangeLabel(range: StockChartRange | undefined, language: App
   return labels[range || 'day'] || labels.day
 }
 
+const MIRROR_STOCK_CHART_WIDTH = 276
+const MIRROR_STOCK_CHART_HEIGHT = 86
+const MIRROR_STOCK_LINE_WIDTH = 3
+
 type MirrorStockChartGeometry = {
   width: number
   height: number
-  rawMin: number
-  rawMax: number
   min: number
   max: number
   points: string
   referenceY: number | null
+  referenceSegments: Array<{ x1: number; x2: number }>
+}
+
+function mirrorStockValueAt(values: number[], indexFloat: number) {
+  const n = values.length
+  if (n <= 0) return Number.NaN
+  if (indexFloat <= 0) return values[0]
+  if (indexFloat >= n - 1) return values[n - 1]
+
+  const i0 = Math.floor(indexFloat)
+  const i1 = Math.min(n - 1, i0 + 1)
+  const t = indexFloat - i0
+  const v0 = values[i0]
+  const v1 = values[i1]
+  if (!Number.isFinite(v0) && !Number.isFinite(v1)) return Number.NaN
+  if (!Number.isFinite(v0)) return v1
+  if (!Number.isFinite(v1)) return v0
+  return v0 + (v1 - v0) * t
 }
 
 function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null): MirrorStockChartGeometry {
-  const width = 100
-  const height = 100
-  const plotTop = 8
-  const plotBottom = 92
-  const rawMin = Math.min(...values)
-  const rawMax = Math.max(...values)
-  const hasPreviousClose = typeof previousClose === 'number' && Number.isFinite(previousClose)
-  const domainMin = hasPreviousClose ? Math.min(rawMin, previousClose) : rawMin
-  const domainMax = hasPreviousClose ? Math.max(rawMax, previousClose) : rawMax
-  const anchor = hasPreviousClose ? previousClose : values[values.length - 1]
+  const width = MIRROR_STOCK_CHART_WIDTH
+  const height = MIRROR_STOCK_CHART_HEIGHT
 
-  // Mirror the firmware chart path math directly: use real price values as the
-  // domain and map them linearly to x/y. Unlike the firmware e-paper chart, keep
-  // explicit top/bottom plot gutters so small mirror cards do not pin extrema to
-  // the SVG edge after CSS stretches the chart to the available card height.
-  const fallbackRange = Math.max(Math.abs(anchor) * 0.005, 0.01)
-  const rawRange = domainMax - domainMin
-  const normalizedRange = rawRange < fallbackRange ? fallbackRange : rawRange
-  const center = rawRange < fallbackRange && Number.isFinite(anchor)
-    ? anchor
-    : (domainMin + domainMax) / 2
-  const paddedRange = normalizedRange * 1.24
-  const min = center - paddedRange / 2
-  const max = center + paddedRange / 2
-  const span = max - min
-  const yForValue = (value: number) => plotBottom - ((value - min) / span) * (plotBottom - plotTop)
-  const pointFor = (value: number, index: number) => {
-    const x = (index / Math.max(1, values.length - 1)) * width
-    const y = Math.min(plotBottom, Math.max(plotTop, yForValue(value)))
-    return `${x.toFixed(2)},${y.toFixed(2)}`
+  let min = Number.isFinite(values[0]) ? values[0] : 0
+  let max = min
+  for (let i = 1; i < values.length; i += 1) {
+    const value = values[i]
+    if (!Number.isFinite(value)) continue
+    if (value < min) min = value
+    if (value > max) max = value
+  }
+
+  let span = max - min
+  if (span < 0.0001) span = 1.0
+
+  const yForValue = (value: number) => height - Math.round(((value - min) / span) * (height - 1))
+  const sampledPoints: string[] = []
+  for (let dx = 0; dx < width; dx += 1) {
+    const indexFloat = (dx / (width - 1)) * (values.length - 1)
+    const interpolated = mirrorStockValueAt(values, indexFloat)
+    const nearest = Math.min(Math.max(Math.round(indexFloat), 0), values.length - 1)
+    const value = Number.isFinite(interpolated) ? interpolated : values[nearest]
+    sampledPoints.push(`${dx},${yForValue(value)}`)
+  }
+
+  let referenceY: number | null = null
+  const hasPreviousClose = typeof previousClose === 'number' && Number.isFinite(previousClose) && previousClose > 0
+  if (hasPreviousClose && previousClose >= min && previousClose <= max && max - min >= 0.0001) {
+    const y = yForValue(previousClose)
+    if (y >= 0 && y <= height - 1) referenceY = y
+  }
+
+  const referenceSegments: Array<{ x1: number; x2: number }> = []
+  if (referenceY != null) {
+    for (let x = 0; x <= width - 1; x += 6) {
+      const segmentWidth = Math.min(2, width - x)
+      if (segmentWidth > 0) referenceSegments.push({ x1: x, x2: x + segmentWidth })
+    }
   }
 
   return {
     width,
     height,
-    rawMin,
-    rawMax,
     min,
     max,
-    points: values.map(pointFor).join(' '),
-    referenceY: hasPreviousClose ? Math.min(plotBottom, Math.max(plotTop, yForValue(previousClose))) : null,
+    points: sampledPoints.join(' '),
+    referenceY,
+    referenceSegments,
   }
 }
 
 function MirrorStockChart({
   series,
-  seriesTimestamps,
   previousClose,
   textColor,
   moduleId,
   chartRange,
 }: {
   series?: number[]
-  seriesTimestamps?: Array<number | null>
   previousClose?: number | null
   textColor: string
   moduleId?: number
@@ -3548,88 +3573,49 @@ function MirrorStockChart({
 }) {
   const values = useMemo(() => (series || []).filter((value) => Number.isFinite(value)), [series])
 
-  const containerRef = useRef<HTMLDivElement | null>(null)
-
   const geometry = useMemo(() => {
     if (values.length < 2) return null
     return buildMirrorStockChartGeometry(values, previousClose)
   }, [values, previousClose])
 
-  useEffect(() => {
-    if (!geometry) return
-    const container = containerRef.current
-    const svg = container?.querySelector('svg')
-    const parentRect = container?.getBoundingClientRect()
-    const svgRect = svg?.getBoundingClientRect()
-    const firstTimestamp = seriesTimestamps?.find((value) => value != null) ?? null
-    const lastTimestamp = seriesTimestamps ? [...seriesTimestamps].reverse().find((value) => value != null) ?? null : null
-
-    console.debug('[mirror stock chart]', {
-      moduleId,
-      chartRange,
-      selectedSeriesLength: values.length,
-      firstTimestamp,
-      lastTimestamp,
-      minValue: geometry.rawMin,
-      maxValue: geometry.rawMax,
-      inputLooksNormalized01: geometry.rawMin >= 0 && geometry.rawMax <= 1,
-      paddedMinValue: geometry.min,
-      paddedMaxValue: geometry.max,
-      svgPoints: geometry.points,
-      previousCloseY: geometry.referenceY,
-      css: {
-        viewBox: svg?.getAttribute('viewBox'),
-        widthAttr: svg?.getAttribute('width'),
-        heightAttr: svg?.getAttribute('height'),
-        preserveAspectRatio: svg?.getAttribute('preserveAspectRatio'),
-        parentHeight: parentRect?.height ?? null,
-        parentWidth: parentRect?.width ?? null,
-        renderedSvgHeight: svgRect?.height ?? null,
-        renderedSvgWidth: svgRect?.width ?? null,
-      },
-    })
-  }, [chartRange, geometry, moduleId, seriesTimestamps, values])
-
   if (!geometry) {
     return (
-      <div ref={containerRef} className="flex h-full w-full items-center justify-center text-[clamp(0.55rem,1.25vw,0.76rem)] font-semibold tracking-[0.06em]">
+      <div className="flex h-full w-full items-center justify-center text-[clamp(0.55rem,1.25vw,0.76rem)] font-semibold tracking-[0.06em]">
         No chart data
       </div>
     )
   }
 
-  const { width, height, points, referenceY } = geometry
+  const { width, height, points, referenceY, referenceSegments } = geometry
 
   return (
     <div
-      ref={containerRef}
-      className="h-full w-full"
+      className="flex h-full w-full items-center justify-center overflow-hidden"
       data-mirror-stock-chart="medium"
       data-module-id={moduleId ?? ''}
       data-chart-range={chartRange ?? ''}
     >
-      <svg className="h-full w-full overflow-hidden" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+      <svg
+        className="block max-h-full max-w-full overflow-hidden"
+        style={{ aspectRatio: `${width} / ${height}`, width: '100%', height: 'auto' }}
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+      >
         {referenceY != null && (
-          <line
-            x1="0"
-            x2={width}
-            y1={referenceY}
-            y2={referenceY}
-            stroke={textColor}
-            strokeWidth="1"
-            strokeDasharray="2 4"
-            vectorEffect="non-scaling-stroke"
-            opacity="0.48"
-          />
+          <g opacity="0.48" stroke={textColor} strokeWidth="1" shapeRendering="crispEdges">
+            {referenceSegments.map((segment) => (
+              <line key={`${segment.x1}-${segment.x2}`} x1={segment.x1} x2={segment.x2} y1={referenceY} y2={referenceY} />
+            ))}
+          </g>
         )}
         <polyline
           points={points}
           fill="none"
           stroke={textColor}
-          strokeWidth="3"
+          strokeWidth={MIRROR_STOCK_LINE_WIDTH}
           strokeLinejoin="round"
           strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
         />
       </svg>
     </div>
@@ -3680,7 +3666,6 @@ function MirrorMediumStocksCard({
       <div className="min-h-0 flex-1 px-[clamp(0.45rem,1.15vw,0.85rem)] pt-[clamp(0.45rem,1vw,0.8rem)] pb-[clamp(0.55rem,1.35vw,1rem)]">
         <MirrorStockChart
           series={detail.stockSeries}
-          seriesTimestamps={detail.stockSeriesTimestamps}
           previousClose={detail.stockPreviousClose}
           textColor={textColor}
           moduleId={detail.stockModuleId}
