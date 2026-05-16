@@ -3446,7 +3446,7 @@ function MirrorSmallStocksCard({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.5rem,1.4vw,0.95rem)] py-[clamp(0.52rem,1.45vw,1rem)] text-center leading-tight">
-      <div className="mx-auto max-w-full shrink-0 truncate border-b-2 border-current px-[clamp(0.25rem,0.7vw,0.5rem)] pb-[clamp(0.05rem,0.18vw,0.12rem)] text-[clamp(0.7rem,1.7vw,1.06rem)] font-semibold tracking-[0.08em]">
+      <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.25rem,0.7vw,0.5rem)] pb-[clamp(0.05rem,0.18vw,0.12rem)] text-[clamp(0.7rem,1.7vw,1.06rem)] font-semibold tracking-[0.08em]">
         {title}
       </div>
 
