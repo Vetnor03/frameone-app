@@ -24,6 +24,7 @@ type Detail = {
   reminderItems?: string[]
   reminderHeader?: string
   dinnerTodayTitle?: string
+  groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
   groceryMealIdeas?: Array<{ name: string; missing?: string[] }>
   weatherLowTemp?: string
@@ -765,6 +766,14 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const historyRows = !historyResult.error && Array.isArray(historyResult.data) ? historyResult.data.map(asRecord) : []
   const checkedRows = !checkedResult.error && Array.isArray(checkedResult.data) ? checkedResult.data.map(asRecord) : []
   const dinnerTodayTitle = asString(dinnerRows.find((row) => asString(row.date).slice(0, 10) === todayIso)?.title).trim()
+  const groceryDinnerPlan = dinnerRows
+    .map((row) => ({
+      date: asString(row.date).slice(0, 10),
+      title: compactGroceryInsightName(row.title, 48),
+    }))
+    .filter((row) => row.date > todayIso && row.title)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title))
+    .slice(0, 7)
   const groceryItems = items
     .map((item) => {
       const name = asString(item.name).trim()
@@ -791,6 +800,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
     tertiary: preview,
     groceryItems,
     dinnerTodayTitle: dinnerTodayTitle || undefined,
+    groceryDinnerPlan,
     groceryRunningLow,
     groceryMealIdeas,
   }

@@ -287,6 +287,7 @@ type MirrorModuleDetail = {
   reminderItems?: string[]
   reminderHeader?: string
   dinnerTodayTitle?: string
+  groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
   groceryMealIdeas?: Array<{ name: string; missing?: string[] }>
   weatherLowTemp?: string
@@ -2698,11 +2699,18 @@ function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppL
   return language === 'no' ? `+${remainingCount} varer` : `+${remainingCount} items`
 }
 
-function mirrorGroceriesMediumHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+function mirrorGroceriesUppercase(value: string, language: AppLanguage) {
   const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  return value.toLocaleUpperCase(locale)
+}
+
+function mirrorGroceriesListHeader(language: AppLanguage) {
+  return mirrorGroceriesUppercase(language === 'no' ? 'Handleliste' : 'Grocery List', language)
+}
+
+function mirrorGroceriesMediumHeader(detail: MirrorModuleDetail, language: AppLanguage) {
   const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
-  const header = dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List')
-  return header.toLocaleUpperCase(locale)
+  return mirrorGroceriesUppercase(dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List'), language)
 }
 
 function mirrorGroceriesTodayDinnerLabel(language: AppLanguage) {
@@ -2733,6 +2741,24 @@ function mirrorGroceriesMealIdeas(detail: MirrorModuleDetail) {
     }))
     .filter((item) => item.name)
     .slice(0, 2)
+}
+
+function mirrorGroceriesDinnerPlan(detail: MirrorModuleDetail) {
+  const rawItems = Array.isArray(detail.groceryDinnerPlan) ? detail.groceryDinnerPlan : []
+  return rawItems
+    .map((item) => ({
+      date: String(item?.date ?? '').slice(0, 10),
+      title: String(item?.title ?? '').trim(),
+    }))
+    .filter((item) => item.date && item.title)
+    .slice(0, 7)
+}
+
+function mirrorGroceriesDinnerDayLabel(date: string, language: AppLanguage) {
+  const parsed = new Date(`${date}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return date.slice(5)
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(parsed).replace('.', '')
 }
 
 function mirrorGroceriesMediumEmptyInsight(detail: MirrorModuleDetail, language: AppLanguage) {
@@ -2810,33 +2836,40 @@ function MirrorGroceryMediumList({ items, overflowLabel, mutedColor }: { items: 
   )
 }
 
-function MirrorGroceriesMediumCard({
+function MirrorGroceriesHeader({ header }: { header: string }) {
+  return (
+    <div className="max-w-full truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
+      {header}
+    </div>
+  )
+}
+
+function MirrorGroceriesMediumPanel({
   detail,
   language,
   mutedColor,
+  header,
+  showDinnerLabel = false,
 }: {
   detail: MirrorModuleDetail
   language: AppLanguage
   mutedColor: string
+  header: string
+  showDinnerLabel?: boolean
 }) {
   const visibleItems = mirrorGroceriesVisibleItems(detail, 12)
   const overflowLabel = mirrorGroceriesOverflowLabel(detail, language, 12)
-  const header = mirrorGroceriesMediumHeader(detail, language)
-  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
-  const hasDinnerTitle = dinnerTitle.length > 0
   const emptyInsight = visibleItems.length <= 0 ? mirrorGroceriesMediumEmptyInsight(detail, language) : null
 
   return (
-    <div className="flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)] text-center leading-none">
-      {hasDinnerTitle && (
+    <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
+      {showDinnerLabel && (
         <div className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]" title={mirrorGroceriesTodayDinnerLabel(language)}>
           {mirrorGroceriesTodayDinnerLabel(language)}
         </div>
       )}
 
-      <div className="max-w-full truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
-        {header}
-      </div>
+      <MirrorGroceriesHeader header={header} />
 
       {visibleItems.length <= 0 ? (
         emptyInsight ? (
@@ -2860,6 +2893,96 @@ function MirrorGroceriesMediumCard({
       ) : (
         <MirrorGroceryMediumList items={visibleItems} overflowLabel={overflowLabel} mutedColor={mutedColor} />
       )}
+    </div>
+  )
+}
+
+function MirrorGroceriesMediumCard({
+  detail,
+  language,
+  mutedColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  mutedColor: string
+}) {
+  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
+
+  return (
+    <div className="flex h-full w-full flex-col px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
+      <MirrorGroceriesMediumPanel
+        detail={detail}
+        language={language}
+        mutedColor={mutedColor}
+        header={mirrorGroceriesMediumHeader(detail, language)}
+        showDinnerLabel={dinnerTitle.length > 0}
+      />
+    </div>
+  )
+}
+
+function MirrorGroceriesDinnerPlanList({ detail, language, mutedColor }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string }) {
+  const plan = mirrorGroceriesDinnerPlan(detail)
+
+  if (plan.length <= 0) {
+    return (
+      <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
+        {language === 'no' ? 'Ingen middager planlagt' : 'No dinners planned'}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 items-start justify-center pt-[clamp(0.36rem,0.9vw,0.58rem)]">
+      <div className="grid w-fit max-w-full grid-cols-[auto_minmax(0,1fr)] gap-x-[clamp(0.52rem,1.25vw,0.84rem)] gap-y-[clamp(0.34rem,0.9vw,0.58rem)] text-left leading-none">
+        {plan.map((item, index) => {
+          const label = `${mirrorGroceriesDinnerDayLabel(item.date, language)}:`
+          return (
+            <React.Fragment key={`${item.date}-${item.title}-${index}`}>
+              <div className="max-w-full truncate text-[clamp(0.58rem,1.3vw,0.82rem)] font-semibold tracking-[0.05em]" title={label}>
+                {label}
+              </div>
+              <div className="min-w-0 truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" title={item.title}>
+                {item.title}
+              </div>
+            </React.Fragment>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function MirrorGroceriesLargeCard({
+  detail,
+  language,
+  mutedColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  mutedColor: string
+}) {
+  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
+  const rightHeader = mirrorGroceriesUppercase(dinnerTitle || (language === 'no' ? 'Ukemeny' : 'Weekly Menu'), language)
+
+  return (
+    <div className="grid h-full w-full grid-cols-2 gap-[clamp(0.75rem,2vw,1.4rem)] overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
+      <MirrorGroceriesMediumPanel
+        detail={detail}
+        language={language}
+        mutedColor={mutedColor}
+        header={mirrorGroceriesListHeader(language)}
+      />
+
+      <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
+        {dinnerTitle && (
+          <div className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]" title={mirrorGroceriesTodayDinnerLabel(language)}>
+            {mirrorGroceriesTodayDinnerLabel(language)}
+          </div>
+        )}
+        <MirrorGroceriesHeader header={rightHeader} />
+        <MirrorGroceriesDinnerPlanList detail={detail} language={language} mutedColor={mutedColor} />
+      </div>
     </div>
   )
 }
@@ -3262,6 +3385,10 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'groceries' && size === 'large') {
+      return <MirrorGroceriesLargeCard detail={detail} language={language} mutedColor={mutedColor} />
     }
 
     if (module === 'groceries' && size === 'medium') {
