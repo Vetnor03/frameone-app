@@ -378,7 +378,6 @@ export async function GET(req: Request) {
       const result = await fetchCandles(resolvedSymbol, '30', nowSec - 36 * 3600, nowSec, apiKey)
       day = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.day)
       candleStatus.day = { status: result.status, reason: result.reason }
-      console.log('[device/stocks] day finnhub points', JSON.stringify({ symbol: resolvedSymbol, count: day.length }))
     } catch (error: unknown) {
       day = []
       candleStatus.day = {
@@ -430,26 +429,16 @@ export async function GET(req: Request) {
     let selectedSeries = seriesByRange[chartRange] || []
     const selectedStatus = candleStatus[chartRange]
     const selectedSeriesFailed = selectedStatus.status !== 'ok'
-    let yahooFallbackStatus: { status: YahooFetchStatus; reason: string } | null = null
-    let weekDataProvider: 'Finnhub' | 'Yahoo' | 'quote fallback' = 'Finnhub'
 
     if (selectedSeriesFailed && selectedSeries.length === 0 && shouldFallbackToYahoo(selectedStatus.status, selectedStatus.reason)) {
       try {
         const yahoo = await fetchYahooCandles(resolvedSymbol, chartRange)
-        yahooFallbackStatus = { status: yahoo.status, reason: yahoo.reason }
         if (yahoo.status === 'ok' && yahoo.points.length > 0) {
           seriesByRange[chartRange] = yahoo.points
           selectedSeries = yahoo.points
-          if (chartRange === 'week') weekDataProvider = 'Yahoo'
-          if (chartRange === 'day') {
-            console.log('[device/stocks] day yahoo fallback points', JSON.stringify({ symbol: resolvedSymbol, count: yahoo.points.length }))
-          }
         }
       } catch (error: unknown) {
-        yahooFallbackStatus = {
-          status: 'exception',
-          reason: error instanceof Error ? error.message : 'Unknown error',
-        }
+        void error
       }
     }
 
@@ -458,39 +447,8 @@ export async function GET(req: Request) {
         { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
         { t: new Date(nowSec * 1000).toISOString(), p: price },
       ]
-      if (chartRange === 'week') weekDataProvider = 'quote fallback'
     }
 
-    console.log(
-      '[device/stocks] week data source',
-      JSON.stringify({
-        symbol: resolvedSymbol,
-        requestedChartRange: chartRange,
-        weekPointCount: seriesByRange.week.length,
-        weekDataProvider,
-      })
-    )
-
-    console.log(
-      '[device/stocks] chart response',
-      JSON.stringify({
-        symbol: resolvedSymbol,
-        chartRange,
-        requestedChartRange: chartRange,
-        weekPointCount: seriesByRange.week.length,
-        weekDataProvider,
-        finnhubSelectedStatus: candleStatus[chartRange],
-        yahooFallbackStatus,
-        selectedSeriesLength: selectedSeries.length,
-        seriesLengths: {
-          day: day.length,
-          week: week.length,
-          month: month.length,
-          year: year.length,
-        },
-        candleStatus,
-      })
-    )
 
     const response = {
       symbol: resolvedSymbol,
