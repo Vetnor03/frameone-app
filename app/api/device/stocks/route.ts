@@ -62,10 +62,19 @@ function clampPoints(points: SeriesPoint[], max: number) {
 }
 
 function sanitizeSeries(points: SeriesPoint[]) {
-  return points.filter((point) => {
-    const hasIso = typeof point.t === 'string' && point.t.length > 0
-    return hasIso && Number.isFinite(point.p)
-  })
+  return points
+    .filter((point) => {
+      const hasIso = typeof point.t === 'string' && point.t.length > 0
+      return hasIso && Number.isFinite(point.p)
+    })
+    .sort((a, b) => {
+      const at = Date.parse(a.t)
+      const bt = Date.parse(b.t)
+      if (!Number.isFinite(at) && !Number.isFinite(bt)) return 0
+      if (!Number.isFinite(at)) return 1
+      if (!Number.isFinite(bt)) return -1
+      return at - bt
+    })
 }
 
 function toIsoOrNull(epochSeconds: unknown) {

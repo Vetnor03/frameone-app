@@ -433,15 +433,50 @@ function formatPercent(value: unknown) {
 }
 
 
-function numericSeries(value: unknown) {
+function seriesTimestampMs(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 100000000000 ? value : value * 1000
+  }
+  if (typeof value !== 'string' || !value.trim()) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function selectedSeriesRows(value: unknown) {
   const series = Array.isArray(value) ? value : []
-  return series
-    .map((point) => {
-      if (typeof point === 'number') return point
+  const rows = series
+    .map((point, index) => {
+      if (typeof point === 'number') {
+        return Number.isFinite(point) ? { price: point, index, timestampMs: null as number | null } : null
+      }
+
       const row = asRecord(point)
-      return asNumber(row.p) ?? asNumber(row.price)
+      const price = asNumber(row.p) ?? asNumber(row.price)
+      if (price == null || !Number.isFinite(price)) return null
+
+      const timestampMs =
+        seriesTimestampMs(row.t) ??
+        seriesTimestampMs(row.timestamp) ??
+        seriesTimestampMs(row.time) ??
+        seriesTimestampMs(row.date)
+
+      return { price, index, timestampMs }
     })
-    .filter((point): point is number => point != null && Number.isFinite(point))
+    .filter((row): row is { price: number; index: number; timestampMs: number | null } => row != null)
+
+  const hasTimestamps = rows.some((row) => row.timestampMs != null)
+  if (!hasTimestamps) return rows
+
+  return [...rows].sort((a, b) => {
+    if (a.timestampMs == null && b.timestampMs == null) return a.index - b.index
+    if (a.timestampMs == null) return 1
+    if (b.timestampMs == null) return -1
+    return a.timestampMs - b.timestampMs || a.index - b.index
+  })
+}
+
+function numericSeries(value: unknown) {
+  return selectedSeriesRows(value).map((point) => point.price)
 }
 
 function normalizeStockRange(value: unknown) {
@@ -450,14 +485,7 @@ function normalizeStockRange(value: unknown) {
 }
 
 function selectedSeriesPercent(value: unknown) {
-  const series = Array.isArray(value) ? value : []
-  const prices = series
-    .map((point) => {
-      if (typeof point === 'number') return point
-      const row = asRecord(point)
-      return asNumber(row.p) ?? asNumber(row.price)
-    })
-    .filter((point): point is number => point != null)
+  const prices = selectedSeriesRows(value).map((point) => point.price)
 
   if (prices.length < 2) return null
 
