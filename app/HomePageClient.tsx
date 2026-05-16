@@ -3492,26 +3492,35 @@ function MirrorStockChart({
     )
   }
 
-  let min = Math.min(...values)
-  let max = Math.max(...values)
-  if (Math.abs(max - min) < 0.0001) {
-    min -= 0.5
-    max += 0.5
-  }
-  const span = max - min
   const width = 100
   const height = 100
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const anchor = typeof previousClose === 'number' && Number.isFinite(previousClose)
+    ? previousClose
+    : values[values.length - 1]
+  const fallbackRange = Math.max(Math.abs(anchor) * 0.005, 0.01)
+  const rawRange = rawMax - rawMin
+  const normalizedRange = rawRange < fallbackRange ? fallbackRange : rawRange
+  const center = rawRange < fallbackRange && Number.isFinite(anchor)
+    ? anchor
+    : (rawMin + rawMax) / 2
+  const paddedRange = normalizedRange * 1.24
+  const min = center - paddedRange / 2
+  const max = center + paddedRange / 2
+  const span = max - min
+  const clampY = (y: number) => Math.min(height - 1, Math.max(1, y))
+  const yForValue = (value: number) => clampY(height - ((value - min) / span) * height)
   const pointFor = (value: number, index: number) => {
     const x = (index / Math.max(1, values.length - 1)) * width
-    const y = height - ((value - min) / span) * height
+    const y = yForValue(value)
     return `${x.toFixed(2)},${y.toFixed(2)}`
   }
   const points = values.map(pointFor).join(' ')
-  const showReference = typeof previousClose === 'number' && Number.isFinite(previousClose) && previousClose >= min && previousClose <= max
-  const referenceY = showReference ? height - ((previousClose - min) / span) * height : null
+  const referenceY = typeof previousClose === 'number' && Number.isFinite(previousClose) ? yForValue(previousClose) : null
 
   return (
-    <svg className="h-full w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+    <svg className="h-full w-full overflow-hidden" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
       {referenceY != null && (
         <line
           x1="0"
@@ -3519,10 +3528,10 @@ function MirrorStockChart({
           y1={referenceY}
           y2={referenceY}
           stroke={textColor}
-          strokeWidth="1.2"
+          strokeWidth="1"
           strokeDasharray="2 4"
           vectorEffect="non-scaling-stroke"
-          opacity="0.72"
+          opacity="0.48"
         />
       )}
       <polyline
