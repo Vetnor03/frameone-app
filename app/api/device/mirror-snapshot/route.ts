@@ -41,6 +41,9 @@ const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
 const LIKELY_AVAILABLE_HISTORY_DAYS = 45
 const MIRROR_RECIPE_SOURCE_MAX = 200
+const MIN_LEARNED_AVAILABLE_DAYS = 1
+const MAX_LEARNED_AVAILABLE_DAYS = 180
+const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 function getBearerToken(req: Request) {
   const h = req.headers.get('authorization') || ''
@@ -249,6 +252,18 @@ function buildMirrorRunningLowInsights(params: {
     .map((item) => ({ name: item.name, label }))
 }
 
+function learnedAvailableDays(row: UnknownRecord) {
+  const n = asNumber(row.average_days_available)
+  if (n == null || !Number.isFinite(n)) return null
+  return Math.max(MIN_LEARNED_AVAILABLE_DAYS, Math.min(MAX_LEARNED_AVAILABLE_DAYS, n))
+}
+
+function ageInDays(isoValue: string) {
+  const then = new Date(isoValue).getTime()
+  if (Number.isNaN(then)) return null
+  return Math.max(0, (Date.now() - then) / MS_PER_DAY)
+}
+
 function buildLikelyAvailableIngredientScores(params: {
   historyRows: UnknownRecord[]
   checkedRows: UnknownRecord[]
@@ -270,7 +285,20 @@ function buildLikelyAvailableIngredientScores(params: {
   for (const row of params.historyRows) {
     const usageCount = Math.max(0, asNumber(row.usage_count) ?? 0)
     const lastUsed = asString(row.last_used_at)
+    const lastPurchased = asString(row.last_purchased_at) || lastUsed
     if (usageCount < 2 || !isIsoAtOrAfter(lastUsed, historyCutoffIso)) continue
+
+    const averageDaysAvailable = learnedAvailableDays(row)
+    if (averageDaysAvailable != null && lastPurchased) {
+      const ageDays = ageInDays(lastPurchased)
+      if (ageDays == null || ageDays > averageDaysAvailable) continue
+
+      const remainingRatio = Math.max(0.15, (averageDaysAvailable - ageDays) / averageDaysAvailable)
+      const learnedFreshnessScore = Math.ceil(remainingRatio * 8)
+      addScore(row.name, Math.min(10, usageCount) + learnedFreshnessScore, lastPurchased)
+      continue
+    }
+
     addScore(row.name, Math.min(10, usageCount) + (isIsoAtOrAfter(lastUsed, recentPurchaseCutoffIso) ? 4 : 0), lastUsed)
   }
 
@@ -854,7 +882,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
       .limit(80),
     supabase
       .from('grocery_item_history')
-      .select('name, usage_count, last_used_at')
+      .select('name, usage_count, last_used_at, last_purchased_at, average_days_available')
       .in('device_id', storageDeviceIds)
       .gte('last_used_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
       .order('usage_count', { ascending: false })

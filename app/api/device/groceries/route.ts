@@ -15,6 +15,9 @@ const GROCERY_CHECKED_RETENTION_MS = 10 * 60 * 1000
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
 const LIKELY_AVAILABLE_HISTORY_DAYS = 45
+const MIN_LEARNED_AVAILABLE_DAYS = 1
+const MAX_LEARNED_AVAILABLE_DAYS = 180
+const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 type GroceryPayload = {
   ok: true
@@ -327,6 +330,18 @@ async function loadRecipeRows(supabase: SupabaseClient, storageDeviceIds: string
     .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
 }
 
+function learnedAvailableDays(row: Record<string, unknown>) {
+  const n = Number(row.average_days_available)
+  if (!Number.isFinite(n)) return null
+  return Math.max(MIN_LEARNED_AVAILABLE_DAYS, Math.min(MAX_LEARNED_AVAILABLE_DAYS, n))
+}
+
+function ageInDays(isoValue: string) {
+  const then = new Date(isoValue).getTime()
+  if (Number.isNaN(then)) return null
+  return Math.max(0, (Date.now() - then) / MS_PER_DAY)
+}
+
 function buildLikelyAvailableIngredientScores(sources: Pick<InsightSourceRows, 'historyRows' | 'checkedRows'>) {
   const recentPurchaseCutoffIso = daysAgoIso(LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS)
   const historyCutoffIso = daysAgoIso(LIKELY_AVAILABLE_HISTORY_DAYS)
@@ -345,7 +360,20 @@ function buildLikelyAvailableIngredientScores(sources: Pick<InsightSourceRows, '
   for (const row of sources.historyRows) {
     const usageCount = Math.max(0, Number(row?.usage_count ?? 0) || 0)
     const lastUsed = asString(row?.last_used_at, '')
+    const lastPurchased = asString(row?.last_purchased_at, '') || lastUsed
     if (usageCount < 2 || !isIsoAtOrAfter(lastUsed, historyCutoffIso)) continue
+
+    const averageDaysAvailable = learnedAvailableDays(row)
+    if (averageDaysAvailable != null && lastPurchased) {
+      const ageDays = ageInDays(lastPurchased)
+      if (ageDays == null || ageDays > averageDaysAvailable) continue
+
+      const remainingRatio = Math.max(0.15, (averageDaysAvailable - ageDays) / averageDaysAvailable)
+      const learnedFreshnessScore = Math.ceil(remainingRatio * 8)
+      addScore(row?.name, Math.min(10, usageCount) + learnedFreshnessScore, lastPurchased)
+      continue
+    }
+
     addScore(row?.name, Math.min(10, usageCount) + (isIsoAtOrAfter(lastUsed, recentPurchaseCutoffIso) ? 4 : 0), lastUsed)
   }
 
@@ -408,7 +436,7 @@ async function loadInsightSourceRows(
   const [historyResult, checkedResult, dinnerHistoryResult] = await Promise.allSettled([
     supabase
       .from('grocery_item_history')
-      .select('name, usage_count, last_used_at')
+      .select('name, usage_count, last_used_at, last_purchased_at, average_days_available')
       .in('device_id', storageDeviceIds)
       .gte('last_used_at', daysAgoIso(180))
       .order('usage_count', { ascending: false })
