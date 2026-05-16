@@ -38,6 +38,9 @@ type Detail = {
   stockPrice?: string
   stockDayPercent?: string
   stockRangePercent?: string
+  stockChartRange?: string
+  stockSeries?: number[]
+  stockPreviousClose?: number | null
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -429,6 +432,23 @@ function formatPercent(value: unknown) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
+
+function numericSeries(value: unknown) {
+  const series = Array.isArray(value) ? value : []
+  return series
+    .map((point) => {
+      if (typeof point === 'number') return point
+      const row = asRecord(point)
+      return asNumber(row.p) ?? asNumber(row.price)
+    })
+    .filter((point): point is number => point != null && Number.isFinite(point))
+}
+
+function normalizeStockRange(value: unknown) {
+  const raw = asString(value, 'day').trim().toLowerCase()
+  return raw === 'week' || raw === 'month' || raw === 'year' ? raw : 'day'
+}
+
 function selectedSeriesPercent(value: unknown) {
   const series = Array.isArray(value) ? value : []
   const prices = series
@@ -812,6 +832,7 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
   const price = formatPrice(quote.price, asString(data.currency, 'USD'))
   const dayPct = formatPercent(quote.changePercent)
   const rangePct = formatPercent(selectedSeriesPercent(data.selectedSeries))
+  const series = numericSeries(data.selectedSeries)
 
   return {
     module: 'stocks',
@@ -823,6 +844,9 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
     stockPrice: price,
     stockDayPercent: dayPct ?? '--',
     stockRangePercent: rangePct ?? '--',
+    stockChartRange: normalizeStockRange(data.chartRange || cfg.chartRange),
+    stockSeries: series,
+    stockPreviousClose: asNumber(quote.previousClose),
   }
 }
 
