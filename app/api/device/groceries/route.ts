@@ -13,6 +13,8 @@ const RECIPE_MISSING_MAX = 2
 const RECIPE_SOURCE_MAX = 200
 const GROCERY_CHECKED_RETENTION_MS = 10 * 60 * 1000
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
+const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
+const LIKELY_AVAILABLE_HISTORY_DAYS = 45
 
 type GroceryPayload = {
   ok: true
@@ -325,12 +327,43 @@ async function loadRecipeRows(supabase: SupabaseClient, storageDeviceIds: string
     .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
 }
 
+function buildLikelyAvailableIngredientScores(sources: Pick<InsightSourceRows, 'historyRows' | 'checkedRows'>) {
+  const recentPurchaseCutoffIso = daysAgoIso(LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS)
+  const historyCutoffIso = daysAgoIso(LIKELY_AVAILABLE_HISTORY_DAYS)
+  const scores = new Map<string, { name: string; score: number; lastUsed: string }>()
+
+  const addScore = (nameValue: unknown, score: number, lastUsed = '') => {
+    const name = compactInsightName(nameValue)
+    if (!name) return
+    const key = normalizeInsightKey(name)
+    const existing = scores.get(key) || { name, score: 0, lastUsed: '' }
+    existing.score += score
+    if (lastUsed && lastUsed > existing.lastUsed) existing.lastUsed = lastUsed
+    scores.set(key, existing)
+  }
+
+  for (const row of sources.historyRows) {
+    const usageCount = Math.max(0, Number(row?.usage_count ?? 0) || 0)
+    const lastUsed = asString(row?.last_used_at, '')
+    if (usageCount < 2 || !isIsoAtOrAfter(lastUsed, historyCutoffIso)) continue
+    addScore(row?.name, Math.min(10, usageCount) + (isIsoAtOrAfter(lastUsed, recentPurchaseCutoffIso) ? 4 : 0), lastUsed)
+  }
+
+  for (const row of sources.checkedRows) {
+    const checkedAt = asString(row?.checked_at, '') || asString(row?.updated_at, '')
+    if (!isIsoAtOrAfter(checkedAt, recentPurchaseCutoffIso)) continue
+    addScore(row?.name, 8, checkedAt)
+  }
+
+  return scores
+}
+
 function buildRecipeInsights(
-  items: GroceryPayload['items'],
+  sources: Pick<InsightSourceRows, 'historyRows' | 'checkedRows'>,
   dinnerPlan: GroceryPayload['dinner_plan'],
   recipeRows: Array<Record<string, unknown>>,
 ): GroceryPayload['insights']['recipes'] {
-  const available = new Set(items.map((item) => normalizeInsightKey(item.name)))
+  const likelyAvailable = buildLikelyAvailableIngredientScores(sources)
   const plannedTitles = new Set(dinnerPlan.map((day) => normalizeInsightKey(day.title)))
   const candidates = new Map<string, { name: string; missing: string[]; score: number; updatedAt: string }>()
 
@@ -343,12 +376,16 @@ function buildRecipeInsights(
     const ingredients = recipeIngredientsFromRow(row)
     if (ingredients.length < 2) continue
 
-    const missing = ingredients.filter(([ingredientKey]) => !available.has(ingredientKey)).map(([, ingredientName]) => ingredientName)
-    const overlap = ingredients.length - missing.length
+    const matchedIngredientScores = ingredients
+      .map(([ingredientKey]) => likelyAvailable.get(ingredientKey)?.score ?? 0)
+      .filter((score) => score > 0)
+    const missing = ingredients.filter(([ingredientKey]) => !likelyAvailable.has(ingredientKey)).map(([, ingredientName]) => ingredientName)
+    const overlap = matchedIngredientScores.length
     if (overlap < 1 || missing.length > RECIPE_MISSING_MAX) continue
 
+    const learnedScore = matchedIngredientScores.reduce((total, score) => total + score, 0)
     const updatedAt = asString(row.updated_at, '') || asString(row.created_at, '')
-    const score = overlap * 2 + ingredients.length - missing.length + (updatedAt ? 1 : 0)
+    const score = learnedScore + overlap * 3 + ingredients.length - missing.length + (updatedAt ? 1 : 0)
     const existing = candidates.get(key)
     if (!existing || score > existing.score || updatedAt > existing.updatedAt) {
       candidates.set(key, { name, missing: missing.slice(0, RECIPE_MISSING_MAX), score, updatedAt })
@@ -421,7 +458,7 @@ async function buildGroceryInsights(params: {
     ])
     const dinnerInsightRows = [...params.dinnerRows, ...sources.dinnerHistoryRows]
     const running_low = buildRunningLowInsight(params.language, params.items, dinnerInsightRows, sources)
-    const recipes = buildRecipeInsights(params.items, params.dinnerPlan, recipeRows)
+    const recipes = buildRecipeInsights(sources, params.dinnerPlan, recipeRows)
     console.log('GROCERIES_INSIGHTS', {
       runningLow: running_low.length,
       recipes: recipes.length,
