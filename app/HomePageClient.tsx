@@ -3484,26 +3484,78 @@ type MirrorStockChartGeometry = {
   height: number
   min: number
   max: number
-  points: string
+  path: string
   referenceY: number | null
   referenceSegments: Array<{ x1: number; x2: number }>
 }
 
-function mirrorStockValueAt(values: number[], indexFloat: number) {
-  const n = values.length
-  if (n <= 0) return Number.NaN
-  if (indexFloat <= 0) return values[0]
-  if (indexFloat >= n - 1) return values[n - 1]
+function formatMirrorStockChartCoord(value: number) {
+  if (!Number.isFinite(value)) return '0'
+  const rounded = Math.round(value * 100) / 100
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+}
 
-  const i0 = Math.floor(indexFloat)
-  const i1 = Math.min(n - 1, i0 + 1)
-  const t = indexFloat - i0
-  const v0 = values[i0]
-  const v1 = values[i1]
-  if (!Number.isFinite(v0) && !Number.isFinite(v1)) return Number.NaN
-  if (!Number.isFinite(v0)) return v1
-  if (!Number.isFinite(v1)) return v0
-  return v0 + (v1 - v0) * t
+function buildStraightMirrorStockChartPath(points: Array<{ x: number; y: number }>) {
+  if (!points.length) return ''
+  return points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${formatMirrorStockChartCoord(point.x)},${formatMirrorStockChartCoord(point.y)}`)
+    .join(' ')
+}
+
+function buildSmoothedMirrorStockChartPath(points: Array<{ x: number; y: number }>, sourcePointCount: number) {
+  if (points.length < 2) return ''
+  if (points.length < 3 || sourcePointCount < 3) return buildStraightMirrorStockChartPath(points)
+
+  const deltas: number[] = []
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const dx = points[i + 1].x - points[i].x
+    deltas.push(dx === 0 ? 0 : (points[i + 1].y - points[i].y) / dx)
+  }
+
+  const tangents: number[] = new Array(points.length).fill(0)
+  tangents[0] = deltas[0]
+  tangents[points.length - 1] = deltas[deltas.length - 1]
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const prev = deltas[i - 1]
+    const next = deltas[i]
+    tangents[i] = prev === 0 || next === 0 || Math.sign(prev) !== Math.sign(next) ? 0 : (prev + next) / 2
+  }
+
+  for (let i = 0; i < deltas.length; i += 1) {
+    const delta = deltas[i]
+    if (delta === 0) {
+      tangents[i] = 0
+      tangents[i + 1] = 0
+      continue
+    }
+
+    const alpha = tangents[i] / delta
+    const beta = tangents[i + 1] / delta
+    const magnitude = Math.hypot(alpha, beta)
+    if (magnitude > 3) {
+      const scale = 3 / magnitude
+      tangents[i] = scale * alpha * delta
+      tangents[i + 1] = scale * beta * delta
+    }
+  }
+
+  const commands = [`M${formatMirrorStockChartCoord(points[0].x)},${formatMirrorStockChartCoord(points[0].y)}`]
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const current = points[i]
+    const next = points[i + 1]
+    const dx = next.x - current.x
+    const cp1x = current.x + dx / 3
+    const cp1y = current.y + (tangents[i] * dx) / 3
+    const cp2x = next.x - dx / 3
+    const cp2y = next.y - (tangents[i + 1] * dx) / 3
+    commands.push(
+      `C${formatMirrorStockChartCoord(cp1x)},${formatMirrorStockChartCoord(cp1y)} ` +
+        `${formatMirrorStockChartCoord(cp2x)},${formatMirrorStockChartCoord(cp2y)} ` +
+        `${formatMirrorStockChartCoord(next.x)},${formatMirrorStockChartCoord(next.y)}`,
+    )
+  }
+
+  return commands.join(' ')
 }
 
 function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null): MirrorStockChartGeometry {
@@ -3522,20 +3574,18 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
   let span = max - min
   if (span < 0.0001) span = 1.0
 
-  const yForValue = (value: number) => height - Math.round(((value - min) / span) * (height - 1))
-  const sampledPoints: string[] = []
-  for (let dx = 0; dx < width; dx += 1) {
-    const indexFloat = (dx / (width - 1)) * (values.length - 1)
-    const interpolated = mirrorStockValueAt(values, indexFloat)
-    const nearest = Math.min(Math.max(Math.round(indexFloat), 0), values.length - 1)
-    const value = Number.isFinite(interpolated) ? interpolated : values[nearest]
-    sampledPoints.push(`${dx},${yForValue(value)}`)
+  const yForChartValue = (value: number) => height - ((value - min) / span) * (height - 1)
+  const yForReferenceValue = (value: number) => height - Math.round(((value - min) / span) * (height - 1))
+  const chartPoints: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < values.length; i += 1) {
+    const x = values.length === 1 ? 0 : (i / (values.length - 1)) * (width - 1)
+    chartPoints.push({ x, y: yForChartValue(values[i]) })
   }
 
   let referenceY: number | null = null
   const hasPreviousClose = typeof previousClose === 'number' && Number.isFinite(previousClose) && previousClose > 0
   if (hasPreviousClose && previousClose >= min && previousClose <= max && max - min >= 0.0001) {
-    const y = yForValue(previousClose)
+    const y = yForReferenceValue(previousClose)
     if (y >= 0 && y <= height - 1) referenceY = y
   }
 
@@ -3552,7 +3602,7 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
     height,
     min,
     max,
-    points: sampledPoints.join(' '),
+    path: buildSmoothedMirrorStockChartPath(chartPoints, values.length),
     referenceY,
     referenceSegments,
   }
@@ -3586,7 +3636,7 @@ function MirrorStockChart({
     )
   }
 
-  const { width, height, points, referenceY, referenceSegments } = geometry
+  const { width, height, path, referenceY, referenceSegments } = geometry
 
   return (
     <div
@@ -3609,8 +3659,8 @@ function MirrorStockChart({
             ))}
           </g>
         )}
-        <polyline
-          points={points}
+        <path
+          d={path}
           fill="none"
           stroke={textColor}
           strokeWidth={MIRROR_STOCK_LINE_WIDTH}
