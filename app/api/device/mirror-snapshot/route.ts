@@ -43,6 +43,7 @@ type Detail = {
   stockSeries?: number[]
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
+  stockPurchasePrice?: number | null
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -877,6 +878,7 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
     stockSeries: series,
     stockSeriesTimestamps: seriesRows.map((point) => point.timestampMs),
     stockPreviousClose: asNumber(quote.previousClose),
+    stockPurchasePrice: asNumber(data.purchasePrice),
   }
 }
 

@@ -306,6 +306,7 @@ type MirrorModuleDetail = {
   stockSeries?: number[]
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
+  stockPurchasePrice?: number | null
 }
 
 type MirrorHoliday = {
@@ -3558,7 +3559,7 @@ function buildSmoothedMirrorStockChartPath(points: Array<{ x: number; y: number 
   return commands.join(' ')
 }
 
-function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null): MirrorStockChartGeometry {
+function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null, purchasePrice?: number | null): MirrorStockChartGeometry {
   const width = MIRROR_STOCK_CHART_WIDTH
   const height = MIRROR_STOCK_CHART_HEIGHT
 
@@ -3571,8 +3572,28 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
     if (value > max) max = value
   }
 
+  const seriesMin = min
+  const seriesMax = max
+  const hasPurchasePrice = typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0
+  const referenceValue = hasPurchasePrice ? purchasePrice : previousClose
+
+  if (hasPurchasePrice) {
+    min = Math.min(min, purchasePrice)
+    max = Math.max(max, purchasePrice)
+  }
+
   let span = max - min
-  if (span < 0.0001) span = 1.0
+  if (span < 0.0001) {
+    const center = (min + max) / 2
+    min = center - 0.5
+    max = center + 0.5
+    span = max - min
+  }
+
+  const padding = span * 0.06
+  min -= padding
+  max += padding
+  span = max - min
 
   const yForChartValue = (value: number) => height - ((value - min) / span) * (height - 1)
   const yForReferenceValue = (value: number) => height - Math.round(((value - min) / span) * (height - 1))
@@ -3583,9 +3604,10 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
   }
 
   let referenceY: number | null = null
-  const hasPreviousClose = typeof previousClose === 'number' && Number.isFinite(previousClose) && previousClose > 0
-  if (hasPreviousClose && previousClose >= min && previousClose <= max && max - min >= 0.0001) {
-    const y = yForReferenceValue(previousClose)
+  const hasReferenceValue = typeof referenceValue === 'number' && Number.isFinite(referenceValue) && referenceValue > 0
+  const shouldShowReference = hasReferenceValue && (hasPurchasePrice || (referenceValue >= seriesMin && referenceValue <= seriesMax))
+  if (shouldShowReference && max - min >= 0.0001) {
+    const y = yForReferenceValue(referenceValue)
     if (y >= 0 && y <= height - 1) referenceY = y
   }
 
@@ -3611,12 +3633,14 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
 function MirrorStockChart({
   series,
   previousClose,
+  purchasePrice,
   textColor,
   moduleId,
   chartRange,
 }: {
   series?: number[]
   previousClose?: number | null
+  purchasePrice?: number | null
   textColor: string
   moduleId?: number
   chartRange?: StockChartRange
@@ -3625,8 +3649,8 @@ function MirrorStockChart({
 
   const geometry = useMemo(() => {
     if (values.length < 2) return null
-    return buildMirrorStockChartGeometry(values, previousClose)
-  }, [values, previousClose])
+    return buildMirrorStockChartGeometry(values, previousClose, purchasePrice)
+  }, [values, previousClose, purchasePrice])
 
   if (!geometry) {
     return (
@@ -3717,6 +3741,7 @@ function MirrorMediumStocksCard({
         <MirrorStockChart
           series={detail.stockSeries}
           previousClose={detail.stockPreviousClose}
+          purchasePrice={detail.stockPurchasePrice}
           textColor={textColor}
           moduleId={detail.stockModuleId}
           chartRange={detail.stockChartRange}
