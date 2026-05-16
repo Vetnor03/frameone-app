@@ -2501,11 +2501,13 @@ function formatMirrorHolidayDate(date: string) {
 
 function MirrorMonthCalendar({
   textColor,
+  language,
   monthOffset = 0,
   holidays = [],
   showHolidayDots = false,
 }: {
   textColor: string
+  language: AppLanguage
   monthOffset?: number
   holidays?: MirrorHoliday[]
   showHolidayDots?: boolean
@@ -2514,10 +2516,16 @@ function MirrorMonthCalendar({
   const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
   const today = monthOffset === 0 ? now.getDate() : -1
   const { days, usedRows } = mirrorCalendarDays(now, monthOffset)
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const monthTitle = new Intl.DateTimeFormat(locale, { month: 'long' }).format(target).toLocaleUpperCase(locale)
 
   return (
     <div className="flex h-full w-full min-w-0 translate-y-[clamp(0.18rem,0.62vw,0.42rem)] items-center justify-center overflow-hidden px-0 py-[clamp(0.16rem,0.44vw,0.32rem)] leading-none">
-      <div className="grid h-full max-h-[min(90%,11.1rem)] w-full max-w-[min(100%,15.8rem)] grid-rows-[auto_1fr] gap-[clamp(0.22rem,0.62vw,0.46rem)]">
+      <div className="grid h-full max-h-[min(90%,11.1rem)] w-full max-w-[min(100%,15.8rem)] grid-rows-[auto_auto_1fr] gap-[clamp(0.18rem,0.5vw,0.38rem)]">
+        <div className="min-w-0 truncate text-center text-[clamp(0.68rem,1.55vw,1rem)] font-bold tracking-[0.14em]">
+          {monthTitle}
+        </div>
+
         <div className="grid grid-cols-7 gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]">
           {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
             <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
@@ -2581,10 +2589,10 @@ function MirrorHolidayList({ holidays, language }: { holidays: MirrorHoliday[]; 
   }
 
   return (
-    <div className="flex h-full w-full items-end overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] pb-[clamp(0.75rem,1.9vw,1.45rem)]">
-      <div className="grid w-full gap-[clamp(0.22rem,0.65vw,0.42rem)]">
+    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.6rem)] py-[clamp(0.75rem,1.9vw,1.45rem)]">
+      <div className="grid w-fit max-w-full gap-[clamp(0.22rem,0.65vw,0.42rem)]">
         {upcoming.map((holiday) => (
-          <div key={`${holiday.date}-${holiday.name}`} className="grid min-w-0 grid-cols-[auto_1fr] items-baseline gap-[clamp(0.5rem,1.45vw,1rem)] leading-none">
+          <div key={`${holiday.date}-${holiday.name}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-[clamp(0.5rem,1.45vw,1rem)] leading-none">
             <div className="shrink-0 text-[clamp(0.56rem,1.35vw,0.86rem)] font-medium tracking-[0.08em] opacity-80">
               {formatMirrorHolidayDate(holiday.date)}
             </div>
@@ -2616,7 +2624,7 @@ function MirrorXLDateView({
           <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
         </div>
         <div className="min-w-0 overflow-hidden">
-          <MirrorMonthCalendar textColor={textColor} holidays={holidays} showHolidayDots />
+          <MirrorMonthCalendar textColor={textColor} language={language} holidays={holidays} showHolidayDots />
         </div>
       </div>
 
@@ -2625,7 +2633,7 @@ function MirrorXLDateView({
           <MirrorHolidayList holidays={holidays} language={language} />
         </div>
         <div className="min-w-0 overflow-hidden">
-          <MirrorMonthCalendar textColor={textColor} monthOffset={1} holidays={holidays} showHolidayDots />
+          <MirrorMonthCalendar textColor={textColor} language={language} monthOffset={1} holidays={holidays} showHolidayDots />
         </div>
       </div>
     </div>
@@ -3066,7 +3074,7 @@ function LandscapeFrameMirror({
             <MirrorMediumDateCard language={language} textColor={textColor} frameBackground={frameBackground} />
           </div>
           <div className="min-w-0 overflow-hidden">
-            <MirrorMonthCalendar textColor={textColor} />
+            <MirrorMonthCalendar textColor={textColor} language={language} />
           </div>
         </div>
       )
