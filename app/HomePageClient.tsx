@@ -296,6 +296,11 @@ type MirrorModuleDetail = {
   weatherWindLine?: string
   weatherPrecipLine?: string
   weatherWmo?: number | null
+  stockTitle?: string
+  stockSymbol?: string
+  stockPrice?: string
+  stockDayPercent?: string
+  stockRangePercent?: string
 }
 
 type MirrorHoliday = {
@@ -3403,6 +3408,60 @@ function MirrorWeatherLightning() {
   return <path d="M54 62 L43 82 H54 L49 95 L68 73 H57 L63 62 Z" fill="currentColor" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
 }
 
+
+function fitMirrorStockTitle(detail: MirrorModuleDetail, fallback: { primary: string; secondary?: string }) {
+  const title = String(detail.stockTitle || detail.stockSymbol || detail.secondary || fallback.primary || '').trim()
+  return title || 'INVESTMENTS'
+}
+
+function MirrorSmallStocksCard({
+  detail,
+  fallback,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  fallback: { primary: string; secondary?: string; tertiary?: string }
+  textColor: string
+}) {
+  const title = fitMirrorStockTitle(detail, fallback)
+  const hasLiveStockLayoutData = Boolean(detail.stockPrice || detail.stockDayPercent || detail.stockRangePercent)
+  const price = detail.stockPrice || '--'
+  const dayPercent = detail.stockDayPercent || '--'
+  const rangePercent = detail.stockRangePercent || '--'
+
+  if (!hasLiveStockLayoutData) {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
+        <div className="max-w-full truncate text-[clamp(0.95rem,2.6vw,1.55rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.5rem,1.4vw,0.95rem)] py-[clamp(0.52rem,1.45vw,1rem)] text-center leading-tight">
+      <div className="mx-auto max-w-full shrink-0 truncate border-b-2 border-current px-[clamp(0.25rem,0.7vw,0.5rem)] pb-[clamp(0.05rem,0.18vw,0.12rem)] text-[clamp(0.7rem,1.7vw,1.06rem)] font-semibold tracking-[0.08em]">
+        {title}
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr_auto_1fr] items-center pt-[clamp(0.35rem,1.05vw,0.75rem)] pb-[clamp(0.1rem,0.4vw,0.28rem)]">
+        <div className="min-w-0 truncate px-[clamp(0.2rem,0.7vw,0.45rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]">
+          {price}
+        </div>
+        <div className="h-[72%] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+        <div className="min-w-0 truncate px-[clamp(0.2rem,0.7vw,0.45rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]">
+          {dayPercent}
+        </div>
+        <div className="h-[72%] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+        <div className="min-w-0 truncate px-[clamp(0.2rem,0.7vw,0.45rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]">
+          {rangePercent}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
   const kind = mirrorWeatherIconKind(wmo)
 
@@ -3530,6 +3589,11 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'stocks' && size === 'small') {
+      const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      return <MirrorSmallStocksCard detail={detail} fallback={fallback} textColor={textColor} />
     }
 
     if (module === 'groceries' && size === 'large' && snapshot.layoutKey === 'full') {

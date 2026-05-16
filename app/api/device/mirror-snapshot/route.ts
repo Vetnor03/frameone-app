@@ -33,6 +33,11 @@ type Detail = {
   weatherWindLine?: string
   weatherPrecipLine?: string
   weatherWmo?: number | null
+  stockTitle?: string
+  stockSymbol?: string
+  stockPrice?: string
+  stockDayPercent?: string
+  stockRangePercent?: string
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -424,6 +429,25 @@ function formatPercent(value: unknown) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
+function selectedSeriesPercent(value: unknown) {
+  const series = Array.isArray(value) ? value : []
+  const prices = series
+    .map((point) => {
+      if (typeof point === 'number') return point
+      const row = asRecord(point)
+      return asNumber(row.p) ?? asNumber(row.price)
+    })
+    .filter((point): point is number => point != null)
+
+  if (prices.length < 2) return null
+
+  const start = prices[0]
+  const end = prices[prices.length - 1]
+  if (!Number.isFinite(start) || !Number.isFinite(end) || Math.abs(start) <= 0.00001) return null
+
+  return ((end - start) / start) * 100
+}
+
 function formatDate(language: string) {
   return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', {
     weekday: 'short',
@@ -783,11 +807,22 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
   url.searchParams.set('id', String(id))
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
   const quote = asRecord(data.quote)
-  const pct = formatPercent(quote.changePercent)
+  const resolvedSymbol = asString(data.symbol, symbol).trim().toUpperCase()
+  const title = asString(data.name, resolvedSymbol || symbol).trim() || resolvedSymbol || symbol
+  const price = formatPrice(quote.price, asString(data.currency, 'USD'))
+  const dayPct = formatPercent(quote.changePercent)
+  const rangePct = formatPercent(selectedSeriesPercent(data.selectedSeries))
+
   return {
-    primary: formatPrice(quote.price, asString(data.currency, 'USD')),
-    secondary: asString(data.symbol, symbol),
-    tertiary: pct ?? undefined,
+    module: 'stocks',
+    primary: price,
+    secondary: resolvedSymbol,
+    tertiary: dayPct ?? undefined,
+    stockTitle: title,
+    stockSymbol: resolvedSymbol,
+    stockPrice: price,
+    stockDayPercent: dayPct ?? '--',
+    stockRangePercent: rangePct ?? '--',
   }
 }
 
