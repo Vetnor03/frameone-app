@@ -10,6 +10,7 @@ const MAX_INSIGHT_HISTORY = 80
 const RUNNING_LOW_MAX = 3
 const RECIPE_MAX = 2
 const RECIPE_MISSING_MAX = 2
+const RECIPE_SOURCE_MAX = 200
 const GROCERY_CHECKED_RETENTION_MS = 10 * 60 * 1000
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 
@@ -148,6 +149,72 @@ function addUniqueName(target: Map<string, string>, value: unknown, maxLength = 
   if (!target.has(key)) target.set(key, name)
 }
 
+function maybeParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
+function recipeNameFromRow(row: Record<string, unknown>) {
+  return compactMealName(row.name) || compactMealName(row.title) || compactMealName(row.recipe_name)
+}
+
+function addRecipeIngredient(target: Map<string, string>, value: unknown) {
+  if (typeof value === 'string') {
+    const parsed = value.trim().startsWith('[') || value.trim().startsWith('{') ? maybeParseJson(value) : value
+    if (parsed !== value) {
+      addRecipeIngredients(target, parsed)
+      return
+    }
+
+    for (const part of value.split(/[\n,;]+/)) addUniqueName(target, part)
+    return
+  }
+
+  if (!value || typeof value !== 'object') return
+  const row = value as Record<string, unknown>
+  addUniqueName(target, row.name ?? row.title ?? row.ingredient ?? row.item)
+}
+
+function addRecipeIngredients(target: Map<string, string>, value: unknown) {
+  if (Array.isArray(value)) {
+    for (const item of value) addRecipeIngredient(target, item)
+    return
+  }
+
+  if (typeof value === 'string') {
+    addRecipeIngredient(target, value)
+    return
+  }
+
+  if (!value || typeof value !== 'object') return
+  const row = value as Record<string, unknown>
+  for (const key of ['ingredients', 'items', 'grocery_items', 'ingredient_names']) {
+    if (key in row) addRecipeIngredients(target, row[key])
+  }
+}
+
+function recipeIngredientsFromRow(row: Record<string, unknown>) {
+  const ingredientMap = new Map<string, string>()
+  addRecipeIngredients(ingredientMap, row.ingredients)
+  addRecipeIngredients(ingredientMap, row.items)
+  addRecipeIngredients(ingredientMap, row.grocery_items)
+  addRecipeIngredients(ingredientMap, row.ingredient_names)
+  return [...ingredientMap.entries()]
+}
+
+function recipeAppliesToDevice(row: Record<string, unknown>, storageDeviceIds: string[]) {
+  const recipeDeviceId = asString(row.device_id, '').trim()
+  return !recipeDeviceId || storageDeviceIds.includes(recipeDeviceId)
+}
+
+function recipeIsActive(row: Record<string, unknown>) {
+  if (row.is_active === false || row.active === false || row.archived === true) return false
+  return true
+}
+
 function labelForRunningLow(language: string) {
   return language.toLocaleLowerCase().startsWith('no') || language.toLocaleLowerCase().startsWith('nb') || language.toLocaleLowerCase().startsWith('nn')
     ? 'Lav snart'
@@ -242,40 +309,54 @@ function buildRunningLowInsight(
     .map((item) => ({ name: item.name, label }))
 }
 
+async function loadRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('*')
+    .limit(RECIPE_SOURCE_MAX)
+
+  if (error) {
+    console.error('/api/device/groceries recipes query failed', { error })
+    return []
+  }
+
+  return (Array.isArray(data) ? data : [])
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object' && !Array.isArray(row))
+    .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
+}
+
 function buildRecipeInsights(
   items: GroceryPayload['items'],
   dinnerPlan: GroceryPayload['dinner_plan'],
-  dinnerRows: Array<Record<string, unknown>>,
+  recipeRows: Array<Record<string, unknown>>,
 ): GroceryPayload['insights']['recipes'] {
   const available = new Set(items.map((item) => normalizeInsightKey(item.name)))
   const plannedTitles = new Set(dinnerPlan.map((day) => normalizeInsightKey(day.title)))
-  const candidates = new Map<string, { name: string; missing: string[]; score: number; lastDate: string }>()
+  const candidates = new Map<string, { name: string; missing: string[]; score: number; updatedAt: string }>()
 
-  for (const row of dinnerRows) {
-    const name = compactMealName(row?.title)
+  for (const row of recipeRows) {
+    const name = recipeNameFromRow(row)
     if (!name) continue
     const key = normalizeInsightKey(name)
     if (plannedTitles.has(key)) continue
 
-    const ingredientMap = new Map<string, string>()
-    for (const item of parseDinnerPlanNoteItems(row?.note)) addUniqueName(ingredientMap, item.name)
-    const ingredients = [...ingredientMap.entries()]
+    const ingredients = recipeIngredientsFromRow(row)
     if (ingredients.length < 2) continue
 
     const missing = ingredients.filter(([ingredientKey]) => !available.has(ingredientKey)).map(([, ingredientName]) => ingredientName)
     const overlap = ingredients.length - missing.length
-    if (overlap < 1 || missing.length < 1 || missing.length > RECIPE_MISSING_MAX) continue
+    if (overlap < 1 || missing.length > RECIPE_MISSING_MAX) continue
 
-    const date = asString(row?.date, '').slice(0, 10)
-    const score = overlap * 2 + ingredients.length - missing.length + (date ? 1 : 0)
+    const updatedAt = asString(row.updated_at, '') || asString(row.created_at, '')
+    const score = overlap * 2 + ingredients.length - missing.length + (updatedAt ? 1 : 0)
     const existing = candidates.get(key)
-    if (!existing || score > existing.score || date > existing.lastDate) {
-      candidates.set(key, { name, missing: missing.slice(0, RECIPE_MISSING_MAX), score, lastDate: date })
+    if (!existing || score > existing.score || updatedAt > existing.updatedAt) {
+      candidates.set(key, { name, missing: missing.slice(0, RECIPE_MISSING_MAX), score, updatedAt })
     }
   }
 
   return [...candidates.values()]
-    .sort((a, b) => b.score - a.score || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name))
+    .sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name))
     .slice(0, RECIPE_MAX)
     .map((recipe) => ({ name: recipe.name, missing: recipe.missing }))
 }
@@ -334,10 +415,13 @@ async function buildGroceryInsights(params: {
   dinnerRows: Array<Record<string, unknown>>
 }): Promise<GroceryPayload['insights']> {
   try {
-    const sources = await loadInsightSourceRows(params.supabase, params.storageDeviceIds)
+    const [sources, recipeRows] = await Promise.all([
+      loadInsightSourceRows(params.supabase, params.storageDeviceIds),
+      loadRecipeRows(params.supabase, params.storageDeviceIds),
+    ])
     const dinnerInsightRows = [...params.dinnerRows, ...sources.dinnerHistoryRows]
     const running_low = buildRunningLowInsight(params.language, params.items, dinnerInsightRows, sources)
-    const recipes = buildRecipeInsights(params.items, params.dinnerPlan, dinnerInsightRows)
+    const recipes = buildRecipeInsights(params.items, params.dinnerPlan, recipeRows)
     console.log('GROCERIES_INSIGHTS', {
       runningLow: running_low.length,
       recipes: recipes.length,

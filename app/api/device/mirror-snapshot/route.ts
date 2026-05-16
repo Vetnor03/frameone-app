@@ -38,6 +38,7 @@ type UnknownRecord = Record<string, unknown>
 
 const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
+const MIRROR_RECIPE_SOURCE_MAX = 200
 
 function getBearerToken(req: Request) {
   const h = req.headers.get('authorization') || ''
@@ -82,27 +83,92 @@ function normalizeGroceryInsightKey(name: string) {
   return name.trim().toLocaleLowerCase()
 }
 
-type DinnerPlanNoteItem = { name: string; quantity: number; isChecked: boolean }
-
-function parseDinnerPlanNoteItems(note: unknown): DinnerPlanNoteItem[] {
-  if (typeof note !== 'string' || !note.trim()) return []
-
+function maybeParseJson(value: string): unknown {
   try {
-    const parsed = JSON.parse(note) as unknown
-    if (!Array.isArray(parsed)) return []
-
-    return parsed
-      .map((item) => {
-        const row = asRecord(item)
-        const name = compactGroceryInsightName(row.name, 80)
-        if (!name) return null
-        const quantity = Math.max(1, Math.round(asNumber(row.quantity) ?? 1))
-        return { name, quantity, isChecked: row.isChecked === true || row.is_checked === true }
-      })
-      .filter(Boolean) as DinnerPlanNoteItem[]
+    return JSON.parse(value) as unknown
   } catch {
+    return value
+  }
+}
+
+function recipeNameFromRow(row: UnknownRecord) {
+  return compactGroceryInsightName(row.name, 32) || compactGroceryInsightName(row.title, 32) || compactGroceryInsightName(row.recipe_name, 32)
+}
+
+function addUniqueRecipeIngredient(target: Map<string, string>, value: unknown) {
+  const name = compactGroceryInsightName(value, 28)
+  if (!name) return
+  const key = normalizeGroceryInsightKey(name)
+  if (!target.has(key)) target.set(key, name)
+}
+
+function addRecipeIngredient(target: Map<string, string>, value: unknown) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    const parsed = trimmed.startsWith('[') || trimmed.startsWith('{') ? maybeParseJson(trimmed) : value
+    if (parsed !== value) {
+      addRecipeIngredients(target, parsed)
+      return
+    }
+
+    for (const part of value.split(/[\n,;]+/)) addUniqueRecipeIngredient(target, part)
+    return
+  }
+
+  const row = asRecord(value)
+  if (Object.keys(row).length <= 0) return
+  addUniqueRecipeIngredient(target, row.name ?? row.title ?? row.ingredient ?? row.item)
+}
+
+function addRecipeIngredients(target: Map<string, string>, value: unknown) {
+  if (Array.isArray(value)) {
+    for (const item of value) addRecipeIngredient(target, item)
+    return
+  }
+
+  if (typeof value === 'string') {
+    addRecipeIngredient(target, value)
+    return
+  }
+
+  const row = asRecord(value)
+  for (const key of ['ingredients', 'items', 'grocery_items', 'ingredient_names']) {
+    if (key in row) addRecipeIngredients(target, row[key])
+  }
+}
+
+function recipeIngredientsFromRow(row: UnknownRecord) {
+  const ingredientMap = new Map<string, string>()
+  addRecipeIngredients(ingredientMap, row.ingredients)
+  addRecipeIngredients(ingredientMap, row.items)
+  addRecipeIngredients(ingredientMap, row.grocery_items)
+  addRecipeIngredients(ingredientMap, row.ingredient_names)
+  return [...ingredientMap.entries()]
+}
+
+function recipeAppliesToDevice(row: UnknownRecord, storageDeviceIds: string[]) {
+  const recipeDeviceId = asString(row.device_id).trim()
+  return !recipeDeviceId || storageDeviceIds.includes(recipeDeviceId)
+}
+
+function recipeIsActive(row: UnknownRecord) {
+  if (row.is_active === false || row.active === false || row.archived === true) return false
+  return true
+}
+
+async function loadMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('*')
+    .limit(MIRROR_RECIPE_SOURCE_MAX)
+
+  if (error) {
+    console.error('/api/device/mirror-snapshot recipes query failed', { error })
     return []
   }
+
+  return (Array.isArray(data) ? data.map(asRecord) : [])
+    .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
 }
 
 function groceryRunningLowLabel(language: string) {
@@ -182,38 +248,40 @@ function buildMirrorRunningLowInsights(params: {
 }
 
 function buildMirrorMealIdeas(params: {
-  dinnerRows: UnknownRecord[]
-  todayIso: string
+  recipeRows: UnknownRecord[]
+  dinnerPlanTitles: string[]
   activeNames: string[]
 }) {
   const activeKeys = new Set(params.activeNames.map(normalizeGroceryInsightKey))
-  const ideas = new Map<string, { name: string; missing: string[]; date: string; upcoming: boolean }>()
+  const plannedTitles = new Set(params.dinnerPlanTitles.map(normalizeGroceryInsightKey))
+  const ideas = new Map<string, { name: string; missing: string[]; score: number; updatedAt: string }>()
 
-  for (const row of params.dinnerRows) {
-    const name = compactGroceryInsightName(row.title, 32)
+  for (const row of params.recipeRows) {
+    const name = recipeNameFromRow(row)
     if (!name) continue
 
     const key = normalizeGroceryInsightKey(name)
-    const date = asString(row.date).slice(0, 10)
-    const upcoming = !!date && date >= params.todayIso
-    const ingredients = parseDinnerPlanNoteItems(row.note)
-      .map((item) => item.name)
-      .filter(Boolean)
-    const missing = ingredients
-      .filter((item) => !activeKeys.has(normalizeGroceryInsightKey(item)))
-      .slice(0, 2)
+    if (plannedTitles.has(key)) continue
 
+    const ingredients = recipeIngredientsFromRow(row)
+    if (ingredients.length < 2) continue
+
+    const missing = ingredients
+      .filter(([ingredientKey]) => !activeKeys.has(ingredientKey))
+      .map(([, ingredientName]) => ingredientName)
+    const overlap = ingredients.length - missing.length
+    if (overlap < 1 || missing.length > 2) continue
+
+    const updatedAt = asString(row.updated_at) || asString(row.created_at)
+    const score = overlap * 2 + ingredients.length - missing.length + (updatedAt ? 1 : 0)
     const existing = ideas.get(key)
-    if (!existing || (upcoming && !existing.upcoming) || date > existing.date) {
-      ideas.set(key, { name, missing, date, upcoming })
+    if (!existing || score > existing.score || updatedAt > existing.updatedAt) {
+      ideas.set(key, { name, missing: missing.slice(0, 2), score, updatedAt })
     }
   }
 
   return [...ideas.values()]
-    .sort((a, b) => {
-      if (a.upcoming !== b.upcoming) return Number(b.upcoming) - Number(a.upcoming)
-      return a.upcoming ? a.date.localeCompare(b.date) || a.name.localeCompare(b.name) : b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
-    })
+    .sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name))
     .slice(0, 2)
     .map((idea) => ({ name: idea.name, missing: idea.missing }))
 }
@@ -725,7 +793,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const sinceCheckedIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
   const sinceDinnerIso = isoDateOnly(new Date(Date.now() - 180 * 24 * 60 * 60 * 1000))
 
-  const [itemsResult, dinnerResult, historyResult, checkedResult] = await Promise.all([
+  const [itemsResult, dinnerResult, historyResult, checkedResult, recipesResult] = await Promise.all([
     supabase
       .from('grocery_items')
       .select('name, quantity, updated_at')
@@ -756,6 +824,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
       .gte('checked_at', sinceCheckedIso)
       .order('checked_at', { ascending: false })
       .limit(80),
+    loadMirrorRecipeRows(supabase, storageDeviceIds),
   ])
 
   if (itemsResult.error) throw new Error(itemsResult.error.message)
@@ -792,7 +861,12 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
     .join(', ')
   const activeNames = items.map((item) => asString(item.name).trim()).filter(Boolean)
   const groceryRunningLow = buildMirrorRunningLowInsights({ language, activeNames, historyRows, checkedRows })
-  const groceryMealIdeas = buildMirrorMealIdeas({ dinnerRows, todayIso, activeNames })
+  const recipeRows = Array.isArray(recipesResult) ? recipesResult : []
+  const groceryMealIdeas = buildMirrorMealIdeas({
+    recipeRows,
+    dinnerPlanTitles: [dinnerTodayTitle, ...groceryDinnerPlan.map((day) => day.title)].filter(Boolean),
+    activeNames,
+  })
 
   return {
     primary: items.length ? `${items.length}` : '0',
