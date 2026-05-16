@@ -301,8 +301,10 @@ type MirrorModuleDetail = {
   stockPrice?: string
   stockDayPercent?: string
   stockRangePercent?: string
+  stockModuleId?: number
   stockChartRange?: StockChartRange
   stockSeries?: number[]
+  stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
 }
 
@@ -3473,77 +3475,164 @@ function mirrorStockRangeLabel(range: StockChartRange | undefined, language: App
   return labels[range || 'day'] || labels.day
 }
 
+type MirrorStockChartGeometry = {
+  width: number
+  height: number
+  rawMin: number
+  rawMax: number
+  min: number
+  max: number
+  points: string
+  referenceY: number | null
+}
+
+function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null): MirrorStockChartGeometry {
+  const width = 100
+  const height = 100
+  const plotTop = 8
+  const plotBottom = 92
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const hasPreviousClose = typeof previousClose === 'number' && Number.isFinite(previousClose)
+  const domainMin = hasPreviousClose ? Math.min(rawMin, previousClose) : rawMin
+  const domainMax = hasPreviousClose ? Math.max(rawMax, previousClose) : rawMax
+  const anchor = hasPreviousClose ? previousClose : values[values.length - 1]
+
+  // Mirror the firmware chart path math directly: use real price values as the
+  // domain and map them linearly to x/y. Unlike the firmware e-paper chart, keep
+  // explicit top/bottom plot gutters so small mirror cards do not pin extrema to
+  // the SVG edge after CSS stretches the chart to the available card height.
+  const fallbackRange = Math.max(Math.abs(anchor) * 0.005, 0.01)
+  const rawRange = domainMax - domainMin
+  const normalizedRange = rawRange < fallbackRange ? fallbackRange : rawRange
+  const center = rawRange < fallbackRange && Number.isFinite(anchor)
+    ? anchor
+    : (domainMin + domainMax) / 2
+  const paddedRange = normalizedRange * 1.24
+  const min = center - paddedRange / 2
+  const max = center + paddedRange / 2
+  const span = max - min
+  const yForValue = (value: number) => plotBottom - ((value - min) / span) * (plotBottom - plotTop)
+  const pointFor = (value: number, index: number) => {
+    const x = (index / Math.max(1, values.length - 1)) * width
+    const y = Math.min(plotBottom, Math.max(plotTop, yForValue(value)))
+    return `${x.toFixed(2)},${y.toFixed(2)}`
+  }
+
+  return {
+    width,
+    height,
+    rawMin,
+    rawMax,
+    min,
+    max,
+    points: values.map(pointFor).join(' '),
+    referenceY: hasPreviousClose ? Math.min(plotBottom, Math.max(plotTop, yForValue(previousClose))) : null,
+  }
+}
+
 function MirrorStockChart({
   series,
+  seriesTimestamps,
   previousClose,
   textColor,
+  moduleId,
+  chartRange,
 }: {
   series?: number[]
+  seriesTimestamps?: Array<number | null>
   previousClose?: number | null
   textColor: string
+  moduleId?: number
+  chartRange?: StockChartRange
 }) {
-  const values = (series || []).filter((value) => Number.isFinite(value))
+  const values = useMemo(() => (series || []).filter((value) => Number.isFinite(value)), [series])
 
-  if (values.length < 2) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  const geometry = useMemo(() => {
+    if (values.length < 2) return null
+    return buildMirrorStockChartGeometry(values, previousClose)
+  }, [values, previousClose])
+
+  useEffect(() => {
+    if (!geometry) return
+    const container = containerRef.current
+    const svg = container?.querySelector('svg')
+    const parentRect = container?.getBoundingClientRect()
+    const svgRect = svg?.getBoundingClientRect()
+    const firstTimestamp = seriesTimestamps?.find((value) => value != null) ?? null
+    const lastTimestamp = seriesTimestamps ? [...seriesTimestamps].reverse().find((value) => value != null) ?? null : null
+
+    console.debug('[mirror stock chart]', {
+      moduleId,
+      chartRange,
+      selectedSeriesLength: values.length,
+      firstTimestamp,
+      lastTimestamp,
+      minValue: geometry.rawMin,
+      maxValue: geometry.rawMax,
+      inputLooksNormalized01: geometry.rawMin >= 0 && geometry.rawMax <= 1,
+      paddedMinValue: geometry.min,
+      paddedMaxValue: geometry.max,
+      svgPoints: geometry.points,
+      previousCloseY: geometry.referenceY,
+      css: {
+        viewBox: svg?.getAttribute('viewBox'),
+        widthAttr: svg?.getAttribute('width'),
+        heightAttr: svg?.getAttribute('height'),
+        preserveAspectRatio: svg?.getAttribute('preserveAspectRatio'),
+        parentHeight: parentRect?.height ?? null,
+        parentWidth: parentRect?.width ?? null,
+        renderedSvgHeight: svgRect?.height ?? null,
+        renderedSvgWidth: svgRect?.width ?? null,
+      },
+    })
+  }, [chartRange, geometry, moduleId, seriesTimestamps, values])
+
+  if (!geometry) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-[clamp(0.55rem,1.25vw,0.76rem)] font-semibold tracking-[0.06em]">
+      <div ref={containerRef} className="flex h-full w-full items-center justify-center text-[clamp(0.55rem,1.25vw,0.76rem)] font-semibold tracking-[0.06em]">
         No chart data
       </div>
     )
   }
 
-  const width = 100
-  const height = 100
-  const rawMin = Math.min(...values)
-  const rawMax = Math.max(...values)
-  const anchor = typeof previousClose === 'number' && Number.isFinite(previousClose)
-    ? previousClose
-    : values[values.length - 1]
-  const fallbackRange = Math.max(Math.abs(anchor) * 0.005, 0.01)
-  const rawRange = rawMax - rawMin
-  const normalizedRange = rawRange < fallbackRange ? fallbackRange : rawRange
-  const center = rawRange < fallbackRange && Number.isFinite(anchor)
-    ? anchor
-    : (rawMin + rawMax) / 2
-  const paddedRange = normalizedRange * 1.24
-  const min = center - paddedRange / 2
-  const max = center + paddedRange / 2
-  const span = max - min
-  const clampY = (y: number) => Math.min(height - 1, Math.max(1, y))
-  const yForValue = (value: number) => clampY(height - ((value - min) / span) * height)
-  const pointFor = (value: number, index: number) => {
-    const x = (index / Math.max(1, values.length - 1)) * width
-    const y = yForValue(value)
-    return `${x.toFixed(2)},${y.toFixed(2)}`
-  }
-  const points = values.map(pointFor).join(' ')
-  const referenceY = typeof previousClose === 'number' && Number.isFinite(previousClose) ? yForValue(previousClose) : null
+  const { width, height, points, referenceY } = geometry
 
   return (
-    <svg className="h-full w-full overflow-hidden" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-      {referenceY != null && (
-        <line
-          x1="0"
-          x2={width}
-          y1={referenceY}
-          y2={referenceY}
+    <div
+      ref={containerRef}
+      className="h-full w-full"
+      data-mirror-stock-chart="medium"
+      data-module-id={moduleId ?? ''}
+      data-chart-range={chartRange ?? ''}
+    >
+      <svg className="h-full w-full overflow-hidden" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+        {referenceY != null && (
+          <line
+            x1="0"
+            x2={width}
+            y1={referenceY}
+            y2={referenceY}
+            stroke={textColor}
+            strokeWidth="1"
+            strokeDasharray="2 4"
+            vectorEffect="non-scaling-stroke"
+            opacity="0.48"
+          />
+        )}
+        <polyline
+          points={points}
+          fill="none"
           stroke={textColor}
-          strokeWidth="1"
-          strokeDasharray="2 4"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
-          opacity="0.48"
         />
-      )}
-      <polyline
-        points={points}
-        fill="none"
-        stroke={textColor}
-        strokeWidth="3"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+      </svg>
+    </div>
   )
 }
 
@@ -3589,7 +3678,14 @@ function MirrorMediumStocksCard({
       </div>
 
       <div className="min-h-0 flex-1 px-[clamp(0.45rem,1.15vw,0.85rem)] pt-[clamp(0.45rem,1vw,0.8rem)] pb-[clamp(0.55rem,1.35vw,1rem)]">
-        <MirrorStockChart series={detail.stockSeries} previousClose={detail.stockPreviousClose} textColor={textColor} />
+        <MirrorStockChart
+          series={detail.stockSeries}
+          seriesTimestamps={detail.stockSeriesTimestamps}
+          previousClose={detail.stockPreviousClose}
+          textColor={textColor}
+          moduleId={detail.stockModuleId}
+          chartRange={detail.stockChartRange}
+        />
       </div>
 
       <div className="mx-auto grid w-[88%] shrink-0 grid-cols-[1fr_auto_1fr_auto_1fr] items-center">
