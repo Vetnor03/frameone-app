@@ -3085,7 +3085,7 @@ function MirrorGroceriesXLCard({ detail, language, mutedColor }: { detail: Mirro
   const rightHeader = mirrorGroceriesUppercase(dinnerTitle || (language === 'no' ? 'Ukemeny' : 'Weekly Menu'), language)
 
   return (
-    <div className="grid h-full w-full grid-rows-[1fr_auto_1fr] overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
+    <div className="grid h-full w-full grid-rows-2 gap-[clamp(1.44rem,3.5vw,2.1rem)] overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
       <div className="grid min-h-0 w-full grid-cols-2 gap-[clamp(0.75rem,2vw,1.4rem)] overflow-hidden">
         <MirrorGroceriesMediumPanel
           detail={detail}
@@ -3109,8 +3109,6 @@ function MirrorGroceriesXLCard({ detail, language, mutedColor }: { detail: Mirro
           <MirrorGroceriesDinnerPlanList detail={detail} language={language} mutedColor={mutedColor} />
         </div>
       </div>
-
-      <div className="my-[clamp(0.72rem,1.75vw,1.05rem)] h-px w-full bg-current opacity-20" aria-hidden="true" />
 
       <div className="grid min-h-0 w-full grid-cols-2 gap-[clamp(0.95rem,2.35vw,1.65rem)] overflow-hidden">
         <MirrorGroceriesXLInsightPanel header={mirrorGroceriesUppercase(language === 'no' ? 'Snart tom' : 'Running Low', language)}>
