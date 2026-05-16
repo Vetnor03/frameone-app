@@ -2699,8 +2699,10 @@ function mirrorGroceriesOverflowLabel(detail: MirrorModuleDetail, language: AppL
 }
 
 function mirrorGroceriesMediumHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
-  return dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List')
+  const header = dinnerTitle || (language === 'no' ? 'Handleliste' : 'Grocery List')
+  return header.toLocaleUpperCase(locale)
 }
 
 function mirrorGroceriesTodayDinnerLabel(language: AppLanguage) {
