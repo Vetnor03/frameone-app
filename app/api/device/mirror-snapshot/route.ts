@@ -38,6 +38,8 @@ type UnknownRecord = Record<string, unknown>
 
 const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
+const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
+const LIKELY_AVAILABLE_HISTORY_DAYS = 45
 const MIRROR_RECIPE_SOURCE_MAX = 200
 
 function getBearerToken(req: Request) {
@@ -247,12 +249,50 @@ function buildMirrorRunningLowInsights(params: {
     .map((item) => ({ name: item.name, label }))
 }
 
+function buildLikelyAvailableIngredientScores(params: {
+  historyRows: UnknownRecord[]
+  checkedRows: UnknownRecord[]
+}) {
+  const recentPurchaseCutoffIso = daysAgoIso(LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS)
+  const historyCutoffIso = daysAgoIso(LIKELY_AVAILABLE_HISTORY_DAYS)
+  const scores = new Map<string, { name: string; score: number; lastUsed: string }>()
+
+  const addScore = (nameValue: unknown, score: number, lastUsed = '') => {
+    const name = compactGroceryInsightName(nameValue, 28)
+    if (!name) return
+    const key = normalizeGroceryInsightKey(name)
+    const existing = scores.get(key) ?? { name, score: 0, lastUsed: '' }
+    existing.score += score
+    if (lastUsed && lastUsed > existing.lastUsed) existing.lastUsed = lastUsed
+    scores.set(key, existing)
+  }
+
+  for (const row of params.historyRows) {
+    const usageCount = Math.max(0, asNumber(row.usage_count) ?? 0)
+    const lastUsed = asString(row.last_used_at)
+    if (usageCount < 2 || !isIsoAtOrAfter(lastUsed, historyCutoffIso)) continue
+    addScore(row.name, Math.min(10, usageCount) + (isIsoAtOrAfter(lastUsed, recentPurchaseCutoffIso) ? 4 : 0), lastUsed)
+  }
+
+  for (const row of params.checkedRows) {
+    const checkedAt = asString(row.checked_at) || asString(row.updated_at)
+    if (!isIsoAtOrAfter(checkedAt, recentPurchaseCutoffIso)) continue
+    addScore(row.name, 8, checkedAt)
+  }
+
+  return scores
+}
+
 function buildMirrorMealIdeas(params: {
   recipeRows: UnknownRecord[]
   dinnerPlanTitles: string[]
-  activeNames: string[]
+  historyRows: UnknownRecord[]
+  checkedRows: UnknownRecord[]
 }) {
-  const activeKeys = new Set(params.activeNames.map(normalizeGroceryInsightKey))
+  const likelyAvailable = buildLikelyAvailableIngredientScores({
+    historyRows: params.historyRows,
+    checkedRows: params.checkedRows,
+  })
   const plannedTitles = new Set(params.dinnerPlanTitles.map(normalizeGroceryInsightKey))
   const ideas = new Map<string, { name: string; missing: string[]; score: number; updatedAt: string }>()
 
@@ -266,14 +306,18 @@ function buildMirrorMealIdeas(params: {
     const ingredients = recipeIngredientsFromRow(row)
     if (ingredients.length < 2) continue
 
+    const matchedIngredientScores = ingredients
+      .map(([ingredientKey]) => likelyAvailable.get(ingredientKey)?.score ?? 0)
+      .filter((score) => score > 0)
     const missing = ingredients
-      .filter(([ingredientKey]) => !activeKeys.has(ingredientKey))
+      .filter(([ingredientKey]) => !likelyAvailable.has(ingredientKey))
       .map(([, ingredientName]) => ingredientName)
-    const overlap = ingredients.length - missing.length
+    const overlap = matchedIngredientScores.length
     if (overlap < 1 || missing.length > 2) continue
 
+    const learnedScore = matchedIngredientScores.reduce((total, score) => total + score, 0)
     const updatedAt = asString(row.updated_at) || asString(row.created_at)
-    const score = overlap * 2 + ingredients.length - missing.length + (updatedAt ? 1 : 0)
+    const score = learnedScore + overlap * 3 + ingredients.length - missing.length + (updatedAt ? 1 : 0)
     const existing = ideas.get(key)
     if (!existing || score > existing.score || updatedAt > existing.updatedAt) {
       ideas.set(key, { name, missing: missing.slice(0, 2), score, updatedAt })
@@ -865,7 +909,8 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const groceryMealIdeas = buildMirrorMealIdeas({
     recipeRows,
     dinnerPlanTitles: [dinnerTodayTitle, ...groceryDinnerPlan.map((day) => day.title)].filter(Boolean),
-    activeNames,
+    historyRows,
+    checkedRows,
   })
 
   return {
