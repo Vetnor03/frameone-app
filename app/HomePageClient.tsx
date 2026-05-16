@@ -3477,7 +3477,7 @@ function mirrorStockRangeLabel(range: StockChartRange | undefined, language: App
 
 const MIRROR_STOCK_CHART_WIDTH = 276
 const MIRROR_STOCK_CHART_HEIGHT = 86
-const MIRROR_STOCK_LINE_WIDTH = 3
+const MIRROR_STOCK_LINE_WIDTH = 1.2
 
 type MirrorStockChartGeometry = {
   width: number
@@ -3655,7 +3655,7 @@ function MirrorMediumStocksCard({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.75rem,1.9vw,1.5rem)] pt-[clamp(0.75rem,1.95vw,1.45rem)] pb-[clamp(0.8rem,2vw,1.55rem)] text-center leading-tight">
-      <div className="mx-auto max-w-full shrink-0 truncate border-b-2 border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.05rem,0.2vw,0.14rem)] text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]">
+      <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.05rem,0.2vw,0.14rem)] text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]">
         {title}
       </div>
 
