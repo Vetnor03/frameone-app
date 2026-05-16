@@ -2850,16 +2850,18 @@ function MirrorGroceriesMediumPanel({
   mutedColor,
   header,
   showDinnerLabel = false,
+  showEmptyInsight = true,
 }: {
   detail: MirrorModuleDetail
   language: AppLanguage
   mutedColor: string
   header: string
   showDinnerLabel?: boolean
+  showEmptyInsight?: boolean
 }) {
   const visibleItems = mirrorGroceriesVisibleItems(detail, 12)
   const overflowLabel = mirrorGroceriesOverflowLabel(detail, language, 12)
-  const emptyInsight = visibleItems.length <= 0 ? mirrorGroceriesMediumEmptyInsight(detail, language) : null
+  const emptyInsight = visibleItems.length <= 0 && showEmptyInsight ? mirrorGroceriesMediumEmptyInsight(detail, language) : null
 
   return (
     <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
@@ -2986,6 +2988,138 @@ function MirrorGroceriesLargeCard({
         )}
         <MirrorGroceriesHeader header={rightHeader} />
         <MirrorGroceriesDinnerPlanList detail={detail} language={language} mutedColor={mutedColor} />
+      </div>
+    </div>
+  )
+}
+
+function MirrorGroceriesRunningLowList({ detail, mutedColor, language }: { detail: MirrorModuleDetail; mutedColor: string; language: AppLanguage }) {
+  const runningLow = mirrorGroceriesRunningLow(detail)
+
+  if (runningLow.length <= 0) {
+    return (
+      <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] max-w-full truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
+        {language === 'no' ? 'Alt ser bra ut' : 'All stocked'}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 items-start justify-center pt-[clamp(0.36rem,0.9vw,0.58rem)]">
+      <div className="flex w-fit max-w-full flex-col items-start gap-[clamp(0.34rem,0.9vw,0.58rem)]">
+        {runningLow.map((item, index) => {
+          const line = item.label ? `${item.name} - ${item.label}` : item.name
+          return (
+            <div key={`${line}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.15vw,0.68rem)] text-left leading-none">
+              <span className="h-[clamp(0.28rem,0.62vw,0.4rem)] w-[clamp(0.28rem,0.62vw,0.4rem)] rounded-full bg-current" aria-hidden="true" />
+              <span className="min-w-0 truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" title={line}>
+                {line}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function MirrorGroceriesMealIdeasList({ detail, mutedColor, language }: { detail: MirrorModuleDetail; mutedColor: string; language: AppLanguage }) {
+  const mealIdeas = mirrorGroceriesMealIdeas(detail)
+
+  if (mealIdeas.length <= 0) {
+    return (
+      <div className="mt-[clamp(0.48rem,1.25vw,0.82rem)] flex max-w-full flex-col items-center gap-[clamp(0.24rem,0.58vw,0.38rem)] text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" style={{ color: mutedColor }}>
+        <div className="max-w-full truncate" title={language === 'no' ? 'Lærer kjøkkenet ditt' : 'Learning your kitchen'}>
+          {language === 'no' ? 'Lærer kjøkkenet ditt' : 'Learning your kitchen'}
+        </div>
+        <div className="max-w-full truncate" title={language === 'no' ? 'Legg til varer over tid' : 'Add groceries over time'}>
+          {language === 'no' ? 'Legg til varer over tid' : 'Add groceries over time'}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 items-start justify-center pt-[clamp(0.36rem,0.9vw,0.58rem)]">
+      <div className="flex w-fit max-w-full flex-col items-start gap-[clamp(0.54rem,1.28vw,0.9rem)] text-left leading-none">
+        {mealIdeas.map((item, index) => {
+          const missingLine = item.missing.length > 0 ? `${language === 'no' ? 'mangler' : 'missing'}: ${item.missing.join(', ')}` : ''
+          return (
+            <div key={`${item.name}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] gap-x-[clamp(0.42rem,1.15vw,0.68rem)]">
+              <span className="mt-[clamp(0.18rem,0.42vw,0.28rem)] h-[clamp(0.28rem,0.62vw,0.4rem)] w-[clamp(0.28rem,0.62vw,0.4rem)] rounded-full bg-current" aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="truncate text-[clamp(0.64rem,1.45vw,0.9rem)] font-medium tracking-[0.045em]" title={item.name}>
+                  {item.name}
+                </div>
+                {missingLine && (
+                  <div className="mt-[clamp(0.16rem,0.42vw,0.28rem)] truncate text-[clamp(0.54rem,1.15vw,0.74rem)] font-medium tracking-[0.04em]" style={{ color: mutedColor }} title={missingLine}>
+                    {missingLine}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function MirrorGroceriesXLInsightPanel({
+  header,
+  children,
+}: {
+  header: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
+      <MirrorGroceriesHeader header={header} />
+      {children}
+    </div>
+  )
+}
+
+function MirrorGroceriesXLCard({ detail, language, mutedColor }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string }) {
+  const dinnerTitle = typeof detail.dinnerTodayTitle === 'string' ? detail.dinnerTodayTitle.trim() : ''
+  const rightHeader = mirrorGroceriesUppercase(dinnerTitle || (language === 'no' ? 'Ukemeny' : 'Weekly Menu'), language)
+
+  return (
+    <div className="grid h-full w-full grid-rows-[1fr_auto_1fr] overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
+      <div className="grid min-h-0 w-full grid-cols-2 gap-[clamp(0.75rem,2vw,1.4rem)] overflow-hidden">
+        <MirrorGroceriesMediumPanel
+          detail={detail}
+          language={language}
+          mutedColor={mutedColor}
+          header={mirrorGroceriesListHeader(language)}
+          showEmptyInsight={false}
+        />
+
+        <div className="flex h-full w-full flex-col items-center overflow-hidden text-center leading-none">
+          {dinnerTitle && (
+            <div
+              className="max-w-full truncate pb-[clamp(0.18rem,0.5vw,0.34rem)] text-[clamp(0.56rem,1.25vw,0.78rem)] font-medium tracking-[0.055em]"
+              style={{ color: mutedColor }}
+              title={mirrorGroceriesTodayDinnerLabel(language)}
+            >
+              {mirrorGroceriesTodayDinnerLabel(language)}
+            </div>
+          )}
+          <MirrorGroceriesHeader header={rightHeader} />
+          <MirrorGroceriesDinnerPlanList detail={detail} language={language} mutedColor={mutedColor} />
+        </div>
+      </div>
+
+      <div className="my-[clamp(0.72rem,1.75vw,1.05rem)] h-px w-full bg-current opacity-20" aria-hidden="true" />
+
+      <div className="grid min-h-0 w-full grid-cols-2 gap-[clamp(0.95rem,2.35vw,1.65rem)] overflow-hidden">
+        <MirrorGroceriesXLInsightPanel header={mirrorGroceriesUppercase(language === 'no' ? 'Snart tom' : 'Running Low', language)}>
+          <MirrorGroceriesRunningLowList detail={detail} mutedColor={mutedColor} language={language} />
+        </MirrorGroceriesXLInsightPanel>
+
+        <MirrorGroceriesXLInsightPanel header={mirrorGroceriesUppercase(language === 'no' ? 'Middagstips' : 'Meal Ideas', language)}>
+          <MirrorGroceriesMealIdeasList detail={detail} mutedColor={mutedColor} language={language} />
+        </MirrorGroceriesXLInsightPanel>
       </div>
     </div>
   )
@@ -3389,6 +3523,10 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'groceries' && size === 'large' && snapshot.layoutKey === 'full') {
+      return <MirrorGroceriesXLCard detail={detail} language={language} mutedColor={mutedColor} />
     }
 
     if (module === 'groceries' && size === 'large') {
