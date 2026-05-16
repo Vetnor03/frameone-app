@@ -301,6 +301,9 @@ type MirrorModuleDetail = {
   stockPrice?: string
   stockDayPercent?: string
   stockRangePercent?: string
+  stockChartRange?: StockChartRange
+  stockSeries?: number[]
+  stockPreviousClose?: number | null
 }
 
 type MirrorHoliday = {
@@ -3462,6 +3465,141 @@ function MirrorSmallStocksCard({
   )
 }
 
+
+function mirrorStockRangeLabel(range: StockChartRange | undefined, language: AppLanguage) {
+  const labels = language === 'no'
+    ? { day: 'I dag', week: 'Uke', month: 'Måned', year: 'År' }
+    : { day: 'Day', week: 'Week', month: 'Month', year: 'Year' }
+  return labels[range || 'day'] || labels.day
+}
+
+function MirrorStockChart({
+  series,
+  previousClose,
+  textColor,
+}: {
+  series?: number[]
+  previousClose?: number | null
+  textColor: string
+}) {
+  const values = (series || []).filter((value) => Number.isFinite(value))
+
+  if (values.length < 2) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-[clamp(0.55rem,1.25vw,0.76rem)] font-semibold tracking-[0.06em]">
+        No chart data
+      </div>
+    )
+  }
+
+  let min = Math.min(...values)
+  let max = Math.max(...values)
+  if (Math.abs(max - min) < 0.0001) {
+    min -= 0.5
+    max += 0.5
+  }
+  const span = max - min
+  const width = 100
+  const height = 100
+  const pointFor = (value: number, index: number) => {
+    const x = (index / Math.max(1, values.length - 1)) * width
+    const y = height - ((value - min) / span) * height
+    return `${x.toFixed(2)},${y.toFixed(2)}`
+  }
+  const points = values.map(pointFor).join(' ')
+  const showReference = typeof previousClose === 'number' && Number.isFinite(previousClose) && previousClose >= min && previousClose <= max
+  const referenceY = showReference ? height - ((previousClose - min) / span) * height : null
+
+  return (
+    <svg className="h-full w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+      {referenceY != null && (
+        <line
+          x1="0"
+          x2={width}
+          y1={referenceY}
+          y2={referenceY}
+          stroke={textColor}
+          strokeWidth="1.2"
+          strokeDasharray="2 4"
+          vectorEffect="non-scaling-stroke"
+          opacity="0.72"
+        />
+      )}
+      <polyline
+        points={points}
+        fill="none"
+        stroke={textColor}
+        strokeWidth="3"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
+function mirrorFrameStockPrice(value: string) {
+  return value.replace(/^[A-Z]{3}\s+/, '')
+}
+
+function MirrorMediumStocksCard({
+  detail,
+  fallback,
+  textColor,
+  language,
+}: {
+  detail: MirrorModuleDetail
+  fallback: { primary: string; secondary?: string; tertiary?: string }
+  textColor: string
+  language: AppLanguage
+}) {
+  const title = fitMirrorStockTitle(detail, fallback)
+  const hasLiveStockLayoutData = Boolean(detail.stockPrice || detail.stockDayPercent || detail.stockRangePercent)
+  const price = mirrorFrameStockPrice(detail.stockPrice || '--')
+  const dayPercent = detail.stockDayPercent || '--'
+  const rangePercent = detail.stockRangePercent || '--'
+
+  if (!hasLiveStockLayoutData) {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-4 text-center leading-tight">
+        <div className="max-w-full truncate text-[clamp(1rem,2.55vw,1.7rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.75rem,1.9vw,1.5rem)] pt-[clamp(0.75rem,1.95vw,1.45rem)] pb-[clamp(0.8rem,2vw,1.55rem)] text-center leading-tight">
+      <div className="mx-auto max-w-full shrink-0 truncate border-b-2 border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.05rem,0.2vw,0.14rem)] text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]">
+        {title}
+      </div>
+
+      <div className="shrink-0 pt-[clamp(0.55rem,1.25vw,0.95rem)] text-[clamp(0.56rem,1.22vw,0.78rem)] font-semibold tracking-[0.08em]">
+        {mirrorStockRangeLabel(detail.stockChartRange, language)}
+      </div>
+
+      <div className="min-h-0 flex-1 px-[clamp(0.45rem,1.15vw,0.85rem)] pt-[clamp(0.45rem,1vw,0.8rem)] pb-[clamp(0.55rem,1.35vw,1rem)]">
+        <MirrorStockChart series={detail.stockSeries} previousClose={detail.stockPreviousClose} textColor={textColor} />
+      </div>
+
+      <div className="mx-auto grid w-[88%] shrink-0 grid-cols-[1fr_auto_1fr_auto_1fr] items-center">
+        <div className="min-w-0 truncate px-[clamp(0.2rem,0.65vw,0.45rem)] text-[clamp(0.58rem,1.28vw,0.82rem)] font-semibold tracking-[0.08em]">
+          {price}
+        </div>
+        <div className="h-[calc(100%+0.25rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+        <div className="min-w-0 truncate px-[clamp(0.2rem,0.65vw,0.45rem)] text-[clamp(0.58rem,1.28vw,0.82rem)] font-semibold tracking-[0.08em]">
+          {dayPercent}
+        </div>
+        <div className="h-[calc(100%+0.25rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+        <div className="min-w-0 truncate px-[clamp(0.2rem,0.65vw,0.45rem)] text-[clamp(0.58rem,1.28vw,0.82rem)] font-semibold tracking-[0.08em]">
+          {rangePercent}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
   const kind = mirrorWeatherIconKind(wmo)
 
@@ -3589,6 +3727,11 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'stocks' && size === 'medium') {
+      const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      return <MirrorMediumStocksCard detail={detail} fallback={fallback} textColor={textColor} language={language} />
     }
 
     if (module === 'stocks' && size === 'small') {
