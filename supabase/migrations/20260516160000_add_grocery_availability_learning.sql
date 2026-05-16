@@ -19,6 +19,12 @@ create index if not exists grocery_item_history_device_purchase_idx
   on public.grocery_item_history (device_id, last_purchased_at desc)
   where last_purchased_at is not null;
 
+-- Existing installs may already have these RPCs with different argument names.
+-- PostgreSQL does not allow CREATE OR REPLACE to rename input parameters,
+-- so drop the same-signature functions before recreating them.
+drop function if exists public.record_grocery_purchase(text, text, integer, text);
+drop function if exists public.mark_grocery_item_probably_out(text, text);
+
 create or replace function public.record_grocery_purchase(
   device_id text,
   item_name text,
