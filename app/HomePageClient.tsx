@@ -3094,7 +3094,7 @@ function MirrorGroceriesXLCard({ detail, language, mutedColor }: { detail: Mirro
   const rightHeader = mirrorGroceriesUppercase(dinnerTitle || (language === 'no' ? 'Ukemeny' : 'Weekly Menu'), language)
 
   return (
-    <div className="grid h-full w-full grid-rows-[minmax(0,0.94fr)_minmax(0,1.06fr)] gap-[clamp(1.08rem,2.7vw,1.72rem)] overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
+    <div className="grid h-full w-full grid-rows-2 gap-[clamp(1.44rem,3.5vw,2.1rem)] overflow-hidden px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
       <div className="grid min-h-0 w-full grid-cols-2 gap-[clamp(0.75rem,2vw,1.4rem)] overflow-hidden">
         <MirrorGroceriesMediumPanel
           detail={detail}
