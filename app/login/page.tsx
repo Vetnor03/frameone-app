@@ -122,7 +122,7 @@ function HomeScreenGuide() {
   ]
 
   return (
-    <section aria-labelledby="home-screen-guide-title" className="mt-8 text-center">
+    <section aria-labelledby="home-screen-guide-title" className="mt-14 text-center">
       <div className="flex items-center justify-center gap-3 text-white/35">
         <span className="h-px w-12 bg-white/12" />
         <h2 id="home-screen-guide-title" className="text-[0.65rem] font-semibold tracking-[0.22em]">
