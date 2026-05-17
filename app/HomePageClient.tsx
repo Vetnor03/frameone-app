@@ -4046,7 +4046,7 @@ function formatMirrorSoccerNumber(value: number | null | undefined, signed = fal
 function MirrorSoccerStandingsTable({ detail, maxRows = 6, variant = 'default' }: { detail: MirrorModuleDetail; maxRows?: number; variant?: 'default' | 'xl' }) {
   const rows = mirrorSoccerTableWindow(Array.isArray(detail.soccerTableRows) ? detail.soccerTableRows : [], maxRows)
   const isXl = variant === 'xl'
-  const xlTableTop = 'clamp(0.42rem,0.95vw,0.68rem)'
+  const xlTableTop = 'clamp(1.5rem,3.4vw,2.35rem)'
   const xlTableBottom = 'clamp(0.42rem,0.95vw,0.68rem)'
   const xlHeaderHeight = 'clamp(0.9rem,2.05vw,1.32rem)'
   const xlRowGap = 'clamp(0.02rem,0.08vw,0.06rem)'
