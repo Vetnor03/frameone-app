@@ -6,6 +6,12 @@ import { buildMediumWeatherDetail, formatWeatherTemp, normalizeDisplayWmoForTemp
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+type SurfMirrorDaypart = {
+  label?: string
+  rating?: number
+  waveRange?: string
+}
+
 type Detail = {
   primary: string
   secondary?: string
@@ -15,6 +21,7 @@ type Detail = {
   waveRange?: string
   swellPeriodS?: number
   windSpeedMs?: number
+  surfDayparts?: SurfMirrorDaypart[]
   isTodaysBest?: boolean
   isExperienceBased?: boolean
   ratingFromExperience?: boolean
@@ -1078,6 +1085,7 @@ async function surfDetail(
   if (lon != null) url.searchParams.set('lon', String(lon))
   // Match the physical frame firmware, which asks for the best surf in the next 4 hours.
   url.searchParams.set('hours', '4')
+  url.searchParams.set('dayparts', '1')
 
   if (spotId === '__todays_best__') {
     const fuelPenalty = truthy(surfSettings.fuelPenalty)
@@ -1096,6 +1104,22 @@ async function surfDetail(
   const rating = asNumber(data.rating) ?? asNumber(data.score) ?? undefined
   const waveRange = asString(forecast.wave_height_range_label || data.line1 || data.line2, '')
   const isExperienceBased = isSurfScoreExperienceBased(data)
+  const surfDayparts = Array.isArray(data.dayparts)
+    ? data.dayparts
+        .map((part): SurfMirrorDaypart | null => {
+          const record = asRecord(part)
+          const label = asString(record.label).trim()
+          const partRating = asNumber(record.rating) ?? undefined
+          const partWaveRange = asString(record.wave_height_range_label || record.waveRange || record.wave_range, '').trim()
+          if (!label && partRating == null && !partWaveRange) return null
+          return {
+            label: label || undefined,
+            rating: partRating,
+            waveRange: partWaveRange || undefined,
+          }
+        })
+        .filter((part): part is SurfMirrorDaypart => Boolean(part))
+    : undefined
 
   return {
     module: 'surf',
@@ -1104,6 +1128,7 @@ async function surfDetail(
     tertiary: waveRange,
     rating,
     waveRange,
+    surfDayparts,
     isExperienceBased,
     ratingFromExperience: isExperienceBased,
     swellPeriodS: asNumber(inputs.swell_period_s) ?? undefined,
