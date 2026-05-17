@@ -10,6 +10,8 @@ type SurfMirrorDaypart = {
   label?: string
   rating?: number
   waveRange?: string
+  ratingFromExperience?: boolean
+  experienceDiceValue?: number
 }
 
 type Detail = {
@@ -25,6 +27,7 @@ type Detail = {
   isTodaysBest?: boolean
   isExperienceBased?: boolean
   ratingFromExperience?: boolean
+  experienceDiceValue?: number
   swellDirectionDeg?: number
   windDirectionDeg?: number
   groceryItems?: string[]
@@ -696,6 +699,35 @@ function truthy(value: unknown) {
   return false
 }
 
+function surfExperienceDiceValue(payload: UnknownRecord, fallbackRating?: number) {
+  if (!isSurfScoreExperienceBased(payload)) return undefined
+  const breakdown = asRecord(payload.breakdown)
+  const experience = asRecord(breakdown.experience)
+  const topExperience = asRecord(payload.experience)
+  const picked = asRecord(payload.picked)
+  const pickedBreakdown = asRecord(picked.breakdown)
+  const pickedExperience = asRecord(picked.experience)
+  const candidates = [
+    fallbackRating,
+    asNumber(payload.rating),
+    asNumber(payload.score),
+    asNumber(experience.blended_rating_1_6),
+    asNumber(topExperience.blended_rating_1_6),
+    asNumber(asRecord(pickedBreakdown.experience).blended_rating_1_6),
+    asNumber(pickedExperience.blended_rating_1_6),
+    asNumber(experience.rating_1_6),
+    asNumber(topExperience.rating_1_6),
+    asNumber(asRecord(pickedBreakdown.experience).rating_1_6),
+    asNumber(pickedExperience.rating_1_6),
+  ]
+
+  for (const value of candidates) {
+    if (value != null && value >= 1 && value <= 6) return Math.round(value)
+  }
+
+  return undefined
+}
+
 function isSurfScoreExperienceBased(payload: UnknownRecord) {
   const breakdown = asRecord(payload.breakdown)
   const experience = asRecord(breakdown.experience)
@@ -1079,7 +1111,7 @@ async function surfDetail(
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
   const url = new URL('/api/surf/score', origin)
-  if (spotId && spotId !== '__todays_best__') url.searchParams.set('spotId', spotId)
+  if (spotId) url.searchParams.set('spotId', spotId)
   else if (spot) url.searchParams.set('spot', spot)
   if (lat != null) url.searchParams.set('lat', String(lat))
   if (lon != null) url.searchParams.set('lon', String(lon))
@@ -1111,11 +1143,15 @@ async function surfDetail(
           const label = asString(record.label).trim()
           const partRating = asNumber(record.rating) ?? undefined
           const partWaveRange = asString(record.wave_height_range_label || record.waveRange || record.wave_range, '').trim()
-          if (!label && partRating == null && !partWaveRange) return null
+          const partRatingFromExperience = isSurfScoreExperienceBased(record)
+          const partExperienceDiceValue = surfExperienceDiceValue(record, partRating)
+          if (!label && partRating == null && !partWaveRange && !partRatingFromExperience && partExperienceDiceValue == null) return null
           return {
             label: label || undefined,
             rating: partRating,
             waveRange: partWaveRange || undefined,
+            ratingFromExperience: partRatingFromExperience || undefined,
+            experienceDiceValue: partExperienceDiceValue,
           }
         })
         .filter((part): part is SurfMirrorDaypart => Boolean(part))
@@ -1131,6 +1167,7 @@ async function surfDetail(
     surfDayparts,
     isExperienceBased,
     ratingFromExperience: isExperienceBased,
+    experienceDiceValue: surfExperienceDiceValue(data, rating),
     swellPeriodS: asNumber(inputs.swell_period_s) ?? undefined,
     windSpeedMs: asNumber(inputs.wind_speed_ms) ?? undefined,
     swellDirectionDeg: asNumber(inputs.swell_direction_deg) ?? undefined,

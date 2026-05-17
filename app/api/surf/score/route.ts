@@ -1322,6 +1322,11 @@ function buildDayparts(
       wave_height_range_label: waveLabel,
       swell_period_s: Number.isFinite(swellPeriod) ? Math.round(swellPeriod) : null,
       wind_speed_ms: Number.isFinite(marine.wind_speed_ms) ? Math.round(marine.wind_speed_ms) : null,
+      breakdown: scored?.breakdown ?? null,
+      ratingSource: picked.ratingSource,
+      finalRating: picked.finalRating,
+      modelRating: picked.modelRating,
+      experienceRating: picked.experienceRating,
     }
   })
 }
