@@ -267,6 +267,8 @@ type MirrorSurfDaypart = {
   label?: string
   rating?: number
   waveRange?: string
+  swellPeriodS?: number
+  windSpeedMs?: number
   ratingFromExperience?: boolean
   experienceDiceValue?: number
 }
@@ -4377,6 +4379,8 @@ function MirrorLargeSurfCard({
       label: part?.label || fallback.label,
       rating: part?.rating ?? rating,
       waveRange: part?.waveRange || fallbackWaveRange,
+      swellPeriodS: part?.swellPeriodS,
+      windSpeedMs: part?.windSpeedMs,
       ratingFromExperience: part?.ratingFromExperience || (detail.ratingFromExperience && part?.rating === rating),
       experienceDiceValue: part?.experienceDiceValue ?? (detail.ratingFromExperience && part?.rating === rating ? detail.experienceDiceValue : undefined),
     }
@@ -4396,7 +4400,7 @@ function MirrorLargeSurfCard({
 
       <div className="mt-[clamp(0.55rem,1.35vw,0.92rem)] grid min-h-0 flex-1 grid-cols-4 items-stretch">
         {dayparts.map((part, index) => (
-          <div key={`${part.label}-${index}`} className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center px-[clamp(0.26rem,0.75vw,0.58rem)]">
+          <div key={`${part.label}-${index}`} className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_auto] items-center px-[clamp(0.26rem,0.75vw,0.58rem)]">
             <div className="min-w-0 truncate text-[clamp(0.58rem,1.32vw,0.82rem)] font-semibold tracking-[0.12em] uppercase" title={part.label}>
               {part.label}
             </div>
@@ -4419,6 +4423,14 @@ function MirrorLargeSurfCard({
 
             <div className="min-w-0 truncate text-[clamp(0.5rem,1.02vw,0.68rem)] tracking-[0.1em]" title={part.waveRange}>
               {part.waveRange}
+            </div>
+
+            <div
+              className="min-w-0 truncate pt-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.42rem,0.86vw,0.56rem)] tracking-[0.08em]"
+              style={{ color: mutedColor }}
+              title={`${formatMirrorMetric(part.swellPeriodS, 's')} / ${formatMirrorMetric(part.windSpeedMs, 'm/s')}`}
+            >
+              {formatMirrorMetric(part.swellPeriodS, 's')} · {formatMirrorMetric(part.windSpeedMs, 'm/s')}
             </div>
 
             {index > 0 && (
