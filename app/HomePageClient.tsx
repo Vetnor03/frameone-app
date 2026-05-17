@@ -271,6 +271,14 @@ type MirrorSurfDaypart = {
   windSpeedMs?: number
   ratingFromExperience?: boolean
   experienceDiceValue?: number
+  wave_height_range_label?: string
+  wave_range?: string
+  swell_period_s?: number
+  wind_speed_ms?: number
+  ratingSource?: string
+  source?: string
+  finalRating?: number
+  experienceRating?: number
 }
 
 type MirrorModuleDetail = {
@@ -4351,6 +4359,92 @@ function DiceRating({ value, rating, isExperienceBased, muted, paperColor, class
 }
 
 
+function finiteMirrorNumber(value: unknown) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function mirrorSurfString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function mirrorSurfPartExperienceBased(part: Record<string, unknown>) {
+  if (booleanish(part.ratingFromExperience) || booleanish(part.isExperienceBased) || booleanish(part.basedOnExperience)) return true
+  const source = String(part.ratingSource ?? part.source ?? '').toLowerCase()
+  if (source.includes('experience') || source.includes('user_surf_experiences')) return true
+
+  const experience = recordFromUnknown(part.experience)
+  if (booleanish(experience.matched) || booleanish(experience.isExperienceBased)) return true
+
+  const breakdownExperience = recordFromUnknown(recordFromUnknown(part.breakdown).experience)
+  if (booleanish(breakdownExperience.matched) || booleanish(breakdownExperience.isExperienceBased)) return true
+
+  const pickedExperience = recordFromUnknown(recordFromUnknown(part.picked).experience)
+  return booleanish(pickedExperience.matched) || booleanish(pickedExperience.isExperienceBased)
+}
+
+function mirrorSurfPartDiceValue(part: Record<string, unknown>, fallbackRating: number | undefined) {
+  const breakdownExperience = recordFromUnknown(recordFromUnknown(part.breakdown).experience)
+  const topExperience = recordFromUnknown(part.experience)
+  const picked = recordFromUnknown(part.picked)
+  const pickedBreakdownExperience = recordFromUnknown(recordFromUnknown(picked.breakdown).experience)
+  const pickedExperience = recordFromUnknown(picked.experience)
+  const candidates = [
+    part.experienceDiceValue,
+    fallbackRating,
+    part.finalRating,
+    part.experienceRating,
+    breakdownExperience.blended_rating_1_6,
+    topExperience.blended_rating_1_6,
+    pickedBreakdownExperience.blended_rating_1_6,
+    pickedExperience.blended_rating_1_6,
+    breakdownExperience.rating_1_6,
+    topExperience.rating_1_6,
+    pickedBreakdownExperience.rating_1_6,
+    pickedExperience.rating_1_6,
+  ]
+
+  for (const candidate of candidates) {
+    const value = finiteMirrorNumber(candidate)
+    if (value !== undefined && value >= 1 && value <= 6) return Math.round(value)
+  }
+
+  return undefined
+}
+
+type MirrorLargeSurfDaypart = {
+  label: string
+  rating?: number
+  waveRange: string
+  swellPeriodS?: number
+  windSpeedMs?: number
+  ratingFromExperience: boolean
+  experienceDiceValue?: number
+}
+
+function normalizeMirrorLargeSurfDaypart(part: unknown, fallbackLabel: string): MirrorLargeSurfDaypart {
+  const record = recordFromUnknown(part)
+  const rating = finiteMirrorNumber(record.rating ?? record.finalRating ?? record.score)
+  const waveRange =
+    mirrorSurfString(record.waveRange) ||
+    mirrorSurfString(record.wave_height_range_label) ||
+    mirrorSurfString(record.wave_range) ||
+    mirrorSurfString(record.waveHeightRange) ||
+    '--'
+  const ratingFromExperience = mirrorSurfPartExperienceBased(record)
+
+  return {
+    label: mirrorSurfString(record.label) || fallbackLabel,
+    rating,
+    waveRange,
+    swellPeriodS: finiteMirrorNumber(record.swellPeriodS ?? record.swell_period_s ?? record.selectedSwellPeriod),
+    windSpeedMs: finiteMirrorNumber(record.windSpeedMs ?? record.wind_speed_ms),
+    ratingFromExperience,
+    experienceDiceValue: ratingFromExperience ? mirrorSurfPartDiceValue(record, rating) : undefined,
+  }
+}
+
+
 function MirrorLargeSurfCard({
   detail,
   mutedColor,
@@ -4364,27 +4458,19 @@ function MirrorLargeSurfCard({
   frameBackground: string
   textColor: string
 }) {
-  const rating = detail.rating ?? Number(detail.primary)
+  const rating = finiteMirrorNumber(detail.rating ?? detail.primary)
   const spotName = detail.secondary || detail.primary || 'Surf'
   const fallbackWaveRange = detail.waveRange || detail.tertiary || '--'
-  const fallbackParts: MirrorSurfDaypart[] = [
-    { label: 'Morning' },
-    { label: 'Noon' },
-    { label: 'Afternoon' },
-    { label: 'Evening' },
+  const fallbackParts: MirrorLargeSurfDaypart[] = [
+    { label: 'Morning', rating, waveRange: fallbackWaveRange, ratingFromExperience: false },
+    { label: 'Noon', rating, waveRange: fallbackWaveRange, ratingFromExperience: false },
+    { label: 'Afternoon', rating, waveRange: fallbackWaveRange, ratingFromExperience: false },
+    { label: 'Evening', rating, waveRange: fallbackWaveRange, ratingFromExperience: false },
   ]
-  const dayparts = fallbackParts.map((fallback, index) => {
-    const part = Array.isArray(detail.surfDayparts) ? detail.surfDayparts[index] : undefined
-    return {
-      label: part?.label || fallback.label,
-      rating: part?.rating ?? rating,
-      waveRange: part?.waveRange || fallbackWaveRange,
-      swellPeriodS: part?.swellPeriodS,
-      windSpeedMs: part?.windSpeedMs,
-      ratingFromExperience: part?.ratingFromExperience || (detail.ratingFromExperience && part?.rating === rating),
-      experienceDiceValue: part?.experienceDiceValue ?? (detail.ratingFromExperience && part?.rating === rating ? detail.experienceDiceValue : undefined),
-    }
-  })
+  const rawDayparts = Array.isArray(detail.surfDayparts) ? detail.surfDayparts : []
+  const dayparts = fallbackParts.map((fallback, index) => (
+    rawDayparts.length > 0 ? normalizeMirrorLargeSurfDaypart(rawDayparts[index], fallback.label) : fallback
+  ))
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.55rem,1.35vw,0.9rem)] py-[clamp(0.45rem,1.1vw,0.75rem)] text-center leading-tight">
