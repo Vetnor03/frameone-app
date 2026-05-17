@@ -1,35 +1,153 @@
 // app/login/page.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+
+function getSafeNextPath() {
+  if (typeof window === 'undefined') return '/'
+
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const raw = params.get('next')
+
+    if (!raw || !raw.startsWith('/')) return '/'
+
+    return raw
+  } catch {
+    return '/'
+  }
+}
+
+function HomeScreenGuide() {
+  const steps = [
+    {
+      label: '1',
+      title: 'Del',
+      helper: 'Trykk på deleknappen nederst i Safari.',
+      icon: (
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
+          <path
+            d="M24 29V8m0 0-7 7m7-7 7 7"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3.2"
+          />
+          <path
+            d="M15 22h-3.5A3.5 3.5 0 0 0 8 25.5v11A3.5 3.5 0 0 0 11.5 40h25a3.5 3.5 0 0 0 3.5-3.5v-11a3.5 3.5 0 0 0-3.5-3.5H33"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3.2"
+          />
+        </svg>
+      ),
+    },
+    {
+      label: '2',
+      title: 'Legg til',
+      helper: 'Velg “Legg til på Hjem-skjerm”.',
+      icon: (
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
+          <path
+            d="M13 8h22a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H13a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4Z"
+            fill="none"
+            stroke="currentColor"
+            strokeLinejoin="round"
+            strokeWidth="3.2"
+          />
+          <path
+            d="M24 17v14m-7-7h14"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="3.4"
+          />
+          <path d="M19 35h10" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.6" />
+        </svg>
+      ),
+    },
+    {
+      label: '3',
+      title: 'Ferdig',
+      helper: 'Trykk “Legg til” — appen ligger på skjermen din.',
+      icon: (
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
+          <path
+            d="M13 21.5 21 30l15-16"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="4"
+          />
+          <path
+            d="M10 13c2.5-4 7.2-6.5 14-6.5 10.5 0 18 7.2 18 17.5S34.5 41.5 24 41.5 6 34.2 6 24c0-2.2.4-4.2 1.1-6"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="2.7"
+          />
+        </svg>
+      ),
+    },
+  ]
+
+  return (
+    <section
+      aria-labelledby="home-screen-guide-title"
+      className="mt-7 rounded-[1.7rem] border-2 border-white/15 bg-white/[0.06] p-3 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
+    >
+      <div className="mb-3 flex items-center justify-between gap-3 px-1">
+        <div>
+          <h2 id="home-screen-guide-title" className="text-sm font-semibold tracking-[0.18em] text-white/90">
+            LEGG APPEN PÅ HJEM-SKJERMEN
+          </h2>
+          <p className="mt-1 text-xs text-white/50">iPhone · Safari · 20 sekunder</p>
+        </div>
+        <span className="rounded-full border border-[#2aa3ff]/50 px-3 py-1 text-[0.65rem] font-semibold tracking-[0.18em] text-[#6fc0ff]">
+          TIPS
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2">
+        {steps.map((item, index) => (
+          <div key={item.label} className="contents">
+            <article className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#f8f3e8] px-2.5 py-3 text-center text-[#061b24] shadow-[inset_0_-3px_0_rgba(6,27,36,0.12)]">
+              <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#061b24] text-[0.65rem] font-black text-[#f8f3e8]">
+                {item.label}
+              </span>
+              <div className="mx-auto mb-2 flex h-16 w-16 rotate-[-2deg] items-center justify-center rounded-2xl border-[3px] border-[#061b24] bg-white text-[#2aa3ff] shadow-[4px_4px_0_rgba(6,27,36,0.18)]">
+                {item.icon}
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-wide">{item.title}</h3>
+              <p className="mt-1 text-[0.68rem] font-semibold leading-snug text-[#24414c]">{item.helper}</p>
+            </article>
+
+            {index < steps.length - 1 ? (
+              <div className="flex items-center" aria-hidden="true">
+                <span className="block h-px w-4 border-t border-dashed border-white/35" />
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 export default function LoginPage() {
   const router = useRouter()
 
-  const [nextPath, setNextPath] = useState('/')
+  const nextPath = useMemo(() => getSafeNextPath(), [])
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const raw = params.get('next')
-
-      if (!raw) {
-        setNextPath('/')
-      } else if (!raw.startsWith('/')) {
-        setNextPath('/')
-      } else {
-        setNextPath(raw)
-      }
-    } catch {
-      setNextPath('/')
-    }
-  }, [])
 
   // ✅ If already logged in, skip login screen
   useEffect(() => {
@@ -71,34 +189,34 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="h-screen bg-[#061b24] text-white flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold tracking-widest text-center">LOGIN</h1>
+    <main className="h-screen overflow-y-auto bg-[#061b24] px-5 py-8 text-white">
+      <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center">
+        <h1 className="text-center text-2xl font-semibold tracking-widest">LOGIN</h1>
 
         {step === 'email' ? (
           <>
-            <p className="text-white/50 text-sm text-center mt-2">We’ll send you an 8-digit code</p>
+            <p className="mt-2 text-center text-sm text-white/50">We’ll send you an 8-digit code</p>
 
             <input
               type="email"
               placeholder="you@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-8 w-full h-12 px-4 rounded-xl bg-transparent border border-white/20 outline-none"
+              className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 outline-none"
               autoComplete="email"
             />
 
             <button
               onClick={sendCode}
               disabled={loading}
-              className="mt-6 w-full h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
+              className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
             >
               {loading ? 'SENDING...' : 'SEND CODE'}
             </button>
           </>
         ) : (
           <>
-            <p className="text-white/50 text-sm text-center mt-2">
+            <p className="mt-2 text-center text-sm text-white/50">
               Enter the code we sent to
               <br />
               <span className="text-white/80">{email}</span>
@@ -109,14 +227,14 @@ export default function LoginPage() {
               placeholder="12345678"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\s/g, ''))}
-              className="mt-8 w-full h-12 px-4 rounded-xl bg-transparent border border-white/20 outline-none tracking-widest text-center"
+              className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
               autoComplete="one-time-code"
             />
 
             <button
               onClick={verifyCode}
               disabled={loading}
-              className="mt-6 w-full h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
+              className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
             >
               {loading ? 'VERIFYING...' : 'VERIFY CODE'}
             </button>
@@ -126,12 +244,14 @@ export default function LoginPage() {
                 setCode('')
                 setStep('email')
               }}
-              className="mt-3 w-full h-12 rounded-xl border border-white/15 text-white/60 tracking-widest"
+              className="mt-3 h-12 w-full rounded-xl border border-white/15 text-white/60 tracking-widest"
             >
               BACK
             </button>
           </>
         )}
+
+        <HomeScreenGuide />
       </div>
     </main>
   )
