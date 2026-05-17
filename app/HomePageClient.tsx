@@ -5461,6 +5461,22 @@ function MirrorMediumStocksCard({
   )
 }
 
+
+function formatMirrorSmallWeatherTempRange(low: string | undefined, high: string | undefined) {
+  const lo = String(low || '').trim()
+  const hi = String(high || '').trim()
+  if (!lo && !hi) return '--°'
+  if (!hi || lo === hi) return lo || hi
+
+  const loMatch = lo.match(/^(-?\d+)°([CF])$/)
+  const hiMatch = hi.match(/^(-?\d+)°([CF])$/)
+  if (loMatch && hiMatch && loMatch[2] === hiMatch[2]) {
+    return `${loMatch[1]} to ${hiMatch[1]}°${hiMatch[2]}`
+  }
+
+  return `${lo} to ${hi}`
+}
+
 function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
   const kind = mirrorWeatherIconKind(wmo)
 
@@ -5527,6 +5543,32 @@ function LandscapeFrameMirror({
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
+
+    if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
+      const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
+      const tempRange = formatMirrorSmallWeatherTempRange(detail.weatherLowTemp, detail.weatherHighTemp)
+      const windLine = detail.weatherWindLine || 'Calm winds'
+      const precipLine = detail.weatherPrecipLine || 'Mostly dry'
+
+      return (
+        <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.7rem,1.9vw,1.25rem)] py-[clamp(0.46rem,1.2vw,0.8rem)] text-center leading-none">
+          <div
+            className="max-w-[86%] shrink-0 truncate border-b border-current pb-[clamp(0.08rem,0.24vw,0.16rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]"
+            title={locationName}
+          >
+            {locationName}
+          </div>
+
+          <div className="mt-[clamp(0.55rem,1.42vw,0.95rem)] flex max-w-full shrink-0 items-center justify-center overflow-hidden text-[clamp(0.58rem,1.32vw,0.84rem)] font-medium tracking-[0.055em]">
+            <div className="min-w-0 truncate px-[clamp(0.18rem,0.55vw,0.4rem)]" title={tempRange}>{tempRange}</div>
+            <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+            <div className="min-w-0 truncate px-[clamp(0.18rem,0.55vw,0.4rem)]" title={windLine}>{windLine}</div>
+            <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+            <div className="min-w-0 truncate px-[clamp(0.18rem,0.55vw,0.4rem)]" title={precipLine}>{precipLine}</div>
+          </div>
+        </div>
+      )
+    }
 
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
       return (
