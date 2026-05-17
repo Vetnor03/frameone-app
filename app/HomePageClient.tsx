@@ -267,6 +267,8 @@ type MirrorSurfDaypart = {
   label?: string
   rating?: number
   waveRange?: string
+  ratingFromExperience?: boolean
+  experienceDiceValue?: number
 }
 
 type MirrorModuleDetail = {
@@ -282,6 +284,7 @@ type MirrorModuleDetail = {
   isTodaysBest?: boolean
   isExperienceBased?: boolean
   ratingFromExperience?: boolean
+  experienceDiceValue?: number
   basedOnExperience?: boolean
   ratingSource?: string
   source?: string
@@ -4374,6 +4377,8 @@ function MirrorLargeSurfCard({
       label: part?.label || fallback.label,
       rating: part?.rating ?? rating,
       waveRange: part?.waveRange || fallbackWaveRange,
+      ratingFromExperience: part?.ratingFromExperience || (detail.ratingFromExperience && part?.rating === rating),
+      experienceDiceValue: part?.experienceDiceValue ?? (detail.ratingFromExperience && part?.rating === rating ? detail.experienceDiceValue : undefined),
     }
   })
 
@@ -4403,7 +4408,13 @@ function MirrorLargeSurfCard({
             </div>
 
             <div className="flex min-h-0 min-w-0 items-center justify-center py-[clamp(0.18rem,0.52vw,0.36rem)]">
-              <DiceRating rating={part.rating} isExperienceBased={false} muted={mutedColor} paperColor={frameBackground} compact />
+              <DiceRating
+                rating={part.experienceDiceValue ?? part.rating}
+                isExperienceBased={Boolean(part.ratingFromExperience)}
+                muted={mutedColor}
+                paperColor={frameBackground}
+                compact
+              />
             </div>
 
             <div className="min-w-0 truncate text-[clamp(0.5rem,1.02vw,0.68rem)] tracking-[0.1em]" title={part.waveRange}>
