@@ -3994,7 +3994,7 @@ function MirrorMediumSoccerCard({ detail, fallback }: { detail: MirrorModuleDeta
       </div>
 
       <div className="relative min-h-0" aria-hidden="true">
-        <div className="absolute left-[5%] right-[5%] top-1/2 h-px -translate-y-1/2 bg-current" />
+        <div className="absolute left-[5%] right-[5%] top-1/2 h-px -translate-y-1/2 bg-current opacity-70" />
       </div>
 
       <div className="flex min-h-0 items-center justify-center text-[clamp(0.54rem,1.18vw,0.74rem)] font-semibold tracking-[0.07em]">Last</div>
