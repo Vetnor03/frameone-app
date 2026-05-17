@@ -286,6 +286,8 @@ type MirrorModuleDetail = {
   groceryItems?: string[]
   reminderItems?: string[]
   reminderHeader?: string
+  reminderOverflowCount?: number
+  reminderTomorrowCount?: number
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -3571,12 +3573,11 @@ function MirrorGroceriesXLCard({ detail, language, mutedColor }: { detail: Mirro
 }
 
 function mirrorRemindersHeader(detail: MirrorModuleDetail, language: AppLanguage) {
-  const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const header = typeof detail.reminderHeader === 'string' ? detail.reminderHeader.trim() : ''
-  if (header) return header.toLocaleUpperCase(locale)
+  if (header) return header
 
   const fallbackDate = typeof detail.tertiary === 'string' ? detail.tertiary.trim() : ''
-  return fallbackDate ? fallbackDate.toLocaleUpperCase(locale) : (language === 'no' ? 'PÅMINNELSER' : 'REMINDERS')
+  return fallbackDate || (language === 'no' ? 'Påminnelser' : 'Reminders')
 }
 
 function mirrorReminderItems(detail: MirrorModuleDetail) {
@@ -3586,6 +3587,70 @@ function mirrorReminderItems(detail: MirrorModuleDetail) {
 
 function mirrorRemindersEmptyMessage(language: AppLanguage) {
   return language === 'no' ? 'Alt gjort' : 'All done'
+}
+
+
+function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }: { detail: MirrorModuleDetail; language: AppLanguage; borderColor: string; mutedColor: string }) {
+  const visibleItems = mirrorReminderItems(detail)
+  const header = mirrorRemindersHeader(detail, language)
+  const overflowCount = Math.max(0, Math.floor(Number(detail.reminderOverflowCount) || 0))
+  const tomorrowCount = Math.max(0, Math.floor(Number(detail.reminderTomorrowCount) || 0))
+  const moreLabel = overflowCount > 0 ? `+${overflowCount} ${language === 'no' ? 'til' : 'more'}` : ''
+  const tomorrowLabel = tomorrowCount > 0 ? `${language === 'no' ? 'I morgen' : 'Tomorrow'}: ${tomorrowCount}` : ''
+  const showTomorrowNote = tomorrowLabel.length > 0
+
+  if (visibleItems.length <= 0) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.26rem,0.72vw,0.46rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
+        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.04em]" title={header}>
+          {header}
+        </div>
+        <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>
+          {mirrorRemindersEmptyMessage(language)}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.45rem,1.2vw,0.8rem)] pb-[clamp(0.38rem,0.95vw,0.62rem)] pt-[clamp(0.65rem,1.7vw,1rem)] text-center leading-none">
+      {moreLabel && (
+        <div className="absolute right-[clamp(0.45rem,1.2vw,0.8rem)] top-[clamp(0.36rem,0.95vw,0.58rem)] max-w-[38%] truncate text-[clamp(0.48rem,1.05vw,0.66rem)] font-medium tracking-[0.04em]" title={moreLabel}>
+          {moreLabel}
+        </div>
+      )}
+
+      <div className="flex shrink-0 justify-center">
+        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.04em]" title={header}>
+          {header}
+        </div>
+      </div>
+
+      <div className={`relative min-h-0 w-full flex-1 ${showTomorrowNote ? 'mb-[clamp(0.78rem,1.75vw,1.08rem)] mt-[clamp(0.44rem,1.1vw,0.68rem)]' : 'mb-[clamp(0.12rem,0.38vw,0.28rem)] mt-[clamp(0.52rem,1.28vw,0.78rem)]'}`}>
+        {visibleItems.length > 1 && Array.from({ length: visibleItems.length - 1 }).map((_, index) => (
+          <div
+            key={index}
+            className="pointer-events-none absolute top-[12%] h-[76%] w-px"
+            style={{ left: `${((index + 1) * 100) / visibleItems.length}%`, backgroundColor: borderColor }}
+            aria-hidden="true"
+          />
+        ))}
+        <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}>
+          {visibleItems.map((item, index) => (
+            <div key={`${item}-${index}`} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]" title={item}>
+              <span className="block max-w-full truncate">{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {showTomorrowNote && (
+        <div className="absolute bottom-[clamp(0.36rem,0.95vw,0.58rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate text-[clamp(0.48rem,1.05vw,0.66rem)] font-medium tracking-[0.04em]" title={tomorrowLabel}>
+          {tomorrowLabel}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function MirrorSurfRatingBars({ rating, muted }: { rating: number | undefined; muted: string }) {
@@ -4534,12 +4599,15 @@ function LandscapeFrameMirror({
       return <MirrorGroceriesMediumCard detail={detail} language={language} mutedColor={mutedColor} />
     }
 
-    if ((module === 'groceries' || module === 'reminders') && size === 'small') {
-      const isGroceries = module === 'groceries'
-      const visibleItems = isGroceries ? mirrorGroceriesVisibleItems(detail) : mirrorReminderItems(detail)
-      const overflowLabel = isGroceries ? mirrorGroceriesOverflowLabel(detail, language) : ''
-      const header = isGroceries ? mirrorGroceriesHeader(detail, language) : mirrorRemindersHeader(detail, language)
-      const emptyMessage = isGroceries ? mirrorGroceriesEmptyMessage(language) : mirrorRemindersEmptyMessage(language)
+    if (module === 'reminders' && size === 'small') {
+      return <MirrorSmallRemindersCard detail={detail} language={language} borderColor={borderColor} mutedColor={mutedColor} />
+    }
+
+    if (module === 'groceries' && size === 'small') {
+      const visibleItems = mirrorGroceriesVisibleItems(detail)
+      const overflowLabel = mirrorGroceriesOverflowLabel(detail, language)
+      const header = mirrorGroceriesHeader(detail, language)
+      const emptyMessage = mirrorGroceriesEmptyMessage(language)
 
       const hasVisibleItems = visibleItems.length > 0
       const headerOffsetStyle = {

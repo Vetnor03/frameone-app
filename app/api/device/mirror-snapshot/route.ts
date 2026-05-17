@@ -23,6 +23,8 @@ type Detail = {
   groceryItems?: string[]
   reminderItems?: string[]
   reminderHeader?: string
+  reminderOverflowCount?: number
+  reminderTomorrowCount?: number
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -1019,33 +1021,37 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
 
 
 function formatReminderMirrorHeader(item: UnknownRecord | undefined, language: string) {
-  if (!item) return language === 'no' ? 'PÅMINNELSER' : 'REMINDERS'
+  if (!item) return language === 'no' ? 'Påminnelser' : 'Reminders'
 
   const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const daysUntil = asNumber(item.days_until)
   const occurrenceYmd = asString(item.occurrence_date).trim()
 
-  if (daysUntil === 0) return language === 'no' ? 'I DAG' : 'TODAY'
-  if (daysUntil === 1) return language === 'no' ? 'I MORGEN' : 'TOMORROW'
+  if (daysUntil === 0) return language === 'no' ? 'I dag' : 'Today'
+  if (daysUntil === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
 
   if (occurrenceYmd) {
     const date = new Date(`${occurrenceYmd}T12:00:00`)
     if (!Number.isNaN(date.getTime())) {
-      if (daysUntil != null && daysUntil > 1 && daysUntil <= 14) {
+      if (daysUntil != null && daysUntil > 1 && daysUntil <= 7) {
         const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
-        const prefix = language === 'no' ? 'NESTE' : 'NEXT'
-        return `${prefix} ${weekday}`.toLocaleUpperCase(locale)
+        return language === 'no' ? `På ${weekday}` : `On ${weekday}`
+      }
+
+      if (daysUntil != null && daysUntil > 7 && daysUntil <= 14) {
+        const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
+        return language === 'no' ? `${weekday} neste uke` : `${weekday} next week`
       }
 
       return new Intl.DateTimeFormat(locale, {
         day: '2-digit',
         month: 'short',
-      }).format(date).replace('.', '').toLocaleUpperCase(locale)
+      }).format(date).replace('.', '')
     }
   }
 
   const displayDate = asString(item.display_date).trim()
-  return displayDate ? displayDate.toLocaleUpperCase(locale) : (language === 'no' ? 'PÅMINNELSER' : 'REMINDERS')
+  return displayDate || (language === 'no' ? 'Påminnelser' : 'Reminders')
 }
 
 async function remindersDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
@@ -1056,9 +1062,10 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   const items = Array.isArray(data.items) ? data.items.map(asRecord) : []
   const first = items[0]
   const firstOccurrenceDate = first ? asString(first.occurrence_date).trim() : ''
-  const visibleItems = firstOccurrenceDate
-    ? items.filter((item) => asString(item.occurrence_date).trim() === firstOccurrenceDate).slice(0, 3)
-    : items.slice(0, 3)
+  const primaryBucketItems = firstOccurrenceDate
+    ? items.filter((item) => asString(item.occurrence_date).trim() === firstOccurrenceDate)
+    : items
+  const visibleItems = primaryBucketItems.slice(0, 3)
   const reminderItems = visibleItems
     .map((item) => {
       const title = asString(item.title).trim()
@@ -1073,6 +1080,10 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
     tertiary: first ? asString(first.display_date || first.display_time, '') : undefined,
     reminderItems,
     reminderHeader: formatReminderMirrorHeader(first, language),
+    reminderOverflowCount: Math.max(0, primaryBucketItems.length - visibleItems.length),
+    reminderTomorrowCount: asNumber(first?.days_until) === 0
+      ? items.filter((item) => asNumber(item.days_until) === 1).length
+      : 0,
   }
 }
 
