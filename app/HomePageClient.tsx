@@ -271,6 +271,8 @@ type MirrorSurfDaypart = {
   windSpeedMs?: number
   ratingFromExperience?: boolean
   experienceDiceValue?: number
+  dateLocal?: string
+  date_local?: string
   wave_height_range_label?: string
   wave_range?: string
   swell_period_s?: number
@@ -291,6 +293,7 @@ type MirrorModuleDetail = {
   swellPeriodS?: number
   windSpeedMs?: number
   surfDayparts?: MirrorSurfDaypart[]
+  surfDaily?: MirrorSurfDaypart[]
   isTodaysBest?: boolean
   isExperienceBased?: boolean
   ratingFromExperience?: boolean
@@ -323,6 +326,12 @@ type MirrorModuleDetail = {
   weatherWindLine?: string
   weatherPrecipLine?: string
   weatherWmo?: number | null
+  surfAirMinC?: number
+  surfAirMaxC?: number
+  surfWaterMinC?: number
+  surfWaterMaxC?: number
+  surfSunrise?: string
+  surfSunset?: string
   stockTitle?: string
   stockSymbol?: string
   stockPrice?: string
@@ -4529,6 +4538,162 @@ function MirrorLargeSurfCard({
   )
 }
 
+
+function formatMirrorSurfTemp(value: number | undefined) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '--'
+  return String(Math.round(n))
+}
+
+function MirrorSurfWaterDropIcon() {
+  return (
+    <svg className="h-[clamp(1.05rem,2.35vw,1.55rem)] w-[clamp(0.9rem,2vw,1.3rem)]" viewBox="0 0 28 34" aria-hidden="true">
+      <path d="M14 2 C14 2 4 15 4 23 C4 29 8.5 33 14 33 C19.5 33 24 29 24 23 C24 15 14 2 14 2 Z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function MirrorSurfSunUpDownIcon() {
+  return (
+    <svg className="h-[clamp(1.05rem,2.35vw,1.55rem)] w-[clamp(1.5rem,3.25vw,2.15rem)]" viewBox="0 0 44 28" aria-hidden="true">
+      <path d="M8 20a14 14 0 0 1 28 0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path d="M3 21h38" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path d="M13 9l-4-4M31 9l4-4M22 5V1" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function MirrorSurfTemperatureRow({
+  icon,
+  left,
+  right,
+  borderColor,
+}: {
+  icon: React.ReactNode
+  left: string
+  right: string
+  borderColor: string
+}) {
+  return (
+    <div className="grid min-w-0 grid-cols-[clamp(1.9rem,4.8vw,3.1rem)_1fr] items-center gap-x-[clamp(0.28rem,0.72vw,0.48rem)]">
+      <div className="flex items-center justify-center">{icon}</div>
+      <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center text-[clamp(0.7rem,1.65vw,1.05rem)] font-semibold tracking-[0.08em]">
+        <div className="truncate text-right">{left}°</div>
+        <div className="mx-[clamp(0.25rem,0.7vw,0.52rem)] h-[clamp(0.95rem,2vw,1.25rem)] w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+        <div className="truncate text-left">{right}°</div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLSurfCard({
+  detail,
+  mutedColor,
+  borderColor,
+  frameBackground,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  mutedColor: string
+  borderColor: string
+  frameBackground: string
+  textColor: string
+}) {
+  const rating = finiteMirrorNumber(detail.rating ?? detail.primary)
+  const spotName = detail.secondary || detail.primary || 'Surf'
+  const waveRange = detail.waveRange || detail.tertiary || '--'
+  const rawDaily = Array.isArray(detail.surfDaily) ? detail.surfDaily : []
+  const bottomSource = rawDaily.length > 1 ? rawDaily.slice(1, 5) : rawDaily.slice(0, 4)
+  const fallbackDays: MirrorLargeSurfDaypart[] = [
+    { label: 'Tomorrow', rating, waveRange, ratingFromExperience: false },
+    { label: '--', rating, waveRange, ratingFromExperience: false },
+    { label: '--', rating, waveRange, ratingFromExperience: false },
+    { label: '--', rating, waveRange, ratingFromExperience: false },
+  ]
+  const daily = fallbackDays.map((fallback, index) => (
+    bottomSource[index] ? normalizeMirrorLargeSurfDaypart(bottomSource[index], fallback.label) : fallback
+  ))
+  const headerLabel = detail.isTodaysBest ? `Best next 4hrs: ${spotName}` : spotName
+  const experienceBased = isSurfExperienceBased(detail)
+  const diceValue = detail.experienceDiceValue ?? rating
+  const swellPeriod = formatMirrorMetric(detail.swellPeriodS, 's')
+  const windSpeed = formatMirrorMetric(detail.windSpeedMs, 'm/s')
+  const airMin = formatMirrorSurfTemp(detail.surfAirMinC)
+  const airMax = formatMirrorSurfTemp(detail.surfAirMaxC)
+  const waterMin = formatMirrorSurfTemp(detail.surfWaterMinC)
+  const waterMax = formatMirrorSurfTemp(detail.surfWaterMaxC)
+  const sunrise = detail.surfSunrise || '--:--'
+  const sunset = detail.surfSunset || '--:--'
+
+  return (
+    <div className="relative grid h-full w-full grid-rows-[1fr_auto_1fr] overflow-hidden text-center leading-tight">
+      <div className="absolute left-[clamp(0.55rem,1.35vw,0.95rem)] top-[clamp(0.42rem,1vw,0.72rem)] z-[1] max-w-[36%] truncate text-[clamp(0.46rem,1.02vw,0.66rem)] font-semibold tracking-[0.08em]" title={headerLabel}>
+        {headerLabel}
+      </div>
+
+      <div className="grid min-h-0 grid-cols-3 items-stretch px-[clamp(0.42rem,1.05vw,0.75rem)] pt-[clamp(0.62rem,1.45vw,1rem)] pb-[clamp(0.52rem,1.18vw,0.82rem)]">
+        <div className="grid min-h-0 grid-cols-2 grid-rows-[1fr_auto_auto_auto] items-center gap-x-[clamp(0.35rem,0.9vw,0.68rem)] px-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(1.55rem,3.25vw,2.25rem)]">
+          <div className="col-span-2 row-start-1 grid grid-cols-2 items-end gap-x-[clamp(0.36rem,0.9vw,0.62rem)] pb-[clamp(0.18rem,0.5vw,0.35rem)]">
+            <div className="flex justify-center text-[clamp(1.05rem,2.45vw,1.62rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
+            <div className="flex justify-center text-[clamp(1.05rem,2.45vw,1.62rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
+          </div>
+          <div className="flex justify-center py-[clamp(0.12rem,0.32vw,0.24rem)]"><MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} /></div>
+          <div className="flex justify-center py-[clamp(0.12rem,0.32vw,0.24rem)]"><MirrorSurfWindIcon /></div>
+          <div className="pb-[clamp(0.03rem,0.12vw,0.08rem)] text-[clamp(0.64rem,1.48vw,0.96rem)] font-semibold tracking-[0.09em]">{swellPeriod}</div>
+          <div className="pb-[clamp(0.03rem,0.12vw,0.08rem)] text-[clamp(0.64rem,1.48vw,0.96rem)] font-semibold tracking-[0.09em]">{windSpeed}</div>
+        </div>
+
+        <div className="relative flex min-h-0 flex-col items-center justify-end px-[clamp(0.35rem,0.9vw,0.64rem)] pb-[clamp(0.06rem,0.18vw,0.14rem)]">
+          <div className="absolute inset-y-[28%] left-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="absolute inset-y-[28%] right-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="mb-auto mt-[clamp(0.08rem,0.25vw,0.18rem)] border-b-2 border-current px-[clamp(0.35rem,0.88vw,0.65rem)] pb-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(1rem,2.45vw,1.55rem)] font-semibold tracking-[0.08em]" style={{ borderColor: textColor }}>
+            Today
+          </div>
+          <div className="mb-[clamp(0.72rem,1.75vw,1.22rem)] text-[clamp(0.72rem,1.7vw,1.08rem)] font-semibold tracking-[0.1em] uppercase">{mirrorSurfRatingWord(rating)}</div>
+          <div className="mb-[clamp(0.72rem,1.75vw,1.22rem)] flex min-w-0 items-center justify-center">
+            <DiceRating rating={diceValue} isExperienceBased={experienceBased} muted={mutedColor} paperColor={frameBackground} />
+          </div>
+          <div className="text-[clamp(0.68rem,1.55vw,1rem)] font-semibold tracking-[0.1em]" title={waveRange}>{waveRange}</div>
+        </div>
+
+        <div className="grid min-h-0 grid-rows-[1fr_auto_auto_auto] items-center px-[clamp(0.55rem,1.35vw,0.95rem)] pt-[clamp(1.55rem,3.25vw,2.25rem)] text-left">
+          <div aria-hidden="true" />
+          <MirrorSurfTemperatureRow icon={<div className="h-[clamp(1.35rem,3.1vw,2rem)] w-[clamp(1.35rem,3.1vw,2rem)]"><MirrorWeatherIcon wmo={detail.weatherWmo} /></div>} left={airMin} right={airMax} borderColor={borderColor} />
+          <MirrorSurfTemperatureRow icon={<MirrorSurfWaterDropIcon />} left={waterMin} right={waterMax} borderColor={borderColor} />
+          <div className="grid min-w-0 grid-cols-[clamp(1.9rem,4.8vw,3.1rem)_1fr] items-center gap-x-[clamp(0.28rem,0.72vw,0.48rem)]">
+            <div className="flex items-center justify-center"><MirrorSurfSunUpDownIcon /></div>
+            <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center text-[clamp(0.7rem,1.65vw,1.05rem)] font-semibold tracking-[0.08em]">
+              <div className="truncate text-right">{sunrise}</div>
+              <div className="mx-[clamp(0.25rem,0.7vw,0.52rem)] h-[clamp(0.95rem,2vw,1.25rem)] w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+              <div className="truncate text-left">{sunset}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-[clamp(0.48rem,1.15vw,0.82rem)] h-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+
+      <div className="grid min-h-0 grid-cols-4 items-stretch px-[clamp(0.35rem,0.95vw,0.7rem)] py-[clamp(0.52rem,1.24vw,0.88rem)]">
+        {daily.map((part, index) => (
+          <div key={`${part.label}-${index}`} className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_auto] items-center px-[clamp(0.22rem,0.65vw,0.5rem)]">
+            {index > 0 && <div className="absolute inset-y-[6%] left-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />}
+            <div className="truncate text-[clamp(0.68rem,1.55vw,1rem)] font-semibold tracking-[0.1em]" title={part.label}>{part.label}</div>
+            <div aria-hidden="true" />
+            <div className="truncate text-[clamp(0.52rem,1.14vw,0.72rem)] font-semibold tracking-[0.1em] uppercase" title={mirrorSurfRatingWord(part.rating)}>{mirrorSurfRatingWord(part.rating)}</div>
+            <div className="flex min-h-0 items-center justify-center py-[clamp(0.18rem,0.52vw,0.38rem)]">
+              <DiceRating rating={part.experienceDiceValue ?? part.rating} isExperienceBased={Boolean(part.ratingFromExperience)} muted={mutedColor} paperColor={frameBackground} compact />
+            </div>
+            <div className="truncate text-[clamp(0.5rem,1.08vw,0.68rem)] tracking-[0.1em]" title={part.waveRange}>{part.waveRange}</div>
+            <div className="truncate pt-[clamp(0.04rem,0.14vw,0.1rem)] text-[clamp(0.42rem,0.86vw,0.56rem)] tracking-[0.08em]" style={{ color: mutedColor }} title={`${formatMirrorMetric(part.swellPeriodS, 's')} / ${formatMirrorMetric(part.windSpeedMs, 'm/s')}`}>
+              {formatMirrorMetric(part.swellPeriodS, 's')} · {formatMirrorMetric(part.windSpeedMs, 'm/s')}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MirrorSmallSurfCard({
   detail,
   mutedColor,
@@ -5541,6 +5706,18 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'surf' && size === 'large') {
+      if (snapshot.layoutKey === 'full') {
+        return (
+          <MirrorXLSurfCard
+            detail={detail}
+            mutedColor={mutedColor}
+            borderColor={borderColor}
+            frameBackground={frameBackground}
+            textColor={textColor}
+          />
+        )
+      }
+
       return (
         <MirrorLargeSurfCard
           detail={detail}

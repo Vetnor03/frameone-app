@@ -16,6 +16,10 @@ type SurfMirrorDaypart = {
   experienceDiceValue?: number
 }
 
+type SurfMirrorDaily = SurfMirrorDaypart & {
+  dateLocal?: string
+}
+
 type Detail = {
   primary: string
   secondary?: string
@@ -26,6 +30,7 @@ type Detail = {
   swellPeriodS?: number
   windSpeedMs?: number
   surfDayparts?: SurfMirrorDaypart[]
+  surfDaily?: SurfMirrorDaily[]
   isTodaysBest?: boolean
   isExperienceBased?: boolean
   ratingFromExperience?: boolean
@@ -52,6 +57,12 @@ type Detail = {
   weatherWindLine?: string
   weatherPrecipLine?: string
   weatherWmo?: number | null
+  surfAirMinC?: number
+  surfAirMaxC?: number
+  surfWaterMinC?: number
+  surfWaterMaxC?: number
+  surfSunrise?: string
+  surfSunset?: string
   stockTitle?: string
   stockSymbol?: string
   stockPrice?: string
@@ -1120,6 +1131,8 @@ async function surfDetail(
   // Match the physical frame firmware, which asks for the best surf in the next 4 hours.
   url.searchParams.set('hours', '4')
   url.searchParams.set('dayparts', '1')
+  url.searchParams.set('daily', '1')
+  url.searchParams.set('days', '5')
 
   if (spotId === '__todays_best__') {
     const fuelPenalty = truthy(surfSettings.fuelPenalty)
@@ -1138,38 +1151,48 @@ async function surfDetail(
   const rating = asNumber(data.rating) ?? asNumber(data.score) ?? undefined
   const waveRange = asString(forecast.wave_height_range_label || data.line1 || data.line2, '')
   const isExperienceBased = isSurfScoreExperienceBased(data)
+  const normalizeSurfPeriod = (part: unknown): SurfMirrorDaily | null => {
+    const record = asRecord(part)
+    const label = asString(record.label).trim()
+    const partRating = asNumber(record.rating) ?? undefined
+    const partWaveRange = asString(record.wave_height_range_label || record.waveRange || record.wave_range, '').trim()
+    const partSwellPeriodS = asNumber(record.swell_period_s ?? record.swellPeriodS) ?? undefined
+    const partWindSpeedMs = asNumber(record.wind_speed_ms ?? record.windSpeedMs) ?? undefined
+    const partRatingFromExperience = isSurfScoreExperienceBased(record)
+    const partExperienceDiceValue = surfExperienceDiceValue(record, partRating)
+    const dateLocal = asString(record.date_local || record.dateLocal, '').trim()
+    if (
+      !label &&
+      partRating == null &&
+      !partWaveRange &&
+      partSwellPeriodS == null &&
+      partWindSpeedMs == null &&
+      !partRatingFromExperience &&
+      partExperienceDiceValue == null &&
+      !dateLocal
+    ) return null
+    return {
+      label: label || undefined,
+      rating: partRating,
+      waveRange: partWaveRange || undefined,
+      swellPeriodS: partSwellPeriodS,
+      windSpeedMs: partWindSpeedMs,
+      ratingFromExperience: partRatingFromExperience || undefined,
+      experienceDiceValue: partExperienceDiceValue,
+      dateLocal: dateLocal || undefined,
+    }
+  }
+
   const surfDayparts = Array.isArray(data.dayparts)
-    ? data.dayparts
-        .map((part): SurfMirrorDaypart | null => {
-          const record = asRecord(part)
-          const label = asString(record.label).trim()
-          const partRating = asNumber(record.rating) ?? undefined
-          const partWaveRange = asString(record.wave_height_range_label || record.waveRange || record.wave_range, '').trim()
-          const partSwellPeriodS = asNumber(record.swell_period_s) ?? undefined
-          const partWindSpeedMs = asNumber(record.wind_speed_ms) ?? undefined
-          const partRatingFromExperience = isSurfScoreExperienceBased(record)
-          const partExperienceDiceValue = surfExperienceDiceValue(record, partRating)
-          if (
-            !label &&
-            partRating == null &&
-            !partWaveRange &&
-            partSwellPeriodS == null &&
-            partWindSpeedMs == null &&
-            !partRatingFromExperience &&
-            partExperienceDiceValue == null
-          ) return null
-          return {
-            label: label || undefined,
-            rating: partRating,
-            waveRange: partWaveRange || undefined,
-            swellPeriodS: partSwellPeriodS,
-            windSpeedMs: partWindSpeedMs,
-            ratingFromExperience: partRatingFromExperience || undefined,
-            experienceDiceValue: partExperienceDiceValue,
-          }
-        })
-        .filter((part): part is SurfMirrorDaypart => Boolean(part))
+    ? data.dayparts.map(normalizeSurfPeriod).filter((part): part is SurfMirrorDaypart => Boolean(part))
     : undefined
+  const surfDaily = Array.isArray(data.daily)
+    ? data.daily.map(normalizeSurfPeriod).filter((part): part is SurfMirrorDaily => Boolean(part))
+    : undefined
+  const air = asRecord(data.air)
+  const water = asRecord(data.water)
+  const sun = asRecord(data.sun)
+  const weather = asRecord(data.weather)
 
   return {
     module: 'surf',
@@ -1179,6 +1202,14 @@ async function surfDetail(
     rating,
     waveRange,
     surfDayparts,
+    surfDaily,
+    weatherWmo: asNumber(weather.code) ?? null,
+    surfAirMinC: asNumber(air.temp_min_c) ?? undefined,
+    surfAirMaxC: asNumber(air.temp_max_c) ?? undefined,
+    surfWaterMinC: asNumber(water.temp_min_c) ?? undefined,
+    surfWaterMaxC: asNumber(water.temp_max_c) ?? undefined,
+    surfSunrise: asString(sun.sunrise, '') || undefined,
+    surfSunset: asString(sun.sunset, '') || undefined,
     isExperienceBased,
     ratingFromExperience: isExperienceBased,
     experienceDiceValue: surfExperienceDiceValue(data, rating),
