@@ -337,6 +337,10 @@ type MirrorModuleDetail = {
   soccerLastAwayLine?: string
   soccerLastHomeGoalsLine?: string
   soccerLastAwayGoalsLine?: string
+  soccerLeagueLine?: string
+  soccerTopScorerLine?: string
+  soccerRecordLine?: string
+  soccerGoalsLine?: string
   soccerTableRows?: Array<{
     position: number | null
     teamShort: string
@@ -4039,8 +4043,8 @@ function formatMirrorSoccerNumber(value: number | null | undefined, signed = fal
   return String(value)
 }
 
-function MirrorSoccerStandingsTable({ detail }: { detail: MirrorModuleDetail }) {
-  const rows = mirrorSoccerTableWindow(Array.isArray(detail.soccerTableRows) ? detail.soccerTableRows : [], 6)
+function MirrorSoccerStandingsTable({ detail, maxRows = 6 }: { detail: MirrorModuleDetail; maxRows?: number }) {
+  const rows = mirrorSoccerTableWindow(Array.isArray(detail.soccerTableRows) ? detail.soccerTableRows : [], maxRows)
 
   if (rows.length <= 0) {
     return (
@@ -4091,6 +4095,88 @@ function MirrorLargeSoccerCard({ detail, fallback }: { detail: MirrorModuleDetai
       <div aria-hidden="true" />
       <div className="min-w-0 overflow-hidden">
         <MirrorSoccerStandingsTable detail={detail} />
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLSoccerLeftPanel({ detail, fallback }: { detail: MirrorModuleDetail; fallback: { primary: string; secondary?: string; tertiary?: string } }) {
+  const kickoff = splitMirrorSoccerKickoff(detail.soccerKickoffLine)
+  const nextDay = detail.soccerNextDayLine || kickoff.day
+  const nextTime = detail.soccerNextTimeLine || kickoff.time
+  const nextHome = detail.soccerNextHomeLine || detail.soccerFixtureLine?.split(/\s+vs\s+/i)[0] || '---'
+  const nextAway = detail.soccerNextAwayLine || detail.soccerFixtureLine?.split(/\s+vs\s+/i)[1] || '---'
+  const position = detail.soccerPositionLine || (detail.tertiary ? `Position: ${detail.tertiary.replace(/^#/, '')}` : 'Position: --')
+  const points = detail.soccerPointsLine || 'Points: --'
+  const lastHome = detail.soccerLastHomeLine || '---'
+  const lastAway = detail.soccerLastAwayLine || '---'
+  const lastHomeGoals = detail.soccerLastHomeGoalsLine || '--'
+  const lastAwayGoals = detail.soccerLastAwayGoalsLine || '--'
+  const title = detail.primary || fallback.primary || 'Soccer'
+  const leagueLine = detail.soccerLeagueLine || detail.secondary || fallback.secondary || 'Premier League'
+  const scorerLine = detail.soccerTopScorerLine || 'Top scorer: --'
+  const recordLine = detail.soccerRecordLine || 'Record: --'
+  const goalsLine = detail.soccerGoalsLine || 'Goals: --'
+
+  if (!detail.soccerFixtureLine && !detail.soccerNextHomeLine && !detail.soccerPositionLine) {
+    return (
+      <div className="flex h-full w-full items-center justify-center overflow-hidden px-4 text-center leading-tight">
+        <div className="max-w-full truncate text-[clamp(0.95rem,2.35vw,1.36rem)] font-semibold tracking-[0.08em]">
+          {fallback.primary || 'Soccer'}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.7rem,1.75vw,1.25rem)] py-[clamp(0.7rem,1.7vw,1.15rem)] text-center leading-none">
+      <div className="flex min-h-0 shrink-0 items-center justify-center text-[clamp(0.72rem,1.72vw,1.08rem)] font-semibold tracking-[0.08em]">
+        <span className="max-w-full truncate" title={title}>{title}</span>
+      </div>
+
+      <div className="mt-[clamp(0.7rem,1.65vw,1.08rem)] grid shrink-0 grid-rows-7 text-center" style={{ height: 'clamp(6.1rem,16.2vw,10.6rem)' }}>
+        <div className="flex min-h-0 items-center justify-center text-[clamp(0.56rem,1.24vw,0.78rem)] font-semibold tracking-[0.07em]">
+          <span className="truncate px-[clamp(0.3rem,0.8vw,0.62rem)]" title={nextDay}>{nextDay}</span>
+          <span className="truncate px-[clamp(0.3rem,0.8vw,0.62rem)]" title={nextTime}>{nextTime}</span>
+        </div>
+        <div className="grid min-h-0 grid-cols-[1fr_auto_1fr] items-center gap-[clamp(0.18rem,0.52vw,0.36rem)] text-[clamp(0.82rem,1.95vw,1.2rem)] font-semibold tracking-[0.07em]">
+          <div className="truncate text-right" title={nextHome}>{nextHome}</div>
+          <div className="px-[clamp(0.12rem,0.34vw,0.24rem)]">vs</div>
+          <div className="truncate text-left" title={nextAway}>{nextAway}</div>
+        </div>
+        <div className="flex min-h-0 items-center justify-center text-[clamp(0.54rem,1.18vw,0.74rem)] font-semibold tracking-[0.045em]">
+          <div className="min-w-0 flex-1 truncate pr-[clamp(0.48rem,1.28vw,0.9rem)] text-right" title={position}>{position}</div>
+          <div className="h-[clamp(0.76rem,1.55vw,0.98rem)] w-px shrink-0 bg-current" aria-hidden="true" />
+          <div className="min-w-0 flex-1 truncate pl-[clamp(0.48rem,1.28vw,0.9rem)] text-left" title={points}>{points}</div>
+        </div>
+        <div className="relative min-h-0" aria-hidden="true"><div className="absolute left-[5%] right-[5%] top-1/2 h-px -translate-y-1/2 bg-current opacity-70" /></div>
+        <div className="flex min-h-0 items-center justify-center text-[clamp(0.54rem,1.18vw,0.74rem)] font-semibold tracking-[0.07em]">Last</div>
+        <div className="grid min-h-0 grid-cols-[1fr_auto_1fr] items-center gap-[clamp(0.16rem,0.46vw,0.32rem)] text-[clamp(0.58rem,1.28vw,0.82rem)] font-semibold tracking-[0.06em]">
+          <div className="truncate text-right" title={lastHome}>{lastHome}</div><div className="px-[clamp(0.12rem,0.32vw,0.22rem)]">vs</div><div className="truncate text-left" title={lastAway}>{lastAway}</div>
+        </div>
+        <div className="grid min-h-0 grid-cols-[1fr_auto_1fr] items-center gap-[clamp(0.16rem,0.46vw,0.32rem)] text-[clamp(0.58rem,1.28vw,0.82rem)] font-semibold tracking-[0.06em]">
+          <div className="truncate text-right" title={lastHomeGoals}>{lastHomeGoals}</div><div className="px-[clamp(0.12rem,0.32vw,0.22rem)]">-</div><div className="truncate text-left" title={lastAwayGoals}>{lastAwayGoals}</div>
+        </div>
+      </div>
+
+      <div className="mt-auto grid shrink-0 grid-rows-4 gap-[clamp(0.12rem,0.38vw,0.26rem)] text-[clamp(0.54rem,1.15vw,0.74rem)] font-semibold tracking-[0.045em]">
+        {[leagueLine, scorerLine, recordLine, goalsLine].map((line, index) => (
+          <div key={`${line}-${index}`} className="min-h-0 truncate" title={line}>{line}</div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLSoccerCard({ detail, fallback }: { detail: MirrorModuleDetail; fallback: { primary: string; secondary?: string; tertiary?: string } }) {
+  return (
+    <div className="grid h-full w-full grid-cols-[49fr_10px_minmax(0,51fr)] overflow-hidden">
+      <div className="min-w-0 overflow-hidden">
+        <MirrorXLSoccerLeftPanel detail={detail} fallback={fallback} />
+      </div>
+      <div aria-hidden="true" />
+      <div className="min-w-0 overflow-hidden">
+        <MirrorSoccerStandingsTable detail={detail} maxRows={12} />
       </div>
     </div>
   )
@@ -5040,6 +5126,9 @@ function LandscapeFrameMirror({
 
     if (module === 'soccer' && size === 'large') {
       const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      if (snapshot.layoutKey === 'full') {
+        return <MirrorXLSoccerCard detail={detail} fallback={fallback} />
+      }
       return <MirrorLargeSoccerCard detail={detail} fallback={fallback} />
     }
 
