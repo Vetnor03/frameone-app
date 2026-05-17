@@ -22,9 +22,12 @@ type Detail = {
   windDirectionDeg?: number
   groceryItems?: string[]
   reminderItems?: string[]
+  reminderMediumItems?: string[]
   reminderHeader?: string
   reminderOverflowCount?: number
+  reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
+  reminderDateBadge?: string
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -1054,6 +1057,36 @@ function formatReminderMirrorHeader(item: UnknownRecord | undefined, language: s
   return displayDate || (language === 'no' ? 'Påminnelser' : 'Reminders')
 }
 
+
+function formatReminderMirrorDateBadge(item: UnknownRecord | undefined, language: string) {
+  if (!item) return undefined
+
+  const daysUntil = asNumber(item.days_until)
+  const isOverdue = Boolean(item.is_overdue) || (daysUntil != null && daysUntil < 0)
+  if (daysUntil == null) return undefined
+
+  if (isOverdue) {
+    const late = Math.abs(daysUntil)
+    if (language === 'no') return late === 1 ? '1 dag sen' : `${late} dager sen`
+    return late === 1 ? '1 day late' : `${late} days late`
+  }
+
+  if (daysUntil === 0) return language === 'no' ? 'I dag' : 'Today'
+  if (daysUntil === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
+  return language === 'no' ? `Om ${daysUntil} dager` : `In ${daysUntil} days`
+}
+
+function formatReminderMirrorItems(items: UnknownRecord[]) {
+  return items
+    .map((item) => {
+      const title = asString(item.title).trim()
+      const displayTime = asString(item.display_time).trim()
+      if (!title) return ''
+      return displayTime ? `${title} ${displayTime}` : title
+    })
+    .filter(Boolean)
+}
+
 async function remindersDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
@@ -1065,23 +1098,23 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   const primaryBucketItems = firstOccurrenceDate
     ? items.filter((item) => asString(item.occurrence_date).trim() === firstOccurrenceDate)
     : items
+  const firstDaysUntil = asNumber(first?.days_until)
+  const isTodayOrTomorrow = firstDaysUntil === 0 || firstDaysUntil === 1
   const visibleItems = primaryBucketItems.slice(0, 3)
-  const reminderItems = visibleItems
-    .map((item) => {
-      const title = asString(item.title).trim()
-      const displayTime = asString(item.display_time).trim()
-      if (!title) return ''
-      return displayTime ? `${title} ${displayTime}` : title
-    })
-    .filter(Boolean)
+  const visibleMediumItems = primaryBucketItems.slice(0, isTodayOrTomorrow ? 4 : 3)
+  const reminderItems = formatReminderMirrorItems(visibleItems)
+  const reminderMediumItems = formatReminderMirrorItems(visibleMediumItems)
   return {
     primary: first ? asString(first.title, language === 'no' ? 'Påminnelse' : 'Reminder') : (language === 'no' ? 'Ingen' : 'None'),
     secondary: language === 'no' ? 'Påminnelser' : 'Reminders',
     tertiary: first ? asString(first.display_date || first.display_time, '') : undefined,
     reminderItems,
+    reminderMediumItems,
     reminderHeader: formatReminderMirrorHeader(first, language),
     reminderOverflowCount: Math.max(0, primaryBucketItems.length - visibleItems.length),
-    reminderTomorrowCount: asNumber(first?.days_until) === 0
+    reminderMediumOverflowCount: Math.max(0, primaryBucketItems.length - visibleMediumItems.length),
+    reminderDateBadge: formatReminderMirrorDateBadge(first, language),
+    reminderTomorrowCount: firstDaysUntil === 0
       ? items.filter((item) => asNumber(item.days_until) === 1).length
       : 0,
   }

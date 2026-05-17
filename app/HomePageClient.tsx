@@ -285,9 +285,12 @@ type MirrorModuleDetail = {
   windDirectionDeg?: number
   groceryItems?: string[]
   reminderItems?: string[]
+  reminderMediumItems?: string[]
   reminderHeader?: string
   reminderOverflowCount?: number
+  reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
+  reminderDateBadge?: string
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -3585,10 +3588,92 @@ function mirrorReminderItems(detail: MirrorModuleDetail) {
   return rawItems.map((item) => String(item).trim()).filter(Boolean).slice(0, 3)
 }
 
+function mirrorMediumReminderItems(detail: MirrorModuleDetail) {
+  const rawItems = Array.isArray(detail.reminderMediumItems) ? detail.reminderMediumItems : detail.reminderItems
+  return (Array.isArray(rawItems) ? rawItems : []).map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
+}
+
 function mirrorRemindersEmptyMessage(language: AppLanguage) {
   return language === 'no' ? 'Alt gjort' : 'All done'
 }
 
+
+function MirrorMediumRemindersCard({
+  detail,
+  language,
+  mutedColor,
+  frameBackground,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  mutedColor: string
+  frameBackground: string
+  textColor: string
+}) {
+  const visibleItems = mirrorMediumReminderItems(detail)
+  const header = mirrorRemindersHeader(detail, language)
+  const headerIsToday = header.trim().toLowerCase() === (language === 'no' ? 'i dag' : 'today')
+  const headerIsTomorrow = header.trim().toLowerCase() === (language === 'no' ? 'i morgen' : 'tomorrow')
+  const showBottomBadge = !headerIsToday && !headerIsTomorrow
+  const overflowCount = Math.max(0, Math.floor(Number(detail.reminderMediumOverflowCount ?? detail.reminderOverflowCount) || 0))
+  const tomorrowCount = Math.max(0, Math.floor(Number(detail.reminderTomorrowCount) || 0))
+  const moreLabel = overflowCount > 0 ? `+${overflowCount} ${language === 'no' ? 'til' : 'more'}` : ''
+  const tomorrowLabel = headerIsToday && tomorrowCount > 0 ? `${language === 'no' ? 'I morgen' : 'Tomorrow'}: ${tomorrowCount}` : ''
+  const badgeLabel = typeof detail.reminderDateBadge === 'string' && detail.reminderDateBadge.trim() ? detail.reminderDateBadge.trim() : header
+
+  if (visibleItems.length <= 0) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.28rem,0.72vw,0.5rem)] px-[clamp(0.75rem,1.9vw,1.2rem)] py-[clamp(0.7rem,1.7vw,1.1rem)] text-center leading-none">
+        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.74rem,1.65vw,1.04rem)] font-semibold tracking-[0.04em]" title={header}>
+          {header}
+        </div>
+        <div className="max-w-full truncate text-[clamp(0.72rem,1.45vw,0.96rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
+          {mirrorRemindersEmptyMessage(language)}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.75rem,1.9vw,1.2rem)] pb-[clamp(0.78rem,1.9vw,1.18rem)] pt-[clamp(0.92rem,2.3vw,1.45rem)] text-center leading-none">
+      {moreLabel && (
+        <div className="absolute right-[clamp(0.55rem,1.35vw,0.92rem)] top-[clamp(0.5rem,1.25vw,0.78rem)] max-w-[34%] truncate text-[clamp(0.48rem,1vw,0.66rem)] font-medium tracking-[0.04em]" title={moreLabel}>
+          {moreLabel}
+        </div>
+      )}
+
+      <div className="flex shrink-0 justify-center">
+        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.74rem,1.65vw,1.04rem)] font-semibold tracking-[0.04em]" title={header}>
+          {header}
+        </div>
+      </div>
+
+      <div className={`flex min-h-0 flex-1 items-center justify-center ${showBottomBadge ? 'pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
+        <div className="flex max-w-full flex-col items-start gap-[clamp(0.42rem,1.05vw,0.72rem)] text-left">
+          {visibleItems.map((item, index) => (
+            <div key={`${item}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.05vw,0.68rem)]">
+              <span className="h-[clamp(0.24rem,0.55vw,0.36rem)] w-[clamp(0.24rem,0.55vw,0.36rem)] rounded-full bg-current" aria-hidden="true" />
+              <span className="min-w-0 truncate text-[clamp(0.7rem,1.5vw,0.98rem)] font-medium tracking-[0.04em]" title={item}>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {showBottomBadge && (
+        <div className="absolute bottom-[clamp(1.05rem,2.55vw,1.55rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.5rem,1.08vw,0.72rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: frameBackground, color: textColor }} title={badgeLabel}>
+          {badgeLabel}
+        </div>
+      )}
+
+      {tomorrowLabel && (
+        <div className="absolute bottom-[clamp(0.62rem,1.55vw,0.95rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate text-[clamp(0.5rem,1.08vw,0.72rem)] font-medium tracking-[0.04em]" title={tomorrowLabel}>
+          {tomorrowLabel}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }: { detail: MirrorModuleDetail; language: AppLanguage; borderColor: string; mutedColor: string }) {
   const visibleItems = mirrorReminderItems(detail)
@@ -4597,6 +4682,10 @@ function LandscapeFrameMirror({
 
     if (module === 'groceries' && size === 'medium') {
       return <MirrorGroceriesMediumCard detail={detail} language={language} mutedColor={mutedColor} />
+    }
+
+    if (module === 'reminders' && size === 'medium') {
+      return <MirrorMediumRemindersCard detail={detail} language={language} mutedColor={mutedColor} frameBackground={frameBackground} textColor={textColor} />
     }
 
     if (module === 'reminders' && size === 'small') {
