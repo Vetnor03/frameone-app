@@ -4063,8 +4063,14 @@ function MirrorSoccerStandingsTable({ detail }: { detail: MirrorModuleDetail }) 
       {rows.map((row, index) => (
         <div
           key={`${row.position ?? index}-${row.teamShort}`}
-          className={`grid min-h-0 grid-cols-[1fr_1fr_1fr_1fr_1fr] items-center gap-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(0.5rem,1.02vw,0.66rem)] font-semibold tracking-[0.045em] ${row.isSelected ? 'border-y border-current' : ''}`}
+          className="relative grid min-h-0 grid-cols-[1fr_1fr_1fr_1fr_1fr] items-center gap-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(0.5rem,1.02vw,0.66rem)] font-semibold tracking-[0.045em]"
         >
+          {row.isSelected && (
+            <>
+              <div className="pointer-events-none absolute left-[4%] right-[4%] top-0 h-px bg-current opacity-70" aria-hidden="true" />
+              <div className="pointer-events-none absolute bottom-0 left-[4%] right-[4%] h-px bg-current opacity-70" aria-hidden="true" />
+            </>
+          )}
           <div className="truncate">{formatMirrorSoccerNumber(row.position)}</div>
           <div className="truncate" title={row.teamShort}>{row.teamShort || '--'}</div>
           <div className="truncate">{formatMirrorSoccerNumber(row.points)}</div>
