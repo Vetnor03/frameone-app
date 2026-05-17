@@ -4558,7 +4558,7 @@ function MirrorSurfSunUpDownIcon() {
     <svg className="h-[clamp(1.05rem,2.35vw,1.52rem)] w-[clamp(1.05rem,2.35vw,1.52rem)]" viewBox="0 0 32 32" aria-hidden="true">
       <path d="M7 22a9 9 0 0 1 18 0" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
       <path d="M5 23.5h22" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
-      <path d="M16 5v4M8.5 9l2.6 2.6M23.5 9l-2.6 2.6" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+      <path d="M16 4.6v4M8.4 8.2l2.5 3.1M23.6 8.2l-2.5 3.1M4.9 15.8l3.4 1.5M27.1 15.8l-3.4 1.5" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -4659,8 +4659,8 @@ function MirrorXLSurfCard({
           <div className="grid w-full translate-y-[clamp(0.12rem,0.36vw,0.25rem)] grid-cols-2 items-center gap-x-[clamp(0.3rem,0.78vw,0.56rem)] gap-y-[clamp(0.1rem,0.3vw,0.22rem)]">
             <div className="flex justify-center text-[clamp(1rem,2.25vw,1.46rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
             <div className="flex justify-center text-[clamp(1rem,2.25vw,1.46rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
-            <div className="flex justify-center"><MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} line /></div>
-            <div className="flex justify-center"><MirrorSurfWindIcon line /></div>
+            <div className="flex justify-center"><MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} /></div>
+            <div className="flex justify-center"><MirrorSurfWindIcon /></div>
             <div className="text-[clamp(0.62rem,1.4vw,0.9rem)] font-semibold tracking-[0.09em]">{swellPeriod}</div>
             <div className="text-[clamp(0.62rem,1.4vw,0.9rem)] font-semibold tracking-[0.09em]">{windSpeed}</div>
           </div>
