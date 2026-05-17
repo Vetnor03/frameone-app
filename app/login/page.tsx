@@ -24,8 +24,8 @@ function HomeScreenGuide() {
   const steps = [
     {
       label: '1',
-      title: 'Del',
-      helper: 'Trykk på deleknappen nederst i Safari.',
+      title: 'Share',
+      helper: 'Tap the Share button at the bottom of Safari.',
       icon: (
         <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
           <path
@@ -49,8 +49,8 @@ function HomeScreenGuide() {
     },
     {
       label: '2',
-      title: 'Legg til',
-      helper: 'Velg “Legg til på Hjem-skjerm”.',
+      title: 'Scroll + Add',
+      helper: 'Scroll down, then choose “Add to Home Screen”.',
       icon: (
         <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
           <path
@@ -73,8 +73,8 @@ function HomeScreenGuide() {
     },
     {
       label: '3',
-      title: 'Ferdig',
-      helper: 'Trykk “Legg til” — appen ligger på skjermen din.',
+      title: 'Done',
+      helper: 'Tap “Add” — the app is now on your home screen.',
       icon: (
         <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
           <path
@@ -105,12 +105,12 @@ function HomeScreenGuide() {
       <div className="mb-3 flex items-center justify-between gap-3 px-1">
         <div>
           <h2 id="home-screen-guide-title" className="text-sm font-semibold tracking-[0.18em] text-white/90">
-            LEGG APPEN PÅ HJEM-SKJERMEN
+            ADD THE APP TO YOUR HOME SCREEN
           </h2>
-          <p className="mt-1 text-xs text-white/50">iPhone · Safari · 20 sekunder</p>
+          <p className="mt-1 text-xs text-white/50">iPhone · Safari · 20 seconds</p>
         </div>
         <span className="rounded-full border border-[#2aa3ff]/50 px-3 py-1 text-[0.65rem] font-semibold tracking-[0.18em] text-[#6fc0ff]">
-          TIPS
+          TIP
         </span>
       </div>
 
