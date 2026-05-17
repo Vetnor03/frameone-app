@@ -286,6 +286,7 @@ type MirrorModuleDetail = {
   groceryItems?: string[]
   reminderItems?: string[]
   reminderMediumItems?: string[]
+  reminderCalendarDates?: string[]
   reminderHeader?: string
   reminderOverflowCount?: number
   reminderMediumOverflowCount?: number
@@ -2451,6 +2452,14 @@ function mirrorCalendarDays(now = new Date(), monthOffset = 0) {
   }
 }
 
+function mirrorIsoWeekNumber(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month, day))
+  const weekday = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - weekday)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+}
+
 
 function formatMirrorCountdownTimeLeftLong(days: number) {
   if (days <= 0) return 'today'
@@ -2951,12 +2960,18 @@ function MirrorMonthCalendar({
   monthOffset = 0,
   holidays = [],
   showHolidayDots = false,
+  highlightDates = [],
+  showMonthTitle = true,
+  showWeekNumbers = false,
 }: {
   textColor: string
   language: AppLanguage
   monthOffset?: number
   holidays?: MirrorHoliday[]
   showHolidayDots?: boolean
+  highlightDates?: string[]
+  showMonthTitle?: boolean
+  showWeekNumbers?: boolean
 }) {
   const now = new Date()
   const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
@@ -2964,15 +2979,31 @@ function MirrorMonthCalendar({
   const { days, usedRows } = mirrorCalendarDays(now, monthOffset)
   const locale = language === 'no' ? 'nb-NO' : 'en-US'
   const monthTitle = new Intl.DateTimeFormat(locale, { month: 'long' }).format(target).toLocaleUpperCase(locale)
+  const year = target.getFullYear()
+  const month = target.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const highlightedDateCounts = highlightDates.reduce<Record<string, number>>((acc, date) => {
+    const key = String(date).slice(0, 10)
+    if (key) acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
 
   return (
     <div className="flex h-full w-full min-w-0 translate-y-[clamp(0.18rem,0.62vw,0.42rem)] items-center justify-center overflow-hidden px-0 py-[clamp(0.16rem,0.44vw,0.32rem)] leading-none">
       <div className="grid h-full max-h-[min(90%,11.1rem)] w-full max-w-[min(100%,15.8rem)] grid-rows-[auto_auto_1fr] gap-[clamp(0.18rem,0.5vw,0.38rem)]">
-        <div className="min-w-0 truncate text-center text-[clamp(0.68rem,1.55vw,1rem)] font-bold tracking-[0.14em]">
-          {monthTitle}
-        </div>
+        {showMonthTitle ? (
+          <div className="min-w-0 truncate text-center text-[clamp(0.68rem,1.55vw,1rem)] font-bold tracking-[0.14em]">
+            {monthTitle}
+          </div>
+        ) : (
+          <div aria-hidden="true" className="h-0" />
+        )}
 
-        <div className="grid grid-cols-7 gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]">
+        <div
+          className="grid gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]"
+          style={{ gridTemplateColumns: `${showWeekNumbers ? 'minmax(1.15rem, 0.52fr) ' : ''}repeat(7, minmax(0, 1fr))` }}
+        >
+          {showWeekNumbers ? <div aria-hidden="true" /> : null}
           {MIRROR_CALENDAR_WEEKDAYS.map((weekday, index) => (
             <div key={weekday} className={index >= 5 ? 'opacity-45' : 'opacity-80'}>
               {weekday}
@@ -2981,38 +3012,63 @@ function MirrorMonthCalendar({
         </div>
 
         <div
-          className="grid min-h-0 grid-cols-7 items-center gap-x-[clamp(0.1rem,0.5vw,0.36rem)] gap-y-[clamp(0.1rem,0.48vw,0.32rem)] text-center text-[clamp(0.72rem,1.72vw,1.12rem)] font-semibold tracking-[0.02em]"
-          style={{ gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))` }}
+          className="grid min-h-0 items-center gap-x-[clamp(0.1rem,0.5vw,0.36rem)] gap-y-[clamp(0.1rem,0.48vw,0.32rem)] text-center text-[clamp(0.72rem,1.72vw,1.12rem)] font-semibold tracking-[0.02em]"
+          style={{
+            gridTemplateColumns: `${showWeekNumbers ? 'minmax(1.15rem, 0.52fr) ' : ''}repeat(7, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))`,
+          }}
         >
-          {Array.from({ length: usedRows * 7 }).map((_, index) => {
-            const day = days[index] ?? null
-            const weekdayIndex = index % 7
-            const isWeekend = weekdayIndex >= 5
-            const isToday = day === today
-            const isHoliday = day != null && showHolidayDots && isMirrorHoliday(holidays, target.getFullYear(), target.getMonth(), day)
+          {Array.from({ length: usedRows }).map((_, rowIndex) => {
+            const rowStart = rowIndex * 7
+            const rowDays = days.slice(rowStart, rowStart + 7)
+            const numberedRowDays = rowDays.filter((day): day is number => day != null)
+            const sampleDay = Math.min(daysInMonth, Math.max(1, numberedRowDays[0] ?? 1))
 
             return (
-              <div key={index} className="flex min-h-0 items-center justify-center">
-                {day == null ? null : (
-                  <span
-                    className="relative flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center rounded-full"
-                    style={{
-                      backgroundColor: isToday ? '#ffffff' : 'transparent',
-                      color: isToday ? '#061b24' : textColor,
-                      opacity: isToday ? 1 : isWeekend ? 0.42 : 0.88,
-                    }}
-                  >
-                    {day}
-                    {isHoliday ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute bottom-[clamp(0.12rem,0.36vw,0.24rem)] h-[clamp(0.12rem,0.34vw,0.22rem)] w-[clamp(0.12rem,0.34vw,0.22rem)] rounded-full"
-                        style={{ backgroundColor: isToday ? '#061b24' : textColor }}
-                      />
-                    ) : null}
-                  </span>
-                )}
-              </div>
+              <React.Fragment key={`calendar-row-${rowIndex}`}>
+                {showWeekNumbers ? (
+                  <div className="flex min-h-0 items-center justify-center border-r border-current pr-[clamp(0.12rem,0.34vw,0.22rem)] text-[clamp(0.52rem,1.12vw,0.74rem)] opacity-70">
+                    {numberedRowDays.length > 0 ? mirrorIsoWeekNumber(year, month, sampleDay) : null}
+                  </div>
+                ) : null}
+
+                {rowDays.map((day, weekdayIndex) => {
+                  const isWeekend = weekdayIndex >= 5
+                  const isToday = day === today
+                  const dateKey = day == null ? '' : `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                  const isHoliday = day != null && showHolidayDots && isMirrorHoliday(holidays, target.getFullYear(), target.getMonth(), day)
+                  const highlightCount = day == null ? 0 : Math.min(3, highlightedDateCounts[dateKey] ?? 0)
+                  const isHighlighted = highlightCount > 0
+
+                  return (
+                    <div key={`${rowIndex}-${weekdayIndex}`} className="flex min-h-0 items-center justify-center">
+                      {day == null ? null : (
+                        <span
+                          className="relative flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center rounded-full"
+                          style={{
+                            backgroundColor: isToday ? '#ffffff' : 'transparent',
+                            color: isToday ? '#061b24' : textColor,
+                            opacity: isToday ? 1 : isWeekend ? 0.42 : 0.88,
+                          }}
+                        >
+                          {day}
+                          {isHoliday || isHighlighted ? (
+                            <span aria-hidden="true" className="absolute bottom-[clamp(0.1rem,0.32vw,0.2rem)] flex items-center justify-center gap-[clamp(0.05rem,0.16vw,0.1rem)]">
+                              {Array.from({ length: isHighlighted ? highlightCount : 1 }).map((_, dotIndex) => (
+                                <span
+                                  key={dotIndex}
+                                  className="h-[clamp(0.1rem,0.3vw,0.2rem)] w-[clamp(0.1rem,0.3vw,0.2rem)] rounded-full"
+                                  style={{ backgroundColor: isToday ? '#061b24' : textColor }}
+                                />
+                              ))}
+                            </span>
+                          ) : null}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </React.Fragment>
             )
           })}
         </div>
@@ -3593,10 +3649,53 @@ function mirrorMediumReminderItems(detail: MirrorModuleDetail) {
   return (Array.isArray(rawItems) ? rawItems : []).map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
 }
 
+function mirrorReminderCalendarDates(detail: MirrorModuleDetail) {
+  return (Array.isArray(detail.reminderCalendarDates) ? detail.reminderCalendarDates : [])
+    .map((date) => String(date).slice(0, 10))
+    .filter(Boolean)
+}
+
 function mirrorRemindersEmptyMessage(language: AppLanguage) {
   return language === 'no' ? 'Alt gjort' : 'All done'
 }
 
+
+function MirrorLargeRemindersCard({
+  detail,
+  language,
+  mutedColor,
+  frameBackground,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  mutedColor: string
+  frameBackground: string
+  textColor: string
+}) {
+  return (
+    <div className="grid h-full w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-stretch gap-[clamp(0.45rem,1.15vw,0.88rem)] overflow-hidden">
+      <div className="min-w-0 overflow-hidden">
+        <MirrorMediumRemindersCard
+          detail={detail}
+          language={language}
+          mutedColor={mutedColor}
+          frameBackground={frameBackground}
+          textColor={textColor}
+        />
+      </div>
+      <div className="min-w-0 overflow-hidden pr-[clamp(0.45rem,1.15vw,0.88rem)]">
+        <MirrorMonthCalendar
+          textColor={textColor}
+          language={language}
+          highlightDates={mirrorReminderCalendarDates(detail)}
+          showMonthTitle={false}
+          showWeekNumbers
+        />
+      </div>
+    </div>
+  )
+}
 
 function MirrorMediumRemindersCard({
   detail,
@@ -4682,6 +4781,10 @@ function LandscapeFrameMirror({
 
     if (module === 'groceries' && size === 'medium') {
       return <MirrorGroceriesMediumCard detail={detail} language={language} mutedColor={mutedColor} />
+    }
+
+    if (module === 'reminders' && size === 'large') {
+      return <MirrorLargeRemindersCard detail={detail} language={language} mutedColor={mutedColor} frameBackground={frameBackground} textColor={textColor} />
     }
 
     if (module === 'reminders' && size === 'medium') {
