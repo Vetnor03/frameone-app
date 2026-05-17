@@ -4043,8 +4043,13 @@ function formatMirrorSoccerNumber(value: number | null | undefined, signed = fal
   return String(value)
 }
 
-function MirrorSoccerStandingsTable({ detail, maxRows = 6 }: { detail: MirrorModuleDetail; maxRows?: number }) {
+function MirrorSoccerStandingsTable({ detail, maxRows = 6, variant = 'default' }: { detail: MirrorModuleDetail; maxRows?: number; variant?: 'default' | 'xl' }) {
   const rows = mirrorSoccerTableWindow(Array.isArray(detail.soccerTableRows) ? detail.soccerTableRows : [], maxRows)
+  const isXl = variant === 'xl'
+  const xlTableTop = 'clamp(0.42rem,0.95vw,0.68rem)'
+  const xlTableBottom = 'clamp(0.42rem,0.95vw,0.68rem)'
+  const xlHeaderHeight = 'clamp(0.9rem,2.05vw,1.32rem)'
+  const xlRowGap = 'clamp(0.02rem,0.08vw,0.06rem)'
 
   if (rows.length <= 0) {
     return (
@@ -4055,7 +4060,10 @@ function MirrorSoccerStandingsTable({ detail, maxRows = 6 }: { detail: MirrorMod
   }
 
   return (
-    <div className="grid h-full w-full grid-rows-[repeat(7,minmax(0,1fr))] overflow-hidden py-[clamp(0.36rem,0.9vw,0.62rem)] text-center leading-none">
+    <div
+      className={`${isXl ? 'grid' : 'grid grid-rows-[repeat(7,minmax(0,1fr))] py-[clamp(0.36rem,0.9vw,0.62rem)]'} h-full w-full overflow-hidden text-center leading-none`}
+      style={isXl ? { gridTemplateRows: `${xlHeaderHeight} repeat(${rows.length}, minmax(0, 1fr))`, rowGap: xlRowGap, paddingTop: xlTableTop, paddingBottom: xlTableBottom } : undefined}
+    >
       <div className="grid min-h-0 grid-cols-[1fr_1fr_1fr_1fr_1fr] items-center gap-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(0.5rem,1.02vw,0.66rem)] font-semibold tracking-[0.06em]">
         <div>P</div>
         <div>Team</div>
@@ -4159,10 +4167,12 @@ function MirrorXLSoccerLeftPanel({ detail, fallback }: { detail: MirrorModuleDet
         </div>
       </div>
 
-      <div className="mt-auto grid shrink-0 grid-rows-4 gap-[clamp(0.12rem,0.38vw,0.26rem)] text-[clamp(0.54rem,1.15vw,0.74rem)] font-semibold tracking-[0.045em]">
-        {[leagueLine, scorerLine, recordLine, goalsLine].map((line, index) => (
-          <div key={`${line}-${index}`} className="min-h-0 truncate" title={line}>{line}</div>
-        ))}
+      <div className="flex min-h-0 flex-1 items-center justify-center pt-[clamp(0.65rem,1.45vw,1rem)]">
+        <div className="grid w-full shrink-0 grid-rows-4 gap-[clamp(0.18rem,0.42vw,0.3rem)] text-[clamp(0.54rem,1.15vw,0.74rem)] font-semibold tracking-[0.045em]">
+          {[leagueLine, scorerLine, recordLine, goalsLine].map((line, index) => (
+            <div key={`${line}-${index}`} className="min-h-0 truncate" title={line}>{line}</div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -4176,7 +4186,7 @@ function MirrorXLSoccerCard({ detail, fallback }: { detail: MirrorModuleDetail; 
       </div>
       <div aria-hidden="true" />
       <div className="min-w-0 overflow-hidden">
-        <MirrorSoccerStandingsTable detail={detail} maxRows={12} />
+        <MirrorSoccerStandingsTable detail={detail} maxRows={12} variant="xl" />
       </div>
     </div>
   )
