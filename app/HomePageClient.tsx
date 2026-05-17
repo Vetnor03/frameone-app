@@ -313,6 +313,10 @@ type MirrorModuleDetail = {
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
   stockPurchasePrice?: number | null
+  countdownTitle?: string
+  countdownDaysLeft?: number
+  countdownTargetDate?: string
+  countdownPinned?: boolean
 }
 
 type MirrorHoliday = {
@@ -2441,6 +2445,92 @@ function mirrorCalendarDays(now = new Date(), monthOffset = 0) {
   }
 }
 
+
+function formatMirrorCountdownTimeLeftLong(days: number) {
+  if (days <= 0) return 'today'
+
+  const years = Math.floor(days / 365)
+  const rem = days % 365
+  const months = Math.floor(rem / 30)
+  const d = rem % 30
+
+  if (years > 0) {
+    let text = `${years} ${years === 1 ? 'year' : 'years'}`
+    if (months > 0) text += ` and ${months} ${months === 1 ? 'month' : 'months'}`
+    else if (d > 0) text += ` and ${d} ${d === 1 ? 'day' : 'days'}`
+    return text
+  }
+
+  if (months > 0) {
+    let text = `${months} ${months === 1 ? 'month' : 'months'}`
+    if (d > 0) text += ` and ${d} ${d === 1 ? 'day' : 'days'}`
+    return text
+  }
+
+  return `${d} ${d === 1 ? 'day' : 'days'}`
+}
+
+type MirrorCountdownTemplate =
+  | 'onlyUntil'
+  | 'in'
+  | 'leftToGo'
+  | 'countingTo'
+  | 'isIn'
+  | 'comingUp'
+  | 'nextStop'
+  | 'notLongNow'
+  | 'bigDay'
+  | 'almostThere'
+  | 'lastStretch'
+  | 'soonNow'
+  | 'closeNow'
+
+function pickMirrorCountdownTemplate(daysLeft: number, now = new Date()): MirrorCountdownTemplate {
+  const rotation = Math.floor(now.getTime() / (4 * 60 * 60 * 1000))
+  const farSet: MirrorCountdownTemplate[] = ['onlyUntil', 'in', 'leftToGo', 'countingTo', 'isIn', 'comingUp', 'nextStop']
+  const midSet: MirrorCountdownTemplate[] = ['onlyUntil', 'in', 'leftToGo', 'countingTo', 'isIn', 'comingUp', 'notLongNow', 'bigDay']
+  const nearSet: MirrorCountdownTemplate[] = ['onlyUntil', 'in', 'almostThere', 'soonNow', 'lastStretch', 'closeNow', 'bigDay', 'notLongNow']
+  const set = daysLeft <= 7 ? nearSet : daysLeft <= 45 ? midSet : farSet
+  return set[((rotation % set.length) + set.length) % set.length]
+}
+
+function buildSmallMirrorCountdownLine(title: string, daysLeft: number) {
+  const cleanTitle = title.trim() || 'COUNTDOWN'
+  const timeLong = formatMirrorCountdownTimeLeftLong(daysLeft)
+
+  if (daysLeft <= 0) return `${cleanTitle} today`
+
+  switch (pickMirrorCountdownTemplate(daysLeft)) {
+    case 'onlyUntil':
+      return `Only ${timeLong} until ${cleanTitle}`
+    case 'in':
+      return `${cleanTitle} in ${timeLong}`
+    case 'leftToGo':
+      return `${timeLong} left to ${cleanTitle}`
+    case 'countingTo':
+      return `Counting to ${cleanTitle} in ${timeLong}`
+    case 'isIn':
+      return `${cleanTitle} is in ${timeLong}`
+    case 'comingUp':
+      return `${cleanTitle} coming up in ${timeLong}`
+    case 'nextStop':
+      return `Next stop ${cleanTitle} in ${timeLong}`
+    case 'notLongNow':
+      return `Not long now ${timeLong} until ${cleanTitle}`
+    case 'bigDay':
+      return `Big day ${cleanTitle} in ${timeLong}`
+    case 'almostThere':
+      return `Almost there ${timeLong} to ${cleanTitle}`
+    case 'soonNow':
+      return `${cleanTitle} soon ${timeLong}`
+    case 'lastStretch':
+      return `Last stretch - ${timeLong} until ${cleanTitle}`
+    case 'closeNow':
+    default:
+      return `${cleanTitle} in ${timeLong}`
+  }
+}
+
 function MirrorMediumDateCard({
   language,
   textColor,
@@ -4172,6 +4262,21 @@ function LandscapeFrameMirror({
               )}
             </div>
           )}
+        </div>
+      )
+    }
+
+
+    if (module === 'countdown' && size === 'small') {
+      const title = detail.countdownTitle || detail.primary || String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
+      const daysLeft = typeof detail.countdownDaysLeft === 'number' ? detail.countdownDaysLeft : null
+      const line = daysLeft === null ? title : buildSmallMirrorCountdownLine(title, daysLeft)
+
+      return (
+        <div className="flex h-full w-full items-center justify-center px-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-tight">
+          <div className="max-w-full truncate text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.08em]" title={line}>
+            {line}
+          </div>
         </div>
       )
     }
