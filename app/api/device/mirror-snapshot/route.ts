@@ -10,6 +10,8 @@ type SurfMirrorDaypart = {
   label?: string
   rating?: number
   waveRange?: string
+  swellPeriodS?: number
+  windSpeedMs?: number
   ratingFromExperience?: boolean
   experienceDiceValue?: number
 }
@@ -1143,13 +1145,25 @@ async function surfDetail(
           const label = asString(record.label).trim()
           const partRating = asNumber(record.rating) ?? undefined
           const partWaveRange = asString(record.wave_height_range_label || record.waveRange || record.wave_range, '').trim()
+          const partSwellPeriodS = asNumber(record.swell_period_s) ?? undefined
+          const partWindSpeedMs = asNumber(record.wind_speed_ms) ?? undefined
           const partRatingFromExperience = isSurfScoreExperienceBased(record)
           const partExperienceDiceValue = surfExperienceDiceValue(record, partRating)
-          if (!label && partRating == null && !partWaveRange && !partRatingFromExperience && partExperienceDiceValue == null) return null
+          if (
+            !label &&
+            partRating == null &&
+            !partWaveRange &&
+            partSwellPeriodS == null &&
+            partWindSpeedMs == null &&
+            !partRatingFromExperience &&
+            partExperienceDiceValue == null
+          ) return null
           return {
             label: label || undefined,
             rating: partRating,
             waveRange: partWaveRange || undefined,
+            swellPeriodS: partSwellPeriodS,
+            windSpeedMs: partWindSpeedMs,
             ratingFromExperience: partRatingFromExperience || undefined,
             experienceDiceValue: partExperienceDiceValue,
           }
