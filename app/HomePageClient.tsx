@@ -301,6 +301,12 @@ type MirrorModuleDetail = {
   stockPrice?: string
   stockDayPercent?: string
   stockRangePercent?: string
+  stockOpen?: string
+  stockHigh?: string
+  stockLow?: string
+  stockPreviousCloseText?: string
+  stockChange?: string
+  stockPositionPercent?: string
   stockModuleId?: number
   stockChartRange?: StockChartRange
   stockSeries?: number[]
@@ -3700,6 +3706,98 @@ function mirrorFrameStockPrice(value: string) {
   return value.replace(/^[A-Z]{3}\s+/, '')
 }
 
+function MirrorStockRangeSelector({
+  range,
+}: {
+  range?: StockChartRange
+}) {
+  const labels = { day: 'Day', week: 'Week', month: 'Month', year: 'Year' }
+  const activeRange = range || 'day'
+
+  return (
+    <div className="flex items-center justify-center gap-[clamp(0.5rem,1.35vw,1.25rem)] whitespace-nowrap text-[clamp(0.54rem,1.1vw,0.78rem)] font-semibold tracking-[0.06em]">
+      {(['day', 'week', 'month', 'year'] as StockChartRange[]).map((item) => {
+        const active = activeRange === item
+        return (
+          <span
+            key={item}
+            className={active ? 'rounded-[clamp(0.28rem,0.75vw,0.45rem)] bg-[color:var(--mirror-bg-inverse)] px-[clamp(0.28rem,0.75vw,0.48rem)] py-[clamp(0.12rem,0.34vw,0.24rem)] text-[color:var(--mirror-fg-inverse)]' : ''}
+          >
+            {labels[item]}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function MirrorLargeStocksCard({
+  detail,
+  fallback,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  fallback: { primary: string; secondary?: string; tertiary?: string }
+  textColor: string
+}) {
+  const title = fitMirrorStockTitle(detail, fallback)
+  const hasLiveStockLayoutData = Boolean(detail.stockPrice || detail.stockDayPercent || detail.stockRangePercent)
+  const rows = [
+    { label: 'Open', value: detail.stockOpen || '--' },
+    { label: 'High', value: detail.stockHigh || '--' },
+    { label: 'Low', value: detail.stockLow || '--' },
+    { label: 'Prev close', value: detail.stockPreviousCloseText || '--' },
+    { label: 'Change', value: detail.stockChange || '--' },
+    { label: detail.stockPositionPercent ? 'Pos %' : 'Range %', value: detail.stockPositionPercent || detail.stockRangePercent || '--' },
+  ]
+
+  if (!hasLiveStockLayoutData) {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-4 text-center leading-tight">
+        <div className="max-w-full truncate text-[clamp(1rem,2.55vw,1.7rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid h-full w-full grid-cols-[1fr_1fr] overflow-hidden px-[clamp(0.65rem,1.65vw,1.25rem)] py-[clamp(0.45rem,1.15vw,0.9rem)] text-center leading-tight">
+      <div className="flex min-w-0 flex-col overflow-hidden pr-[clamp(0.35rem,0.95vw,0.8rem)]">
+        <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.2rem,0.6vw,0.46rem)] pb-[clamp(0.05rem,0.16vw,0.12rem)] text-[clamp(0.64rem,1.24vw,0.96rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col justify-evenly pt-[clamp(0.42rem,1vw,0.72rem)] pb-[clamp(0.08rem,0.3vw,0.22rem)]">
+          {rows.map((row) => (
+            <div key={row.label} className="grid grid-cols-2 items-center gap-[clamp(0.3rem,0.85vw,0.7rem)] text-[clamp(0.52rem,1.02vw,0.74rem)] font-semibold tracking-[0.055em]">
+              <div className="truncate text-right">{row.label}</div>
+              <div className="truncate text-left">{row.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex min-w-0 flex-col overflow-hidden pl-[clamp(0.35rem,0.95vw,0.8rem)]">
+        <div className="shrink-0 pt-[clamp(0.12rem,0.35vw,0.28rem)]">
+          <MirrorStockRangeSelector range={detail.stockChartRange} />
+        </div>
+
+        <div className="min-h-0 flex-1 px-[clamp(0.28rem,0.85vw,0.65rem)] pt-[clamp(0.75rem,1.55vw,1.15rem)] pb-[clamp(0.75rem,1.85vw,1.35rem)]">
+          <MirrorStockChart
+            series={detail.stockSeries}
+            previousClose={detail.stockPreviousClose}
+            purchasePrice={detail.stockPurchasePrice}
+            textColor={textColor}
+            moduleId={detail.stockModuleId}
+            chartRange={detail.stockChartRange}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MirrorMediumStocksCard({
   detail,
   fallback,
@@ -3812,13 +3910,16 @@ function LandscapeFrameMirror({
   const batteryPercent = normalizeBatteryPercent(status?.battery_percent)
   const isCharging = status?.is_usb_present === true || status?.is_charging === true
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
-  const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15' | '--mirror-bg', string> = {
+  const inverseColor = isDark ? '#07141c' : '#eef2f6'
+  const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15' | '--mirror-bg' | '--mirror-bg-inverse' | '--mirror-fg-inverse', string> = {
     background,
     color: textColor,
     '--fg': textColor,
     '--fg-50': mutedColor,
     '--bd-15': borderColor,
     '--mirror-bg': frameBackground,
+    '--mirror-bg-inverse': textColor,
+    '--mirror-fg-inverse': inverseColor,
   }
 
   const renderMirrorCell: FrameCellRenderer = (module, slot, size) => {
@@ -3892,6 +3993,11 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'stocks' && size === 'large') {
+      const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      return <MirrorLargeStocksCard detail={detail} fallback={fallback} textColor={textColor} />
     }
 
     if (module === 'stocks' && size === 'medium') {

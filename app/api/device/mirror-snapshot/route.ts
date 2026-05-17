@@ -38,6 +38,12 @@ type Detail = {
   stockPrice?: string
   stockDayPercent?: string
   stockRangePercent?: string
+  stockOpen?: string
+  stockHigh?: string
+  stockLow?: string
+  stockPreviousCloseText?: string
+  stockChange?: string
+  stockPositionPercent?: string
   stockModuleId?: number
   stockChartRange?: string
   stockSeries?: number[]
@@ -396,6 +402,19 @@ function formatPrice(value: unknown, currency: string) {
   if (n == null) return '--'
   const digits = Math.abs(n) >= 100 ? 2 : 2
   return `${currency} ${n.toFixed(digits)}`
+}
+
+function formatFrameStockPrice(value: unknown) {
+  const n = asNumber(value)
+  if (n == null) return '--'
+  return Math.abs(n) >= 1000 ? n.toFixed(0) : n.toFixed(2)
+}
+
+function formatFrameStockSigned(value: unknown, withPercent = false) {
+  const n = asNumber(value)
+  if (n == null) return '--'
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(2)}${withPercent ? '%' : ''}`
 }
 
 
@@ -860,6 +879,7 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
   const price = formatPrice(quote.price, asString(data.currency, 'USD'))
   const dayPct = formatPercent(quote.changePercent)
   const rangePct = formatPercent(selectedSeriesPercent(data.selectedSeries))
+  const personalChangePercent = asNumber(data.personalChangePercent)
   const seriesRows = selectedSeriesRows(data.selectedSeries)
   const series = seriesRows.map((point) => point.price)
 
@@ -874,6 +894,12 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
     stockPrice: price,
     stockDayPercent: dayPct ?? '--',
     stockRangePercent: rangePct ?? '--',
+    stockOpen: formatFrameStockPrice(quote.open),
+    stockHigh: formatFrameStockPrice(quote.high),
+    stockLow: formatFrameStockPrice(quote.low),
+    stockPreviousCloseText: formatFrameStockPrice(quote.previousClose),
+    stockChange: formatFrameStockSigned(quote.change),
+    stockPositionPercent: personalChangePercent != null ? formatFrameStockSigned(personalChangePercent, true) : undefined,
     stockChartRange: normalizeStockRange(data.chartRange || cfg.chartRange),
     stockSeries: series,
     stockSeriesTimestamps: seriesRows.map((point) => point.timestampMs),
