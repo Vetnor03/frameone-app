@@ -66,6 +66,14 @@ type Detail = {
   soccerKickoffLine?: string
   soccerPositionLine?: string
   soccerPointsLine?: string
+  soccerNextDayLine?: string
+  soccerNextTimeLine?: string
+  soccerNextHomeLine?: string
+  soccerNextAwayLine?: string
+  soccerLastHomeLine?: string
+  soccerLastAwayLine?: string
+  soccerLastHomeGoalsLine?: string
+  soccerLastAwayGoalsLine?: string
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -158,9 +166,9 @@ function osloYmd(date: Date) {
   }).format(date)
 }
 
-function soccerSmallKickoffLine(value: unknown) {
+function soccerKickoffParts(value: unknown) {
   const parts = osloDateParts(value)
-  if (!parts) return '-- --:--'
+  if (!parts) return { dayText: '--', timeText: '--:--' }
 
   const kickoffYmd = `${parts.year}-${parts.month}-${parts.day}`
   const now = new Date()
@@ -173,7 +181,12 @@ function soccerSmallKickoffLine(value: unknown) {
   if (kickoffYmd === todayYmd) dayText = 'Today'
   else if (kickoffYmd === tomorrowYmd) dayText = 'Tomorrow'
 
-  return `${dayText} ${parts.hour}:${parts.minute}`
+  return { dayText, timeText: `${parts.hour}:${parts.minute}` }
+}
+
+function soccerSmallKickoffLine(value: unknown) {
+  const parts = soccerKickoffParts(value)
+  return `${parts.dayText} ${parts.timeText}`
 }
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
@@ -1083,13 +1096,19 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
   url.searchParams.set('teamId', teamId)
   const data = asRecord(await fetchJson(url.toString()))
   const next = asRecord(data.next)
+  const last = asRecord(data.last)
   const standing = asRecord(data.standing)
   const position = asNumber(standing.position)
   const points = asNumber(standing.points)
   const hasNext = Object.keys(next).length > 0
+  const hasLast = Object.keys(last).length > 0
   const fixtureLine = hasNext
     ? `${soccerOfficialish3(next.homeShort)} vs ${soccerOfficialish3(next.awayShort)}`
     : (teamName || asString(data.teamKey, 'Team'))
+  const kickoffParts = hasNext ? soccerKickoffParts(next.utc) : { dayText: '--', timeText: '--:--' }
+  const [lastHomeGoals = '--', lastAwayGoals = '--'] = asString(last.score, '-- - --')
+    .split('-')
+    .map((part) => part.trim() || '--')
 
   return {
     primary: teamName || asString(data.teamKey, 'SOCCER'),
@@ -1099,6 +1118,14 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
     soccerKickoffLine: hasNext ? soccerSmallKickoffLine(next.utc) : '-- --:--',
     soccerPositionLine: position != null ? `Position: ${position}` : 'Position: --',
     soccerPointsLine: points != null ? `Points: ${points}` : 'Points: --',
+    soccerNextDayLine: kickoffParts.dayText,
+    soccerNextTimeLine: kickoffParts.timeText,
+    soccerNextHomeLine: hasNext ? soccerOfficialish3(next.homeShort) : '---',
+    soccerNextAwayLine: hasNext ? soccerOfficialish3(next.awayShort) : '---',
+    soccerLastHomeLine: hasLast ? soccerOfficialish3(last.homeShort) : '---',
+    soccerLastAwayLine: hasLast ? soccerOfficialish3(last.awayShort) : '---',
+    soccerLastHomeGoalsLine: hasLast ? lastHomeGoals : '--',
+    soccerLastAwayGoalsLine: hasLast ? lastAwayGoals : '--',
   }
 }
 
