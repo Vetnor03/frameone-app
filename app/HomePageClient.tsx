@@ -4547,18 +4547,41 @@ function formatMirrorSurfTemp(value: number | undefined) {
 
 function MirrorSurfWaterDropIcon() {
   return (
-    <svg className="h-[clamp(1.05rem,2.35vw,1.55rem)] w-[clamp(0.9rem,2vw,1.3rem)]" viewBox="0 0 28 34" aria-hidden="true">
-      <path d="M14 2 C14 2 4 15 4 23 C4 29 8.5 33 14 33 C19.5 33 24 29 24 23 C24 15 14 2 14 2 Z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+    <svg className="h-[clamp(1.05rem,2.35vw,1.52rem)] w-[clamp(1.05rem,2.35vw,1.52rem)]" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 4 C16 4 8 14.2 8 21 C8 25.9 11.5 29 16 29 C20.5 29 24 25.9 24 21 C24 14.2 16 4 16 4 Z" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
 function MirrorSurfSunUpDownIcon() {
   return (
-    <svg className="h-[clamp(1.05rem,2.35vw,1.55rem)] w-[clamp(1.5rem,3.25vw,2.15rem)]" viewBox="0 0 44 28" aria-hidden="true">
-      <path d="M8 20a14 14 0 0 1 28 0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <path d="M3 21h38" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <path d="M13 9l-4-4M31 9l4-4M22 5V1" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    <svg className="h-[clamp(1.05rem,2.35vw,1.52rem)] w-[clamp(1.05rem,2.35vw,1.52rem)]" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M7 22a9 9 0 0 1 18 0" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M5 23.5h22" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M16 5v4M8.5 9l2.6 2.6M23.5 9l-2.6 2.6" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function MirrorXLSurfWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
+  const kind = mirrorWeatherIconKind(wmo)
+  const isRain = kind === 'rain' || kind === 'sleet' || kind === 'thunder'
+  const isSnow = kind === 'snow' || kind === 'sleet'
+
+  return (
+    <svg className="h-[clamp(1.05rem,2.35vw,1.52rem)] w-[clamp(1.05rem,2.35vw,1.52rem)] overflow-visible" viewBox="0 0 32 32" aria-hidden="true">
+      {(kind === 'sun' || kind === 'partly') && (
+        <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" transform={kind === 'partly' ? 'translate(3 -2) scale(0.72)' : undefined}>
+          <circle cx="16" cy="16" r="5.2" />
+          <path d="M16 4.5v3M16 24.5v3M4.5 16h3M24.5 16h3M7.9 7.9l2.1 2.1M22 22l2.1 2.1M24.1 7.9 22 10M10 22l-2.1 2.1" />
+        </g>
+      )}
+      {kind !== 'sun' && (
+        <path d="M10.2 23.5h12.1c3.3 0 5.7-2.2 5.7-5.2 0-2.8-2.1-5-5-5.3-1-3.8-4.1-6.2-8.1-6.2-3.7 0-6.7 2.1-8 5.4-2.9.4-5 2.8-5 5.6 0 3.2 2.5 5.7 5.8 5.7h2.5Z" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {isRain && <path d="M11 27l-1.5 3M17 27l-1.5 3M23 27l-1.5 3" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />}
+      {isSnow && <path d="M11 28h3M12.5 26.5v3M19 28h3M20.5 26.5v3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
+      {kind === 'fog' && <path d="M8 27h16M11 30h10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />}
     </svg>
   )
 }
@@ -4575,11 +4598,11 @@ function MirrorSurfTemperatureRow({
   borderColor: string
 }) {
   return (
-    <div className="grid min-w-0 grid-cols-[clamp(1.9rem,4.8vw,3.1rem)_1fr] items-center gap-x-[clamp(0.28rem,0.72vw,0.48rem)]">
+    <div className="grid min-w-0 grid-cols-[clamp(1.55rem,3.8vw,2.45rem)_1fr] items-center gap-x-[clamp(0.22rem,0.58vw,0.38rem)]">
       <div className="flex items-center justify-center">{icon}</div>
-      <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center text-[clamp(0.7rem,1.65vw,1.05rem)] font-semibold tracking-[0.08em]">
+      <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center text-[clamp(0.66rem,1.5vw,0.96rem)] font-semibold tracking-[0.08em]">
         <div className="truncate text-right">{left}°</div>
-        <div className="mx-[clamp(0.25rem,0.7vw,0.52rem)] h-[clamp(0.95rem,2vw,1.25rem)] w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+        <div className="mx-[clamp(0.2rem,0.55vw,0.38rem)] h-[clamp(0.75rem,1.65vw,1.04rem)] w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
         <div className="truncate text-left">{right}°</div>
       </div>
     </div>
@@ -4632,40 +4655,43 @@ function MirrorXLSurfCard({
       </div>
 
       <div className="grid min-h-0 grid-cols-3 items-stretch px-[clamp(0.42rem,1.05vw,0.75rem)] pt-[clamp(0.62rem,1.45vw,1rem)] pb-[clamp(0.52rem,1.18vw,0.82rem)]">
-        <div className="grid min-h-0 grid-cols-2 grid-rows-[1fr_auto_auto_auto] items-center gap-x-[clamp(0.35rem,0.9vw,0.68rem)] px-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(1.55rem,3.25vw,2.25rem)]">
-          <div className="col-span-2 row-start-1 grid grid-cols-2 items-end gap-x-[clamp(0.36rem,0.9vw,0.62rem)] pb-[clamp(0.18rem,0.5vw,0.35rem)]">
-            <div className="flex justify-center text-[clamp(1.05rem,2.45vw,1.62rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
-            <div className="flex justify-center text-[clamp(1.05rem,2.45vw,1.62rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
+        <div className="flex min-h-0 items-center justify-center px-[clamp(0.2rem,0.55vw,0.4rem)] pt-[clamp(0.72rem,1.65vw,1.12rem)]">
+          <div className="grid w-full translate-y-[clamp(0.12rem,0.36vw,0.25rem)] grid-cols-2 items-center gap-x-[clamp(0.3rem,0.78vw,0.56rem)] gap-y-[clamp(0.1rem,0.3vw,0.22rem)]">
+            <div className="flex justify-center text-[clamp(1rem,2.25vw,1.46rem)] leading-none" style={mirrorDirectionToStyle(detail.swellDirectionDeg)}>↑</div>
+            <div className="flex justify-center text-[clamp(1rem,2.25vw,1.46rem)] leading-none" style={mirrorDirectionToStyle(detail.windDirectionDeg)}>↑</div>
+            <div className="flex justify-center"><MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} line /></div>
+            <div className="flex justify-center"><MirrorSurfWindIcon line /></div>
+            <div className="text-[clamp(0.62rem,1.4vw,0.9rem)] font-semibold tracking-[0.09em]">{swellPeriod}</div>
+            <div className="text-[clamp(0.62rem,1.4vw,0.9rem)] font-semibold tracking-[0.09em]">{windSpeed}</div>
           </div>
-          <div className="flex justify-center py-[clamp(0.12rem,0.32vw,0.24rem)]"><MirrorSurfWaveIcon periodSeconds={detail.swellPeriodS} /></div>
-          <div className="flex justify-center py-[clamp(0.12rem,0.32vw,0.24rem)]"><MirrorSurfWindIcon /></div>
-          <div className="pb-[clamp(0.03rem,0.12vw,0.08rem)] text-[clamp(0.64rem,1.48vw,0.96rem)] font-semibold tracking-[0.09em]">{swellPeriod}</div>
-          <div className="pb-[clamp(0.03rem,0.12vw,0.08rem)] text-[clamp(0.64rem,1.48vw,0.96rem)] font-semibold tracking-[0.09em]">{windSpeed}</div>
         </div>
 
-        <div className="relative flex min-h-0 flex-col items-center justify-end px-[clamp(0.35rem,0.9vw,0.64rem)] pb-[clamp(0.06rem,0.18vw,0.14rem)]">
-          <div className="absolute inset-y-[28%] left-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
-          <div className="absolute inset-y-[28%] right-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
-          <div className="mb-auto mt-[clamp(0.08rem,0.25vw,0.18rem)] border-b-2 border-current px-[clamp(0.35rem,0.88vw,0.65rem)] pb-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(1rem,2.45vw,1.55rem)] font-semibold tracking-[0.08em]" style={{ borderColor: textColor }}>
-            Today
+        <div className="relative flex min-h-0 flex-col items-center justify-center px-[clamp(0.35rem,0.9vw,0.64rem)] pt-[clamp(0.28rem,0.75vw,0.5rem)]">
+          <div className="absolute inset-y-[34%] left-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="absolute inset-y-[34%] right-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="translate-y-[clamp(0.08rem,0.28vw,0.2rem)]">
+            <div className="mx-auto inline-block border-b-2 border-current px-[clamp(0.32rem,0.78vw,0.58rem)] pb-[clamp(0.06rem,0.16vw,0.12rem)] text-[clamp(0.98rem,2.32vw,1.46rem)] font-semibold tracking-[0.08em]" style={{ borderColor: textColor }}>
+              Today
+            </div>
+            <div className="mt-[clamp(0.32rem,0.78vw,0.56rem)] text-[clamp(0.7rem,1.6vw,1rem)] font-semibold tracking-[0.1em] uppercase">{mirrorSurfRatingWord(rating)}</div>
+            <div className="mt-[clamp(0.26rem,0.66vw,0.46rem)] flex min-w-0 items-center justify-center">
+              <DiceRating rating={diceValue} isExperienceBased={experienceBased} muted={mutedColor} paperColor={frameBackground} />
+            </div>
+            <div className="mt-[clamp(0.32rem,0.78vw,0.56rem)] text-[clamp(0.66rem,1.48vw,0.94rem)] font-semibold tracking-[0.1em]" title={waveRange}>{waveRange}</div>
           </div>
-          <div className="mb-[clamp(0.72rem,1.75vw,1.22rem)] text-[clamp(0.72rem,1.7vw,1.08rem)] font-semibold tracking-[0.1em] uppercase">{mirrorSurfRatingWord(rating)}</div>
-          <div className="mb-[clamp(0.72rem,1.75vw,1.22rem)] flex min-w-0 items-center justify-center">
-            <DiceRating rating={diceValue} isExperienceBased={experienceBased} muted={mutedColor} paperColor={frameBackground} />
-          </div>
-          <div className="text-[clamp(0.68rem,1.55vw,1rem)] font-semibold tracking-[0.1em]" title={waveRange}>{waveRange}</div>
         </div>
 
-        <div className="grid min-h-0 grid-rows-[1fr_auto_auto_auto] items-center px-[clamp(0.55rem,1.35vw,0.95rem)] pt-[clamp(1.55rem,3.25vw,2.25rem)] text-left">
-          <div aria-hidden="true" />
-          <MirrorSurfTemperatureRow icon={<div className="h-[clamp(1.35rem,3.1vw,2rem)] w-[clamp(1.35rem,3.1vw,2rem)]"><MirrorWeatherIcon wmo={detail.weatherWmo} /></div>} left={airMin} right={airMax} borderColor={borderColor} />
-          <MirrorSurfTemperatureRow icon={<MirrorSurfWaterDropIcon />} left={waterMin} right={waterMax} borderColor={borderColor} />
-          <div className="grid min-w-0 grid-cols-[clamp(1.9rem,4.8vw,3.1rem)_1fr] items-center gap-x-[clamp(0.28rem,0.72vw,0.48rem)]">
-            <div className="flex items-center justify-center"><MirrorSurfSunUpDownIcon /></div>
-            <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center text-[clamp(0.7rem,1.65vw,1.05rem)] font-semibold tracking-[0.08em]">
-              <div className="truncate text-right">{sunrise}</div>
-              <div className="mx-[clamp(0.25rem,0.7vw,0.52rem)] h-[clamp(0.95rem,2vw,1.25rem)] w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
-              <div className="truncate text-left">{sunset}</div>
+        <div className="flex min-h-0 items-center justify-center px-[clamp(0.48rem,1.15vw,0.82rem)] pt-[clamp(0.72rem,1.65vw,1.12rem)] text-left">
+          <div className="grid w-full translate-y-[clamp(0.12rem,0.36vw,0.25rem)] gap-y-[clamp(0.2rem,0.52vw,0.36rem)]">
+            <MirrorSurfTemperatureRow icon={<MirrorXLSurfWeatherIcon wmo={detail.weatherWmo} />} left={airMin} right={airMax} borderColor={borderColor} />
+            <MirrorSurfTemperatureRow icon={<MirrorSurfWaterDropIcon />} left={waterMin} right={waterMax} borderColor={borderColor} />
+            <div className="grid min-w-0 grid-cols-[clamp(1.55rem,3.8vw,2.45rem)_1fr] items-center gap-x-[clamp(0.22rem,0.58vw,0.38rem)]">
+              <div className="flex items-center justify-center"><MirrorSurfSunUpDownIcon /></div>
+              <div className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center text-[clamp(0.66rem,1.5vw,0.96rem)] font-semibold tracking-[0.08em]">
+                <div className="truncate text-right">{sunrise}</div>
+                <div className="mx-[clamp(0.2rem,0.55vw,0.38rem)] h-[clamp(0.75rem,1.65vw,1.04rem)] w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+                <div className="truncate text-left">{sunset}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -4758,9 +4784,18 @@ function mirrorWavePeakCount(periodSeconds: number | undefined) {
   return 2
 }
 
-function MirrorSurfWaveIcon({ periodSeconds }: { periodSeconds: number | undefined }) {
+function MirrorSurfWaveIcon({ periodSeconds, line = false }: { periodSeconds: number | undefined; line?: boolean }) {
   const peaks = mirrorWavePeakCount(periodSeconds)
   const items = Array.from({ length: peaks })
+  if (line) {
+    return (
+      <svg className="h-[clamp(1.05rem,2.35vw,1.52rem)] w-[clamp(1.8rem,3.8vw,2.65rem)]" viewBox="0 0 52 32" aria-hidden="true">
+        <path d="M4 20 C9 12, 15 12, 20 20 S31 28, 36 20 S47 12, 50 20" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 25 H47" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
   return (
     <svg className="h-[clamp(1rem,2.2vw,1.45rem)] w-[clamp(2rem,4.2vw,3.2rem)]" viewBox="0 0 64 28" aria-hidden="true">
       {items.map((_, index) => {
@@ -4780,7 +4815,17 @@ function MirrorSurfWaveIcon({ periodSeconds }: { periodSeconds: number | undefin
   )
 }
 
-function MirrorSurfWindIcon() {
+function MirrorSurfWindIcon({ line = false }: { line?: boolean } = {}) {
+  if (line) {
+    return (
+      <svg className="h-[clamp(1.05rem,2.35vw,1.52rem)] w-[clamp(1.8rem,3.8vw,2.65rem)]" viewBox="0 0 52 32" aria-hidden="true">
+        <path d="M5 10 H34 C39 10 39 4 34 4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 17 H43 C48 17 48 11 43 11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14 24 H35 C40 24 40 30 35 30" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+
   return (
     <svg className="h-[clamp(1rem,2.2vw,1.45rem)] w-[clamp(2rem,4.2vw,3.2rem)]" viewBox="0 0 64 28" aria-hidden="true">
       <rect x="4" y="5" width="46" height="4" rx="2" fill="currentColor" />
