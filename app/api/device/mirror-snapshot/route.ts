@@ -54,6 +54,7 @@ type Detail = {
   countdownDaysLeft?: number
   countdownTargetDate?: string
   countdownPinned?: boolean
+  countdownUpcoming?: Array<{ title: string; targetDate: string; daysLeft: number }>
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -275,6 +276,14 @@ async function countdownDetail(supabase: SupabaseClient, deviceId: string, langu
     countdownDaysLeft: nearest.daysLeft,
     countdownTargetDate: nearest.targetDate,
     countdownPinned: nearest.pinned,
+    countdownUpcoming: items
+      .filter((item) => !item.isPast)
+      .slice(1, 5)
+      .map((item) => ({
+        title: item.title,
+        targetDate: item.targetDate,
+        daysLeft: item.daysLeft,
+      })),
   }
 }
 

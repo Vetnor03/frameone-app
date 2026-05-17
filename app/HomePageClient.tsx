@@ -317,6 +317,7 @@ type MirrorModuleDetail = {
   countdownDaysLeft?: number
   countdownTargetDate?: string
   countdownPinned?: boolean
+  countdownUpcoming?: Array<{ title: string; targetDate: string; daysLeft: number }>
 }
 
 type MirrorHoliday = {
@@ -2583,6 +2584,27 @@ function formatMirrorCountdownMediumBadge(daysLeft: number, targetDate: string |
   return formatMirrorCountdownShortStatus(daysLeft)
 }
 
+function formatMirrorCountdownUpcomingStatus(daysLeft: number, targetDate: string | undefined) {
+  if (daysLeft <= 0) return 'Today'
+  if (daysLeft === 1) return 'Tomorrow'
+
+  const date = parseMirrorCountdownDate(targetDate)
+
+  if (daysLeft <= 13) {
+    if (!date) return `${daysLeft} days`
+    const weekday = mirrorCountdownWeekdayName(date)
+    return daysLeft <= 6 ? weekday : `Next ${weekday}`
+  }
+
+  if (daysLeft === 14) return 'In 2 weeks'
+
+  return `${daysLeft} days`
+}
+
+function formatMirrorCountdownUpcomingLine(item: { title: string; targetDate?: string; daysLeft: number }) {
+  return `${item.title} - ${formatMirrorCountdownUpcomingStatus(item.daysLeft, item.targetDate)}`
+}
+
 function MirrorMediumCountdownCard({
   detail,
   fallbackTitle,
@@ -2628,6 +2650,53 @@ function MirrorMediumCountdownCard({
         >
           {badge}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorLargeCountdownCard({
+  detail,
+  fallbackTitle,
+}: {
+  detail: MirrorModuleDetail
+  fallbackTitle: string
+}) {
+  const upcoming = Array.isArray(detail.countdownUpcoming) ? detail.countdownUpcoming : []
+
+  return (
+    <div className="grid h-full w-full grid-cols-[1fr_1fr] gap-[clamp(0.45rem,1.45vw,0.95rem)] overflow-hidden">
+      <div className="min-w-0 overflow-hidden">
+        <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+      </div>
+
+      <div className="flex min-w-0 items-center justify-center overflow-hidden px-[clamp(0.25rem,0.75vw,0.5rem)] py-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-none">
+        {upcoming.length === 0 ? (
+          <div className="max-w-full truncate text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]">
+            No more events
+          </div>
+        ) : (
+          <div className="flex max-h-full max-w-full flex-col items-stretch justify-center overflow-hidden">
+            <div className="mb-[clamp(0.42rem,1.22vw,0.72rem)] shrink-0 text-center text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.16em]">
+              COMING UP
+            </div>
+
+            <div className="flex max-w-full flex-col gap-[clamp(0.48rem,1.45vw,0.9rem)] overflow-hidden text-left">
+              {upcoming.map((item, index) => {
+                const line = formatMirrorCountdownUpcomingLine(item)
+
+                return (
+                  <div key={`${item.targetDate}-${item.title}-${index}`} className="flex min-w-0 items-center gap-[clamp(0.34rem,0.9vw,0.55rem)]" title={line}>
+                    <span className="h-[clamp(0.28rem,0.7vw,0.42rem)] w-[clamp(0.28rem,0.7vw,0.42rem)] shrink-0 rounded-full bg-current" aria-hidden="true" />
+                    <span className="min-w-0 truncate text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.04em]">
+                      {line}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -4368,6 +4437,11 @@ function LandscapeFrameMirror({
       )
     }
 
+
+    if (module === 'countdown' && size === 'large') {
+      const fallbackTitle = String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
+      return <MirrorLargeCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+    }
 
     if (module === 'countdown' && size === 'medium') {
       const fallbackTitle = String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
