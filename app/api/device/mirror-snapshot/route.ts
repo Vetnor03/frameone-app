@@ -24,6 +24,7 @@ type Detail = {
   reminderItems?: string[]
   reminderMediumItems?: string[]
   reminderCalendarDates?: string[]
+  reminderNextItems?: Array<{ date: string; title: string }>
   reminderHeader?: string
   reminderOverflowCount?: number
   reminderMediumOverflowCount?: number
@@ -1088,6 +1089,19 @@ function formatReminderMirrorItems(items: UnknownRecord[]) {
     .filter(Boolean)
 }
 
+function reminderMirrorItemKey(item: UnknownRecord) {
+  return `${asString(item.reminder_id).trim()}__${asString(item.occurrence_date).trim()}`
+}
+
+function formatReminderMirrorNextItems(items: UnknownRecord[]) {
+  return items
+    .map((item) => ({
+      date: asString(item.occurrence_date).slice(0, 10),
+      title: formatReminderMirrorItems([item])[0] || '',
+    }))
+    .filter((item) => item.date && item.title)
+}
+
 async function remindersDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
@@ -1106,6 +1120,10 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   const reminderItems = formatReminderMirrorItems(visibleItems)
   const reminderMediumItems = formatReminderMirrorItems(visibleMediumItems)
   const reminderCalendarDates = items.map((item) => asString(item.occurrence_date).slice(0, 10)).filter(Boolean)
+  const shownPrimaryKeys = new Set(visibleMediumItems.map(reminderMirrorItemKey))
+  const reminderNextItems = formatReminderMirrorNextItems(
+    items.filter((item) => !shownPrimaryKeys.has(reminderMirrorItemKey(item))).slice(0, 5)
+  )
   return {
     primary: first ? asString(first.title, language === 'no' ? 'Påminnelse' : 'Reminder') : (language === 'no' ? 'Ingen' : 'None'),
     secondary: language === 'no' ? 'Påminnelser' : 'Reminders',
@@ -1113,6 +1131,7 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
     reminderItems,
     reminderMediumItems,
     reminderCalendarDates,
+    reminderNextItems,
     reminderHeader: formatReminderMirrorHeader(first, language),
     reminderOverflowCount: Math.max(0, primaryBucketItems.length - visibleItems.length),
     reminderMediumOverflowCount: Math.max(0, primaryBucketItems.length - visibleMediumItems.length),

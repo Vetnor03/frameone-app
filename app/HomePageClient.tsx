@@ -287,6 +287,7 @@ type MirrorModuleDetail = {
   reminderItems?: string[]
   reminderMediumItems?: string[]
   reminderCalendarDates?: string[]
+  reminderNextItems?: Array<{ date: string; title: string }>
   reminderHeader?: string
   reminderOverflowCount?: number
   reminderMediumOverflowCount?: number
@@ -3655,6 +3656,21 @@ function mirrorReminderCalendarDates(detail: MirrorModuleDetail) {
     .filter(Boolean)
 }
 
+function mirrorReminderNextItems(detail: MirrorModuleDetail) {
+  return (Array.isArray(detail.reminderNextItems) ? detail.reminderNextItems : [])
+    .map((item) => ({
+      date: String(item?.date ?? '').slice(0, 10),
+      title: String(item?.title ?? '').trim(),
+    }))
+    .filter((item) => item.date && item.title)
+    .slice(0, 5)
+}
+
+function formatMirrorReminderListDate(date: string) {
+  const [, month = '', day = ''] = String(date).slice(0, 10).split('-')
+  return `${day.padStart(2, '0')}.${month.padStart(2, '0')}`
+}
+
 function mirrorRemindersEmptyMessage(language: AppLanguage) {
   return language === 'no' ? 'Alt gjort' : 'All done'
 }
@@ -3692,6 +3708,80 @@ function MirrorLargeRemindersCard({
           showMonthTitle={false}
           showWeekNumbers
         />
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLRemindersNextList({ detail, language, mutedColor }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string }) {
+  const items = mirrorReminderNextItems(detail)
+  const emptyLabel = language === 'no' ? 'Ingen flere påminnelser' : 'No more reminders'
+
+  if (items.length <= 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.8rem,2vw,1.35rem)] text-center text-[clamp(0.7rem,1.55vw,0.98rem)] font-semibold tracking-[0.06em]" style={{ color: mutedColor }}>
+        {emptyLabel}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full items-end justify-start overflow-hidden px-[clamp(0.8rem,2.05vw,1.35rem)] pb-[clamp(0.72rem,1.85vw,1.2rem)] leading-none">
+      <div className="grid w-full max-w-full gap-[clamp(0.28rem,0.82vw,0.5rem)]">
+        {items.map((item, index) => (
+          <div key={`${item.date}-${item.title}-${index}`} className="grid min-w-0 grid-cols-[clamp(2.1rem,5.3vw,3.15rem)_minmax(0,1fr)] items-baseline gap-[clamp(0.55rem,1.38vw,0.86rem)] text-left" title={`${formatMirrorReminderListDate(item.date)} ${item.title}`}>
+            <div className="justify-self-end text-[clamp(0.52rem,1.18vw,0.76rem)] font-semibold tracking-[0.05em]">
+              {formatMirrorReminderListDate(item.date)}
+            </div>
+            <div className="min-w-0 truncate text-[clamp(0.66rem,1.48vw,0.96rem)] font-semibold tracking-[0.025em]">
+              {item.title}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLRemindersCard({
+  detail,
+  language,
+  mutedColor,
+  frameBackground,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  mutedColor: string
+  frameBackground: string
+  textColor: string
+}) {
+  const highlightDates = mirrorReminderCalendarDates(detail)
+
+  return (
+    <div className="grid h-full w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
+      <div className="grid min-h-0 grid-rows-2 gap-y-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
+        <div className="min-h-0 overflow-hidden">
+          <MirrorMediumRemindersCard
+            detail={detail}
+            language={language}
+            mutedColor={mutedColor}
+            frameBackground={frameBackground}
+            textColor={textColor}
+          />
+        </div>
+        <div className="min-h-0 overflow-hidden">
+          <MirrorXLRemindersNextList detail={detail} language={language} mutedColor={mutedColor} />
+        </div>
+      </div>
+
+      <div className="grid min-h-0 grid-rows-2 gap-y-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden pr-[clamp(0.25rem,0.85vw,0.55rem)]">
+        <div className="min-h-0 overflow-hidden">
+          <MirrorMonthCalendar textColor={textColor} language={language} highlightDates={highlightDates} showWeekNumbers />
+        </div>
+        <div className="min-h-0 overflow-hidden">
+          <MirrorMonthCalendar textColor={textColor} language={language} monthOffset={1} highlightDates={highlightDates} showWeekNumbers />
+        </div>
       </div>
     </div>
   )
@@ -4784,6 +4874,9 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'reminders' && size === 'large') {
+      if (snapshot.layoutKey === 'full') {
+        return <MirrorXLRemindersCard detail={detail} language={language} mutedColor={mutedColor} frameBackground={frameBackground} textColor={textColor} />
+      }
       return <MirrorLargeRemindersCard detail={detail} language={language} mutedColor={mutedColor} frameBackground={frameBackground} textColor={textColor} />
     }
 
