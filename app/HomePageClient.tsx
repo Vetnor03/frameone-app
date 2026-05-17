@@ -263,6 +263,12 @@ function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; sub
   ]
 }
 
+type MirrorSurfDaypart = {
+  label?: string
+  rating?: number
+  waveRange?: string
+}
+
 type MirrorModuleDetail = {
   primary: string
   secondary?: string
@@ -272,6 +278,7 @@ type MirrorModuleDetail = {
   waveRange?: string
   swellPeriodS?: number
   windSpeedMs?: number
+  surfDayparts?: MirrorSurfDaypart[]
   isTodaysBest?: boolean
   isExperienceBased?: boolean
   ratingFromExperience?: boolean
@@ -4338,6 +4345,81 @@ function DiceRating({ value, rating, isExperienceBased, muted, paperColor, class
   )
 }
 
+
+function MirrorLargeSurfCard({
+  detail,
+  mutedColor,
+  borderColor,
+  frameBackground,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  mutedColor: string
+  borderColor: string
+  frameBackground: string
+  textColor: string
+}) {
+  const rating = detail.rating ?? Number(detail.primary)
+  const spotName = detail.secondary || detail.primary || 'Surf'
+  const fallbackWaveRange = detail.waveRange || detail.tertiary || '--'
+  const fallbackParts: MirrorSurfDaypart[] = [
+    { label: 'Morning' },
+    { label: 'Noon' },
+    { label: 'Afternoon' },
+    { label: 'Evening' },
+  ]
+  const dayparts = fallbackParts.map((fallback, index) => {
+    const part = Array.isArray(detail.surfDayparts) ? detail.surfDayparts[index] : undefined
+    return {
+      label: part?.label || fallback.label,
+      rating: part?.rating ?? rating,
+      waveRange: part?.waveRange || fallbackWaveRange,
+    }
+  })
+
+  return (
+    <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.55rem,1.35vw,0.9rem)] py-[clamp(0.45rem,1.1vw,0.75rem)] text-center leading-tight">
+      {detail.isTodaysBest && (
+        <div className="absolute left-[clamp(0.55rem,1.35vw,0.9rem)] top-[clamp(0.36rem,0.9vw,0.6rem)] max-w-[44%] truncate text-[clamp(0.42rem,0.95vw,0.62rem)] font-semibold tracking-[0.15em]" style={{ color: mutedColor }}>
+          Best next 4h:
+        </div>
+      )}
+
+      <div className="mx-auto max-w-[72%] truncate border-b border-current pb-[clamp(0.1rem,0.3vw,0.18rem)] text-[clamp(0.72rem,1.65vw,1.02rem)] font-semibold tracking-[0.14em] uppercase" style={{ borderColor: textColor }} title={spotName}>
+        {spotName}
+      </div>
+
+      <div className="mt-[clamp(0.55rem,1.35vw,0.92rem)] grid min-h-0 flex-1 grid-cols-4 items-stretch">
+        {dayparts.map((part, index) => (
+          <div key={`${part.label}-${index}`} className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center px-[clamp(0.26rem,0.75vw,0.58rem)]">
+            <div className="min-w-0 truncate text-[clamp(0.58rem,1.32vw,0.82rem)] font-semibold tracking-[0.12em] uppercase" title={part.label}>
+              {part.label}
+            </div>
+
+            <div aria-hidden="true" />
+
+            <div className="min-w-0 truncate text-[clamp(0.52rem,1.08vw,0.7rem)] font-semibold tracking-[0.1em] uppercase" title={mirrorSurfRatingWord(part.rating)}>
+              {mirrorSurfRatingWord(part.rating)}
+            </div>
+
+            <div className="flex min-h-0 min-w-0 items-center justify-center py-[clamp(0.18rem,0.52vw,0.36rem)]">
+              <DiceRating rating={part.rating} isExperienceBased={false} muted={mutedColor} paperColor={frameBackground} compact />
+            </div>
+
+            <div className="min-w-0 truncate text-[clamp(0.5rem,1.02vw,0.68rem)] tracking-[0.1em]" title={part.waveRange}>
+              {part.waveRange}
+            </div>
+
+            {index > 0 && (
+              <div className="absolute inset-y-[18%] left-0 w-px" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MirrorSmallSurfCard({
   detail,
   mutedColor,
@@ -5347,6 +5429,18 @@ function LandscapeFrameMirror({
 
     if (module === 'surf' && size === 'small') {
       return <MirrorSmallSurfCard detail={detail} mutedColor={mutedColor} borderColor={borderColor} frameBackground={frameBackground} />
+    }
+
+    if (module === 'surf' && size === 'large') {
+      return (
+        <MirrorLargeSurfCard
+          detail={detail}
+          mutedColor={mutedColor}
+          borderColor={borderColor}
+          frameBackground={frameBackground}
+          textColor={textColor}
+        />
+      )
     }
 
     if (module === 'surf' && size === 'medium') {
