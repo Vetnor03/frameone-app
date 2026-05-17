@@ -74,6 +74,10 @@ type Detail = {
   soccerLastAwayLine?: string
   soccerLastHomeGoalsLine?: string
   soccerLastAwayGoalsLine?: string
+  soccerLeagueLine?: string
+  soccerTopScorerLine?: string
+  soccerRecordLine?: string
+  soccerGoalsLine?: string
   soccerTableRows?: Array<{
     position: number | null
     teamShort: string
@@ -1122,6 +1126,15 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
   const standing = asRecord(data.standing)
   const position = asNumber(standing.position)
   const points = asNumber(standing.points)
+  const won = asNumber(standing.won)
+  const draw = asNumber(standing.draw)
+  const lost = asNumber(standing.lost)
+  const goalsFor = asNumber(standing.goalsFor)
+  const goalsAgainst = asNumber(standing.goalsAgainst)
+  const goalDifference = asNumber(standing.goalDifference)
+  const topScorer = asRecord(data.topScorer)
+  const topScorerName = asString(topScorer.name).trim()
+  const topScorerGoals = asNumber(topScorer.goals)
   const hasNext = Object.keys(next).length > 0
   const hasLast = Object.keys(last).length > 0
   const fixtureLine = hasNext
@@ -1131,6 +1144,14 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
   const [lastHomeGoals = '--', lastAwayGoals = '--'] = asString(last.score, '-- - --')
     .split('-')
     .map((part) => part.trim() || '--')
+  const leagueLine = asString(data.competitionName, '') || asString(cfg.competitionName, '') || 'Premier League'
+  const scorerLine = topScorerName && topScorerGoals != null ? `Top scorer: ${topScorerName} (${topScorerGoals})` : 'Top scorer: --'
+  const recordLine = won != null && draw != null && lost != null ? `Record: ${won}W ${draw}D ${lost}L` : 'Record: --'
+  const goalsLine = goalsFor != null && goalsAgainst != null
+    ? goalDifference != null
+      ? `Goals: ${goalsFor}-${goalsAgainst}  GD ${goalDifference > 0 ? '+' : ''}${goalDifference}`
+      : `Goals: ${goalsFor}-${goalsAgainst}`
+    : 'Goals: --'
 
   return {
     primary: teamName || asString(data.teamKey, 'SOCCER'),
@@ -1148,6 +1169,10 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
     soccerLastAwayLine: hasLast ? soccerOfficialish3(last.awayShort) : '---',
     soccerLastHomeGoalsLine: hasLast ? lastHomeGoals : '--',
     soccerLastAwayGoalsLine: hasLast ? lastAwayGoals : '--',
+    soccerLeagueLine: leagueLine,
+    soccerTopScorerLine: scorerLine,
+    soccerRecordLine: recordLine,
+    soccerGoalsLine: goalsLine,
     soccerTableRows: soccerTableRows(data.table),
   }
 }
