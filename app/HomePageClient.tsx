@@ -3798,6 +3798,94 @@ function MirrorLargeStocksCard({
   )
 }
 
+function MirrorXLStocksCard({
+  detail,
+  fallback,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  fallback: { primary: string; secondary?: string; tertiary?: string }
+  textColor: string
+}) {
+  const title = fitMirrorStockTitle(detail, fallback)
+  const hasLiveStockLayoutData = Boolean(detail.stockPrice || detail.stockDayPercent || detail.stockRangePercent)
+  const price = mirrorFrameStockPrice(detail.stockPrice || '--')
+  const change = detail.stockChange || '--'
+  const dayPercent = detail.stockDayPercent || '--'
+  const detailGroups = [
+    [
+      { label: 'High', value: detail.stockHigh || '--' },
+      { label: 'Low', value: detail.stockLow || '--' },
+    ],
+    [
+      { label: 'Open', value: detail.stockOpen || '--' },
+      { label: 'Prev', value: detail.stockPreviousCloseText || '--' },
+    ],
+    [
+      { label: 'Change', value: change },
+      { label: 'Day', value: dayPercent },
+    ],
+  ]
+
+  if (!hasLiveStockLayoutData) {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-5 text-center leading-tight">
+        <div className="max-w-full truncate text-[clamp(1.1rem,2.8vw,2rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.85rem,2.2vw,1.55rem)] pt-[clamp(0.85rem,2.15vw,1.55rem)] pb-[clamp(0.7rem,1.8vw,1.35rem)] text-center leading-tight">
+      <div className="flex min-h-0 flex-[0_0_47%] flex-col overflow-hidden pb-[clamp(0.2rem,0.65vw,0.5rem)]">
+        <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.05rem,0.2vw,0.14rem)] text-[clamp(0.72rem,1.55vw,1.05rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+
+        <div className="mx-auto grid w-[calc(100%-clamp(2.5rem,7vw,5rem))] shrink-0 grid-cols-[1fr_auto_1fr_auto_1fr] items-center pt-[clamp(0.8rem,1.9vw,1.25rem)]">
+          <div className="min-w-0 truncate px-[clamp(0.25rem,0.75vw,0.55rem)] text-[clamp(0.76rem,1.65vw,1.12rem)] font-semibold tracking-[0.08em]">{price}</div>
+          <div className="h-[calc(100%+0.3rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="min-w-0 truncate px-[clamp(0.25rem,0.75vw,0.55rem)] text-[clamp(0.76rem,1.65vw,1.12rem)] font-semibold tracking-[0.08em]">{change}</div>
+          <div className="h-[calc(100%+0.3rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="min-w-0 truncate px-[clamp(0.25rem,0.75vw,0.55rem)] text-[clamp(0.76rem,1.65vw,1.12rem)] font-semibold tracking-[0.08em]">{dayPercent}</div>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-3 items-center gap-[clamp(0.35rem,1vw,0.8rem)] pt-[clamp(0.75rem,1.75vw,1.15rem)]">
+          {detailGroups.map((group, index) => (
+            <div key={index} className="grid min-w-0 grid-cols-2 gap-x-[clamp(0.5rem,1.3vw,1rem)] gap-y-[clamp(0.44rem,1vw,0.7rem)] text-[clamp(0.54rem,1.12vw,0.76rem)] font-semibold tracking-[0.06em]">
+              {group.map((item) => (
+                <div key={item.label} className="min-w-0 truncate">{item.label}</div>
+              ))}
+              {group.map((item) => (
+                <div key={`${item.label}-value`} className="min-w-0 truncate">{item.value}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-[clamp(0.25rem,0.75vw,0.55rem)]">
+        <div className="shrink-0">
+          <MirrorStockRangeSelector range={detail.stockChartRange} />
+        </div>
+
+        <div className="min-h-0 flex-1 px-[clamp(0.25rem,0.75vw,0.5rem)] pt-[clamp(0.55rem,1.25vw,0.9rem)] pb-[clamp(0.2rem,0.65vw,0.45rem)]">
+          <MirrorStockChart
+            series={detail.stockSeries}
+            previousClose={detail.stockPreviousClose}
+            purchasePrice={detail.stockPurchasePrice}
+            textColor={textColor}
+            moduleId={detail.stockModuleId}
+            chartRange={detail.stockChartRange}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MirrorMediumStocksCard({
   detail,
   fallback,
@@ -3997,6 +4085,9 @@ function LandscapeFrameMirror({
 
     if (module === 'stocks' && size === 'large') {
       const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      if (snapshot.layoutKey === 'full') {
+        return <MirrorXLStocksCard detail={detail} fallback={fallback} textColor={textColor} />
+      }
       return <MirrorLargeStocksCard detail={detail} fallback={fallback} textColor={textColor} />
     }
 
