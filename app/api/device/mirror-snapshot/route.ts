@@ -74,6 +74,14 @@ type Detail = {
   soccerLastAwayLine?: string
   soccerLastHomeGoalsLine?: string
   soccerLastAwayGoalsLine?: string
+  soccerTableRows?: Array<{
+    position: number | null
+    teamShort: string
+    points: number | null
+    gap: number | null
+    goalDifference: number | null
+    isSelected: boolean
+  }>
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -187,6 +195,20 @@ function soccerKickoffParts(value: unknown) {
 function soccerSmallKickoffLine(value: unknown) {
   const parts = soccerKickoffParts(value)
   return `${parts.dayText} ${parts.timeText}`
+}
+
+function soccerTableRows(value: unknown) {
+  const rows = Array.isArray(value) ? value.map(asRecord) : []
+  return rows
+    .map((row) => ({
+      position: asNumber(row.position),
+      teamShort: soccerOfficialish3(row.teamShort || row.teamName),
+      points: asNumber(row.points),
+      gap: asNumber(row.gap),
+      goalDifference: asNumber(row.goalDifference),
+      isSelected: row.isSelected === true,
+    }))
+    .filter((row) => row.position != null || row.teamShort !== '---')
 }
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
@@ -1126,6 +1148,7 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
     soccerLastAwayLine: hasLast ? soccerOfficialish3(last.awayShort) : '---',
     soccerLastHomeGoalsLine: hasLast ? lastHomeGoals : '--',
     soccerLastAwayGoalsLine: hasLast ? lastAwayGoals : '--',
+    soccerTableRows: soccerTableRows(data.table),
   }
 }
 
