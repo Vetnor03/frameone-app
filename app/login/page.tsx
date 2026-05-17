@@ -44,17 +44,6 @@ function useStandaloneDisplayMode() {
 
 type HomeScreenGuideSectionId = 'iphone' | 'android'
 
-function getInitialExpandedGuideIds(): Record<HomeScreenGuideSectionId, boolean> {
-  if (typeof window === 'undefined') return { iphone: false, android: false }
-
-  const userAgent = window.navigator.userAgent
-
-  return {
-    iphone: /iPad|iPhone|iPod/.test(userAgent),
-    android: /Android/.test(userAgent),
-  }
-}
-
 function ChevronIcon({ isOpen }: { isOpen: boolean }) {
   return (
     <svg
@@ -278,6 +267,33 @@ const homeScreenGuideSections: HomeScreenGuideSection[] = [
   },
 ]
 
+function HomeScreenGuideSteps({ section }: { section: HomeScreenGuideSection }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-1.5">
+      {section.steps.map((item, index) => (
+        <div key={`${section.id}-${item.label}`} className="contents">
+          <article className="flex min-w-0 flex-col items-center text-center">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#2aa3ff]/25 text-[0.6rem] font-semibold text-white/45">
+              {item.label}
+            </span>
+            <div className="mt-2.5 flex h-9 items-center justify-center text-[#5fa7d8]/90">{item.icon}</div>
+            <h3 className="mt-2.5 text-[0.66rem] font-semibold tracking-[0.18em] text-white/55">{item.title}</h3>
+            <p className="mt-1.5 max-w-[7.1rem] text-[0.61rem] font-medium leading-snug text-white/35">
+              {item.helper}
+            </p>
+          </article>
+
+          {index < section.steps.length - 1 ? (
+            <div className="pt-[3.8rem]" aria-hidden="true">
+              <span className="block h-px w-5 border-t border-dotted border-white/14" />
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function HomeScreenGuidePlatform({
   expanded,
   onToggle,
@@ -290,73 +306,35 @@ function HomeScreenGuidePlatform({
   const contentId = `home-screen-guide-${section.id}`
 
   return (
-    <div className="border-t border-white/10 last:border-b">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-4 py-3 text-left text-white/45"
-        aria-expanded={expanded}
-        aria-controls={contentId}
-        onClick={onToggle}
-      >
-        <span className="flex items-center gap-2.5">
-          <span className="text-white/35">{section.platformIcon}</span>
-          <span className="text-[0.63rem] font-semibold tracking-[0.22em] text-white/45">{section.title}</span>
-        </span>
-        <span className="text-white/35">
-          <ChevronIcon isOpen={expanded} />
-        </span>
-      </button>
-
-      {expanded ? (
-        <div id={contentId} className="pb-5 pt-2">
-          <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-1.5">
-            {section.steps.map((item, index) => (
-              <div key={`${section.id}-${item.label}`} className="contents">
-                <article className="flex min-w-0 flex-col items-center text-center">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#2aa3ff]/25 text-[0.6rem] font-semibold text-white/45">
-                    {item.label}
-                  </span>
-                  <div className="mt-2.5 flex h-9 items-center justify-center text-[#5fa7d8]/90">{item.icon}</div>
-                  <h3 className="mt-2.5 text-[0.66rem] font-semibold tracking-[0.18em] text-white/55">
-                    {item.title}
-                  </h3>
-                  <p className="mt-1.5 max-w-[7.1rem] text-[0.61rem] font-medium leading-snug text-white/35">
-                    {item.helper}
-                  </p>
-                </article>
-
-                {index < section.steps.length - 1 ? (
-                  <div className="pt-[3.8rem]" aria-hidden="true">
-                    <span className="block h-px w-5 border-t border-dotted border-white/14" />
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <button
+      type="button"
+      className="flex w-full items-center justify-between gap-4 border-b border-white/10 py-3 text-left text-white/45"
+      aria-expanded={expanded}
+      aria-controls={contentId}
+      onClick={onToggle}
+    >
+      <span className="flex items-center gap-2.5">
+        <span className="text-white/35">{section.platformIcon}</span>
+        <span className="text-[0.63rem] font-semibold tracking-[0.22em] text-white/45">{section.title}</span>
+      </span>
+      <span className="text-white/35">
+        <ChevronIcon isOpen={expanded} />
+      </span>
+    </button>
   )
 }
 
 function HomeScreenGuide() {
   const isStandalone = useStandaloneDisplayMode()
-  const [isTipOpen, setIsTipOpen] = useState(true)
-  const [expandedGuideIds, setExpandedGuideIds] = useState(getInitialExpandedGuideIds)
+  const [activeGuideId, setActiveGuideId] = useState<HomeScreenGuideSectionId | null>(null)
 
   if (isStandalone) return null
 
-  const hasExpandedGuide = homeScreenGuideSections.some((section) => expandedGuideIds[section.id])
+  const activeSection = homeScreenGuideSections.find((section) => section.id === activeGuideId)
 
   return (
-    <section aria-label="Add to home screen guide" className={hasExpandedGuide ? 'mt-10 text-center' : 'mt-9 text-center'}>
-      <button
-        type="button"
-        className="flex w-full items-center gap-3 py-2.5 text-left text-white/45"
-        aria-expanded={isTipOpen}
-        aria-controls="home-screen-guide-sections"
-        onClick={() => setIsTipOpen((current) => !current)}
-      >
+    <section aria-label="Add to home screen guide" className="relative mt-9 text-center">
+      <div className="flex w-full items-center gap-3 py-2.5 text-left text-white/45">
         <span className="text-[#5fa7d8]/80">
           <InfoIcon />
         </span>
@@ -364,26 +342,25 @@ function HomeScreenGuide() {
         <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-white/35">
           Add the app to your home screen for a better experience.
         </span>
-        <span className="text-white/35">
-          <ChevronIcon isOpen={isTipOpen} />
-        </span>
-      </button>
+      </div>
 
-      {isTipOpen ? (
-        <div id="home-screen-guide-sections" className="mt-2">
-          {homeScreenGuideSections.map((section) => (
-            <HomeScreenGuidePlatform
-              key={section.id}
-              expanded={expandedGuideIds[section.id]}
-              section={section}
-              onToggle={() =>
-                setExpandedGuideIds((current) => ({
-                  ...current,
-                  [section.id]: !current[section.id],
-                }))
-              }
-            />
-          ))}
+      <div className="mt-2 border-t border-white/10">
+        {homeScreenGuideSections.map((section) => (
+          <HomeScreenGuidePlatform
+            key={section.id}
+            expanded={activeGuideId === section.id}
+            section={section}
+            onToggle={() => setActiveGuideId((current) => (current === section.id ? null : section.id))}
+          />
+        ))}
+      </div>
+
+      {activeSection ? (
+        <div
+          id={`home-screen-guide-${activeSection.id}`}
+          className="absolute left-0 right-0 top-full z-10 mt-5 max-h-[42vh] overflow-y-auto pb-2 pt-1"
+        >
+          <HomeScreenGuideSteps section={activeSection} />
         </div>
       ) : null}
     </section>
