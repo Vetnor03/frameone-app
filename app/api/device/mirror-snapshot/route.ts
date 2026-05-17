@@ -62,10 +62,119 @@ type Detail = {
   countdownTargetDate?: string
   countdownPinned?: boolean
   countdownUpcoming?: Array<{ title: string; targetDate: string; daysLeft: number }>
+  soccerFixtureLine?: string
+  soccerKickoffLine?: string
+  soccerPositionLine?: string
+  soccerPointsLine?: string
 }
+
 type UnknownRecord = Record<string, unknown>
 
 const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+
+const SOCCER_TEAM_ABBREVIATIONS: Array<[string, string]> = [
+  ['AFC Bournemouth', 'BOU'],
+  ['Bournemouth', 'BOU'],
+  ['Arsenal', 'ARS'],
+  ['Aston Villa', 'AVL'],
+  ['Brentford', 'BRE'],
+  ['Brighton & Hove Albion', 'BHA'],
+  ['Brighton', 'BHA'],
+  ['Burnley', 'BUR'],
+  ['Chelsea', 'CHE'],
+  ['Crystal Palace', 'CRY'],
+  ['Everton', 'EVE'],
+  ['Fulham', 'FUL'],
+  ['Leeds', 'LEE'],
+  ['Liverpool', 'LIV'],
+  ['Manchester City', 'MCI'],
+  ['Man City', 'MCI'],
+  ['Manchester United', 'MUN'],
+  ['Man Utd', 'MUN'],
+  ['Man United', 'MUN'],
+  ['Newcastle', 'NEW'],
+  ['Nottingham Forest', 'NFO'],
+  ['Sunderland', 'SUN'],
+  ['Tottenham Hotspur', 'TOT'],
+  ['Tottenham', 'TOT'],
+  ['West Ham', 'WHU'],
+  ['Wolverhampton', 'WOL'],
+  ['Wolves', 'WOL'],
+]
+
+const SOCCER_OFFICIAL_CODES = new Set([
+  'BOU', 'ARS', 'AVL', 'BRE', 'BHA', 'BUR', 'CHE', 'CRY', 'EVE', 'FUL', 'LEE', 'LIV',
+  'MCI', 'MUN', 'NEW', 'NFO', 'SUN', 'TOT', 'WHU', 'WOL',
+])
+
+function soccerOfficialish3(value: unknown) {
+  const input = asString(value).trim()
+  if (!input) return '---'
+
+  for (const [needle, code] of SOCCER_TEAM_ABBREVIATIONS) {
+    if (input.includes(needle)) return code
+  }
+
+  if (SOCCER_OFFICIAL_CODES.has(input)) return input
+
+  const letters = input.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 3)
+  return (letters + '---').slice(0, 3)
+}
+
+function osloDateParts(value: unknown) {
+  const iso = asString(value).trim()
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Oslo',
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+
+  const part = (type: string) => parts.find((x) => x.type === type)?.value || ''
+  return {
+    weekday: part('weekday') || '--',
+    year: part('year'),
+    month: part('month'),
+    day: part('day'),
+    hour: part('hour') || '--',
+    minute: part('minute') || '--',
+  }
+}
+
+function osloYmd(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Oslo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+function soccerSmallKickoffLine(value: unknown) {
+  const parts = osloDateParts(value)
+  if (!parts) return '-- --:--'
+
+  const kickoffYmd = `${parts.year}-${parts.month}-${parts.day}`
+  const now = new Date()
+  const todayYmd = osloYmd(now)
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowYmd = osloYmd(tomorrow)
+
+  let dayText = parts.weekday
+  if (kickoffYmd === todayYmd) dayText = 'Today'
+  else if (kickoffYmd === tomorrowYmd) dayText = 'Tomorrow'
+
+  return `${dayText} ${parts.hour}:${parts.minute}`
+}
 const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
 const LIKELY_AVAILABLE_HISTORY_DAYS = 45
@@ -976,10 +1085,20 @@ async function soccerDetail(origin: string, cfg: UnknownRecord, language: string
   const next = asRecord(data.next)
   const standing = asRecord(data.standing)
   const position = asNumber(standing.position)
+  const points = asNumber(standing.points)
+  const hasNext = Object.keys(next).length > 0
+  const fixtureLine = hasNext
+    ? `${soccerOfficialish3(next.homeShort)} vs ${soccerOfficialish3(next.awayShort)}`
+    : (teamName || asString(data.teamKey, 'Team'))
+
   return {
     primary: teamName || asString(data.teamKey, 'SOCCER'),
     secondary: next.homeShort && next.awayShort ? `${next.homeShort} - ${next.awayShort}` : asString(data.competitionName, ''),
     tertiary: position != null ? `#${position}` : undefined,
+    soccerFixtureLine: fixtureLine,
+    soccerKickoffLine: hasNext ? soccerSmallKickoffLine(next.utc) : '-- --:--',
+    soccerPositionLine: position != null ? `Position: ${position}` : 'Position: --',
+    soccerPointsLine: points != null ? `Points: ${points}` : 'Points: --',
   }
 }
 

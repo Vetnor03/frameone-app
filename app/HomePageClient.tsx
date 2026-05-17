@@ -325,7 +325,12 @@ type MirrorModuleDetail = {
   countdownTargetDate?: string
   countdownPinned?: boolean
   countdownUpcoming?: Array<{ title: string; targetDate: string; daysLeft: number }>
+  soccerFixtureLine?: string
+  soccerKickoffLine?: string
+  soccerPositionLine?: string
+  soccerPointsLine?: string
 }
+
 
 type MirrorHoliday = {
   date: string
@@ -3927,6 +3932,33 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
   )
 }
 
+
+function MirrorSmallSoccerCard({ detail, fallback }: { detail: MirrorModuleDetail; fallback: { primary: string; secondary?: string; tertiary?: string } }) {
+  const fixture = detail.soccerFixtureLine || detail.secondary || fallback.primary || 'Soccer'
+  const kickoff = detail.soccerKickoffLine || '-- --:--'
+  const position = detail.soccerPositionLine || (detail.tertiary ? `Position: ${detail.tertiary.replace(/^#/, '')}` : 'Position: --')
+  const points = detail.soccerPointsLine || 'Points: --'
+  const stats = [kickoff, position, points]
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.45rem,1.15vw,0.8rem)] text-center leading-none">
+      <div className="max-w-full truncate text-[clamp(0.92rem,2.35vw,1.38rem)] font-semibold tracking-[0.08em]" title={fixture}>
+        {fixture}
+      </div>
+      <div className="mt-[clamp(0.8rem,2.15vw,1.2rem)] flex w-full max-w-full items-center justify-center text-[clamp(0.58rem,1.32vw,0.82rem)] font-semibold tracking-[0.045em]">
+        {stats.map((item, index) => (
+          <React.Fragment key={`${item}-${index}`}>
+            {index > 0 && <div className="mx-[clamp(0.18rem,0.55vw,0.42rem)] h-[clamp(0.85rem,1.8vw,1.1rem)] w-px shrink-0 bg-current opacity-90" aria-hidden="true" />}
+            <div className="min-w-0 flex-1 truncate px-[clamp(0.12rem,0.38vw,0.28rem)]" title={item}>
+              {item}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MirrorSurfRatingBars({ rating, muted }: { rating: number | undefined; muted: string }) {
   const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
   return (
@@ -4841,6 +4873,11 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'soccer' && size === 'small') {
+      const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      return <MirrorSmallSoccerCard detail={detail} fallback={fallback} />
     }
 
     if (module === 'stocks' && size === 'large') {
