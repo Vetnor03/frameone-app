@@ -125,7 +125,7 @@ function HomeScreenGuide() {
   return (
     <section
       aria-labelledby="home-screen-guide-title"
-      className="mt-6 rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-2.5 shadow-[0_10px_34px_rgba(0,0,0,0.16)]"
+      className="mt-4 rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-2.5 shadow-[0_10px_34px_rgba(0,0,0,0.16)]"
     >
       <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
         <div>
@@ -134,7 +134,7 @@ function HomeScreenGuide() {
           </h2>
           <p className="mt-1 text-xs text-white/50">iPhone · Safari · 20 seconds</p>
         </div>
-        <span className="rounded-full border border-[#6faed8]/30 px-2.5 py-0.5 text-[0.62rem] font-semibold tracking-[0.18em] text-[#8ab5d2]">
+        <span className="rounded-full border border-[#6faed8]/20 px-2.5 py-0.5 text-[0.62rem] font-semibold tracking-[0.18em] text-[#789db5]">
           TIP
         </span>
       </div>
@@ -142,11 +142,11 @@ function HomeScreenGuide() {
       <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-1.5">
         {steps.map((item, index) => (
           <div key={item.label} className="contents">
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#e8dfcf] px-2 py-2.5 text-center text-[#061b24] shadow-[inset_0_-2px_0_rgba(6,27,36,0.08)]">
-              <span className="absolute left-2 top-2 flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full bg-[#12303b] text-[0.6rem] font-black text-[#e8dfcf]">
+            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#ded2bd] px-2 py-2 text-center text-[#061b24] shadow-[inset_0_-2px_0_rgba(6,27,36,0.08)]">
+              <span className="absolute left-2 top-2 flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full bg-[#12303b] text-[0.6rem] font-black text-[#ded2bd]">
                 {item.label}
               </span>
-              <div className="mx-auto mb-1.5 flex h-14 w-14 rotate-[-2deg] items-center justify-center rounded-2xl border-2 border-[#12303b] bg-[#f3ede2] text-[#6faed8] shadow-[2px_2px_0_rgba(6,27,36,0.12)]">
+              <div className="mx-auto mb-1.5 flex h-14 w-14 rotate-[-2deg] items-center justify-center rounded-2xl border-2 border-[#12303b] bg-[#eee5d6] text-[#6a9ebf] shadow-[2px_2px_0_rgba(6,27,36,0.12)]">
                 {item.icon}
               </div>
               <h3 className="text-sm font-black uppercase tracking-wide">{item.title}</h3>
@@ -155,7 +155,7 @@ function HomeScreenGuide() {
 
             {index < steps.length - 1 ? (
               <div className="flex items-center" aria-hidden="true">
-                <span className="block h-px w-3 border-t border-dashed border-white/25" />
+                <span className="block h-px w-3 border-t border-dashed border-white/18" />
               </div>
             ) : null}
           </div>
