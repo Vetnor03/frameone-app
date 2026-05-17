@@ -337,6 +337,14 @@ type MirrorModuleDetail = {
   soccerLastAwayLine?: string
   soccerLastHomeGoalsLine?: string
   soccerLastAwayGoalsLine?: string
+  soccerTableRows?: Array<{
+    position: number | null
+    teamShort: string
+    points: number | null
+    gap: number | null
+    goalDifference: number | null
+    isSelected: boolean
+  }>
 }
 
 
@@ -4014,6 +4022,74 @@ function MirrorMediumSoccerCard({ detail, fallback }: { detail: MirrorModuleDeta
   )
 }
 
+function mirrorSoccerTableWindow(rows: NonNullable<MirrorModuleDetail['soccerTableRows']>, maxRows: number) {
+  if (rows.length <= maxRows) return rows
+
+  const selectedIndex = rows.findIndex((row) => row.isSelected)
+  if (selectedIndex < 0) return rows.slice(0, maxRows)
+
+  let start = selectedIndex - Math.floor(maxRows / 2)
+  start = Math.max(0, Math.min(start, rows.length - maxRows))
+  return rows.slice(start, start + maxRows)
+}
+
+function formatMirrorSoccerNumber(value: number | null | undefined, signed = false) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return signed ? '' : '--'
+  if (signed && value > 0) return `+${value}`
+  return String(value)
+}
+
+function MirrorSoccerStandingsTable({ detail }: { detail: MirrorModuleDetail }) {
+  const rows = mirrorSoccerTableWindow(Array.isArray(detail.soccerTableRows) ? detail.soccerTableRows : [], 6)
+
+  if (rows.length <= 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.35rem,0.9vw,0.65rem)] text-center text-[clamp(0.58rem,1.24vw,0.78rem)] font-semibold tracking-[0.07em]">
+        No table
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid h-full w-full grid-rows-[repeat(7,minmax(0,1fr))] overflow-hidden py-[clamp(0.36rem,0.9vw,0.62rem)] text-center leading-none">
+      <div className="grid min-h-0 grid-cols-[1fr_1fr_1fr_1fr_1fr] items-center gap-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(0.5rem,1.02vw,0.66rem)] font-semibold tracking-[0.06em]">
+        <div>P</div>
+        <div>Team</div>
+        <div>Pts</div>
+        <div>Gap</div>
+        <div>GD</div>
+      </div>
+
+      {rows.map((row, index) => (
+        <div
+          key={`${row.position ?? index}-${row.teamShort}`}
+          className={`grid min-h-0 grid-cols-[1fr_1fr_1fr_1fr_1fr] items-center gap-[clamp(0.08rem,0.22vw,0.16rem)] text-[clamp(0.5rem,1.02vw,0.66rem)] font-semibold tracking-[0.045em] ${row.isSelected ? 'border-y border-current' : ''}`}
+        >
+          <div className="truncate">{formatMirrorSoccerNumber(row.position)}</div>
+          <div className="truncate" title={row.teamShort}>{row.teamShort || '--'}</div>
+          <div className="truncate">{formatMirrorSoccerNumber(row.points)}</div>
+          <div className="truncate">{row.isSelected ? '' : formatMirrorSoccerNumber(row.gap, true)}</div>
+          <div className="truncate">{formatMirrorSoccerNumber(row.goalDifference, true) || '--'}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MirrorLargeSoccerCard({ detail, fallback }: { detail: MirrorModuleDetail; fallback: { primary: string; secondary?: string; tertiary?: string } }) {
+  return (
+    <div className="grid h-full w-full grid-cols-[49fr_12px_minmax(0,51fr)] overflow-hidden">
+      <div className="min-w-0 overflow-hidden">
+        <MirrorMediumSoccerCard detail={detail} fallback={fallback} />
+      </div>
+      <div aria-hidden="true" />
+      <div className="min-w-0 overflow-hidden">
+        <MirrorSoccerStandingsTable detail={detail} />
+      </div>
+    </div>
+  )
+}
+
 function MirrorSmallSoccerCard({ detail, fallback }: { detail: MirrorModuleDetail; fallback: { primary: string; secondary?: string; tertiary?: string } }) {
   const fixture = detail.soccerFixtureLine || detail.secondary || fallback.primary || 'Soccer'
   const kickoff = detail.soccerKickoffLine || '-- --:--'
@@ -4954,6 +5030,11 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'soccer' && size === 'large') {
+      const fallback = frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+      return <MirrorLargeSoccerCard detail={detail} fallback={fallback} />
     }
 
     if (module === 'soccer' && size === 'medium') {
