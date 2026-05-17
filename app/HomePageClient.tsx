@@ -2605,6 +2605,109 @@ function formatMirrorCountdownUpcomingLine(item: { title: string; targetDate?: s
   return `${item.title} - ${formatMirrorCountdownUpcomingStatus(item.daysLeft, item.targetDate)}`
 }
 
+function mirrorCountdownYmdNumber(year: number, month: number, day: number) {
+  return year * 10000 + (month + 1) * 100 + day
+}
+
+function mirrorCountdownTargetParts(targetDate: string | undefined) {
+  const date = parseMirrorCountdownDate(targetDate)
+  if (!date) return null
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth(),
+    day: date.getDate(),
+  }
+}
+
+function MirrorCountdownDayMarker({ kind }: { kind: 'crossed' | 'target' }) {
+  if (kind === 'target') {
+    return (
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-[clamp(0.02rem,0.1vw,0.08rem)] rounded-full border-[clamp(0.12rem,0.34vw,0.22rem)] border-current"
+      />
+    )
+  }
+
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <span className="absolute h-[clamp(0.12rem,0.34vw,0.22rem)] w-[88%] rotate-45 rounded-full bg-current" />
+      <span className="absolute h-[clamp(0.12rem,0.34vw,0.22rem)] w-[88%] -rotate-45 rounded-full bg-current" />
+    </span>
+  )
+}
+
+function MirrorCountdownCalendarMonth({
+  textColor,
+  targetDate,
+  monthOffset = 0,
+  showWeekdays = true,
+}: {
+  textColor: string
+  targetDate?: string
+  monthOffset?: number
+  showWeekdays?: boolean
+}) {
+  const now = new Date()
+  const targetMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const { days, usedRows } = mirrorCalendarDays(now, monthOffset)
+  const target = mirrorCountdownTargetParts(targetDate)
+  const todayKey = mirrorCountdownYmdNumber(now.getFullYear(), now.getMonth(), now.getDate())
+  const targetKey = target ? mirrorCountdownYmdNumber(target.year, target.month, target.day) : null
+  const monthTitle = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(targetMonth)
+  const year = targetMonth.getFullYear()
+  const month = targetMonth.getMonth()
+
+  return (
+    <div className="flex h-full w-full min-w-0 items-center justify-center overflow-hidden px-[clamp(0.3rem,0.82vw,0.55rem)] py-[clamp(0.26rem,0.72vw,0.48rem)] leading-none">
+      <div className="grid h-full max-h-[min(100%,11.25rem)] w-full max-w-[min(100%,15.8rem)] grid-rows-[auto_auto_1fr] gap-[clamp(0.16rem,0.46vw,0.34rem)]">
+        <div className="min-w-0 truncate text-center text-[clamp(0.68rem,1.55vw,1rem)] font-bold tracking-[0.08em]">
+          {monthTitle}
+        </div>
+
+        {showWeekdays ? (
+          <div className="grid grid-cols-7 gap-x-[clamp(0.1rem,0.5vw,0.36rem)] text-center text-[clamp(0.54rem,1.18vw,0.78rem)] font-bold tracking-[0.1em]">
+            {MIRROR_CALENDAR_WEEKDAYS.map((weekday) => (
+              <div key={weekday} className="opacity-80">
+                {weekday}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div aria-hidden="true" className="h-0" />
+        )}
+
+        <div
+          className="grid min-h-0 grid-cols-7 items-center gap-x-[clamp(0.1rem,0.5vw,0.36rem)] gap-y-[clamp(0.1rem,0.48vw,0.32rem)] text-center text-[clamp(0.72rem,1.72vw,1.12rem)] font-semibold tracking-[0.02em]"
+          style={{ gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: usedRows * 7 }).map((_, index) => {
+            const day = days[index] ?? null
+            const dayKey = day == null ? null : mirrorCountdownYmdNumber(year, month, day)
+            const isTarget = !!target && target.year === year && target.month === month && target.day === day
+            const isCrossed = dayKey !== null && targetKey !== null && dayKey < todayKey && dayKey < targetKey
+
+            return (
+              <div key={index} className="flex min-h-0 items-center justify-center">
+                {day == null ? null : (
+                  <span
+                    className="relative flex aspect-square h-[clamp(1.24rem,3.35vw,2.12rem)] items-center justify-center"
+                    style={{ color: textColor, opacity: 0.9 }}
+                  >
+                    <span className="relative z-10">{day}</span>
+                    {isCrossed ? <MirrorCountdownDayMarker kind="crossed" /> : null}
+                    {isTarget ? <MirrorCountdownDayMarker kind="target" /> : null}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MirrorMediumCountdownCard({
   detail,
   fallbackTitle,
@@ -2697,6 +2800,63 @@ function MirrorLargeCountdownCard({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLCountdownCard({
+  detail,
+  fallbackTitle,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  fallbackTitle: string
+  textColor: string
+}) {
+  const upcoming = Array.isArray(detail.countdownUpcoming) ? detail.countdownUpcoming : []
+
+  return (
+    <div className="grid h-full w-full grid-cols-[1fr_1fr] grid-rows-[1fr_1fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
+      <div className="min-h-0 min-w-0 overflow-hidden">
+        <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+      </div>
+
+      <div className="min-h-0 min-w-0 overflow-hidden">
+        <MirrorCountdownCalendarMonth textColor={textColor} targetDate={detail.countdownTargetDate} showWeekdays />
+      </div>
+
+      <div className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden px-[clamp(0.25rem,0.75vw,0.5rem)] py-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-none">
+        {upcoming.length === 0 ? (
+          <div className="max-w-full truncate text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]">
+            No more events
+          </div>
+        ) : (
+          <div className="flex max-h-full max-w-full flex-col items-stretch justify-center overflow-hidden">
+            <div className="mb-[clamp(0.42rem,1.22vw,0.72rem)] shrink-0 text-center text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.16em]">
+              COMING UP
+            </div>
+
+            <div className="flex max-w-full flex-col gap-[clamp(0.48rem,1.45vw,0.9rem)] overflow-hidden text-left">
+              {upcoming.map((item, index) => {
+                const line = formatMirrorCountdownUpcomingLine(item)
+
+                return (
+                  <div key={`${item.targetDate}-${item.title}-${index}`} className="flex min-w-0 items-center gap-[clamp(0.34rem,0.9vw,0.55rem)]" title={line}>
+                    <span className="h-[clamp(0.28rem,0.7vw,0.42rem)] w-[clamp(0.28rem,0.7vw,0.42rem)] shrink-0 rounded-full bg-current" aria-hidden="true" />
+                    <span className="min-w-0 truncate text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.04em]">
+                      {line}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="min-h-0 min-w-0 overflow-hidden">
+        <MirrorCountdownCalendarMonth textColor={textColor} targetDate={detail.countdownTargetDate} monthOffset={1} showWeekdays={false} />
       </div>
     </div>
   )
@@ -4440,6 +4600,9 @@ function LandscapeFrameMirror({
 
     if (module === 'countdown' && size === 'large') {
       const fallbackTitle = String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
+      if (snapshot.layoutKey === 'full') {
+        return <MirrorXLCountdownCard detail={detail} fallbackTitle={fallbackTitle} textColor={textColor} />
+      }
       return <MirrorLargeCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
     }
 
