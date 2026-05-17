@@ -49,17 +49,17 @@ function HomeScreenGuide() {
   const steps = [
     {
       label: '1',
-      title: 'Share',
+      title: 'SHARE',
       helper: 'Tap the Share button at the bottom of Safari.',
       icon: (
-        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-11 w-11">
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-9 w-9">
           <path
             d="M24 29V8m0 0-7 7m7-7 7 7"
             fill="none"
             stroke="currentColor"
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth="3.2"
+            strokeWidth="2.5"
           />
           <path
             d="M15 22h-3.5A3.5 3.5 0 0 0 8 25.5v11A3.5 3.5 0 0 0 11.5 40h25a3.5 3.5 0 0 0 3.5-3.5v-11a3.5 3.5 0 0 0-3.5-3.5H33"
@@ -67,51 +67,26 @@ function HomeScreenGuide() {
             stroke="currentColor"
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth="3.2"
+            strokeWidth="2.5"
           />
         </svg>
       ),
     },
     {
       label: '2',
-      title: 'Scroll + Add',
+      title: 'ADD',
       helper: 'Scroll down, then choose “Add to Home Screen”.',
       icon: (
-        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-11 w-11">
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-9 w-9">
           <path
             d="M13 8h22a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H13a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4Z"
             fill="none"
             stroke="currentColor"
             strokeLinejoin="round"
-            strokeWidth="3.2"
+            strokeWidth="2.5"
           />
           <path
             d="M24 17v14m-7-7h14"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="3.4"
-          />
-          <path d="M19 35h10" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.6" />
-        </svg>
-      ),
-    },
-    {
-      label: '3',
-      title: 'Done',
-      helper: 'Tap “Add” — the app is now on your home screen.',
-      icon: (
-        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-11 w-11">
-          <path
-            d="M13 21.5 21 30l15-16"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="4"
-          />
-          <path
-            d="M10 13c2.5-4 7.2-6.5 14-6.5 10.5 0 18 7.2 18 17.5S34.5 41.5 24 41.5 6 34.2 6 24c0-2.2.4-4.2 1.1-6"
             fill="none"
             stroke="currentColor"
             strokeLinecap="round"
@@ -120,42 +95,59 @@ function HomeScreenGuide() {
         </svg>
       ),
     },
+    {
+      label: '3',
+      title: 'DONE',
+      helper: 'Tap “Add” — the app is now on your home screen.',
+      icon: (
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-9 w-9">
+          <path
+            d="M13 24.5 21 32l15-17"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+          />
+          <path
+            d="M10 13c2.5-4 7.2-6.5 14-6.5 10.5 0 18 7.2 18 17.5S34.5 41.5 24 41.5 6 34.2 6 24c0-2.2.4-4.2 1.1-6"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="2"
+          />
+        </svg>
+      ),
+    },
   ]
 
   return (
-    <section
-      aria-labelledby="home-screen-guide-title"
-      className="mt-4 rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-2.5 shadow-[0_10px_34px_rgba(0,0,0,0.16)]"
-    >
-      <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
-        <div>
-          <h2 id="home-screen-guide-title" className="text-sm font-semibold tracking-[0.18em] text-white/90">
-            ADD THE APP TO YOUR HOME SCREEN
-          </h2>
-          <p className="mt-1 text-xs text-white/50">iPhone · Safari · 20 seconds</p>
-        </div>
-        <span className="rounded-full border border-[#6faed8]/20 px-2.5 py-0.5 text-[0.62rem] font-semibold tracking-[0.18em] text-[#789db5]">
-          TIP
-        </span>
+    <section aria-labelledby="home-screen-guide-title" className="mt-8 text-center">
+      <div className="flex items-center justify-center gap-3 text-white/35">
+        <span className="h-px w-12 bg-white/12" />
+        <h2 id="home-screen-guide-title" className="text-[0.65rem] font-semibold tracking-[0.22em]">
+          ADD TO HOME SCREEN
+        </h2>
+        <span className="h-px w-12 bg-white/12" />
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-1.5">
+      <div className="mt-5 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-1.5">
         {steps.map((item, index) => (
           <div key={item.label} className="contents">
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#ded2bd] px-2 py-2 text-center text-[#061b24] shadow-[inset_0_-2px_0_rgba(6,27,36,0.08)]">
-              <span className="absolute left-2 top-2 flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full bg-[#12303b] text-[0.6rem] font-black text-[#ded2bd]">
+            <article className="flex min-w-0 flex-col items-center text-center">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[0.62rem] font-semibold text-white/45">
                 {item.label}
               </span>
-              <div className="mx-auto mb-1.5 flex h-14 w-14 rotate-[-2deg] items-center justify-center rounded-2xl border-2 border-[#12303b] bg-[#eee5d6] text-[#6a9ebf] shadow-[2px_2px_0_rgba(6,27,36,0.12)]">
+              <div className="mt-2 flex h-10 items-center justify-center text-[#5fa7d8]">
                 {item.icon}
               </div>
-              <h3 className="text-sm font-black uppercase tracking-wide">{item.title}</h3>
-              <p className="mt-1 text-[0.66rem] font-semibold leading-snug text-[#314b55]">{item.helper}</p>
+              <h3 className="mt-2 text-[0.68rem] font-semibold tracking-[0.18em] text-white/55">{item.title}</h3>
+              <p className="mt-1 max-w-[7.2rem] text-[0.62rem] font-medium leading-snug text-white/35">{item.helper}</p>
             </article>
 
             {index < steps.length - 1 ? (
-              <div className="flex items-center" aria-hidden="true">
-                <span className="block h-px w-3 border-t border-dashed border-white/18" />
+              <div className="pt-[3.9rem]" aria-hidden="true">
+                <span className="block h-px w-5 border-t border-dashed border-white/14" />
               </div>
             ) : null}
           </div>
@@ -238,6 +230,8 @@ export default function LoginPage() {
             >
               {loading ? 'SENDING...' : 'SEND CODE'}
             </button>
+
+            <HomeScreenGuide />
           </>
         ) : (
           <>
@@ -275,8 +269,6 @@ export default function LoginPage() {
             </button>
           </>
         )}
-
-        <HomeScreenGuide />
       </div>
     </main>
   )
