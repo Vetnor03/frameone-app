@@ -2531,6 +2531,108 @@ function buildSmallMirrorCountdownLine(title: string, daysLeft: number) {
   }
 }
 
+function formatMirrorCountdownDaysNumber(days: number) {
+  return String(Math.max(0, days))
+}
+
+function formatMirrorCountdownDaysUnit(days: number) {
+  return days === 1 ? 'DAG' : 'DAGER'
+}
+
+function parseMirrorCountdownDate(date: string | undefined) {
+  const match = typeof date === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(date) : null
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+
+  return new Date(year, month - 1, day)
+}
+
+function mirrorCountdownWeekdayName(date: Date) {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date)
+}
+
+function formatMirrorCountdownShortStatus(daysLeft: number) {
+  if (daysLeft <= 0) return 'Today'
+  if (daysLeft === 1) return 'Tomorrow'
+  return `In ${daysLeft} days`
+}
+
+function formatMirrorCountdownMediumBadge(daysLeft: number, targetDate: string | undefined) {
+  if (daysLeft <= 0) return 'Today'
+  if (daysLeft === 1) return 'Tomorrow'
+
+  const date = parseMirrorCountdownDate(targetDate)
+  if (!date) return formatMirrorCountdownShortStatus(daysLeft)
+
+  const weekday = mirrorCountdownWeekdayName(date)
+
+  if (daysLeft <= 6) return weekday
+  if (daysLeft <= 13) return `Next ${weekday}`
+  if (daysLeft === 14) return 'In 2 weeks'
+  if (daysLeft === 21) return 'In 3 weeks'
+  if (daysLeft === 28) return 'In 4 weeks'
+  if (daysLeft < 30) return `In ${daysLeft} days`
+  if (daysLeft < 60) return 'Next month'
+
+  return formatMirrorCountdownShortStatus(daysLeft)
+}
+
+function MirrorMediumCountdownCard({
+  detail,
+  fallbackTitle,
+}: {
+  detail: MirrorModuleDetail
+  fallbackTitle: string
+}) {
+  const title = detail.countdownTitle || detail.primary || fallbackTitle || 'COUNTDOWN'
+  const daysLeft = typeof detail.countdownDaysLeft === 'number' ? detail.countdownDaysLeft : null
+
+  if (daysLeft === null) {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-4 text-center leading-tight">
+        <div className="max-w-full truncate text-[clamp(1rem,2.55vw,1.7rem)] font-semibold tracking-[0.08em]">
+          {title}
+        </div>
+      </div>
+    )
+  }
+
+  const daysNumber = formatMirrorCountdownDaysNumber(daysLeft)
+  const daysUnit = formatMirrorCountdownDaysUnit(daysLeft)
+  const badge = formatMirrorCountdownMediumBadge(daysLeft, detail.countdownTargetDate)
+
+  return (
+    <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.5rem,1.45vw,0.95rem)] py-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-none">
+      <div className="flex max-h-full w-full flex-col items-center justify-center gap-[clamp(0.42rem,1.22vw,0.72rem)] overflow-hidden">
+        <div className="max-w-full shrink-0 truncate text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]" title={title}>
+          {title}
+        </div>
+
+        <div className="max-w-full shrink-0 truncate text-[clamp(2.2rem,7.4vw,4.8rem)] font-semibold tracking-[-0.06em]" title={daysNumber}>
+          {daysNumber}
+        </div>
+
+        <div className="max-w-full shrink-0 truncate text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.16em]" title={daysUnit}>
+          {daysUnit}
+        </div>
+
+        <div
+          className="max-w-[calc(100%-clamp(0.7rem,2vw,1.2rem))] shrink-0 truncate bg-white px-[clamp(0.78rem,2.1vw,1.25rem)] py-[clamp(0.36rem,0.92vw,0.62rem)] text-[clamp(0.72rem,1.65vw,1.08rem)] font-semibold tracking-[0.08em] text-black"
+          title={badge}
+        >
+          {badge}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MirrorMediumDateCard({
   language,
   textColor,
@@ -4266,6 +4368,11 @@ function LandscapeFrameMirror({
       )
     }
 
+
+    if (module === 'countdown' && size === 'medium') {
+      const fallbackTitle = String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
+      return <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+    }
 
     if (module === 'countdown' && size === 'small') {
       const title = detail.countdownTitle || detail.primary || String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
