@@ -1,7 +1,7 @@
 // app/login/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
@@ -20,14 +20,39 @@ function getSafeNextPath() {
   }
 }
 
+function isStandaloneDisplayMode() {
+  if (typeof window === 'undefined') return false
+
+  const navigatorWithStandalone = window.navigator as Navigator & { standalone?: boolean }
+
+  return window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true
+}
+
+function subscribeToStandaloneDisplayMode(onStoreChange: () => void) {
+  if (typeof window === 'undefined') return () => {}
+
+  const mediaQuery = window.matchMedia('(display-mode: standalone)')
+  mediaQuery.addEventListener('change', onStoreChange)
+
+  return () => mediaQuery.removeEventListener('change', onStoreChange)
+}
+
+function useStandaloneDisplayMode() {
+  return useSyncExternalStore(subscribeToStandaloneDisplayMode, isStandaloneDisplayMode, () => false)
+}
+
 function HomeScreenGuide() {
+  const isStandalone = useStandaloneDisplayMode()
+
+  if (isStandalone) return null
+
   const steps = [
     {
       label: '1',
       title: 'Share',
       helper: 'Tap the Share button at the bottom of Safari.',
       icon: (
-        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-11 w-11">
           <path
             d="M24 29V8m0 0-7 7m7-7 7 7"
             fill="none"
@@ -52,7 +77,7 @@ function HomeScreenGuide() {
       title: 'Scroll + Add',
       helper: 'Scroll down, then choose “Add to Home Screen”.',
       icon: (
-        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-11 w-11">
           <path
             d="M13 8h22a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H13a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4Z"
             fill="none"
@@ -76,7 +101,7 @@ function HomeScreenGuide() {
       title: 'Done',
       helper: 'Tap “Add” — the app is now on your home screen.',
       icon: (
-        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-12 w-12">
+        <svg viewBox="0 0 48 48" aria-hidden="true" className="h-11 w-11">
           <path
             d="M13 21.5 21 30l15-16"
             fill="none"
@@ -100,37 +125,37 @@ function HomeScreenGuide() {
   return (
     <section
       aria-labelledby="home-screen-guide-title"
-      className="mt-7 rounded-[1.7rem] border-2 border-white/15 bg-white/[0.06] p-3 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
+      className="mt-6 rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-2.5 shadow-[0_10px_34px_rgba(0,0,0,0.16)]"
     >
-      <div className="mb-3 flex items-center justify-between gap-3 px-1">
+      <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
         <div>
           <h2 id="home-screen-guide-title" className="text-sm font-semibold tracking-[0.18em] text-white/90">
             ADD THE APP TO YOUR HOME SCREEN
           </h2>
           <p className="mt-1 text-xs text-white/50">iPhone · Safari · 20 seconds</p>
         </div>
-        <span className="rounded-full border border-[#2aa3ff]/50 px-3 py-1 text-[0.65rem] font-semibold tracking-[0.18em] text-[#6fc0ff]">
+        <span className="rounded-full border border-[#6faed8]/30 px-2.5 py-0.5 text-[0.62rem] font-semibold tracking-[0.18em] text-[#8ab5d2]">
           TIP
         </span>
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2">
+      <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-1.5">
         {steps.map((item, index) => (
           <div key={item.label} className="contents">
-            <article className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#f8f3e8] px-2.5 py-3 text-center text-[#061b24] shadow-[inset_0_-3px_0_rgba(6,27,36,0.12)]">
-              <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#061b24] text-[0.65rem] font-black text-[#f8f3e8]">
+            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#e8dfcf] px-2 py-2.5 text-center text-[#061b24] shadow-[inset_0_-2px_0_rgba(6,27,36,0.08)]">
+              <span className="absolute left-2 top-2 flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full bg-[#12303b] text-[0.6rem] font-black text-[#e8dfcf]">
                 {item.label}
               </span>
-              <div className="mx-auto mb-2 flex h-16 w-16 rotate-[-2deg] items-center justify-center rounded-2xl border-[3px] border-[#061b24] bg-white text-[#2aa3ff] shadow-[4px_4px_0_rgba(6,27,36,0.18)]">
+              <div className="mx-auto mb-1.5 flex h-14 w-14 rotate-[-2deg] items-center justify-center rounded-2xl border-2 border-[#12303b] bg-[#f3ede2] text-[#6faed8] shadow-[2px_2px_0_rgba(6,27,36,0.12)]">
                 {item.icon}
               </div>
               <h3 className="text-sm font-black uppercase tracking-wide">{item.title}</h3>
-              <p className="mt-1 text-[0.68rem] font-semibold leading-snug text-[#24414c]">{item.helper}</p>
+              <p className="mt-1 text-[0.66rem] font-semibold leading-snug text-[#314b55]">{item.helper}</p>
             </article>
 
             {index < steps.length - 1 ? (
               <div className="flex items-center" aria-hidden="true">
-                <span className="block h-px w-4 border-t border-dashed border-white/35" />
+                <span className="block h-px w-3 border-t border-dashed border-white/25" />
               </div>
             ) : null}
           </div>
