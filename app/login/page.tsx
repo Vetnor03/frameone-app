@@ -306,21 +306,29 @@ function HomeScreenGuidePlatform({
   const contentId = `home-screen-guide-${section.id}`
 
   return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between gap-4 border-b border-white/10 py-3 text-left text-white/45"
-      aria-expanded={expanded}
-      aria-controls={contentId}
-      onClick={onToggle}
-    >
-      <span className="flex items-center gap-2.5">
-        <span className="text-white/35">{section.platformIcon}</span>
-        <span className="text-[0.63rem] font-semibold tracking-[0.22em] text-white/45">{section.title}</span>
-      </span>
-      <span className="text-white/35">
-        <ChevronIcon isOpen={expanded} />
-      </span>
-    </button>
+    <div className="border-b border-white/10">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-4 py-3 text-left text-white/45"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={onToggle}
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="text-white/35">{section.platformIcon}</span>
+          <span className="text-[0.63rem] font-semibold tracking-[0.22em] text-white/45">{section.title}</span>
+        </span>
+        <span className="text-white/35">
+          <ChevronIcon isOpen={expanded} />
+        </span>
+      </button>
+
+      {expanded ? (
+        <div id={contentId} className="pb-5 pt-2">
+          <HomeScreenGuideSteps section={section} />
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -330,10 +338,8 @@ function HomeScreenGuide() {
 
   if (isStandalone) return null
 
-  const activeSection = homeScreenGuideSections.find((section) => section.id === activeGuideId)
-
   return (
-    <section aria-label="Add to home screen guide" className="relative mt-9 text-center">
+    <section aria-label="Add to home screen guide" className="mt-9 text-center">
       <div className="flex w-full items-center gap-3 py-2.5 text-left text-white/45">
         <span className="text-[#5fa7d8]/80">
           <InfoIcon />
@@ -354,15 +360,6 @@ function HomeScreenGuide() {
           />
         ))}
       </div>
-
-      {activeSection ? (
-        <div
-          id={`home-screen-guide-${activeSection.id}`}
-          className="absolute left-0 right-0 top-full z-10 mt-5 max-h-[42vh] overflow-y-auto pb-2 pt-1"
-        >
-          <HomeScreenGuideSteps section={activeSection} />
-        </div>
-      ) : null}
     </section>
   )
 }
