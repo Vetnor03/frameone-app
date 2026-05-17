@@ -4218,14 +4218,19 @@ function MirrorSmallSoccerCard({ detail, fallback }: { detail: MirrorModuleDetai
   )
 }
 
-function MirrorSurfRatingBars({ rating, muted }: { rating: number | undefined; muted: string }) {
+function MirrorSurfRatingBars({ rating, muted, compact = false }: { rating: number | undefined; muted: string; compact?: boolean }) {
   const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
+  const gapClass = compact ? 'gap-[clamp(0.1rem,0.3vw,0.22rem)]' : 'gap-[clamp(0.18rem,0.55vw,0.45rem)]'
+  const boxClass = compact
+    ? 'h-[clamp(0.34rem,0.85vw,0.52rem)] w-[clamp(0.5rem,1.12vw,0.76rem)] rounded-[0.13rem]'
+    : 'h-[clamp(0.42rem,1.15vw,0.72rem)] w-[clamp(0.7rem,1.65vw,1.05rem)] rounded-[0.18rem]'
+
   return (
-    <div className="flex items-center justify-center gap-[clamp(0.18rem,0.55vw,0.45rem)]" aria-label={`Surf rating ${value} of 6`}>
+    <div className={`flex items-center justify-center ${gapClass}`} aria-label={`Surf rating ${value} of 6`}>
       {Array.from({ length: 6 }).map((_, index) => (
         <span
           key={index}
-          className="block h-[clamp(0.42rem,1.15vw,0.72rem)] w-[clamp(0.7rem,1.65vw,1.05rem)] rounded-[0.18rem] border"
+          className={`block border ${boxClass}`}
           style={{
             backgroundColor: index < value ? 'currentColor' : 'transparent',
             borderColor: index < value ? 'currentColor' : muted,
@@ -4244,6 +4249,7 @@ type DiceRatingProps = {
   muted: string
   paperColor: string
   className?: string
+  compact?: boolean
 }
 
 const MIRROR_DICE_DOTS: Record<number, Array<[number, number]>> = {
@@ -4283,13 +4289,21 @@ function isSurfExperienceBased(detail: MirrorModuleDetail | undefined) {
   return booleanish(pickedExperience.matched)
 }
 
-function DiceRating({ value, rating, isExperienceBased, muted, paperColor, className = '' }: DiceRatingProps) {
+function DiceRating({ value, rating, isExperienceBased, muted, paperColor, className = '', compact = false }: DiceRatingProps) {
   const displayRating = rating ?? value
-  if (!isExperienceBased) return <MirrorSurfRatingBars rating={displayRating} muted={muted} />
+  if (!isExperienceBased) return <MirrorSurfRatingBars rating={displayRating} muted={muted} compact={compact} />
 
   const normalizedValue = Math.max(0, Math.min(6, Math.round(Number(displayRating) || 0)))
+  const gapClass = compact ? 'gap-[clamp(0.08rem,0.24vw,0.16rem)]' : 'gap-[clamp(0.12rem,0.38vw,0.28rem)]'
+  const dieClass = compact
+    ? 'h-[clamp(0.46rem,1.05vw,0.66rem)] w-[clamp(0.46rem,1.05vw,0.66rem)] rounded-[clamp(0.1rem,0.24vw,0.16rem)]'
+    : 'h-[clamp(0.58rem,1.42vw,0.9rem)] w-[clamp(0.58rem,1.42vw,0.9rem)] rounded-[clamp(0.12rem,0.32vw,0.22rem)]'
+  const dotClass = compact
+    ? 'h-[clamp(0.065rem,0.17vw,0.1rem)] w-[clamp(0.065rem,0.17vw,0.1rem)]'
+    : 'h-[clamp(0.085rem,0.24vw,0.15rem)] w-[clamp(0.085rem,0.24vw,0.15rem)]'
+
   return (
-    <div className={`flex items-center justify-center gap-[clamp(0.12rem,0.38vw,0.28rem)] ${className}`} aria-label={`Experience-based surf rating ${normalizedValue} of 6`}>
+    <div className={`flex items-center justify-center ${gapClass} ${className}`} aria-label={`Experience-based surf rating ${normalizedValue} of 6`}>
       {Array.from({ length: 6 }).map((_, index) => {
         const face = index + 1
         const filled = face <= normalizedValue
@@ -4297,7 +4311,7 @@ function DiceRating({ value, rating, isExperienceBased, muted, paperColor, class
         return (
           <span
             key={face}
-            className="relative block h-[clamp(0.58rem,1.42vw,0.9rem)] w-[clamp(0.58rem,1.42vw,0.9rem)] shrink-0 rounded-[clamp(0.12rem,0.32vw,0.22rem)] border"
+            className={`relative block shrink-0 border ${dieClass}`}
             style={{
               backgroundColor: filled ? 'currentColor' : 'transparent',
               borderColor: filled ? 'currentColor' : muted,
@@ -4308,7 +4322,7 @@ function DiceRating({ value, rating, isExperienceBased, muted, paperColor, class
             {dots.map(([left, top], dotIndex) => (
               <span
                 key={`${face}-${dotIndex}`}
-                className="absolute h-[clamp(0.085rem,0.24vw,0.15rem)] w-[clamp(0.085rem,0.24vw,0.15rem)] rounded-full"
+                className={`absolute rounded-full ${dotClass}`}
                 style={{
                   left: `${left}%`,
                   top: `${top}%`,
@@ -4320,6 +4334,50 @@ function DiceRating({ value, rating, isExperienceBased, muted, paperColor, class
           </span>
         )
       })}
+    </div>
+  )
+}
+
+function MirrorSmallSurfCard({
+  detail,
+  mutedColor,
+  borderColor,
+  frameBackground,
+}: {
+  detail: MirrorModuleDetail
+  mutedColor: string
+  borderColor: string
+  frameBackground: string
+}) {
+  const rating = detail.rating ?? Number(detail.primary)
+  const spotName = detail.secondary || detail.primary || 'Surf'
+  const waveRange = detail.waveRange || detail.tertiary || '--'
+
+  return (
+    <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.45rem,1.15vw,0.78rem)] py-[clamp(0.35rem,0.9vw,0.58rem)] text-center leading-none">
+      {detail.isTodaysBest && (
+        <div className="absolute left-[clamp(0.36rem,0.9vw,0.6rem)] top-[clamp(0.26rem,0.66vw,0.44rem)] max-w-[46%] truncate text-[clamp(0.38rem,0.82vw,0.56rem)] font-semibold tracking-[0.14em]" style={{ color: mutedColor }}>
+          Best next 4h:
+        </div>
+      )}
+
+      <div className="max-w-[86%] truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.72vw,1.04rem)] font-semibold tracking-[0.12em] uppercase" title={spotName}>
+        {spotName}
+      </div>
+
+      <div className="mt-[clamp(0.68rem,1.7vw,1.05rem)] grid w-full min-w-0 grid-cols-[1fr_auto_1fr_auto_1fr] items-center">
+        <div className="min-w-0 truncate px-[clamp(0.1rem,0.32vw,0.22rem)] text-[clamp(0.56rem,1.24vw,0.78rem)] font-semibold tracking-[0.08em] uppercase" title={mirrorSurfRatingWord(rating)}>
+          {mirrorSurfRatingWord(rating)}
+        </div>
+        <div className="h-[clamp(0.86rem,1.75vw,1.12rem)] w-px shrink-0" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+        <div className="flex min-w-0 items-center justify-center overflow-hidden px-[clamp(0.08rem,0.26vw,0.2rem)]">
+          <DiceRating rating={rating} isExperienceBased={isSurfExperienceBased(detail)} muted={mutedColor} paperColor={frameBackground} compact />
+        </div>
+        <div className="h-[clamp(0.86rem,1.75vw,1.12rem)] w-px shrink-0" style={{ backgroundColor: borderColor }} aria-hidden="true" />
+        <div className="min-w-0 truncate px-[clamp(0.1rem,0.32vw,0.22rem)] text-[clamp(0.56rem,1.24vw,0.78rem)] font-semibold tracking-[0.08em]" title={waveRange}>
+          {waveRange}
+        </div>
+      </div>
     </div>
   )
 }
@@ -5287,22 +5345,8 @@ function LandscapeFrameMirror({
       )
     }
 
-    if (module === 'surf' && size === 'small' && detail.isTodaysBest) {
-      return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.25rem,0.9vw,0.55rem)] px-3 text-center leading-tight">
-          <div className="max-w-full truncate text-[clamp(0.62rem,1.45vw,0.9rem)] font-semibold tracking-[0.18em] uppercase">
-            Todays best
-          </div>
-          <div className="max-w-full truncate text-[clamp(0.95rem,2.7vw,1.55rem)] font-semibold tracking-[0.14em] uppercase">
-            {detail.secondary || detail.primary}
-          </div>
-          {detail.tertiary && (
-            <div className="max-w-full truncate text-[clamp(0.58rem,1.25vw,0.8rem)] tracking-[0.12em]" style={{ color: mutedColor }}>
-              {detail.tertiary}
-            </div>
-          )}
-        </div>
-      )
+    if (module === 'surf' && size === 'small') {
+      return <MirrorSmallSurfCard detail={detail} mutedColor={mutedColor} borderColor={borderColor} frameBackground={frameBackground} />
     }
 
     if (module === 'surf' && size === 'medium') {
