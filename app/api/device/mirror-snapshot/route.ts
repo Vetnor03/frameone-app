@@ -50,6 +50,10 @@ type Detail = {
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
   stockPurchasePrice?: number | null
+  countdownTitle?: string
+  countdownDaysLeft?: number
+  countdownTargetDate?: string
+  countdownPinned?: boolean
 }
 type UnknownRecord = Record<string, unknown>
 
@@ -176,6 +180,102 @@ function recipeAppliesToDevice(row: UnknownRecord, storageDeviceIds: string[]) {
 function recipeIsActive(row: UnknownRecord) {
   if (row.is_active === false || row.active === false || row.archived === true) return false
   return true
+}
+
+
+type CountdownMirrorRow = {
+  id: string | null
+  title: string | null
+  target_date: string | null
+  pinned: boolean | null
+}
+
+function parseYmdDateOnly(ymd: string) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null
+  return { y, m, d }
+}
+
+function daysFromCivil(y: number, m: number, d: number) {
+  y -= m <= 2 ? 1 : 0
+  const era = Math.floor(y / 400)
+  const yoe = y - era * 400
+  const mp = m + (m > 2 ? -3 : 9)
+  const doy = Math.floor((153 * mp + 2) / 5) + d - 1
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy
+  return era * 146097 + doe - 719468
+}
+
+function diffDaysYmd(fromYmd: string, toYmd: string) {
+  const from = parseYmdDateOnly(fromYmd)
+  const to = parseYmdDateOnly(toYmd)
+  if (!from || !to) return 0
+  return daysFromCivil(to.y, to.m, to.d) - daysFromCivil(from.y, from.m, from.d)
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function todayYmdInTimeZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+  const day = Number(parts.find((part) => part.type === 'day')?.value)
+  return `${year}-${pad2(month)}-${pad2(day)}`
+}
+
+async function countdownDetail(supabase: SupabaseClient, deviceId: string, language: string): Promise<Detail> {
+  const { data, error } = await supabase
+    .from('countdown_events')
+    .select('id, title, target_date, pinned')
+    .eq('device_id', deviceId)
+    .order('target_date', { ascending: true })
+    .order('title', { ascending: true })
+
+  if (error) throw new Error(error.message)
+
+  const todayYmd = todayYmdInTimeZone('Europe/Oslo')
+  const items = (Array.isArray(data) ? (data as CountdownMirrorRow[]) : [])
+    .map((row) => {
+      const title = asString(row.title).trim()
+      const targetDate = asString(row.target_date).trim()
+      const daysLeft = diffDaysYmd(todayYmd, targetDate)
+      return title && targetDate
+        ? {
+            title,
+            targetDate,
+            daysLeft,
+            pinned: !!row.pinned,
+            isPast: daysLeft < 0,
+          }
+        : null
+    })
+    .filter((item): item is { title: string; targetDate: string; daysLeft: number; pinned: boolean; isPast: boolean } => !!item)
+    .sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      if (a.isPast !== b.isPast) return a.isPast ? 1 : -1
+      if (a.daysLeft !== b.daysLeft) return a.daysLeft - b.daysLeft
+      if (a.targetDate !== b.targetDate) return a.targetDate.localeCompare(b.targetDate)
+      return a.title.localeCompare(b.title)
+    })
+
+  const nearest = items.find((item) => !item.isPast) ?? items[0]
+  if (!nearest) return { primary: language === 'no' ? 'Ingen nedtelling' : 'No Countdown', secondary: language === 'no' ? 'Ingen hendelser' : 'No events yet' }
+
+  return {
+    primary: nearest.title,
+    secondary: language === 'no' ? 'Nedtelling' : 'Countdown',
+    countdownTitle: nearest.title,
+    countdownDaysLeft: nearest.daysLeft,
+    countdownTargetDate: nearest.targetDate,
+    countdownPinned: nearest.pinned,
+  }
 }
 
 async function loadMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
@@ -1130,7 +1230,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, language)
-        else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = { primary: asString(cfg.title || cfg.name, 'COUNTDOWN'), secondary: language === 'no' ? 'Nedtelling' : 'Countdown' }
+        else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, deviceId, language)
       } catch {
         // Leave this slot to the client-side config fallback if live data is unavailable.
       }
