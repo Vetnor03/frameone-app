@@ -5559,12 +5559,12 @@ function LandscapeFrameMirror({
             {locationName}
           </div>
 
-          <div className="mt-[clamp(0.55rem,1.42vw,0.95rem)] flex max-w-full shrink-0 items-center justify-center overflow-hidden text-[clamp(0.58rem,1.32vw,0.84rem)] font-medium tracking-[0.055em]">
-            <div className="min-w-0 truncate px-[clamp(0.18rem,0.55vw,0.4rem)]" title={tempRange}>{tempRange}</div>
-            <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
-            <div className="min-w-0 truncate px-[clamp(0.18rem,0.55vw,0.4rem)]" title={windLine}>{windLine}</div>
-            <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
-            <div className="min-w-0 truncate px-[clamp(0.18rem,0.55vw,0.4rem)]" title={precipLine}>{precipLine}</div>
+          <div className="mt-[clamp(0.55rem,1.42vw,0.95rem)] grid w-full max-w-[96%] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center overflow-hidden text-[clamp(0.56rem,1.24vw,0.8rem)] font-medium tracking-[0.045em]">
+            <div className="min-w-0 truncate px-[clamp(0.08rem,0.34vw,0.28rem)] text-center" title={tempRange}>{tempRange}</div>
+            <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+            <div className="min-w-0 truncate px-[clamp(0.08rem,0.34vw,0.28rem)] text-center" title={windLine}>{windLine}</div>
+            <div className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+            <div className="min-w-0 truncate px-[clamp(0.08rem,0.34vw,0.28rem)] text-center" title={precipLine}>{precipLine}</div>
           </div>
         </div>
       )
