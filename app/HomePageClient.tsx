@@ -334,6 +334,8 @@ type MirrorModuleDetail = {
   weatherAdvice?: string
   weatherWindLine?: string
   weatherPrecipLine?: string
+  weatherSunLine?: string
+  weatherHumidityLine?: string
   weatherWmo?: number | null
   weatherDays?: MirrorWeatherDay[]
   surfAirMinC?: number
@@ -5487,6 +5489,166 @@ function formatMirrorSmallWeatherTempRange(low: string | undefined, high: string
   return `${lo} to ${hi}`
 }
 
+
+function MirrorWeatherTempPair({
+  low,
+  high,
+  textColor,
+  className = '',
+}: {
+  low: string | undefined
+  high: string | undefined
+  textColor: string
+  className?: string
+}) {
+  return (
+    <div className={`flex max-w-full items-center justify-center border-current font-semibold tracking-[0.06em] ${className}`}>
+      <span className="min-w-0 truncate px-[clamp(0.12rem,0.38vw,0.28rem)]">{low || '--'}</span>
+      <span className="h-[clamp(0.86rem,1.8vw,1.18rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+      <span className="min-w-0 truncate px-[clamp(0.12rem,0.38vw,0.28rem)]">{high || low || '--'}</span>
+    </div>
+  )
+}
+
+function MirrorWeatherSunRangeLine({ line, textColor }: { line: string | undefined; textColor: string }) {
+  const raw = String(line || '').trim()
+  const match = /^Sun\s+([^/]+)\s*\/\s*(.+)$/i.exec(raw)
+  const left = match ? `Sun ${match[1].trim() || '--:--'}` : 'Sun --:--'
+  const right = match ? match[2].trim() || '--:--' : '--:--'
+
+  return (
+    <div className="flex max-w-full items-center justify-center font-medium tracking-[0.055em]">
+      <span className="min-w-0 truncate px-[clamp(0.08rem,0.3vw,0.22rem)]">{left}</span>
+      <span className="h-[clamp(0.72rem,1.45vw,0.92rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+      <span className="min-w-0 truncate px-[clamp(0.08rem,0.3vw,0.22rem)]">{right}</span>
+    </div>
+  )
+}
+
+function MirrorXLWeatherMiniDay({ day, textColor }: { day: MirrorWeatherDay; textColor: string }) {
+  return (
+    <div className="flex h-full min-w-0 flex-col items-center justify-between overflow-hidden px-[clamp(0.24rem,0.78vw,0.62rem)] py-[clamp(0.22rem,0.66vw,0.48rem)] text-center leading-none">
+      <div className="max-w-full shrink-0 truncate text-[clamp(0.58rem,1.24vw,0.84rem)] font-semibold tracking-[0.08em]" title={day.label}>
+        {day.label}
+      </div>
+
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center py-[clamp(0.14rem,0.44vw,0.3rem)]">
+        <div className="aspect-square h-[clamp(1.75rem,4.8vw,3.25rem)] max-h-full max-w-[58%] overflow-hidden">
+          <MirrorWeatherIcon wmo={day.wmo} />
+        </div>
+      </div>
+
+      <MirrorWeatherTempPair
+        low={day.lowTemp}
+        high={day.highTemp}
+        textColor={textColor}
+        className="shrink-0 text-[clamp(0.56rem,1.2vw,0.82rem)]"
+      />
+
+      <div className="mt-[clamp(0.2rem,0.55vw,0.38rem)] flex w-full shrink-0 flex-col items-center gap-[clamp(0.1rem,0.28vw,0.2rem)] text-[clamp(0.45rem,0.96vw,0.64rem)] font-medium tracking-[0.035em]">
+        <div className="max-w-full truncate" title={day.windLine}>{day.windLine || 'Calm winds'}</div>
+        <div className="max-w-full truncate" title={day.precipLine}>{day.precipLine || 'Mostly dry'}</div>
+      </div>
+    </div>
+  )
+}
+
+function MirrorXLWeatherCard({
+  detail,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  textColor: string
+}) {
+  const fallbackDay: MirrorWeatherDay = {
+    label: 'Today',
+    lowTemp: detail.weatherLowTemp || detail.tertiary?.split('/')[0]?.trim() || '--',
+    highTemp: detail.weatherHighTemp || detail.tertiary?.split('/')[1]?.trim() || detail.weatherLowTemp || '--',
+    windLine: detail.weatherWindLine || 'Calm winds',
+    precipLine: detail.weatherPrecipLine || 'Mostly dry',
+    wmo: detail.weatherWmo ?? null,
+  }
+  const allDays = Array.isArray(detail.weatherDays) && detail.weatherDays.length > 0 ? detail.weatherDays : [fallbackDay]
+  const tomorrowDays = allDays.slice(1, 5)
+
+  while (tomorrowDays.length < 4) {
+    tomorrowDays.push({
+      label: '--',
+      lowTemp: '--',
+      highTemp: '--',
+      windLine: 'Calm winds',
+      precipLine: 'Mostly dry',
+      wmo: null,
+    })
+  }
+
+  const currentTemp = String(detail.primary || detail.weatherHighTemp || '--').trim()
+  const locationName = String(detail.secondary || 'Weather').trim()
+  const windLine = detail.weatherWindLine || fallbackDay.windLine || 'Calm winds'
+  const precipLine = detail.weatherPrecipLine || fallbackDay.precipLine || 'Mostly dry'
+  const sunLine = detail.weatherSunLine || 'Sun --:-- / --:--'
+  const humidityLine = detail.weatherHumidityLine || 'Humidity --%'
+  const advice = detail.weatherAdvice || ''
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden text-center leading-none">
+      <div className="relative grid h-1/2 min-h-0 grid-cols-3 items-stretch overflow-hidden px-[clamp(0.45rem,1.2vw,0.85rem)] pt-[clamp(0.38rem,1vw,0.7rem)] pb-[clamp(0.48rem,1.2vw,0.8rem)]">
+        <div className="absolute bottom-0 left-[2.5%] right-[2.5%] h-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+
+        <div className="flex min-w-0 flex-col overflow-hidden pr-[clamp(0.25rem,0.75vw,0.55rem)]">
+          <div className="shrink-0 truncate text-left text-[clamp(0.48rem,1.04vw,0.7rem)] font-medium tracking-[0.055em]" title={locationName}>
+            {locationName}
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <div className="flex max-w-full flex-col items-center gap-[clamp(0.12rem,0.34vw,0.24rem)] text-[clamp(0.48rem,1.02vw,0.68rem)]">
+              <MirrorWeatherTempPair low={detail.weatherLowTemp} high={detail.weatherHighTemp} textColor={textColor} className="text-[clamp(0.5rem,1.08vw,0.72rem)]" />
+              <div className="max-w-full truncate font-medium tracking-[0.055em]" title={windLine}>{windLine}</div>
+              <div className="max-w-full truncate font-medium tracking-[0.055em]" title={precipLine}>{precipLine}</div>
+              <MirrorWeatherSunRangeLine line={sunLine} textColor={textColor} />
+              <div className="max-w-full truncate font-medium tracking-[0.055em]" title={humidityLine}>{humidityLine}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative flex min-w-0 flex-col items-center overflow-hidden px-[clamp(0.35rem,0.95vw,0.72rem)]">
+          <div className="absolute bottom-[clamp(0.45rem,1.15vw,0.8rem)] left-0 top-[clamp(1.65rem,4.1vw,2.7rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+          <div className="absolute bottom-[clamp(0.45rem,1.15vw,0.8rem)] right-0 top-[clamp(1.65rem,4.1vw,2.7rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+
+          <div className="shrink-0 border-b-[3px] border-current px-[clamp(0.24rem,0.7vw,0.5rem)] pb-[clamp(0.04rem,0.14vw,0.1rem)] text-[clamp(0.88rem,2.15vw,1.42rem)] font-semibold tracking-[0.08em]">
+            Today
+          </div>
+
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center pt-[clamp(0.28rem,0.8vw,0.52rem)]">
+            <div className="aspect-square h-[clamp(2.45rem,7vw,4.75rem)] max-h-[72%] max-w-[52%] overflow-hidden">
+              <MirrorWeatherIcon wmo={detail.weatherWmo} />
+            </div>
+            <div className="mt-[clamp(0.16rem,0.45vw,0.32rem)] truncate text-[clamp(0.98rem,2.45vw,1.65rem)] font-semibold tracking-[0.06em]">
+              {currentTemp}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center justify-center overflow-hidden pl-[clamp(0.32rem,0.95vw,0.72rem)] pr-[clamp(0.1rem,0.35vw,0.25rem)]">
+          <div className="line-clamp-5 max-w-full text-[clamp(0.5rem,1.08vw,0.74rem)] font-medium leading-snug tracking-[0.035em]" title={advice}>
+            {advice}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid h-1/2 min-h-0 grid-cols-4 items-stretch overflow-hidden px-[clamp(0.18rem,0.55vw,0.4rem)] py-[clamp(0.24rem,0.72vw,0.5rem)]">
+        {tomorrowDays.map((day, index) => (
+          <div key={`${day.label}-${index}`} className="relative min-w-0 overflow-hidden">
+            {index > 0 && (
+              <div className="absolute bottom-[clamp(0.12rem,0.36vw,0.26rem)] left-0 top-[clamp(0.12rem,0.36vw,0.26rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
+            )}
+            <MirrorXLWeatherMiniDay day={day} textColor={textColor} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MirrorLargeWeatherCard({
   detail,
   textColor,
@@ -5658,6 +5820,10 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'weather' && size === 'large' && detail.weatherLowTemp && detail.weatherHighTemp) {
+      if (snapshot.layoutKey === 'full') {
+        return <MirrorXLWeatherCard detail={detail} textColor={textColor} />
+      }
+
       return <MirrorLargeWeatherCard detail={detail} textColor={textColor} />
     }
 
