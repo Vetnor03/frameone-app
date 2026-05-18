@@ -3221,6 +3221,49 @@ function mirrorSurfRatingWord(rating: number | undefined) {
   }
 }
 
+type MirrorSurfTrend = { symbol: '↑' | '−' | '↓'; label: string }
+
+function mirrorOsloHour(now = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Oslo',
+    hour: '2-digit',
+    hour12: false,
+  }).format(now))
+
+  return Number.isFinite(hour) ? hour : now.getHours()
+}
+
+function mirrorCurrentSurfDaypartIndex(now = new Date()) {
+  const hour = mirrorOsloHour(now)
+  if (hour >= 21) return 0
+  if (hour < 10) return 0
+  if (hour < 14) return 1
+  if (hour < 18) return 2
+  return 3
+}
+
+function mirrorSurfTrend(detail: MirrorModuleDetail): MirrorSurfTrend | null {
+  const rawDayparts = Array.isArray(detail.surfDayparts) ? detail.surfDayparts : []
+  const dayparts = rawDayparts
+    .map((part, index) => normalizeMirrorLargeSurfDaypart(part, `Daypart ${index + 1}`))
+    .filter((part) => part.rating !== undefined)
+
+  if (dayparts.length <= 1) return null
+
+  const currentIndex = Math.min(mirrorCurrentSurfDaypartIndex(), dayparts.length - 1)
+  const fromIndex = currentIndex >= dayparts.length - 1 ? dayparts.length - 2 : currentIndex
+  const toIndex = Math.min(fromIndex + 1, dayparts.length - 1)
+  const fromRating = dayparts[fromIndex]?.rating ?? finiteMirrorNumber(detail.rating ?? detail.primary)
+  const compareRating = dayparts[toIndex]?.rating
+
+  if (fromRating === undefined || compareRating === undefined) return null
+
+  const delta = compareRating - fromRating
+  if (delta >= 0.5) return { symbol: '↑', label: 'Surf trend: improving' }
+  if (delta <= -0.5) return { symbol: '↓', label: 'Surf trend: worsening' }
+  return { symbol: '−', label: 'Surf trend: staying steady' }
+}
+
 const MIRROR_GROCERIES_EMPTY_MESSAGES: Record<AppLanguage, string[]> = {
   en: ['Fridge is stacked', 'Kitchen looks good', 'Nothing needed', 'Grocery run complete', 'Fully stocked', 'Looking good'],
   no: ['Kjøleskapet er fullt', 'Kjøkkenet ser bra ut', 'Ingenting trengs', 'Handleturen er ferdig', 'Alt er på lager', 'Ser bra ut'],
@@ -6077,12 +6120,24 @@ function LandscapeFrameMirror({
       const rating = detail.rating ?? Number(detail.primary)
       const waveRange = detail.waveRange || detail.tertiary || '--'
       const spotName = detail.secondary || detail.primary || 'Surf'
+      const trend = mirrorSurfTrend(detail)
 
       return (
         <div className="relative flex h-full w-full flex-col px-[clamp(0.7rem,2.2vw,1.6rem)] py-[clamp(0.45rem,1.5vw,1.1rem)] text-center leading-tight">
           {detail.isTodaysBest && (
             <div className="absolute left-[clamp(0.45rem,1.4vw,0.9rem)] top-[clamp(0.3rem,0.9vw,0.65rem)] max-w-[52%] truncate text-[clamp(0.45rem,1vw,0.68rem)] font-semibold tracking-[0.16em]" style={{ color: mutedColor }}>
               Best next 4h:
+            </div>
+          )}
+
+          {trend && (
+            <div
+              className="absolute right-[clamp(0.45rem,1.4vw,0.9rem)] top-[clamp(0.3rem,0.9vw,0.65rem)] text-[clamp(0.45rem,1vw,0.68rem)] font-semibold leading-none tracking-[0.16em]"
+              style={{ color: mutedColor }}
+              title={trend.label}
+              aria-label={trend.label}
+            >
+              {trend.symbol}
             </div>
           )}
 
