@@ -283,6 +283,15 @@ type MirrorSurfDaypart = {
   experienceRating?: number
 }
 
+type MirrorWeatherDay = {
+  label: string
+  lowTemp: string
+  highTemp: string
+  windLine: string
+  precipLine: string
+  wmo: number | null
+}
+
 type MirrorModuleDetail = {
   primary: string
   secondary?: string
@@ -326,6 +335,7 @@ type MirrorModuleDetail = {
   weatherWindLine?: string
   weatherPrecipLine?: string
   weatherWmo?: number | null
+  weatherDays?: MirrorWeatherDay[]
   surfAirMinC?: number
   surfAirMaxC?: number
   surfWaterMinC?: number
@@ -5477,6 +5487,83 @@ function formatMirrorSmallWeatherTempRange(low: string | undefined, high: string
   return `${lo} to ${hi}`
 }
 
+function MirrorLargeWeatherCard({
+  detail,
+  textColor,
+}: {
+  detail: MirrorModuleDetail
+  textColor: string
+}) {
+  const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
+  const fallbackDay: MirrorWeatherDay = {
+    label: 'Today',
+    lowTemp: detail.weatherLowTemp || detail.tertiary?.split('/')[0]?.trim() || '--',
+    highTemp: detail.weatherHighTemp || detail.tertiary?.split('/')[1]?.trim() || detail.weatherLowTemp || '--',
+    windLine: detail.weatherWindLine || 'Calm winds',
+    precipLine: detail.weatherPrecipLine || 'Mostly dry',
+    wmo: detail.weatherWmo ?? null,
+  }
+  const days = (Array.isArray(detail.weatherDays) && detail.weatherDays.length > 0 ? detail.weatherDays : [fallbackDay])
+    .slice(0, 4)
+
+  while (days.length < 4) {
+    days.push({
+      label: '--',
+      lowTemp: '--',
+      highTemp: '--',
+      windLine: 'Calm winds',
+      precipLine: 'Mostly dry',
+      wmo: null,
+    })
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.7rem,1.9vw,1.35rem)] pt-[clamp(0.55rem,1.4vw,0.95rem)] pb-[clamp(0.55rem,1.35vw,0.9rem)] text-center leading-none">
+      <div
+        className="mx-auto max-w-[86%] shrink-0 truncate border-b border-current pb-[clamp(0.08rem,0.24vw,0.16rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]"
+        title={locationName}
+      >
+        {locationName}
+      </div>
+
+      <div className="mt-[clamp(0.5rem,1.25vw,0.82rem)] grid min-h-0 w-full flex-1 grid-cols-4 items-stretch">
+        {days.map((day, index) => (
+          <div key={`${day.label}-${index}`} className="relative flex min-w-0 flex-col items-center justify-between px-[clamp(0.25rem,0.85vw,0.7rem)] py-[clamp(0.16rem,0.45vw,0.3rem)]">
+            {index > 0 && (
+              <div
+                className="absolute bottom-[clamp(0.12rem,0.34vw,0.25rem)] left-0 top-[clamp(0.12rem,0.34vw,0.25rem)] w-px"
+                style={{ backgroundColor: textColor }}
+                aria-hidden="true"
+              />
+            )}
+
+            <div className="max-w-full shrink-0 truncate text-[clamp(0.66rem,1.5vw,0.98rem)] font-semibold tracking-[0.08em]" title={day.label}>
+              {day.label}
+            </div>
+
+            <div className="flex min-h-0 w-full flex-1 items-center justify-center py-[clamp(0.18rem,0.55vw,0.4rem)]">
+              <div className="aspect-square h-[clamp(2.15rem,6.1vw,4.2rem)] max-h-full max-w-[70%] overflow-hidden">
+                <MirrorWeatherIcon wmo={day.wmo} />
+              </div>
+            </div>
+
+            <div className="flex max-w-full shrink-0 items-center justify-center border-current text-[clamp(0.64rem,1.5vw,0.96rem)] font-semibold tracking-[0.06em]">
+              <span className="min-w-0 truncate px-[clamp(0.12rem,0.38vw,0.28rem)]">{day.lowTemp}</span>
+              <span className="h-[clamp(0.86rem,1.8vw,1.18rem)] w-px shrink-0" style={{ backgroundColor: textColor }} aria-hidden="true" />
+              <span className="min-w-0 truncate px-[clamp(0.12rem,0.38vw,0.28rem)]">{day.highTemp}</span>
+            </div>
+
+            <div className="mt-[clamp(0.32rem,0.85vw,0.56rem)] flex w-full shrink-0 flex-col items-center gap-[clamp(0.18rem,0.48vw,0.32rem)] text-[clamp(0.52rem,1.14vw,0.74rem)] font-medium tracking-[0.035em]">
+              <div className="max-w-full truncate" title={day.windLine}>{day.windLine}</div>
+              <div className="max-w-full truncate" title={day.precipLine}>{day.precipLine}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MirrorWeatherIcon({ wmo }: { wmo: number | null | undefined }) {
   const kind = mirrorWeatherIconKind(wmo)
 
@@ -5568,6 +5655,10 @@ function LandscapeFrameMirror({
           </div>
         </div>
       )
+    }
+
+    if (module === 'weather' && size === 'large' && detail.weatherLowTemp && detail.weatherHighTemp) {
+      return <MirrorLargeWeatherCard detail={detail} textColor={textColor} />
     }
 
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
