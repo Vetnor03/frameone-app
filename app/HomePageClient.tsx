@@ -2621,6 +2621,25 @@ function formatMirrorCountdownDaysUnit(days: number) {
   return days === 1 ? 'DAG' : 'DAGER'
 }
 
+
+const MIRROR_MODULE_HEADER_CLASS = "max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-medium leading-none tracking-[0.12em] uppercase"
+
+function MirrorModuleHeader({
+  title,
+  className = '',
+  style,
+}: {
+  title: string
+  className?: string
+  style?: React.CSSProperties
+}) {
+  return (
+    <div className={`${MIRROR_MODULE_HEADER_CLASS}${className ? ` ${className}` : ''}`} style={style} title={title}>
+      {title}
+    </div>
+  )
+}
+
 function parseMirrorCountdownDate(date: string | undefined) {
   const match = typeof date === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(date) : null
   if (!match) return null
@@ -2802,9 +2821,7 @@ function MirrorMediumCountdownCard({
   if (daysLeft === null) {
     return (
       <div className="flex h-full w-full items-center justify-center px-4 text-center leading-tight">
-        <div className="max-w-full truncate text-[clamp(1rem,2.55vw,1.7rem)] font-semibold tracking-[0.08em]">
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} />
       </div>
     )
   }
@@ -2816,9 +2833,7 @@ function MirrorMediumCountdownCard({
   return (
     <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.5rem,1.45vw,0.95rem)] py-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-none">
       <div className="flex max-h-full w-full flex-col items-center justify-center gap-[clamp(0.42rem,1.22vw,0.72rem)] overflow-hidden">
-        <div className="max-w-full shrink-0 truncate text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]" title={title}>
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} />
 
         <div className="max-w-full shrink-0 truncate text-[clamp(2.2rem,7.4vw,4.8rem)] font-semibold tracking-[-0.06em]" title={daysNumber}>
           {daysNumber}
@@ -2861,8 +2876,8 @@ function MirrorLargeCountdownCard({
           </div>
         ) : (
           <div className="flex max-h-full max-w-full flex-col items-stretch justify-center overflow-hidden">
-            <div className="mb-[clamp(0.42rem,1.22vw,0.72rem)] shrink-0 text-center text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.16em]">
-              COMING UP
+            <div className="mb-[clamp(0.42rem,1.22vw,0.72rem)] flex shrink-0 justify-center">
+              <MirrorModuleHeader title="COMING UP" />
             </div>
 
             <div className="flex max-w-full flex-col gap-[clamp(0.48rem,1.45vw,0.9rem)] overflow-hidden text-left">
@@ -2914,8 +2929,8 @@ function MirrorXLCountdownCard({
           </div>
         ) : (
           <div className="flex max-h-full max-w-full flex-col items-stretch justify-center overflow-hidden">
-            <div className="mb-[clamp(0.42rem,1.22vw,0.72rem)] shrink-0 text-center text-[clamp(0.58rem,1.34vw,0.86rem)] font-semibold tracking-[0.16em]">
-              COMING UP
+            <div className="mb-[clamp(0.42rem,1.22vw,0.72rem)] flex shrink-0 justify-center">
+              <MirrorModuleHeader title="COMING UP" />
             </div>
 
             <div className="flex max-w-full flex-col gap-[clamp(0.48rem,1.45vw,0.9rem)] overflow-hidden text-left">
@@ -3451,11 +3466,7 @@ function MirrorGroceryMediumList({ items, overflowLabel, mutedColor }: { items: 
 }
 
 function MirrorGroceriesHeader({ header }: { header: string }) {
-  return (
-    <div className="max-w-full truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.7vw,1.05rem)] font-semibold tracking-[0.055em]" title={header}>
-      {header}
-    </div>
-  )
+  return <MirrorModuleHeader title={header} />
 }
 
 function MirrorGroceriesMediumPanel({
@@ -3923,9 +3934,7 @@ function MirrorMediumRemindersCard({
   if (visibleItems.length <= 0) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.28rem,0.72vw,0.5rem)] px-[clamp(0.75rem,1.9vw,1.2rem)] py-[clamp(0.7rem,1.7vw,1.1rem)] text-center leading-none">
-        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.74rem,1.65vw,1.04rem)] font-semibold tracking-[0.04em]" title={header}>
-          {header}
-        </div>
+        <MirrorModuleHeader title={header} />
         <div className="max-w-full truncate text-[clamp(0.72rem,1.45vw,0.96rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
           {mirrorRemindersEmptyMessage(language)}
         </div>
@@ -3942,9 +3951,7 @@ function MirrorMediumRemindersCard({
       )}
 
       <div className="flex shrink-0 justify-center">
-        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.74rem,1.65vw,1.04rem)] font-semibold tracking-[0.04em]" title={header}>
-          {header}
-        </div>
+        <MirrorModuleHeader title={header} />
       </div>
 
       <div className={`flex min-h-0 flex-1 items-center justify-center ${showBottomBadge ? 'pb-[clamp(1.35rem,3vw,1.9rem)] pt-[clamp(0.55rem,1.35vw,0.9rem)]' : tomorrowLabel ? 'pb-[clamp(0.95rem,2.2vw,1.35rem)] pt-[clamp(0.62rem,1.55vw,0.98rem)]' : 'pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]'}`}>
@@ -3985,9 +3992,7 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
   if (visibleItems.length <= 0) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.26rem,0.72vw,0.46rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
-        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.04em]" title={header}>
-          {header}
-        </div>
+        <MirrorModuleHeader title={header} />
         <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>
           {mirrorRemindersEmptyMessage(language)}
         </div>
@@ -4004,9 +4009,7 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
       )}
 
       <div className="flex shrink-0 justify-center">
-        <div className="max-w-full truncate border-b-2 border-current pb-[clamp(0.04rem,0.12vw,0.09rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.04em]" title={header}>
-          {header}
-        </div>
+        <MirrorModuleHeader title={header} />
       </div>
 
       <div className={`relative min-h-0 w-full flex-1 ${showTomorrowNote ? 'mb-[clamp(0.78rem,1.75vw,1.08rem)] mt-[clamp(0.44rem,1.1vw,0.68rem)]' : 'mb-[clamp(0.12rem,0.38vw,0.28rem)] mt-[clamp(0.52rem,1.28vw,0.78rem)]'}`}>
@@ -4063,9 +4066,7 @@ function MirrorMediumSoccerCard({ detail, fallback }: { detail: MirrorModuleDeta
   if (!detail.soccerFixtureLine && !detail.soccerNextHomeLine && !detail.soccerPositionLine) {
     return (
       <div className="flex h-full w-full items-center justify-center overflow-hidden px-4 text-center leading-tight">
-        <div className="max-w-full truncate text-[clamp(0.95rem,2.35vw,1.36rem)] font-semibold tracking-[0.08em]">
-          {fallback.primary || 'Soccer'}
-        </div>
+        <MirrorModuleHeader title={fallback.primary || 'Soccer'} />
       </div>
     )
   }
@@ -4213,17 +4214,15 @@ function MirrorXLSoccerLeftPanel({ detail, fallback }: { detail: MirrorModuleDet
   if (!detail.soccerFixtureLine && !detail.soccerNextHomeLine && !detail.soccerPositionLine) {
     return (
       <div className="flex h-full w-full items-center justify-center overflow-hidden px-4 text-center leading-tight">
-        <div className="max-w-full truncate text-[clamp(0.95rem,2.35vw,1.36rem)] font-semibold tracking-[0.08em]">
-          {fallback.primary || 'Soccer'}
-        </div>
+        <MirrorModuleHeader title={fallback.primary || 'Soccer'} />
       </div>
     )
   }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.7rem,1.75vw,1.25rem)] py-[clamp(0.7rem,1.7vw,1.15rem)] text-center leading-none">
-      <div className="flex min-h-0 shrink-0 items-center justify-center text-[clamp(0.72rem,1.72vw,1.08rem)] font-semibold tracking-[0.08em]">
-        <span className="max-w-full truncate" title={title}>{title}</span>
+      <div className="flex min-h-0 shrink-0 items-center justify-center">
+        <MirrorModuleHeader title={title} />
       </div>
 
       <div className="mt-[clamp(0.7rem,1.65vw,1.08rem)] grid shrink-0 grid-rows-7 text-center" style={{ height: 'clamp(6.1rem,16.2vw,10.6rem)' }}>
@@ -4285,9 +4284,7 @@ function MirrorSmallSoccerCard({ detail, fallback }: { detail: MirrorModuleDetai
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.45rem,1.15vw,0.8rem)] text-center leading-none">
-      <div className="max-w-full truncate text-[clamp(0.92rem,2.35vw,1.38rem)] font-semibold tracking-[0.08em]" title={fixture}>
-        {fixture}
-      </div>
+      <MirrorModuleHeader title={fixture} />
       <div className="mt-[clamp(0.8rem,2.15vw,1.2rem)] flex w-full max-w-full items-center justify-center text-[clamp(0.58rem,1.32vw,0.82rem)] font-semibold tracking-[0.045em]">
         {stats.map((item, index) => (
           <React.Fragment key={`${item}-${index}`}>
@@ -4544,9 +4541,7 @@ function MirrorLargeSurfCard({
         </div>
       )}
 
-      <div className="mx-auto max-w-[72%] truncate border-b border-current pb-[clamp(0.1rem,0.3vw,0.18rem)] text-[clamp(0.72rem,1.65vw,1.02rem)] font-semibold tracking-[0.14em] uppercase" style={{ borderColor: textColor }} title={spotName}>
-        {spotName}
-      </div>
+      <MirrorModuleHeader title={spotName} className="mx-auto max-w-[72%]" style={{ borderColor: textColor }} />
 
       <div className="mt-[clamp(0.55rem,1.35vw,0.92rem)] grid min-h-0 flex-1 grid-cols-4 items-stretch">
         {dayparts.map((part, index) => (
@@ -4725,9 +4720,7 @@ function MirrorXLSurfCard({
           <div className="absolute inset-y-[34%] left-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
           <div className="absolute inset-y-[34%] right-0 w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
           <div className="translate-y-[clamp(0.08rem,0.28vw,0.2rem)]">
-            <div className="mx-auto inline-block border-b-2 border-current px-[clamp(0.32rem,0.78vw,0.58rem)] pb-[clamp(0.06rem,0.16vw,0.12rem)] text-[clamp(0.98rem,2.32vw,1.46rem)] font-semibold tracking-[0.08em]" style={{ borderColor: textColor }}>
-              Today
-            </div>
+            <MirrorModuleHeader title="Today" className="mx-auto inline-block" style={{ borderColor: textColor }} />
             <div className="mt-[clamp(0.32rem,0.78vw,0.56rem)] text-[clamp(0.7rem,1.6vw,1rem)] font-semibold tracking-[0.1em] uppercase">{mirrorSurfRatingWord(rating)}</div>
             <div className="mt-[clamp(0.26rem,0.66vw,0.46rem)] flex min-w-0 items-center justify-center">
               <DiceRating rating={diceValue} isExperienceBased={experienceBased} muted={mutedColor} paperColor={frameBackground} />
@@ -4798,9 +4791,7 @@ function MirrorSmallSurfCard({
         </div>
       )}
 
-      <div className="max-w-[86%] truncate border-b border-current pb-[clamp(0.08rem,0.22vw,0.14rem)] text-[clamp(0.72rem,1.72vw,1.04rem)] font-semibold tracking-[0.12em] uppercase" title={spotName}>
-        {spotName}
-      </div>
+      <MirrorModuleHeader title={spotName} className="max-w-[86%]" />
 
       <div className="mt-[clamp(0.68rem,1.7vw,1.05rem)] grid w-full min-w-0 grid-cols-[1fr_auto_1fr_auto_1fr] items-center">
         <div className="min-w-0 truncate px-[clamp(0.1rem,0.32vw,0.22rem)] text-[clamp(0.56rem,1.24vw,0.78rem)] font-semibold tracking-[0.08em] uppercase" title={mirrorSurfRatingWord(rating)}>
@@ -5009,18 +5000,14 @@ function MirrorSmallStocksCard({
   if (!hasLiveStockLayoutData) {
     return (
       <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
-        <div className="max-w-full truncate text-[clamp(0.95rem,2.6vw,1.55rem)] font-semibold tracking-[0.08em]">
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} />
       </div>
     )
   }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.5rem,1.4vw,0.95rem)] py-[clamp(0.52rem,1.45vw,1rem)] text-center leading-tight">
-      <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.25rem,0.7vw,0.5rem)] pb-[clamp(0.05rem,0.18vw,0.12rem)] text-[clamp(0.7rem,1.7vw,1.06rem)] font-semibold tracking-[0.08em]">
-        {title}
-      </div>
+      <MirrorModuleHeader title={title} className="mx-auto" />
 
       <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr_auto_1fr] items-center pt-[clamp(0.35rem,1.05vw,0.75rem)] pb-[clamp(0.1rem,0.4vw,0.28rem)]">
         <div className="min-w-0 truncate px-[clamp(0.2rem,0.7vw,0.45rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]">
@@ -5319,9 +5306,7 @@ function MirrorLargeStocksCard({
   if (!hasLiveStockLayoutData) {
     return (
       <div className="flex h-full w-full items-center justify-center px-4 text-center leading-tight">
-        <div className="max-w-full truncate text-[clamp(1rem,2.55vw,1.7rem)] font-semibold tracking-[0.08em]">
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} />
       </div>
     )
   }
@@ -5329,9 +5314,7 @@ function MirrorLargeStocksCard({
   return (
     <div className="grid h-full w-full grid-cols-[1fr_1fr] overflow-hidden px-[clamp(0.65rem,1.65vw,1.25rem)] py-[clamp(0.45rem,1.15vw,0.9rem)] text-center leading-tight">
       <div className="flex min-w-0 flex-col overflow-hidden pr-[clamp(0.35rem,0.95vw,0.8rem)]">
-        <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.2rem,0.6vw,0.46rem)] pb-[clamp(0.05rem,0.16vw,0.12rem)] text-[clamp(0.64rem,1.24vw,0.96rem)] font-semibold tracking-[0.08em]">
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} className="mx-auto" />
 
         <div className="flex min-h-0 flex-1 flex-col justify-evenly pt-[clamp(0.42rem,1vw,0.72rem)] pb-[clamp(0.08rem,0.3vw,0.22rem)]">
           {rows.map((row) => (
@@ -5405,9 +5388,7 @@ function MirrorXLStocksCard({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.85rem,2.2vw,1.55rem)] pt-[clamp(0.85rem,2.15vw,1.55rem)] pb-[clamp(0.7rem,1.8vw,1.35rem)] text-center leading-tight">
       <div className="flex min-h-0 flex-[0_0_47%] flex-col overflow-hidden pb-[clamp(0.2rem,0.65vw,0.5rem)]">
-        <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.05rem,0.2vw,0.14rem)] text-[clamp(0.72rem,1.55vw,1.05rem)] font-semibold tracking-[0.08em]">
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} className="mx-auto" />
 
         <div className="mx-auto grid w-[calc(100%-clamp(2.5rem,7vw,5rem))] shrink-0 grid-cols-[1fr_auto_1fr_auto_1fr] items-center pt-[clamp(0.8rem,1.9vw,1.25rem)]">
           <div className="min-w-0 truncate px-[clamp(0.25rem,0.75vw,0.55rem)] text-[clamp(0.76rem,1.65vw,1.12rem)] font-semibold tracking-[0.08em]">{price}</div>
@@ -5471,18 +5452,14 @@ function MirrorMediumStocksCard({
   if (!hasLiveStockLayoutData) {
     return (
       <div className="flex h-full w-full items-center justify-center px-4 text-center leading-tight">
-        <div className="max-w-full truncate text-[clamp(1rem,2.55vw,1.7rem)] font-semibold tracking-[0.08em]">
-          {title}
-        </div>
+        <MirrorModuleHeader title={title} />
       </div>
     )
   }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.75rem,1.9vw,1.5rem)] pt-[clamp(0.75rem,1.95vw,1.45rem)] pb-[clamp(0.8rem,2vw,1.55rem)] text-center leading-tight">
-      <div className="mx-auto max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.05rem,0.2vw,0.14rem)] text-[clamp(0.78rem,1.8vw,1.18rem)] font-semibold tracking-[0.08em]">
-        {title}
-      </div>
+      <MirrorModuleHeader title={title} className="mx-auto" />
 
       <div className="shrink-0 pt-[clamp(0.55rem,1.25vw,0.95rem)] text-[clamp(0.56rem,1.22vw,0.78rem)] font-semibold tracking-[0.08em]">
         {mirrorStockRangeLabel(detail.stockChartRange, language)}
@@ -5657,9 +5634,7 @@ function MirrorXLWeatherCard({
           <div className="absolute bottom-[clamp(0.45rem,1.15vw,0.8rem)] left-0 top-[clamp(1.65rem,4.1vw,2.7rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
           <div className="absolute bottom-[clamp(0.45rem,1.15vw,0.8rem)] right-0 top-[clamp(1.65rem,4.1vw,2.7rem)] w-px" style={{ backgroundColor: textColor }} aria-hidden="true" />
 
-          <div className="shrink-0 border-b-[3px] border-current px-[clamp(0.24rem,0.7vw,0.5rem)] pb-[clamp(0.04rem,0.14vw,0.1rem)] text-[clamp(0.88rem,2.15vw,1.42rem)] font-semibold tracking-[0.08em]">
-            Today
-          </div>
+          <MirrorModuleHeader title="Today" />
 
           <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center pt-[clamp(0.28rem,0.8vw,0.52rem)]">
             <div className="aspect-square h-[clamp(2.45rem,7vw,4.75rem)] max-h-[72%] max-w-[52%] overflow-hidden">
@@ -5724,12 +5699,7 @@ function MirrorLargeWeatherCard({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.7rem,1.9vw,1.35rem)] pt-[clamp(0.55rem,1.4vw,0.95rem)] pb-[clamp(0.55rem,1.35vw,0.9rem)] text-center leading-none">
-      <div
-        className="mx-auto max-w-[86%] shrink-0 truncate border-b border-current pb-[clamp(0.08rem,0.24vw,0.16rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]"
-        title={locationName}
-      >
-        {locationName}
-      </div>
+      <MirrorModuleHeader title={locationName} className="mx-auto max-w-[86%]" />
 
       <div className="mt-[clamp(0.5rem,1.25vw,0.82rem)] grid min-h-0 w-full flex-1 grid-cols-4 items-stretch">
         {days.map((day, index) => (
@@ -5844,12 +5814,7 @@ function LandscapeFrameMirror({
 
       return (
         <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.7rem,1.9vw,1.25rem)] py-[clamp(0.46rem,1.2vw,0.8rem)] text-center leading-none">
-          <div
-            className="max-w-[86%] shrink-0 truncate border-b border-current pb-[clamp(0.08rem,0.24vw,0.16rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-semibold tracking-[0.08em]"
-            title={locationName}
-          >
-            {locationName}
-          </div>
+          <MirrorModuleHeader title={locationName} className="max-w-[86%]" />
 
           <div className="mt-[clamp(0.55rem,1.42vw,0.95rem)] grid w-full max-w-[96%] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center overflow-hidden text-[clamp(0.56rem,1.24vw,0.8rem)] font-medium tracking-[0.045em]">
             <div className="min-w-0 truncate px-[clamp(0.08rem,0.34vw,0.28rem)] text-center" title={tempRange}>{tempRange}</div>
@@ -6014,13 +5979,7 @@ function LandscapeFrameMirror({
 
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.22rem,0.65vw,0.42rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
-          <div
-            className="max-w-full truncate border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.08em]"
-            style={headerOffsetStyle}
-            title={header}
-          >
-            {header}
-          </div>
+          <MirrorModuleHeader title={header} style={headerOffsetStyle} />
 
           {visibleItems.length <= 0 ? (
             <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.08em]" style={{ ...contentOffsetStyle, color: mutedColor }}>
@@ -6141,9 +6100,7 @@ function LandscapeFrameMirror({
             </div>
           )}
 
-          <div className="mx-auto max-w-[78%] truncate border-b border-current pb-[clamp(0.12rem,0.4vw,0.24rem)] text-[clamp(0.72rem,1.8vw,1.08rem)] font-semibold tracking-[0.14em] uppercase" style={{ borderColor: textColor }}>
-            {spotName}
-          </div>
+          <MirrorModuleHeader title={spotName} className="mx-auto max-w-[78%]" style={{ borderColor: textColor }} />
 
           <div className="grid min-h-0 flex-1 grid-cols-[1fr_auto_1fr] grid-rows-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center pt-[clamp(0.45rem,1.1vw,0.75rem)] pb-[clamp(0.16rem,0.45vw,0.32rem)]">
             <div className="col-start-1 row-start-1 min-w-0 pr-[clamp(0.45rem,1.25vw,0.9rem)]">
@@ -6191,12 +6148,11 @@ function LandscapeFrameMirror({
       )
     }
 
-    const primarySize = size === 'large' ? 'text-[clamp(1.8rem,7vw,4.5rem)]' : 'text-[clamp(1rem,3vw,2rem)]'
     const secondarySize = size === 'large' ? 'text-[clamp(0.85rem,2vw,1.4rem)]' : 'text-[clamp(0.65rem,1.6vw,1rem)]'
 
     return (
       <div className="max-w-full px-3 text-center leading-tight">
-        <div className={`${primarySize} font-semibold tracking-[0.14em] uppercase truncate`}>{detail.primary}</div>
+        <MirrorModuleHeader title={detail.primary} />
         {detail.secondary && (
           <div className={`${secondarySize} mt-2 tracking-[0.18em] uppercase truncate`} style={{ color: mutedColor }}>
             {detail.secondary}
