@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
-import { buildMediumWeatherDetail, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
+import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,6 +18,15 @@ type SurfMirrorDaypart = {
 
 type SurfMirrorDaily = SurfMirrorDaypart & {
   dateLocal?: string
+}
+
+type WeatherMirrorDay = {
+  label: string
+  lowTemp: string
+  highTemp: string
+  windLine: string
+  precipLine: string
+  wmo: number | null
 }
 
 type Detail = {
@@ -57,6 +66,7 @@ type Detail = {
   weatherWindLine?: string
   weatherPrecipLine?: string
   weatherWmo?: number | null
+  weatherDays?: WeatherMirrorDay[]
   surfAirMinC?: number
   surfAirMaxC?: number
   surfWaterMinC?: number
@@ -863,6 +873,18 @@ function hhmmFromIso(value: string) {
   return match ? match[1] : ''
 }
 
+function weekdayShortFromYmd(value: string, language: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!match) return '--'
+
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+  if (Number.isNaN(date.getTime())) return '--'
+
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-US', { weekday: 'short', timeZone: 'UTC' })
+    .format(date)
+    .replace(/\.$/, '')
+}
+
 function wmoSeverityRank(wmo: number) {
   if (wmo === 95 || wmo === 96 || wmo === 99) return 90
   if ((wmo >= 71 && wmo <= 77) || wmo === 85 || wmo === 86) return 100
@@ -1074,7 +1096,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
   url.searchParams.set('current', 'temperature_2m,weather_code,relative_humidity_2m')
   url.searchParams.set('hourly', 'temperature_2m,weather_code,wind_speed_10m,precipitation')
   url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,wind_speed_10m_max,sunrise,sunset')
-  url.searchParams.set('forecast_days', '1')
+  url.searchParams.set('forecast_days', '5')
   url.searchParams.set('temperature_unit', 'celsius')
   url.searchParams.set('wind_speed_unit', 'ms')
   url.searchParams.set('precipitation_unit', 'mm')
@@ -1102,12 +1124,30 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
     sunsetHHMM,
     localHour: localHourFromIso(currentTime),
   })
+  const dailyTime = Array.isArray(daily.time) ? daily.time : []
+  const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(4, Math.max(1, dailyTime.length)) }, (_, index) => {
+    const dayLoC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restLoC : arrayNumberAt(daily.temperature_2m_min, index)
+    const dayHiC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restHiC : arrayNumberAt(daily.temperature_2m_max, index)
+    const dayWindMaxMs = index === 0 && selectedPeriods.restValid ? selectedPeriods.restWindMaxMs : arrayNumberAt(daily.wind_speed_10m_max, index)
+    const dayPrecipMm = index === 0 && selectedPeriods.restValid ? selectedPeriods.restPrecipMm : arrayNumberAt(daily.precipitation_sum, index)
+    const dayWmo = index === 0 && selectedPeriods.restValid ? selectedPeriods.restWmo : arrayNumberAt(daily.weather_code, index)
+
+    return {
+      label: index === 0 ? 'Today' : weekdayShortFromYmd(asString(dailyTime[index]), language),
+      lowTemp: formatTemp(dayLoC, units),
+      highTemp: formatTemp(dayHiC, units),
+      windLine: buildWeatherWindLine(dayWindMaxMs),
+      precipLine: buildWeatherPrecipLine(dayPrecipMm, dayWmo, dayLoC, dayHiC),
+      wmo: dayWmo,
+    }
+  })
 
   return {
     primary: formatTemp(currentTempC, units),
     secondary: label || (language === 'no' ? 'Vær' : 'Weather'),
     tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
     ...medium,
+    weatherDays,
   }
 }
 
