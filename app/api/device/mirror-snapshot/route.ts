@@ -65,6 +65,8 @@ type Detail = {
   weatherAdvice?: string
   weatherWindLine?: string
   weatherPrecipLine?: string
+  weatherSunLine?: string
+  weatherHumidityLine?: string
   weatherWmo?: number | null
   weatherDays?: WeatherMirrorDay[]
   surfAirMinC?: number
@@ -1106,6 +1108,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
   const current = asRecord(data.current)
   const daily = asRecord(data.daily)
   const currentTempC = asNumber(current.temperature_2m)
+  const humidity = asNumber(current.relative_humidity_2m)
   const hiC = arrayNumberAt(daily.temperature_2m_max, 0)
   const loC = arrayNumberAt(daily.temperature_2m_min, 0)
   const windMaxMs = arrayNumberAt(daily.wind_speed_10m_max, 0)
@@ -1125,7 +1128,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
     localHour: localHourFromIso(currentTime),
   })
   const dailyTime = Array.isArray(daily.time) ? daily.time : []
-  const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(4, Math.max(1, dailyTime.length)) }, (_, index) => {
+  const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(5, Math.max(1, dailyTime.length)) }, (_, index) => {
     const dayLoC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restLoC : arrayNumberAt(daily.temperature_2m_min, index)
     const dayHiC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restHiC : arrayNumberAt(daily.temperature_2m_max, index)
     const dayWindMaxMs = index === 0 && selectedPeriods.restValid ? selectedPeriods.restWindMaxMs : arrayNumberAt(daily.wind_speed_10m_max, index)
@@ -1147,6 +1150,8 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
     secondary: label || (language === 'no' ? 'Vær' : 'Weather'),
     tertiary: `${formatTemp(loC, units)} / ${formatTemp(hiC, units)}`,
     ...medium,
+    weatherSunLine: `Sun ${sunriseHHMM || '--:--'} / ${sunsetHHMM || '--:--'}`,
+    weatherHumidityLine: humidity != null ? `Humidity ${Math.round(humidity)}%` : 'Humidity --%',
     weatherDays,
   }
 }
