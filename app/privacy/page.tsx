@@ -26,7 +26,7 @@ function PrivacyPageContent() {
   const [showBottomFade, setShowBottomFade] = useState(false)
 
   function goBack() {
-    if (from === 'settings') router.replace('/?tab=settings')
+    if (from === 'settings') router.replace('/?tab=settings&nosplash=1')
     else router.back()
   }
 
