@@ -1058,19 +1058,20 @@ export default function HomePage() {
 
   const layoutMeta = allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0]
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
-  const pendingMirrorSoccerSlots = useMemo(() => {
-    if (!physicalFrameSnapshot) return new Set<number>()
+  const pendingMirrorSlotsByModule = useMemo(() => {
+    if (!physicalFrameSnapshot) return new Map<number, ModuleKey>()
 
     const next = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
     const prev = physicalFrameSnapshot.cells
-    const pending = new Set<number>()
+    const pending = new Map<number, ModuleKey>()
 
     Object.keys(next).forEach((slotKey) => {
       const slot = Number(slotKey)
       if (!Number.isFinite(slot)) return
-      if (next[slot] !== 'soccer') return
-      if (next[slot] === prev[slot]) return
-      pending.add(slot)
+      const nextModule = next[slot]
+      if (!nextModule) return
+      if (nextModule === prev[slot]) return
+      pending.set(slot, nextModule)
     })
 
     return pending
@@ -1850,7 +1851,7 @@ async function handleSelectTab(k: TabKey) {
         fallbackLanguage={language}
         theme={theme}
         status={activeFrameStatus}
-        pendingSoccerSlots={pendingMirrorSoccerSlots}
+        pendingSlotsByModule={pendingMirrorSlotsByModule}
       />
     )
   }
@@ -5794,13 +5795,13 @@ function LandscapeFrameMirror({
   fallbackLanguage,
   theme,
   status,
-  pendingSoccerSlots,
+  pendingSlotsByModule,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
   theme: 'dark' | 'light'
   status: MemberRow | null
-  pendingSoccerSlots: Set<number>
+  pendingSlotsByModule: Map<number, ModuleKey>
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const isDark = theme === 'dark'
@@ -5824,11 +5825,14 @@ function LandscapeFrameMirror({
     '--mirror-fg-inverse': inverseColor,
   }
 
-  const pendingSoccerLabel = language === 'no' ? 'Laster fotball…' : 'Loading soccer...'
+  const loadingTextForModule = (module: ModuleKey) => {
+    if (language === 'no') return `Laster ${module}...`
+    return `Loading ${module}...`
+  }
   const displayCells = snapshot
     ? Object.keys(snapshot.cells).reduce<Record<number, ModuleKey | null>>((acc, key) => {
       const slot = Number(key)
-      acc[slot] = pendingSoccerSlots.has(slot) ? 'soccer' : snapshot.cells[slot]
+      acc[slot] = pendingSlotsByModule.get(slot) ?? snapshot.cells[slot]
       return acc
     }, {})
     : null
@@ -5841,11 +5845,11 @@ function LandscapeFrameMirror({
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
 
-    if (module === 'soccer' && pendingSoccerSlots.has(slot)) {
+    if (pendingSlotsByModule.get(slot) === module) {
       return (
         <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
           <div className="max-w-full text-[clamp(0.66rem,1.8vw,1.02rem)] font-semibold tracking-[0.08em]">
-            {pendingSoccerLabel}
+            {loadingTextForModule(module)}
           </div>
         </div>
       )
