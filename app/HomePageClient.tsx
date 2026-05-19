@@ -1069,7 +1069,7 @@ export default function HomePage() {
       const slot = Number(slotKey)
       if (!Number.isFinite(slot)) return
       if (next[slot] !== 'soccer') return
-      if (prev[slot] === 'soccer') return
+      if (next[slot] === prev[slot]) return
       pending.add(slot)
     })
 
