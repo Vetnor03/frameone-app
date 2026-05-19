@@ -13,7 +13,7 @@ export default function ContactPage() {
   const [from, setFrom] = useState<string | null>(null)
 
   function goBack() {
-    if (from === 'settings') router.replace('/?tab=settings')
+    if (from === 'settings') router.replace('/?tab=settings&nosplash=1')
     else router.back()
   }
 

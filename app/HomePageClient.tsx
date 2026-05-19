@@ -1063,6 +1063,8 @@ export default function HomePage() {
   const preferInstantScrollRef = useRef(false)
   const isLoadedRef = useRef(false)
 
+  const disableLaunchSplash = searchParams?.get('nosplash') === '1'
+
   useEffect(() => {
     const tab = searchParams?.get('tab')
     if (tab === 'settings') {
@@ -1510,8 +1512,8 @@ export default function HomePage() {
       }
 
       setShouldRenderApp(true)
-      setShowSplash(true)
-      setBooting(true)
+      setShowSplash(!disableLaunchSplash)
+      setBooting(!disableLaunchSplash)
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
@@ -1564,14 +1566,18 @@ export default function HomePage() {
         await loadDeviceSettings(selected)
       }
 
-      await finishBoot()
+      if (disableLaunchSplash) {
+        setBooting(false)
+      } else {
+        await finishBoot()
+      }
     })()
 
     return () => {
       cancelled = true
       if (unsub) unsub.unsubscribe()
     }
-  }, [router])
+  }, [disableLaunchSplash, router])
 
   useEffect(() => {
     if (booting) {
