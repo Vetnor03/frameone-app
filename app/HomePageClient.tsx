@@ -6623,7 +6623,7 @@ function MyFramesSection({
   }
 
 async function addFrame() {
-  const wasEmpty = frames.length === 0
+  const existingDeviceIds = new Set(frames.map((f) => f.device_id))
 
   const code = prompt(t.addFramePrompt)
   if (!code) return
@@ -6670,8 +6670,9 @@ async function addFrame() {
 
   onFramesChanged(merged)
 
-  if (wasEmpty && merged.length > 0) {
-    onSelectDevice(merged[0].device_id)
+  const newlyAddedFrame = merged.find((f) => !existingDeviceIds.has(f.device_id))
+  if (newlyAddedFrame) {
+    onSelectDevice(newlyAddedFrame.device_id)
   }
 
   alert(t.frameAdded)
