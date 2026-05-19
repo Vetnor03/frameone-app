@@ -1058,6 +1058,23 @@ export default function HomePage() {
 
   const layoutMeta = allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0]
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
+  const pendingMirrorSoccerSlots = useMemo(() => {
+    if (!physicalFrameSnapshot) return new Set<number>()
+
+    const next = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
+    const prev = physicalFrameSnapshot.cells
+    const pending = new Set<number>()
+
+    Object.keys(next).forEach((slotKey) => {
+      const slot = Number(slotKey)
+      if (!Number.isFinite(slot)) return
+      if (next[slot] !== 'soccer') return
+      if (prev[slot] === 'soccer') return
+      pending.add(slot)
+    })
+
+    return pending
+  }, [cellsByLayout, layoutKey, physicalFrameSnapshot])
 
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
@@ -1833,6 +1850,7 @@ async function handleSelectTab(k: TabKey) {
         fallbackLanguage={language}
         theme={theme}
         status={activeFrameStatus}
+        pendingSoccerSlots={pendingMirrorSoccerSlots}
       />
     )
   }
@@ -5776,11 +5794,13 @@ function LandscapeFrameMirror({
   fallbackLanguage,
   theme,
   status,
+  pendingSoccerSlots,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
   theme: 'dark' | 'light'
   status: MemberRow | null
+  pendingSoccerSlots: Set<number>
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const isDark = theme === 'dark'
@@ -5804,6 +5824,15 @@ function LandscapeFrameMirror({
     '--mirror-fg-inverse': inverseColor,
   }
 
+  const pendingSoccerLabel = language === 'no' ? 'Laster fotball…' : 'Loading soccer...'
+  const displayCells = snapshot
+    ? Object.keys(snapshot.cells).reduce<Record<number, ModuleKey | null>>((acc, key) => {
+      const slot = Number(key)
+      acc[slot] = pendingSoccerSlots.has(slot) ? 'soccer' : snapshot.cells[slot]
+      return acc
+    }, {})
+    : null
+
   const renderMirrorCell: FrameCellRenderer = (module, slot, size) => {
     if (!snapshot || !module) {
       return <div className="text-sm tracking-widest opacity-35">—</div>
@@ -5811,6 +5840,16 @@ function LandscapeFrameMirror({
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
+
+    if (module === 'soccer' && pendingSoccerSlots.has(slot)) {
+      return (
+        <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
+          <div className="max-w-full text-[clamp(0.66rem,1.8vw,1.02rem)] font-semibold tracking-[0.08em]">
+            {pendingSoccerLabel}
+          </div>
+        </div>
+      )
+    }
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
       const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
@@ -6198,7 +6237,7 @@ function LandscapeFrameMirror({
         {snapshot ? (
           <FrameLayoutRenderer
             layoutKey={snapshot.layoutKey}
-            cells={snapshot.cells}
+            cells={displayCells ?? snapshot.cells}
             language={language}
             renderCellContent={renderMirrorCell}
             frameClassName="pointer-events-none select-none"
