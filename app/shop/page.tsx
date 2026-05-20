@@ -48,7 +48,7 @@ const accessories = [
   { name: 'Desk Stand', price: '€39' },
   { name: 'Wall Mount', price: '€29' },
   { name: 'Cleaning Kit', price: '€19' },
-  { name: 'Replacement Glass', price: '€24' },
+  { name: 'Replacement Glass', price: '€9' },
 ]
 
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
