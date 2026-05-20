@@ -53,7 +53,7 @@ const accessories = [
 
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
   return (
-    <div className="relative aspect-[4/3] overflow-hidden rounded-sm bg-[#e9e7e3]">
+    <div className="relative aspect-[4/3] overflow-hidden rounded-sm bg-[#f3f1ed]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_24%,rgba(255,255,255,0.7),transparent_55%)]" />
       <div
         className="absolute left-8 top-8 h-40 w-40 rotate-[-18deg] border-[14px]"
@@ -88,7 +88,7 @@ export default function ShopPage() {
         </div>
       </div>
 
-      <header className="border-b border-black/10 bg-[#f2f0ec]">
+      <header className="border-b border-black/10 bg-[#f6f4f0]">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6">
           <span className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</span>
           <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex">
@@ -102,7 +102,7 @@ export default function ShopPage() {
         </div>
       </header>
 
-      <div className="bg-[#f2f0ec]">
+      <div className="bg-[#f6f4f0]">
         <div className="mx-auto max-w-[1200px] px-6">
           <section className="grid gap-8 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
@@ -137,7 +137,7 @@ export default function ShopPage() {
         </div>
       </div>
 
-      <section className="w-full border-y border-black/10 bg-[#f2f0ec]">
+      <section className="w-full border-y border-black/10 bg-[#f6f4f0]">
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-5 px-6 py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Swap in seconds', body: ['Satisfying click.', 'Designed for ease.'] },
@@ -169,7 +169,7 @@ export default function ShopPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCards.map((card) => (
-              <article key={card.name} className="border border-black/10 bg-[#f2f0ec] p-3">
+              <article key={card.name} className="rounded-lg border border-black/10 bg-[#f6f4f0] p-3">
                 <CornerCrop palette={card.palette} />
                 <div className="mt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
@@ -182,7 +182,7 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="mattes" className="grid gap-4 border border-black/10 bg-[#ebe7e1] p-8 md:grid-cols-[0.75fr_1.25fr] md:items-center">
+        <section id="mattes" className="grid gap-4 rounded-lg border border-black/10 bg-[#f2efea] p-8 md:grid-cols-[0.75fr_1.25fr] md:items-center">
           <div>
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
             <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
@@ -197,7 +197,7 @@ export default function ShopPage() {
             </p>
             <button className="mt-6 rounded bg-black px-7 py-3 text-sm text-white">SHOP MATTES</button>
           </div>
-          <div className="relative h-[260px] overflow-hidden rounded-sm bg-[#f5f2ee]">
+          <div className="relative h-[260px] overflow-hidden rounded-sm bg-[#faf8f4]">
             <div className="absolute left-12 top-16 h-44 w-60 rotate-[18deg] border-[14px] border-[#1f2124]" />
             <div className="absolute left-40 top-8 h-44 w-64 rotate-[16deg] border-[14px] border-[#fbfaf7]" />
             <div className="absolute left-52 top-20 h-36 w-44 rotate-[18deg] border-[12px] border-[#ece8e0]" />
@@ -211,7 +211,7 @@ export default function ShopPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
-              <article key={item.name} className="border border-black/10 bg-[#f2f0ec] p-3">
+              <article key={item.name} className="rounded-lg border border-black/10 bg-[#f6f4f0] p-3">
                 <div className="flex aspect-[16/9] items-center justify-center bg-[#ece9e4] text-5xl">▣</div>
                 <div className="mt-3 flex justify-between gap-3 leading-[1.3]"><h3 className="max-w-[16ch]">{item.name}</h3><span>{item.price}</span></div>
               </article>
@@ -222,7 +222,7 @@ export default function ShopPage() {
         </div>
 
       <footer id="about" className="border-t border-black/10 bg-white">
-        <div className="border-b border-black/10 bg-[#f2f0ec]">
+        <div className="border-b border-black/10 bg-[#f6f4f0]">
           <div className="mx-auto grid max-w-[1200px] gap-5 px-6 py-5 text-sm sm:grid-cols-3">
             <p>FREE SHIPPING<br /><span className="text-black/60">On orders over €100</span></p>
             <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
