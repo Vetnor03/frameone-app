@@ -71,12 +71,13 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
 export default function ShopPage() {
   return (
     <main
-      className="h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]"
+      className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]"
       style={{
         marginTop: 'calc(env(safe-area-inset-top) * -1)',
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
+      <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white">
       <div className="bg-[#0b0d10] text-[11px] text-white">
         <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-3 px-6 py-2 tracking-[0.02em] sm:gap-5">
           <span>Free shipping over €100</span>
@@ -264,6 +265,7 @@ export default function ShopPage() {
           </div>
         </div>
       </footer>
+      </div>
     </main>
   )
 }

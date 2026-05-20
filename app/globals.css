@@ -111,7 +111,7 @@ body > div:first-child {
 html[data-route-theme="shop"],
 html[data-route-theme="shop"] body,
 html[data-route-theme="shop"] body > div:first-child {
-  background: #f6f3ed;
+  background: #fff;
 }
 
 /* Hide scrollbars but keep horizontal swipe */
