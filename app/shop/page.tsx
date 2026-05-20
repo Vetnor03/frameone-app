@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -119,19 +120,15 @@ export default function ShopPage() {
               <p className="text-black/60">Satisfying click. Designed for ease.</p>
             </div>
           </div>
-          <div className="relative min-h-[420px] overflow-hidden rounded-sm border border-black/10 bg-[linear-gradient(170deg,#f2efeb_0%,#ece8e2_45%,#ddd4c9_100%)]">
-            <div className="absolute bottom-0 left-0 right-0 h-28 bg-[linear-gradient(180deg,#7e573a,#5a3d2c)]" />
-            <div className="absolute right-6 top-10 h-60 w-20 rounded-t-full bg-[#e3e1db]" />
-            <div className="absolute bottom-24 left-10 flex gap-2">
-              {['#ae7a54', '#704d39', '#5a5a5a', '#f0efea'].map((tone) => (
-                <span key={tone} className="h-56 w-9 rotate-[8deg] rounded-sm shadow" style={{ backgroundColor: tone }} />
-              ))}
-            </div>
-            <div className="absolute bottom-20 right-8 w-[340px] rotate-[-4deg] rounded-md border-[14px] border-[#1b1d1f] bg-[#111] p-4 shadow-2xl">
-              <div className="rounded-sm bg-[linear-gradient(180deg,#2c2f31,#121416)] p-4 text-center text-white/80">
-                <p className="text-sm">Monday, 18. May</p><p className="mt-3 h-28 rounded-sm bg-black/45" />
-              </div>
-            </div>
+          <div className="relative min-h-[420px] overflow-hidden rounded-sm border border-black/10 bg-[#f5f2ee]">
+            <Image
+              src="/shop/hero-top.jpg"
+              alt="Re:mind frames on a cabinet"
+              fill
+              priority
+              className="object-cover object-center"
+            />
+            <div className="absolute inset-y-0 left-0 w-[56%] bg-[linear-gradient(90deg,rgba(250,249,247,0.98)_0%,rgba(250,249,247,0.86)_28%,rgba(250,249,247,0.55)_46%,rgba(250,249,247,0.16)_66%,rgba(250,249,247,0)_100%)]" />
           </div>
           </section>
         </div>
