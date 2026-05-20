@@ -71,15 +71,19 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
 export default function ShopPage() {
   return (
     <main
-      className="h-screen overflow-y-auto overflow-x-hidden bg-[#f5f4f2] text-[#141414]"
+      className="h-screen overflow-y-auto overflow-x-hidden bg-[#f8f8f6] text-[#141414]"
       style={{
         marginTop: 'calc(env(safe-area-inset-top) * -1)',
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
       <div className="bg-[#0b0d10] text-[11px] text-white">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-8 px-6 py-2 tracking-[0.02em] sm:gap-14">
-          <span>Free shipping over €100</span><span>30 day returns</span><span>2 year warranty</span>
+        <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-3 px-6 py-2 tracking-[0.02em] sm:gap-5">
+          <span>Free shipping over €100</span>
+          <span className="h-3 w-px bg-white/35" aria-hidden />
+          <span>30 day returns</span>
+          <span className="h-3 w-px bg-white/35" aria-hidden />
+          <span>2 year warranty</span>
         </div>
       </div>
 
@@ -97,7 +101,7 @@ export default function ShopPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1200px] px-6 pb-12">
+      <div className="mx-auto max-w-[1200px] bg-[#fcfcfb] px-6 pb-12">
         <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
@@ -150,14 +154,14 @@ export default function ShopPage() {
           ))}
         </section>
 
-        <section id="frames" className="py-10">
+        <section id="frames" className="bg-[#fbfbfa] py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="max-w-[14ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCards.map((card) => (
-              <article key={card.name} className="border border-black/10 bg-white p-3">
+              <article key={card.name} className="border border-black/10 bg-[#fefefd] p-3">
                 <CornerCrop palette={card.palette} />
                 <div className="mt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
@@ -192,14 +196,14 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="accessories" className="py-10">
+        <section id="accessories" className="bg-[#fbfbfa] py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="max-w-[17ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Complete the experience</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
-              <article key={item.name} className="border border-black/10 bg-white p-3">
+              <article key={item.name} className="border border-black/10 bg-[#fefefd] p-3">
                 <div className="flex aspect-[16/9] items-center justify-center bg-[#ece9e4] text-5xl">▣</div>
                 <div className="mt-3 flex justify-between gap-3 leading-[1.3]"><h3 className="max-w-[16ch]">{item.name}</h3><span>{item.price}</span></div>
               </article>
@@ -208,7 +212,7 @@ export default function ShopPage() {
         </section>
       </div>
 
-      <footer id="about" className="border-t border-black/10 bg-[#f1f0ee]">
+      <footer id="about" className="border-t border-black/10 bg-[#f6f5f3]">
         <div className="mx-auto grid max-w-[1200px] gap-5 border-b border-black/10 px-6 py-5 text-sm sm:grid-cols-3">
           <p>FREE SHIPPING<br /><span className="text-black/60">On orders over €100</span></p>
           <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
