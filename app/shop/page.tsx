@@ -101,7 +101,7 @@ export default function ShopPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1200px] bg-white px-6 pb-12">
+      <div className="mx-auto max-w-[1200px] bg-white px-6">
         <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
@@ -133,7 +133,10 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section className="grid gap-x-8 gap-y-5 border-b border-black/10 bg-[#f2f0ec] py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      </div>
+
+      <section className="w-full border-b border-black/10 bg-[#f2f0ec]">
+        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-5 px-6 py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Swap in seconds', body: ['Satisfying click.', 'Designed for ease.'] },
             { label: 'Premium materials', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
@@ -152,8 +155,10 @@ export default function ShopPage() {
               </div>
             </article>
           ))}
-        </section>
+        </div>
+      </section>
 
+      <div className="mx-auto max-w-[1200px] bg-white px-6 pb-12">
         <section id="frames" className="py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="max-w-[14ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Popular Frames</h2>
