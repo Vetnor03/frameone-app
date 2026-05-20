@@ -245,6 +245,7 @@ export default function ShopPage() {
             >
               <option value="en-eur">English (EUR €)</option>
               <option value="en-usd">English (USD $)</option>
+              <option value="no-nok">Norwegian (NOK kr)</option>
             </select>
           </div>
         </div>
