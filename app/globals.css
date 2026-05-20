@@ -108,6 +108,12 @@ body > div:first-child {
   overflow: hidden;
 }
 
+html[data-route-theme="shop"],
+html[data-route-theme="shop"] body,
+html[data-route-theme="shop"] body > div:first-child {
+  background: #f6f3ed;
+}
+
 /* Hide scrollbars but keep horizontal swipe */
 .tab-scroll {
   -ms-overflow-style: none;
