@@ -85,7 +85,7 @@ export default function ShopPage() {
 
       <header className="border-b border-black/10 bg-white">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6">
-          <span className="text-[34px] font-medium tracking-[0.32em]">RE:MIND</span>
+          <span className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</span>
           <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex">
             <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
             <a href="#mattes" className="pb-1">Mattes</a>
@@ -100,11 +100,11 @@ export default function ShopPage() {
       <div className="mx-auto max-w-[1200px] px-6 pb-12">
         <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
-            <h1 className="max-w-[12.4ch] text-[44px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[50px] md:text-[62px]">
+            <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
               <span className="block">Frames that</span>
               <span className="block">fit your life.</span>
             </h1>
-            <p className="mt-6 max-w-[27ch] text-[19px] leading-[1.45] text-black/65 md:max-w-[31ch]">
+            <p className="mt-6 max-w-[27ch] text-[18px] leading-[1.45] text-black/65 md:max-w-[31ch]">
               Swap in seconds. Designed to complement your home, your style, your day.
             </p>
             <button className="mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white">SHOP FRAMES</button>
@@ -229,6 +229,9 @@ export default function ShopPage() {
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><p>FAQ</p><p>Shipping</p><p>Returns</p><p>Warranty</p></div></div>
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><p>About</p><p>Sustainability</p><p>Contact</p><p>Press</p></div></div>
           <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[24ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><div className="mt-3 flex overflow-hidden rounded border border-black/15"><input className="w-full bg-white px-3 py-2 outline-none" placeholder="Your email" /><button className="bg-black px-3 text-white">→</button></div></div>
+        </div>
+        <div className="mx-auto max-w-[1200px] border-t border-black/10 px-6 py-4 text-xs text-black/60">
+          © 2026 Re-mind. All rights reserved.
         </div>
       </footer>
     </main>
