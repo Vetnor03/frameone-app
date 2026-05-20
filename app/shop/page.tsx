@@ -101,8 +101,9 @@ export default function ShopPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1200px] bg-[#f2f0ec] px-6">
-        <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
+      <div className="bg-[#f2f0ec]">
+        <div className="mx-auto max-w-[1200px] px-6">
+          <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
               <span className="block">Frames that</span>
@@ -214,14 +215,17 @@ export default function ShopPage() {
               </article>
             ))}
           </div>
-        </section>
+          </section>
+        </div>
       </div>
 
       <footer id="about" className="border-t border-black/10 bg-white">
-        <div className="mx-auto grid max-w-[1200px] gap-5 border-b border-black/10 px-6 py-5 text-sm sm:grid-cols-3">
-          <p>FREE SHIPPING<br /><span className="text-black/60">On orders over €100</span></p>
-          <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
-          <p>2 YEAR WARRANTY<br /><span className="text-black/60">Peace of mind</span></p>
+        <div className="border-b border-black/10 bg-[#f2f0ec]">
+          <div className="mx-auto grid max-w-[1200px] gap-5 px-6 py-5 text-sm sm:grid-cols-3">
+            <p>FREE SHIPPING<br /><span className="text-black/60">On orders over €100</span></p>
+            <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
+            <p>2 YEAR WARRANTY<br /><span className="text-black/60">Peace of mind</span></p>
+          </div>
         </div>
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-9 px-6 py-10 text-sm sm:grid-cols-2 lg:grid-cols-[1.35fr_0.78fr_0.78fr_0.78fr_1.25fr]">
           <div className="pr-4 lg:pr-10">
