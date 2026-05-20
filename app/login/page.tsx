@@ -415,11 +415,15 @@ export default function LoginPage() {
   return (
     <main className="h-screen overflow-y-auto bg-[#061b24] px-5 py-8 text-white">
       <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center">
-        <div className="mb-8 flex justify-end">
-          <a href="/shop" className="text-sm font-medium tracking-wide text-white/70 transition hover:text-white">
-            Shop
+        <header className="mb-8 flex items-center justify-between">
+          <span className="text-xs font-semibold tracking-[0.2em] text-white/45">RE:MIND</span>
+          <a
+            href="/shop"
+            className="rounded-full border border-white/18 px-3 py-1.5 text-xs font-medium tracking-[0.16em] text-white/75 transition hover:border-white/35 hover:text-white"
+          >
+            SHOP
           </a>
-        </div>
+        </header>
         <h1 className="text-center text-2xl font-semibold tracking-widest">LOGIN</h1>
 
         {step === 'email' ? (
