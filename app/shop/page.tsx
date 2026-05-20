@@ -173,8 +173,16 @@ export default function ShopPage() {
         <section id="mattes" className="grid gap-4 border border-black/10 bg-[#ebe7e1] p-8 md:grid-cols-[0.75fr_1.25fr] md:items-center">
           <div>
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
-            <h2 className="mt-3 max-w-[11.5ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">Change the feel.<br />Not the frame.</h2>
-            <p className="mt-4 max-w-[26ch] text-[18px] leading-[1.45] text-black/65">Choose the perfect matte to match your space and reduce glare.</p>
+            <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
+              Change the feel.
+              <br />
+              Not the frame.
+            </h2>
+            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/65">
+              Choose the perfect matte to match
+              <br />
+              your space and reduce glare.
+            </p>
             <button className="mt-6 rounded bg-black px-7 py-3 text-sm text-white">SHOP MATTES</button>
           </div>
           <div className="relative h-[260px] overflow-hidden rounded-sm bg-[#f5f2ee]">
