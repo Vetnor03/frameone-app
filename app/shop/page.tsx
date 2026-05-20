@@ -87,7 +87,7 @@ export default function ShopPage() {
         </div>
       </div>
 
-      <header className="border-b border-black/10 bg-white">
+      <header className="border-b border-black/10 bg-[#f2f0ec]">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6">
           <span className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</span>
           <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex">
@@ -101,7 +101,7 @@ export default function ShopPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1200px] bg-white px-6">
+      <div className="mx-auto max-w-[1200px] bg-[#f2f0ec] px-6">
         <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
@@ -217,7 +217,7 @@ export default function ShopPage() {
         </section>
       </div>
 
-      <footer id="about" className="border-t border-black/10 bg-[#f6f5f3]">
+      <footer id="about" className="border-t border-black/10 bg-white">
         <div className="mx-auto grid max-w-[1200px] gap-5 border-b border-black/10 px-6 py-5 text-sm sm:grid-cols-3">
           <p>FREE SHIPPING<br /><span className="text-black/60">On orders over €100</span></p>
           <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
