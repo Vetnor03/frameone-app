@@ -339,7 +339,7 @@ function HomeScreenGuide() {
   if (isStandalone) return null
 
   return (
-    <section aria-label="Add to home screen guide" className="absolute left-0 right-0 top-full mt-9 text-center">
+    <section aria-label="Add to home screen guide" className="mt-9 text-center">
       <div className="flex w-full items-center gap-3 py-2.5 text-left text-white/45">
         <span className="text-[#5fa7d8]/80">
           <InfoIcon />
