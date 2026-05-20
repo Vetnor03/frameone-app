@@ -413,22 +413,27 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="h-screen overflow-y-auto bg-[#061b24] px-5 py-8 text-white">
-      <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center">
-        <header className="mb-8 flex items-center justify-between">
+    <main className="min-h-screen overflow-y-auto bg-[#061b24] px-5 text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col">
+        <header
+          className="flex items-center justify-between pb-6 pt-5"
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 1.25rem)' }}
+        >
           <span className="text-xs font-semibold tracking-[0.2em] text-white/45">RE:MIND</span>
           <a
             href="/shop"
-            className="rounded-full border border-white/18 px-3 py-1.5 text-xs font-medium tracking-[0.16em] text-white/75 transition hover:border-white/35 hover:text-white"
+            className="rounded-full border border-white/14 px-3 py-1.5 text-xs font-medium tracking-[0.16em] text-white/65 transition hover:border-white/30 hover:text-white/85"
           >
             SHOP
           </a>
         </header>
-        <h1 className="text-center text-2xl font-semibold tracking-widest">LOGIN</h1>
 
-        {step === 'email' ? (
-          <div className="relative">
-            <p className="mt-2 text-center text-sm text-white/50">We’ll send you an 8-digit code</p>
+        <section className="flex flex-1 flex-col justify-center pb-14 pt-8">
+          <h1 className="text-center text-2xl font-semibold tracking-widest">LOGIN</h1>
+
+          {step === 'email' ? (
+            <div className="relative">
+              <p className="mt-2 text-center text-sm text-white/50">We’ll send you an 8-digit code</p>
 
             <input
               type="email"
@@ -447,44 +452,45 @@ export default function LoginPage() {
               {loading ? 'SENDING...' : 'SEND CODE'}
             </button>
 
-            <HomeScreenGuide />
-          </div>
-        ) : (
-          <>
-            <p className="mt-2 text-center text-sm text-white/50">
-              Enter the code we sent to
-              <br />
-              <span className="text-white/80">{email}</span>
-            </p>
+              <HomeScreenGuide />
+            </div>
+          ) : (
+            <>
+              <p className="mt-2 text-center text-sm text-white/50">
+                Enter the code we sent to
+                <br />
+                <span className="text-white/80">{email}</span>
+              </p>
 
-            <input
-              inputMode="numeric"
-              placeholder="12345678"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\s/g, ''))}
-              className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
-              autoComplete="one-time-code"
-            />
+              <input
+                inputMode="numeric"
+                placeholder="12345678"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\s/g, ''))}
+                className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
+                autoComplete="one-time-code"
+              />
 
-            <button
-              onClick={verifyCode}
-              disabled={loading}
-              className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
-            >
-              {loading ? 'VERIFYING...' : 'VERIFY CODE'}
-            </button>
+              <button
+                onClick={verifyCode}
+                disabled={loading}
+                className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
+              >
+                {loading ? 'VERIFYING...' : 'VERIFY CODE'}
+              </button>
 
-            <button
-              onClick={() => {
-                setCode('')
-                setStep('email')
-              }}
-              className="mt-3 h-12 w-full rounded-xl border border-white/15 text-white/60 tracking-widest"
-            >
-              BACK
-            </button>
-          </>
-        )}
+              <button
+                onClick={() => {
+                  setCode('')
+                  setStep('email')
+                }}
+                className="mt-3 h-12 w-full rounded-xl border border-white/15 text-white/60 tracking-widest"
+              >
+                BACK
+              </button>
+            </>
+          )}
+        </section>
       </div>
     </main>
   )
