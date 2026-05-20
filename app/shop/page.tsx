@@ -103,7 +103,7 @@ export default function ShopPage() {
 
       <div className="bg-[#f2f0ec]">
         <div className="mx-auto max-w-[1200px] px-6">
-          <section className="grid gap-8 border-b border-black/10 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
+          <section className="grid gap-8 py-10 md:grid-cols-[0.95fr_1.25fr] md:items-stretch md:py-12">
           <div className="flex flex-col justify-center">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
               <span className="block">Frames that</span>
@@ -136,7 +136,7 @@ export default function ShopPage() {
 
       </div>
 
-      <section className="w-full border-b border-black/10 bg-[#f2f0ec]">
+      <section className="w-full border-y border-black/10 bg-[#f2f0ec]">
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-5 px-6 py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Swap in seconds', body: ['Satisfying click.', 'Designed for ease.'] },
