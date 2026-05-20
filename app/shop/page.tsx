@@ -104,9 +104,9 @@ export default function ShopPage() {
       </header>
 
       <div className="bg-[#faf9f7]">
-        <div className="mx-auto max-w-[1200px] px-6">
-          <section className="grid gap-7 py-10 md:min-h-[560px] md:grid-cols-[0.88fr_1.32fr] md:items-stretch md:py-14">
-          <div className="flex flex-col justify-center md:-mt-5">
+        <div className="mx-auto max-w-[1200px]">
+          <section className="grid gap-0 py-8 md:min-h-[585px] md:grid-cols-[0.8fr_1.4fr] md:items-stretch md:py-0">
+          <div className="flex flex-col justify-center px-6 py-8 md:-mt-7 md:pl-14 md:pr-10">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
               <span className="block">Frames that</span>
               <span className="block">fit your life.</span>
@@ -120,16 +120,16 @@ export default function ShopPage() {
               <p className="text-black/60">Satisfying click. Designed for ease.</p>
             </div>
           </div>
-          <div className="relative min-h-[440px] overflow-hidden md:min-h-[520px]">
+          <div className="relative min-h-[470px] overflow-hidden md:min-h-[585px]">
             <Image
               src="/shop/hero-top.jpg"
               alt="Re:mind frames on a cabinet"
               fill
               priority
-              className="object-cover object-[64%_46%] md:scale-[1.05]"
+              className="object-cover object-[66%_46%] md:scale-[1.08]"
             />
-            <div className="absolute inset-y-0 -left-[12%] w-[86%] bg-[linear-gradient(90deg,rgba(250,249,247,1)_0%,rgba(250,249,247,0.96)_24%,rgba(250,249,247,0.88)_40%,rgba(250,249,247,0.72)_54%,rgba(250,249,247,0.5)_68%,rgba(250,249,247,0.26)_82%,rgba(250,249,247,0)_100%)]" />
-            <div className="absolute inset-x-0 bottom-0 h-[24%] bg-[linear-gradient(180deg,rgba(250,249,247,0)_0%,rgba(250,249,247,0.3)_55%,rgba(250,249,247,0.72)_100%)]" />
+            <div className="absolute inset-y-0 -left-[15%] w-[80%] bg-[linear-gradient(90deg,rgba(250,249,247,1)_0%,rgba(250,249,247,0.985)_20%,rgba(250,249,247,0.94)_36%,rgba(250,249,247,0.82)_52%,rgba(250,249,247,0.62)_66%,rgba(250,249,247,0.36)_80%,rgba(250,249,247,0.14)_92%,rgba(250,249,247,0)_100%)]" />
+            <div className="absolute inset-x-0 bottom-0 h-[20%] bg-[linear-gradient(180deg,rgba(250,249,247,0)_0%,rgba(250,249,247,0.22)_58%,rgba(250,249,247,0.6)_100%)]" />
           </div>
           </section>
         </div>
