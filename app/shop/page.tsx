@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import ShopNav from './ShopNav'
 
 export const metadata: Metadata = {
   title: 'Re-mind Shop',
@@ -83,23 +84,7 @@ export default function ShopPage() {
       <div className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10 lg:py-12">
         <header className="relative flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <details className="group relative">
-              <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full border border-black/15 bg-white/60 text-black/75">
-                <span className="sr-only">Toggle shop navigation</span>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-                  <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                </svg>
-              </summary>
-              <div className="absolute left-0 top-12 z-20 w-64 rounded-2xl border border-black/10 bg-[#fdfbf6] p-3 shadow-[0_20px_44px_rgba(0,0,0,0.12)]">
-                <nav className="flex flex-col">
-                  <a href="#frames" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">Frames</a>
-                  <a href="#mattes" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">Mattes</a>
-                  <a href="#accessories" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">Accessories</a>
-                  <a href="#about" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">About</a>
-                  <Link href="/login?next=/?nosplash=1" className="mt-1 rounded-xl px-3 py-2.5 text-sm font-medium text-black/85 transition hover:bg-black/[0.04]">Open app</Link>
-                </nav>
-              </div>
-            </details>
+            <ShopNav />
             <span className="text-sm font-semibold tracking-[0.2em]">RE:MIND</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
