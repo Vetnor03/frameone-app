@@ -223,8 +223,8 @@ export default function ShopPage() {
           <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
           <p>2 YEAR WARRANTY<br /><span className="text-black/60">Peace of mind</span></p>
         </div>
-        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-9 px-6 py-10 text-sm sm:grid-cols-2 lg:grid-cols-5">
-          <div>
+        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-9 px-6 py-10 text-sm sm:grid-cols-2 lg:grid-cols-[1.35fr_0.78fr_0.78fr_0.78fr_1.25fr]">
+          <div className="pr-4 lg:pr-10">
             <p className="mb-3 font-bold tracking-[0.2em]">RE:MIND</p>
             <p className="max-w-[34ch] leading-[1.55] text-black/65">
               Re-mind gives you what matters,
@@ -237,7 +237,7 @@ export default function ShopPage() {
           <div><p className="mb-3 font-medium">SHOP</p><div className="space-y-1.5 leading-[1.4]"><p>Frames</p><p>Mattes</p><p>Accessories</p><p>Bundles</p></div></div>
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><p>FAQ</p><p>Shipping</p><p>Returns</p><p>Warranty</p></div></div>
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><p>About</p><p>Sustainability</p><p>Contact</p><p>Press</p></div></div>
-          <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><div className="mt-3 flex overflow-hidden rounded border border-black/15"><input className="w-full bg-white px-3 py-2 outline-none" placeholder="Your email" /><button className="bg-black px-3 text-white">→</button></div></div>
+          <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><div className="mt-3 flex w-full max-w-[320px] overflow-hidden rounded border border-black/15"><input className="w-full bg-white px-3 py-2 outline-none" placeholder="Your email" /><button className="bg-black px-3 text-white">→</button></div></div>
         </div>
         <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
           <p>© 2026 Re-mind. All rights reserved.</p>
