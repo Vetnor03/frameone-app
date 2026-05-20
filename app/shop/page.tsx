@@ -132,8 +132,8 @@ export default function ShopPage() {
               </div>
             </div>
           </div>
-        </section>
-
+          </section>
+        </div>
       </div>
 
       <section className="w-full border-y border-black/10 bg-[#f2f0ec]">
@@ -159,8 +159,9 @@ export default function ShopPage() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1200px] bg-white px-6 pb-12">
-        <section id="frames" className="py-10">
+      <div className="bg-white">
+        <div className="mx-auto max-w-[1200px] px-6 pb-12">
+          <section id="frames" className="py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="max-w-[14ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
@@ -202,7 +203,7 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="accessories" className="py-10">
+          <section id="accessories" className="py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="max-w-[17ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Complete the experience</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
@@ -217,7 +218,7 @@ export default function ShopPage() {
           </div>
           </section>
         </div>
-      </div>
+        </div>
 
       <footer id="about" className="border-t border-black/10 bg-white">
         <div className="border-b border-black/10 bg-[#f2f0ec]">
