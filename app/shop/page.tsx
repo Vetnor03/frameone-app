@@ -77,26 +77,33 @@ function FrameVisual({ frameTone, matTone, artTone }: Omit<FrameFinish, 'name' |
 export default function ShopPage() {
   return (
     <main
-      className="h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#1c1b1a]"
-      style={{
-        marginTop: 'calc(env(safe-area-inset-top) * -1)',
-        paddingTop: 'env(safe-area-inset-top)',
-      }}
+      className="min-h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#1c1b1a]"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <div className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10 lg:py-12">
-        <header className="flex items-center justify-between">
-          <span className="text-sm font-semibold tracking-[0.2em]">RE:MIND</span>
-          <nav className="hidden items-center gap-8 text-sm text-black/70 md:flex">
-            <a href="#frames">Frames</a>
-            <a href="#mattes">Mattes</a>
-            <a href="#accessories">Accessories</a>
-            <a href="#about">About</a>
-          </nav>
+        <header className="relative flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <details className="group relative">
+              <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full border border-black/15 bg-white/60 text-black/75">
+                <span className="sr-only">Toggle shop navigation</span>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                  <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                </svg>
+              </summary>
+              <div className="absolute left-0 top-12 z-20 w-64 rounded-2xl border border-black/10 bg-[#fdfbf6] p-3 shadow-[0_20px_44px_rgba(0,0,0,0.12)]">
+                <nav className="flex flex-col">
+                  <a href="#frames" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">Frames</a>
+                  <a href="#mattes" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">Mattes</a>
+                  <a href="#accessories" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">Accessories</a>
+                  <a href="#about" className="rounded-xl px-3 py-2.5 text-sm text-black/75 transition hover:bg-black/[0.04]">About</a>
+                  <Link href="/login?next=/?nosplash=1" className="mt-1 rounded-xl px-3 py-2.5 text-sm font-medium text-black/85 transition hover:bg-black/[0.04]">Open app</Link>
+                </nav>
+              </div>
+            </details>
+            <span className="text-sm font-semibold tracking-[0.2em]">RE:MIND</span>
+          </div>
           <div className="flex items-center gap-3 text-sm">
-            <Link href="/login" className="rounded-full border border-black/15 px-4 py-1.5 font-medium">
-              Open app
-            </Link>
-            <span className="hidden text-black/35 sm:inline">Cart —</span>
+            <Link href="/login?next=/?nosplash=1" className="rounded-full border border-black/15 px-4 py-1.5 font-medium">Open app</Link>
           </div>
         </header>
 
