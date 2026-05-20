@@ -126,10 +126,10 @@ export default function ShopPage() {
               alt="Re:mind frames on a cabinet"
               fill
               priority
-              className="object-cover object-[61%_52%] md:scale-[1.01]"
+              className="object-cover object-[64%_50%]"
             />
-            <div className="absolute inset-y-0 -left-[10%] w-[68%] bg-[linear-gradient(90deg,rgba(250,249,247,0.995)_0%,rgba(250,249,247,0.96)_30%,rgba(250,249,247,0.86)_50%,rgba(250,249,247,0.66)_68%,rgba(250,249,247,0.36)_84%,rgba(250,249,247,0.1)_95%,rgba(250,249,247,0)_100%)]" />
-            <div className="absolute inset-x-0 bottom-0 h-[16%] bg-[linear-gradient(180deg,rgba(250,249,247,0)_0%,rgba(250,249,247,0.14)_62%,rgba(250,249,247,0.42)_100%)]" />
+            <div className="absolute inset-y-0 -left-[8%] w-[56%] bg-[linear-gradient(90deg,rgba(250,249,247,0.97)_0%,rgba(250,249,247,0.88)_38%,rgba(250,249,247,0.55)_68%,rgba(250,249,247,0.2)_88%,rgba(250,249,247,0)_100%)]" />
+            <div className="absolute inset-x-0 bottom-0 h-[10%] bg-[linear-gradient(180deg,rgba(250,249,247,0)_0%,rgba(250,249,247,0.08)_62%,rgba(250,249,247,0.22)_100%)]" />
           </div>
           </section>
         </div>
