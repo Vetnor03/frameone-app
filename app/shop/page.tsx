@@ -26,7 +26,7 @@ const frameCards: FrameCard[] = [
     price: '€79',
     subtitle: 'Real walnut',
     palette: ['#5a3a2a', '#7a513c', '#946550'],
-    swatches: ['#6a4633', '#bdb7b0', '#8a624a'],
+    swatches: ['#6a4633', '#8a624a'],
   },
   {
     name: 'Natural Oak',
