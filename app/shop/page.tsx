@@ -130,11 +130,16 @@ export default function ShopPage() {
         </section>
 
         <section className="grid gap-x-8 gap-y-5 border-b border-black/10 py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          {['Swap in seconds', 'Premium materials', 'Built to last', 'Made for Re:mind'].map((item) => (
-            <article key={item} className="flex gap-3">
+          {[
+            { label: 'Swap in seconds' },
+            { label: 'Premium materials', noWrap: true },
+            { label: 'Built to last' },
+            { label: 'Made for Re:mind' },
+          ].map((item) => (
+            <article key={item.label} className="flex gap-3">
               <span>◌</span>
               <div className="max-w-[21ch] leading-[1.4]">
-                <p className="font-medium uppercase tracking-[0.08em]">{item}</p>
+                <p className={`font-medium uppercase tracking-[0.08em] ${item.noWrap ? 'whitespace-nowrap' : ''}`}>{item.label}</p>
                 <p className="mt-1 text-black/60">Satisfying click. Designed for ease.</p>
               </div>
             </article>
