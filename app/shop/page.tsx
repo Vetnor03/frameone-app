@@ -76,7 +76,13 @@ function FrameVisual({ frameTone, matTone, artTone }: Omit<FrameFinish, 'name' |
 
 export default function ShopPage() {
   return (
-    <main className="h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#1c1b1a]">
+    <main
+      className="h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#1c1b1a]"
+      style={{
+        marginTop: 'calc(env(safe-area-inset-top) * -1)',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
+    >
       <div className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10 lg:py-12">
         <header className="flex items-center justify-between">
           <span className="text-sm font-semibold tracking-[0.2em]">RE:MIND</span>
