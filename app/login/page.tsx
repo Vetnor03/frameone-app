@@ -336,8 +336,6 @@ function HomeScreenGuide() {
   const isStandalone = useStandaloneDisplayMode()
   const [activeGuideId, setActiveGuideId] = useState<HomeScreenGuideSectionId | null>(null)
 
-  if (isStandalone) return null
-
   return (
     <section aria-label="Add to home screen guide" className="mt-9 text-center">
       <div className="flex w-full items-center gap-3 py-2.5 text-left text-white/45">
@@ -346,7 +344,7 @@ function HomeScreenGuide() {
         </span>
         <span className="text-[0.64rem] font-semibold tracking-[0.22em] text-white/50">TIP</span>
         <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-white/35">
-          Add the app to your home screen for a better experience.
+          {isStandalone ? "You're using the home screen app. These steps are here if you need them again." : "Add the app to your home screen for a better experience."}
         </span>
       </div>
 

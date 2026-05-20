@@ -3555,6 +3555,36 @@ function MirrorGroceriesMediumPanel({
   )
 }
 
+function MirrorGroceriesMediumMealIdeas({ detail, language, mutedColor }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string }) {
+  const mealIdeas = mirrorGroceriesMealIdeas(detail)
+  if (mealIdeas.length <= 0) return null
+
+  return (
+    <div className="mt-[clamp(0.48rem,1.15vw,0.78rem)] border-t border-white/15 pt-[clamp(0.4rem,0.98vw,0.66rem)]">
+      <div className="max-w-full truncate text-center text-[clamp(0.52rem,1.16vw,0.74rem)] font-semibold tracking-[0.07em]" style={{ color: mutedColor }}>
+        {mirrorGroceriesUppercase(language === 'no' ? 'Middagstips' : 'Meal Ideas', language)}
+      </div>
+      <div className="mt-[clamp(0.26rem,0.62vw,0.42rem)] flex flex-col items-center gap-[clamp(0.18rem,0.5vw,0.32rem)]">
+        {mealIdeas.map((item, index) => {
+          const missingLine = item.missing.length > 0 ? `${language === 'no' ? 'mangler' : 'missing'}: ${item.missing.join(', ')}` : ''
+          return (
+            <div key={`${item.name}-${index}`} className="max-w-full text-center leading-none">
+              <div className="truncate text-[clamp(0.62rem,1.4vw,0.88rem)] font-medium tracking-[0.045em]" title={item.name}>
+                {item.name}
+              </div>
+              {missingLine && (
+                <div className="mt-[clamp(0.12rem,0.36vw,0.24rem)] truncate text-[clamp(0.52rem,1.1vw,0.7rem)] font-medium tracking-[0.04em]" style={{ color: mutedColor }} title={missingLine}>
+                  {missingLine}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function MirrorGroceriesMediumCard({
   detail,
   language,
@@ -3568,13 +3598,16 @@ function MirrorGroceriesMediumCard({
 
   return (
     <div className="flex h-full w-full flex-col px-[clamp(0.62rem,1.7vw,1.2rem)] py-[clamp(0.58rem,1.55vw,0.95rem)]">
-      <MirrorGroceriesMediumPanel
-        detail={detail}
-        language={language}
-        mutedColor={mutedColor}
-        header={mirrorGroceriesMediumHeader(detail, language)}
-        showDinnerLabel={dinnerTitle.length > 0}
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <MirrorGroceriesMediumPanel
+          detail={detail}
+          language={language}
+          mutedColor={mutedColor}
+          header={mirrorGroceriesMediumHeader(detail, language)}
+          showDinnerLabel={dinnerTitle.length > 0}
+        />
+      </div>
+      <MirrorGroceriesMediumMealIdeas detail={detail} language={language} mutedColor={mutedColor} />
     </div>
   )
 }
