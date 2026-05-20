@@ -215,7 +215,16 @@ export default function ShopPage() {
           <p>2 YEAR WARRANTY<br /><span className="text-black/60">Peace of mind</span></p>
         </div>
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-9 px-6 py-10 text-sm sm:grid-cols-2 lg:grid-cols-5">
-          <div><p className="mb-3 tracking-[0.2em]">RE:MIND</p><p className="max-w-[24ch] leading-[1.55] text-black/65">Re-mind gives you what matters, beautifully displayed. Less screen time. More presence.</p></div>
+          <div>
+            <p className="mb-3 font-bold tracking-[0.2em]">RE:MIND</p>
+            <p className="max-w-[34ch] leading-[1.55] text-black/65">
+              Re-mind gives you what matters,
+              <br />
+              beautifully displayed. Less screen time.
+              <br />
+              More presence.
+            </p>
+          </div>
           <div><p className="mb-3 font-medium">SHOP</p><div className="space-y-1.5 leading-[1.4]"><p>Frames</p><p>Mattes</p><p>Accessories</p><p>Bundles</p></div></div>
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><p>FAQ</p><p>Shipping</p><p>Returns</p><p>Warranty</p></div></div>
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><p>About</p><p>Sustainability</p><p>Contact</p><p>Press</p></div></div>
