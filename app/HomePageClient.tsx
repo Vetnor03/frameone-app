@@ -66,6 +66,7 @@ const UI = {
     privacyPolicy: 'Privacy policy',
     termsAndConditions: 'Terms and conditions',
     contact: 'Contact',
+    shop: 'Shop',
     logout: 'Log out',
 
     myFrames: 'MY FRAMES',
@@ -179,6 +180,7 @@ const UI = {
     privacyPolicy: 'Personvern',
     termsAndConditions: 'Vilkår og betingelser',
     contact: 'Kontakt',
+    shop: 'Butikk',
     logout: 'Logg ut',
 
     myFrames: 'MINE FRAMES',
@@ -6556,6 +6558,7 @@ function SettingsTab({
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
+              <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
             </div>
 
             <div className="mt-8">
