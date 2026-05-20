@@ -230,8 +230,23 @@ export default function ShopPage() {
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><p>About</p><p>Sustainability</p><p>Contact</p><p>Press</p></div></div>
           <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[24ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><div className="mt-3 flex overflow-hidden rounded border border-black/15"><input className="w-full bg-white px-3 py-2 outline-none" placeholder="Your email" /><button className="bg-black px-3 text-white">→</button></div></div>
         </div>
-        <div className="mx-auto max-w-[1200px] border-t border-black/10 px-6 py-4 text-xs text-black/60">
-          © 2026 Re-mind. All rights reserved.
+        <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
+          <p>© 2026 Re-mind. All rights reserved.</p>
+          <div className="flex items-center justify-center gap-6">
+            <a href="/terms" className="hover:text-black/80">Terms</a>
+            <a href="/privacy" className="hover:text-black/80">Privacy</a>
+            <a href="/cookies" className="hover:text-black/80">Cookies</a>
+          </div>
+          <div className="flex justify-start sm:justify-end">
+            <select
+              aria-label="Language and currency"
+              className="bg-transparent pr-4 text-right text-xs text-black/70 outline-none"
+              defaultValue="en-eur"
+            >
+              <option value="en-eur">English (EUR €)</option>
+              <option value="en-usd">English (USD $)</option>
+            </select>
+          </div>
         </div>
       </footer>
     </main>
