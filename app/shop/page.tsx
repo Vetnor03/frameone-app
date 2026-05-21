@@ -138,7 +138,36 @@ export default function ShopPage() {
             <a href="#bundles" className="pb-1">Bundles</a>
             <a href="#about" className="pb-1">About</a>
           </nav>
-          <div className="flex items-center gap-4 text-lg text-black/75"><span>◌</span><span>🛒</span></div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Open profile"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white/70 hover:bg-white"
+            >
+              <Image
+                src="/shop/icons/header/profile.png"
+                alt=""
+                aria-hidden
+                width={20}
+                height={20}
+                className="h-5 w-5 object-contain"
+              />
+            </button>
+            <button
+              type="button"
+              aria-label="Open cart"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white/70 hover:bg-white"
+            >
+              <Image
+                src="/shop/icons/header/cart.png"
+                alt=""
+                aria-hidden
+                width={20}
+                height={20}
+                className="h-5 w-5 object-contain"
+              />
+            </button>
+          </div>
         </div>
       </header>
 
