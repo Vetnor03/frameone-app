@@ -313,7 +313,10 @@ export default function ShopPage() {
 
           <section id="accessories" className="py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
-            <h2 className="max-w-[17ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Complete the experience</h2>
+            <h2 className="max-w-[17ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">
+              <span className="normal-case sm:hidden">complete the<br />Experience</span>
+              <span className="hidden sm:inline">Complete the experience</span>
+            </h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
