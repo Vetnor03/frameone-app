@@ -12,6 +12,7 @@ type FrameCard = {
   subtitle: string
   palette: [string, string, string]
   swatches: string[]
+  imageSrc?: string
 }
 
 const frameCards: FrameCard[] = [
@@ -21,6 +22,7 @@ const frameCards: FrameCard[] = [
     subtitle: 'Matte aluminum',
     palette: ['#111214', '#252628', '#3c3d40'],
     swatches: ['#111214', '#d5d5d5'],
+    imageSrc: '/shop/frames/midnight-black.png',
   },
   {
     name: 'Walnut Wood',
@@ -176,7 +178,13 @@ export default function ShopPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCards.map((card) => (
               <article key={card.name} className="rounded-lg border border-black/10 bg-[#faf9f7] p-3">
-                <CornerCrop palette={card.palette} />
+                {card.imageSrc ? (
+                  <div className="relative aspect-[4/3] overflow-hidden rounded-sm bg-[#faf9f7]">
+                    <Image src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
+                  </div>
+                ) : (
+                  <CornerCrop palette={card.palette} />
+                )}
                 <div className="mt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
                   <span>{card.price}</span>
