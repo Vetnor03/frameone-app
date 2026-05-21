@@ -81,6 +81,27 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
 }
 
 export default function ShopPage() {
+  const footerBenefits = [
+    {
+      title: 'FREE SHIPPING',
+      body: 'On orders over €100',
+      iconSrc: '/shop/icons/footer/free-shipping.png',
+      iconAlt: 'Delivery truck icon',
+    },
+    {
+      title: '30 DAY RETURNS',
+      body: 'No questions asked',
+      iconSrc: '/shop/icons/footer/returns-30-day.png',
+      iconAlt: 'Circular arrows return icon',
+    },
+    {
+      title: '2 YEAR WARRANTY',
+      body: 'Peace of mind',
+      iconSrc: '/shop/icons/footer/warranty-2-year.png',
+      iconAlt: 'Shield warranty icon',
+    },
+  ]
+
   return (
     <main
       className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]"
@@ -282,9 +303,22 @@ export default function ShopPage() {
       <footer id="about" className="border-t border-black/10 bg-white">
         <div className="border-b border-black/10 bg-[#faf9f7]">
           <div className="mx-auto grid max-w-[1200px] gap-5 px-6 py-5 text-sm sm:grid-cols-3">
-            <p>FREE SHIPPING<br /><span className="text-black/60">On orders over €100</span></p>
-            <p>30 DAY RETURNS<br /><span className="text-black/60">No questions asked</span></p>
-            <p>2 YEAR WARRANTY<br /><span className="text-black/60">Peace of mind</span></p>
+            {footerBenefits.map((item) => (
+              <article key={item.title} className="flex items-start gap-3">
+                <Image
+                  src={item.iconSrc}
+                  alt={item.iconAlt}
+                  width={24}
+                  height={24}
+                  className="h-6 w-6 shrink-0 opacity-70"
+                />
+                <p>
+                  {item.title}
+                  <br />
+                  <span className="text-black/60">{item.body}</span>
+                </p>
+              </article>
+            ))}
           </div>
         </div>
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-9 px-6 py-10 text-sm sm:grid-cols-2 lg:grid-cols-[1.35fr_0.78fr_0.78fr_0.78fr_1.25fr]">
