@@ -148,9 +148,9 @@ export default function ShopPage() {
                 src="/shop/icons/header/profile.png"
                 alt=""
                 aria-hidden
-                width={32}
-                height={32}
-                className="h-8 w-8 object-contain"
+                width={36}
+                height={36}
+                className="h-9 w-9 object-contain"
               />
             </button>
             <button
@@ -162,9 +162,9 @@ export default function ShopPage() {
                 src="/shop/icons/header/cart.png"
                 alt=""
                 aria-hidden
-                width={40}
-                height={40}
-                className="h-10 w-10 object-contain"
+                width={44}
+                height={44}
+                className="h-11 w-11 object-contain"
               />
             </button>
           </div>
