@@ -312,11 +312,14 @@ export default function ShopPage() {
         </section>
 
           <section id="accessories" className="py-10">
-          <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-            <h2 className="text-[24px] font-semibold uppercase leading-[1.08] tracking-[0.06em] whitespace-nowrap sm:text-[30px]">
-              COMPLETE THE EXPERIENCE
-            </h2>
-            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
+          <div className="mb-6">
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+              <h2 className="text-[24px] font-semibold uppercase leading-[1.08] tracking-[0.06em] whitespace-nowrap sm:text-[30px]">
+                COMPLETE THE EXPERIENCE
+              </h2>
+              <a className="hidden shrink-0 text-sm uppercase tracking-[0.08em] sm:inline" href="#">View all accessories →</a>
+            </div>
+            <a className="mt-2 text-sm uppercase tracking-[0.08em] sm:hidden" href="#">View all accessories →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
