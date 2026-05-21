@@ -142,29 +142,29 @@ export default function ShopPage() {
             <button
               type="button"
               aria-label="Open profile"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white/70 hover:bg-white"
+              className="inline-flex items-center justify-center p-1 text-black/75 hover:text-black"
             >
               <Image
                 src="/shop/icons/header/profile.png"
                 alt=""
                 aria-hidden
-                width={20}
-                height={20}
-                className="h-5 w-5 object-contain"
+                width={26}
+                height={26}
+                className="h-6.5 w-6.5 object-contain"
               />
             </button>
             <button
               type="button"
               aria-label="Open cart"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white/70 hover:bg-white"
+              className="inline-flex items-center justify-center p-1 text-black/75 hover:text-black"
             >
               <Image
                 src="/shop/icons/header/cart.png"
                 alt=""
                 aria-hidden
-                width={20}
-                height={20}
-                className="h-5 w-5 object-contain"
+                width={26}
+                height={26}
+                className="h-6.5 w-6.5 object-contain"
               />
             </button>
           </div>
