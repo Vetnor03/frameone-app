@@ -105,8 +105,8 @@ export default function ShopPage() {
 
       <div className="bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px]">
-          <section className="relative grid gap-0 py-8 md:min-h-[585px] md:grid-cols-1 md:items-stretch md:py-0">
-          <div className="relative z-10 flex flex-col justify-center px-6 py-8 md:-mt-6 md:min-h-[585px] md:pl-14 md:pr-10">
+          <section className="relative grid min-h-[560px] gap-0 py-8 md:min-h-[585px] md:grid-cols-1 md:items-stretch md:py-0">
+          <div className="relative z-10 flex max-w-[26rem] flex-col justify-center px-6 py-8 md:-mt-6 md:min-h-[585px] md:max-w-none md:pl-14 md:pr-10">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
               <span className="block">Frames that</span>
               <span className="block">fit your life.</span>
@@ -120,15 +120,15 @@ export default function ShopPage() {
               <p className="text-black/60">Satisfying click. Designed for ease.</p>
             </div>
           </div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-full overflow-hidden md:translate-x-[4%]">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-full overflow-hidden translate-x-[16%] md:translate-x-[4%]">
             <Image
               src="/shop/hero-top.jpg"
               alt="Re:mind frames on a cabinet"
               fill
               priority
-              className="object-cover object-right"
+              className="object-cover object-[78%_center] md:object-right"
             />
-            <div className="absolute inset-y-0 left-0 w-[42%] bg-[linear-gradient(90deg,#faf9f7_0%,rgba(250,249,247,0.92)_38%,rgba(250,249,247,0.56)_72%,rgba(250,249,247,0)_100%)]" />
+            <div className="absolute inset-y-0 left-0 w-[78%] bg-[linear-gradient(90deg,#faf9f7_0%,rgba(250,249,247,0.98)_34%,rgba(250,249,247,0.82)_58%,rgba(250,249,247,0.32)_82%,rgba(250,249,247,0)_100%)] md:w-[42%] md:bg-[linear-gradient(90deg,#faf9f7_0%,rgba(250,249,247,0.92)_38%,rgba(250,249,247,0.56)_72%,rgba(250,249,247,0)_100%)]" />
           </div>
           </section>
         </div>
