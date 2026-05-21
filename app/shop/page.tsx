@@ -90,7 +90,7 @@ export default function ShopPage() {
       </div>
 
       <header className="border-b border-black/10 bg-[#faf9f7]">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6 md:px-14">
           <span className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</span>
           <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex">
             <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
