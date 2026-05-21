@@ -162,9 +162,9 @@ export default function ShopPage() {
                 src="/shop/icons/header/cart.png"
                 alt=""
                 aria-hidden
-                width={32}
-                height={32}
-                className="h-8 w-8 object-contain"
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
               />
             </button>
           </div>
