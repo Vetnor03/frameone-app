@@ -204,14 +204,26 @@ export default function ShopPage() {
         <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 md:min-h-[320px] md:p-10">
           <Image
             src="/shop/mattes-hero.png"
-            alt="Layered matte frame corners in neutral tones"
+            alt=""
             fill
-            className="object-contain object-right"
+            aria-hidden
+            className="hidden object-contain object-right md:block"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
           />
           <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
+            <div className="-mx-8 mt-4 overflow-hidden md:hidden">
+              <Image
+                src="/shop/mattes-hero.png"
+                alt="Layered matte frame corners in neutral tones"
+                width={1400}
+                height={700}
+                className="h-auto w-full object-cover"
+                sizes="100vw"
+                priority
+              />
+            </div>
             <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
               Change the feel.
               <br />
@@ -222,7 +234,7 @@ export default function ShopPage() {
               <br />
               your space and reduce glare.
             </p>
-            <button className="mt-6 rounded bg-black px-7 py-3 text-sm text-white">SHOP MATTES</button>
+            <button className="mt-7 rounded bg-black px-7 py-3 text-sm text-white md:mt-6">SHOP MATTES</button>
           </div>
         </section>
 
