@@ -177,20 +177,22 @@ export default function ShopPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCards.map((card) => (
-              <article key={card.name} className="rounded-lg border border-black/10 bg-[#faf9f7] p-3">
+              <article key={card.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7]">
                 {card.imageSrc ? (
-                  <div className="relative aspect-[4/3] overflow-hidden rounded-sm bg-[#faf9f7]">
+                  <div className="relative aspect-[4/3] overflow-hidden bg-[#faf9f7]">
                     <Image src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
                   </div>
                 ) : (
-                  <CornerCrop palette={card.palette} />
+                  <div className="p-3">
+                    <CornerCrop palette={card.palette} />
+                  </div>
                 )}
-                <div className="mt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
+                <div className="px-3 pt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
                   <span>{card.price}</span>
                 </div>
-                <p className="mt-1 max-w-[20ch] text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
-                <div className="mt-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>
+                <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
+                <div className="mt-3 px-3 pb-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>
               </article>
             ))}
           </div>
