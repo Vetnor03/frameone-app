@@ -105,8 +105,8 @@ export default function ShopPage() {
 
       <div className="bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px]">
-          <section className="grid gap-0 py-8 md:min-h-[585px] md:grid-cols-[0.72fr_1.48fr] md:items-stretch md:py-0">
-          <div className="flex flex-col justify-center px-6 py-8 md:-mt-6 md:pl-14 md:pr-10">
+          <section className="relative grid gap-0 py-8 md:min-h-[585px] md:grid-cols-1 md:items-stretch md:py-0">
+          <div className="relative z-10 flex flex-col justify-center px-6 py-8 md:-mt-6 md:min-h-[585px] md:pl-14 md:pr-10">
             <h1 className="max-w-[12.4ch] text-[42px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
               <span className="block">Frames that</span>
               <span className="block">fit your life.</span>
@@ -120,13 +120,13 @@ export default function ShopPage() {
               <p className="text-black/60">Satisfying click. Designed for ease.</p>
             </div>
           </div>
-          <div className="relative min-h-[470px] overflow-hidden md:min-h-[585px] md:overflow-visible">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-full overflow-hidden">
             <Image
               src="/shop/hero-top.jpg"
               alt="Re:mind frames on a cabinet"
               fill
               priority
-              className="object-contain object-right"
+              className="object-cover object-right"
             />
           </div>
           </section>
