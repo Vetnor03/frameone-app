@@ -304,13 +304,13 @@ export default function ShopPage() {
         <div className="border-b border-black/10 bg-[#faf9f7]">
           <div className="mx-auto grid max-w-[1200px] gap-5 px-6 py-5 text-sm sm:grid-cols-3">
             {footerBenefits.map((item) => (
-              <article key={item.title} className="flex items-start gap-3">
+              <article key={item.title} className="flex items-center gap-4">
                 <Image
                   src={item.iconSrc}
                   alt={item.iconAlt}
-                  width={24}
-                  height={24}
-                  className="h-6 w-6 shrink-0 opacity-70"
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 shrink-0 opacity-70"
                 />
                 <p>
                   {item.title}
