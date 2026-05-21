@@ -157,7 +157,7 @@ export default function ShopPage() {
             { label: 'Made for Re:mind', iconSrc: '/shop/icons/features/made-for-remind.png', body: ['Perfect fit. Seamless', 'integration.'] },
           ].map((item) => (
             <article key={item.label} className="flex items-center gap-3">
-              <Image src={item.iconSrc} alt="" width={30} height={30} aria-hidden className="h-[30px] w-[30px] shrink-0 opacity-80" />
+              <Image src={item.iconSrc} alt="" width={48} height={48} aria-hidden className="h-[48px] w-[48px] shrink-0 opacity-80" />
               <div className="max-w-[21ch] leading-[1.4]">
                 <p className={`font-medium uppercase tracking-[0.08em] ${item.noWrap ? 'whitespace-nowrap' : ''}`}>{item.label}</p>
                 <p className="mt-1 text-black/60">
