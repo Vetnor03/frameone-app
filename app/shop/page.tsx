@@ -201,30 +201,28 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="mattes" className="grid gap-4 rounded-lg border border-black/10 bg-[#f8f7f5] p-8 md:grid-cols-[0.75fr_1.25fr] md:items-center">
-          <div>
+        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 md:min-h-[320px] md:p-10">
+          <Image
+            src="/shop/mattes-hero.png"
+            alt="Layered matte frame corners in neutral tones"
+            fill
+            className="object-contain object-right"
+            sizes="(min-width: 768px) 70vw, 100vw"
+            priority
+          />
+          <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
             <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
               Change the feel.
               <br />
               Not the frame.
             </h2>
-            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/65">
+            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
               Choose the perfect matte to match
               <br />
               your space and reduce glare.
             </p>
             <button className="mt-6 rounded bg-black px-7 py-3 text-sm text-white">SHOP MATTES</button>
-          </div>
-          <div className="relative h-[260px] overflow-hidden rounded-sm bg-[#fcfbf9]">
-            <Image
-              src="/shop/mattes-hero.png"
-              alt="Layered matte frame corners in neutral tones"
-              fill
-              className="object-cover"
-              sizes="(min-width: 768px) 55vw, 100vw"
-              priority
-            />
           </div>
         </section>
 
