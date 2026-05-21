@@ -126,9 +126,19 @@ export default function ShopPage() {
                 Swap in seconds. Designed to complement your home, your style, your day.
               </p>
               <button className="mt-8 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
-              <div className="mt-8 hidden max-w-[30ch] text-sm leading-[1.45] md:block">
-                <p className="font-medium">Swap in seconds</p>
-                <p className="text-black/60">Satisfying click. Designed for ease.</p>
+              <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
+                <Image
+                  src="/shop/icons/features/swap-in-seconds-hero.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  aria-hidden
+                  className="mt-0.5 h-7 w-7 shrink-0 opacity-80"
+                />
+                <div className="max-w-[30ch]">
+                  <p className="font-medium">Swap in seconds</p>
+                  <p className="text-black/60">Satisfying click. Designed for ease.</p>
+                </div>
               </div>
             </div>
             <div className="relative mt-8 h-[360px] w-full overflow-hidden border-t border-black/10 md:hidden">
