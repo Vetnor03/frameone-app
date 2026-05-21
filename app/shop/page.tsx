@@ -314,8 +314,8 @@ export default function ShopPage() {
           <section id="accessories" className="py-10">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="max-w-[17ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">
-              <span className="normal-case sm:hidden">complete the<br />Experience</span>
-              <span className="hidden sm:inline">Complete the experience</span>
+              <span className="sm:hidden">COMPLETE THE<br />EXPERIENCE</span>
+              <span className="hidden sm:inline">COMPLETE THE<br />EXPERIENCE</span>
             </h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
           </div>
