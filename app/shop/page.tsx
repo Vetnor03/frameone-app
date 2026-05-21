@@ -308,9 +308,9 @@ export default function ShopPage() {
                 <Image
                   src={item.iconSrc}
                   alt={item.iconAlt}
-                  width={36}
-                  height={36}
-                  className="h-9 w-9 shrink-0 opacity-70"
+                  width={48}
+                  height={48}
+                  className="h-12 w-12 shrink-0 opacity-70"
                 />
                 <p>
                   {item.title}
