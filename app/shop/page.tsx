@@ -206,7 +206,7 @@ export default function ShopPage() {
             src="/shop/mattes-hero.png"
             alt="Layered matte frame corners in neutral tones"
             fill
-            className="object-contain object-right"
+            className="object-contain object-[95%_center] scale-[1.08]"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
           />
