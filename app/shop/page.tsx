@@ -206,11 +206,10 @@ export default function ShopPage() {
             src="/shop/mattes-hero.png"
             alt="Layered matte frame corners in neutral tones"
             fill
-            className="object-cover"
+            className="object-contain object-right"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
           />
-          <div className="absolute inset-0 bg-white/40" aria-hidden />
           <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
             <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
@@ -218,7 +217,7 @@ export default function ShopPage() {
               <br />
               Not the frame.
             </h2>
-            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/75">
+            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
               Choose the perfect matte to match
               <br />
               your space and reduce glare.
