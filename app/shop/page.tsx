@@ -201,12 +201,12 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#e7e0d8] p-8 md:min-h-[320px] md:p-10">
+        <section id="mattes" className="relative overflow-hidden rounded-lg bg-[#e7e0d8] p-8 md:min-h-[320px] md:p-10">
           <Image
             src="/shop/mattes-hero.png"
             alt="Layered matte frame corners in neutral tones"
             fill
-            className="object-cover object-[85%_center] scale-[0.94]"
+            className="object-contain object-right"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
           />
