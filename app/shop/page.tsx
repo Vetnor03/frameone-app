@@ -217,9 +217,14 @@ export default function ShopPage() {
             <button className="mt-6 rounded bg-black px-7 py-3 text-sm text-white">SHOP MATTES</button>
           </div>
           <div className="relative h-[260px] overflow-hidden rounded-sm bg-[#fcfbf9]">
-            <div className="absolute left-12 top-16 h-44 w-60 rotate-[18deg] border-[14px] border-[#1f2124]" />
-            <div className="absolute left-40 top-8 h-44 w-64 rotate-[16deg] border-[14px] border-[#fbfaf7]" />
-            <div className="absolute left-52 top-20 h-36 w-44 rotate-[18deg] border-[12px] border-[#ece8e0]" />
+            <Image
+              src="/shop/mattes-hero.png"
+              alt="Layered matte frame corners in neutral tones"
+              fill
+              className="object-cover"
+              sizes="(min-width: 768px) 55vw, 100vw"
+              priority
+            />
           </div>
         </section>
 
