@@ -63,6 +63,13 @@ const accessories: AccessoryCard[] = [
   { name: 'Replacement Glass', price: '€9', imageSrc: '/shop/accessories/replacement-glass.png' },
 ]
 
+
+const socialLinks = [
+  { name: 'Instagram', href: '#', iconSrc: '/shop/icons/social/instagram.png' },
+  { name: 'Facebook', href: '#', iconSrc: '/shop/icons/social/facebook.png' },
+  { name: 'Pinterest', href: '#', iconSrc: '/shop/icons/social/pinterest.png' },
+] as const
+
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-sm bg-[#faf9f7]">
@@ -331,6 +338,18 @@ export default function ShopPage() {
               <br />
               More presence.
             </p>
+            <div className="mt-6 flex items-center gap-5">
+              {socialLinks.map((item) => (
+                <a
+                  key={item.name}
+                  href={item.href}
+                  aria-label={item.name}
+                  className="inline-flex h-6 w-6 items-center justify-center opacity-75 transition-opacity hover:opacity-100"
+                >
+                  <Image src={item.iconSrc} alt={item.name} width={20} height={20} className="h-5 w-5" />
+                </a>
+              ))}
+            </div>
           </div>
           <div><p className="mb-3 font-medium">SHOP</p><div className="space-y-1.5 leading-[1.4]"><p>Frames</p><p>Mattes</p><p>Accessories</p><p>Bundles</p></div></div>
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><p>FAQ</p><p>Shipping</p><p>Returns</p><p>Warranty</p></div></div>
