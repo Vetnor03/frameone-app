@@ -30,6 +30,7 @@ const frameCards: FrameCard[] = [
     subtitle: 'Real walnut',
     palette: ['#5a3a2a', '#7a513c', '#946550'],
     swatches: ['#6a4633', '#8a624a'],
+    imageSrc: '/shop/frames/walnut-wood.png',
   },
   {
     name: 'Natural Oak',
@@ -37,6 +38,7 @@ const frameCards: FrameCard[] = [
     subtitle: 'Real oak',
     palette: ['#b5824f', '#cb9b67', '#deb57e'],
     swatches: ['#bb8d5f', '#d8be9f'],
+    imageSrc: '/shop/frames/natural-oak.png',
   },
   {
     name: 'Cloud White',
@@ -44,6 +46,7 @@ const frameCards: FrameCard[] = [
     subtitle: 'Matte aluminum',
     palette: ['#e8e7e3', '#f2f2ee', '#dbdad5'],
     swatches: ['#f0f0ef', '#cfcfcf'],
+    imageSrc: '/shop/frames/cloud-white.png',
   },
 ]
 
