@@ -201,28 +201,40 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 md:min-h-[320px] md:p-10">
-          <Image
-            src="/shop/mattes-hero.png"
-            alt="Layered matte frame corners in neutral tones"
-            fill
-            className="object-contain object-right"
-            sizes="(min-width: 768px) 70vw, 100vw"
-            priority
-          />
+        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-6 md:min-h-[320px] md:p-10">
+          <div className="pointer-events-none absolute inset-0 hidden md:block">
+            <Image
+              src="/shop/mattes-hero.png"
+              alt="Layered matte frame corners in neutral tones"
+              fill
+              className="object-contain object-right"
+              sizes="(min-width: 768px) 70vw, 100vw"
+              priority
+            />
+          </div>
           <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
-            <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
+            <div className="relative mt-4 aspect-[16/10] w-full overflow-hidden rounded-sm border border-black/10 bg-[#f1efea] md:hidden">
+              <Image
+                src="/shop/mattes-hero.png"
+                alt="Layered matte frame corners in neutral tones"
+                fill
+                className="object-contain"
+                sizes="100vw"
+                priority
+              />
+            </div>
+            <h2 className="mt-5 max-w-[14ch] text-[36px] leading-[1.05] tracking-[-0.02em] sm:text-[50px] md:mt-3 md:text-[44px]">
               Change the feel.
               <br />
               Not the frame.
             </h2>
-            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
+            <p className="mt-4 max-w-[33ch] text-[17px] leading-[1.45] text-black/70 md:text-[18px]">
               Choose the perfect matte to match
               <br />
               your space and reduce glare.
             </p>
-            <button className="mt-6 rounded bg-black px-7 py-3 text-sm text-white">SHOP MATTES</button>
+            <button className="mt-7 rounded bg-black px-7 py-3 text-sm text-white md:mt-6">SHOP MATTES</button>
           </div>
         </section>
 
