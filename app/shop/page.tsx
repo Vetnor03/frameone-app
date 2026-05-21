@@ -50,11 +50,17 @@ const frameCards: FrameCard[] = [
   },
 ]
 
-const accessories = [
-  { name: 'Desk Stand', price: '€39' },
-  { name: 'Wall Mount', price: '€29' },
-  { name: 'Cleaning Kit', price: '€19' },
-  { name: 'Replacement Glass', price: '€9' },
+type AccessoryCard = {
+  name: string
+  price: string
+  imageSrc?: string
+}
+
+const accessories: AccessoryCard[] = [
+  { name: 'Desk Stand', price: '€39', imageSrc: '/shop/accessories/desk-stand.png' },
+  { name: 'Wall Mount', price: '€29', imageSrc: '/shop/accessories/wall-mount.png' },
+  { name: 'Cleaning Kit', price: '€19', imageSrc: '/shop/accessories/cleaning-kit.png' },
+  { name: 'Replacement Glass', price: '€9', imageSrc: '/shop/accessories/replacement-glass.png' },
 ]
 
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
@@ -245,9 +251,17 @@ export default function ShopPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
-              <article key={item.name} className="rounded-lg border border-black/10 bg-[#faf9f7] p-3">
-                <div className="flex aspect-[16/9] items-center justify-center bg-[#ece9e4] text-5xl">▣</div>
-                <div className="mt-3 flex justify-between gap-3 leading-[1.3]"><h3 className="max-w-[16ch]">{item.name}</h3><span>{item.price}</span></div>
+              <article key={item.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7]">
+                {item.imageSrc ? (
+                  <div className="relative aspect-[4/3] overflow-hidden bg-[#ece9e4]">
+                    <Image src={item.imageSrc} alt={item.name} fill className="object-cover" />
+                  </div>
+                ) : (
+                  <div className="p-3">
+                    <div className="flex aspect-[16/9] items-center justify-center bg-[#ece9e4] text-5xl">▣</div>
+                  </div>
+                )}
+                <div className="px-3 py-3 flex items-start justify-between gap-3 text-lg leading-[1.25]"><h3 className="max-w-[16ch]">{item.name}</h3><span>{item.price}</span></div>
               </article>
             ))}
           </div>
