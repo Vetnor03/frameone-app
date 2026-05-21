@@ -151,13 +151,13 @@ export default function ShopPage() {
       <section className="w-full border-y border-black/10 bg-[#faf9f7]">
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-5 px-6 py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: 'Swap in seconds', body: ['Satisfying click.', 'Designed for ease.'] },
-            { label: 'Premium materials', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
-            { label: 'Built to last', body: ['Sustainable design.', 'Made to be kept.'] },
-            { label: 'Made for Re:mind', body: ['Perfect fit. Seamless', 'integration.'] },
+            { label: 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: ['Satisfying click.', 'Designed for ease.'] },
+            { label: 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
+            { label: 'Built to last', iconSrc: '/shop/icons/features/built-to-last.png', body: ['Sustainable design.', 'Made to be kept.'] },
+            { label: 'Made for Re:mind', iconSrc: '/shop/icons/features/made-for-remind.png', body: ['Perfect fit. Seamless', 'integration.'] },
           ].map((item) => (
             <article key={item.label} className="flex gap-3">
-              <span>◌</span>
+              <Image src={item.iconSrc} alt="" width={18} height={18} aria-hidden className="mt-0.5 h-[18px] w-[18px] opacity-80" />
               <div className="max-w-[21ch] leading-[1.4]">
                 <p className={`font-medium uppercase tracking-[0.08em] ${item.noWrap ? 'whitespace-nowrap' : ''}`}>{item.label}</p>
                 <p className="mt-1 text-black/60">
