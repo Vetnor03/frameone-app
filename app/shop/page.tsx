@@ -214,7 +214,7 @@ export default function ShopPage() {
           </div>
           <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
-            <div className="relative mt-4 aspect-[16/10] w-full overflow-hidden rounded-sm border border-black/10 bg-[#f1efea] md:hidden">
+            <div className="relative -mx-6 mt-4 aspect-[16/10] w-[calc(100%+3rem)] overflow-hidden border-y border-black/10 bg-[#f1efea] md:hidden">
               <Image
                 src="/shop/mattes-hero.png"
                 alt="Layered matte frame corners in neutral tones"
