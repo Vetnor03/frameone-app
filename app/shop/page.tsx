@@ -206,11 +206,11 @@ export default function ShopPage() {
             src="/shop/mattes-hero.png"
             alt="Layered matte frame corners in neutral tones"
             fill
-            className="object-cover object-right"
+            className="object-cover object-[85%_center] scale-[0.94]"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#e7e0d8] via-[#e7e0d8]/86 via-30% to-transparent" aria-hidden />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#e7e0d8] via-[#e7e0d8]/60 via-18% to-transparent" aria-hidden />
           <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
             <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
