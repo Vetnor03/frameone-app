@@ -120,7 +120,7 @@ export default function ShopPage() {
               <p className="text-black/60">Satisfying click. Designed for ease.</p>
             </div>
           </div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-full overflow-hidden">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-full overflow-hidden md:translate-x-[4%]">
             <Image
               src="/shop/hero-top.jpg"
               alt="Re:mind frames on a cabinet"
@@ -128,6 +128,7 @@ export default function ShopPage() {
               priority
               className="object-cover object-right"
             />
+            <div className="absolute inset-y-0 left-0 w-[42%] bg-[linear-gradient(90deg,#faf9f7_0%,rgba(250,249,247,0.92)_38%,rgba(250,249,247,0.56)_72%,rgba(250,249,247,0)_100%)]" />
           </div>
           </section>
         </div>
