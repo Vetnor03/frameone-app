@@ -65,9 +65,9 @@ const accessories: AccessoryCard[] = [
 
 
 const socialLinks = [
-  { name: 'Instagram', href: '#', iconSrc: '/shop/icons/social/instagram.png' },
-  { name: 'Facebook', href: '#', iconSrc: '/shop/icons/social/facebook.png' },
-  { name: 'Pinterest', href: '#', iconSrc: '/shop/icons/social/pinterest.png' },
+  { name: 'Instagram', href: '#', iconSrc: '/shop/icons/social/instagram.png', iconWidth: 1024, iconHeight: 1024 },
+  { name: 'Facebook', href: '#', iconSrc: '/shop/icons/social/facebook.png', iconWidth: 1024, iconHeight: 1024 },
+  { name: 'Pinterest', href: '#', iconSrc: '/shop/icons/social/pinterest.png', iconWidth: 1536, iconHeight: 1024 },
 ] as const
 
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
@@ -344,9 +344,15 @@ export default function ShopPage() {
                   key={item.name}
                   href={item.href}
                   aria-label={item.name}
-                  className="inline-flex h-6 w-6 items-center justify-center opacity-75 transition-opacity hover:opacity-100"
+                  className="inline-flex h-8 w-8 items-center justify-center opacity-75 transition-opacity hover:opacity-100"
                 >
-                  <Image src={item.iconSrc} alt={item.name} width={20} height={20} className="h-5 w-5" />
+                  <Image
+                    src={item.iconSrc}
+                    alt={item.name}
+                    width={item.iconWidth}
+                    height={item.iconHeight}
+                    className="h-6 w-auto"
+                  />
                 </a>
               ))}
             </div>
