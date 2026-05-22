@@ -130,25 +130,17 @@ export default function ShopPage() {
       </div>
 
       <header className="border-b border-black/10 bg-[#faf9f7]">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6 md:px-14">
-          <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</a>
-          <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
-            <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
-            <a href="#mattes" className="pb-1">Mattes</a>
-            <a href="#accessories" className="pb-1">Accessories</a>
-            <a href="#bundles" className="pb-1">Bundles</a>
-            <a href="#about" className="pb-1">About</a>
-          </nav>
-          <ShopMobileMenu>
-            <nav className="flex flex-col gap-3 text-sm uppercase tracking-[0.09em] shop-nav">
-              <a href="#frames" className="pb-1">Frames</a>
+        <div className="mx-auto max-w-[1200px] px-6 py-6 md:px-14">
+          <div className="flex items-center justify-between">
+            <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</a>
+            <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
+              <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
               <a href="#mattes" className="pb-1">Mattes</a>
               <a href="#accessories" className="pb-1">Accessories</a>
               <a href="#bundles" className="pb-1">Bundles</a>
               <a href="#about" className="pb-1">About</a>
             </nav>
-          </ShopMobileMenu>
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <button
               type="button"
               aria-label="Open profile"
@@ -177,6 +169,18 @@ export default function ShopPage() {
                 className="h-11 w-11 object-contain"
               />
             </button>
+            </div>
+          </div>
+          <div className="pt-4 md:hidden">
+            <ShopMobileMenu>
+              <nav className="shop-nav flex flex-col items-start gap-3 text-left text-sm uppercase tracking-[0.09em]">
+                <a href="#frames" className="pb-1">Frames</a>
+                <a href="#mattes" className="pb-1">Mattes</a>
+                <a href="#accessories" className="pb-1">Accessories</a>
+                <a href="#bundles" className="pb-1">Bundles</a>
+                <a href="#about" className="pb-1">About</a>
+              </nav>
+            </ShopMobileMenu>
           </div>
         </div>
       </header>
