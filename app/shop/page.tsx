@@ -140,12 +140,12 @@ export default function ShopPage() {
             <a href="#about" className="pb-1">About</a>
           </nav>
           <ShopMobileMenu>
-            <nav className="flex flex-col gap-3 text-sm uppercase tracking-[0.09em] shop-nav">
-              <a href="#frames" className="pb-1">Frames</a>
-              <a href="#mattes" className="pb-1">Mattes</a>
-              <a href="#accessories" className="pb-1">Accessories</a>
-              <a href="#bundles" className="pb-1">Bundles</a>
-              <a href="#about" className="pb-1">About</a>
+            <nav className="shop-nav flex flex-col gap-4 text-[13px] uppercase tracking-[0.12em]">
+              <a href="#frames">Frames</a>
+              <a href="#mattes">Mattes</a>
+              <a href="#accessories">Accessories</a>
+              <a href="#bundles">Bundles</a>
+              <a href="#about">About</a>
             </nav>
           </ShopMobileMenu>
           <div className="flex items-center gap-3">

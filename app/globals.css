@@ -395,17 +395,24 @@ a {
 }
 
 .shop-page .shop-mobile-nav {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  width: 100vw;
+  transform: translate(-50%, -6px);
+  background: #fff;
+  border-top: 1px solid rgba(20, 20, 20, 0.12);
+  z-index: 30;
   max-height: 0;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(-6px);
   transition: max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease-out, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .shop-page .shop-mobile-nav.is-open {
-  max-height: 220px;
+  max-height: 320px;
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .shop-page .shop-fade-image {
@@ -443,6 +450,9 @@ a {
   }
 
   .shop-page .shop-mobile-nav {
+    position: static;
+    width: auto;
+    border-top: none;
     max-height: none;
     opacity: 1;
   }

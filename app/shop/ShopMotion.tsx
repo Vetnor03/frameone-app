@@ -38,12 +38,12 @@ export function ShopMobileMenu({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <div className="md:hidden">
+    <div className="shop-mobile-menu-wrap relative md:hidden">
       <button type="button" aria-expanded={open} aria-controls="shop-mobile-nav" onClick={() => setOpen((v) => !v)} className="shop-nav-trigger inline-flex items-center rounded border border-black/15 px-3 py-1.5 text-[11px] uppercase tracking-[0.11em] text-black/75">
         Menu
       </button>
       <div id="shop-mobile-nav" className={`shop-mobile-nav ${open ? 'is-open' : ''}`}>
-        <div className="pt-4 pb-1">{children}</div>
+        <div className="shop-mobile-nav-inner mx-auto max-w-[1200px] px-6 py-5">{children}</div>
       </div>
     </div>
   )
