@@ -291,3 +291,101 @@ a {
     stroke-dashoffset: 0;
   }
 }
+
+/* Shop-only premium motion */
+.shop-page .shop-reveal {
+  animation: shop-reveal-up 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--shop-reveal-delay, 0ms);
+}
+
+.shop-page .shop-card,
+.shop-page .shop-button,
+.shop-page .shop-nav a,
+.shop-page .shop-nav-trigger,
+.shop-page .shop-fade-image,
+.shop-page button,
+.shop-page a {
+  transition: transform 0.68s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.68s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.6s ease-out,
+    color 0.35s ease,
+    background-color 0.35s ease,
+    border-color 0.35s ease;
+}
+
+.shop-page .shop-card:hover,
+.shop-page .shop-card:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.07);
+}
+
+.shop-page .shop-button:hover,
+.shop-page .shop-button:focus-visible {
+  transform: translateY(-1px);
+}
+
+.shop-page .shop-nav a:hover,
+.shop-page .shop-nav a:focus-visible,
+.shop-page .shop-nav-trigger:hover,
+.shop-page .shop-nav-trigger:focus-visible {
+  transform: translateY(-1px);
+  opacity: 0.88;
+}
+
+.shop-page .shop-mobile-nav {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease-out, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shop-page .shop-mobile-nav.is-open {
+  max-height: 220px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.shop-page .shop-fade-image {
+  opacity: 0;
+}
+
+.shop-page .shop-fade-image.is-loaded {
+  opacity: 1;
+}
+
+@keyframes shop-reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-page .shop-reveal,
+  .shop-page .shop-card,
+  .shop-page .shop-button,
+  .shop-page .shop-nav a,
+  .shop-page .shop-nav-trigger,
+  .shop-page .shop-mobile-nav,
+  .shop-page .shop-fade-image,
+  .shop-page button,
+  .shop-page a {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .shop-page .shop-mobile-nav {
+    max-height: none;
+    opacity: 1;
+  }
+
+  .shop-page .shop-fade-image {
+    opacity: 1;
+  }
+}

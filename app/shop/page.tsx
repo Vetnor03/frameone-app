@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { ShopFadeImage, ShopMobileMenu, ShopReveal } from './ShopMotion'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -131,13 +132,22 @@ export default function ShopPage() {
       <header className="border-b border-black/10 bg-[#faf9f7]">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6 md:px-14">
           <span className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</span>
-          <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex">
+          <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
             <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
             <a href="#mattes" className="pb-1">Mattes</a>
             <a href="#accessories" className="pb-1">Accessories</a>
             <a href="#bundles" className="pb-1">Bundles</a>
             <a href="#about" className="pb-1">About</a>
           </nav>
+          <ShopMobileMenu>
+            <nav className="flex flex-col gap-3 text-sm uppercase tracking-[0.09em] shop-nav">
+              <a href="#frames" className="pb-1">Frames</a>
+              <a href="#mattes" className="pb-1">Mattes</a>
+              <a href="#accessories" className="pb-1">Accessories</a>
+              <a href="#bundles" className="pb-1">Bundles</a>
+              <a href="#about" className="pb-1">About</a>
+            </nav>
+          </ShopMobileMenu>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -182,7 +192,7 @@ export default function ShopPage() {
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
                 Swap in seconds. Designed to complement your home, your style, your day.
               </p>
-              <button className="mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
+              <button className="shop-button mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"
@@ -246,17 +256,17 @@ export default function ShopPage() {
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
-          <section id="frames" className="pt-11 pb-12 md:pt-10 md:pb-9">
+          <ShopReveal><section id="frames" className="pt-11 pb-12 md:pt-10 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCards.map((card) => (
-              <article key={card.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
+              <article key={card.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
                 {card.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#faf9f7]">
-                    <Image src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
+                    <ShopFadeImage src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
                   </div>
                 ) : (
                   <div className="p-3">
@@ -272,9 +282,9 @@ export default function ShopPage() {
               </article>
             ))}
           </div>
-        </section>
+        </section></ShopReveal>
 
-          <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
+          <ShopReveal delayMs={50}><section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
           <Image
             src="/shop/mattes-hero.png"
             alt=""
@@ -307,11 +317,11 @@ export default function ShopPage() {
               <br />
               your space and reduce glare.
             </p>
-            <button className="mt-7 rounded bg-black px-7 py-3 text-sm text-white md:mt-6">SHOP MATTES</button>
+            <button className="shop-button mt-7 rounded bg-black px-7 py-3 text-sm text-white md:mt-6">SHOP MATTES</button>
           </div>
-        </section>
+        </section></ShopReveal>
 
-          <section id="accessories" className="pt-11 pb-12 md:pt-9 md:pb-10">
+          <ShopReveal delayMs={90}><section id="accessories" className="pt-11 pb-12 md:pt-9 md:pb-10">
           <div className="mb-6">
             <div className="flex flex-col items-start gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
               <h2 className="text-[24px] font-semibold uppercase leading-[1.08] tracking-[0.06em] whitespace-nowrap sm:text-[30px]">
@@ -322,10 +332,10 @@ export default function ShopPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
-              <article key={item.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
+              <article key={item.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
                 {item.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#ece9e4]">
-                    <Image src={item.imageSrc} alt={item.name} fill className="object-cover" />
+                    <ShopFadeImage src={item.imageSrc} alt={item.name} fill className="object-cover" />
                   </div>
                 ) : (
                   <div className="p-3">
@@ -336,7 +346,7 @@ export default function ShopPage() {
               </article>
             ))}
           </div>
-          </section>
+          </section></ShopReveal>
         </div>
         </div>
 
