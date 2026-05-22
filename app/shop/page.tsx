@@ -76,7 +76,7 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_24%,rgba(255,255,255,0.7),transparent_55%)]" />
       <div
         className="absolute left-8 top-8 h-40 w-40 rotate-[-18deg] border-[14px]"
-        style={{ borderColor: palette[0], boxShadow: `0 0 0 1px ${palette[1]} inset, 0 14px 24px rgba(0,0,0,0.18)` }}
+        style={{ borderColor: palette[0], boxShadow: `0 0 0 1px ${palette[1]} inset, 0 12px 22px rgba(0,0,0,0.12)` }}
       >
         <div
           className="h-full w-full"
@@ -117,7 +117,7 @@ export default function ShopPage() {
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
-      <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white">
+      <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
       <div className="bg-[#0b0d10] text-[11px] text-white">
         <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-3 px-6 py-2 tracking-[0.02em] sm:gap-5">
           <span>Free shipping over €100</span>
@@ -173,7 +173,7 @@ export default function ShopPage() {
 
       <div className="bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px]">
-          <section className="relative py-8 md:min-h-[585px] md:py-0">
+          <section className="relative py-10 md:min-h-[585px] md:py-0">
             <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-2 md:-mt-6 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
               <h1 className="max-w-[12.4ch] text-[38px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
                 <span className="block">Frames that</span>
@@ -198,7 +198,7 @@ export default function ShopPage() {
                 </div>
               </div>
             </div>
-            <div className="relative mt-8 h-[360px] w-full overflow-hidden border-t border-black/10 md:hidden">
+            <div className="relative mt-10 h-[360px] w-full overflow-hidden border-t border-black/10 md:hidden">
               <Image
                 src="/shop/hero-top.png"
                 alt="Re:mind frames on a cabinet"
@@ -222,7 +222,7 @@ export default function ShopPage() {
       </div>
 
       <section className="w-full border-y border-black/10 bg-[#faf9f7]">
-        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-5 px-6 py-7 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-6 px-6 py-8 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: ['Satisfying click.', 'Designed for ease.'] },
             { label: 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
@@ -245,15 +245,15 @@ export default function ShopPage() {
       </section>
 
       <div className="bg-white">
-        <div className="mx-auto max-w-[1200px] px-6 pb-12">
-          <section id="frames" className="py-10">
+        <div className="mx-auto max-w-[1200px] px-6 pb-14">
+          <section id="frames" className="py-12 md:py-10">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCards.map((card) => (
-              <article key={card.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7]">
+              <article key={card.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
                 {card.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#faf9f7]">
                     <Image src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
@@ -274,7 +274,7 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 md:min-h-[320px] md:p-10">
+        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
           <Image
             src="/shop/mattes-hero.png"
             alt=""
@@ -311,7 +311,7 @@ export default function ShopPage() {
           </div>
         </section>
 
-          <section id="accessories" className="py-10">
+          <section id="accessories" className="py-12 md:py-10">
           <div className="mb-6">
             <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
               <h2 className="text-[24px] font-semibold uppercase leading-[1.08] tracking-[0.06em] whitespace-nowrap sm:text-[30px]">
@@ -323,7 +323,7 @@ export default function ShopPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
-              <article key={item.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7]">
+              <article key={item.name} className="overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
                 {item.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#ece9e4]">
                     <Image src={item.imageSrc} alt={item.name} fill className="object-cover" />
