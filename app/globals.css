@@ -339,6 +339,18 @@ a {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .shop-page .shop-card,
+  .shop-page .shop-button,
+  .shop-page .shop-nav a,
+  .shop-page .shop-nav-trigger,
+  .shop-page .shop-icon-button,
+  .shop-page .shop-social-link,
+  .shop-page .shop-footer-link,
+  .shop-page button,
+  .shop-page a {
+    cursor: pointer;
+  }
+
   .shop-page .shop-icon-button:hover,
   .shop-page .shop-social-link:hover,
   .shop-page .shop-footer-link:hover {
