@@ -247,8 +247,8 @@ export default function ShopPage() {
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-12">
           <section id="frames" className="py-10">
-          <div className="mb-6 flex items-end justify-between gap-4">
-            <h2 className="max-w-[14ch] text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em] sm:max-w-none">Popular Frames</h2>
+          <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
