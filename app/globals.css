@@ -332,6 +332,56 @@ a {
   opacity: 0.88;
 }
 
+.shop-page .shop-icon-button:focus-visible,
+.shop-page .shop-social-link:focus-visible,
+.shop-page .shop-footer-link:focus-visible {
+  opacity: 0.88;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .shop-page .shop-icon-button:hover,
+  .shop-page .shop-social-link:hover,
+  .shop-page .shop-footer-link:hover {
+    opacity: 0.88;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .shop-page .shop-card,
+  .shop-page .shop-button,
+  .shop-page .shop-nav a,
+  .shop-page .shop-nav-trigger,
+  .shop-page .shop-icon-button,
+  .shop-page .shop-social-link,
+  .shop-page .shop-footer-link,
+  .shop-page .shop-fade-image,
+  .shop-page button,
+  .shop-page a {
+    transition-duration: 0.08s;
+    transition-timing-function: linear;
+  }
+
+  .shop-page .shop-card:hover,
+  .shop-page .shop-card:active,
+  .shop-page .shop-card:focus-within,
+  .shop-page .shop-button:hover,
+  .shop-page .shop-button:active,
+  .shop-page .shop-nav a:hover,
+  .shop-page .shop-nav a:active,
+  .shop-page .shop-nav-trigger:hover,
+  .shop-page .shop-nav-trigger:active,
+  .shop-page .shop-icon-button:hover,
+  .shop-page .shop-icon-button:active,
+  .shop-page .shop-social-link:hover,
+  .shop-page .shop-social-link:active,
+  .shop-page .shop-footer-link:hover,
+  .shop-page .shop-footer-link:active {
+    transform: none;
+    box-shadow: none;
+    opacity: inherit;
+  }
+}
+
 .shop-page .shop-mobile-nav {
   max-height: 0;
   overflow: hidden;

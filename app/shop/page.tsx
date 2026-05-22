@@ -152,7 +152,7 @@ export default function ShopPage() {
             <button
               type="button"
               aria-label="Open profile"
-              className="inline-flex items-center justify-center p-1 text-black/75 hover:text-black"
+              className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
             >
               <Image
                 src="/shop/icons/header/profile.png"
@@ -166,7 +166,7 @@ export default function ShopPage() {
             <button
               type="button"
               aria-label="Open cart"
-              className="inline-flex items-center justify-center p-1 text-black/75 hover:text-black"
+              className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
             >
               <Image
                 src="/shop/icons/header/cart.png"
@@ -387,7 +387,7 @@ export default function ShopPage() {
                   key={item.name}
                   href={item.href}
                   aria-label={item.name}
-                  className="inline-flex h-8 w-8 items-center justify-center opacity-75 transition-opacity hover:opacity-100"
+                  className="shop-social-link inline-flex h-8 w-8 items-center justify-center opacity-75"
                 >
                   <Image
                     src={item.iconSrc}
@@ -408,9 +408,9 @@ export default function ShopPage() {
         <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
           <p>© 2026 Re-mind. All rights reserved.</p>
           <div className="flex items-center justify-center gap-6">
-            <a href="/terms" className="hover:text-black/80">Terms</a>
-            <a href="/privacy" className="hover:text-black/80">Privacy</a>
-            <a href="/cookies" className="hover:text-black/80">Cookies</a>
+            <a href="/terms" className="shop-footer-link">Terms</a>
+            <a href="/privacy" className="shop-footer-link">Privacy</a>
+            <a href="/cookies" className="shop-footer-link">Cookies</a>
           </div>
           <div className="flex justify-start sm:justify-end">
             <select
