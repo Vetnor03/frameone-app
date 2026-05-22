@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { ShopFadeImage, ShopMobileMenu, ShopReveal } from './ShopMotion'
+import ShopLocaleCurrencySelector from './ShopLocaleCurrencySelector'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -88,7 +89,28 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
   )
 }
 
-export default function ShopPage() {
+const CURRENCY_SYMBOL: Record<'EUR' | 'USD' | 'NOK', string> = { EUR: '€', USD: '$', NOK: 'kr' }
+const FX_FROM_EUR: Record<'EUR' | 'USD' | 'NOK', number> = { EUR: 1, USD: 1.09, NOK: 11.7 }
+
+function pickLang(v?: string): 'en' | 'no' { return v === 'no' ? 'no' : 'en' }
+function pickCurrency(v?: string): 'EUR' | 'USD' | 'NOK' { return v === 'USD' || v === 'NOK' ? v : 'EUR' }
+function formatPrice(valueEur: number, currency: 'EUR' | 'USD' | 'NOK') {
+  const converted = Math.round(valueEur * FX_FROM_EUR[currency])
+  return `${CURRENCY_SYMBOL[currency]}${converted}`
+}
+
+export default function ShopPage({ searchParams }: { searchParams?: { lang?: string; currency?: string } }) {
+  const language = pickLang(searchParams?.lang)
+  const currency = pickCurrency(searchParams?.currency)
+  const frameCardsLocalized = frameCards.map((item) => ({
+    ...item,
+    price: formatPrice(Number(item.price.replace(/[^\d]/g, '')), currency),
+  }))
+  const accessoriesLocalized = accessories.map((item) => ({
+    ...item,
+    price: formatPrice(Number(item.price.replace(/[^\d]/g, '')), currency),
+  }))
+  const topShipping = formatPrice(100, currency)
   const footerBenefits = [
     {
       title: 'FREE SHIPPING',
@@ -121,7 +143,7 @@ export default function ShopPage() {
       <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
       <div className="bg-[#0b0d10] text-[11px] text-white">
         <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-3 px-6 py-2 tracking-[0.02em] sm:gap-5">
-          <span>Free shipping over €100</span>
+          <span>{language === 'no' ? `Gratis frakt over ${topShipping}` : `Free shipping over ${topShipping}`}</span>
           <span className="h-3 w-px bg-white/35" aria-hidden />
           <span>30 day returns</span>
           <span className="h-3 w-px bg-white/35" aria-hidden />
@@ -266,7 +288,7 @@ export default function ShopPage() {
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {frameCards.map((card) => (
+            {frameCardsLocalized.map((card) => (
               <article key={card.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
                 {card.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#faf9f7]">
@@ -335,7 +357,7 @@ export default function ShopPage() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {accessories.map((item) => (
+            {accessoriesLocalized.map((item) => (
               <article key={item.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
                 {item.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#ece9e4]">
@@ -417,15 +439,7 @@ export default function ShopPage() {
             <a href="/cookies" className="shop-footer-link">Cookies</a>
           </div>
           <div className="flex justify-start sm:justify-end">
-            <select
-              aria-label="Language and currency"
-              className="bg-transparent pr-4 text-right text-xs text-black/70 outline-none"
-              defaultValue="en-eur"
-            >
-              <option value="en-eur">English (EUR €)</option>
-              <option value="en-usd">English (USD $)</option>
-              <option value="no-nok">Norwegian (NOK kr)</option>
-            </select>
+            <ShopLocaleCurrencySelector language={language} currency={currency} />
           </div>
         </div>
       </footer>
