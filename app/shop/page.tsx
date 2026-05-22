@@ -172,6 +172,7 @@ export default function ShopPage() {
             </div>
           </div>
           <div className="pt-4 md:hidden">
+            <div className="flex justify-start">
             <ShopMobileMenu>
               <nav className="shop-nav flex flex-col items-center gap-3 text-center text-sm uppercase tracking-[0.09em]">
                 <a href="#frames" className="pb-1">Frames</a>
@@ -181,6 +182,7 @@ export default function ShopPage() {
                 <a href="#about" className="pb-1">About</a>
               </nav>
             </ShopMobileMenu>
+          </div>
           </div>
         </div>
       </header>
