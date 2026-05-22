@@ -190,7 +190,7 @@ export default function ShopPage() {
                 <span className="block">fit your life.</span>
               </h1>
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
-                Swap in seconds. Designed to complement your home, your style, your day.
+                Designed to complement your home, your style, your day.
               </p>
               <button className="shop-button mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
