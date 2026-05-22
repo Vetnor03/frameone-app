@@ -200,7 +200,7 @@ export default function ShopPage() {
             </div>
             <div className="relative mt-8 h-[360px] w-full overflow-hidden border-t border-black/10 md:hidden">
               <Image
-                src="/shop/hero-top.jpg"
+                src="/shop/hero-top.png"
                 alt="Re:mind frames on a cabinet"
                 fill
                 priority
@@ -209,7 +209,7 @@ export default function ShopPage() {
             </div>
             <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-full overflow-hidden md:block md:translate-x-[4%] md:z-0">
               <Image
-                src="/shop/hero-top.jpg"
+                src="/shop/hero-top.png"
                 alt="Re:mind frames on a cabinet"
                 fill
                 priority
