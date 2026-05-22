@@ -99,9 +99,14 @@ function formatPrice(valueEur: number, currency: 'EUR' | 'USD' | 'NOK') {
   return `${CURRENCY_SYMBOL[currency]}${converted}`
 }
 
-export default function ShopPage({ searchParams }: { searchParams?: { lang?: string; currency?: string } }) {
-  const language = pickLang(searchParams?.lang)
-  const currency = pickCurrency(searchParams?.currency)
+export default async function ShopPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ lang?: string; currency?: string }>
+}) {
+  const resolvedSearchParams = await searchParams
+  const language = pickLang(resolvedSearchParams?.lang)
+  const currency = pickCurrency(resolvedSearchParams?.currency)
   const frameCardsLocalized = frameCards.map((item) => ({
     ...item,
     price: formatPrice(Number(item.price.replace(/[^\d]/g, '')), currency),
