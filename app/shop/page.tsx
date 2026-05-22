@@ -174,7 +174,7 @@ export default function ShopPage() {
       <div className="bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px]">
           <section className="relative py-10 md:min-h-[585px] md:py-0">
-            <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-2 md:-mt-6 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
+            <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-3 md:-mt-6 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
               <h1 className="max-w-[12.4ch] text-[38px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
                 <span className="block">Frames that</span>
                 <span className="block">fit your life.</span>
@@ -182,7 +182,7 @@ export default function ShopPage() {
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
                 Swap in seconds. Designed to complement your home, your style, your day.
               </p>
-              <button className="mt-8 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
+              <button className="mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"
@@ -222,7 +222,7 @@ export default function ShopPage() {
       </div>
 
       <section className="w-full border-y border-black/10 bg-[#faf9f7]">
-        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-6 px-6 py-8 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-6 px-6 py-9 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: ['Satisfying click.', 'Designed for ease.'] },
             { label: 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
@@ -246,7 +246,7 @@ export default function ShopPage() {
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
-          <section id="frames" className="py-12 md:py-10">
+          <section id="frames" className="pt-11 pb-12 md:pt-10 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
@@ -274,13 +274,13 @@ export default function ShopPage() {
           </div>
         </section>
 
-        <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
+          <section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
           <Image
             src="/shop/mattes-hero.png"
             alt=""
             fill
             aria-hidden
-            className="hidden object-contain object-right md:block"
+            className="hidden scale-[1.02] object-contain object-right md:block"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
           />
@@ -297,12 +297,12 @@ export default function ShopPage() {
                 priority
               />
             </div>
-            <h2 className="mt-3 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
+            <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
               Change the feel.
               <br />
               Not the frame.
             </h2>
-            <p className="mt-4 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
+            <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
               Choose the perfect matte to match
               <br />
               your space and reduce glare.
@@ -311,15 +311,14 @@ export default function ShopPage() {
           </div>
         </section>
 
-          <section id="accessories" className="py-12 md:py-10">
+          <section id="accessories" className="pt-11 pb-12 md:pt-9 md:pb-10">
           <div className="mb-6">
-            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div className="flex flex-col items-start gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
               <h2 className="text-[24px] font-semibold uppercase leading-[1.08] tracking-[0.06em] whitespace-nowrap sm:text-[30px]">
                 COMPLETE THE EXPERIENCE
               </h2>
-              <a className="hidden shrink-0 text-sm uppercase tracking-[0.08em] sm:inline" href="#">View all accessories →</a>
+              <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
             </div>
-            <a className="mt-2 text-sm uppercase tracking-[0.08em] sm:hidden" href="#">View all accessories →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {accessories.map((item) => (
