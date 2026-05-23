@@ -6,6 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
+import {
+  loadCustomSurfSpots,
+  normalizeCustomSpot,
+  saveCustomSurfSpots,
+  type CustomSurfSpot,
+} from './lib/surf/customSurfSpotsStore'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -7026,6 +7032,7 @@ type SurfCfg = {
   id: number
   spot?: string
   spotId?: string
+  customSpot?: CustomSurfSpot
   fuelPenalty?: FuelPenaltyCfg
 }
 
@@ -12079,9 +12086,11 @@ function SurfModuleSettingsTab({
         }
 
         const fuelPenalty = sanitizeFuelPenalty(x.fuelPenalty)
+        const customSpot = normalizeCustomSpot(x.customSpot)
 
         const out: SurfCfg = { id, spot, spotId }
         if (fuelPenalty) out.fuelPenalty = fuelPenalty
+        if (customSpot) out.customSpot = customSpot
 
         return out
       })
@@ -13688,11 +13697,13 @@ function SurfSpotSheet({
   language: AppLanguage
   title: string
   onClose: () => void
-  onPicked: (cfgPatch: { spot: string; spotId: string }) => void
+  onPicked: (cfgPatch: { spot: string; spotId: string; customSpot?: CustomSurfSpot }) => void
   hideTodaysBest?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [spots, setSpots] = useState<SpotItem[]>([])
+  const [customSpots, setCustomSpots] = useState<CustomSurfSpot[]>([])
+  const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -13754,11 +13765,31 @@ function SurfSpotSheet({
     }
   }, [hideTodaysBest])
 
+  useEffect(() => {
+    ;(async () => {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = sessionData.session?.user?.id
+      setCustomSpots(loadCustomSurfSpots(userId))
+    })()
+  }, [])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return spots
-    return spots.filter((s) => s.label.toLowerCase().includes(q))
-  }, [query, spots])
+    const merged = [
+      ...customSpots.map((x) => ({ spotId: x.spotId, label: `${x.label} (Custom)` })),
+      ...spots,
+    ]
+    if (!q) return merged
+    return merged.filter((s) => s.label.toLowerCase().includes(q))
+  }, [query, spots, customSpots])
+
+  async function onSaveCustomSpot(next: CustomSurfSpot) {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user?.id
+    const updated = [...customSpots, next]
+    setCustomSpots(updated)
+    saveCustomSurfSpots(userId, updated)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
@@ -13771,6 +13802,13 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-4">
+          <button onClick={() => setEditorOpen(true)} className="w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs tracking-widest">
+            {language === 'no' ? 'LEGG TIL EGEN SPOT' : 'ADD CUSTOM SPOT'}
+          </button>
+          <div className="mt-2 text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Trykk i kartet for koordinater. Dra for retning.' : 'Tap map for coordinates. Drag handles for direction sectors.'}</div>
+        </div>
+
+        <div className="mt-3">
           <input
             ref={inputRef}
             value={query}
@@ -13793,7 +13831,10 @@ function SurfSpotSheet({
             filtered.map((s) => (
               <button
                 key={`${s.spotId || 'label'}-${s.label}`}
-                onClick={() => onPicked({ spot: s.label, spotId: s.spotId })}
+                onClick={() => {
+                  const custom = customSpots.find((c) => c.spotId === s.spotId)
+                  onPicked({ spot: s.label.replace(/\s+\(Custom\)$/i, ''), spotId: s.spotId, customSpot: custom })
+                }}
                 className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
               >
 <div className="text-[color:var(--fg-90)] text-base font-medium">
@@ -13804,8 +13845,130 @@ function SurfSpotSheet({
           )}
         </div>
       </div>
+      {editorOpen && (
+        <CustomSurfSpotEditorSheet
+          language={language}
+          onClose={() => setEditorOpen(false)}
+          onSave={async (spot) => {
+            await onSaveCustomSpot(spot)
+            setEditorOpen(false)
+          }}
+        />
+      )}
     </div>
   )
+}
+
+function CustomSurfSpotEditorSheet({ language, onClose, onSave }: { language: AppLanguage; onClose: () => void; onSave: (spot: CustomSurfSpot) => void | Promise<void> }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [label, setLabel] = useState('')
+  const [breakLat, setBreakLat] = useState(58.8)
+  const [breakLon, setBreakLon] = useState(5.6)
+  const [parkingLat, setParkingLat] = useState(58.8)
+  const [parkingLon, setParkingLon] = useState(5.6)
+  const [mapLat, setMapLat] = useState(58.8)
+  const [mapLon, setMapLon] = useState(5.6)
+  const [zoom, setZoom] = useState(13)
+  const [swellStart, setSwellStart] = useState(300)
+  const [swellEnd, setSwellEnd] = useState(40)
+  const [swellBest, setSwellBest] = useState(330)
+  const [windStart, setWindStart] = useState(40)
+  const [windEnd, setWindEnd] = useState(140)
+  const [windBest, setWindBest] = useState(90)
+  const center = `${mapLat.toFixed(5)},${mapLon.toFixed(5)}`
+  const canSave = label.trim().length > 1
+  const isNo = language === 'no'
+
+  function pinCenterToBreak() {
+    setBreakLat(mapLat)
+    setBreakLon(mapLon)
+  }
+  function pinCenterToParking() {
+    setParkingLat(mapLat)
+    setParkingLon(mapLon)
+  }
+
+  return <div className="fixed inset-0 z-[70] bg-black">
+    <div className="relative h-full w-full overflow-hidden bg-black">
+      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{isNo ? 'EGEN SURFSPOT' : 'CUSTOM SURF SPOT'}</div><button onClick={onClose}>✕</button></div>
+      <div className="absolute top-3 left-4 right-4 z-20 flex items-center justify-between text-white">
+        <div className="tracking-widest text-sm">{isNo ? 'EGEN SURFSPOT' : 'CUSTOM SURF SPOT'}</div>
+        <button onClick={onClose} className="text-2xl">✕</button>
+      </div>
+      <div className="absolute top-12 left-4 z-20 rounded-full bg-black/55 px-3 py-1 text-xs text-white">{isNo ? `STEG ${step} AV 3` : `STEP ${step} OF 3`}</div>
+
+      {step === 1 && <>
+        <MapCenterPicker lat={mapLat} lon={mapLon} zoom={zoom} onZoom={setZoom} />
+        <div className="absolute bottom-0 left-0 right-0 z-20 rounded-t-3xl bg-black/70 p-4 backdrop-blur">
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={isNo ? 'Navn på spot' : 'Spot name'} className="w-full h-11 rounded-2xl border border-white/25 bg-white/10 px-4 text-white" />
+          <div className="mt-2 text-xs text-white/80">{isNo ? 'Flytt kart med én finger. Zoom med to fingre. Sentrer blå prikk over bølgebrekk.' : 'Move map with one finger. Zoom with two fingers. Center blue dot over break.'}</div>
+          <button onClick={pinCenterToBreak} className="mt-2 h-10 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff]">{isNo ? 'SETT SURF BREAK HER' : 'SET SURF BREAK HERE'}</button>
+          <SectorDial title={isNo ? 'SWELL-SEKTOR' : 'SWELL SECTOR'} start={swellStart} end={swellEnd} best={swellBest} onChange={(k, v) => k === 'start' ? setSwellStart(v) : k === 'end' ? setSwellEnd(v) : setSwellBest(v)} />
+        </div>
+      </>}
+
+      {step === 2 && <>
+        <MapCenterPicker lat={breakLat} lon={breakLon} zoom={zoom} onZoom={setZoom} />
+        <div className="absolute bottom-0 left-0 right-0 z-20 rounded-t-3xl bg-black/70 p-4 backdrop-blur">
+          <div className="text-xs text-white/80">{isNo ? 'Sett vindsektor og foretrukket retning.' : 'Set wind sector and preferred direction.'}</div>
+          <SectorDial title={isNo ? 'WIND-SEKTOR' : 'WIND SECTOR'} start={windStart} end={windEnd} best={windBest} onChange={(k, v) => k === 'start' ? setWindStart(v) : k === 'end' ? setWindEnd(v) : setWindBest(v)} />
+        </div>
+      </>}
+
+      {step === 3 && <>
+        <MapCenterPicker lat={mapLat} lon={mapLon} zoom={zoom} onZoom={setZoom} />
+        <div className="absolute bottom-0 left-0 right-0 z-20 rounded-t-3xl bg-black/70 p-4 backdrop-blur">
+          <div className="text-xs text-white/80">{isNo ? 'Sentrer blå prikk over nærmeste parkering.' : 'Center blue dot over closest parking.'}</div>
+          <button onClick={pinCenterToParking} className="mt-2 h-10 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff]">{isNo ? 'SETT PARKERING HER' : 'SET PARKING HERE'}</button>
+          <div className="mt-2 text-xs text-white/70">Break: {breakLat.toFixed(5)}, {breakLon.toFixed(5)} · Parking: {parkingLat.toFixed(5)}, {parkingLon.toFixed(5)}</div>
+        </div>
+      </>}
+
+      <div className="absolute left-4 right-4 bottom-3 z-30 grid grid-cols-2 gap-2">
+        <button onClick={() => setStep((s) => (Math.max(1, s - 1) as 1 | 2 | 3))} disabled={step === 1} className="h-11 rounded-2xl border border-[color:var(--bd-15)] disabled:opacity-40">{isNo ? 'TILBAKE' : 'BACK'}</button>
+        {step < 3 ? (
+          <button onClick={() => setStep((s) => (Math.min(3, s + 1) as 1 | 2 | 3))} disabled={step === 1 && !canSave} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-40">{isNo ? 'NESTE' : 'NEXT'}</button>
+        ) : (
+          <button disabled={!canSave} onClick={() => onSave(normalizeCustomSpot({ kind: 'custom', spotId: `custom_${Date.now()}`, label, breakLat, breakLon, parkingLat, parkingLon, swell: { startDeg: swellStart, endDeg: swellEnd, bestDeg: swellBest }, wind: { startDeg: windStart, endDeg: windEnd, bestDeg: windBest } })!)} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-40">{isNo ? 'LAGRE' : 'SAVE'}</button>
+        )}
+      </div>
+      <div className="absolute right-4 top-12 z-20 rounded-full bg-black/55 px-3 py-1 text-xs text-white">Center: {center}</div>
+    </div>
+  </div>
+}
+
+function MapCenterPicker({ lat, lon, zoom, onZoom }: { lat: number; lon: number; zoom: number; onZoom: (z: number) => void }) {
+  const spanLon = 0.06 * Math.max(1, 13 / zoom)
+  const spanLat = 0.04 * Math.max(1, 13 / zoom)
+  return <div className="mt-2">
+    <div className="relative">
+      <iframe title="map" className="w-full h-[100vh]" src={`https://www.openstreetmap.org/export/embed.html?bbox=${lon - spanLon}%2C${lat - spanLat}%2C${lon + spanLon}%2C${lat + spanLat}&layer=mapnik`} />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="h-5 w-5 rounded-full border-2 border-white bg-[#2aa3ff] shadow-[0_0_0_3px_rgba(42,163,255,0.35)]" />
+      </div>
+    </div>
+    <div className="absolute right-4 bottom-28 z-30 grid gap-2">
+      <button className="h-10 w-10 rounded-full bg-black/60 text-white" onClick={() => onZoom(Math.min(17, zoom + 1))}>＋</button>
+      <button className="h-10 w-10 rounded-full bg-black/60 text-white" onClick={() => onZoom(Math.max(9, zoom - 1))}>－</button>
+    </div>
+  </div>
+}
+
+function SectorDial({ title, start, end, best, onChange }: { title: string; start: number; end: number; best: number; onChange: (k: 'start'|'end'|'best', v: number)=>void }) {
+  return <div className="mt-3 rounded-2xl border border-white/20 bg-black/30 p-3 text-white">
+    <div className="text-xs tracking-widest">{title}</div>
+    <DirectionTriplet label="" start={start} end={end} best={best} onChange={onChange} />
+  </div>
+}
+
+function DirectionTriplet({ label, start, end, best, onChange }: { label: string; start: number; end: number; best: number; onChange: (k: 'start' | 'end' | 'best', v: number) => void }) {
+  return <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
+    <div className="text-xs tracking-widest text-[color:var(--fg-50)]">{label}</div>
+    <input type="range" min={0} max={359} value={start} onChange={(e) => onChange('start', Number(e.target.value))} className="w-full" />
+    <input type="range" min={0} max={359} value={end} onChange={(e) => onChange('end', Number(e.target.value))} className="w-full" />
+    <input type="range" min={0} max={359} value={best} onChange={(e) => onChange('best', Number(e.target.value))} className="w-full" />
+    <div className="text-xs text-[color:var(--fg-60)]">Start {start}° · End {end}° · Best {best}°</div>
+  </div>
 }
 
 function WeatherLocationRow({
