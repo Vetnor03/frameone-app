@@ -6,6 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
+import {
+  loadCustomSurfSpots,
+  normalizeCustomSpot,
+  saveCustomSurfSpots,
+  type CustomSurfSpot,
+} from './lib/surf/customSurfSpotsStore'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -7026,6 +7032,7 @@ type SurfCfg = {
   id: number
   spot?: string
   spotId?: string
+  customSpot?: CustomSurfSpot
   fuelPenalty?: FuelPenaltyCfg
 }
 
@@ -12079,9 +12086,11 @@ function SurfModuleSettingsTab({
         }
 
         const fuelPenalty = sanitizeFuelPenalty(x.fuelPenalty)
+        const customSpot = normalizeCustomSpot(x.customSpot)
 
         const out: SurfCfg = { id, spot, spotId }
         if (fuelPenalty) out.fuelPenalty = fuelPenalty
+        if (customSpot) out.customSpot = customSpot
 
         return out
       })
@@ -13688,11 +13697,12 @@ function SurfSpotSheet({
   language: AppLanguage
   title: string
   onClose: () => void
-  onPicked: (cfgPatch: { spot: string; spotId: string }) => void
+  onPicked: (cfgPatch: { spot: string; spotId: string; customSpot?: CustomSurfSpot }) => void
   hideTodaysBest?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [spots, setSpots] = useState<SpotItem[]>([])
+  const [customSpots, setCustomSpots] = useState<CustomSurfSpot[]>([])
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -13754,11 +13764,55 @@ function SurfSpotSheet({
     }
   }, [hideTodaysBest])
 
+  useEffect(() => {
+    ;(async () => {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = sessionData.session?.user?.id
+      setCustomSpots(loadCustomSurfSpots(userId))
+    })()
+  }, [])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return spots
-    return spots.filter((s) => s.label.toLowerCase().includes(q))
-  }, [query, spots])
+    const merged = [
+      ...customSpots.map((x) => ({ spotId: x.spotId, label: `${x.label} (Custom)` })),
+      ...spots,
+    ]
+    if (!q) return merged
+    return merged.filter((s) => s.label.toLowerCase().includes(q))
+  }, [query, spots, customSpots])
+
+  async function onAddCustomSpot() {
+    const name = window.prompt(language === 'no' ? 'Navn på spot' : 'Spot name')
+    if (!name) return
+    const breakLat = Number(window.prompt('Break latitude'))
+    const breakLon = Number(window.prompt('Break longitude'))
+    const parkingLat = Number(window.prompt('Parking latitude'))
+    const parkingLon = Number(window.prompt('Parking longitude'))
+    const swellStart = Number(window.prompt('Swell sector start (0-359)', '300'))
+    const swellEnd = Number(window.prompt('Swell sector end (0-359)', '40'))
+    const swellBest = Number(window.prompt('Best swell direction (0-359)', '330'))
+    const windStart = Number(window.prompt('Wind sector start (0-359)', '40'))
+    const windEnd = Number(window.prompt('Wind sector end (0-359)', '140'))
+    const windBest = Number(window.prompt('Best wind direction (0-359)', '90'))
+    const next = normalizeCustomSpot({
+      kind: 'custom',
+      label: name,
+      spotId: `custom_${Date.now()}`,
+      breakLat,
+      breakLon,
+      parkingLat,
+      parkingLon,
+      swell: { startDeg: swellStart, endDeg: swellEnd, bestDeg: swellBest },
+      wind: { startDeg: windStart, endDeg: windEnd, bestDeg: windBest },
+    })
+    if (!next) return
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user?.id
+    const updated = [...customSpots, next]
+    setCustomSpots(updated)
+    saveCustomSurfSpots(userId, updated)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
@@ -13771,6 +13825,13 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-4">
+          <button onClick={onAddCustomSpot} className="w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs tracking-widest">
+            {language === 'no' ? 'LEGG TIL EGEN SPOT' : 'ADD CUSTOM SPOT'}
+          </button>
+          <div className="mt-2 text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Kartvelger kommer snart. Bruk koordinater foreløpig.' : 'Map picker coming next. Use manual coordinates for now.'}</div>
+        </div>
+
+        <div className="mt-3">
           <input
             ref={inputRef}
             value={query}
@@ -13793,7 +13854,10 @@ function SurfSpotSheet({
             filtered.map((s) => (
               <button
                 key={`${s.spotId || 'label'}-${s.label}`}
-                onClick={() => onPicked({ spot: s.label, spotId: s.spotId })}
+                onClick={() => {
+                  const custom = customSpots.find((c) => c.spotId === s.spotId)
+                  onPicked({ spot: s.label.replace(/\s+\(Custom\)$/i, ''), spotId: s.spotId, customSpot: custom })
+                }}
                 className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
               >
 <div className="text-[color:var(--fg-90)] text-base font-medium">
