@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS } from '@/app/lib/surf/spots'
+import { createClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,6 +11,16 @@ const TODAYS_BEST_ID = '__todays_best__'
 type SpotItem = {
   spotId: string
   label: string
+}
+
+function getUserClient(req: Request) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const bearer = req.headers.get('authorization') || ''
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: bearer ? { Authorization: bearer } : {} },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
 }
 
 function uniqItems(list: SpotItem[]) {
@@ -30,7 +41,7 @@ function uniqItems(list: SpotItem[]) {
   return out
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const items: SpotItem[] = Object.values(SURF_SPOTS)
       .filter(Boolean)
@@ -40,7 +51,24 @@ export async function GET() {
       }))
       .filter((s) => s.spotId && s.label)
 
-    const sorted = uniqItems(items).sort((a, b) => a.label.localeCompare(b.label, 'nb'))
+    const supabase = getUserClient(req)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    const customItems: SpotItem[] = []
+    if (user?.id) {
+      const { data } = await supabase
+        .from('user_surf_spots')
+        .select('id,name')
+        .eq('user_id', user.id)
+        .order('name', { ascending: true })
+      for (const row of data || []) {
+        customItems.push({ spotId: `user:${row.id}`, label: String(row.name || '').trim() })
+      }
+    }
+
+    const sorted = uniqItems([...items, ...customItems]).sort((a, b) => a.label.localeCompare(b.label, 'nb'))
 
     const cleaned = [
       { spotId: TODAYS_BEST_ID, label: TODAYS_BEST_LABEL },
@@ -60,5 +88,33 @@ export async function GET() {
       { spots: [], items: [], error: String(e?.message || e) },
       { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     )
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const supabase = getUserClient(req)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const body = await req.json()
+    const payload = {
+      user_id: user.id,
+      name: String(body?.name || '').trim().slice(0, 80),
+      lat: Number(body?.lat),
+      lng: Number(body?.lng),
+      parking_lat: Number(body?.parkingLat),
+      parking_lng: Number(body?.parkingLng),
+      swell_start_angle: Number(body?.swell?.startAngle),
+      swell_end_angle: Number(body?.swell?.endAngle),
+      wind_start_angle: Number(body?.wind?.startAngle),
+      wind_end_angle: Number(body?.wind?.endAngle),
+    }
+    const { data, error } = await supabase.from('user_surf_spots').insert(payload).select('id,name').single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ item: { spotId: `user:${data.id}`, label: data.name } })
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }
