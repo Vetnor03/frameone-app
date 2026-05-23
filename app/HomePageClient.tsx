@@ -13940,9 +13940,11 @@ function CustomSurfSpotEditorSheet({ language, onClose, onSave }: { language: Ap
 
 function MapCenterPicker({ lat, lon, zoom, onZoom, onNudge }: { lat: number; lon: number; zoom: number; onZoom: (z: number) => void; onNudge: (dLat: number, dLon: number) => void }) {
   const d = zoom >= 14 ? 0.0025 : zoom >= 12 ? 0.006 : 0.015
+  const mapSrc = `https://maps.google.com/maps?q=${lat},${lon}&t=k&z=${zoom}&output=embed`
   return <div className="mt-2">
+    <div className="mb-2 text-xs text-[color:var(--fg-50)]">Satellite map · Move with map gestures or arrow controls.</div>
     <div className="relative">
-      <iframe title="map" className="w-full h-56 rounded-2xl border border-[color:var(--bd-10)]" src={`https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.06}%2C${lat - 0.04}%2C${lon + 0.06}%2C${lat + 0.04}&layer=mapnik`} />
+      <iframe title="map" className="w-full h-56 rounded-2xl border border-[color:var(--bd-10)]" src={mapSrc} />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="h-5 w-5 rounded-full border-2 border-white bg-[#2aa3ff] shadow-[0_0_0_3px_rgba(42,163,255,0.35)]" />
       </div>
