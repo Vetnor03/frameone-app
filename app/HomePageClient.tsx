@@ -13703,6 +13703,7 @@ function SurfSpotSheet({
   const [query, setQuery] = useState('')
   const [spots, setSpots] = useState<SpotItem[]>([])
   const [customSpots, setCustomSpots] = useState<CustomSurfSpot[]>([])
+  const [editorOpen, setEditorOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -13782,31 +13783,7 @@ function SurfSpotSheet({
     return merged.filter((s) => s.label.toLowerCase().includes(q))
   }, [query, spots, customSpots])
 
-  async function onAddCustomSpot() {
-    const name = window.prompt(language === 'no' ? 'Navn på spot' : 'Spot name')
-    if (!name) return
-    const breakLat = Number(window.prompt('Break latitude'))
-    const breakLon = Number(window.prompt('Break longitude'))
-    const parkingLat = Number(window.prompt('Parking latitude'))
-    const parkingLon = Number(window.prompt('Parking longitude'))
-    const swellStart = Number(window.prompt('Swell sector start (0-359)', '300'))
-    const swellEnd = Number(window.prompt('Swell sector end (0-359)', '40'))
-    const swellBest = Number(window.prompt('Best swell direction (0-359)', '330'))
-    const windStart = Number(window.prompt('Wind sector start (0-359)', '40'))
-    const windEnd = Number(window.prompt('Wind sector end (0-359)', '140'))
-    const windBest = Number(window.prompt('Best wind direction (0-359)', '90'))
-    const next = normalizeCustomSpot({
-      kind: 'custom',
-      label: name,
-      spotId: `custom_${Date.now()}`,
-      breakLat,
-      breakLon,
-      parkingLat,
-      parkingLon,
-      swell: { startDeg: swellStart, endDeg: swellEnd, bestDeg: swellBest },
-      wind: { startDeg: windStart, endDeg: windEnd, bestDeg: windBest },
-    })
-    if (!next) return
+  async function onSaveCustomSpot(next: CustomSurfSpot) {
     const { data: sessionData } = await supabase.auth.getSession()
     const userId = sessionData.session?.user?.id
     const updated = [...customSpots, next]
@@ -13825,10 +13802,10 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-4">
-          <button onClick={onAddCustomSpot} className="w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs tracking-widest">
+          <button onClick={() => setEditorOpen(true)} className="w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs tracking-widest">
             {language === 'no' ? 'LEGG TIL EGEN SPOT' : 'ADD CUSTOM SPOT'}
           </button>
-          <div className="mt-2 text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Kartvelger kommer snart. Bruk koordinater foreløpig.' : 'Map picker coming next. Use manual coordinates for now.'}</div>
+          <div className="mt-2 text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Trykk i kartet for koordinater. Dra for retning.' : 'Tap map for coordinates. Drag handles for direction sectors.'}</div>
         </div>
 
         <div className="mt-3">
@@ -13868,8 +13845,62 @@ function SurfSpotSheet({
           )}
         </div>
       </div>
+      {editorOpen && (
+        <CustomSurfSpotEditorSheet
+          language={language}
+          onClose={() => setEditorOpen(false)}
+          onSave={async (spot) => {
+            await onSaveCustomSpot(spot)
+            setEditorOpen(false)
+          }}
+        />
+      )}
     </div>
   )
+}
+
+function CustomSurfSpotEditorSheet({ language, onClose, onSave }: { language: AppLanguage; onClose: () => void; onSave: (spot: CustomSurfSpot) => void | Promise<void> }) {
+  const [label, setLabel] = useState('')
+  const [breakLat, setBreakLat] = useState(58.8)
+  const [breakLon, setBreakLon] = useState(5.6)
+  const [parkingLat, setParkingLat] = useState(58.8)
+  const [parkingLon, setParkingLon] = useState(5.6)
+  const [swellStart, setSwellStart] = useState(300)
+  const [swellEnd, setSwellEnd] = useState(40)
+  const [swellBest, setSwellBest] = useState(330)
+  const [windStart, setWindStart] = useState(40)
+  const [windEnd, setWindEnd] = useState(140)
+  const [windBest, setWindBest] = useState(90)
+  const center = `${breakLat.toFixed(5)},${breakLon.toFixed(5)}`
+  const canSave = label.trim().length > 1
+  return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+    <div className="w-full max-w-[420px] max-h-[92vh] overflow-y-auto rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'EGEN SURFSPOT' : 'CUSTOM SURF SPOT'}</div><button onClick={onClose}>✕</button></div>
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={language === 'no' ? 'Navn på spot' : 'Spot name'} className="mt-3 w-full h-11 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4" />
+      <div className="mt-3 text-xs text-[color:var(--fg-50)]">Map ({center})</div>
+      <iframe title="map" className="mt-2 w-full h-48 rounded-2xl border border-[color:var(--bd-10)]" src={`https://www.openstreetmap.org/export/embed.html?bbox=${breakLon - 0.06}%2C${breakLat - 0.04}%2C${breakLon + 0.06}%2C${breakLat + 0.04}&layer=mapnik&marker=${breakLat}%2C${breakLon}`} />
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <input type="number" value={breakLat} onChange={(e) => setBreakLat(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+        <input type="number" value={breakLon} onChange={(e) => setBreakLon(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+        <input type="number" value={parkingLat} onChange={(e) => setParkingLat(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+        <input type="number" value={parkingLon} onChange={(e) => setParkingLon(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+      </div>
+      <button onClick={() => { setParkingLat(breakLat); setParkingLon(breakLon) }} className="mt-2 h-10 rounded-xl border px-3">{language === 'no' ? 'Kopier spot → parkering' : 'Copy break → parking'}</button>
+      <DirectionTriplet label="SWELL" start={swellStart} end={swellEnd} best={swellBest} onChange={(k, v) => k === 'start' ? setSwellStart(v) : k === 'end' ? setSwellEnd(v) : setSwellBest(v)} />
+      <DirectionTriplet label="WIND" start={windStart} end={windEnd} best={windBest} onChange={(k, v) => k === 'start' ? setWindStart(v) : k === 'end' ? setWindEnd(v) : setWindBest(v)} />
+      <button disabled={!canSave} onClick={() => onSave(normalizeCustomSpot({ kind: 'custom', spotId: `custom_${Date.now()}`, label, breakLat, breakLon, parkingLat, parkingLon, swell: { startDeg: swellStart, endDeg: swellEnd, bestDeg: swellBest }, wind: { startDeg: windStart, endDeg: windEnd, bestDeg: windBest } })!)} className="mt-4 w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-50">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+    </div>
+  </div>
+}
+
+function DirectionTriplet({ label, start, end, best, onChange }: { label: string; start: number; end: number; best: number; onChange: (k: 'start' | 'end' | 'best', v: number) => void }) {
+  return <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
+    <div className="text-xs tracking-widest text-[color:var(--fg-50)]">{label}</div>
+    <input type="range" min={0} max={359} value={start} onChange={(e) => onChange('start', Number(e.target.value))} className="w-full" />
+    <input type="range" min={0} max={359} value={end} onChange={(e) => onChange('end', Number(e.target.value))} className="w-full" />
+    <input type="range" min={0} max={359} value={best} onChange={(e) => onChange('best', Number(e.target.value))} className="w-full" />
+    <div className="text-xs text-[color:var(--fg-60)]">Start {start}° · End {end}° · Best {best}°</div>
+  </div>
 }
 
 function WeatherLocationRow({
