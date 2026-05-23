@@ -8654,6 +8654,13 @@ function StockSearchSheet({
         </div>
 
         <div className="mt-4">
+          <button
+            onClick={() => onAddSpot?.()}
+            className="mb-3 w-full h-12 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-sm"
+          >
+            {language === 'no' ? 'LEGG TIL SURFESPOT' : 'ADD SURF SPOT'}
+          </button>
+
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -12490,6 +12497,9 @@ function SurfSpotRow({
           title={title}
           hideTodaysBest={false}
           onClose={() => setOpen(false)}
+          onAddSpot={() => {
+            window.alert(language === 'no' ? 'Legg til surfespot kommer snart.' : 'Add surf spot flow is coming soon.')
+          }}
           onPicked={(picked) => {
             const nextSpot = String(picked?.spot ?? '').trim()
             if (!isTodaysBestLabel(nextSpot)) {
@@ -13683,12 +13693,14 @@ function SurfSpotSheet({
   title,
   onClose,
   onPicked,
+  onAddSpot,
   hideTodaysBest = false,
 }: {
   language: AppLanguage
   title: string
   onClose: () => void
   onPicked: (cfgPatch: { spot: string; spotId: string }) => void
+  onAddSpot?: () => void
   hideTodaysBest?: boolean
 }) {
   const [query, setQuery] = useState('')
@@ -13771,6 +13783,13 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-4">
+          <button
+            onClick={() => onAddSpot?.()}
+            className="mb-3 w-full h-12 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-sm"
+          >
+            {language === 'no' ? 'LEGG TIL SURFESPOT' : 'ADD SURF SPOT'}
+          </button>
+
           <input
             ref={inputRef}
             value={query}
@@ -13935,6 +13954,13 @@ function WeatherLocationSheet({
         </div>
 
         <div className="mt-4">
+          <button
+            onClick={() => onAddSpot?.()}
+            className="mb-3 w-full h-12 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-sm"
+          >
+            {language === 'no' ? 'LEGG TIL SURFESPOT' : 'ADD SURF SPOT'}
+          </button>
+
           <input
             ref={inputRef}
             value={query}
