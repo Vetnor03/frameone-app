@@ -13860,6 +13860,7 @@ function SurfSpotSheet({
 }
 
 function CustomSurfSpotEditorSheet({ language, onClose, onSave }: { language: AppLanguage; onClose: () => void; onSave: (spot: CustomSurfSpot) => void | Promise<void> }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1)
   const [label, setLabel] = useState('')
   const [breakLat, setBreakLat] = useState(58.8)
   const [breakLon, setBreakLon] = useState(5.6)
@@ -13871,24 +13872,72 @@ function CustomSurfSpotEditorSheet({ language, onClose, onSave }: { language: Ap
   const [windStart, setWindStart] = useState(40)
   const [windEnd, setWindEnd] = useState(140)
   const [windBest, setWindBest] = useState(90)
-  const center = `${breakLat.toFixed(5)},${breakLon.toFixed(5)}`
   const canSave = label.trim().length > 1
-  return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
-    <div className="w-full max-w-[420px] max-h-[92vh] overflow-y-auto rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
-      <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'EGEN SURFSPOT' : 'CUSTOM SURF SPOT'}</div><button onClick={onClose}>✕</button></div>
-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={language === 'no' ? 'Navn på spot' : 'Spot name'} className="mt-3 w-full h-11 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4" />
-      <div className="mt-3 text-xs text-[color:var(--fg-50)]">Map ({center})</div>
-      <iframe title="map" className="mt-2 w-full h-48 rounded-2xl border border-[color:var(--bd-10)]" src={`https://www.openstreetmap.org/export/embed.html?bbox=${breakLon - 0.06}%2C${breakLat - 0.04}%2C${breakLon + 0.06}%2C${breakLat + 0.04}&layer=mapnik&marker=${breakLat}%2C${breakLon}`} />
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <input type="number" value={breakLat} onChange={(e) => setBreakLat(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
-        <input type="number" value={breakLon} onChange={(e) => setBreakLon(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
-        <input type="number" value={parkingLat} onChange={(e) => setParkingLat(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
-        <input type="number" value={parkingLon} onChange={(e) => setParkingLon(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+  const stepTitle =
+    step === 1
+      ? language === 'no'
+        ? 'Steg 1: Navn + surf break'
+        : 'Step 1: Name + surf break'
+      : step === 2
+        ? language === 'no'
+          ? 'Steg 2: Parkering'
+          : 'Step 2: Parking'
+        : language === 'no'
+          ? 'Steg 3: Eksponering'
+          : 'Step 3: Exposure'
+  const stepHint =
+    step === 1
+      ? language === 'no'
+        ? 'Gi spoten et navn. Finn break-lokasjon i satellittkartet.'
+        : 'Name your spot. Set the break location using the satellite map.'
+      : step === 2
+        ? language === 'no'
+          ? 'Sett nærmeste parkering. Du kan kopiere fra break.'
+          : 'Set nearest parking location. You can copy from break.'
+        : language === 'no'
+          ? 'Dra sliderne for swell/vind-sektorer og beste retning.'
+          : 'Drag sliders for swell/wind sectors and best direction.'
+  const mapLat = step === 2 ? parkingLat : breakLat
+  const mapLon = step === 2 ? parkingLon : breakLon
+  const mapSrc = `https://www.google.com/maps?q=${mapLat},${mapLon}&t=k&z=14&output=embed`
+  return <div className="fixed inset-0 z-[70] bg-black">
+    <iframe title="satellite-map" className="absolute inset-0 h-full w-full" src={mapSrc} />
+    <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/70" />
+    <div className="absolute top-0 left-0 right-0 p-4 pt-8">
+      <div className="rounded-2xl bg-white/95 p-4">
+        <div className="text-xs tracking-widest text-[color:#3d3d3d]">{stepTitle}</div>
+        <div className="mt-1 text-sm text-[color:#4d4d4d]">{stepHint}</div>
+        {step === 1 && (
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={language === 'no' ? 'Navn på spot' : 'Spot name'} className="mt-3 w-full h-11 rounded-xl border border-[color:#ddd] px-3" />
+        )}
       </div>
-      <button onClick={() => { setParkingLat(breakLat); setParkingLon(breakLon) }} className="mt-2 h-10 rounded-xl border px-3">{language === 'no' ? 'Kopier spot → parkering' : 'Copy break → parking'}</button>
-      <DirectionTriplet label="SWELL" start={swellStart} end={swellEnd} best={swellBest} onChange={(k, v) => k === 'start' ? setSwellStart(v) : k === 'end' ? setSwellEnd(v) : setSwellBest(v)} />
-      <DirectionTriplet label="WIND" start={windStart} end={windEnd} best={windBest} onChange={(k, v) => k === 'start' ? setWindStart(v) : k === 'end' ? setWindEnd(v) : setWindBest(v)} />
-      <button disabled={!canSave} onClick={() => onSave(normalizeCustomSpot({ kind: 'custom', spotId: `custom_${Date.now()}`, label, breakLat, breakLon, parkingLat, parkingLon, swell: { startDeg: swellStart, endDeg: swellEnd, bestDeg: swellBest }, wind: { startDeg: windStart, endDeg: windEnd, bestDeg: windBest } })!)} className="mt-4 w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-50">{language === 'no' ? 'LAGRE' : 'SAVE'}</button>
+    </div>
+    <div className="absolute left-4 right-4 bottom-24 rounded-2xl bg-white/95 p-3">
+      <div className="grid grid-cols-2 gap-2">
+        <input type="number" value={step === 2 ? parkingLat : breakLat} onChange={(e) => step === 2 ? setParkingLat(Number(e.target.value)) : setBreakLat(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+        <input type="number" value={step === 2 ? parkingLon : breakLon} onChange={(e) => step === 2 ? setParkingLon(Number(e.target.value)) : setBreakLon(Number(e.target.value))} className="h-10 rounded-xl border px-3" />
+      </div>
+      {step === 2 && <button onClick={() => { setParkingLat(breakLat); setParkingLon(breakLon) }} className="mt-2 h-10 w-full rounded-xl border px-3">{language === 'no' ? 'Kopier break → parkering' : 'Copy break → parking'}</button>}
+      {step === 3 && <>
+        <DirectionTriplet label="SWELL" start={swellStart} end={swellEnd} best={swellBest} onChange={(k, v) => k === 'start' ? setSwellStart(v) : k === 'end' ? setSwellEnd(v) : setSwellBest(v)} />
+        <DirectionTriplet label="WIND" start={windStart} end={windEnd} best={windBest} onChange={(k, v) => k === 'start' ? setWindStart(v) : k === 'end' ? setWindEnd(v) : setWindBest(v)} />
+      </>}
+    </div>
+    <div className="absolute bottom-0 left-0 right-0 p-4 pb-6">
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={onClose} className="h-12 rounded-2xl border border-white/60 bg-black/40 text-white">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
+        <button
+          disabled={!canSave}
+          onClick={() => {
+            if (step < 3) return setStep((step + 1) as 2 | 3)
+            const payload = normalizeCustomSpot({ kind: 'custom', spotId: `custom_${Date.now()}`, label, breakLat, breakLon, parkingLat, parkingLon, swell: { startDeg: swellStart, endDeg: swellEnd, bestDeg: swellBest }, wind: { startDeg: windStart, endDeg: windEnd, bestDeg: windBest } })
+            if (payload) onSave(payload)
+          }}
+          className="h-12 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white disabled:opacity-50"
+        >
+          {step < 3 ? (language === 'no' ? 'NESTE' : 'NEXT') : (language === 'no' ? 'LAGRE' : 'SAVE')}
+        </button>
+      </div>
     </div>
   </div>
 }
