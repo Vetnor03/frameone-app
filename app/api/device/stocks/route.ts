@@ -33,6 +33,16 @@ type StockConfigItem = {
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 type CandleFetchStatus = 'ok' | 'http_error' | 'no_data' | 'invalid_payload' | 'exception'
 type YahooFetchStatus = 'ok' | 'http_error' | 'invalid_payload' | 'exception'
+type YahooQuote = {
+  price: number | null
+  change: number | null
+  changePercent: number | null
+  previousClose: number | null
+  open: number | null
+  high: number | null
+  low: number | null
+  asOf: string | null
+}
 const SERIES_CAPS: Record<StockChartRange, number> = {
   day: 32,
   week: 40,
@@ -275,6 +285,71 @@ async function fetchYahooCandles(symbol: string, chartRange: StockChartRange) {
   }
 }
 
+async function fetchYahooQuote(symbol: string): Promise<YahooQuote | null> {
+  const url =
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+    '?range=1d&interval=1m'
+  const resp = await fetch(url, {
+    cache: 'no-store',
+    headers: { 'user-agent': 'Mozilla/5.0' },
+  })
+  if (!resp.ok) return null
+  const raw = await resp.text().catch(() => '')
+  let body: {
+    chart?: {
+      result?: Array<{
+        meta?: {
+          regularMarketPrice?: number
+          chartPreviousClose?: number
+          previousClose?: number
+          regularMarketTime?: number
+        }
+        indicators?: {
+          quote?: Array<{
+            open?: Array<number | null>
+            high?: Array<number | null>
+            low?: Array<number | null>
+            close?: Array<number | null>
+          }>
+        }
+      }>
+    }
+  }
+  try {
+    body = (raw ? JSON.parse(raw) : {}) as typeof body
+  } catch {
+    return null
+  }
+  const result = Array.isArray(body?.chart?.result) ? body.chart?.result?.[0] : null
+  const meta = result?.meta
+  const quote = result?.indicators?.quote?.[0]
+  const closes = Array.isArray(quote?.close) ? quote?.close ?? [] : []
+  const opens = Array.isArray(quote?.open) ? quote?.open ?? [] : []
+  const highs = Array.isArray(quote?.high) ? quote?.high ?? [] : []
+  const lows = Array.isArray(quote?.low) ? quote?.low ?? [] : []
+  const lastFinite = (arr: Array<number | null>) => {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const n = toNumber(arr[i])
+      if (n != null) return n
+    }
+    return null
+  }
+  const price = toNumber(meta?.regularMarketPrice) ?? lastFinite(closes)
+  const previousClose = toNumber(meta?.chartPreviousClose) ?? toNumber(meta?.previousClose)
+  const change = price != null && previousClose != null ? price - previousClose : null
+  const changePercent = change != null && previousClose ? (change / previousClose) * 100 : null
+  return {
+    price,
+    change,
+    changePercent,
+    previousClose,
+    open: lastFinite(opens),
+    high: lastFinite(highs),
+    low: lastFinite(lows),
+    asOf: toIsoOrNull(meta?.regularMarketTime),
+  }
+}
+
 function makeSignature(symbol: string, price: number | null, change: number | null, changePercent: number | null) {
   const p = price == null ? '' : String(price)
   const c = change == null ? '' : String(change)
@@ -346,25 +421,23 @@ export async function GET(req: Request) {
     }
 
     const apiKey = process.env.FINNHUB_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Missing FINNHUB_API_KEY' }, { status: 500 })
-    }
 
     const nowSec = Math.floor(Date.now() / 1000)
     const resolvedSymbol = symbol || name
 
-    const quoteRaw = await fetchFinnhubQuote(resolvedSymbol, apiKey)
+    const quoteRaw = apiKey ? await fetchFinnhubQuote(resolvedSymbol, apiKey) : null
+    const yahooQuote = quoteRaw ? null : await fetchYahooQuote(resolvedSymbol)
 
     const currency = normalizeCurrency(cfg.currency) || 'USD'
 
-    const price = toNumber(quoteRaw?.c)
-    const change = toNumber(quoteRaw?.d)
-    const changePercent = toNumber(quoteRaw?.dp)
-    const previousClose = toNumber(quoteRaw?.pc)
-    const open = toNumber(quoteRaw?.o)
-    const high = toNumber(quoteRaw?.h)
-    const low = toNumber(quoteRaw?.l)
-    const asOf = toIsoOrNull(quoteRaw?.t)
+    const price = toNumber(quoteRaw?.c) ?? yahooQuote?.price ?? null
+    const change = toNumber(quoteRaw?.d) ?? yahooQuote?.change ?? null
+    const changePercent = toNumber(quoteRaw?.dp) ?? yahooQuote?.changePercent ?? null
+    const previousClose = toNumber(quoteRaw?.pc) ?? yahooQuote?.previousClose ?? null
+    const open = toNumber(quoteRaw?.o) ?? yahooQuote?.open ?? null
+    const high = toNumber(quoteRaw?.h) ?? yahooQuote?.high ?? null
+    const low = toNumber(quoteRaw?.l) ?? yahooQuote?.low ?? null
+    const asOf = toIsoOrNull(quoteRaw?.t) ?? yahooQuote?.asOf ?? null
 
     const candleStatus: Record<StockChartRange, { status: CandleFetchStatus; reason: string }> = {
       day: { status: 'exception', reason: 'Not requested' },
@@ -375,6 +448,7 @@ export async function GET(req: Request) {
 
     let day: SeriesPoint[] = []
     try {
+      if (!apiKey) throw new Error('Missing FINNHUB_API_KEY')
       const result = await fetchCandles(resolvedSymbol, '30', nowSec - 36 * 3600, nowSec, apiKey)
       day = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.day)
       candleStatus.day = { status: result.status, reason: result.reason }
@@ -388,6 +462,7 @@ export async function GET(req: Request) {
 
     let week: SeriesPoint[] = []
     try {
+      if (!apiKey) throw new Error('Missing FINNHUB_API_KEY')
       const result = await fetchCandles(resolvedSymbol, '60', nowSec - 7 * 24 * 3600, nowSec, apiKey)
       week = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.week)
       candleStatus.week = { status: result.status, reason: result.reason }
@@ -401,6 +476,7 @@ export async function GET(req: Request) {
 
     let month: SeriesPoint[] = []
     try {
+      if (!apiKey) throw new Error('Missing FINNHUB_API_KEY')
       const result = await fetchCandles(resolvedSymbol, 'D', nowSec - 45 * 24 * 3600, nowSec, apiKey)
       month = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.month)
       candleStatus.month = { status: result.status, reason: result.reason }
@@ -414,6 +490,7 @@ export async function GET(req: Request) {
 
     let year: SeriesPoint[] = []
     try {
+      if (!apiKey) throw new Error('Missing FINNHUB_API_KEY')
       const result = await fetchCandles(resolvedSymbol, 'W', nowSec - 500 * 24 * 3600, nowSec, apiKey)
       year = clampPoints(sanitizeSeries(result.points), SERIES_CAPS.year)
       candleStatus.year = { status: result.status, reason: result.reason }
