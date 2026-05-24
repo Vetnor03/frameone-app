@@ -14068,9 +14068,17 @@ function RealTileMap({
       setViewport({ w: rootRef.current.clientWidth || 390, h: rootRef.current.clientHeight || 844 })
     }
     updateSize()
+    const raf1 = window.requestAnimationFrame(updateSize)
+    const raf2 = window.requestAnimationFrame(() => window.requestAnimationFrame(updateSize))
     window.addEventListener('resize', updateSize)
+    window.visualViewport?.addEventListener('resize', updateSize)
+    window.visualViewport?.addEventListener('scroll', updateSize)
     return () => {
       window.removeEventListener('resize', updateSize)
+      window.visualViewport?.removeEventListener('resize', updateSize)
+      window.visualViewport?.removeEventListener('scroll', updateSize)
+      window.cancelAnimationFrame(raf1)
+      window.cancelAnimationFrame(raf2)
       if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current)
     }
   }, [])
@@ -14084,10 +14092,11 @@ function RealTileMap({
   const halfH = viewportH / (2 * zoomScale)
   const left = world.x - halfW
   const top = world.y - halfH
-  const firstX = Math.floor(left / TILE)
-  const firstY = Math.floor(top / TILE)
-  const lastX = Math.floor((left + viewportW / zoomScale) / TILE)
-  const lastY = Math.floor((top + viewportH / zoomScale) / TILE)
+  const tileBuffer = 1
+  const firstX = Math.floor(left / TILE) - tileBuffer
+  const firstY = Math.floor(top / TILE) - tileBuffer
+  const lastX = Math.floor((left + viewportW / zoomScale) / TILE) + tileBuffer
+  const lastY = Math.floor((top + viewportH / zoomScale) / TILE) + tileBuffer
   const maxIdx = 2 ** tileZoom
 
   const tiles: React.ReactNode[] = []
