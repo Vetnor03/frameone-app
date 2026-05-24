@@ -13808,7 +13808,7 @@ function SurfSpotSheet({
             onClick={() => setWizardOpen(true)}
             className="mb-3 h-11 w-full rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-sm font-semibold"
           >
-            + {language === 'no' ? 'Legg til ny surf spot' : 'Add new surf spot'}
+            + {language === 'no' ? 'Legg til hemmelig spot' : 'Add secret spot'}
           </button>
           <input
             ref={inputRef}
@@ -13944,25 +13944,47 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
     if (!resp.ok) return
     const json: any = await resp.json()
     onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}` })
+    onClose()
   }
 
   return <div className="fixed inset-0 z-[60] bg-[#0c1117] flex flex-col">
     <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl bg-black/45 p-4 backdrop-blur-sm border border-white/10">
-      <div className="text-xs tracking-[0.14em] text-white/80">{language === 'no' ? 'LEGG TIL SURF SPOT' : 'ADD SURF SPOT'}</div>
+      <div className="text-xs tracking-[0.14em] text-white/80">{language === 'no' ? 'LEGG TIL HEMMELIG SPOT' : 'ADD SECRET SPOT'}</div>
+      <div className="mt-1 text-[11px] text-white/70">
+        {language === 'no' ? 'Kun synlig for deg — denne spoten deles ikke med andre.' : 'Private to your account — this spot is not shared with other users.'}
+      </div>
       {step === 1 ? <><input value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="mt-2 w-full h-11 rounded-xl border border-white/20 bg-black/35 px-3 text-white" />
         <div className="mt-3 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
       {step === 2 ? <><div className="mt-2 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
       {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
-      <RealTileMap center={step === 3 ? parkingCenter : spotCenter} onCenterChange={step === 3 ? setParkingCenter : setSpotCenter} showPinnedMarker={step === 3} />
+      <RealTileMap
+        center={step === 3 ? parkingCenter : spotCenter}
+        onCenterChange={step === 3 ? setParkingCenter : setSpotCenter}
+        markerType={step === 3 ? 'parking' : 'spot'}
+      />
       {step === 1 ? <DirectionDial start={swellStart} end={swellEnd} main={swellMain} onStart={setSwellStart} onEnd={setSwellEnd} onMain={(v) => { setSwellArrowMoved(true); setSwellMain(v) }} /> : null}
       {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
 
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(28px,calc(env(safe-area-inset-bottom)+16px))]">
       {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
-      {step < 3 ? <button className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={() => setStep((step + 1) as 1 | 2 | 3)}>{language === 'no' ? 'Neste' : 'Next'}</button> : <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>}
+      {step < 3 ? (
+        <button
+          disabled={step === 1 && !name.trim()}
+          className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed opacity-45 text-[#7caed6]' : 'text-[#2aa3ff]'}`}
+          onClick={() => {
+            if (step === 1 && !name.trim()) return
+            if (step === 2) setParkingCenter(spotCenter)
+            setStep((step + 1) as 1 | 2 | 3)
+          }}
+        >
+          {language === 'no' ? 'Neste' : 'Next'}
+        </button>
+      ) : (
+        <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>
+      )}
     </div>
   </div>
 }
@@ -13970,11 +13992,11 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
 function RealTileMap({
   center,
   onCenterChange,
-  showPinnedMarker = false,
+  markerType = 'spot',
 }: {
   center: { lat: number; lon: number }
   onCenterChange: (v: { lat: number; lon: number }) => void
-  showPinnedMarker?: boolean
+  markerType?: 'spot' | 'parking'
 }) {
   const TILE = 256
   const [zoom, setZoom] = useState(14)
@@ -14076,7 +14098,20 @@ function RealTileMap({
   return <div ref={rootRef} className="absolute inset-0 overflow-hidden bg-[#0a1118] touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
     {tiles}
     <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
-    {showPinnedMarker ? <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full text-[#3ad6d0] text-4xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] pointer-events-none">📍</div> : <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-white bg-[#3ad6d0] shadow-[0_0_0_2px_rgba(0,0,0,0.35)] pointer-events-none" />}
+    {markerType === 'parking' ? (
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+        <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+          <path d="M11.5 22.5V19.2C11.5 18.2 11.8 17.3 12.5 16.5L15 13.7C15.7 12.9 16.6 12.5 17.6 12.5H20.4C21.4 12.5 22.3 12.9 23 13.7L25.5 16.5C26.2 17.3 26.5 18.2 26.5 19.2V22.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="10.5" y="18.5" width="17" height="8.5" rx="3.2" stroke="white" strokeWidth="2" />
+          <line x1="16.2" y1="18.8" x2="16.2" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <line x1="21.8" y1="18.8" x2="21.8" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="14.4" cy="25.1" r="1.5" fill="white" />
+          <circle cx="23.6" cy="25.1" r="1.5" fill="white" />
+        </svg>
+      </div>
+    ) : (
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-white bg-[#3ad6d0] shadow-[0_0_0_2px_rgba(0,0,0,0.35)] pointer-events-none" />
+    )}
   </div>
 }
 
