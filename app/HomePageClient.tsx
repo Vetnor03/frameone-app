@@ -14095,10 +14095,20 @@ function RealTileMap({
     for (let ty = firstY; ty <= lastY; ty += 1) {
       if (ty < 0 || ty >= maxIdx) continue
       const wrappedX = ((tx % maxIdx) + maxIdx) % maxIdx
-      const leftPx = Math.floor((tx * TILE - left) * zoomScale)
-      const topPx = Math.floor((ty * TILE - top) * zoomScale)
-      const tilePx = Math.ceil(TILE * zoomScale) + 1
-      tiles.push(<img key={`${tileZoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: tilePx, height: tilePx, left: leftPx, top: topPx }} />)
+      const leftPx = (tx * TILE - left) * zoomScale
+      const topPx = (ty * TILE - top) * zoomScale
+      const tilePx = TILE * zoomScale
+      const seamOverlap = 1
+      tiles.push(
+        <img
+          key={`${tileZoom}-${tx}-${ty}`}
+          src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${wrappedX}`}
+          alt="Satellite map tile"
+          draggable={false}
+          className="absolute select-none pointer-events-none"
+          style={{ width: tilePx + seamOverlap * 2, height: tilePx + seamOverlap * 2, left: leftPx - seamOverlap, top: topPx - seamOverlap }}
+        />,
+      )
     }
   }
 
