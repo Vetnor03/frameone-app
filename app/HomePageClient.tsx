@@ -14051,7 +14051,7 @@ function RealTileMap({
       const dist = Math.hypot(vals[0].x - vals[1].x, vals[0].y - vals[1].y)
       if (!pinchRef.current) pinchRef.current = { dist, zoomStart: zoom }
       const delta = Math.log2(Math.max(0.2, dist / pinchRef.current.dist))
-      const next = Math.max(2, Math.min(18, Math.round(pinchRef.current.zoomStart + delta)))
+      const next = Math.max(2, Math.min(18, pinchRef.current.zoomStart + delta))
       if (next !== zoom) setZoom(next)
     }
   }
@@ -14077,21 +14077,28 @@ function RealTileMap({
 
   const viewportW = viewport.w
   const viewportH = viewport.h
-  const world = project(localCenter.lat, localCenter.lon, zoom)
-  const left = world.x - viewportW / 2
-  const top = world.y - viewportH / 2
+  const tileZoom = Math.max(2, Math.min(18, Math.floor(zoom)))
+  const zoomScale = 2 ** (zoom - tileZoom)
+  const world = project(localCenter.lat, localCenter.lon, tileZoom)
+  const halfW = viewportW / (2 * zoomScale)
+  const halfH = viewportH / (2 * zoomScale)
+  const left = world.x - halfW
+  const top = world.y - halfH
   const firstX = Math.floor(left / TILE)
   const firstY = Math.floor(top / TILE)
-  const lastX = Math.floor((left + viewportW) / TILE)
-  const lastY = Math.floor((top + viewportH) / TILE)
-  const maxIdx = 2 ** zoom
+  const lastX = Math.floor((left + viewportW / zoomScale) / TILE)
+  const lastY = Math.floor((top + viewportH / zoomScale) / TILE)
+  const maxIdx = 2 ** tileZoom
 
   const tiles: React.ReactNode[] = []
   for (let tx = firstX; tx <= lastX; tx += 1) {
     for (let ty = firstY; ty <= lastY; ty += 1) {
       if (ty < 0 || ty >= maxIdx) continue
       const wrappedX = ((tx % maxIdx) + maxIdx) % maxIdx
-      tiles.push(<img key={`${zoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: TILE, height: TILE, left: tx * TILE - left, top: ty * TILE - top }} />)
+      const leftPx = Math.floor((tx * TILE - left) * zoomScale)
+      const topPx = Math.floor((ty * TILE - top) * zoomScale)
+      const tilePx = Math.ceil(TILE * zoomScale) + 1
+      tiles.push(<img key={`${tileZoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: tilePx, height: tilePx, left: leftPx, top: topPx }} />)
     }
   }
 
@@ -14128,14 +14135,14 @@ function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: nu
     const y = clientY - rect.top - center
     setter(normalizeAngle(Math.atan2(y, x) * 180 / Math.PI + 90))
   }
-  return <div id="direction-dial" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ width: size, height: size }}>
-    <svg width={size} height={size}>
+  return <div id="direction-dial" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{ width: size, height: size }}>
+    <svg width={size} height={size} className="pointer-events-none">
       <circle cx={center} cy={center} r={r} stroke="rgba(255,255,255,.55)" strokeWidth="2" fill="none" />
       <path d={`M ${center} ${center} L ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 1 ${e.x} ${e.y} Z`} fill="rgba(42,211,201,.35)" />
       <line x1={center} y1={center} x2={m.x} y2={m.y} stroke="#3ad6d0" strokeWidth="4" />
-      <circle cx={s.x} cy={s.y} r="10" fill="#3ad6d0" onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onStart); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
-      <circle cx={e.x} cy={e.y} r="10" fill="#3ad6d0" onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onEnd); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
-      <circle cx={m.x} cy={m.y} r="11" fill="#2aa3ff" onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, (v) => onMain(clampAngleToSector(v, start, end))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
+      <circle cx={s.x} cy={s.y} r="10" fill="#3ad6d0" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onStart); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
+      <circle cx={e.x} cy={e.y} r="10" fill="#3ad6d0" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onEnd); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
+      <circle cx={m.x} cy={m.y} r="11" fill="#2aa3ff" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, (v) => onMain(clampAngleToSector(v, start, end))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
     </svg>
   </div>
 }
