@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
+import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -13909,17 +13910,31 @@ function WeatherLocationRow({
 function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [name, setName] = useState('')
-  const [lat, setLat] = useState(58.7)
-  const [lon, setLon] = useState(5.55)
-  const [parkingLat, setParkingLat] = useState(58.7)
-  const [parkingLon, setParkingLon] = useState(5.55)
+  const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 })
+  const [parkingOffset, setParkingOffset] = useState({ x: 0, y: 0 })
   const [saving, setSaving] = useState(false)
   const [swellStart, setSwellStart] = useState(315)
   const [swellEnd, setSwellEnd] = useState(45)
   const [swellMain, setSwellMain] = useState(0)
+  const [swellArrowMoved, setSwellArrowMoved] = useState(false)
   const [windStart, setWindStart] = useState(45)
   const [windEnd, setWindEnd] = useState(135)
   const [windMain, setWindMain] = useState(90)
+  const [windArrowMoved, setWindArrowMoved] = useState(false)
+
+  const lat = 58.7 - mapOffset.y * 0.00035
+  const lon = 5.55 - mapOffset.x * 0.00045
+  const parkingLat = 58.7 - parkingOffset.y * 0.00035
+  const parkingLon = 5.55 - parkingOffset.x * 0.00045
+
+  useEffect(() => {
+    if (!swellArrowMoved) setSwellMain(sectorMidpoint(swellStart, swellEnd))
+    else setSwellMain((curr) => clampAngleToSector(curr, swellStart, swellEnd))
+  }, [swellStart, swellEnd, swellArrowMoved])
+  useEffect(() => {
+    if (!windArrowMoved) setWindMain(sectorMidpoint(windStart, windEnd))
+    else setWindMain((curr) => clampAngleToSector(curr, windStart, windEnd))
+  }, [windStart, windEnd, windArrowMoved])
 
   async function save() {
     setSaving(true)
@@ -13931,18 +13946,65 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
     onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}` })
   }
 
-  return <div className="fixed inset-0 z-[60] bg-[color:var(--sheet-bg)] p-5 flex flex-col">
-    <div className="text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'LEGG TIL SURF SPOT' : 'ADD SURF SPOT'}</div>
-    <div className="mt-3 text-sm">{step === 1 ? '1. Move map center (lat/lon here).\n2. Set swell sector.\n3. Set main swell direction.' : step === 2 ? '1. Set good wind sector.\n2. Set best wind direction.' : '1. Move to closest parking spot.'}</div>
-    <div className="mt-4 space-y-2">
-      {step === 1 ? <><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Spot name" className="w-full h-11 rounded-xl border px-3" /><input type="number" value={lat} onChange={(e) => setLat(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={lon} onChange={(e) => setLon(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={swellStart} onChange={(e) => setSwellStart(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={swellEnd} onChange={(e) => setSwellEnd(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={swellMain} onChange={(e) => setSwellMain(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /></> : null}
-      {step === 2 ? <><input type="number" value={windStart} onChange={(e) => setWindStart(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={windEnd} onChange={(e) => setWindEnd(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={windMain} onChange={(e) => setWindMain(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /></> : null}
-      {step === 3 ? <><input type="number" value={parkingLat} onChange={(e) => setParkingLat(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /><input type="number" value={parkingLon} onChange={(e) => setParkingLon(Number(e.target.value))} className="w-full h-11 rounded-xl border px-3" /></> : null}
+  return <div className="fixed inset-0 z-[60] bg-[#0c1117] flex flex-col">
+    <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl bg-black/45 p-4 backdrop-blur-sm border border-white/10">
+      <div className="text-xs tracking-[0.14em] text-white/80">{language === 'no' ? 'LEGG TIL SURF SPOT' : 'ADD SURF SPOT'}</div>
+      {step === 1 ? <><input value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="mt-2 w-full h-11 rounded-xl border border-white/20 bg-black/35 px-3 text-white" />
+        <div className="mt-3 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
+      {step === 2 ? <><div className="mt-2 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
+      {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
+    </div>
+    <div className="flex-1 relative">
+      {(step === 1 || step === 3) ? <FauxSatelliteMap offset={step === 1 ? mapOffset : parkingOffset} onOffsetChange={step === 1 ? setMapOffset : setParkingOffset} /> : null}
+      {step === 1 ? <DirectionDial start={swellStart} end={swellEnd} main={swellMain} onStart={setSwellStart} onEnd={setSwellEnd} onMain={(v) => { setSwellArrowMoved(true); setSwellMain(v) }} /> : null}
+      {step === 2 ? <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#193946_0%,#10222d_55%,#09131c_100%)]"><DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /></div> : null}
+      {step === 3 ? <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#3ad6d0] text-4xl">📍</div> : null}
     </div>
     <div className="mt-auto grid grid-cols-2 gap-3">
       {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
       {step < 3 ? <button className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={() => setStep((step + 1) as 1 | 2 | 3)}>{language === 'no' ? 'Neste' : 'Next'}</button> : <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>}
     </div>
+  </div>
+}
+
+function FauxSatelliteMap({ offset, onOffsetChange }: { offset: { x: number; y: number }; onOffsetChange: (v: { x: number; y: number }) => void }) {
+  const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
+  return <div
+    onPointerDown={(e) => { dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId) }}
+    onPointerMove={(e) => {
+      if (!dragRef.current) return
+      const dx = e.clientX - dragRef.current.x
+      const dy = e.clientY - dragRef.current.y
+      onOffsetChange({ x: dragRef.current.ox + dx, y: dragRef.current.oy + dy })
+    }}
+    onPointerUp={() => { dragRef.current = null }}
+    className="absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_30%_25%,#274356,#132330_40%,#0a1118_72%,#05080c_100%)]"
+    style={{ backgroundPosition: `${offset.x / 3}px ${offset.y / 3}px` }}
+  ><div className="absolute inset-0 opacity-25 bg-[linear-gradient(45deg,transparent_45%,rgba(255,255,255,.07)_50%,transparent_55%)] bg-[length:28px_28px]" /></div>
+}
+
+function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: number; end: number; main: number; onStart: (v: number) => void; onEnd: (v: number) => void; onMain: (v: number) => void }) {
+  const size = 290
+  const center = size / 2
+  const r = 115
+  const toXY = (deg: number) => { const rad = (normalizeAngle(deg) - 90) * Math.PI / 180; return { x: center + Math.cos(rad) * r, y: center + Math.sin(rad) * r } }
+  const s = toXY(start); const e = toXY(end); const m = toXY(main)
+  const largeArc = ((end - start + 360) % 360) > 180 ? 1 : 0
+  const move = (clientX: number, clientY: number, setter: (v: number) => void) => {
+    const rect = (document.getElementById('direction-dial') as HTMLElement).getBoundingClientRect()
+    const x = clientX - rect.left - center
+    const y = clientY - rect.top - center
+    setter(normalizeAngle(Math.atan2(y, x) * 180 / Math.PI + 90))
+  }
+  return <div id="direction-dial" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ width: size, height: size }}>
+    <svg width={size} height={size}>
+      <circle cx={center} cy={center} r={r} stroke="rgba(255,255,255,.55)" strokeWidth="2" fill="none" />
+      <path d={`M ${center} ${center} L ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 1 ${e.x} ${e.y} Z`} fill="rgba(42,211,201,.35)" />
+      <line x1={center} y1={center} x2={m.x} y2={m.y} stroke="#3ad6d0" strokeWidth="4" />
+      <circle cx={s.x} cy={s.y} r="10" fill="#3ad6d0" onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onStart); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
+      <circle cx={e.x} cy={e.y} r="10" fill="#3ad6d0" onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onEnd); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
+      <circle cx={m.x} cy={m.y} r="11" fill="#2aa3ff" onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, (v) => onMain(clampAngleToSector(v, start, end))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
+    </svg>
   </div>
 }
 
