@@ -13955,14 +13955,32 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
       {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
-      <RealTileMap center={step === 3 ? parkingCenter : spotCenter} onCenterChange={step === 3 ? setParkingCenter : setSpotCenter} showPinnedMarker={step === 3} />
+      <RealTileMap
+        center={step === 3 ? parkingCenter : spotCenter}
+        onCenterChange={step === 3 ? setParkingCenter : setSpotCenter}
+        markerType={step === 3 ? 'parking' : 'spot'}
+      />
       {step === 1 ? <DirectionDial start={swellStart} end={swellEnd} main={swellMain} onStart={setSwellStart} onEnd={setSwellEnd} onMain={(v) => { setSwellArrowMoved(true); setSwellMain(v) }} /> : null}
       {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
 
     </div>
     <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
       {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
-      {step < 3 ? <button className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={() => setStep((step + 1) as 1 | 2 | 3)}>{language === 'no' ? 'Neste' : 'Next'}</button> : <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>}
+      {step < 3 ? (
+        <button
+          disabled={step === 1 && !name.trim()}
+          className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed opacity-45 text-[#7caed6]' : 'text-[#2aa3ff]'}`}
+          onClick={() => {
+            if (step === 1 && !name.trim()) return
+            if (step === 2) setParkingCenter(spotCenter)
+            setStep((step + 1) as 1 | 2 | 3)
+          }}
+        >
+          {language === 'no' ? 'Neste' : 'Next'}
+        </button>
+      ) : (
+        <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>
+      )}
     </div>
   </div>
 }
@@ -13970,11 +13988,11 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
 function RealTileMap({
   center,
   onCenterChange,
-  showPinnedMarker = false,
+  markerType = 'spot',
 }: {
   center: { lat: number; lon: number }
   onCenterChange: (v: { lat: number; lon: number }) => void
-  showPinnedMarker?: boolean
+  markerType?: 'spot' | 'parking'
 }) {
   const TILE = 256
   const [zoom, setZoom] = useState(14)
@@ -14076,7 +14094,19 @@ function RealTileMap({
   return <div ref={rootRef} className="absolute inset-0 overflow-hidden bg-[#0a1118] touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
     {tiles}
     <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
-    {showPinnedMarker ? <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full text-[#3ad6d0] text-4xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] pointer-events-none">📍</div> : <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-white bg-[#3ad6d0] shadow-[0_0_0_2px_rgba(0,0,0,0.35)] pointer-events-none" />}
+    {markerType === 'parking' ? (
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+        <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+          <rect x="8.5" y="13" width="21" height="10" rx="3.5" stroke="white" strokeWidth="2" />
+          <path d="M12 13L14.5 10H23.5L26 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="14" cy="24.5" r="2.25" fill="white" />
+          <circle cx="24" cy="24.5" r="2.25" fill="white" />
+          <path d="M10 18H28" stroke="white" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </div>
+    ) : (
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-white bg-[#3ad6d0] shadow-[0_0_0_2px_rgba(0,0,0,0.35)] pointer-events-none" />
+    )}
   </div>
 }
 
