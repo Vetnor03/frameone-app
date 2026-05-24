@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS } from '@/app/lib/surf/spots'
+import { createClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,6 +11,19 @@ const TODAYS_BEST_ID = '__todays_best__'
 type SpotItem = {
   spotId: string
   label: string
+}
+
+
+
+async function fetchCustom(req: Request) {
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+  if (!token) return [] as SpotItem[]
+  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const { data: userData } = await sb.auth.getUser(token)
+  const userId = userData.user?.id
+  if (!userId) return [] as SpotItem[]
+  const { data } = await sb.from('user_custom_surf_spots').select('id,name').eq('user_id', userId)
+  return (data || []).map((r:any)=>({ spotId: `custom:${r.id}`, label: `${String(r.name||'Custom spot')} · Custom` }))
 }
 
 function uniqItems(list: SpotItem[]) {
@@ -30,7 +44,7 @@ function uniqItems(list: SpotItem[]) {
   return out
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const items: SpotItem[] = Object.values(SURF_SPOTS)
       .filter(Boolean)
@@ -40,7 +54,8 @@ export async function GET() {
       }))
       .filter((s) => s.spotId && s.label)
 
-    const sorted = uniqItems(items).sort((a, b) => a.label.localeCompare(b.label, 'nb'))
+    const merged = [...items, ...(await fetchCustom(req))]
+    const sorted = uniqItems(merged).sort((a, b) => a.label.localeCompare(b.label, 'nb'))
 
     const cleaned = [
       { spotId: TODAYS_BEST_ID, label: TODAYS_BEST_LABEL },

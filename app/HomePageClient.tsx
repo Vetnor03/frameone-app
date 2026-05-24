@@ -6622,6 +6622,8 @@ function MyFramesSection({
   onFramesChanged: (frames: MemberRow[]) => void
 }) {
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
   const [shareOpen, setShareOpen] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCode, setShareCode] = useState('')
@@ -7656,6 +7658,8 @@ function CountdownModuleSettingsTab({
 }) {
   const [items, setItems] = useState<CountdownItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<CountdownItem | null>(null)
@@ -8614,6 +8618,8 @@ function StockSearchSheet({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<StockSearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
   const [manualOpen, setManualOpen] = useState(false)
   const [manualSymbol, setManualSymbol] = useState(initialSymbol)
   const [manualName, setManualName] = useState(initialName)
@@ -8661,6 +8667,17 @@ function StockSearchSheet({
             className="w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
           />
         </div>
+
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="mt-4 w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs"
+        >
+          {adding ? (language === 'no' ? 'LUKK NY SPOT' : 'CLOSE NEW SPOT') : (language === 'no' ? 'LEGG TIL SURFSPOT' : 'ADD SURF SPOT')}
+        </button>
+
+        {adding && (
+          <CustomSurfSpotWizard language={language} draft={draft} setDraft={setDraft} onCancel={() => setAdding(false)} onSaved={(picked) => { setAdding(false); onPicked(picked); }} />
+        )}
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
           {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
@@ -8989,6 +9006,8 @@ function GroceriesModuleSettingsTab({
   const t = tx(language)
   const [items, setItems] = useState<GroceryItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
   const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>([])
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -10724,6 +10743,8 @@ function RemindersModuleSettingsTab({
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
@@ -12521,6 +12542,8 @@ function SurfExperienceCard({
 }) {
   const [items, setItems] = useState<SurfExperienceRowData[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
   const [latestOpen, setLatestOpen] = useState(false)
   const [latestListMaxHeight, setLatestListMaxHeight] = useState<number | null>(null)
   const latestListRef = useRef<HTMLDivElement | null>(null)
@@ -13678,6 +13701,8 @@ type SpotItem = {
   label: string
 }
 
+type CustomDraft = { name: string; lat: number; lon: number; parking_lat: number; parking_lon: number; swell_sector_start_deg: number; swell_sector_end_deg: number; swell_main_deg: number; wind_sector_start_deg: number; wind_sector_end_deg: number; wind_main_deg: number }
+
 function SurfSpotSheet({
   language,
   title,
@@ -13694,6 +13719,8 @@ function SurfSpotSheet({
   const [query, setQuery] = useState('')
   const [spots, setSpots] = useState<SpotItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -13780,6 +13807,17 @@ function SurfSpotSheet({
           />
         </div>
 
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="mt-4 w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs"
+        >
+          {adding ? (language === 'no' ? 'LUKK NY SPOT' : 'CLOSE NEW SPOT') : (language === 'no' ? 'LEGG TIL SURFSPOT' : 'ADD SURF SPOT')}
+        </button>
+
+        {adding && (
+          <CustomSurfSpotWizard language={language} draft={draft} setDraft={setDraft} onCancel={() => setAdding(false)} onSaved={(picked) => { setAdding(false); onPicked(picked); }} />
+        )}
+
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
                   {loading ? (language === 'no' ? 'LASTER…' : 'LOADING…') : filtered.length > 0 ? (language === 'no' ? 'SPOTS' : 'SPOTS') : (language === 'no' ? 'INGEN SPOTS' : 'NO SPOTS')}
         </div>
@@ -13806,6 +13844,28 @@ function SurfSpotSheet({
       </div>
     </div>
   )
+}
+
+
+function CustomSurfSpotWizard({ language, draft, setDraft, onCancel, onSaved }: { language: AppLanguage; draft: CustomDraft; setDraft: React.Dispatch<React.SetStateAction<CustomDraft>>; onCancel: () => void; onSaved: (cfgPatch: { spot: string; spotId: string }) => void }) {
+  const [step, setStep] = useState<1|2|3>(1)
+  async function save() {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) return
+    const resp = await fetch('/api/surf/custom-spots', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(draft) })
+    const data:any = await resp.json()
+    if (!resp.ok) return
+    onSaved({ spot: `${data.item.name} · Custom`, spotId: `custom:${data.item.id}` })
+  }
+  return <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] p-3 text-sm">
+    <div className="text-[color:var(--fg-80)] mb-2">{step===1?'Step 1 — Spot + Swell':step===2?'Step 2 — Wind':'Step 3 — Parking'}</div>
+    {step===1 && <div className="space-y-2"> <input value={draft.name} onChange={(e)=>setDraft(d=>({...d,name:e.target.value}))} placeholder={language==='no'?'Spotnavn':'Spot name'} className="w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3"/> </div>}
+    <div className="mt-3 flex justify-between">
+      <button onClick={step===1?onCancel:()=>setStep((step-1) as any)} className="h-9 px-3 rounded-xl border border-[color:var(--bd-15)]">{step===1?'Cancel':'Back'}</button>
+      <button onClick={step<3?()=>setStep((step+1) as any):save} className="h-9 px-3 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]">{step<3?'Next':'Save'}</button>
+    </div>
+  </div>
 }
 
 function WeatherLocationRow({
@@ -13870,6 +13930,8 @@ function WeatherLocationSheet({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<CustomDraft>({ name: '', lat: 58.8, lon: 5.5, parking_lat: 58.8, parking_lon: 5.5, swell_sector_start_deg: 300, swell_sector_end_deg: 40, swell_main_deg: 350, wind_sector_start_deg: 40, wind_sector_end_deg: 140, wind_main_deg: 90 })
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -13943,6 +14005,17 @@ function WeatherLocationSheet({
             className="w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
           />
         </div>
+
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="mt-4 w-full h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-xs"
+        >
+          {adding ? (language === 'no' ? 'LUKK NY SPOT' : 'CLOSE NEW SPOT') : (language === 'no' ? 'LEGG TIL SURFSPOT' : 'ADD SURF SPOT')}
+        </button>
+
+        {adding && (
+          <CustomSurfSpotWizard language={language} draft={draft} setDraft={setDraft} onCancel={() => setAdding(false)} onSaved={(picked) => { setAdding(false); onPicked(picked); }} />
+        )}
 
         <div className="mt-3 text-xs tracking-widest text-[color:var(--fg-40)]">
                   {loading ? (language === 'no' ? 'SØKER…' : 'SEARCHING…') : results.length > 0 ? (language === 'no' ? 'RESULTATER' : 'RESULTS') : query.trim().length >= 2 ? (language === 'no' ? 'INGEN RESULTATER' : 'NO RESULTS') : ''}
