@@ -13999,8 +13999,9 @@ function RealTileMap({
   markerType?: 'spot' | 'parking'
 }) {
   const TILE = 256
-  const [zoom, setZoom] = useState(14)
+  const [zoom, setZoom] = useState(5.8)
   const [localCenter, setLocalCenter] = useState(center)
+  const localCenterRef = useRef(center)
   const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
   const clampLat = (lat: number) => Math.max(-85.0511, Math.min(85.0511, lat))
   const project = (lat: number, lon: number, z: number) => {
@@ -14024,6 +14025,11 @@ function RealTileMap({
   const [viewport, setViewport] = useState({ w: 390, h: 844 })
   const rafRef = useRef<number | null>(null)
 
+  const updateCenter = (nextCenter: { lat: number; lon: number }) => {
+    localCenterRef.current = nextCenter
+    setLocalCenter(nextCenter)
+  }
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     e.currentTarget.setPointerCapture?.(e.pointerId)
@@ -14037,7 +14043,7 @@ function RealTileMap({
       const dy = e.clientY - prev.y
       const c = project(localCenter.lat, localCenter.lon, zoom)
       const nextCenter = unproject(c.x - dx, c.y - dy, zoom)
-      setLocalCenter(nextCenter)
+      updateCenter(nextCenter)
       if (rafRef.current == null) {
         rafRef.current = window.requestAnimationFrame(() => {
           rafRef.current = null
@@ -14047,21 +14053,58 @@ function RealTileMap({
       return
     }
     if (pointers.current.size === 2) {
-      const vals = [...pointers.current.values()]
-      const dist = Math.hypot(vals[0].x - vals[1].x, vals[0].y - vals[1].y)
-      if (!pinchRef.current) pinchRef.current = { dist, zoomStart: zoom }
-      const delta = Math.log2(Math.max(0.2, dist / pinchRef.current.dist))
-      const next = Math.max(2, Math.min(18, Math.round(pinchRef.current.zoomStart + delta)))
-      if (next !== zoom) setZoom(next)
+      const vals = [...pointers.current.entries()]
+      const [first, second] = vals
+      const p1Prev = first[0] === e.pointerId ? prev : first[1]
+      const p2Prev = second[0] === e.pointerId ? prev : second[1]
+      const p1Next = first[1]
+      const p2Next = second[1]
+      const prevDist = Math.hypot(p1Prev.x - p2Prev.x, p1Prev.y - p2Prev.y)
+      const nextDist = Math.hypot(p1Next.x - p2Next.x, p1Next.y - p2Next.y)
+      if (!pinchRef.current) pinchRef.current = { dist: prevDist, zoomStart: zoom }
+      const delta = Math.log2(Math.max(0.2, nextDist / pinchRef.current.dist))
+      const nextZoom = Math.max(2, Math.min(18, pinchRef.current.zoomStart + delta))
+
+      const prevMidX = (p1Prev.x + p2Prev.x) / 2
+      const prevMidY = (p1Prev.y + p2Prev.y) / 2
+      const nextMidX = (p1Next.x + p2Next.x) / 2
+      const nextMidY = (p1Next.y + p2Next.y) / 2
+      const rootRect = rootRef.current.getBoundingClientRect()
+      const anchorX = nextMidX - rootRect.left
+      const anchorY = nextMidY - rootRect.top
+
+      const currentCenterProjected = project(localCenterRef.current.lat, localCenterRef.current.lon, zoom)
+      const worldAtAnchorBefore = {
+        x: currentCenterProjected.x + (prevMidX - rootRect.left - viewport.w / 2),
+        y: currentCenterProjected.y + (prevMidY - rootRect.top - viewport.h / 2),
+      }
+      const scaleRatio = 2 ** (nextZoom - zoom)
+      const worldAtAnchorAfter = { x: worldAtAnchorBefore.x * scaleRatio, y: worldAtAnchorBefore.y * scaleRatio }
+      const nextCenterProjected = {
+        x: worldAtAnchorAfter.x - (anchorX - viewport.w / 2),
+        y: worldAtAnchorAfter.y - (anchorY - viewport.h / 2),
+      }
+      const nextCenter = unproject(nextCenterProjected.x, nextCenterProjected.y, nextZoom)
+      setZoom(nextZoom)
+      updateCenter(nextCenter)
+      if (rafRef.current == null) {
+        rafRef.current = window.requestAnimationFrame(() => {
+          rafRef.current = null
+          onCenterChange(nextCenter)
+        })
+      }
     }
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinchRef.current = null
-    onCenterChange(localCenter)
+    onCenterChange(localCenterRef.current)
   }
 
-  useEffect(() => { setLocalCenter(center) }, [center.lat, center.lon])
+  useEffect(() => {
+    localCenterRef.current = center
+    setLocalCenter(center)
+  }, [center.lat, center.lon])
   useEffect(() => {
     const updateSize = () => {
       if (!rootRef.current) return
@@ -14099,14 +14142,13 @@ function RealTileMap({
     {tiles}
     <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
     {markerType === 'parking' ? (
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-        <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-          <path d="M11.5 22.5V19.2C11.5 18.2 11.8 17.3 12.5 16.5L15 13.7C15.7 12.9 16.6 12.5 17.6 12.5H20.4C21.4 12.5 22.3 12.9 23 13.7L25.5 16.5C26.2 17.3 26.5 18.2 26.5 19.2V22.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="10.5" y="18.5" width="17" height="8.5" rx="3.2" stroke="white" strokeWidth="2" />
-          <line x1="16.2" y1="18.8" x2="16.2" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          <line x1="21.8" y1="18.8" x2="21.8" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="14.4" cy="25.1" r="1.5" fill="white" />
-          <circle cx="23.6" cy="25.1" r="1.5" fill="white" />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.55)]">
+        <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <rect x="6" y="6" width="32" height="32" rx="11" fill="#38d7d3" fillOpacity="0.2" stroke="#58ece8" strokeWidth="2.2" />
+          <path d="M12.5 25.2V22.7C12.5 21.7 12.9 20.8 13.6 20.1L16.2 17.4C16.9 16.7 17.8 16.3 18.8 16.3H25.2C26.2 16.3 27.1 16.7 27.8 17.4L30.4 20.1C31.1 20.8 31.5 21.7 31.5 22.7V25.2" stroke="#9efffb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="11.3" y="21.9" width="21.4" height="9.6" rx="3.8" stroke="#9efffb" strokeWidth="2.2" />
+          <circle cx="17.4" cy="26.8" r="1.8" fill="#9efffb" />
+          <circle cx="26.6" cy="26.8" r="1.8" fill="#9efffb" />
         </svg>
       </div>
     ) : (
