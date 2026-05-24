@@ -13808,7 +13808,7 @@ function SurfSpotSheet({
             onClick={() => setWizardOpen(true)}
             className="mb-3 h-11 w-full rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-sm font-semibold"
           >
-            + {language === 'no' ? 'Legg til ny surf spot' : 'Add new surf spot'}
+            + {language === 'no' ? 'Legg til hemmelig spot' : 'Add secret spot'}
           </button>
           <input
             ref={inputRef}
@@ -13944,11 +13944,15 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
     if (!resp.ok) return
     const json: any = await resp.json()
     onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}` })
+    onClose()
   }
 
   return <div className="fixed inset-0 z-[60] bg-[#0c1117] flex flex-col">
     <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl bg-black/45 p-4 backdrop-blur-sm border border-white/10">
-      <div className="text-xs tracking-[0.14em] text-white/80">{language === 'no' ? 'LEGG TIL SURF SPOT' : 'ADD SURF SPOT'}</div>
+      <div className="text-xs tracking-[0.14em] text-white/80">{language === 'no' ? 'LEGG TIL HEMMELIG SPOT' : 'ADD SECRET SPOT'}</div>
+      <div className="mt-1 text-[11px] text-white/70">
+        {language === 'no' ? 'Kun synlig for deg — denne spoten deles ikke med andre.' : 'Private to your account — this spot is not shared with other users.'}
+      </div>
       {step === 1 ? <><input value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="mt-2 w-full h-11 rounded-xl border border-white/20 bg-black/35 px-3 text-white" />
         <div className="mt-3 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
       {step === 2 ? <><div className="mt-2 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
@@ -13964,7 +13968,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
       {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
 
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(28px,calc(env(safe-area-inset-bottom)+16px))]">
       {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
       {step < 3 ? (
         <button
@@ -14097,11 +14101,12 @@ function RealTileMap({
     {markerType === 'parking' ? (
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
         <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-          <rect x="8.5" y="13" width="21" height="10" rx="3.5" stroke="white" strokeWidth="2" />
-          <path d="M12 13L14.5 10H23.5L26 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx="14" cy="24.5" r="2.25" fill="white" />
-          <circle cx="24" cy="24.5" r="2.25" fill="white" />
-          <path d="M10 18H28" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <path d="M11.5 22.5V19.2C11.5 18.2 11.8 17.3 12.5 16.5L15 13.7C15.7 12.9 16.6 12.5 17.6 12.5H20.4C21.4 12.5 22.3 12.9 23 13.7L25.5 16.5C26.2 17.3 26.5 18.2 26.5 19.2V22.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="10.5" y="18.5" width="17" height="8.5" rx="3.2" stroke="white" strokeWidth="2" />
+          <line x1="16.2" y1="18.8" x2="16.2" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <line x1="21.8" y1="18.8" x2="21.8" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="14.4" cy="25.1" r="1.5" fill="white" />
+          <circle cx="23.6" cy="25.1" r="1.5" fill="white" />
         </svg>
       </div>
     ) : (
