@@ -13910,8 +13910,8 @@ function WeatherLocationRow({
 function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [name, setName] = useState('')
-  const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 })
-  const [parkingOffset, setParkingOffset] = useState({ x: 0, y: 0 })
+  const [spotCenter, setSpotCenter] = useState({ lat: 58.7, lon: 5.55 })
+  const [parkingCenter, setParkingCenter] = useState({ lat: 58.7, lon: 5.55 })
   const [saving, setSaving] = useState(false)
   const [swellStart, setSwellStart] = useState(315)
   const [swellEnd, setSwellEnd] = useState(45)
@@ -13922,10 +13922,10 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
   const [windMain, setWindMain] = useState(90)
   const [windArrowMoved, setWindArrowMoved] = useState(false)
 
-  const lat = 58.7 - mapOffset.y * 0.00035
-  const lon = 5.55 - mapOffset.x * 0.00045
-  const parkingLat = 58.7 - parkingOffset.y * 0.00035
-  const parkingLon = 5.55 - parkingOffset.x * 0.00045
+  const lat = spotCenter.lat
+  const lon = spotCenter.lon
+  const parkingLat = parkingCenter.lat
+  const parkingLon = parkingCenter.lon
 
   useEffect(() => {
     if (!swellArrowMoved) setSwellMain(sectorMidpoint(swellStart, swellEnd))
@@ -13955,32 +13955,129 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
       {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
-      {(step === 1 || step === 3) ? <FauxSatelliteMap offset={step === 1 ? mapOffset : parkingOffset} onOffsetChange={step === 1 ? setMapOffset : setParkingOffset} /> : null}
+      <RealTileMap center={step === 3 ? parkingCenter : spotCenter} onCenterChange={step === 3 ? setParkingCenter : setSpotCenter} showPinnedMarker={step === 3} />
       {step === 1 ? <DirectionDial start={swellStart} end={swellEnd} main={swellMain} onStart={setSwellStart} onEnd={setSwellEnd} onMain={(v) => { setSwellArrowMoved(true); setSwellMain(v) }} /> : null}
-      {step === 2 ? <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#193946_0%,#10222d_55%,#09131c_100%)]"><DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /></div> : null}
-      {step === 3 ? <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#3ad6d0] text-4xl">📍</div> : null}
+      {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
+
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-3">
+    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
       {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
       {step < 3 ? <button className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={() => setStep((step + 1) as 1 | 2 | 3)}>{language === 'no' ? 'Neste' : 'Next'}</button> : <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>}
     </div>
   </div>
 }
 
-function FauxSatelliteMap({ offset, onOffsetChange }: { offset: { x: number; y: number }; onOffsetChange: (v: { x: number; y: number }) => void }) {
-  const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
-  return <div
-    onPointerDown={(e) => { dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId) }}
-    onPointerMove={(e) => {
-      if (!dragRef.current) return
-      const dx = e.clientX - dragRef.current.x
-      const dy = e.clientY - dragRef.current.y
-      onOffsetChange({ x: dragRef.current.ox + dx, y: dragRef.current.oy + dy })
-    }}
-    onPointerUp={() => { dragRef.current = null }}
-    className="absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_30%_25%,#274356,#132330_40%,#0a1118_72%,#05080c_100%)]"
-    style={{ backgroundPosition: `${offset.x / 3}px ${offset.y / 3}px` }}
-  ><div className="absolute inset-0 opacity-25 bg-[linear-gradient(45deg,transparent_45%,rgba(255,255,255,.07)_50%,transparent_55%)] bg-[length:28px_28px]" /></div>
+function RealTileMap({
+  center,
+  onCenterChange,
+  showPinnedMarker = false,
+}: {
+  center: { lat: number; lon: number }
+  onCenterChange: (v: { lat: number; lon: number }) => void
+  showPinnedMarker?: boolean
+}) {
+  const TILE = 256
+  const [zoom, setZoom] = useState(14)
+  const [localCenter, setLocalCenter] = useState(center)
+  const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
+  const clampLat = (lat: number) => Math.max(-85.0511, Math.min(85.0511, lat))
+  const project = (lat: number, lon: number, z: number) => {
+    const scale = TILE * (2 ** z)
+    const x = (wrapLon(lon) + 180) / 360 * scale
+    const sinLat = Math.sin(clampLat(lat) * Math.PI / 180)
+    const y = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale
+    return { x, y }
+  }
+  const unproject = (x: number, y: number, z: number) => {
+    const scale = TILE * (2 ** z)
+    const lon = x / scale * 360 - 180
+    const n = Math.PI - 2 * Math.PI * y / scale
+    const lat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+    return { lat: clampLat(lat), lon: wrapLon(lon) }
+  }
+
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const pinchRef = useRef<{ dist: number; zoomStart: number } | null>(null)
+  const [viewport, setViewport] = useState({ w: 390, h: 844 })
+  const rafRef = useRef<number | null>(null)
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!rootRef.current || !pointers.current.has(e.pointerId)) return
+    const prev = pointers.current.get(e.pointerId)!
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 1) {
+      const dx = e.clientX - prev.x
+      const dy = e.clientY - prev.y
+      const c = project(localCenter.lat, localCenter.lon, zoom)
+      const nextCenter = unproject(c.x - dx, c.y - dy, zoom)
+      setLocalCenter(nextCenter)
+      if (rafRef.current == null) {
+        rafRef.current = window.requestAnimationFrame(() => {
+          rafRef.current = null
+          onCenterChange(nextCenter)
+        })
+      }
+      return
+    }
+    if (pointers.current.size === 2) {
+      const vals = [...pointers.current.values()]
+      const dist = Math.hypot(vals[0].x - vals[1].x, vals[0].y - vals[1].y)
+      if (!pinchRef.current) pinchRef.current = { dist, zoomStart: zoom }
+      const delta = Math.log2(Math.max(0.2, dist / pinchRef.current.dist))
+      const next = Math.max(2, Math.min(18, Math.round(pinchRef.current.zoomStart + delta)))
+      if (next !== zoom) setZoom(next)
+    }
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinchRef.current = null
+    onCenterChange(localCenter)
+  }
+
+  useEffect(() => { setLocalCenter(center) }, [center.lat, center.lon])
+  useEffect(() => {
+    const updateSize = () => {
+      if (!rootRef.current) return
+      setViewport({ w: rootRef.current.clientWidth || 390, h: rootRef.current.clientHeight || 844 })
+    }
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    return () => {
+      window.removeEventListener('resize', updateSize)
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
+
+  const viewportW = viewport.w
+  const viewportH = viewport.h
+  const world = project(localCenter.lat, localCenter.lon, zoom)
+  const left = world.x - viewportW / 2
+  const top = world.y - viewportH / 2
+  const firstX = Math.floor(left / TILE)
+  const firstY = Math.floor(top / TILE)
+  const lastX = Math.floor((left + viewportW) / TILE)
+  const lastY = Math.floor((top + viewportH) / TILE)
+  const maxIdx = 2 ** zoom
+
+  const tiles: React.ReactNode[] = []
+  for (let tx = firstX; tx <= lastX; tx += 1) {
+    for (let ty = firstY; ty <= lastY; ty += 1) {
+      if (ty < 0 || ty >= maxIdx) continue
+      const wrappedX = ((tx % maxIdx) + maxIdx) % maxIdx
+      tiles.push(<img key={`${zoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: TILE, height: TILE, left: tx * TILE - left, top: ty * TILE - top }} />)
+    }
+  }
+
+  return <div ref={rootRef} className="absolute inset-0 overflow-hidden bg-[#0a1118] touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+    {tiles}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
+    {showPinnedMarker ? <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full text-[#3ad6d0] text-4xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] pointer-events-none">📍</div> : <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-white bg-[#3ad6d0] shadow-[0_0_0_2px_rgba(0,0,0,0.35)] pointer-events-none" />}
+  </div>
 }
 
 function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: number; end: number; main: number; onStart: (v: number) => void; onEnd: (v: number) => void; onMain: (v: number) => void }) {
