@@ -13955,12 +13955,12 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
       {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
-      {(step === 1 || step === 3) ? <RealTileMap center={step === 1 ? spotCenter : parkingCenter} onCenterChange={step === 1 ? setSpotCenter : setParkingCenter} showPinnedMarker={step === 3} /> : null}
+      <RealTileMap center={step === 3 ? parkingCenter : spotCenter} onCenterChange={step === 3 ? setParkingCenter : setSpotCenter} showPinnedMarker={step === 3} />
       {step === 1 ? <DirectionDial start={swellStart} end={swellEnd} main={swellMain} onStart={setSwellStart} onEnd={setSwellEnd} onMain={(v) => { setSwellArrowMoved(true); setSwellMain(v) }} /> : null}
-      {step === 2 ? <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#193946_0%,#10222d_55%,#09131c_100%)]"><DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /></div> : null}
+      {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
 
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-3">
+    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
       {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
       {step < 3 ? <button className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={() => setStep((step + 1) as 1 | 2 | 3)}>{language === 'no' ? 'Neste' : 'Next'}</button> : <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>}
     </div>
@@ -13978,6 +13978,7 @@ function RealTileMap({
 }) {
   const TILE = 256
   const [zoom, setZoom] = useState(14)
+  const [localCenter, setLocalCenter] = useState(center)
   const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
   const clampLat = (lat: number) => Math.max(-85.0511, Math.min(85.0511, lat))
   const project = (lat: number, lon: number, z: number) => {
@@ -13998,6 +13999,8 @@ function RealTileMap({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
   const pinchRef = useRef<{ dist: number; zoomStart: number } | null>(null)
+  const [viewport, setViewport] = useState({ w: 390, h: 844 })
+  const rafRef = useRef<number | null>(null)
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -14010,8 +14013,15 @@ function RealTileMap({
     if (pointers.current.size === 1) {
       const dx = e.clientX - prev.x
       const dy = e.clientY - prev.y
-      const c = project(center.lat, center.lon, zoom)
-      onCenterChange(unproject(c.x - dx, c.y - dy, zoom))
+      const c = project(localCenter.lat, localCenter.lon, zoom)
+      const nextCenter = unproject(c.x - dx, c.y - dy, zoom)
+      setLocalCenter(nextCenter)
+      if (rafRef.current == null) {
+        rafRef.current = window.requestAnimationFrame(() => {
+          rafRef.current = null
+          onCenterChange(nextCenter)
+        })
+      }
       return
     }
     if (pointers.current.size === 2) {
@@ -14026,11 +14036,26 @@ function RealTileMap({
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinchRef.current = null
+    onCenterChange(localCenter)
   }
 
-  const viewportW = typeof window === 'undefined' ? 390 : window.innerWidth
-  const viewportH = typeof window === 'undefined' ? 844 : window.innerHeight
-  const world = project(center.lat, center.lon, zoom)
+  useEffect(() => { setLocalCenter(center) }, [center.lat, center.lon])
+  useEffect(() => {
+    const updateSize = () => {
+      if (!rootRef.current) return
+      setViewport({ w: rootRef.current.clientWidth || 390, h: rootRef.current.clientHeight || 844 })
+    }
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    return () => {
+      window.removeEventListener('resize', updateSize)
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
+
+  const viewportW = viewport.w
+  const viewportH = viewport.h
+  const world = project(localCenter.lat, localCenter.lon, zoom)
   const left = world.x - viewportW / 2
   const top = world.y - viewportH / 2
   const firstX = Math.floor(left / TILE)
