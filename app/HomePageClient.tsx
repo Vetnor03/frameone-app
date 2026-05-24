@@ -13999,7 +13999,7 @@ function RealTileMap({
   markerType?: 'spot' | 'parking'
 }) {
   const TILE = 256
-  const [zoom, setZoom] = useState(5.8)
+  const [zoom, setZoom] = useState(6.9)
   const [localCenter, setLocalCenter] = useState(center)
   const localCenterRef = useRef(center)
   const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
@@ -14120,21 +14120,25 @@ function RealTileMap({
 
   const viewportW = viewport.w
   const viewportH = viewport.h
-  const world = project(localCenter.lat, localCenter.lon, zoom)
-  const left = world.x - viewportW / 2
-  const top = world.y - viewportH / 2
-  const firstX = Math.floor(left / TILE)
-  const firstY = Math.floor(top / TILE)
-  const lastX = Math.floor((left + viewportW) / TILE)
-  const lastY = Math.floor((top + viewportH) / TILE)
-  const maxIdx = 2 ** zoom
+  const baseZoom = Math.max(2, Math.min(18, Math.floor(zoom)))
+  const zoomScale = 2 ** (zoom - baseZoom)
+  const worldBase = project(localCenter.lat, localCenter.lon, baseZoom)
+  const visibleHalfWBase = viewportW / (2 * zoomScale)
+  const visibleHalfHBase = viewportH / (2 * zoomScale)
+  const firstX = Math.floor((worldBase.x - visibleHalfWBase) / TILE)
+  const firstY = Math.floor((worldBase.y - visibleHalfHBase) / TILE)
+  const lastX = Math.floor((worldBase.x + visibleHalfWBase) / TILE)
+  const lastY = Math.floor((worldBase.y + visibleHalfHBase) / TILE)
+  const maxIdx = 2 ** baseZoom
 
   const tiles: React.ReactNode[] = []
   for (let tx = firstX; tx <= lastX; tx += 1) {
     for (let ty = firstY; ty <= lastY; ty += 1) {
       if (ty < 0 || ty >= maxIdx) continue
       const wrappedX = ((tx % maxIdx) + maxIdx) % maxIdx
-      tiles.push(<img key={`${zoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: TILE, height: TILE, left: tx * TILE - left, top: ty * TILE - top }} />)
+      const left = viewportW / 2 + (tx * TILE - worldBase.x) * zoomScale
+      const top = viewportH / 2 + (ty * TILE - worldBase.y) * zoomScale
+      tiles.push(<img key={`${baseZoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${baseZoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: TILE * zoomScale, height: TILE * zoomScale, left, top }} />)
     }
   }
 
