@@ -13676,6 +13676,30 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (next: bool
 type SpotItem = {
   spotId: string
   label: string
+  custom?: boolean
+}
+
+type CustomSurfSpot = {
+  id: string
+  user_id: string
+  name: string
+  lat: number
+  lon: number
+  parking_lat: number
+  parking_lon: number
+  swell_sector_start_deg: number
+  swell_sector_end_deg: number
+  swell_main_deg: number
+  wind_sector_start_deg: number
+  wind_sector_end_deg: number
+  wind_main_deg: number
+}
+
+type SurfSpotSelection = { spot: string; spotId: string }
+type CustomSurfSpotWizardProps = {
+  language: AppLanguage
+  onClose: () => void
+  onSaved: (picked: SurfSpotSelection) => void
 }
 
 function SurfSpotSheet({
@@ -13694,6 +13718,7 @@ function SurfSpotSheet({
   const [query, setQuery] = useState('')
   const [spots, setSpots] = useState<SpotItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -13735,13 +13760,20 @@ function SurfSpotSheet({
             .filter((s: any) => s.label.length > 0)
         }
 
-        if (!cancelled) {
-          setSpots(
-            hideTodaysBest
-              ? list.filter((s) => String(s.spotId || '').trim() !== '__todays_best__')
-              : list
-          )
+        const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+        let customList: SpotItem[] = []
+        if (accessToken) {
+          const customResp = await fetch('/api/surf/custom-spots', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+          if (customResp.ok) {
+            const customJson: any = await customResp.json()
+            customList = (Array.isArray(customJson?.items) ? customJson.items : []).map((row: CustomSurfSpot) => ({
+              spotId: `custom:${row.id}`,
+              label: String(row.name || '').trim(),
+              custom: true,
+            }))
+          }
         }
+        if (!cancelled) setSpots((hideTodaysBest ? list.filter((s) => String(s.spotId || '').trim() !== '__todays_best__') : list).concat(customList))
       } catch {
         if (!cancelled) setSpots([])
       } finally {
@@ -13771,6 +13803,12 @@ function SurfSpotSheet({
         </div>
 
         <div className="mt-4">
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="mb-3 h-11 w-full rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-sm font-semibold"
+          >
+            + {language === 'no' ? 'Legg til ny surf spot' : 'Add new surf spot'}
+          </button>
           <input
             ref={inputRef}
             value={query}
@@ -13799,10 +13837,22 @@ function SurfSpotSheet({
 <div className="text-[color:var(--fg-90)] text-base font-medium">
   {language === 'no' && isTodaysBestLabel(s.label) ? 'Dagens Beste' : s.label}
 </div>
+                {s.custom ? <div className="mt-1 text-[10px] tracking-[0.12em] uppercase text-[#26b6b6]">Custom</div> : null}
               </button>
             ))
           )}
         </div>
+        {wizardOpen ? (
+          <CustomSurfSpotWizard
+            language={language}
+            onClose={() => setWizardOpen(false)}
+            onSaved={(picked: SurfSpotSelection) => {
+              onPicked(picked)
+              setWizardOpen(false)
+              onClose()
+            }}
+          />
+        ) : null}
       </div>
     </div>
   )
@@ -13854,6 +13904,63 @@ function WeatherLocationRow({
       )}
     </>
   )
+}
+
+function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWizardProps) {
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [name, setName] = useState('')
+  const [lat, setLat] = useState(58.7)
+  const [lon, setLon] = useState(5.55)
+  const [parkingLat, setParkingLat] = useState(58.7)
+  const [parkingLon, setParkingLon] = useState(5.55)
+  const [saving, setSaving] = useState(false)
+  const [swellStart, setSwellStart] = useState(315)
+  const [swellEnd, setSwellEnd] = useState(45)
+  const [swellMain, setSwellMain] = useState(0)
+  const [windStart, setWindStart] = useState(45)
+  const [windEnd, setWindEnd] = useState(135)
+  const [windMain, setWindMain] = useState(90)
+
+  async function save() {
+    setSaving(true)
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    const resp = await fetch('/api/surf/custom-spots', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ name, lat, lon, parking_lat: parkingLat, parking_lon: parkingLon, swell_sector_start_deg: swellStart, swell_sector_end_deg: swellEnd, swell_main_deg: swellMain, wind_sector_start_deg: windStart, wind_sector_end_deg: windEnd, wind_main_deg: windMain }) })
+    setSaving(false)
+    if (!resp.ok) return
+    const json: any = await resp.json()
+    onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}` })
+  }
+
+  return <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+    <SimpleSatelliteMap
+      centerLat={step === 3 ? parkingLat : lat}
+      centerLon={step === 3 ? parkingLon : lon}
+      onCenterChange={(nextLat, nextLon) => {
+        if (step === 3) {
+          setParkingLat(nextLat)
+          setParkingLon(nextLon)
+        } else {
+          setLat(nextLat)
+          setLon(nextLon)
+        }
+      }}
+    />
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <div className="h-12 w-12 rounded-full border-2 border-[#26b6b6] bg-transparent" />
+      <div className="absolute h-1 w-10 rounded bg-[#26b6b6]" />
+    </div>
+    <div className="absolute left-0 right-0 top-0 p-4">
+      <div className="rounded-2xl bg-black/55 p-3 text-white">
+        <div className="text-xs tracking-widest text-white/70">{language === 'no' ? 'LEGG TIL SURF SPOT' : 'ADD SURF SPOT'}</div>
+        <div className="mt-2 text-sm whitespace-pre-line">{step === 1 ? '1. Move the map to center your surf spot.\n2. Drag the sector handles to define swell exposure.\n3. Drag the arrow to the best swell direction.' : step === 2 ? '1. Drag the sector handles to define good wind directions.\n2. Drag the arrow to the best wind direction.' : '1. Move the map to the closest parking spot.\n2. Place the marker where you usually park.'}</div>
+        {step === 1 ? <input value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="pointer-events-auto mt-3 w-full h-11 rounded-xl border border-white/20 bg-white/10 px-3 text-white" /> : null}
+      </div>
+    </div>
+    <div className="mt-auto grid grid-cols-2 gap-3">
+      {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
+      {step < 3 ? <button className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={() => setStep((step + 1) as 1 | 2 | 3)}>{language === 'no' ? 'Neste' : 'Next'}</button> : <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>}
+    </div>
+  </div>
 }
 
 function WeatherLocationSheet({
@@ -13968,6 +14075,76 @@ function WeatherLocationSheet({
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+function lonLatToWorld(lon: number, lat: number, zoom: number) {
+  const scale = 256 * 2 ** zoom
+  const x = ((lon + 180) / 360) * scale
+  const sin = Math.sin((lat * Math.PI) / 180)
+  const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale
+  return { x, y }
+}
+
+function worldToLonLat(x: number, y: number, zoom: number) {
+  const scale = 256 * 2 ** zoom
+  const lon = (x / scale) * 360 - 180
+  const n = Math.PI - (2 * Math.PI * y) / scale
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+  return { lon, lat }
+}
+
+function SimpleSatelliteMap({ centerLat, centerLon, onCenterChange }: { centerLat: number; centerLon: number; onCenterChange: (lat: number, lon: number) => void }) {
+  const [zoom, setZoom] = useState(12)
+  const ref = useRef<HTMLDivElement | null>(null)
+  const dragRef = useRef<{ x: number; y: number; wx: number; wy: number } | null>(null)
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null)
+  const { x: centerX, y: centerY } = lonLatToWorld(centerLon, centerLat, zoom)
+  const size = ref.current?.getBoundingClientRect()
+  const width = size?.width || 360
+  const height = size?.height || 640
+  const tileX = Math.floor(centerX / 256)
+  const tileY = Math.floor(centerY / 256)
+  const offsetX = centerX - tileX * 256
+  const offsetY = centerY - tileY * 256
+  const tiles: Array<{ x: number; y: number; left: number; top: number }> = []
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -3; dy <= 3; dy++) tiles.push({ x: tileX + dx, y: tileY + dy, left: width / 2 - offsetX + dx * 256, top: height / 2 - offsetY + dy * 256 })
+
+  return (
+    <div
+      ref={ref}
+      className="absolute inset-0 overflow-hidden touch-none"
+      onPointerDown={(e) => { dragRef.current = { x: e.clientX, y: e.clientY, wx: centerX, wy: centerY } }}
+      onPointerMove={(e) => {
+        if (!dragRef.current) return
+        const nextX = dragRef.current.wx - (e.clientX - dragRef.current.x)
+        const nextY = dragRef.current.wy - (e.clientY - dragRef.current.y)
+        const ll = worldToLonLat(nextX, nextY, zoom)
+        onCenterChange(Math.max(-85, Math.min(85, ll.lat)), ll.lon)
+      }}
+      onPointerUp={() => { dragRef.current = null }}
+      onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.max(2, Math.min(18, z + (e.deltaY < 0 ? 0.35 : -0.35)))) }}
+      onTouchMove={(e) => {
+        if (e.touches.length !== 2) return
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const dist = Math.hypot(dx, dy)
+        if (!pinchRef.current) pinchRef.current = { dist, zoom }
+        else setZoom(Math.max(2, Math.min(18, pinchRef.current.zoom + Math.log2(dist / pinchRef.current.dist))))
+      }}
+      onTouchEnd={() => { pinchRef.current = null }}
+    >
+      {tiles.map((t) => (
+        <img
+          key={`${zoom}-${t.x}-${t.y}`}
+          alt=""
+          draggable={false}
+          className="absolute h-64 w-64 select-none"
+          style={{ left: t.left, top: t.top }}
+          src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${Math.round(zoom)}/${t.y}/${((t.x % 2 ** Math.round(zoom)) + 2 ** Math.round(zoom)) % 2 ** Math.round(zoom)}`}
+        />
+      ))}
     </div>
   )
 }
