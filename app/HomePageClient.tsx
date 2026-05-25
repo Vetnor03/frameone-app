@@ -13910,8 +13910,8 @@ function WeatherLocationRow({
 function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [name, setName] = useState('')
-  const [spotCenter, setSpotCenter] = useState({ lat: 58.7, lon: 5.55 })
-  const [parkingCenter, setParkingCenter] = useState({ lat: 58.7, lon: 5.55 })
+  const [spotCenter, setSpotCenter] = useState({ lat: 62.2, lon: 10.4 })
+  const [parkingCenter, setParkingCenter] = useState({ lat: 62.2, lon: 10.4 })
   const [saving, setSaving] = useState(false)
   const [swellStart, setSwellStart] = useState(315)
   const [swellEnd, setSwellEnd] = useState(45)
@@ -13999,7 +13999,7 @@ function RealTileMap({
   markerType?: 'spot' | 'parking'
 }) {
   const TILE = 256
-  const [zoom, setZoom] = useState(14)
+  const [zoom, setZoom] = useState(5)
   const [localCenter, setLocalCenter] = useState(center)
   const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
   const clampLat = (lat: number) => Math.max(-85.0511, Math.min(85.0511, lat))
