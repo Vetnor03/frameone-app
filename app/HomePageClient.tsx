@@ -13999,7 +13999,7 @@ function RealTileMap({
   markerType?: 'spot' | 'parking'
 }) {
   const TILE = 256
-  const [zoom, setZoom] = useState(14)
+  const [zoom, setZoom] = useState(14) // keep integer zoom levels to avoid tile seam artifacts while pinch-zooming
   const [localCenter, setLocalCenter] = useState(center)
   const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
   const clampLat = (lat: number) => Math.max(-85.0511, Math.min(85.0511, lat))
@@ -14052,7 +14052,8 @@ function RealTileMap({
       if (!pinchRef.current) pinchRef.current = { dist, zoomStart: zoom }
       const delta = Math.log2(Math.max(0.2, dist / pinchRef.current.dist))
       const next = Math.max(2, Math.min(18, pinchRef.current.zoomStart + delta))
-      if (next !== zoom) setZoom(next)
+      const snapped = Math.round(next)
+      if (snapped !== zoom) setZoom(snapped)
     }
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -14077,8 +14078,8 @@ function RealTileMap({
 
   const viewportW = viewport.w
   const viewportH = viewport.h
-  const tileZoom = Math.max(2, Math.min(18, Math.floor(zoom)))
-  const zoomScale = 2 ** (zoom - tileZoom)
+  const tileZoom = Math.max(2, Math.min(18, Math.round(zoom)))
+  const zoomScale = 1
   const world = project(localCenter.lat, localCenter.lon, tileZoom)
   const halfW = viewportW / (2 * zoomScale)
   const halfH = viewportH / (2 * zoomScale)
