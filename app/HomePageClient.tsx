@@ -1804,18 +1804,25 @@ export default function HomePage() {
   const appText = 'text-[color:var(--fg)]'
 
   useEffect(() => {
-    if (!activeDeviceId || !isLoadedRef.current || persisting || autoPersistingRef.current) return
-    const timer = window.setTimeout(async () => {
-      const baseline = savedFrameStateRef.current
-      if (!baseline) return
+    if (
+      !activeDeviceId ||
+      !isLoadedRef.current ||
+      persisting ||
+      autoPersistingRef.current ||
+      activeTab !== 'frame' ||
+      !dirty
+    ) {
+      return
+    }
 
+    const timer = window.setTimeout(async () => {
       const modulesForSave = normalizeModulesForSave(modulesJson)
       const settingsJson: SettingsJson = {
-        theme: baseline.theme,
-        language: baseline.language,
-        fontSize: baseline.fontSize,
-        layout: baseline.layoutKey,
-        cells: cellsMapToArray(baseline.cellsByLayout[baseline.layoutKey]),
+        theme,
+        language,
+        fontSize,
+        layout: layoutKey,
+        cells: cellsMapToArray(cellsByLayout[layoutKey]),
         modules: modulesForSave,
         pinned_tabs: pinnedModuleTabs,
       }
@@ -1827,7 +1834,7 @@ export default function HomePage() {
           p_settings: settingsJson,
         })
         if (error) throw error
-        if (data !== true) throw new Error('Failed to auto-save module settings')
+        if (data !== true) throw new Error('Failed to auto-save frame settings')
 
         savedStateRef.current = serializeComparableState({
           theme,
@@ -1844,10 +1851,22 @@ export default function HomePage() {
       } finally {
         autoPersistingRef.current = false
       }
-    }, 550)
+    }, 250)
 
     return () => window.clearTimeout(timer)
-  }, [activeDeviceId, activeTab, modulesJson, pinnedModuleTabs])
+  }, [
+    activeDeviceId,
+    activeTab,
+    cellsByLayout,
+    dirty,
+    fontSize,
+    language,
+    layoutKey,
+    modulesJson,
+    persisting,
+    pinnedModuleTabs,
+    theme,
+  ])
 
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
