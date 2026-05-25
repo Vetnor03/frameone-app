@@ -14107,12 +14107,12 @@ function RealTileMap({
     {markerType === 'parking' ? (
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
         <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-          <path d="M11.5 22.5V19.2C11.5 18.2 11.8 17.3 12.5 16.5L15 13.7C15.7 12.9 16.6 12.5 17.6 12.5H20.4C21.4 12.5 22.3 12.9 23 13.7L25.5 16.5C26.2 17.3 26.5 18.2 26.5 19.2V22.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="10.5" y="18.5" width="17" height="8.5" rx="3.2" stroke="white" strokeWidth="2" />
-          <line x1="16.2" y1="18.8" x2="16.2" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          <line x1="21.8" y1="18.8" x2="21.8" y2="22.4" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="14.4" cy="25.1" r="1.5" fill="white" />
-          <circle cx="23.6" cy="25.1" r="1.5" fill="white" />
+          <path d="M7 23.8H30.8L29.2 18.4C28.9 17.3 28.1 16.4 27.1 15.9L23.4 13.9C22.7 13.6 22 13.4 21.2 13.4H15.4C14.3 13.4 13.3 13.9 12.6 14.7L9.3 18.6C8.6 19.4 8.2 20.4 8.1 21.5L7 23.8Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M10.5 20.2H27.1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M15.2 14V20.2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M21.2 14V20.2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx="13.1" cy="24.7" r="2.3" fill="white"/>
+          <circle cx="24.9" cy="24.7" r="2.3" fill="white"/>
         </svg>
       </div>
     ) : (
@@ -14125,8 +14125,17 @@ function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: nu
   const size = 290
   const center = size / 2
   const r = 115
-  const toXY = (deg: number) => { const rad = (normalizeAngle(deg) - 90) * Math.PI / 180; return { x: center + Math.cos(rad) * r, y: center + Math.sin(rad) * r } }
+  const toXY = (deg: number, radius = r) => { const rad = (normalizeAngle(deg) - 90) * Math.PI / 180; return { x: center + Math.cos(rad) * radius, y: center + Math.sin(rad) * radius } }
   const s = toXY(start); const e = toXY(end); const m = toXY(main)
+  const mainUnit = { x: m.x - center, y: m.y - center }
+  const mainLen = Math.hypot(mainUnit.x, mainUnit.y) || 1
+  const ux = mainUnit.x / mainLen
+  const uy = mainUnit.y / mainLen
+  const px = -uy
+  const py = ux
+  const arrowTip = toXY(main, r * 0.46)
+  const arrowBase = toXY(main, r * 0.62)
+  const arrowHalfWidth = 8
   const largeArc = ((end - start + 360) % 360) > 180 ? 1 : 0
   const move = (clientX: number, clientY: number, setter: (v: number) => void) => {
     const rect = (document.getElementById('direction-dial') as HTMLElement).getBoundingClientRect()
@@ -14139,6 +14148,10 @@ function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: nu
       <circle cx={center} cy={center} r={r} stroke="rgba(255,255,255,.55)" strokeWidth="2" fill="none" />
       <path d={`M ${center} ${center} L ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 1 ${e.x} ${e.y} Z`} fill="rgba(42,211,201,.35)" />
       <line x1={center} y1={center} x2={m.x} y2={m.y} stroke="#3ad6d0" strokeWidth="4" />
+      <polygon
+        points={`${arrowTip.x},${arrowTip.y} ${arrowBase.x + px * arrowHalfWidth},${arrowBase.y + py * arrowHalfWidth} ${arrowBase.x - px * arrowHalfWidth},${arrowBase.y - py * arrowHalfWidth}`}
+        fill="#3ad6d0"
+      />
       <circle cx={s.x} cy={s.y} r="10" fill="#3ad6d0" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onStart); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
       <circle cx={e.x} cy={e.y} r="10" fill="#3ad6d0" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, onEnd); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
       <circle cx={m.x} cy={m.y} r="11" fill="#2aa3ff" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, (v) => onMain(clampAngleToSector(v, start, end))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
