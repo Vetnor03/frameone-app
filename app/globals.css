@@ -2,23 +2,65 @@
 @import "tailwindcss";
 
 /* =========================
-   Theme tokens (DEFAULT: DARK)
+   Theme tokens (DEFAULT: LIGHT / Shop-aligned)
    ========================= */
 :root {
   /* base */
-  --app-bg: #061b24;        /* your current background */
-  --sheet-bg: #071f2a;      /* your current modal/sheet bg */
+  --app-bg: #f6f3ed;
+  --sheet-bg: #ffffff;
   --accent: #2aa3ff;
 
   /* text */
+  --fg: rgba(20, 20, 20, 1);
+  --fg-90: rgba(20, 20, 20, 0.9);
+  --fg-80: rgba(20, 20, 20, 0.8);
+  --fg-70: rgba(20, 20, 20, 0.7);
+  --fg-60: rgba(20, 20, 20, 0.6);
+  --fg-50: rgba(20, 20, 20, 0.5);
+  --fg-40: rgba(20, 20, 20, 0.4);
+  --fg-30: rgba(20, 20, 20, 0.3);
+  --fg-15: rgba(20, 20, 20, 0.15);
+
+  /* borders */
+  --bd-40: rgba(20, 20, 20, 0.4);
+  --bd-30: rgba(20, 20, 20, 0.3);
+  --bd-20: rgba(20, 20, 20, 0.2);
+  --bd-15: rgba(20, 20, 20, 0.15);
+  --bd-10: rgba(20, 20, 20, 0.10);
+
+  /* surfaces */
+  --panel-05: rgba(20, 20, 20, 0.05);
+  --panel-10: rgba(20, 20, 20, 0.08);
+  --panel-20: rgba(20, 20, 20, 0.15);
+
+  --overlay-55: rgba(0, 0, 0, 0.55);
+  --toast-bg: rgba(20, 20, 20, 0.08);
+
+  /* danger */
+  --danger: rgba(248, 113, 113, 1);
+  --danger-bd: rgba(239, 68, 68, 0.4);
+  --danger-bg: rgba(239, 68, 68, 0.05);
+}
+
+/* =========================
+   LIGHT THEME OVERRIDES
+   ========================= */
+html[data-theme="dark"] {
+  /* Softer premium light background */
+  --app-bg: #061b24;
+  --sheet-bg: #ffffff;
+
+  --accent: #2aa3ff;
+
+  /* Dark text ladder */
   --fg: rgba(255, 255, 255, 1);
   --fg-90: rgba(255, 255, 255, 0.9);
-  --fg-80: rgba(255, 255, 255, 0.8);
-  --fg-70: rgba(255, 255, 255, 0.7);
-  --fg-60: rgba(255, 255, 255, 0.6);
-  --fg-50: rgba(255, 255, 255, 0.5);
-  --fg-40: rgba(255, 255, 255, 0.4);
-  --fg-30: rgba(255, 255, 255, 0.3);
+  --fg-80: rgba(15, 23, 42, 0.8);
+  --fg-70: rgba(15, 23, 42, 0.7);
+  --fg-60: rgba(15, 23, 42, 0.6);
+  --fg-50: rgba(15, 23, 42, 0.5);
+  --fg-40: rgba(15, 23, 42, 0.4);
+  --fg-30: rgba(15, 23, 42, 0.3);
   --fg-15: rgba(255, 255, 255, 0.15);
 
   /* borders */
@@ -33,50 +75,8 @@
   --panel-10: rgba(255, 255, 255, 0.10);
   --panel-20: rgba(255, 255, 255, 0.20);
 
-  --overlay-55: rgba(0, 0, 0, 0.55);
-  --toast-bg: rgba(0, 0, 0, 0.35);
-
-  /* danger */
-  --danger: rgba(248, 113, 113, 1);
-  --danger-bd: rgba(239, 68, 68, 0.4);
-  --danger-bg: rgba(239, 68, 68, 0.05);
-}
-
-/* =========================
-   LIGHT THEME OVERRIDES
-   ========================= */
-html[data-theme="light"] {
-  /* Softer premium light background */
-  --app-bg: #eef2f6;      /* soft blue-grey */
-  --sheet-bg: #ffffff;
-
-  --accent: #2aa3ff;
-
-  /* Dark text ladder */
-  --fg: rgba(15, 23, 42, 1);
-  --fg-90: rgba(15, 23, 42, 0.9);
-  --fg-80: rgba(15, 23, 42, 0.8);
-  --fg-70: rgba(15, 23, 42, 0.7);
-  --fg-60: rgba(15, 23, 42, 0.6);
-  --fg-50: rgba(15, 23, 42, 0.5);
-  --fg-40: rgba(15, 23, 42, 0.4);
-  --fg-30: rgba(15, 23, 42, 0.3);
-  --fg-15: rgba(15, 23, 42, 0.15);
-
-  /* borders */
-  --bd-40: rgba(15, 23, 42, 0.4);
-  --bd-30: rgba(15, 23, 42, 0.3);
-  --bd-20: rgba(15, 23, 42, 0.2);
-  --bd-15: rgba(15, 23, 42, 0.15);
-  --bd-10: rgba(15, 23, 42, 0.10);
-
-  /* surfaces */
-  --panel-05: rgba(15, 23, 42, 0.05);
-  --panel-10: rgba(15, 23, 42, 0.08);
-  --panel-20: rgba(15, 23, 42, 0.15);
-
   --overlay-55: rgba(0, 0, 0, 0.45);
-  --toast-bg: rgba(15, 23, 42, 0.08);
+  --toast-bg: rgba(0, 0, 0, 0.35);
 }
 
 /* Base document */

@@ -639,7 +639,7 @@ function normalizePhysicalFrameSnapshot(settings: unknown, updatedAt: string | n
   )
 
   return {
-    theme: isTheme(json.theme) ? json.theme : 'dark',
+    theme: isTheme(json.theme) ? json.theme : 'light',
     language: isLanguage(json.language) ? json.language : 'en',
     fontSize: isFontSize(json.fontSize) ? json.fontSize : 'normal',
     layoutKey,
@@ -950,7 +950,7 @@ export default function HomePage() {
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
 
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setTheme] = useState<'dark' | 'light'>('light')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -991,7 +991,7 @@ export default function HomePage() {
     document.documentElement.style.colorScheme = theme
 
     const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null
-    if (meta) meta.content = theme === 'dark' ? '#061b24' : '#eef2f6'
+    if (meta) meta.content = theme === 'dark' ? '#061b24' : '#f6f3ed'
   }, [theme])
 
   useEffect(() => {
@@ -1427,7 +1427,7 @@ export default function HomePage() {
       !!data?.settings_json &&
       typeof data.settings_json === 'object' &&
       Object.keys(data.settings_json as Record<string, unknown>).length > 0
-    const nextTheme = (json.theme || 'dark') as 'dark' | 'light'
+    const nextTheme = (json.theme || 'light') as 'dark' | 'light'
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
     const nextLayout = (json.layout || 'default') as LayoutKey

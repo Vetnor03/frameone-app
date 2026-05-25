@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: versionedIconPath("/apple-touch-icon.png"), sizes: "180x180", type: "image/png" }],
   },
-  themeColor: "#061b24",
+  themeColor: "#f6f3ed",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -47,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light" style={{ colorScheme: "light" }}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
