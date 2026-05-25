@@ -13954,8 +13954,9 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
         {language === 'no' ? 'Kun synlig for deg — denne spoten deles ikke med andre.' : 'Private to your account — this spot is not shared with other users.'}
       </div>
       {step === 1 ? <><input value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="mt-2 w-full h-11 rounded-xl border border-white/20 bg-black/35 px-3 text-white" />
-        <div className="mt-3 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
-      {step === 2 ? <><div className="mt-2 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
+        <div className="mt-3 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'BØLGE' : 'WAVE'}</div>
+        <div className="mt-1 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
+      {step === 2 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'VIND' : 'WIND'}</div><div className="mt-1 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
       {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
@@ -14138,9 +14139,9 @@ function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: nu
   const uy = mainUnit.y / mainLen
   const px = -uy
   const py = ux
-  const arrowTip = toXY(main, r * 0.46)
-  const arrowBase = toXY(main, r * 0.62)
-  const arrowHalfWidth = 8
+  const arrowTip = { x: center, y: center }
+  const arrowBase = toXY(main, r * 0.16)
+  const arrowHalfWidth = 6
   const largeArc = ((end - start + 360) % 360) > 180 ? 1 : 0
   const move = (clientX: number, clientY: number, setter: (v: number) => void) => {
     const rect = (document.getElementById('direction-dial') as HTMLElement).getBoundingClientRect()
@@ -14152,7 +14153,7 @@ function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: nu
     <svg width={size} height={size} className="pointer-events-none">
       <circle cx={center} cy={center} r={r} stroke="rgba(255,255,255,.55)" strokeWidth="2" fill="none" />
       <path d={`M ${center} ${center} L ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 1 ${e.x} ${e.y} Z`} fill="rgba(42,211,201,.35)" />
-      <line x1={center} y1={center} x2={m.x} y2={m.y} stroke="#3ad6d0" strokeWidth="4" />
+      <line x1={center} y1={center} x2={m.x} y2={m.y} stroke="#3ad6d0" strokeWidth="2.5" />
       <polygon
         points={`${arrowTip.x},${arrowTip.y} ${arrowBase.x + px * arrowHalfWidth},${arrowBase.y + py * arrowHalfWidth} ${arrowBase.x - px * arrowHalfWidth},${arrowBase.y - py * arrowHalfWidth}`}
         fill="#3ad6d0"
