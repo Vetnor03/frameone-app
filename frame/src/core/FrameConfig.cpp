@@ -268,6 +268,8 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
 
         const char* spotId = s["spotId"] | "";
         const char* spot   = s["spot"]   | "";
+        float lat = s["lat"] | 0.0f;
+        float lon = s["lon"] | 0.0f;
 
         if ((!spotId || !spotId[0]) && (!spot || !spot[0])) continue;
 
@@ -280,6 +282,8 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
         if (spot && spot[0]) strlcpy(dst.spot, spot, sizeof(dst.spot));
         else dst.spot[0] = '\0';
 
+        dst.lat = lat;
+        dst.lon = lon;
         dst.refreshMs = (uint32_t)(s["refresh"] | 1800000UL);
 
         out.surfCount++;

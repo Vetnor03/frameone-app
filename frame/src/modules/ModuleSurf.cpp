@@ -45,6 +45,8 @@ struct SurfInstanceConfig {
   uint8_t id = 1;
   char spotId[80] = {0};
   char spot[48] = {0};
+  float lat = 0.0f;
+  float lon = 0.0f;
   uint32_t refreshMs = 1800000UL;
 };
 
@@ -809,9 +811,13 @@ static SurfInstanceConfig makeInactiveSurfInstance(uint8_t id) {
 static bool cfgChanged(const SurfInstanceConfig& oldCfg,
                        const char* spotId,
                        const char* spot,
+                       float lat,
+                       float lon,
                        uint32_t refreshMs) {
   if (strcmp(oldCfg.spotId, spotId ? spotId : "") != 0) return true;
   if (strcmp(oldCfg.spot, spot ? spot : "") != 0) return true;
+  if (fabsf(oldCfg.lat - lat) > 0.000001f) return true;
+  if (fabsf(oldCfg.lon - lon) > 0.000001f) return true;
   if (oldCfg.refreshMs != refreshMs) return true;
   return false;
 }
@@ -837,9 +843,11 @@ static void applyConfigFromFrameConfig() {
     char spotLatin1[48] = {0};
     if (src.spot[0]) utf8ToLatin1(spotLatin1, sizeof(spotLatin1), src.spot);
 
-    bool changed = cfgChanged(oldCfg, src.spotId, spotLatin1, src.refreshMs);
+    bool changed = cfgChanged(oldCfg, src.spotId, spotLatin1, src.lat, src.lon, src.refreshMs);
 
     dst.id = src.id;
+    dst.lat = src.lat;
+    dst.lon = src.lon;
     dst.refreshMs = src.refreshMs;
 
     if (src.spotId[0]) strlcpy(dst.spotId, src.spotId, sizeof(dst.spotId));
@@ -916,6 +924,11 @@ static String buildSurfUrlBase(const SurfInstanceConfig& cfg, const char* spotId
     url += "spot=" + urlEncode(cfg.spot);
   } else {
     url += "spot=Surf";
+  }
+
+  if (cfg.lat != 0.0f && cfg.lon != 0.0f) {
+    url += "&lat=" + fmtFloat6(cfg.lat);
+    url += "&lon=" + fmtFloat6(cfg.lon);
   }
 
   url += "&hours=4";
