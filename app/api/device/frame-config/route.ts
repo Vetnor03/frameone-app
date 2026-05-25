@@ -40,6 +40,11 @@ function asString(v: unknown, def: string) {
   return typeof v === 'string' ? v : def
 }
 
+function asNumber(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
