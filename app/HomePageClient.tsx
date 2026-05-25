@@ -13835,10 +13835,20 @@ function SurfSpotSheet({
                 onClick={() => onPicked({ spot: s.label, spotId: s.spotId })}
                 className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
               >
-<div className="text-[color:var(--fg-90)] text-base font-medium">
-  {language === 'no' && isTodaysBestLabel(s.label) ? 'Dagens Beste' : s.label}
-</div>
-                {s.custom ? <div className="mt-1 text-[10px] tracking-[0.12em] uppercase text-[#26b6b6]">Custom</div> : null}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[color:var(--fg-90)] text-base font-medium">
+                      {language === 'no' && isTodaysBestLabel(s.label) ? 'Dagens Beste' : s.label}
+                    </div>
+                    {s.custom ? <div className="mt-1 text-[10px] tracking-[0.12em] uppercase text-[#26b6b6]">{language === 'no' ? 'Privat' : 'Private'}</div> : null}
+                  </div>
+                  {s.custom ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-[#26b6b6]">
+                      <path d="M7.5 10V7.5C7.5 5.01 9.51 3 12 3C14.49 3 16.5 5.01 16.5 7.5V10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <rect x="5" y="10" width="14" height="11" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+                    </svg>
+                  ) : null}
+                </div>
               </button>
             ))
           )}
@@ -13957,7 +13967,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
         <div className="mt-3 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'BØLGE' : 'WAVE'}</div>
         <div className="mt-1 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
       {step === 2 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'VIND' : 'WIND'}</div><div className="mt-1 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
-      {step === 3 ? <><div className="mt-2 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
+      {step === 3 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'PARKERING' : 'PARKING'}</div><div className="mt-1 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
       <RealTileMap
@@ -14111,14 +14121,10 @@ function RealTileMap({
     {tiles}
     <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
     {markerType === 'parking' ? (
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-        <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-          <path d="M8.4 24.2H29.6" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-          <path d="M10.2 24.2V20.8L12.6 18.3H24.2L27.8 20.7V24.2" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M14.2 18.3L16.2 15.9H22.5L25.2 18.3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M12.9 21.3H24.6" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="14.3" cy="24.4" r="2.2" fill="#0c1117" stroke="white" strokeWidth="1.8" />
-          <circle cx="23.8" cy="24.4" r="2.2" fill="#0c1117" stroke="white" strokeWidth="1.8" />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+        <svg width="34" height="42" viewBox="0 0 34 42" fill="none" aria-hidden="true">
+          <path d="M17 3.5C9.54416 3.5 3.5 9.54416 3.5 17C3.5 27.1259 17 38.5 17 38.5C17 38.5 30.5 27.1259 30.5 17C30.5 9.54416 24.4558 3.5 17 3.5Z" fill="#2aa3ff" stroke="white" strokeWidth="2" />
+          <circle cx="17" cy="17" r="5.2" fill="#0c1117" stroke="white" strokeWidth="1.8" />
         </svg>
       </div>
     ) : (
