@@ -13963,6 +13963,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
         center={step === 3 ? parkingCenter : spotCenter}
         onCenterChange={step === 3 ? setParkingCenter : setSpotCenter}
         markerType={step === 3 ? 'parking' : 'spot'}
+        draggable={step !== 2}
       />
       {step === 1 ? <DirectionDial start={swellStart} end={swellEnd} main={swellMain} onStart={setSwellStart} onEnd={setSwellEnd} onMain={(v) => { setSwellArrowMoved(true); setSwellMain(v) }} /> : null}
       {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
@@ -13993,10 +13994,12 @@ function RealTileMap({
   center,
   onCenterChange,
   markerType = 'spot',
+  draggable = true,
 }: {
   center: { lat: number; lon: number }
   onCenterChange: (v: { lat: number; lon: number }) => void
   markerType?: 'spot' | 'parking'
+  draggable?: boolean
 }) {
   const TILE = 256
   const [zoom, setZoom] = useState(5)
@@ -14025,6 +14028,7 @@ function RealTileMap({
   const rafRef = useRef<number | null>(null)
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggable) return
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
@@ -14057,6 +14061,7 @@ function RealTileMap({
     }
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggable) return
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinchRef.current = null
     onCenterChange(localCenter)
@@ -14101,18 +14106,18 @@ function RealTileMap({
     }
   }
 
-  return <div ref={rootRef} className="absolute inset-0 overflow-hidden bg-[#253744] touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+  return <div ref={rootRef} className={`absolute inset-0 overflow-hidden bg-[#253744] ${draggable ? 'touch-none' : ''}`} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
     {tiles}
     <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
     {markerType === 'parking' ? (
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
         <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
-          <path d="M7 23.8H30.8L29.2 18.4C28.9 17.3 28.1 16.4 27.1 15.9L23.4 13.9C22.7 13.6 22 13.4 21.2 13.4H15.4C14.3 13.4 13.3 13.9 12.6 14.7L9.3 18.6C8.6 19.4 8.2 20.4 8.1 21.5L7 23.8Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M10.5 20.2H27.1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          <path d="M15.2 14V20.2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          <path d="M21.2 14V20.2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          <circle cx="13.1" cy="24.7" r="2.3" fill="white"/>
-          <circle cx="24.9" cy="24.7" r="2.3" fill="white"/>
+          <path d="M8.4 24.2H29.6" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M10.2 24.2V20.8L12.6 18.3H24.2L27.8 20.7V24.2" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M14.2 18.3L16.2 15.9H22.5L25.2 18.3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12.9 21.3H24.6" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="14.3" cy="24.4" r="2.2" fill="#0c1117" stroke="white" strokeWidth="1.8" />
+          <circle cx="23.8" cy="24.4" r="2.2" fill="#0c1117" stroke="white" strokeWidth="1.8" />
         </svg>
       </div>
     ) : (
