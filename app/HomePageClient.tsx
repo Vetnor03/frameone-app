@@ -256,6 +256,11 @@ function moduleLabel(language: AppLanguage, key: ModuleKey) {
   return UI[language].modules[key]
 }
 
+function moduleLoadingText(language: AppLanguage, key: ModuleKey) {
+  const label = moduleLabel(language, key).toLowerCase()
+  return language === 'no' ? `Laster ${label}…` : `Loading ${label}…`
+}
+
 function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; subtitle: string }[] {
   const t = tx(language)
   return [
@@ -10112,7 +10117,7 @@ function GroceriesModuleSettingsTab({
     <div className="h-full flex flex-col min-h-0">
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+          <div className="p-4 text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'groceries')}</div>
         ) : groupedVisibleItems.length === 0 ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
         ) : (
@@ -11202,7 +11207,7 @@ const sortedReminders = useMemo(() => {
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
               ) : loading ? (
-                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+                <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'reminders')}</div>
               ) : sortedReminders.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">
                   {selectedDayYmd
@@ -12642,7 +12647,7 @@ function SurfExperienceCard({
               className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
             >
                       {loading ? (
-                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+                <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'surf')}</div>
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
               ) : (
@@ -12911,7 +12916,7 @@ function SurfExperienceEditor({
     <>
       <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
         {loadingExisting ? (
-          <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+          <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'surf')}</div>
         ) : (
           <>
             <div>
@@ -13829,7 +13834,7 @@ function SurfSpotSheet({
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
                   {loading ? (
-            <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+            <div className="px-4 py-4 text-[color:var(--fg-50)]">{moduleLoadingText(language, 'surf')}</div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen spots funnet' : 'No spots found'}</div>
           ) : (
