@@ -247,6 +247,31 @@ async function fetchCustomSpotById(req: Request, spotId: string) {
     .maybeSingle()
   return data || null
 }
+
+async function fetchCustomSpotsForUser(req: Request): Promise<Array<{ id: string; name: string; lat: number; lon: number }>> {
+  const token = authBearerFromReq(req)
+  if (!token) return []
+  const userId = await resolveOwnerUserIdFromBearerToken(token)
+  if (!userId) return []
+
+  const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const { data, error } = await supabaseAdmin
+    .from('custom_surf_spots')
+    .select('id, name, lat, lon')
+    .eq('user_id', userId)
+
+  if (error || !Array.isArray(data)) return []
+
+  return data
+    .map((row: any) => ({
+      id: String(row?.id || '').trim(),
+      name: String(row?.name || '').trim(),
+      lat: Number(row?.lat),
+      lon: Number(row?.lon),
+    }))
+    .filter((row) => row.id && row.name && Number.isFinite(row.lat) && Number.isFinite(row.lon))
+}
+
 type WaterMinMax = { temp_min_c: number | null; temp_max_c: number | null }
 
 const SST_CACHE_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
@@ -1700,12 +1725,21 @@ export async function GET(req: Request) {
         'vigdel',
       ])
 
-      const candidates = Object.values(SURF_SPOTS).filter((s) => {
+      const mapCandidates = Object.values(SURF_SPOTS).filter((s) => {
         if (!s || !s.spotId) return false
         if (EXCLUDE_FROM_TODAYS_BEST.has(s.spotId)) return false
         if (s.label.toLowerCase() === TODAYS_BEST_LABEL.toLowerCase()) return false
         return true
       })
+
+      const customCandidates = (await fetchCustomSpotsForUser(req)).map((row) => ({
+        spotId: row.id,
+        label: row.name,
+        lat: row.lat,
+        lon: row.lon,
+      }))
+
+      const candidates = mapCandidates.concat(customCandidates)
 
       if (!candidates.length) {
         return jsonNoStore({ error: 'No spots available for Today’s Best' }, { status: 500 })
@@ -2032,6 +2066,18 @@ export async function GET(req: Request) {
       geoSource = 'query_latlon'
       spotId = spotIdQ || null
       spotLabel = spotQ || (spotId ? SURF_SPOTS[spotId]?.label ?? null : null)
+
+      if (!spotLabel && spotId) {
+        const cs = await fetchCustomSpotById(req, spotId)
+        if (cs) {
+          spotLabel = String(cs.name || '').trim() || null
+          customSpotProfile = {
+            waveDir: { startDeg: Number(cs.swell_sector_start_deg), endDeg: Number(cs.swell_sector_end_deg), mainDeg: Number(cs.swell_main_deg) },
+            windDir: { startDeg: Number(cs.wind_sector_start_deg), endDeg: Number(cs.wind_sector_end_deg), mainDeg: Number(cs.wind_main_deg) },
+          }
+          geoSource = 'query_latlon_custom'
+        }
+      }
     } else if (spotIdQ) {
       const s = SURF_SPOTS[spotIdQ]
       if (s) {
