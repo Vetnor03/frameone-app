@@ -14098,7 +14098,7 @@ function RealTileMap({
       const leftPx = Math.floor((tx * TILE - left) * zoomScale)
       const topPx = Math.floor((ty * TILE - top) * zoomScale)
       const tilePx = Math.ceil(TILE * zoomScale) + 1
-      tiles.push(<img key={`${tileZoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: tilePx, height: tilePx, left: leftPx, top: topPx }} />)
+      tiles.push(<img key={`${tileZoom}-${tx}-${ty}`} src={`https://mt1.google.com/vt/lyrs=s&x=${wrappedX}&y=${ty}&z=${tileZoom}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: tilePx, height: tilePx, left: leftPx, top: topPx }} />)
     }
   }
 
