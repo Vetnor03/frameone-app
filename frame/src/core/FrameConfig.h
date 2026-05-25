@@ -53,7 +53,7 @@ struct WeatherModuleConfig {
 // You can send either; firmware will URL-encode safely when requesting scores.
 struct SurfModuleConfig {
   uint8_t id = 0;                 // 1..n (matches "surf:<id>")
-  char spotId[32] = {0};          // preferred stable ASCII id (optional)
+  char spotId[80] = {0};          // preferred stable ASCII id (optional, includes longer custom ids)
   char spot[48] = {0};            // display name (optional)
   uint32_t refreshMs = 1800000UL; // default 30 min
 };

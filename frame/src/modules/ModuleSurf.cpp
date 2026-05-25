@@ -43,7 +43,7 @@ static const char* TODAYS_BEST_LABEL = "Today's Best";
 
 struct SurfInstanceConfig {
   uint8_t id = 1;
-  char spotId[32] = {0};
+  char spotId[80] = {0};
   char spot[48] = {0};
   uint32_t refreshMs = 1800000UL;
 };
@@ -84,7 +84,7 @@ struct SurfCache {
   char waveRangeNext[24] = {0};
 
   char spotLabel[48] = {0};
-  char spotIdResolved[32] = {0};
+  char spotIdResolved[80] = {0};
 
   float swellHeightM = NAN;
   float swellPeriodS = NAN;
