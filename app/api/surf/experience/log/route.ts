@@ -11,6 +11,31 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+async function fetchCustomSpotForUser(userId: string, spotIdOrName: string) {
+  const q = String(spotIdOrName || '').trim()
+  if (!q) return null
+
+  const cleanId = q.startsWith('custom:') ? q.slice('custom:'.length).trim() : q
+
+  const byId = await supabaseAdmin
+    .from('custom_surf_spots')
+    .select('id,name,lat,lon,user_id')
+    .eq('user_id', userId)
+    .eq('id', cleanId)
+    .maybeSingle()
+
+  if (byId.data) return byId.data
+
+  const byName = await supabaseAdmin
+    .from('custom_surf_spots')
+    .select('id,name,lat,lon,user_id')
+    .eq('user_id', userId)
+    .ilike('name', q)
+    .maybeSingle()
+
+  return byName.data || null
+}
+
 type SwellPart = {
   height: number
   dir: number
@@ -367,18 +392,31 @@ export async function POST(req: Request) {
     let resolvedSpotLabel: string | null = null
     let resolvedSpotId: string | null = null
 
-    const byId = Object.values(SURF_SPOTS).find((s) => s.spotId === String(spotId).trim()) || null
+    const spotIdRaw = String(spotId).trim()
+    const byId = Object.values(SURF_SPOTS).find((s) => s.spotId === spotIdRaw) || null
     const byLabel = findSpotByLabel(String(spot).trim())
     const resolved = byId || byLabel
 
     if (!resolved) {
-      return NextResponse.json({ error: 'Unknown surf spot' }, { status: 400 })
-    }
+      const custom = await fetchCustomSpotForUser(user.id, spotIdRaw || String(spot).trim())
+      if (!custom) {
+        return NextResponse.json({ error: 'Unknown surf spot' }, { status: 400 })
+      }
 
-    resolvedSpotId = String(resolved.spotId)
-    resolvedSpotLabel = String(resolved.label)
-    lat = Number(resolved.lat)
-    lon = Number(resolved.lon)
+      resolvedSpotId = String(custom.id)
+      resolvedSpotLabel = String(custom.name)
+      lat = Number(custom.lat)
+      lon = Number(custom.lon)
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return NextResponse.json({ error: 'Spot coordinates missing' }, { status: 400 })
+      }
+    } else {
+      resolvedSpotId = String(resolved.spotId)
+      resolvedSpotLabel = String(resolved.label)
+      lat = Number(resolved.lat)
+      lon = Number(resolved.lon)
+    }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       return NextResponse.json({ error: 'Spot coordinates missing' }, { status: 400 })
