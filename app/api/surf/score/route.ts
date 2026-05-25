@@ -1,7 +1,7 @@
 // app/api/surf/score/route.ts  (FULL FILE - copy/paste)
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
-import { scoreSurf, type UserSurfExperienceRecord } from '@/app/lib/surfScoring'
+import { scoreSurf, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
@@ -188,6 +188,23 @@ async function fetchDailyExtras(lat: number, lon: number): Promise<DailyExtras> 
 // ------------------------------
 // Water temp min/max (Open-Meteo Marine SST) — cached
 // ------------------------------
+
+
+async function fetchCustomSpotById(req: Request, spotId: string) {
+  const token = authBearerFromReq(req)
+  if (!token) return null
+  const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const { data: userData } = await supabaseAdmin.auth.getUser(token)
+  const userId = userData?.user?.id
+  if (!userId) return null
+  const { data } = await supabaseAdmin
+    .from('custom_surf_spots')
+    .select('*')
+    .eq('id', spotId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return data || null
+}
 type WaterMinMax = { temp_min_c: number | null; temp_max_c: number | null }
 
 const SST_CACHE_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
@@ -715,8 +732,9 @@ function pickBestSwell(args: {
   spotKey: string
   marine: MarineBundle
   userExperiences?: UserSurfExperienceRecord[]
+  customSpotProfile?: CustomSpotScoringProfile | null
 }) {
-  const { spotKey, marine, userExperiences } = args
+  const { spotKey, marine, userExperiences, customSpotProfile } = args
 
   const windSpeedMs = marine.wind_speed_ms
   const windDirDeg = marine.wind_direction_deg_from
@@ -731,6 +749,7 @@ function pickBestSwell(args: {
     windSpeedMs,
     windDirDeg,
     userExperiences,
+    customSpotProfile,
   })
 
   const withDebug = <T extends { chosen: 'primary' | 'secondary'; chosenScore: ReturnType<typeof scoreSurf> }>(
@@ -811,6 +830,7 @@ function pickBestSwell(args: {
     windSpeedMs,
     windDirDeg,
     userExperiences,
+    customSpotProfile,
   })
 
   const pickPrimary = (whySelected: string) =>
@@ -1962,6 +1982,7 @@ export async function GET(req: Request) {
     let geoSource: string = 'unknown'
     let geoQuery: string | null = null
 
+    let customSpotProfile: CustomSpotScoringProfile | null = null
     if (latQ != null && lonQ != null) {
       lat = latQ
       lon = lonQ
@@ -1970,12 +1991,25 @@ export async function GET(req: Request) {
       spotLabel = spotQ || (spotId ? SURF_SPOTS[spotId]?.label ?? null : null)
     } else if (spotIdQ) {
       const s = SURF_SPOTS[spotIdQ]
-      if (!s) return jsonNoStore({ error: 'Unknown spotId', spotId: spotIdQ }, { status: 400 })
-      spotId = s.spotId
-      spotLabel = s.label
-      lat = s.lat
-      lon = s.lon
-      geoSource = 'spotId_map'
+      if (s) {
+        spotId = s.spotId
+        spotLabel = s.label
+        lat = s.lat
+        lon = s.lon
+        geoSource = 'spotId_map'
+      } else {
+        const cs = await fetchCustomSpotById(req, spotIdQ)
+        if (!cs) return jsonNoStore({ error: 'Unknown spotId', spotId: spotIdQ }, { status: 400 })
+        spotId = String(cs.id)
+        spotLabel = String(cs.name)
+        lat = Number(cs.lat)
+        lon = Number(cs.lon)
+        geoSource = 'spotId_custom'
+        customSpotProfile = {
+          waveDir: { startDeg: Number(cs.swell_sector_start_deg), endDeg: Number(cs.swell_sector_end_deg), mainDeg: Number(cs.swell_main_deg) },
+          windDir: { startDeg: Number(cs.wind_sector_start_deg), endDeg: Number(cs.wind_sector_end_deg), mainDeg: Number(cs.wind_main_deg) },
+        }
+      }
     } else if (spotQ) {
       const s = findSpotByLabel(spotQ)
       if (!s) {
@@ -2027,7 +2061,7 @@ export async function GET(req: Request) {
       chosenHourOffset = best.hourOffset
     } else {
       marineNow = makeBundleAt(series, 0)
-      pickedNow = pickBestSwell({ spotKey: spotKeyForTables, marine: marineNow, userExperiences: spotUserExperiences })
+      pickedNow = pickBestSwell({ spotKey: spotKeyForTables, marine: marineNow, userExperiences: spotUserExperiences, customSpotProfile })
       scoredNow = pickedNow.chosenScore
       chosenHourOffset = 0
     }
@@ -2035,7 +2069,7 @@ export async function GET(req: Request) {
     const chosenHeights: number[] = []
     for (let off = 0; off < hours; off++) {
       const b = makeBundleAt(series, off)
-      const p = pickBestSwell({ spotKey: spotKeyForTables, marine: b, userExperiences: spotUserExperiences })
+      const p = pickBestSwell({ spotKey: spotKeyForTables, marine: b, userExperiences: spotUserExperiences, customSpotProfile })
       const h = selectedSwellFromPick(b, p).height_m
       if (Number.isFinite(h)) chosenHeights.push(h)
     }
