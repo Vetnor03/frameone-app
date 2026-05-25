@@ -235,6 +235,34 @@ export async function GET(req: Request) {
     // -------------------------------
     if (isActiveBase(active, 'surf')) {
       const surfList: UnknownRecord[] = Array.isArray(sourceModules.surf) ? sourceModules.surf : []
+      const customSpotIdsToResolve = Array.from(
+        new Set(
+          surfList
+            .map((s) => (s && typeof s === 'object' ? asString((s as UnknownRecord).spotId, '').trim() : ''))
+            .filter((spotId) => spotId.startsWith('custom:'))
+            .map((spotId) => spotId.slice('custom:'.length))
+            .filter((id) => id.length > 0)
+        )
+      )
+
+      const customSpotById = new Map<string, { name: string; lat: number | null; lon: number | null }>()
+      if (customSpotIdsToResolve.length > 0) {
+        const { data: customSpots } = await supabase
+          .from('custom_surf_spots')
+          .select('id, name, lat, lon')
+          .in('id', customSpotIdsToResolve)
+
+        for (const row of customSpots ?? []) {
+          const id = asString((row as UnknownRecord).id, '').trim()
+          if (!id) continue
+          customSpotById.set(id, {
+            name: asString((row as UnknownRecord).name, '').trim(),
+            lat: asNumber((row as UnknownRecord).lat),
+            lon: asNumber((row as UnknownRecord).lon),
+          })
+        }
+      }
+
       const sanitizedSurf: UnknownRecord[] = []
       const seenSurfIds = new Set<number>()
 
@@ -251,9 +279,11 @@ export async function GET(req: Request) {
         const derivedSpotId = !spotId && spot ? spotIdFromLabel(spot) : null
         // Keep room for custom spot ids (uuid is 36 chars; prefixed ids are longer).
         const finalSpotId = (spotId || derivedSpotId || '').slice(0, 80)
-        const finalSpot = spot.slice(0, 47)
-        const lat = asNumber(s.lat)
-        const lon = asNumber(s.lon)
+        const customSpot =
+          finalSpotId.startsWith('custom:') ? customSpotById.get(finalSpotId.slice('custom:'.length)) ?? null : null
+        const finalSpot = (spot || customSpot?.name || '').slice(0, 47)
+        const lat = asNumber(s.lat) ?? customSpot?.lat ?? null
+        const lon = asNumber(s.lon) ?? customSpot?.lon ?? null
 
         if (!finalSpotId && !finalSpot && lat == null && lon == null) continue
 
