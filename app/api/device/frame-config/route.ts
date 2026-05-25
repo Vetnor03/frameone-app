@@ -140,7 +140,7 @@ export async function GET(req: Request) {
 
     const settings_json: UnknownRecord =
       data?.settings_json ?? {
-        theme: 'dark',
+        theme: 'light',
         layout: 'default',
         cells: [
           { slot: 0, module: 'date' },

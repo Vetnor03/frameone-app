@@ -5808,7 +5808,7 @@ function LandscapeFrameMirror({
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const isDark = theme === 'dark'
-  const background = isDark ? '#061b24' : '#eef2f6'
+  const background = isDark ? '#061b24' : '#f6f3ed'
   const frameBackground = background
   const textColor = isDark ? '#eef8ff' : '#07141c'
   const mutedColor = isDark ? 'rgba(238,248,255,0.58)' : 'rgba(7,20,28,0.58)'
