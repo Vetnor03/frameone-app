@@ -244,7 +244,8 @@ export async function GET(req: Request) {
         const spotId = asString(s.spotId, '').trim()
         const spot = asString(s.spot, '').trim()
         const derivedSpotId = !spotId && spot ? spotIdFromLabel(spot) : null
-        const finalSpotId = (spotId || derivedSpotId || '').slice(0, 31)
+        // Keep room for custom spot ids (uuid is 36 chars; prefixed ids are longer).
+        const finalSpotId = (spotId || derivedSpotId || '').slice(0, 80)
         const finalSpot = spot.slice(0, 47)
 
         if (!finalSpotId && !finalSpot) continue
