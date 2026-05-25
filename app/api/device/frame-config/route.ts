@@ -40,6 +40,11 @@ function asString(v: unknown, def: string) {
   return typeof v === 'string' ? v : def
 }
 
+function asNumber(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
@@ -247,13 +252,17 @@ export async function GET(req: Request) {
         // Keep room for custom spot ids (uuid is 36 chars; prefixed ids are longer).
         const finalSpotId = (spotId || derivedSpotId || '').slice(0, 80)
         const finalSpot = spot.slice(0, 47)
+        const lat = asNumber(s.lat)
+        const lon = asNumber(s.lon)
 
-        if (!finalSpotId && !finalSpot) continue
+        if (!finalSpotId && !finalSpot && lat == null && lon == null) continue
 
         sanitizedSurf.push({
           id,
           spotId: finalSpotId || undefined,
           spot: finalSpot || undefined,
+          lat: lat ?? undefined,
+          lon: lon ?? undefined,
           refresh: 1800000,
         })
 

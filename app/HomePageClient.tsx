@@ -7027,6 +7027,8 @@ type SurfCfg = {
   id: number
   spot?: string
   spotId?: string
+  lat?: number
+  lon?: number
   fuelPenalty?: FuelPenaltyCfg
 }
 
@@ -12080,8 +12082,12 @@ function SurfModuleSettingsTab({
         }
 
         const fuelPenalty = sanitizeFuelPenalty(x.fuelPenalty)
+        const lat = Number.isFinite(Number(x.lat)) ? Number(x.lat) : undefined
+        const lon = Number.isFinite(Number(x.lon)) ? Number(x.lon) : undefined
 
         const out: SurfCfg = { id, spot, spotId }
+        if (lat != null) out.lat = lat
+        if (lon != null) out.lon = lon
         if (fuelPenalty) out.fuelPenalty = fuelPenalty
 
         return out
@@ -13677,6 +13683,8 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (next: bool
 type SpotItem = {
   spotId: string
   label: string
+  lat?: number
+  lon?: number
   custom?: boolean
 }
 
@@ -13696,7 +13704,7 @@ type CustomSurfSpot = {
   wind_main_deg: number
 }
 
-type SurfSpotSelection = { spot: string; spotId: string }
+type SurfSpotSelection = { spot: string; spotId: string; lat?: number; lon?: number }
 type CustomSurfSpotWizardProps = {
   language: AppLanguage
   onClose: () => void
@@ -13713,7 +13721,7 @@ function SurfSpotSheet({
   language: AppLanguage
   title: string
   onClose: () => void
-  onPicked: (cfgPatch: { spot: string; spotId: string }) => void
+  onPicked: (cfgPatch: { spot: string; spotId: string; lat?: number; lon?: number }) => void
   hideTodaysBest?: boolean
 }) {
   const [query, setQuery] = useState('')
@@ -13745,6 +13753,8 @@ function SurfSpotSheet({
             .map((s: any) => ({
               spotId: String(s?.spotId ?? '').trim(),
               label: String(s?.label ?? '').trim(),
+              lat: Number.isFinite(Number(s?.lat)) ? Number(s.lat) : undefined,
+              lon: Number.isFinite(Number(s?.lon)) ? Number(s.lon) : undefined,
             }))
             .filter((s: any) => s.spotId.length > 0 && s.label.length > 0)
         } else {
@@ -13770,6 +13780,8 @@ function SurfSpotSheet({
             customList = (Array.isArray(customJson?.items) ? customJson.items : []).map((row: CustomSurfSpot) => ({
               spotId: `custom:${row.id}`,
               label: String(row.name || '').trim(),
+              lat: Number(row.lat),
+              lon: Number(row.lon),
               custom: true,
             }))
           }
@@ -13832,7 +13844,7 @@ function SurfSpotSheet({
             filtered.map((s) => (
               <button
                 key={`${s.spotId || 'label'}-${s.label}`}
-                onClick={() => onPicked({ spot: s.label, spotId: s.spotId })}
+                onClick={() => onPicked({ spot: s.label, spotId: s.spotId, lat: s.lat, lon: s.lon })}
                 className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -13953,7 +13965,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
     setSaving(false)
     if (!resp.ok) return
     const json: any = await resp.json()
-    onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}` })
+    onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}`, lat, lon })
     onClose()
   }
 
