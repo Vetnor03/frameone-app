@@ -5808,11 +5808,6 @@ function LandscapeFrameMirror({
     '--mirror-bg-inverse': textColor,
     '--mirror-fg-inverse': inverseColor,
   }
-
-  const loadingTextForModule = (module: ModuleKey) => {
-    if (language === 'no') return `Laster ${module}...`
-    return `Loading ${module}...`
-  }
   const displayCells = snapshot
     ? Object.keys(snapshot.cells).reduce<Record<number, ModuleKey | null>>((acc, key) => {
       const slot = Number(key)
@@ -5828,16 +5823,6 @@ function LandscapeFrameMirror({
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
-
-    if (pendingSlotsByModule.get(slot) === module) {
-      return (
-        <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
-          <div className="max-w-full text-[clamp(0.66rem,1.8vw,1.02rem)] font-semibold tracking-[0.08em]">
-            {loadingTextForModule(module)}
-          </div>
-        </div>
-      )
-    }
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
       const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
