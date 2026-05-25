@@ -91,6 +91,7 @@ type Detail = {
   stockSeries?: number[]
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
+  stockBaselinePrice?: number | null
   stockPurchasePrice?: number | null
   countdownTitle?: string
   countdownDaysLeft?: number
