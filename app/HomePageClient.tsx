@@ -14051,8 +14051,9 @@ function RealTileMap({
       const dist = Math.hypot(vals[0].x - vals[1].x, vals[0].y - vals[1].y)
       if (!pinchRef.current) pinchRef.current = { dist, zoomStart: zoom }
       const delta = Math.log2(Math.max(0.2, dist / pinchRef.current.dist))
-      const next = Math.max(2, Math.min(18, pinchRef.current.zoomStart + delta))
-      if (next !== zoom) setZoom(next)
+      const rawNext = Math.max(2, Math.min(18, pinchRef.current.zoomStart + delta))
+      const snappedNext = Math.round(rawNext)
+      if (snappedNext !== zoom) setZoom(snappedNext)
     }
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -14077,17 +14078,16 @@ function RealTileMap({
 
   const viewportW = viewport.w
   const viewportH = viewport.h
-  const tileZoom = Math.max(2, Math.min(18, Math.floor(zoom)))
-  const zoomScale = 2 ** (zoom - tileZoom)
+  const tileZoom = Math.max(2, Math.min(18, Math.round(zoom)))
   const world = project(localCenter.lat, localCenter.lon, tileZoom)
-  const halfW = viewportW / (2 * zoomScale)
-  const halfH = viewportH / (2 * zoomScale)
+  const halfW = viewportW / 2
+  const halfH = viewportH / 2
   const left = world.x - halfW
   const top = world.y - halfH
   const firstX = Math.floor(left / TILE)
   const firstY = Math.floor(top / TILE)
-  const lastX = Math.floor((left + viewportW / zoomScale) / TILE)
-  const lastY = Math.floor((top + viewportH / zoomScale) / TILE)
+  const lastX = Math.floor((left + viewportW) / TILE)
+  const lastY = Math.floor((top + viewportH) / TILE)
   const maxIdx = 2 ** tileZoom
 
   const tiles: React.ReactNode[] = []
@@ -14095,14 +14095,13 @@ function RealTileMap({
     for (let ty = firstY; ty <= lastY; ty += 1) {
       if (ty < 0 || ty >= maxIdx) continue
       const wrappedX = ((tx % maxIdx) + maxIdx) % maxIdx
-      const leftPx = Math.floor((tx * TILE - left) * zoomScale)
-      const topPx = Math.floor((ty * TILE - top) * zoomScale)
-      const tilePx = Math.ceil(TILE * zoomScale) + 1
-      tiles.push(<img key={`${tileZoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none" style={{ width: tilePx, height: tilePx, left: leftPx, top: topPx }} />)
+      const leftPx = tx * TILE - left
+      const topPx = ty * TILE - top
+      tiles.push(<img key={`${tileZoom}-${tx}-${ty}`} src={`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${wrappedX}`} alt="Satellite map tile" draggable={false} className="absolute select-none pointer-events-none [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]" style={{ width: TILE, height: TILE, left: leftPx, top: topPx }} />)
     }
   }
 
-  return <div ref={rootRef} className="absolute inset-0 overflow-hidden bg-[#0a1118] touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+  return <div ref={rootRef} className="absolute inset-0 overflow-hidden bg-[#253744] touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
     {tiles}
     <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/30 pointer-events-none" />
     {markerType === 'parking' ? (
