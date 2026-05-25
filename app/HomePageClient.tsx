@@ -6628,6 +6628,7 @@ function MyFramesSection({
   const [shareCode, setShareCode] = useState('')
   const [shareError, setShareError] = useState<string | null>(null)
   const [copyDone, setCopyDone] = useState(false)
+  const autoPairPromptedRef = useRef(false)
 
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
@@ -6730,6 +6731,12 @@ async function addFrame() {
 
   alert(t.frameAdded)
 }
+
+  useEffect(() => {
+    if (loading || frames.length > 0 || autoPairPromptedRef.current) return
+    autoPairPromptedRef.current = true
+    void addFrame()
+  }, [frames.length, loading])
 
   async function openShare() {
     if (!activeDeviceId) return
