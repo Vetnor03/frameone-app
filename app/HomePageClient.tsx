@@ -5845,6 +5845,11 @@ function LandscapeFrameMirror({
       return <div className="text-sm tracking-widest opacity-35">—</div>
     }
 
+    const isPending = pendingSlotsByModule.get(slot) === module
+    if (isPending) {
+      return <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, module)}</div>
+    }
+
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
 
