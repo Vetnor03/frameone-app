@@ -971,15 +971,11 @@ export default function HomePage() {
   const autoPersistingRef = useRef(false)
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
-  const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
-  const saveToastTimerRef = useRef<number | null>(null)
+  const recentModulesRef = useRef<ModuleKey[]>([])
 
-  function showSavedToast(text = tx(language).saved) {
-    setSaveToast({ visible: true, text })
-    if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
-    saveToastTimerRef.current = window.setTimeout(() => {
-      setSaveToast((t) => ({ ...t, visible: false }))
-    }, 1400)
+  function rememberModule(module: ModuleKey | null) {
+    if (!module) return
+    recentModulesRef.current = [module, ...recentModulesRef.current.filter((m) => m !== module)].slice(0, 4)
   }
 
   useEffect(() => {
@@ -1054,7 +1050,6 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
-      if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
       if (dirtyFrameRef.current != null) window.cancelAnimationFrame(dirtyFrameRef.current)
     }
   }, [])
@@ -1215,12 +1210,26 @@ export default function HomePage() {
   }
 
   function projectSlotMemoryIntoLayout(moduleMemory: (ModuleKey | null)[], targetLayout: LayoutKey) {
-    // We intentionally keep sparse values as null so layout switches preserve slot positions.
     const target = emptyCellsFor(targetLayout)
     const targetSlots = orderedSlotsForLayout(targetLayout)
+    const used = new Set<ModuleKey>()
 
     targetSlots.forEach((slot, idx) => {
-      target[slot] = moduleMemory[idx] ?? null
+      const baseModule = moduleMemory[idx] ?? null
+      if (baseModule) {
+        target[slot] = baseModule
+        used.add(baseModule)
+        rememberModule(baseModule)
+        return
+      }
+
+      const fallback = recentModulesRef.current.find((m) => !used.has(m))
+      if (fallback) {
+        target[slot] = fallback
+        used.add(fallback)
+      } else {
+        target[slot] = null
+      }
     })
 
     return target
@@ -1240,6 +1249,7 @@ export default function HomePage() {
     while (next.length <= slot) next.push(null)
 
     next[slot] = nextValue ?? null
+    if (nextValue) rememberModule(nextValue)
     return next
   }
 
@@ -1439,6 +1449,7 @@ export default function HomePage() {
     }
 
     layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(nextCellsForLayout)
+    recentModulesRef.current = layoutModuleMemoryRef.current.filter((m): m is ModuleKey => Boolean(m)).slice(0, 4)
 
     const rawModules =
       json.modules && typeof json.modules === 'object'
@@ -1717,7 +1728,7 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function persistSettings(showToast = true) {
+  async function persistSettings() {
     if (!activeDeviceId) return
     if (persisting) return
 
@@ -1752,6 +1763,7 @@ export default function HomePage() {
       }
 
       layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(savedCellsForLayout)
+      recentModulesRef.current = layoutModuleMemoryRef.current.filter((m): m is ModuleKey => Boolean(m)).slice(0, 4)
 
       setCellsByLayout(nextCellsByLayout)
       setModulesJson(modulesForSave)
@@ -1774,7 +1786,6 @@ export default function HomePage() {
       }
 
       setDirty(false)
-      if (showToast) showSavedToast(tx(language).saved)
     } catch (e: any) {
       alert(String(e?.message || e))
     } finally {
@@ -1793,9 +1804,7 @@ export default function HomePage() {
   const appText = 'text-[color:var(--fg)]'
 
   useEffect(() => {
-    if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting || autoPersistingRef.current) return
-    if (activeTab === 'settings') return
-
+    if (!activeDeviceId || !isLoadedRef.current || persisting || autoPersistingRef.current) return
     const timer = window.setTimeout(async () => {
       const baseline = savedFrameStateRef.current
       if (!baseline) return
@@ -1831,7 +1840,7 @@ export default function HomePage() {
         })
         refreshDirtyState()
       } catch {
-        // keep unsaved state; user can still tap UPDATE manually
+        // keep unsaved state and retry on next change
       } finally {
         autoPersistingRef.current = false
       }
@@ -1955,19 +1964,6 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
   <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
-    <button
-      onClick={() => persistSettings(true)}
-      className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
-        dirty
-          ? 'border-[#2aa3ff] text-[#2aa3ff]'
-          : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
-      }`}
-      style={{ backgroundColor: 'var(--app-bg)' }}
-      disabled={!dirty || persisting}
-    >
-      {persisting ? tx(language).saving : tx(language).update}
-    </button>
-
     <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
       {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
     </div>
@@ -2024,7 +2020,6 @@ async function handleSelectTab(k: TabKey) {
               />
             )}
 
-            <SaveToast visible={saveToast.visible} text={saveToast.text} />
           </>
         </div>
 
@@ -2038,20 +2033,6 @@ async function handleSelectTab(k: TabKey) {
         )}
       </div>
     </main>
-  )
-}
-
-function SaveToast({ visible, text }: { visible: boolean; text: string }) {
-  return (
-    <div
-      className={`pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-[28px] z-[80] transition-all duration-200 ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-      }`}
-    >
-      <div className="px-4 py-2 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--toast-bg)] backdrop-blur text-[color:var(--fg-80)] tracking-widest text-xs">
-        {text}
-      </div>
-    </div>
   )
 }
 
