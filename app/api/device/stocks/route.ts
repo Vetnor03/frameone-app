@@ -527,6 +527,18 @@ export async function GET(req: Request) {
     }
 
 
+    const currentPrice = price
+    const dayChangePct = changePercent
+    const rangeChangePct =
+      selectedSeries.length >= 2 && selectedSeries[0]?.p != null && selectedSeries[selectedSeries.length - 1]?.p != null && selectedSeries[0].p > 0
+        ? ((selectedSeries[selectedSeries.length - 1].p - selectedSeries[0].p) / selectedSeries[0].p) * 100
+        : null
+    const returnSincePurchasePct =
+      purchasePrice != null && currentPrice != null
+        ? ((currentPrice - purchasePrice) / purchasePrice) * 100
+        : null
+    const displayReturnPct = returnSincePurchasePct ?? rangeChangePct
+
     const response = {
       symbol: resolvedSymbol,
       name: name || resolvedSymbol,
@@ -534,13 +546,13 @@ export async function GET(req: Request) {
       chartRange,
       currency,
       ...(purchasePrice != null ? { purchasePrice } : {}),
-      ...(purchasePrice != null && price != null
-        ? { personalChangePercent: ((price - purchasePrice) / purchasePrice) * 100 }
-        : {}),
+      ...(returnSincePurchasePct != null ? { personalChangePercent: returnSincePurchasePct } : {}),
+      ...(rangeChangePct != null ? { rangeChangePercent: rangeChangePct } : {}),
+      ...(displayReturnPct != null ? { displayReturnPercent: displayReturnPct } : {}),
       quote: {
-        price,
+        price: currentPrice,
         change,
-        changePercent,
+        changePercent: dayChangePct,
         previousClose,
         open,
         high,
