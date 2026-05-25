@@ -1791,6 +1791,7 @@ export default function HomePage() {
       }
 
       setDirty(false)
+      await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
     } catch (e: any) {
       alert(String(e?.message || e))
     } finally {
@@ -1851,6 +1852,7 @@ export default function HomePage() {
           pinnedModuleTabs,
         })
         refreshDirtyState()
+        await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
       } catch {
         // keep unsaved state and retry on next change
       } finally {
