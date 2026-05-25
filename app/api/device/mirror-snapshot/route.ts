@@ -1338,10 +1338,19 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
   const quote = asRecord(data.quote)
   const resolvedSymbol = asString(data.symbol, symbol).trim().toUpperCase()
   const title = asString(data.name, resolvedSymbol || symbol).trim() || resolvedSymbol || symbol
-  const price = formatPrice(quote.price, asString(data.currency, 'USD'))
-  const dayPct = formatPercent(quote.changePercent)
-  const rangePct = formatPercent(selectedSeriesPercent(data.selectedSeries))
-  const personalChangePercent = asNumber(data.personalChangePercent)
+  const currentPrice = asNumber(quote.price)
+  const dayChangePct = asNumber(quote.changePercent)
+  const purchasePriceRaw = asNumber(data.purchasePrice)
+  const purchasePrice = purchasePriceRaw != null && purchasePriceRaw > 0 ? purchasePriceRaw : null
+  const returnSincePurchasePct =
+    purchasePrice != null && currentPrice != null
+      ? ((currentPrice - purchasePrice) / purchasePrice) * 100
+      : null
+  const rangeChangePct = asNumber(data.rangeChangePercent) ?? selectedSeriesPercent(data.selectedSeries)
+  const displayReturnPct = returnSincePurchasePct ?? rangeChangePct
+  const price = formatPrice(currentPrice, asString(data.currency, 'USD'))
+  const dayPct = formatPercent(dayChangePct)
+  const displayReturnPctText = formatPercent(displayReturnPct)
   const seriesRows = selectedSeriesRows(data.selectedSeries)
   const series = seriesRows.map((point) => point.price)
 
@@ -1355,18 +1364,18 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
     stockSymbol: resolvedSymbol,
     stockPrice: price,
     stockDayPercent: dayPct ?? '--',
-    stockRangePercent: rangePct ?? '--',
+    stockRangePercent: displayReturnPctText ?? '--',
     stockOpen: formatFrameStockPrice(quote.open),
     stockHigh: formatFrameStockPrice(quote.high),
     stockLow: formatFrameStockPrice(quote.low),
     stockPreviousCloseText: formatFrameStockPrice(quote.previousClose),
     stockChange: formatFrameStockSigned(quote.change),
-    stockPositionPercent: personalChangePercent != null ? formatFrameStockSigned(personalChangePercent, true) : undefined,
+    stockPositionPercent: returnSincePurchasePct != null ? formatFrameStockSigned(returnSincePurchasePct, true) : undefined,
     stockChartRange: normalizeStockRange(data.chartRange || cfg.chartRange),
     stockSeries: series,
     stockSeriesTimestamps: seriesRows.map((point) => point.timestampMs),
     stockPreviousClose: asNumber(quote.previousClose),
-    stockPurchasePrice: asNumber(data.purchasePrice),
+    stockPurchasePrice: purchasePrice,
   }
 }
 
