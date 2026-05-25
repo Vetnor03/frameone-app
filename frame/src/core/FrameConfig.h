@@ -55,6 +55,8 @@ struct SurfModuleConfig {
   uint8_t id = 0;                 // 1..n (matches "surf:<id>")
   char spotId[80] = {0};          // preferred stable ASCII id (optional, includes longer custom ids)
   char spot[48] = {0};            // display name (optional)
+  float lat = 0.0f;               // optional (used by custom spots)
+  float lon = 0.0f;               // optional (used by custom spots)
   uint32_t refreshMs = 1800000UL; // default 30 min
 };
 
