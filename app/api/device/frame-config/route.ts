@@ -1,7 +1,7 @@
 // app/api/device/frame-config/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { spotIdFromLabel } from '@/app/lib/surf/spots'
+import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 
 export const runtime = 'nodejs'
 
@@ -235,12 +235,18 @@ export async function GET(req: Request) {
     // -------------------------------
     if (isActiveBase(active, 'surf')) {
       const surfList: UnknownRecord[] = Array.isArray(sourceModules.surf) ? sourceModules.surf : []
+      const knownSpotIds = new Set(Object.values(SURF_SPOTS).map((x) => String(x.spotId || '').trim()))
       const customSpotIdsToResolve = Array.from(
         new Set(
           surfList
             .map((s) => (s && typeof s === 'object' ? asString((s as UnknownRecord).spotId, '').trim() : ''))
-            .filter((spotId) => spotId.startsWith('custom:'))
-            .map((spotId) => spotId.slice('custom:'.length))
+            .map((spotId) =>
+              spotId.startsWith('custom:')
+                ? spotId.slice('custom:'.length).trim()
+                : !knownSpotIds.has(spotId)
+                  ? spotId
+                  : ''
+            )
             .filter((id) => id.length > 0)
         )
       )
@@ -279,8 +285,12 @@ export async function GET(req: Request) {
         const derivedSpotId = !spotId && spot ? spotIdFromLabel(spot) : null
         // Keep room for custom spot ids (uuid is 36 chars; prefixed ids are longer).
         const finalSpotId = (spotId || derivedSpotId || '').slice(0, 80)
-        const customSpot =
-          finalSpotId.startsWith('custom:') ? customSpotById.get(finalSpotId.slice('custom:'.length)) ?? null : null
+        const customSpotId = finalSpotId.startsWith('custom:')
+          ? finalSpotId.slice('custom:'.length)
+          : !knownSpotIds.has(finalSpotId)
+            ? finalSpotId
+            : ''
+        const customSpot = customSpotId ? customSpotById.get(customSpotId) ?? null : null
         const finalSpot = (spot || customSpot?.name || '').slice(0, 47)
         const lat = asNumber(s.lat) ?? customSpot?.lat ?? null
         const lon = asNumber(s.lon) ?? customSpot?.lon ?? null
