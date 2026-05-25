@@ -142,6 +142,18 @@ type ScoreBreakdown = {
   method: string
 }
 
+
+export type CustomDirectionSector = {
+  startDeg: number
+  endDeg: number
+  mainDeg: number
+}
+
+export type CustomSpotScoringProfile = {
+  waveDir?: CustomDirectionSector | null
+  windDir?: CustomDirectionSector | null
+}
+
 export type SurfScoreResult = {
   rating: number // 1..6
   score: number // same as rating (kept for firmware compatibility)
@@ -348,7 +360,31 @@ function scoreToLabelFromTables(total: number): string {
 // ---------------------
 // Direction score
 // ---------------------
-function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, degFrom: number) {
+function directionScoreInSectorLinear(degFrom: number, sector: CustomDirectionSector): number {
+  const norm = (d: number) => ((d % 360) + 360) % 360
+  const dist = (a: number, b: number) => {
+    const d = Math.abs(norm(a) - norm(b))
+    return d > 180 ? 360 - d : d
+  }
+  const inSector = (a: number, start: number, end: number) => {
+    const aa = norm(a), s = norm(start), e = norm(end)
+    return s <= e ? aa >= s && aa <= e : aa >= s || aa <= e
+  }
+  if (!inSector(degFrom, sector.startDeg, sector.endDeg)) return 0
+  const span = (() => {
+    const s = norm(sector.startDeg), e = norm(sector.endDeg)
+    return s <= e ? e - s : 360 - s + e
+  })()
+  const maxDist = Math.max(1, Math.min(span / 2, Math.max(dist(sector.mainDeg, sector.startDeg), dist(sector.mainDeg, sector.endDeg))))
+  const dMain = dist(degFrom, sector.mainDeg)
+  const t = Math.max(0, 1 - dMain / maxDist)
+  return Math.max(1, Math.min(6, Math.round(1 + t * 5)))
+}
+
+function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, degFrom: number, customSpotProfile?: CustomSpotScoringProfile | null) {
+  const sector = tableKey === 'wave_dir' ? customSpotProfile?.waveDir : customSpotProfile?.windDir
+  if (sector) return { picked: `${Math.round(normDeg(degFrom))}°`, score: directionScoreInSectorLinear(degFrom, sector) }
+
   const st = getSpotTables(spotKey)
   const arr: any[] = Array.isArray(st?.[tableKey]) ? st[tableKey] : []
   if (!arr.length) return { picked: degToDir8(degFrom), score: 1 }
@@ -474,14 +510,15 @@ function buildModelScore(args: {
   sd: number
   ws: number
   wd: number
+  customSpotProfile?: CustomSpotScoringProfile | null
 }) {
   const weights = getWeights()
 
-  const sWaveDir = dirBucketScore1to6('wave_dir', args.spotKey, args.sd)
+  const sWaveDir = dirBucketScore1to6('wave_dir', args.spotKey, args.sd, args.customSpotProfile)
   const sWaveH = rangeScore1to6('wave_height', args.spotKey, args.h)
   const sWaveP = rangeScore1to6('wave_period', args.spotKey, args.p)
   const sWindS = rangeScore1to6('wind_speed', args.spotKey, args.ws)
-  const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd)
+  const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
 
   let total =
     sWaveDir.score * weights.wave_dir +
@@ -1097,6 +1134,7 @@ export function scoreSurf(params: {
   forecastTimeUtc?: string | null
   whySelected?: string
   userExperiences?: UserSurfExperienceRecord[]
+  customSpotProfile?: CustomSpotScoringProfile | null
 }): SurfScoreResult {
   const spotKey = normalizeSpotKey(params.spotKey)
 
@@ -1144,6 +1182,7 @@ export function scoreSurf(params: {
     sd,
     ws,
     wd,
+    customSpotProfile: params.customSpotProfile,
   })
 
   const exp = buildExperienceBlend({
