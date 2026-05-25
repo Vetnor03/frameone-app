@@ -1616,7 +1616,8 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     console.log('SURF SCORE QUERY:', Object.fromEntries(url.searchParams.entries()))
 
-    const spotIdQ = (url.searchParams.get('spotId') || '').trim()
+    const spotIdRaw = (url.searchParams.get('spotId') || '').trim()
+    const spotIdQ = spotIdRaw.startsWith('custom:') ? spotIdRaw.slice('custom:'.length).trim() : spotIdRaw
     const spotQ = (url.searchParams.get('spot') || '').trim()
 
     const latQ = asNum(url.searchParams.get('lat'))
