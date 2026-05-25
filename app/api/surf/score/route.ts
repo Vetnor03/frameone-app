@@ -190,13 +190,55 @@ async function fetchDailyExtras(lat: number, lon: number): Promise<DailyExtras> 
 // ------------------------------
 
 
+
+async function resolveOwnerUserIdFromBearerToken(rawBearer: string): Promise<string | null> {
+  const bearer = String(rawBearer || '').trim()
+  if (!bearer) return null
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) return null
+
+  const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: bearer } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const { data: { user } } = await userSupabase.auth.getUser()
+  if (user?.id) return user.id
+
+  const rawToken = bearer.replace(/^Bearer\s+/i, '').trim()
+  if (!rawToken) return null
+
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+  const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const { data: deviceRow } = await adminSupabase
+    .from('devices')
+    .select('device_id')
+    .eq('device_token_hash', tokenHash)
+    .maybeSingle()
+
+  if (!deviceRow?.device_id) return null
+
+  const { data: memberRow } = await adminSupabase
+    .from('device_members')
+    .select('user_id, role')
+    .eq('device_id', deviceRow.device_id)
+    .eq('role', 'owner')
+    .maybeSingle()
+
+  return memberRow?.user_id ?? null
+}
 async function fetchCustomSpotById(req: Request, spotId: string) {
   const token = authBearerFromReq(req)
   if (!token) return null
-  const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: userData } = await supabaseAdmin.auth.getUser(token)
-  const userId = userData?.user?.id
+  const userId = await resolveOwnerUserIdFromBearerToken(token)
   if (!userId) return null
+  const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data } = await supabaseAdmin
     .from('custom_surf_spots')
     .select('*')
