@@ -1339,7 +1339,11 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
   const resolvedSymbol = asString(data.symbol, symbol).trim().toUpperCase()
   const title = asString(data.name, resolvedSymbol || symbol).trim() || resolvedSymbol || symbol
   const currentPrice = asNumber(quote.price)
-  const dayChangePct = asNumber(quote.changePercent)
+  const previousClose = asNumber(quote.previousClose)
+  const dayChangePct =
+    currentPrice != null && previousClose != null && previousClose > 0
+      ? ((currentPrice - previousClose) / previousClose) * 100
+      : asNumber(quote.changePercent)
   const purchasePriceRaw = asNumber(data.purchasePrice)
   const purchasePrice = purchasePriceRaw != null && purchasePriceRaw > 0 ? purchasePriceRaw : null
   const returnSincePurchasePct =
@@ -1374,7 +1378,8 @@ async function stocksDetail(origin: string, deviceId: string, deviceToken: strin
     stockChartRange: normalizeStockRange(data.chartRange || cfg.chartRange),
     stockSeries: series,
     stockSeriesTimestamps: seriesRows.map((point) => point.timestampMs),
-    stockPreviousClose: asNumber(quote.previousClose),
+    stockPreviousClose: previousClose,
+    stockBaselinePrice: asNumber(data.baselinePrice),
     stockPurchasePrice: purchasePrice,
   }
 }
