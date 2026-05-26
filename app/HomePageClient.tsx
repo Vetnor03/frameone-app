@@ -983,6 +983,52 @@ export default function HomePage() {
     recentModulesRef.current = [module, ...recentModulesRef.current.filter((m) => m !== module)].slice(0, 4)
   }
 
+
+  function clearClientPersistedState(options?: { clearSupabaseAuthStorage?: boolean }) {
+    if (typeof window === 'undefined') return
+
+    const shouldClearSupabaseAuthStorage = options?.clearSupabaseAuthStorage !== false
+    const localKeys = Object.keys(window.localStorage)
+    const sessionKeys = Object.keys(window.sessionStorage)
+    const shouldWipeKey = (key: string) => {
+      const normalized = key.toLowerCase()
+
+      if (normalized === 'activedeviceid') return true
+      if (normalized.includes('onboarding')) return true
+      if (normalized.includes('pair')) return true
+      if (normalized.includes('device')) return true
+      if (normalized.includes('frame')) return true
+      if (normalized.includes('settings')) return true
+      if (normalized.includes('tab')) return true
+      if (normalized.includes('profile')) return true
+      if (normalized.includes('cache')) return true
+      if (normalized.includes('zustand') || normalized.includes('swr') || normalized.includes('reactquery')) return true
+      if (shouldClearSupabaseAuthStorage && normalized.includes('supabase')) return true
+      return false
+    }
+
+    for (const key of localKeys) {
+      if (shouldWipeKey(key)) window.localStorage.removeItem(key)
+    }
+
+    for (const key of sessionKeys) {
+      if (shouldWipeKey(key)) window.sessionStorage.removeItem(key)
+    }
+  }
+
+  function resetAppStateAfterSignOut(options?: { clearSupabaseAuthStorage?: boolean }) {
+    setFrames([])
+    setActiveDeviceId(null)
+    setActiveTab('frame')
+    setPhysicalFrameSnapshot(null)
+    physicalFrameSnapshotRef.current = null
+    physicalFrameRenderAtRef.current = null
+    stickySettingsRef.current = false
+    autoOpenedSettingsForPairingRef.current = false
+    preferInstantScrollRef.current = false
+    clearClientPersistedState(options)
+  }
+
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
   }, [physicalFrameSnapshot])
@@ -1562,8 +1608,7 @@ export default function HomePage() {
       void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
 
       if (!session) {
-        setFrames([])
-        setActiveDeviceId(null)
+        resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
         setBooting(false)
         setShowSplash(false)
         setShouldRenderApp(false)
@@ -1577,6 +1622,7 @@ export default function HomePage() {
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
+          resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
           setShouldRenderApp(false)
           setShowSplash(false)
           setBooting(false)
@@ -1825,7 +1871,10 @@ export default function HomePage() {
 
 
   async function logout() {
+    resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
+
     await supabase.auth.signOut()
+    resetAppStateAfterSignOut({ clearSupabaseAuthStorage: true })
     router.replace('/login')
   }
 
