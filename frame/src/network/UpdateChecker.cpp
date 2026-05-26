@@ -203,6 +203,23 @@ void UpdateChecker::saveUsbPresent(bool usbPresent) {
   prefs.putBool("usb_seen", true);
 }
 
+bool UpdateChecker::detectAndPersistUsbStateChange(bool usbPresent, bool isStableSample, bool& outHadPrevious) {
+  outHadPrevious = hasLastUsbPresent();
+  bool changed = false;
+
+  if (isStableSample) {
+    if (outHadPrevious) {
+      changed = (usbPresent != getLastUsbPresent());
+    }
+
+    saveUsbPresent(usbPresent);
+  } else {
+    Serial.println("⚠️ USB sample unstable; keeping persisted charger state");
+  }
+
+  return changed;
+}
+
 int UpdateChecker::getLastBatteryPercent() {
   return prefs.getInt("bat_prev", -1);
 }

@@ -53,6 +53,12 @@ static FrameConfig g_cfg;
 // Only initialize the display if we actually need to draw
 static bool g_displayReady = false;
 
+enum SetupStep {
+  SETUP_STEP_NONE = 0,
+  SETUP_STEP_WIFI = 1,
+  SETUP_STEP_PAIRING = 2
+};
+
 struct PowerSenseDebug {
   int raw;
   int highCount;
@@ -386,7 +392,7 @@ static void markOtaCheckedToday() {
 // --------------------------------------
 // Pairing
 // --------------------------------------
-static bool ensurePairedNoReboot() {
+static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
   if (DeviceIdentity::hasToken()) {
     Serial.println("✅ Token in flash -> paired");
     return true;
@@ -413,6 +419,10 @@ static bool ensurePairedNoReboot() {
     }
 
     delay(500);
+  }
+
+  if (forceFreshPairCode) {
+    Serial.println("🔁 Charger state changed during setup -> request fresh pairing code");
   }
 
   PairStartResponse startResp;
@@ -501,6 +511,22 @@ void setup() {
   PowerSenseDebug pwrEarly = readPowerSenseDebug();
   BatteryState battEarly = BatteryManager::readAndUpdate(pwrEarly.usbPresent);
   BatteryManager::logState("early", battEarly);
+  const bool hadPreviousUsbState = UpdateChecker::hasLastUsbPresent();
+  const bool previousUsbPresent = hadPreviousUsbState ? UpdateChecker::getLastUsbPresent() : pwrEarly.usbPresent;
+  bool dummyHadPrevious = false;
+  const bool chargerStateChanged = UpdateChecker::detectAndPersistUsbStateChange(
+    pwrEarly.usbPresent,
+    pwrEarly.stable,
+    dummyHadPrevious
+  );
+  if (chargerStateChanged) {
+    Serial.print("🔄 Forced redraw/restart reason: charger_state_changed (prev=");
+    Serial.print(previousUsbPresent ? "plugged" : "battery");
+    Serial.print(", now=");
+    Serial.print(pwrEarly.usbPresent ? "plugged" : "battery");
+    Serial.println(")");
+  }
+
 
   Serial.print("device_id: ");
   Serial.println(DeviceIdentity::getDeviceId());
@@ -562,7 +588,14 @@ void setup() {
   UpdateChecker::noteWake();
 
   bool reconnectedViaProvisioning = false;
+  bool setupFlowRefreshByCharger = false;
+  SetupStep activeSetupStep = SETUP_STEP_NONE;
   if (!WiFiManagerV2::connectSaved(12000)) {
+    activeSetupStep = SETUP_STEP_WIFI;
+    if (chargerStateChanged) {
+      Serial.println("🔄 Charger change on Wi-Fi setup screen -> restart Wi-Fi setup flow and redraw");
+      setupFlowRefreshByCharger = true;
+    }
     ensureDisplay();
     ProvisioningPortal::runBlocking();
     reconnectedViaProvisioning = true;
@@ -570,12 +603,15 @@ void setup() {
 
   TimeSync::ensure(8000);
 
-  if (!ensurePairedNoReboot()) {
+  activeSetupStep = SETUP_STEP_PAIRING;
+  if (!ensurePairedNoReboot(chargerStateChanged)) {
     ensureDisplay();
     ScreenPairing::showError("Could not pair frame");
     goToSleep(pwrEarly.usbPresent);
     return;
   }
+
+  activeSetupStep = SETUP_STEP_NONE;
 
   // ---------------- Battery / Power sense ----------------
   PowerSenseDebug pwr = readPowerSenseDebug();
@@ -591,14 +627,8 @@ void setup() {
   String reminderSig;
   String surfSig;
 
-  const bool hasLastUsbPresent = UpdateChecker::hasLastUsbPresent();
-  const bool lastUsbPresent = UpdateChecker::getLastUsbPresent();
   const int lastBatteryPercent = UpdateChecker::getLastBatteryPercent();
-
-  const bool usbChanged =
-    pwr.stable &&
-    hasLastUsbPresent &&
-    (pwr.usbPresent != lastUsbPresent);
+  const bool usbChanged = chargerStateChanged;
 
   bool batteryJumpChanged = false;
   if (lastBatteryPercent >= 0) {
@@ -654,6 +684,11 @@ void setup() {
 
   if (usbChanged) {
     Serial.println("🔌 USB state changed -> force redraw");
+    if (activeSetupStep == SETUP_STEP_WIFI) {
+      Serial.println("   ↳ setup screen refresh target: wifi_setup");
+    } else if (activeSetupStep == SETUP_STEP_PAIRING) {
+      Serial.println("   ↳ setup screen refresh target: pairing_code");
+    }
   }
 
   if (batteryJumpChanged) {
@@ -672,14 +707,14 @@ void setup() {
     surfChanged ||
     usbChanged ||
     batteryJumpChanged ||
-    reconnectedViaProvisioning;
+    reconnectedViaProvisioning ||
+    setupFlowRefreshByCharger;
 
   // ---------------- No redraw ----------------
   if (!shouldRender) {
     Serial.println("😴 No change -> keep current ePaper image");
 
     postDeviceStatus(batt, pwr, false);
-    if (pwr.stable) UpdateChecker::saveUsbPresent(pwr.usbPresent);
     UpdateChecker::saveBatteryPercent(batt.percent);
     goToSleep(pwr.usbPresent);
     return;
@@ -721,7 +756,6 @@ void setup() {
   if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);
   if (surfSig.length() > 0) UpdateChecker::saveSurfSig(surfSig);
   UpdateChecker::saveFirmwareVersion(FW_VER);
-  if (pwr.stable) UpdateChecker::saveUsbPresent(pwr.usbPresent);
   UpdateChecker::saveBatteryPercent(batt.percent);
 
   if (forcePeriodic) {
