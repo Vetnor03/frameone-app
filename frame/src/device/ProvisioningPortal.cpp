@@ -145,12 +145,12 @@ namespace ProvisioningPortal {
 void runBlocking() {
   Theme::set(THEME_DARK);
 
-  // Create AP name Frame-Setup-XXXX using last 2 bytes of MAC
+  // Create AP name FRAME-000-XXXX using last 2 bytes of MAC
   uint8_t mac[6];
   WiFi.macAddress(mac);
   char suffix[5];
   snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
-  apSsid = String("Frame-Setup-") + suffix;
+  apSsid = String("FRAME-000-") + suffix;
 
   WiFi.mode(WIFI_AP);
   WiFi.softAP(apSsid.c_str());
@@ -164,28 +164,21 @@ void runBlocking() {
     display.fillScreen(Theme::paper());
     display.setTextColor(Theme::ink());
 
-    const int left = 28;
-    const int maxW = FRAME_W - (left * 2);
+    auto centered = [&](const char* text, int y, const GFXfont* font) {
+      display.setFont(font);
+      int16_t x1, y1;
+      uint16_t w, h;
+      display.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+      int x = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+      display.setCursor(x, y);
+      display.print(text);
+    };
 
-    drawCenteredLine("CONNECT TO WIFI", FRAME_Y + 58, &FreeMonoBold18pt7b);
-    drawCenteredLine("JOIN THIS NETWORK", FRAME_Y + 112, &FreeMonoBold12pt7b);
-
-    display.setFont(&FreeMonoBold18pt7b);
-    display.setCursor(FRAME_X + left, FRAME_Y + 160);
-    display.print(apSsid.c_str());
-
-    int y = 220;
-    drawWrappedLine("1) Setup page should open", left, y, maxW, &FreeMonoBold12pt7b, 24);
-    y += 8;
-    drawWrappedLine("2) If not, open 192.168.4.1", left, y, maxW, &FreeMonoBold12pt7b, 24);
-    y += 8;
-    drawWrappedLine("3) Enter your home Wi-Fi", left, y, maxW, &FreeMonoBold12pt7b, 24);
-
-    display.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, Theme::ink());
-
-    display.setFont(&FreeMonoBold9pt7b);
-    display.setCursor(FRAME_X + left, FRAME_Y + FRAME_H - 18);
-    display.print("FRAME WILL CONTINUE SETUP AFTER SAVE");
+    centered("In your Wi-Fi settings on your phone, connect to:", FRAME_Y + 120, &FreeMonoBold12pt7b);
+    centered(apSsid.c_str(), FRAME_Y + 208, &FreeMonoBold18pt7b);
+    centered("Add your Wi-Fi credentials", FRAME_Y + 294, &FreeMonoBold12pt7b);
+    centered("Can take up to a minute for frame to receive your Wi-Fi credentials", FRAME_Y + FRAME_H - 34, &FreeMonoBold9pt7b);
+    centered("Reconnect charger to restart Wi-Fi setup", FRAME_Y + FRAME_H - 12, &FreeMonoBold9pt7b);
 
   } while (display.nextPage());
 

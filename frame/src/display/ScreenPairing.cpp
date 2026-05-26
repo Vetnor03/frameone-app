@@ -3,6 +3,7 @@
 #include "DisplayCore.h"
 #include "Config.h"
 #include "Theme.h"
+#include "../assets/PairingQrBitmap.h"
 
 #include <Arduino.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
@@ -171,53 +172,28 @@ static void drawPairCode(void* vctx) {
   PairCtx* ctx = (PairCtx*)vctx;
   auto& d = DisplayCore::get();
 
-  const int left = 28;
-  const int maxW = FRAME_W - (left * 2);
-  const int footerLineY = FRAME_Y + FRAME_H - 46;
-  const int footerTextY = FRAME_Y + FRAME_H - 18;
+  auto centered = [&](const char* text, int y, const GFXfont* font) {
+    d.setFont(font);
+    int16_t x1, y1;
+    uint16_t w, h;
+    d.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+    int x = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
+    d.setCursor(x, y);
+    d.print(text);
+  };
 
-  drawCenteredInFrame("PAIR FRAME", FRAME_Y + 58, &FreeMonoBold18pt7b);
-  drawLeftInFrame("GO TO", left, 104, &FreeMonoBold12pt7b);
+  centered("Login to app and pair frame", FRAME_Y + 44, &FreeMonoBold12pt7b);
 
-  int y = 144;
-  drawWrappedBlock(ctx->appUrl, left, y, maxW, &FreeMonoBold18pt7b, 34);
+  const int qrSize = 232;
+  const int qrX = FRAME_X + (FRAME_W - qrSize) / 2;
+  const int qrY = FRAME_Y + 56;
+  d.drawBitmap(qrX, qrY, PAIRING_QR_BITMAP, PAIRING_QR_W, PAIRING_QR_H, Theme::ink());
 
-  y += 32;
-  drawWrappedBlock("1) Open the app", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  y += 24;
-  drawWrappedBlock("2) Log in", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  y += 24;
-  drawWrappedBlock("3) Tap \"+ ADD FRAME\"", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  y += 24;
-  drawWrappedBlock("4) Enter this code", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  const int instructionBottomY = FRAME_Y + y;
-  const int codeTextH = measureTextHeight(ctx->code, &FreeMonoBold18pt7b);
-
-  // Center the code vertically between the bottom of step 4 and the footer divider.
-  int gapTop = instructionBottomY + 8;
-  int gapBottom = footerLineY - 8;
-  int gapMid = gapTop + (gapBottom - gapTop) / 2;
-
-  // drawCenteredInFrame uses baseline Y, so convert from desired visual center.
-  int codeBaselineY = gapMid + (codeTextH / 2);
-  drawCenteredInFrame(ctx->code, codeBaselineY, &FreeMonoBold18pt7b);
-
-  d.drawLine(FRAME_X + left, footerLineY, FRAME_X + FRAME_W - left, footerLineY, Theme::ink());
-
-  d.setFont(&FreeMonoBold9pt7b);
-  d.setTextColor(Theme::ink());
-  d.setCursor(FRAME_X + left, footerTextY);
-
-  int mins = (ctx->expiresInSec + 59) / 60;
-  if (mins < 1) mins = 1;
-
-  d.print("CODE VALID FOR ABOUT ");
-  d.print("10");
-  d.print(" MIN");
+  centered("re-mind.no", FRAME_Y + 316, &FreeMonoBold12pt7b);
+  centered("Pair frame to app by adding code below", FRAME_Y + 350, &FreeMonoBold12pt7b);
+  centered("For returning users, \"Pair frame\" can be found in app settings", FRAME_Y + 374, &FreeMonoBold9pt7b);
+  centered(ctx->code, FRAME_Y + 414, &FreeMonoBold18pt7b);
+  centered("Reconnect charger to restart pairing", FRAME_Y + FRAME_H - 12, &FreeMonoBold9pt7b);
 }
 
 void showPairCode(const char* code, int expiresInSec, const char* appUrl) {
