@@ -69,6 +69,33 @@ static void ensureDisplay() {
 
 static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << PWR_SENSE_DEBUG_PIN);
 
+
+static bool isDeepSleepWake() {
+  return esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED;
+}
+
+static void recoverDisplayAfterShelfWake() {
+  Serial.println("Shelf/setup wake detected — running display recovery refresh");
+  ensureDisplay();
+
+  auto& d = DisplayCore::get();
+  d.setFullWindow();
+
+  d.firstPage();
+  do {
+    d.fillScreen(GxEPD_BLACK);
+  } while (d.nextPage());
+
+  d.firstPage();
+  do {
+    d.fillScreen(GxEPD_WHITE);
+  } while (d.nextPage());
+
+  DisplayCore::forceNextFullRefresh(true);
+  Serial.println("Display recovery refresh complete");
+}
+
+
 static bool enablePowerSenseWakeForNextSleep(bool currentlyUsbPresent) {
   // Confirmed signal:
   // HIGH = USB plugged in
@@ -491,6 +518,19 @@ void setup() {
     prefs.begin("frame", false);
     bool shelfDone = prefs.getBool("shelf_done", false);
     bool shelfPendingDisconnect = prefs.getBool("shelf_pending_disconnect", false);
+
+    bool needsSetupRecovery =
+      isDeepSleepWake() &&
+      (
+        !hasWifi ||
+        !hasToken ||
+        !shelfDone ||
+        shelfPendingDisconnect
+      );
+
+    if (needsSetupRecovery) {
+      recoverDisplayAfterShelfWake();
+    }
 
     if (hasWifi || hasToken) {
       if (shelfPendingDisconnect) prefs.putBool("shelf_pending_disconnect", false);
