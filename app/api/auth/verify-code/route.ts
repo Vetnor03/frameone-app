@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -58,14 +58,6 @@ export async function POST(request: Request) {
         for (const { name, value, options } of cookiesToSet) {
           cookieStore.set(name, value, options)
         }
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        cookieWrites += 1
-        cookieStore.set(name, value, options)
-      },
-      remove(name: string, options: CookieOptions) {
-        cookieWrites += 1
-        cookieStore.set(name, '', { ...options, maxAge: 0 })
       },
     },
   })
