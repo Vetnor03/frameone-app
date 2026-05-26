@@ -461,37 +461,25 @@ export default function LoginPage() {
     setVerifyDiagnostic('')
 
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: normalizedEmail,
-        token: cleanedCode,
-        type: verifyType,
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, token: cleanedCode }),
       })
 
-      if (error) {
-        const safeError = {
-          message: error.message,
-          status: (error as { status?: number }).status,
-          code: (error as { code?: string }).code,
-          name: error.name,
-        }
-        const derivedDiagnostic =
-          safeError.code === 'otp_expired' || /expired/i.test(safeError.message)
-            ? 'otp_expired'
-            : safeError.code === 'invalid_token' || /invalid token|token is invalid/i.test(safeError.message)
-              ? 'invalid_token'
-              : !emailMatchesRequest
-                ? 'email_mismatch'
-                : 'verify_failed'
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
         console.warn('[auth] verifyOtp failed', {
-          safeError,
+          status: response.status,
           tokenLength: cleanedCode.length,
           tokenHasExpectedLength,
           tokenDigitsOnly,
           verifyType,
           normalizedEmail,
           emailMatchesRequest,
+          message: payload?.error || 'unknown_error',
         })
-        setVerifyDiagnostic(derivedDiagnostic)
+        setVerifyDiagnostic(!emailMatchesRequest ? 'email_mismatch' : 'verify_failed')
         setVerifyError('Could not verify the code. Please try again.')
         return
       }
