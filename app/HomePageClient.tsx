@@ -368,6 +368,7 @@ type MirrorModuleDetail = {
   stockSeries?: number[]
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
+  stockBaselinePrice?: number | null
   stockPurchasePrice?: number | null
   countdownTitle?: string
   countdownDaysLeft?: number
@@ -5224,7 +5225,7 @@ function buildSmoothedMirrorStockChartPath(points: Array<{ x: number; y: number 
   return commands.join(' ')
 }
 
-function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null, purchasePrice?: number | null): MirrorStockChartGeometry {
+function buildMirrorStockChartGeometry(values: number[], baselinePrice?: number | null): MirrorStockChartGeometry {
   const width = MIRROR_STOCK_CHART_WIDTH
   const height = MIRROR_STOCK_CHART_HEIGHT
 
@@ -5239,12 +5240,12 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
 
   const seriesMin = min
   const seriesMax = max
-  const hasPurchasePrice = typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0
-  const referenceValue = hasPurchasePrice ? purchasePrice : previousClose
+  const hasBaselinePrice = typeof baselinePrice === 'number' && Number.isFinite(baselinePrice) && baselinePrice > 0
+  const referenceValue = hasBaselinePrice ? baselinePrice : null
 
-  if (hasPurchasePrice) {
-    min = Math.min(min, purchasePrice)
-    max = Math.max(max, purchasePrice)
+  if (hasBaselinePrice) {
+    min = Math.min(min, baselinePrice)
+    max = Math.max(max, baselinePrice)
   }
 
   let span = max - min
@@ -5270,7 +5271,7 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
 
   let referenceY: number | null = null
   const hasReferenceValue = typeof referenceValue === 'number' && Number.isFinite(referenceValue) && referenceValue > 0
-  const shouldShowReference = hasReferenceValue && (hasPurchasePrice || (referenceValue >= seriesMin && referenceValue <= seriesMax))
+  const shouldShowReference = hasReferenceValue && (referenceValue >= seriesMin && referenceValue <= seriesMax)
   if (shouldShowReference && max - min >= 0.0001) {
     const y = yForReferenceValue(referenceValue)
     if (y >= 0 && y <= height - 1) referenceY = y
@@ -5297,15 +5298,13 @@ function buildMirrorStockChartGeometry(values: number[], previousClose?: number 
 
 function MirrorStockChart({
   series,
-  previousClose,
-  purchasePrice,
+  baselinePrice,
   textColor,
   moduleId,
   chartRange,
 }: {
   series?: number[]
-  previousClose?: number | null
-  purchasePrice?: number | null
+  baselinePrice?: number | null
   textColor: string
   moduleId?: number
   chartRange?: StockChartRange
@@ -5314,8 +5313,8 @@ function MirrorStockChart({
 
   const geometry = useMemo(() => {
     if (values.length < 2) return null
-    return buildMirrorStockChartGeometry(values, previousClose, purchasePrice)
-  }, [values, previousClose, purchasePrice])
+    return buildMirrorStockChartGeometry(values, baselinePrice)
+  }, [values, baselinePrice])
 
   if (!geometry) {
     return (
@@ -5441,8 +5440,7 @@ function MirrorLargeStocksCard({
         <div className="min-h-0 flex-1 px-[clamp(0.28rem,0.85vw,0.65rem)] pt-[clamp(0.75rem,1.55vw,1.15rem)] pb-[clamp(0.75rem,1.85vw,1.35rem)]">
           <MirrorStockChart
             series={detail.stockSeries}
-            previousClose={detail.stockPreviousClose}
-            purchasePrice={detail.stockPurchasePrice}
+            baselinePrice={detail.stockBaselinePrice ?? detail.stockPreviousClose}
             textColor={textColor}
             moduleId={detail.stockModuleId}
             chartRange={detail.stockChartRange}
@@ -5527,8 +5525,7 @@ function MirrorXLStocksCard({
         <div className="min-h-0 flex-1 px-[clamp(0.25rem,0.75vw,0.5rem)] pt-[clamp(0.55rem,1.25vw,0.9rem)] pb-[clamp(0.2rem,0.65vw,0.45rem)]">
           <MirrorStockChart
             series={detail.stockSeries}
-            previousClose={detail.stockPreviousClose}
-            purchasePrice={detail.stockPurchasePrice}
+            baselinePrice={detail.stockBaselinePrice ?? detail.stockPreviousClose}
             textColor={textColor}
             moduleId={detail.stockModuleId}
             chartRange={detail.stockChartRange}
@@ -5575,8 +5572,7 @@ function MirrorMediumStocksCard({
       <div className="min-h-0 flex-1 px-[clamp(0.45rem,1.15vw,0.85rem)] pt-[clamp(0.45rem,1vw,0.8rem)] pb-[clamp(0.55rem,1.35vw,1rem)]">
         <MirrorStockChart
           series={detail.stockSeries}
-          previousClose={detail.stockPreviousClose}
-          purchasePrice={detail.stockPurchasePrice}
+          baselinePrice={detail.stockBaselinePrice ?? detail.stockPreviousClose}
           textColor={textColor}
           moduleId={detail.stockModuleId}
           chartRange={detail.stockChartRange}

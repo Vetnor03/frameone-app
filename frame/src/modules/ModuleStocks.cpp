@@ -223,21 +223,23 @@ static void formatSigned(char* out, size_t n, float v, int decimals, bool withPe
 // Purchase-aware UI is intentionally gated until purchase fields are finalized
 // in the backend/config contract. Keep fallback layouts active by default.
 static bool hasPurchaseData(const StockCache& data) {
-  (void)data;
-  return false;
+  return isfinite(data.purchasePrice) && data.purchasePrice > 0.0f
+      && isfinite(data.personalChangePercent);
 }
 
 static bool getReferenceLineValue(const StockCache& data, float& outValue) {
   outValue = NAN;
 
-  // Keep purchase-aware safety gate: only use purchase price when purchase
-  // data is explicitly enabled and valid.
-  if (hasPurchaseData(data) && isfinite(data.purchasePrice) && data.purchasePrice > 0.0f) {
-    outValue = data.purchasePrice;
-    return true;
+  const bool isWeekOrMonth =
+      (strcmp(data.chartRange, "week") == 0) || (strcmp(data.chartRange, "month") == 0);
+  if (isWeekOrMonth && data.seriesCount > 0) {
+    const float first = data.series[0];
+    if (isfinite(first) && first > 0.0f) {
+      outValue = first;
+      return true;
+    }
   }
 
-  // Default market reference line: previous close.
   if (isfinite(data.previousClose) && data.previousClose > 0.0f) {
     outValue = data.previousClose;
     return true;
