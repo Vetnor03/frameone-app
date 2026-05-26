@@ -28,6 +28,7 @@ namespace UpdateChecker {
   bool hasLastUsbPresent();
   bool getLastUsbPresent();
   void saveUsbPresent(bool usbPresent);
+  bool detectAndPersistUsbStateChange(bool usbPresent, bool isStableSample, bool& outHadPrevious);
 
   int getLastBatteryPercent();
   void saveBatteryPercent(int percent);
