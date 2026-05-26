@@ -1559,6 +1559,8 @@ export default function HomePage() {
       const { data: sessionData } = await supabase.auth.getSession()
       const session = sessionData.session
 
+      void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
+
       if (!session) {
         setFrames([])
         setActiveDeviceId(null)
