@@ -371,8 +371,10 @@ export default function LoginPage() {
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [verifyError, setVerifyError] = useState('')
 
   // ✅ If already logged in, skip login screen
   useEffect(() => {
@@ -384,7 +386,7 @@ export default function LoginPage() {
 
   async function sendCode() {
     if (!email) return
-    setLoading(true)
+    setIsSendingCode(true)
     setSendError('')
 
     try {
@@ -401,25 +403,37 @@ export default function LoginPage() {
       }
 
       setStep('code')
+    } catch {
+      setSendError('Could not send your login code. Please try again.')
     } finally {
-      setLoading(false)
+      setIsSendingCode(false)
     }
   }
 
   async function verifyCode() {
     if (!email || !code) return
-    setLoading(true)
 
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: code.trim(),
-      type: 'email',
-    })
+    setIsVerifyingCode(true)
+    setVerifyError('')
 
-    setLoading(false)
-    if (error) return alert(error.message)
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: code.trim(),
+        type: 'email',
+      })
 
-    router.replace(nextPath)
+      if (error) {
+        setVerifyError('Could not verify the code. Please try again.')
+        return
+      }
+
+      router.replace(nextPath)
+    } catch {
+      setVerifyError('Could not verify the code. Please try again.')
+    } finally {
+      setIsVerifyingCode(false)
+    }
   }
 
   return (
@@ -461,10 +475,10 @@ export default function LoginPage() {
 
             <button
               onClick={sendCode}
-              disabled={loading}
+              disabled={isSendingCode}
               className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
             >
-              {loading ? 'SENDING...' : 'SEND CODE'}
+              {isSendingCode ? 'SENDING...' : 'SEND CODE'}
             </button>
 
               <HomeScreenGuide />
@@ -481,30 +495,30 @@ export default function LoginPage() {
                 inputMode="numeric"
                 placeholder="12345678"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\s/g, ''))}
+                onChange={(e) => {
+                  setCode(e.target.value.replace(/\s/g, ''))
+                  if (verifyError) setVerifyError('')
+                }}
                 className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
                 autoComplete="one-time-code"
               />
 
-              {sendError ? (
-              <p className="mt-4 text-center text-xs text-[#ff8b8b]">{sendError}</p>
-            ) : null}
+              {verifyError ? (
+                <p className="mt-4 text-center text-xs text-[#ff8b8b]">{verifyError}</p>
+              ) : null}
 
-            <button
+              <button
                 onClick={verifyCode}
-                disabled={loading}
+                disabled={isVerifyingCode}
                 className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
               >
-                {loading ? 'VERIFYING...' : 'VERIFY CODE'}
+                {isVerifyingCode ? 'VERIFYING...' : 'VERIFY CODE'}
               </button>
 
-              {sendError ? (
-              <p className="mt-4 text-center text-xs text-[#ff8b8b]">{sendError}</p>
-            ) : null}
-
-            <button
+              <button
                 onClick={() => {
                   setCode('')
+                  setVerifyError('')
                   setStep('email')
                 }}
                 className="mt-3 h-12 w-full rounded-xl border border-white/15 text-white/60 tracking-widest"
