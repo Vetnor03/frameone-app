@@ -6668,66 +6668,82 @@ function MyFramesSection({
     }
   }
 
-async function addFrame() {
-  const existingDeviceIds = new Set(frames.map((f) => f.device_id))
+  const [addFrameOpen, setAddFrameOpen] = useState(false)
+  const [addFrameCode, setAddFrameCode] = useState('')
+  const [addFrameError, setAddFrameError] = useState<string | null>(null)
+  const [addFrameLoading, setAddFrameLoading] = useState(false)
 
-  const code = prompt(t.addFramePrompt)
-  if (!code) return
-  const cleaned = code.trim().toUpperCase()
+  async function submitAddFrame() {
+    const existingDeviceIds = new Set(frames.map((f) => f.device_id))
+    const cleaned = addFrameCode.trim().toUpperCase()
+    if (!cleaned) return
 
-  const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
-  if (error) return alert(error.message)
-  if (data !== true) return alert(t.invalidPairCode)
+    setAddFrameLoading(true)
+    setAddFrameError(null)
+    try {
+      const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
+      if (error) throw new Error(error.message)
+      if (data !== true) throw new Error(t.invalidPairCode)
 
-  const { data: sessionData } = await supabase.auth.getSession()
-  const session = sessionData.session
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData.session
 
-  if (!session) {
-    await reload()
-    return
+      if (!session) {
+        await reload()
+        setAddFrameOpen(false)
+        setAddFrameCode('')
+        return
+      }
+
+      const { data: members, error: membersError } = await supabase
+        .from('device_members')
+        .select('device_id, role')
+        .eq('user_id', session.user.id)
+        .order('device_id', { ascending: true })
+
+      if (membersError) {
+        await reload()
+      } else {
+        const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+        const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+        const statusMap = await fetchDeviceStatusMap(deviceIds)
+
+        const merged: MemberRow[] = memberRows.map((m) => ({
+          device_id: m.device_id,
+          role: m.role,
+          current_version: statusMap.get(m.device_id)?.current_version ?? null,
+          battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+          battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+          is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+          is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
+        }))
+
+        onFramesChanged(merged)
+
+        const newlyAddedFrame = merged.find((f) => !existingDeviceIds.has(f.device_id))
+        if (newlyAddedFrame) onSelectDevice(newlyAddedFrame.device_id)
+      }
+
+      setAddFrameOpen(false)
+      setAddFrameCode('')
+      alert(t.frameAdded)
+    } catch (e: any) {
+      setAddFrameError(String(e?.message || e || t.invalidPairCode))
+    } finally {
+      setAddFrameLoading(false)
+    }
   }
 
-  const { data: members, error: membersError } = await supabase
-    .from('device_members')
-    .select('device_id, role')
-    .eq('user_id', session.user.id)
-    .order('device_id', { ascending: true })
-
-  if (membersError) {
-    await reload()
-    alert(t.frameAdded)
-    return
+  function openAddFrame() {
+    setAddFrameError(null)
+    setAddFrameCode('')
+    setAddFrameOpen(true)
   }
-
-  const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-  const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-
-  const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-  const merged: MemberRow[] = memberRows.map((m) => ({
-    device_id: m.device_id,
-    role: m.role,
-    current_version: statusMap.get(m.device_id)?.current_version ?? null,
-    battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-    battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-    is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-    is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-  }))
-
-  onFramesChanged(merged)
-
-  const newlyAddedFrame = merged.find((f) => !existingDeviceIds.has(f.device_id))
-  if (newlyAddedFrame) {
-    onSelectDevice(newlyAddedFrame.device_id)
-  }
-
-  alert(t.frameAdded)
-}
 
   useEffect(() => {
     if (loading || frames.length > 0 || autoPairPromptedRef.current) return
     autoPairPromptedRef.current = true
-    void addFrame()
+    openAddFrame()
   }, [frames.length, loading])
 
   async function openShare() {
@@ -6815,7 +6831,7 @@ async function addFrame() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={addFrame}
+              onClick={openAddFrame}
               className="px-3 py-1 border border-[color:var(--bd-20)] rounded-lg text-xs tracking-widest text-[color:var(--fg-70)]"
             >
               {t.addFrame}
@@ -6877,6 +6893,19 @@ async function addFrame() {
         </div>
       </div>
 
+
+      {addFrameOpen && (
+        <PairCodeSheet
+          language={language}
+          code={addFrameCode}
+          loading={addFrameLoading}
+          error={addFrameError}
+          onCodeChange={setAddFrameCode}
+          onClose={() => setAddFrameOpen(false)}
+          onSubmit={submitAddFrame}
+        />
+      )}
+
       {shareOpen && (
         <ShareFrameCodeSheet
           language={language}
@@ -6894,6 +6923,48 @@ async function addFrame() {
         />
       )}
     </>
+  )
+}
+
+function PairCodeSheet({
+  language,
+  code,
+  loading,
+  error,
+  onCodeChange,
+  onClose,
+  onSubmit,
+}: {
+  language: 'en' | 'no'
+  code: string
+  loading: boolean
+  error: string | null
+  onCodeChange: (value: string) => void
+  onClose: () => void
+  onSubmit: () => void
+}) {
+  const isNo = language === 'no'
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{isNo ? 'LEGG TIL FRAME' : 'ADD FRAME'}</div>
+          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button>
+        </div>
+        <p className="mt-4 text-[color:var(--fg-80)] text-sm">{isNo ? 'Skriv inn 4-tegns parkode.' : 'Enter the 4-character pair code.'}</p>
+        <input
+          value={code}
+          onChange={(e) => onCodeChange(e.target.value.toUpperCase())}
+          placeholder={isNo ? 'Eksempel: K7D4' : 'Example: K7D4'}
+          maxLength={8}
+          className="mt-4 w-full h-12 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 tracking-[0.25em] uppercase text-center text-[color:var(--fg-95)]"
+        />
+        <div className="mt-2 min-h-[20px] text-xs text-[color:var(--danger)]">{error || ''}</div>
+        <button onClick={onSubmit} disabled={loading || !code.trim()} className="mt-3 w-full h-12 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-sm disabled:opacity-40">
+          {loading ? (isNo ? 'LEGGER TIL…' : 'ADDING…') : (isNo ? 'LEGG TIL' : 'ADD')}
+        </button>
+      </div>
+    </div>
   )
 }
 
