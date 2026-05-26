@@ -8,6 +8,7 @@
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
+#include "../assets/images/PairingQrBitmap.h"
 
 static void drawCenteredInFrame(const char* text, int y, const GFXfont* font) {
   auto& d = DisplayCore::get();
@@ -51,15 +52,14 @@ static void drawPairCode(void* vctx) {
   PairCtx* ctx = (PairCtx*)vctx;
   auto& d = DisplayCore::get();
   drawCenteredInFrame("Login to app and pair frame", FRAME_Y + 60, &FreeMonoBold12pt7b);
-  // Placeholder QR region (reserved for uploaded QR bitmap asset)
-  const int qrSize = 230;
-  const int qrX = FRAME_X + (FRAME_W - qrSize) / 2;
-  const int qrY = FRAME_Y + 86;
-  d.drawRect(qrX, qrY, qrSize, qrSize, Theme::ink());
-  drawCenteredInFrame("re-mind.no", qrY + qrSize + 34, &FreeMonoBold12pt7b);
-  drawCenteredInFrame("Pair frame to app by adding code below", qrY + qrSize + 84, &FreeMonoBold12pt7b);
-  drawCenteredInFrame("For returning users, \"Pair frame\" can be found in app settings", qrY + qrSize + 112, &FreeMonoBold9pt7b);
-  drawCenteredInFrame(ctx->code, qrY + qrSize + 166, &FreeMonoBold18pt7b);
+  const int qrX = FRAME_X + (FRAME_W - PairingQrBitmap::WIDTH) / 2;
+  const int qrY = FRAME_Y + 78;
+  d.drawBitmap(qrX, qrY, PairingQrBitmap::DATA, PairingQrBitmap::WIDTH, PairingQrBitmap::HEIGHT, Theme::ink());
+
+  drawCenteredInFrame("re-mind.no", qrY + PairingQrBitmap::HEIGHT + 22, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Pair frame to app by adding code below", qrY + PairingQrBitmap::HEIGHT + 48, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("For returning users, \"Pair frame\" can be found in app settings", qrY + PairingQrBitmap::HEIGHT + 68, &FreeMonoBold9pt7b);
+  drawCenteredInFrame(ctx->code, qrY + PairingQrBitmap::HEIGHT + 102, &FreeMonoBold18pt7b);
   drawCenteredInFrame("Reconnect charger to restart pairing", FRAME_Y + FRAME_H - 16, &FreeMonoBold9pt7b);
 }
 
