@@ -126,6 +126,21 @@ static void renderPage(DrawCb cb, void* ctx) {
   Theme::set(previousTheme);
 }
 
+
+static void drawScaledMonoBitmap(int x, int y, const uint8_t* bmp, int w, int h, int scale) {
+  auto& d = DisplayCore::get();
+  const int stride = (w + 7) / 8;
+  for (int yy = 0; yy < h; ++yy) {
+    for (int xx = 0; xx < w; ++xx) {
+      const uint8_t byteVal = pgm_read_byte(&bmp[(yy * stride) + (xx / 8)]);
+      const bool on = ((byteVal >> (7 - (xx % 8))) & 0x01) != 0;
+      if (on) {
+        d.fillRect(x + (xx * scale), y + (yy * scale), scale, scale, Theme::ink());
+      }
+    }
+  }
+}
+
 // =======================================================
 // Screens
 // =======================================================
@@ -184,10 +199,11 @@ static void drawPairCode(void* vctx) {
 
   centered("Login to app and pair frame", FRAME_Y + 44, &FreeMonoBold12pt7b);
 
-  const int qrSize = 232;
+  const int qrScale = 8;
+  const int qrSize = PAIRING_QR_W * qrScale;
   const int qrX = FRAME_X + (FRAME_W - qrSize) / 2;
-  const int qrY = FRAME_Y + 56;
-  d.drawBitmap(qrX, qrY, PAIRING_QR_BITMAP, PAIRING_QR_W, PAIRING_QR_H, Theme::ink());
+  const int qrY = FRAME_Y + 60;
+  drawScaledMonoBitmap(qrX, qrY, PAIRING_QR_BITMAP, PAIRING_QR_W, PAIRING_QR_H, qrScale);
 
   centered("re-mind.no", FRAME_Y + 316, &FreeMonoBold12pt7b);
   centered("Pair frame to app by adding code below", FRAME_Y + 350, &FreeMonoBold12pt7b);
