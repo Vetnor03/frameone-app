@@ -2,9 +2,33 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const WINDOW_MS = 10 * 60 * 1000
+const MAX_REQUESTS_PER_WINDOW = 5
+
+const requestLog = new Map<string, number[]>()
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
+}
+
+function getClientIp(request: Request) {
+  const forwardedFor = request.headers.get('x-forwarded-for') || ''
+  const firstForwardedIp = forwardedFor.split(',')[0]?.trim()
+  return firstForwardedIp || request.headers.get('x-real-ip') || 'unknown'
+}
+
+function isRateLimited(key: string, now: number) {
+  const prior = requestLog.get(key) || []
+  const active = prior.filter((ts) => now - ts < WINDOW_MS)
+
+  if (active.length >= MAX_REQUESTS_PER_WINDOW) {
+    requestLog.set(key, active)
+    return true
+  }
+
+  active.push(now)
+  requestLog.set(key, active)
+  return false
 }
 
 export async function POST(request: Request) {
@@ -23,6 +47,13 @@ export async function POST(request: Request) {
     return jsonError('Please enter a valid email address.')
   }
 
+  const now = Date.now()
+  const ip = getClientIp(request)
+
+  if (isRateLimited(`ip:${ip}`, now) || isRateLimited(`email:${email}`, now)) {
+    return jsonError('Too many code requests. Please wait a few minutes and try again.', 429)
+  }
+
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
@@ -34,7 +65,7 @@ export async function POST(request: Request) {
   })
 
   if (listError) {
-    return jsonError('Could not prepare login for this email. Please try again.', 500)
+    return jsonError('Could not send your login code. Please try again.', 500)
   }
 
   const existingUser = existingUsers?.users?.[0]
@@ -47,7 +78,7 @@ export async function POST(request: Request) {
     })
 
     if (createError) {
-      return jsonError('Could not prepare login for this email. Please try again.', 500)
+      return jsonError('Could not send your login code. Please try again.', 500)
     }
   } else if (!existingUser.email_confirmed_at) {
     const { error: updateError } = await admin.auth.admin.updateUserById(existingUser.id, {
@@ -55,7 +86,7 @@ export async function POST(request: Request) {
     })
 
     if (updateError) {
-      return jsonError('Could not prepare login for this email. Please try again.', 500)
+      return jsonError('Could not send your login code. Please try again.', 500)
     }
   }
 
