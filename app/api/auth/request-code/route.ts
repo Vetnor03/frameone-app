@@ -58,17 +58,25 @@ export async function POST(request: Request) {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const { data: existingUsers, error: listError } = await admin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1,
-    email,
-  })
+  let existingUser: { id: string; email_confirmed_at?: string | null } | undefined
+  let page = 1
+  const perPage = 200
 
-  if (listError) {
-    return jsonError('Could not send your login code. Please try again.', 500)
+  while (page <= 10 && !existingUser) {
+    const { data, error: listError } = await admin.auth.admin.listUsers({
+      page,
+      perPage,
+    })
+
+    if (listError) {
+      return jsonError('Could not send your login code. Please try again.', 500)
+    }
+
+    existingUser = data.users.find((user) => user.email?.toLowerCase() === email)
+
+    if (!data.users.length || data.users.length < perPage) break
+    page += 1
   }
-
-  const existingUser = existingUsers?.users?.[0]
 
   if (!existingUser) {
     const { error: createError } = await admin.auth.admin.createUser({
