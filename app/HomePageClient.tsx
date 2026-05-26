@@ -984,37 +984,74 @@ export default function HomePage() {
     recentModulesRef.current = [module, ...recentModulesRef.current.filter((m) => m !== module)].slice(0, 4)
   }
 
+  const isSessionRepairDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+
+  function logSessionRepair(event: string, details?: Record<string, unknown>) {
+    if (!isSessionRepairDebugEnabled) return
+    if (details) console.info(`[session-repair] ${event}`, details)
+    else console.info(`[session-repair] ${event}`)
+  }
+
 
   function clearClientPersistedState(options?: { clearSupabaseAuthStorage?: boolean }) {
     if (typeof window === 'undefined') return
 
-    const shouldClearSupabaseAuthStorage = options?.clearSupabaseAuthStorage !== false
+    const shouldClearSupabaseAuthStorage = options?.clearSupabaseAuthStorage === true
     const localKeys = Object.keys(window.localStorage)
     const sessionKeys = Object.keys(window.sessionStorage)
+    const appStateKeys = new Set([
+      'activeDeviceId',
+      'pairingFlowStep',
+      'pairingDeviceId',
+      'pairingCode',
+      'onboardingStep',
+      'newUserState',
+      'cachedUserDeviceStatus',
+      'selectedFrameId',
+      'frameSetupComplete',
+    ])
+    const appStateFragments = [
+      'pairing',
+      'onboarding',
+      'new-user',
+      'new_user',
+      'frame-selection',
+      'frame_selection',
+      'cached-user',
+      'device-status',
+      'device_status',
+      'activeframe',
+      'activedevice',
+    ]
     const shouldWipeKey = (key: string) => {
       const normalized = key.toLowerCase()
-
-      if (normalized === 'activedeviceid') return true
-      if (normalized.includes('onboarding')) return true
-      if (normalized.includes('pair')) return true
-      if (normalized.includes('device')) return true
-      if (normalized.includes('frame')) return true
-      if (normalized.includes('settings')) return true
-      if (normalized.includes('tab')) return true
-      if (normalized.includes('profile')) return true
-      if (normalized.includes('cache')) return true
-      if (normalized.includes('zustand') || normalized.includes('swr') || normalized.includes('reactquery')) return true
+      if (appStateKeys.has(key)) return true
+      if (appStateFragments.some((fragment) => normalized.includes(fragment))) return true
       if (shouldClearSupabaseAuthStorage && normalized.includes('supabase')) return true
       return false
     }
+    const clearedLocalKeys: string[] = []
+    const clearedSessionKeys: string[] = []
 
     for (const key of localKeys) {
-      if (shouldWipeKey(key)) window.localStorage.removeItem(key)
+      if (!shouldWipeKey(key)) continue
+      window.localStorage.removeItem(key)
+      clearedLocalKeys.push(key)
     }
 
     for (const key of sessionKeys) {
-      if (shouldWipeKey(key)) window.sessionStorage.removeItem(key)
+      if (!shouldWipeKey(key)) continue
+      window.sessionStorage.removeItem(key)
+      clearedSessionKeys.push(key)
     }
+
+    logSessionRepair('cleared-client-state', {
+      localClearedCount: clearedLocalKeys.length,
+      sessionClearedCount: clearedSessionKeys.length,
+      localClearedKeys: clearedLocalKeys,
+      sessionClearedKeys: clearedSessionKeys,
+      clearedSupabaseAuthStorage: shouldClearSupabaseAuthStorage,
+    })
   }
 
   function resetAppStateAfterSignOut(options?: { clearSupabaseAuthStorage?: boolean }) {
@@ -1149,6 +1186,7 @@ export default function HomePage() {
     if (stickySettingsRef.current) return
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
+      logSessionRepair('redirect-to-settings', { reason: 'no-devices-in-db', source: 'db' })
       autoOpenedSettingsForPairingRef.current = true
       stickySettingsRef.current = true
       preferInstantScrollRef.current = true
@@ -1157,6 +1195,7 @@ export default function HomePage() {
     }
 
     if (frames.length > 0 && autoOpenedSettingsForPairingRef.current && activeTab === 'settings') {
+      logSessionRepair('redirect-to-frame', { reason: 'devices-found-in-db', source: 'db', deviceCount: frames.length })
       stickySettingsRef.current = false
       preferInstantScrollRef.current = true
       setActiveTab('frame')
@@ -1607,6 +1646,7 @@ export default function HomePage() {
       const session = sessionData.session
 
       void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
+      logSessionRepair('boot-session-check', { hasSession: Boolean(session), userId: session?.user?.id ?? null })
 
       if (!session) {
         resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
@@ -1617,6 +1657,7 @@ export default function HomePage() {
         return
       }
 
+      clearClientPersistedState({ clearSupabaseAuthStorage: false })
       setShouldRenderApp(true)
       setShowSplash(!disableLaunchSplash)
       setBooting(!disableLaunchSplash)
@@ -1639,6 +1680,7 @@ export default function HomePage() {
         .order('device_id', { ascending: true })
 
       if (error) {
+        logSessionRepair('members-load-failed', { userId: session.user.id, error: error.message })
         setFrames([])
         setActiveDeviceId(null)
         setBooting(false)
@@ -1646,6 +1688,7 @@ export default function HomePage() {
       }
 
       const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+      logSessionRepair('members-loaded', { userId: session.user.id, source: 'db', deviceCount: memberRows.length })
       const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
       const statusMap = await fetchDeviceStatusMap(deviceIds)
 
@@ -1661,6 +1704,10 @@ export default function HomePage() {
       setFrames(list)
 
       const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
+      logSessionRepair('active-device-resolution', {
+        source: 'db-with-optional-local-fallback',
+        cachedActiveDeviceId: saved,
+      })
       const savedExists = saved && list.some((x) => x.device_id === saved)
       const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
 

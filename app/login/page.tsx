@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 function getSafeNextPath() {
   if (typeof window === 'undefined') return '/'
 
