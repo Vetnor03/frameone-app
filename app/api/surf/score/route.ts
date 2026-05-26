@@ -1709,14 +1709,21 @@ export async function GET(req: Request) {
 
     const bestOn = bestModeEnabled(url, hours)
 
+    const hasBearer = !!authBearerFromReq(req)
+    const customSpotsForUser = hasBearer ? await fetchCustomSpotsForUser(req) : []
+
     const userExpBySpotId = await fetchUserExperiencesBySpotIds(
       req,
-      Object.values(SURF_SPOTS)
-        .map((s) => String(s?.spotId ?? '').trim())
-        .filter(Boolean)
+      Array.from(
+        new Set(
+          Object.values(SURF_SPOTS)
+            .map((s) => String(s?.spotId ?? '').trim())
+            .concat(customSpotsForUser.map((s) => String(s?.id ?? '').trim()))
+            .concat(spotIdQ ? [spotIdQ] : [])
+            .filter(Boolean)
+        )
+      )
     )
-
-    const hasBearer = !!authBearerFromReq(req)
 
     // ---------- Today's Best ----------
     if (isTodaysBest(spotIdQ, spotQ)) {
@@ -1732,7 +1739,7 @@ export async function GET(req: Request) {
         return true
       })
 
-      const customCandidates = (await fetchCustomSpotsForUser(req)).map((row) => ({
+      const customCandidates = customSpotsForUser.map((row) => ({
         spotId: row.id,
         label: row.name,
         lat: row.lat,
