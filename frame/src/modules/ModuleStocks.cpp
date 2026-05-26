@@ -223,20 +223,21 @@ static void formatSigned(char* out, size_t n, float v, int decimals, bool withPe
 // Purchase-aware UI is intentionally gated until purchase fields are finalized
 // in the backend/config contract. Keep fallback layouts active by default.
 static bool hasPurchaseData(const StockCache& data) {
-  return isfinite(data.purchasePrice) && data.purchasePrice > 0.0f
-      && isfinite(data.personalChangePercent);
+  (void)data;
+  return false;
 }
 
 static bool getReferenceLineValue(const StockCache& data, float& outValue) {
   outValue = NAN;
 
-  const char* range = normalizeRange(data.chartRange);
-  if ((strcmp(range, "week") == 0 || strcmp(range, "month") == 0) &&
-      data.seriesCount >= 1 && isfinite(data.series[0]) && data.series[0] > 0.0f) {
-    outValue = data.series[0];
+  // Keep purchase-aware safety gate: only use purchase price when purchase
+  // data is explicitly enabled and valid.
+  if (hasPurchaseData(data) && isfinite(data.purchasePrice) && data.purchasePrice > 0.0f) {
+    outValue = data.purchasePrice;
     return true;
   }
 
+  // Default market reference line: previous close.
   if (isfinite(data.previousClose) && data.previousClose > 0.0f) {
     outValue = data.previousClose;
     return true;
@@ -871,10 +872,9 @@ static void drawLive(const Cell& c, const StockCache& data) {
   const int colW = rowW / 3;
   d.drawFastVLine(rowX + colW, rowY - 2, rowH + 4, ink);
   d.drawFastVLine(rowX + colW * 2, rowY - 2, rowH + 4, ink);
-  const char* thirdValue = hasPurchase ? posPctTxt : rangePctTxt;
   drawCenteredLine(rowX + colW * 0, rowY, colW, rowH, priceTxt, FONT_B12, ink);
-  drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, dayPctTxt, FONT_B12, ink);
-  drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, thirdValue, FONT_B12, ink);
+  drawCenteredLine(rowX + colW * 1, rowY, colW, rowH, changeTxt, FONT_B12, ink);
+  drawCenteredLine(rowX + colW * 2, rowY, rowW - colW * 2, rowH, dayPctTxt, FONT_B12, ink);
 
   const int stackY = rowY + rowH + topGap + 2;
   const int detailW = rowW;
