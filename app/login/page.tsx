@@ -375,8 +375,12 @@ export default function LoginPage() {
   const [isVerifyingCode, setIsVerifyingCode] = useState(false)
   const [sendError, setSendError] = useState('')
   const [verifyError, setVerifyError] = useState('')
+  const [verifyDiagnostic, setVerifyDiagnostic] = useState('')
   const [lastRequestedEmail, setLastRequestedEmail] = useState('')
   const inFlightSendRequestRef = useRef(false)
+  const sendAttemptCountRef = useRef(0)
+  const isDebugVerifyBannerEnabled =
+    process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
 
   // ✅ If already logged in, skip login screen
   useEffect(() => {
@@ -394,6 +398,15 @@ export default function LoginPage() {
     setIsSendingCode(true)
     setSendError('')
     setVerifyError('')
+    setVerifyDiagnostic('')
+
+    sendAttemptCountRef.current += 1
+    if (sendAttemptCountRef.current > 1) {
+      console.info('[auth] multiple OTP requests detected', {
+        normalizedEmail,
+        requestCount: sendAttemptCountRef.current,
+      })
+    }
 
     try {
       const response = await fetch('/api/auth/request-code', {
@@ -422,37 +435,78 @@ export default function LoginPage() {
   async function verifyCode() {
     const normalizedEmail = email.trim().toLowerCase()
     const cleanedCode = code.trim()
+    const tokenDigitsOnly = /^\d+$/.test(cleanedCode)
+    const tokenHasExpectedLength = cleanedCode.length === 8
+    const emailMatchesRequest = normalizedEmail === lastRequestedEmail
+    const verifyType = 'email'
 
     if (!normalizedEmail || !cleanedCode) return
-    if (!/^\d{8}$/.test(cleanedCode)) {
+    if (!tokenDigitsOnly || !tokenHasExpectedLength) {
       setVerifyError('Please enter the full 8-digit code.')
+      setVerifyDiagnostic('wrong_length')
+      console.warn('[auth] verifyOtp precheck failed', {
+        tokenLength: cleanedCode.length,
+        tokenDigitsOnly,
+        tokenHasExpectedLength,
+        verifyType,
+        normalizedEmail,
+        emailMatchesRequest,
+      })
       return
     }
 
     setIsVerifyingCode(true)
     setVerifyError('')
+    setVerifyDiagnostic('')
 
     try {
       const { error } = await supabase.auth.verifyOtp({
         email: normalizedEmail,
         token: cleanedCode,
-        type: 'email',
+        type: verifyType,
       })
 
       if (error) {
-        console.warn('[auth] verifyOtp failed', {
-          codeLength: cleanedCode.length,
+        const safeError = {
           message: error.message,
-          name: error.name,
           status: (error as { status?: number }).status,
-          emailMatchesRequest: normalizedEmail === lastRequestedEmail,
+          code: (error as { code?: string }).code,
+          name: error.name,
+        }
+        const derivedDiagnostic =
+          safeError.code === 'otp_expired' || /expired/i.test(safeError.message)
+            ? 'otp_expired'
+            : safeError.code === 'invalid_token' || /invalid token|token is invalid/i.test(safeError.message)
+              ? 'invalid_token'
+              : !emailMatchesRequest
+                ? 'email_mismatch'
+                : 'verify_failed'
+        console.warn('[auth] verifyOtp failed', {
+          safeError,
+          tokenLength: cleanedCode.length,
+          tokenHasExpectedLength,
+          tokenDigitsOnly,
+          verifyType,
+          normalizedEmail,
+          emailMatchesRequest,
         })
+        setVerifyDiagnostic(derivedDiagnostic)
         setVerifyError('Could not verify the code. Please try again.')
         return
       }
 
       router.replace(nextPath)
-    } catch {
+    } catch (error) {
+      console.warn('[auth] verifyOtp threw', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+        tokenLength: cleanedCode.length,
+        tokenHasExpectedLength,
+        tokenDigitsOnly,
+        verifyType,
+        normalizedEmail,
+        emailMatchesRequest,
+      })
+      setVerifyDiagnostic(!emailMatchesRequest ? 'email_mismatch' : 'verify_failed')
       setVerifyError('Could not verify the code. Please try again.')
     } finally {
       setIsVerifyingCode(false)
@@ -527,7 +581,14 @@ export default function LoginPage() {
               />
 
               {verifyError ? (
-                <p className="mt-4 text-center text-xs text-[#ff8b8b]">{verifyError}</p>
+                <>
+                  <p className="mt-4 text-center text-xs text-[#ff8b8b]">{verifyError}</p>
+                  {isDebugVerifyBannerEnabled && verifyDiagnostic ? (
+                    <p className="mt-1 text-center text-[10px] tracking-wide text-white/45">
+                      debug: {verifyDiagnostic}
+                    </p>
+                  ) : null}
+                </>
               ) : null}
 
               <button
