@@ -379,6 +379,7 @@ export default function LoginPage() {
   const [lastRequestedEmail, setLastRequestedEmail] = useState('')
   const inFlightSendRequestRef = useRef(false)
   const sendAttemptCountRef = useRef(0)
+  const OTP_LENGTH = 8
   const isDebugVerifyBannerEnabled =
     process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
 
@@ -436,13 +437,13 @@ export default function LoginPage() {
     const normalizedEmail = email.trim().toLowerCase()
     const cleanedCode = code.trim()
     const tokenDigitsOnly = /^\d+$/.test(cleanedCode)
-    const tokenHasExpectedLength = cleanedCode.length === 8
+    const tokenHasExpectedLength = cleanedCode.length === OTP_LENGTH
     const emailMatchesRequest = normalizedEmail === lastRequestedEmail
     const verifyType = 'email'
 
     if (!normalizedEmail || !cleanedCode) return
     if (!tokenDigitsOnly || !tokenHasExpectedLength) {
-      setVerifyError('Please enter the full 8-digit code.')
+      setVerifyError(`Please enter the full ${OTP_LENGTH}-digit code.`)
       setVerifyDiagnostic('wrong_length')
       console.warn('[auth] verifyOtp precheck failed', {
         tokenLength: cleanedCode.length,
@@ -573,7 +574,7 @@ export default function LoginPage() {
                 placeholder="12345678"
                 value={code}
                 onChange={(e) => {
-                  setCode(e.target.value.replace(/\D/g, '').slice(0, 8))
+                  setCode(e.target.value.replace(/\D/g, '').slice(0, OTP_LENGTH))
                   if (verifyError) setVerifyError('')
                 }}
                 className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
