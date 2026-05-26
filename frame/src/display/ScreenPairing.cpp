@@ -1,118 +1,36 @@
-// ScreenPairing.cpp
 #include "ScreenPairing.h"
 #include "DisplayCore.h"
 #include "Config.h"
 #include "Theme.h"
+#include "assets/pairing/PairingQrAsset.h"
 
 #include <Arduino.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
 
-// =======================================================
-// Helpers
-// =======================================================
 static void drawCenteredInFrame(const char* text, int y, const GFXfont* font) {
   auto& d = DisplayCore::get();
   d.setFont(font);
-
-  int16_t x1, y1;
-  uint16_t w, h;
+  int16_t x1, y1; uint16_t w, h;
   d.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
-
   int x = FRAME_X + (FRAME_W - (int)w) / 2 - x1;
   d.setCursor(x, y);
   d.print(text);
 }
 
-static void drawLeftInFrame(const char* text, int x, int y, const GFXfont* font) {
+static int textHeight(const char* text, const GFXfont* font) {
   auto& d = DisplayCore::get();
   d.setFont(font);
-  d.setCursor(FRAME_X + x, FRAME_Y + y);
-  d.print(text);
-}
-
-static void drawWrappedLine(const String& line, int x, int& y, int maxW, const GFXfont* font, int lineStep) {
-  auto& d = DisplayCore::get();
-  d.setFont(font);
-
-  int16_t x1, y1;
-  uint16_t w, h;
-  d.getTextBounds(line.c_str(), 0, 0, &x1, &y1, &w, &h);
-
-  if ((int)w <= maxW) {
-    d.setCursor(FRAME_X + x, FRAME_Y + y);
-    d.print(line.c_str());
-    y += lineStep;
-    return;
-  }
-
-  String remaining = line;
-  remaining.trim();
-
-  while (remaining.length() > 0) {
-    int bestCut = -1;
-
-    for (int i = 1; i <= remaining.length(); i++) {
-      String part = remaining.substring(0, i);
-      int spacePos = part.lastIndexOf(' ');
-      if (spacePos > 0) part = remaining.substring(0, spacePos);
-
-      part.trim();
-      if (part.length() == 0) continue;
-
-      d.getTextBounds(part.c_str(), 0, 0, &x1, &y1, &w, &h);
-      if ((int)w <= maxW) bestCut = part.length();
-      else break;
-    }
-
-    if (bestCut <= 0) bestCut = 1;
-
-    String out = remaining.substring(0, bestCut);
-    out.trim();
-
-    d.setCursor(FRAME_X + x, FRAME_Y + y);
-    d.print(out.c_str());
-    y += lineStep;
-
-    remaining = remaining.substring(bestCut);
-    remaining.trim();
-  }
-}
-
-static void drawWrappedBlock(const char* text, int x, int y, int maxW, const GFXfont* font, int lineStep) {
-  String s = String(text);
-  int yy = y;
-
-  while (s.length() > 0) {
-    int nl = s.indexOf('\n');
-    if (nl < 0) {
-      drawWrappedLine(s, x, yy, maxW, font, lineStep);
-      break;
-    }
-
-    String one = s.substring(0, nl);
-    drawWrappedLine(one, x, yy, maxW, font, lineStep);
-    s = s.substring(nl + 1);
-  }
-}
-
-static int measureTextHeight(const char* text, const GFXfont* font) {
-  auto& d = DisplayCore::get();
-  d.setFont(font);
-
-  int16_t x1, y1;
-  uint16_t w, h;
+  int16_t x1, y1; uint16_t w, h;
   d.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
   return (int)h;
 }
 
 typedef void (*DrawCb)(void* ctx);
-
 static void renderPage(DrawCb cb, void* ctx) {
   ThemeKey previousTheme = Theme::get();
   Theme::set(THEME_DARK);
-
   auto& d = DisplayCore::get();
   d.setFullWindow();
   d.firstPage();
@@ -121,148 +39,70 @@ static void renderPage(DrawCb cb, void* ctx) {
     d.setTextColor(Theme::ink());
     cb(ctx);
   } while (d.nextPage());
-
   Theme::set(previousTheme);
 }
 
-// =======================================================
-// Screens
-// =======================================================
 namespace ScreenPairing {
-
-// ---- WIFI SETUP ----
-static void drawWifiSetup(void* ctx) {
-  (void)ctx;
-  auto& d = DisplayCore::get();
-
-  const int left = 28;
-  const int maxW = FRAME_W - (left * 2);
-
-  drawCenteredInFrame("CONNECT TO WIFI", FRAME_Y + 58, &FreeMonoBold18pt7b);
-
-  drawLeftInFrame("ON YOUR PHONE", left, 104, &FreeMonoBold12pt7b);
-
-  int y = 140;
-  drawWrappedBlock("1) Join Wi-Fi network FRAME-SETUP", left, y, maxW, &FreeMonoBold12pt7b, 24);
-  y += 8;
-  drawWrappedBlock("2) Setup page should open", left, y, maxW, &FreeMonoBold12pt7b, 24);
-  y += 8;
-  drawWrappedBlock("3) If not, open 192.168.4.1", left, y, maxW, &FreeMonoBold12pt7b, 24);
-  y += 8;
-  drawWrappedBlock("4) Enter home Wi-Fi details", left, y, maxW, &FreeMonoBold12pt7b, 24);
-
-  d.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, Theme::ink());
-
-  drawLeftInFrame("KEEP PHONE NEAR FRAME", left, FRAME_H - 20, &FreeMonoBold9pt7b);
+struct WifiCtx { const char* apSsid; };
+static void drawWifiSetup(void* vctx) {
+  auto* ctx = (WifiCtx*)vctx;
+  const int bottomY = FRAME_Y + FRAME_H;
+  int y = FRAME_Y + 90;
+  drawCenteredInFrame("In your Wi-Fi settings on your phone, connect to:", y, &FreeMonoBold12pt7b);
+  y += 70;
+  drawCenteredInFrame(ctx->apSsid, y, &FreeMonoBold18pt7b);
+  y += 64;
+  drawCenteredInFrame("Add your Wi-Fi credentials", y, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Can take up to a minute for frame to receive your Wi-Fi credentials", bottomY - 34, &FreeMonoBold9pt7b);
+  drawCenteredInFrame("Reconnect charger to restart Wi-Fi setup", bottomY - 12, &FreeMonoBold9pt7b);
 }
 
-void showWifiSetup() {
-  renderPage(drawWifiSetup, nullptr);
+void showWifiSetup(const char* apSsid) {
+  WifiCtx ctx{apSsid};
+  renderPage(drawWifiSetup, &ctx);
 }
 
-// ---- PAIR CODE ----
-struct PairCtx {
-  const char* code;
-  int expiresInSec;
-  const char* appUrl;
-};
-
+struct PairCtx { const char* code; };
 static void drawPairCode(void* vctx) {
   PairCtx* ctx = (PairCtx*)vctx;
   auto& d = DisplayCore::get();
+  const int frameCenterX = FRAME_X + (FRAME_W / 2);
 
-  const int left = 28;
-  const int maxW = FRAME_W - (left * 2);
-  const int footerLineY = FRAME_Y + FRAME_H - 46;
-  const int footerTextY = FRAME_Y + FRAME_H - 18;
+  drawCenteredInFrame("Login to app and pair frame", FRAME_Y + 42, &FreeMonoBold12pt7b);
 
-  drawCenteredInFrame("PAIR FRAME", FRAME_Y + 58, &FreeMonoBold18pt7b);
-  drawLeftInFrame("GO TO", left, 104, &FreeMonoBold12pt7b);
+  const int qrSize = 220;
+  const int qrX = frameCenterX - (qrSize / 2);
+  const int qrY = FRAME_Y + 58;
+  d.drawBitmap(qrX, qrY, PairingQrAsset::kQrMonoBitmap, qrSize, qrSize, Theme::ink());
 
-  int y = 144;
-  drawWrappedBlock(ctx->appUrl, left, y, maxW, &FreeMonoBold18pt7b, 34);
+  drawCenteredInFrame("re-mind.no", qrY + qrSize + 38, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Pair frame to app by adding code below", qrY + qrSize + 74, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("For returning users, \"Pair frame\" can be found in app settings", qrY + qrSize + 100, &FreeMonoBold9pt7b);
 
-  y += 32;
-  drawWrappedBlock("1) Open the app", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  y += 24;
-  drawWrappedBlock("2) Log in", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  y += 24;
-  drawWrappedBlock("3) Tap \"+ ADD FRAME\"", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  y += 24;
-  drawWrappedBlock("4) Enter this code", left, y, maxW, &FreeMonoBold12pt7b, 30);
-
-  const int instructionBottomY = FRAME_Y + y;
-  const int codeTextH = measureTextHeight(ctx->code, &FreeMonoBold18pt7b);
-
-  // Center the code vertically between the bottom of step 4 and the footer divider.
-  int gapTop = instructionBottomY + 8;
-  int gapBottom = footerLineY - 8;
-  int gapMid = gapTop + (gapBottom - gapTop) / 2;
-
-  // drawCenteredInFrame uses baseline Y, so convert from desired visual center.
-  int codeBaselineY = gapMid + (codeTextH / 2);
-  drawCenteredInFrame(ctx->code, codeBaselineY, &FreeMonoBold18pt7b);
-
-  d.drawLine(FRAME_X + left, footerLineY, FRAME_X + FRAME_W - left, footerLineY, Theme::ink());
-
-  d.setFont(&FreeMonoBold9pt7b);
-  d.setTextColor(Theme::ink());
-  d.setCursor(FRAME_X + left, footerTextY);
-
-  int mins = (ctx->expiresInSec + 59) / 60;
-  if (mins < 1) mins = 1;
-
-  d.print("CODE VALID FOR ABOUT ");
-  d.print("10");
-  d.print(" MIN");
+  const int codeY = FRAME_Y + FRAME_H - 54;
+  drawCenteredInFrame(ctx->code, codeY, &FreeMonoBold18pt7b);
+  drawCenteredInFrame("Reconnect charger to restart pairing", FRAME_Y + FRAME_H - 12, &FreeMonoBold9pt7b);
 }
 
 void showPairCode(const char* code, int expiresInSec, const char* appUrl) {
-  PairCtx ctx;
-  ctx.code = code;
-  ctx.expiresInSec = expiresInSec;
-  ctx.appUrl = appUrl;
+  (void)expiresInSec; (void)appUrl;
+  PairCtx ctx{code};
   renderPage(drawPairCode, &ctx);
 }
 
-// ---- PAIRED ----
 static void drawPaired(void* ctx) {
   (void)ctx;
-
-  const int left = 28;
-  const int maxW = FRAME_W - (left * 2);
-
   drawCenteredInFrame("FRAME CONNECTED", FRAME_Y + 150, &FreeMonoBold18pt7b);
-  drawWrappedBlock("Loading your frame...", left, 230, maxW, &FreeMonoBold12pt7b, 24);
+  drawCenteredInFrame("Loading your frame...", FRAME_Y + 230, &FreeMonoBold12pt7b);
 }
+void showPaired() { renderPage(drawPaired, nullptr); }
 
-void showPaired() {
-  renderPage(drawPaired, nullptr);
-}
-
-// ---- ERROR ----
-struct ErrCtx {
-  const char* msg;
-};
-
+struct ErrCtx { const char* msg; };
 static void drawError(void* vctx) {
   ErrCtx* ctx = (ErrCtx*)vctx;
-
-  const int left = 28;
-  const int maxW = FRAME_W - (left * 2);
-
   drawCenteredInFrame("SETUP STOPPED", FRAME_Y + 110, &FreeMonoBold18pt7b);
-  drawWrappedBlock(ctx->msg, left, 185, maxW, &FreeMonoBold12pt7b, 24);
-  drawWrappedBlock("Restart frame and try again", left, 255, maxW, &FreeMonoBold12pt7b, 24);
+  drawCenteredInFrame(ctx->msg, FRAME_Y + 185, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Reconnect charger and try again", FRAME_Y + 255, &FreeMonoBold12pt7b);
 }
-
-void showError(const char* msg) {
-  ErrCtx ctx;
-  ctx.msg = msg;
-  renderPage(drawError, &ctx);
+void showError(const char* msg) { ErrCtx ctx{msg}; renderPage(drawError, &ctx); }
 }
-
-} // namespace ScreenPairing

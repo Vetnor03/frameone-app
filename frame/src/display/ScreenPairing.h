@@ -5,7 +5,7 @@
 namespace ScreenPairing {
 
   // Onboarding screens (short + clear)
-  void showWifiSetup();
+  void showWifiSetup(const char* apSsid);
   void showPairCode(const char* code, int expiresInSec, const char* appUrl);
   void showPaired();
 

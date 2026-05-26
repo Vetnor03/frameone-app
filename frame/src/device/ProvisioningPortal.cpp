@@ -4,6 +4,7 @@
 #include "DisplayCore.h"
 #include "Config.h"
 #include "Theme.h"
+#include "display/ScreenPairing.h"
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -157,37 +158,7 @@ void runBlocking() {
 
   IPAddress apIP = WiFi.softAPIP();
 
-  auto& display = DisplayCore::get();
-  display.setFullWindow();
-  display.firstPage();
-  do {
-    display.fillScreen(Theme::paper());
-    display.setTextColor(Theme::ink());
-
-    const int left = 28;
-    const int maxW = FRAME_W - (left * 2);
-
-    drawCenteredLine("CONNECT TO WIFI", FRAME_Y + 58, &FreeMonoBold18pt7b);
-    drawCenteredLine("JOIN THIS NETWORK", FRAME_Y + 112, &FreeMonoBold12pt7b);
-
-    display.setFont(&FreeMonoBold18pt7b);
-    display.setCursor(FRAME_X + left, FRAME_Y + 160);
-    display.print(apSsid.c_str());
-
-    int y = 220;
-    drawWrappedLine("1) Setup page should open", left, y, maxW, &FreeMonoBold12pt7b, 24);
-    y += 8;
-    drawWrappedLine("2) If not, open 192.168.4.1", left, y, maxW, &FreeMonoBold12pt7b, 24);
-    y += 8;
-    drawWrappedLine("3) Enter your home Wi-Fi", left, y, maxW, &FreeMonoBold12pt7b, 24);
-
-    display.drawLine(FRAME_X + left, FRAME_Y + FRAME_H - 46, FRAME_X + FRAME_W - left, FRAME_Y + FRAME_H - 46, Theme::ink());
-
-    display.setFont(&FreeMonoBold9pt7b);
-    display.setCursor(FRAME_X + left, FRAME_Y + FRAME_H - 18);
-    display.print("FRAME WILL CONTINUE SETUP AFTER SAVE");
-
-  } while (display.nextPage());
+  ScreenPairing::showWifiSetup(apSsid.c_str());
 
   Serial.println("=== Provisioning Portal ===");
   Serial.print("AP SSID: ");
