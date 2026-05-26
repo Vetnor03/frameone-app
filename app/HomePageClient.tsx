@@ -1084,6 +1084,7 @@ export default function HomePage() {
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
   const isLoadedRef = useRef(false)
+  const autoOpenedSettingsForPairingRef = useRef(false)
 
   const disableLaunchSplash = searchParams?.get('nosplash') === '1'
 
@@ -1091,10 +1092,30 @@ export default function HomePage() {
     const tab = searchParams?.get('tab')
     if (tab === 'settings') {
       stickySettingsRef.current = true
+      autoOpenedSettingsForPairingRef.current = true
       preferInstantScrollRef.current = true
       setActiveTab('settings')
     }
   }, [searchParams])
+
+  useEffect(() => {
+    if (!shouldRenderApp || booting) return
+    if (stickySettingsRef.current) return
+
+    if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
+      autoOpenedSettingsForPairingRef.current = true
+      stickySettingsRef.current = true
+      preferInstantScrollRef.current = true
+      setActiveTab('settings')
+      return
+    }
+
+    if (frames.length > 0 && autoOpenedSettingsForPairingRef.current && activeTab === 'settings') {
+      stickySettingsRef.current = false
+      preferInstantScrollRef.current = true
+      setActiveTab('frame')
+    }
+  }, [activeTab, booting, frames.length, shouldRenderApp])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
