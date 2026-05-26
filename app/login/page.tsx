@@ -372,6 +372,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sendError, setSendError] = useState('')
 
   // ✅ If already logged in, skip login screen
   useEffect(() => {
@@ -384,16 +385,25 @@ export default function LoginPage() {
   async function sendCode() {
     if (!email) return
     setLoading(true)
+    setSendError('')
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true },
-    })
+    try {
+      const response = await fetch('/api/auth/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
 
-    setLoading(false)
-    if (error) return alert(error.message)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setSendError(payload?.error || 'Could not send your login code. Please try again.')
+        return
+      }
 
-    setStep('code')
+      setStep('code')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function verifyCode() {
@@ -434,6 +444,7 @@ export default function LoginPage() {
           {step === 'email' ? (
             <div className="relative">
               <p className="mt-2 text-center text-sm text-white/50">We’ll send you an 8-digit code</p>
+              <p className="mt-1 text-center text-xs text-white/35">Use the email with the code to log in.</p>
 
             <input
               type="email"
@@ -443,6 +454,10 @@ export default function LoginPage() {
               className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 outline-none"
               autoComplete="email"
             />
+
+            {sendError ? (
+              <p className="mt-4 text-center text-xs text-[#ff8b8b]">{sendError}</p>
+            ) : null}
 
             <button
               onClick={sendCode}
@@ -471,7 +486,11 @@ export default function LoginPage() {
                 autoComplete="one-time-code"
               />
 
-              <button
+              {sendError ? (
+              <p className="mt-4 text-center text-xs text-[#ff8b8b]">{sendError}</p>
+            ) : null}
+
+            <button
                 onClick={verifyCode}
                 disabled={loading}
                 className="mt-6 h-12 w-full rounded-xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest"
@@ -479,7 +498,11 @@ export default function LoginPage() {
                 {loading ? 'VERIFYING...' : 'VERIFY CODE'}
               </button>
 
-              <button
+              {sendError ? (
+              <p className="mt-4 text-center text-xs text-[#ff8b8b]">{sendError}</p>
+            ) : null}
+
+            <button
                 onClick={() => {
                   setCode('')
                   setStep('email')
