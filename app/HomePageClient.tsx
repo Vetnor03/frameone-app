@@ -6702,9 +6702,26 @@ function MyFramesSection({
     setAddFrameLoading(true)
     setAddFrameError(null)
     try {
-      const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
-      if (error) throw new Error(error.message)
-      if (data !== true) throw new Error(t.invalidPairCode)
+      console.info('[add-frame] submit', { pairCodeLength: cleaned.length })
+
+      const response = await fetch('/api/frame/claim-pair-code', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pairCode: cleaned }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      console.info('[add-frame] result', {
+        status: response.status,
+        ok: response.ok,
+        hasPayload: Boolean(payload),
+      })
+
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || (cleaned.length === 4 ? t.invalidPairCode : 'Unable to add frame right now.'))
+      }
 
       const { data: sessionData } = await supabase.auth.getSession()
       const session = sessionData.session
@@ -6749,7 +6766,7 @@ function MyFramesSection({
       setAddFrameCode('')
       alert(t.frameAdded)
     } catch (e: any) {
-      setAddFrameError(String(e?.message || e || t.invalidPairCode))
+      setAddFrameError(String(e?.message || 'Unable to add frame right now. Please try again.'))
     } finally {
       setAddFrameLoading(false)
     }
