@@ -11,6 +11,19 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
 }
 
+type OtpFlow = 'login_otp' | 'signup_otp' | 'confirmation_otp' | 'unknown'
+
+function classifyOtpFlow(source?: string): OtpFlow {
+  const value = source?.toLowerCase() || ''
+
+  if (!value) return 'unknown'
+  if (value.includes('login')) return 'login_otp'
+  if (value.includes('signup') || value.includes('create user')) return 'signup_otp'
+  if (value.includes('confirm') || value.includes('verification')) return 'confirmation_otp'
+
+  return 'unknown'
+}
+
 function getClientIp(request: Request) {
   const forwardedFor = request.headers.get('x-forwarded-for') || ''
   const firstForwardedIp = forwardedFor.split(',')[0]?.trim()
@@ -34,9 +47,8 @@ function isRateLimited(key: string, now: number) {
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     return jsonError('Login is temporarily unavailable. Please try again shortly.', 500)
   }
 
@@ -54,61 +66,22 @@ export async function POST(request: Request) {
     return jsonError('Too many code requests. Please wait a few minutes and try again.', 429)
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-
-  let existingUser: { id: string; email_confirmed_at?: string | null } | undefined
-  let page = 1
-  const perPage = 200
-
-  while (page <= 10 && !existingUser) {
-    const { data, error: listError } = await admin.auth.admin.listUsers({
-      page,
-      perPage,
-    })
-
-    if (listError) {
-      return jsonError('Could not send your login code. Please try again.', 500)
-    }
-
-    existingUser = data.users.find((user) => user.email?.toLowerCase() === email)
-
-    if (!data.users.length || data.users.length < perPage) break
-    page += 1
-  }
-
-  if (!existingUser) {
-    const { error: createError } = await admin.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { created_via: 'login_otp_bootstrap' },
-    })
-
-    if (createError) {
-      return jsonError('Could not send your login code. Please try again.', 500)
-    }
-  } else if (!existingUser.email_confirmed_at) {
-    const { error: updateError } = await admin.auth.admin.updateUserById(existingUser.id, {
-      email_confirm: true,
-    })
-
-    if (updateError) {
-      return jsonError('Could not send your login code. Please try again.', 500)
-    }
-  }
-
   const anon = createClient(supabaseUrl, supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  const otpFlow: OtpFlow = 'login_otp'
+
   const { error: otpError } = await anon.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: true },
   })
 
   if (otpError) {
+    const detectedFlow = classifyOtpFlow(otpError.message)
     console.warn('[auth] signInWithOtp failed', {
+      otpFlow,
+      detectedFlow,
       message: otpError.message,
       name: otpError.name,
       status: (otpError as { status?: number }).status,
@@ -116,6 +89,12 @@ export async function POST(request: Request) {
     })
     return jsonError('Could not send your login code. Please try again.', 500)
   }
+
+  console.info('[auth] OTP requested', {
+    otpFlow,
+    detectedFlow: classifyOtpFlow('login'),
+    emailDomain: email.split('@')[1] || 'unknown',
+  })
 
   return NextResponse.json({ ok: true })
 }
