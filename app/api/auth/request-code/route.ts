@@ -108,6 +108,12 @@ export async function POST(request: Request) {
   })
 
   if (otpError) {
+    console.warn('[auth] signInWithOtp failed', {
+      message: otpError.message,
+      name: otpError.name,
+      status: (otpError as { status?: number }).status,
+      codeLengthHint: process.env.SUPABASE_EMAIL_OTP_LENGTH || 'default',
+    })
     return jsonError('Could not send your login code. Please try again.', 500)
   }
 

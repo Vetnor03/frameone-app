@@ -2,7 +2,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
@@ -375,6 +375,8 @@ export default function LoginPage() {
   const [isVerifyingCode, setIsVerifyingCode] = useState(false)
   const [sendError, setSendError] = useState('')
   const [verifyError, setVerifyError] = useState('')
+  const [lastRequestedEmail, setLastRequestedEmail] = useState('')
+  const inFlightSendRequestRef = useRef(false)
 
   // ✅ If already logged in, skip login screen
   useEffect(() => {
@@ -385,15 +387,19 @@ export default function LoginPage() {
   }, [router, nextPath])
 
   async function sendCode() {
-    if (!email) return
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail || inFlightSendRequestRef.current) return
+    inFlightSendRequestRef.current = true
     setIsSendingCode(true)
     setSendError('')
+    setVerifyError('')
 
     try {
       const response = await fetch('/api/auth/request-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: normalizedEmail }),
       })
 
       const payload = await response.json().catch(() => null)
@@ -403,27 +409,44 @@ export default function LoginPage() {
       }
 
       setStep('code')
+      setEmail(normalizedEmail)
+      setLastRequestedEmail(normalizedEmail)
     } catch {
       setSendError('Could not send your login code. Please try again.')
     } finally {
       setIsSendingCode(false)
+      inFlightSendRequestRef.current = false
     }
   }
 
   async function verifyCode() {
-    if (!email || !code) return
+    const normalizedEmail = email.trim().toLowerCase()
+    const cleanedCode = code.trim()
+
+    if (!normalizedEmail || !cleanedCode) return
+    if (!/^\d{8}$/.test(cleanedCode)) {
+      setVerifyError('Please enter the full 8-digit code.')
+      return
+    }
 
     setIsVerifyingCode(true)
     setVerifyError('')
 
     try {
       const { error } = await supabase.auth.verifyOtp({
-        email,
-        token: code.trim(),
+        email: normalizedEmail,
+        token: cleanedCode,
         type: 'email',
       })
 
       if (error) {
+        console.warn('[auth] verifyOtp failed', {
+          codeLength: cleanedCode.length,
+          message: error.message,
+          name: error.name,
+          status: (error as { status?: number }).status,
+          emailMatchesRequest: normalizedEmail === lastRequestedEmail,
+        })
         setVerifyError('Could not verify the code. Please try again.')
         return
       }
@@ -496,7 +519,7 @@ export default function LoginPage() {
                 placeholder="12345678"
                 value={code}
                 onChange={(e) => {
-                  setCode(e.target.value.replace(/\s/g, ''))
+                  setCode(e.target.value.replace(/\D/g, '').slice(0, 8))
                   if (verifyError) setVerifyError('')
                 }}
                 className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
