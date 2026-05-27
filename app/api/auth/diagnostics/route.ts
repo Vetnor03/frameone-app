@@ -41,10 +41,18 @@ export async function GET() {
 
   let deviceCount = 0
   let deviceError: DbErrorLike = null
+  let serverFallbackFrameCount = 0
+  let serverFallbackError: DbErrorLike = null
   if (user?.id) {
-    const { data, error } = await supabase.from('device_members').select('device_id').eq('user_id', user.id)
+    const { data, error } = await supabase
+      .from('device_members')
+      .select('device_id, role')
+      .eq('user_id', user.id)
+      .order('device_id', { ascending: true })
     deviceCount = data?.length || 0
     deviceError = error as DbErrorLike
+    serverFallbackFrameCount = data?.length || 0
+    serverFallbackError = error as DbErrorLike
   }
 
   const onboardingReason = !session
@@ -65,11 +73,13 @@ export async function GET() {
     cookieWrites,
     profileFound,
     deviceCount,
+    serverFallbackFrameCount,
     queryErrors: {
       session: summarizeError(sessionError as DbErrorLike),
       user: summarizeError(userError as DbErrorLike),
       profile: summarizeError(profileError),
       deviceMembers: summarizeError(deviceError),
+      serverFallback: summarizeError(serverFallbackError),
     },
     onboardingReason,
   })

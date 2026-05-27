@@ -1087,6 +1087,28 @@ export default function HomePage() {
     }
   }
 
+  function isFrameMembershipNetworkError(error: unknown) {
+    if (!error) return false
+    const message = error instanceof Error ? error.message : String(error)
+    const normalized = message.toLowerCase()
+    return normalized.includes('load failed')
+      || normalized.includes('failed to fetch')
+      || normalized.includes('networkerror')
+      || normalized.includes('fetch failed')
+      || normalized.includes('typeerror')
+  }
+
+  async function loadFramesFromServerFallback() {
+    const response = await fetch('/api/device/user-frames', { method: 'GET', cache: 'no-store', credentials: 'include' })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.ok) {
+      const message = payload?.details || payload?.error || `request_failed_${response.status}`
+      throw new Error(String(message))
+    }
+    const frames = Array.isArray(payload.frames) ? payload.frames : []
+    return frames as Array<{ device_id: string; role: string | null }>
+  }
+
 
   function clearClientPersistedState(options?: { clearSupabaseAuthStorage?: boolean }) {
     if (typeof window === 'undefined') return
@@ -1905,22 +1927,64 @@ export default function HomePage() {
 
         const { data: members, error } = await loadDeviceMembersWithRetry(session.user.id)
 
-        if (error) {
-          setFrameQueryFailed(true)
-          setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'error', frameQueryErrorMessage: error.message, frameQueryErrorCode: error.code ?? null, frameQueryErrorDetails: error.details ?? null }))
-          logSessionRepair('members-load-failed', { error: error.message })
-          console.info('[BOOT] frame list load failed', { error: error.message })
-          setFramesHydrated(true)
-          setBooting(false)
-          return
-        }
-        setFrameQueryFailed(false)
+        let memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+        let frameSource: 'client' | 'server-fallback' = 'client'
 
-        const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+        if (error) {
+          const canTryServerFallback = isFrameMembershipNetworkError(error)
+          if (!canTryServerFallback) {
+            setFrameQueryFailed(true)
+            setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'error', frameQueryErrorMessage: error.message, frameQueryErrorCode: error.code ?? null, frameQueryErrorDetails: error.details ?? null }))
+            logSessionRepair('members-load-failed', { error: error.message, source: 'client' })
+            console.info('[BOOT] frame list load failed', { error: error.message, source: 'client' })
+            setFramesHydrated(true)
+            setBooting(false)
+            return
+          }
+
+          try {
+            memberRows = await loadFramesFromServerFallback()
+            frameSource = 'server-fallback'
+            setBootDebug((prev) => ({
+              ...prev,
+              frameQueryStatus: 'ok',
+              frameQueryErrorMessage: error.message,
+              frameQueryFallbackUsed: true,
+              frameQueryFallbackCount: memberRows.length,
+            }))
+            logSessionRepair('members-loaded', { source: frameSource, deviceCount: memberRows.length, initialClientError: error.message })
+          } catch (fallbackError) {
+            setFrameQueryFailed(true)
+            setBootDebug((prev) => ({
+              ...prev,
+              frameQueryStatus: 'error',
+              frameQueryErrorMessage: error.message,
+              frameQueryFallbackUsed: true,
+              frameQueryFallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            }))
+            logSessionRepair('members-load-failed', {
+              error: error.message,
+              source: 'client+server-fallback',
+              fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            })
+            console.info('[BOOT] frame list load failed', {
+              error: error.message,
+              fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              source: 'client+server-fallback',
+            })
+            setFramesHydrated(true)
+            setBooting(false)
+            return
+          }
+        }
+
+        setFrameQueryFailed(false)
         setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'ok', serverFrameCount: memberRows.length, rawFrames: memberRows }))
         console.info('[BOOT] frame list loaded', { count: memberRows.length })
         console.info('[BOOT] server frame count', { count: memberRows.length })
-        logSessionRepair('members-loaded', { source: 'db', deviceCount: memberRows.length })
+        if (frameSource === 'client') {
+          logSessionRepair('members-loaded', { source: 'client', deviceCount: memberRows.length })
+        }
         const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
         const statusMap = await fetchDeviceStatusMap(deviceIds)
 
