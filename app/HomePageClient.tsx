@@ -1455,6 +1455,17 @@ export default function HomePage() {
     }
   }, [searchParams])
 
+  const clearStaleAddFrameRedirectDebug = useCallback((extras?: Record<string, unknown>) => {
+    setBootDebug((prev) => ({
+      ...prev,
+      redirectTarget: null,
+      redirectReason: null,
+      addFrameTriggerSource: 'none',
+      ...(prev.bootTimeoutReason === 'startup-timeout' ? { bootTimeoutReason: 'recovered-after-hydration' } : {}),
+      ...(extras ?? {}),
+    }))
+  }, [])
+
   useEffect(() => {
     console.info('[FRAME] post-hydration routing effect entered', {
       shouldRenderApp,
@@ -1492,7 +1503,12 @@ export default function HomePage() {
     }
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
-      setBootDebug((prev) => ({ ...prev, redirectTarget: 'settings:add-frame', redirectReason: 'no-devices-in-db', addFrameTriggerSource: 'server-data' }))
+      setBootDebug((prev) => ({
+        ...prev,
+        redirectTarget: 'settings:add-frame',
+        redirectReason: 'no-devices-in-db',
+        addFrameTriggerSource: 'server-data',
+      }))
       console.info('[ROUTE] pair flow redirect: no frames found after hydration')
       logSessionRepair('redirect-to-settings', { reason: 'no-devices-in-db', source: 'db' })
       autoOpenedSettingsForPairingRef.current = true
@@ -1503,6 +1519,10 @@ export default function HomePage() {
     }
 
     if (frames.length > 0) {
+      clearStaleAddFrameRedirectDebug({
+        redirectReason: 'devices-found-in-db',
+        redirectTarget: activeTab === 'settings' && autoOpenedSettingsForPairingRef.current ? 'frame' : null,
+      })
       console.info('[ROUTE] onboarding redirect skipped: existing frame found', { frameCount: frames.length })
     }
 
@@ -1513,7 +1533,7 @@ export default function HomePage() {
       preferInstantScrollRef.current = true
       setActiveTab('frame')
     }
-  }, [activeTab, authHydrated, booting, frameQueryFailed, frames.length, framesHydrated, shouldRenderApp])
+  }, [activeTab, authHydrated, booting, clearStaleAddFrameRedirectDebug, frameQueryFailed, frames.length, framesHydrated, shouldRenderApp])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
@@ -2192,7 +2212,23 @@ export default function HomePage() {
         }
 
         setFrameQueryFailed(false)
-        setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'ok', serverFrameCount: memberRows.length, rawFrames: memberRows }))
+        if (memberRows.length > 0) {
+          setBootTimeoutHit(false)
+        }
+        setBootDebug((prev) => ({
+          ...prev,
+          frameQueryStatus: 'ok',
+          serverFrameCount: memberRows.length,
+          rawFrames: memberRows,
+          ...(memberRows.length > 0
+            ? {
+                redirectTarget: null,
+                redirectReason: null,
+                addFrameTriggerSource: 'none',
+                bootTimeoutReason: prev.bootTimeoutReason === 'startup-timeout' ? 'recovered-after-hydration' : prev.bootTimeoutReason,
+              }
+            : {}),
+        }))
         console.info('[FRAME] finalized', { durationMs: Date.now() - hydrationStartAt, source: frameSource })
         lastResolvedStageRef.current = 'finalized'
         trace('finalized')
