@@ -383,6 +383,8 @@ function directionScoreInSectorLinear(degFrom: number, sector: CustomDirectionSe
 
 function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, degFrom: number, customSpotProfile?: CustomSpotScoringProfile | null) {
   const sector = tableKey === 'wave_dir' ? customSpotProfile?.waveDir : customSpotProfile?.windDir
+  // Custom-spot sectors are stored/treated as meteorological FROM directions (same as built-in waveguide tables).
+  // We pass the incoming degFrom through the same normalization + wraparound math in directionScoreInSectorLinear.
   if (sector) return { picked: `${Math.round(normDeg(degFrom))}°`, score: directionScoreInSectorLinear(degFrom, sector) }
 
   const st = getSpotTables(spotKey)
