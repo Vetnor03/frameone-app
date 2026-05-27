@@ -542,7 +542,14 @@ export async function GET(req: Request) {
       purchasePrice != null && currentPrice != null
         ? ((currentPrice - purchasePrice) / purchasePrice) * 100
         : null
-    const displayReturnPct = returnSincePurchasePct ?? rangeChangePct
+    const selectedSeriesFirstPrice = selectedSeries.length > 0 ? selectedSeries[0]?.p ?? null : null
+    const selectedRangeReturnPct =
+      hasValidCurrentPrice && chartRange === 'day'
+        ? dayChangePct
+        : hasValidCurrentPrice && selectedSeriesFirstPrice != null && selectedSeriesFirstPrice > 0
+          ? ((currentPrice - selectedSeriesFirstPrice) / selectedSeriesFirstPrice) * 100
+          : rangeChangePct
+    const displayReturnPct = returnSincePurchasePct ?? selectedRangeReturnPct
 
     const baselinePrice =
       chartRange === 'day'
