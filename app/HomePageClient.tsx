@@ -958,6 +958,7 @@ export default function HomePage() {
   const [authHydrated, setAuthHydrated] = useState(false)
   const [framesHydrated, setFramesHydrated] = useState(false)
   const [bootDebug, setBootDebug] = useState<Record<string, unknown>>({})
+  const [bootTimeoutHit, setBootTimeoutHit] = useState(false)
   const [frameQueryFailed, setFrameQueryFailed] = useState(false)
   const [frameQueryRetrying, setFrameQueryRetrying] = useState(false)
 
@@ -1072,14 +1073,18 @@ export default function HomePage() {
     if (!first.error) return first
 
     await collectFrameQueryDiagnostics('before-response', first.error, requestUrl)
+    setFrameQueryFailed(true)
     setFrameQueryRetrying(true)
-    await new Promise((resolve) => window.setTimeout(resolve, 550))
-    const second = await queryMembers()
-    setFrameQueryRetrying(false)
-    if (second.error) {
-      await collectFrameQueryDiagnostics('after-response', second.error, requestUrl)
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 550))
+      const second = await queryMembers()
+      if (second.error) {
+        await collectFrameQueryDiagnostics('after-response', second.error, requestUrl)
+      }
+      return second
+    } finally {
+      setFrameQueryRetrying(false)
     }
-    return second
   }
 
 
@@ -1792,7 +1797,9 @@ export default function HomePage() {
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null
     let cancelled = false
+    let bootDone = false
     const bootStartedAt = performance.now()
+    const bootTimeoutMs = 9000
 
     async function finishBoot() {
       const minimumSplashMs = 1350
@@ -1809,9 +1816,22 @@ export default function HomePage() {
         setFramesHydrated(false)
         setShowSplash(!disableLaunchSplash)
         setBooting(!disableLaunchSplash)
+        setBootTimeoutHit(false)
         setShouldRenderApp(false)
 
-        const { data: sessionData } = await supabase.auth.getSession()
+        const bootTimeout = window.setTimeout(() => {
+          if (cancelled || bootDone) return
+          setBootTimeoutHit(true)
+          setFrameQueryFailed(true)
+          setAuthHydrated(true)
+          setFramesHydrated(true)
+          setShowSplash(false)
+          setBooting(false)
+          setBootDebug((prev) => ({ ...prev, bootTimeoutMs, bootTimeoutAt: new Date().toISOString(), bootTimeoutReason: 'startup-timeout' }))
+        }, bootTimeoutMs)
+
+        try {
+          const { data: sessionData } = await supabase.auth.getSession()
         const session = sessionData.session
         const sessionExpiresAt = session?.expires_at
           ? new Date(session.expires_at * 1000).toISOString()
@@ -1948,15 +1968,26 @@ export default function HomePage() {
         } else {
           await finishBoot()
         }
+        } finally {
+          window.clearTimeout(bootTimeout)
+        }
       } catch (error) {
-        setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'boot-exception' }))
+        setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'boot-exception', bootException: error instanceof Error ? error.message : String(error) }))
         console.error('[BOOT] startup failed', error)
         setAuthHydrated(true)
         setFramesHydrated(true)
         setShouldRenderApp(false)
+        setFrameQueryFailed(true)
         setShowSplash(false)
         setBooting(false)
         router.replace('/login')
+      } finally {
+        bootDone = true
+        if (!cancelled) {
+          setAuthHydrated(true)
+          setFramesHydrated(true)
+          setBooting(false)
+        }
       }
     })()
 
@@ -2261,7 +2292,9 @@ async function handleSelectTab(k: TabKey) {
                 <div className="mt-1 text-red-100/85">
                   {frameQueryRetrying
                     ? 'Retrying frame lookup…'
-                    : 'This is a network/query error, not an empty account. Please retry.'}
+                    : bootTimeoutHit
+                      ? 'Boot timed out before frame hydration completed. Check debug details and retry.'
+                      : 'This is a network/query error, not an empty account. Please retry.'}
                 </div>
                 <button
                   className="mt-3 inline-flex rounded-md bg-red-500/30 px-3 py-1.5 font-medium"
