@@ -964,6 +964,7 @@ export default function HomePage() {
   const [bootTimeoutHit, setBootTimeoutHit] = useState(false)
   const [frameQueryFailed, setFrameQueryFailed] = useState(false)
   const [frameQueryRetrying, setFrameQueryRetrying] = useState(false)
+  const [frameHydrationError, setFrameHydrationError] = useState<string | null>(null)
   const frameHydrationStageRef = useRef<string>('idle')
   const lastResolvedStageRef = useRef<string>('idle')
   const activePromiseStageRef = useRef<string | null>(null)
@@ -1074,6 +1075,23 @@ export default function HomePage() {
       bootTrace: bootTraceRef.current,
       ...(extras ?? {}),
     }))
+  }
+
+  function logFrameHydrationQueryDiagnostic(input: {
+    queryName: string
+    routeOrTable: string
+    activeDeviceId: string | null
+    status: 'success' | 'error' | 'skipped'
+    rowCount?: number | null
+    skippedReason?: string
+    error?: unknown
+  }) {
+    const diagnostic = {
+      ...input,
+      errorMessage: input.error instanceof Error ? input.error.message : input.error ? String(input.error) : null,
+      timestamp: new Date().toISOString(),
+    }
+    console.info('[FRAME_HYDRATION_QUERY]', diagnostic)
   }
 
   async function loadDeviceMembersWithRetry(userId: string) {
@@ -1740,6 +1758,7 @@ export default function HomePage() {
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
       if (!resp.ok) {
+        logFrameHydrationQueryDiagnostic({ queryName: 'loadDeviceStatus', routeOrTable: '/api/device/status', activeDeviceId: deviceId, status: 'error', error: `http_${resp.status}` })
         setLastUpdatedAt(null)
         return null
       }
@@ -1757,9 +1776,11 @@ export default function HomePage() {
       setFrames((current) =>
         current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
       )
+      logFrameHydrationQueryDiagnostic({ queryName: 'loadDeviceStatus', routeOrTable: '/api/device/status', activeDeviceId: deviceId, status: 'success', rowCount: 1 })
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
       return renderIso || null
-    } catch {
+    } catch (error) {
+      logFrameHydrationQueryDiagnostic({ queryName: 'loadDeviceStatus', routeOrTable: '/api/device/status', activeDeviceId: deviceId, status: 'error', error })
       setLastUpdatedAt(null)
       return null
     }
@@ -1812,7 +1833,10 @@ export default function HomePage() {
         data: { session },
       } = await supabase.auth.getSession()
 
-      if (!session?.access_token) return null
+      if (!session?.access_token) {
+        logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'skipped', skippedReason: 'missing-session-token' })
+        return null
+      }
 
       const resp = await fetch(`/api/device/mirror-snapshot?device_id=${encodeURIComponent(deviceId)}`, {
         cache: 'no-store',
@@ -1821,7 +1845,10 @@ export default function HomePage() {
         },
       })
 
-      if (!resp.ok) return null
+      if (!resp.ok) {
+        logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'error', error: `http_${resp.status}` })
+        return null
+      }
 
       const data = await resp.json()
       const status = modulesRecordFromUnknown(data?.status)
@@ -1833,12 +1860,14 @@ export default function HomePage() {
       )
 
       applyDeviceStatus(deviceId, status)
+      logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'success', rowCount: 1 })
 
       return {
         ...snapshot,
         detailsBySlot: modulesRecordFromUnknown(data?.detailsBySlot) as Record<string, MirrorModuleDetail>,
       }
-    } catch {
+    } catch (error) {
+      logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'error', error })
       return null
     }
   }
@@ -1869,13 +1898,43 @@ export default function HomePage() {
   }
 
   async function loadDeviceSettings(deviceId: string) {
-    const { data, error } = await supabase
-      .from('device_settings')
-      .select('settings_json')
-      .eq('device_id', deviceId)
-      .maybeSingle()
-
-    if (error) return defaultDinnerPlanDays()
+    setFrameHydrationError(null)
+    let data: { settings_json?: SettingsJson } | null = null
+    try {
+      const resp = await fetch(`/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '')
+        logFrameHydrationQueryDiagnostic({
+          queryName: 'loadDeviceSettings',
+          routeOrTable: '/api/device/frame-config',
+          activeDeviceId: deviceId,
+          status: 'error',
+          error: `http_${resp.status}: ${body || 'empty-body'}`,
+        })
+        setFrameHydrationError('Frame content failed to load from server config API.')
+        return
+      }
+      const payload = await resp.json()
+      data = payload && typeof payload === 'object' ? { settings_json: (payload as any).settings_json } : null
+      const rowCount = data?.settings_json && typeof data.settings_json === 'object' ? 1 : 0
+      logFrameHydrationQueryDiagnostic({
+        queryName: 'loadDeviceSettings',
+        routeOrTable: '/api/device/frame-config',
+        activeDeviceId: deviceId,
+        status: 'success',
+        rowCount,
+      })
+    } catch (error) {
+      logFrameHydrationQueryDiagnostic({
+        queryName: 'loadDeviceSettings',
+        routeOrTable: '/api/device/frame-config',
+        activeDeviceId: deviceId,
+        status: 'error',
+        error,
+      })
+      setFrameHydrationError('Frame content failed to load due to a network error.')
+      return
+    }
 
     const json = (data?.settings_json || {}) as SettingsJson
     const hasSavedSettings =
@@ -1937,20 +1996,16 @@ export default function HomePage() {
     if (!stickySettingsRef.current) setActiveTab('frame')
 
     if (!hasSavedSettings) {
-      const initialSettingsJson: SettingsJson = {
-        theme: nextTheme,
-        language: nextLanguage,
-        fontSize: nextFontSize,
-        layout: 'default',
-        cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
-        modules: normalizedModules,
-        pinned_tabs: nextPinnedTabs,
-      }
-
-      await supabase.rpc('upsert_device_settings', {
-        p_device_id: deviceId,
-        p_settings: initialSettingsJson,
+      setFrameHydrationError('No saved frame layout/config found for this frame.')
+      logFrameHydrationQueryDiagnostic({
+        queryName: 'loadDeviceSettings',
+        routeOrTable: '/api/device/frame-config',
+        activeDeviceId: deviceId,
+        status: 'error',
+        rowCount: 0,
+        error: 'missing-settings-json',
       })
+      return
     }
 
     isLoadedRef.current = true
@@ -2636,16 +2691,24 @@ async function handleSelectTab(k: TabKey) {
 
             <div className="mt-6 flex-1 min-h-0">
               {activeTab === 'frame' && (
-                <FrameTab
-                  title={layoutMeta.title}
-                  subtitle={layoutMeta.subtitle}
-                  layoutKey={layoutKey}
-                  cells={cellsByLayout[layoutKey]}
-                  onPrev={prevLayout}
-                  onNext={nextLayout}
-                  onCellTap={openPicker}
-                  language={language}
-                />
+                <>
+                  {frameHydrationError && (
+                    <div className="mb-3 rounded-xl border border-amber-300/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+                      <div className="font-semibold">Frame content unavailable</div>
+                      <div className="mt-1 text-amber-100/90">{frameHydrationError}</div>
+                    </div>
+                  )}
+                  <FrameTab
+                    title={layoutMeta.title}
+                    subtitle={layoutMeta.subtitle}
+                    layoutKey={layoutKey}
+                    cells={cellsByLayout[layoutKey]}
+                    onPrev={prevLayout}
+                    onNext={nextLayout}
+                    onCellTap={openPicker}
+                    language={language}
+                  />
+                </>
               )}
 
               {activeTab === 'settings' && (
