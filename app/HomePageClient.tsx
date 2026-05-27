@@ -1963,6 +1963,10 @@ export default function HomePage() {
         : ({} as Record<string, any>)
 
     const normalizedModules = normalizeModulesForSave(rawModules)
+    console.info('[SURF][FUEL_PENALTY] after-hydration-normalize', {
+      activeDeviceId: deviceId,
+      fuelPenaltyTrace: summarizeSurfFuelPenalty(normalizedModules),
+    })
     const loadedSurfList: SurfCfg[] = Array.isArray(normalizedModules.surf) ? (normalizedModules.surf as SurfCfg[]) : []
     const loadedBest = loadedSurfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
     const loadedFp = loadedBest ? sanitizeFuelPenalty((loadedBest as any).fuelPenalty) : undefined
@@ -1983,6 +1987,10 @@ export default function HomePage() {
     setFontSize(nextFontSize)
     setCellsByLayout(nextCellsByLayout)
     setLayoutKey(nextLayout)
+    console.info('[SURF][FUEL_PENALTY] before-set-react-state', {
+      activeDeviceId: deviceId,
+      fuelPenaltyTrace: summarizeSurfFuelPenalty(normalizedModules),
+    })
     setModulesJson(normalizedModules)
     setPinnedModuleTabs(nextPinnedTabs)
 
@@ -2527,7 +2535,11 @@ export default function HomePage() {
       } = await supabase.auth.getSession()
       const accessToken = session?.access_token
       if (!accessToken) throw new Error(language === 'no' ? 'Mangler innloggingstoken.' : 'Missing auth token.')
-      const saveResp = await fetch('/api/device/save-settings', {
+      console.info('[SURF][FUEL_PENALTY] before-save-autosave', {
+          activeDeviceId,
+          fuelPenaltyTrace: summarizeSurfFuelPenalty(modulesForSave),
+        })
+        const saveResp = await fetch('/api/device/save-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ device_id: activeDeviceId, settings_json: settingsJson }),
@@ -2648,6 +2660,10 @@ export default function HomePage() {
         } = await supabase.auth.getSession()
         const accessToken = session?.access_token
         if (!accessToken) throw new Error('Missing auth token')
+        console.info('[SURF][FUEL_PENALTY] before-save-autosave', {
+          activeDeviceId,
+          fuelPenaltyTrace: summarizeSurfFuelPenalty(modulesForSave),
+        })
         const saveResp = await fetch('/api/device/save-settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -8146,6 +8162,7 @@ function deriveSurfSettingsFromModules(mods: Record<string, any>): SurfSettingsC
   const best = surfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
   const fp = best ? sanitizeFuelPenalty((best as any).fuelPenalty) : undefined
 
+  console.info('[SURF][FUEL_PENALTY] deriveSurfSettingsFromModules-input', { fuelPenaltyTrace: summarizeSurfFuelPenalty(mods) })
   const fuelPenalty = !!fp?.enabled
   const homeLat = Number(fp?.homeLat)
   const homeLon = Number(fp?.homeLon)
@@ -8162,9 +8179,34 @@ function deriveSurfSettingsFromModules(mods: Record<string, any>): SurfSettingsC
 function normalizeModulesForSave(mods: Record<string, any>) {
   const safe = mods && typeof mods === 'object' ? { ...mods } : {}
 
+  console.info('[SURF][FUEL_PENALTY] normalizeModulesForSave-input', { fuelPenaltyTrace: summarizeSurfFuelPenalty(safe) })
   safe.surf_settings = deriveSurfSettingsFromModules(safe)
+  console.info('[SURF][FUEL_PENALTY] normalizeModulesForSave-output', { fuelPenaltyTrace: summarizeSurfFuelPenalty(safe) })
 
   return safe
+}
+
+
+function summarizeSurfFuelPenalty(mods: Record<string, any>) {
+  const surfList = Array.isArray(mods?.surf) ? mods.surf : []
+  const perInstance = surfList.map((s: any, idx: number) => {
+    const fp = s && typeof s === 'object' ? (s as any).fuelPenalty : undefined
+    const hasObject = !!fp && typeof fp === 'object' && !Array.isArray(fp)
+    return {
+      index: idx,
+      id: Number((s as any)?.id) || null,
+      hasFuelPenalty: hasObject,
+      enabled: hasObject ? Boolean((fp as any).enabled) : null,
+      homeAddress: hasObject ? String((fp as any).homeAddress ?? '').trim() || null : null,
+      formatted: hasObject ? String((fp as any).formatted ?? '').trim() || null : null,
+      homeLat: hasObject && Number.isFinite(Number((fp as any).homeLat)) ? Number((fp as any).homeLat) : null,
+      homeLon: hasObject && Number.isFinite(Number((fp as any).homeLon)) ? Number((fp as any).homeLon) : null,
+      distanceKm: hasObject && Number.isFinite(Number((fp as any).distanceKm)) ? Number((fp as any).distanceKm) : null,
+      fuelLiters: hasObject && Number.isFinite(Number((fp as any).fuelLiters)) ? Number((fp as any).fuelLiters) : null,
+      fuelPrice: hasObject && Number.isFinite(Number((fp as any).fuelPrice)) ? Number((fp as any).fuelPrice) : null,
+    }
+  })
+  return { surfCount: surfList.length, perInstance }
 }
 
 function logSurfFuelPenaltyDiagnostic(event: string, payload: Record<string, unknown>) {
