@@ -1074,11 +1074,13 @@ export default function HomePage() {
     }
 
     const queryMembers = async () => withTimeout(
-      supabase
-        .from('device_members')
-        .select('device_id, role')
-        .eq('user_id', userId)
-        .order('device_id', { ascending: true }),
+      (async () => {
+        return await supabase
+          .from('device_members')
+          .select('device_id, role')
+          .eq('user_id', userId)
+          .order('device_id', { ascending: true })
+      })(),
       3000,
       'client_query_timeout_3000ms'
     )

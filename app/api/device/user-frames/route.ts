@@ -49,11 +49,13 @@ export async function GET() {
   }
 
   const { data: members, error } = await withTimeout(
-    supabase
-      .from('device_members')
-      .select('device_id, role')
-      .eq('user_id', user.id)
-      .order('device_id', { ascending: true }),
+    (async () => {
+      return await supabase
+        .from('device_members')
+        .select('device_id, role')
+        .eq('user_id', user.id)
+        .order('device_id', { ascending: true })
+    })(),
     3000,
     'device_members_query_timeout_3000ms'
   )
@@ -63,7 +65,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: 'device_members_query_failed', details: error.message }, { status: 500 })
   }
 
-  const frames: DeviceMemberRow[] = (members ?? []).map((member) => ({
+  const frames: DeviceMemberRow[] = (members ?? []).map((member: DeviceMemberRow) => ({
     device_id: member.device_id,
     role: member.role,
   }))
