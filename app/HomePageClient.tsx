@@ -955,6 +955,8 @@ export default function HomePage() {
   const [booting, setBooting] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
+  const [authHydrated, setAuthHydrated] = useState(false)
+  const [framesHydrated, setFramesHydrated] = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1182,10 +1184,11 @@ export default function HomePage() {
   }, [searchParams])
 
   useEffect(() => {
-    if (!shouldRenderApp || booting) return
+    if (!shouldRenderApp || booting || !authHydrated || !framesHydrated) return
     if (stickySettingsRef.current) return
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
+      console.info('[ROUTE] pair flow redirect: no frames found after hydration')
       logSessionRepair('redirect-to-settings', { reason: 'no-devices-in-db', source: 'db' })
       autoOpenedSettingsForPairingRef.current = true
       stickySettingsRef.current = true
@@ -1194,13 +1197,17 @@ export default function HomePage() {
       return
     }
 
+    if (frames.length > 0) {
+      console.info('[ROUTE] onboarding redirect skipped: existing frame found', { frameCount: frames.length })
+    }
+
     if (frames.length > 0 && autoOpenedSettingsForPairingRef.current && activeTab === 'settings') {
       logSessionRepair('redirect-to-frame', { reason: 'devices-found-in-db', source: 'db', deviceCount: frames.length })
       stickySettingsRef.current = false
       preferInstantScrollRef.current = true
       setActiveTab('frame')
     }
-  }, [activeTab, booting, frames.length, shouldRenderApp])
+  }, [activeTab, authHydrated, booting, frames.length, framesHydrated, shouldRenderApp])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
@@ -1638,8 +1645,10 @@ export default function HomePage() {
     }
 
     ;(async () => {
-      setBooting(false)
-      setShowSplash(false)
+      setAuthHydrated(false)
+      setFramesHydrated(false)
+      setShowSplash(!disableLaunchSplash)
+      setBooting(!disableLaunchSplash)
       setShouldRenderApp(false)
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -1647,8 +1656,11 @@ export default function HomePage() {
 
       void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
       logSessionRepair('boot-session-check', { hasSession: Boolean(session), userId: session?.user?.id ?? null })
+      console.info(session ? '[BOOT] session found' : '[BOOT] no session found')
 
       if (!session) {
+        setAuthHydrated(true)
+        setFramesHydrated(true)
         resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
         setBooting(false)
         setShowSplash(false)
@@ -1657,10 +1669,10 @@ export default function HomePage() {
         return
       }
 
+      setAuthHydrated(true)
+      console.info('[BOOT] user loaded', { userId: session.user.id })
       clearClientPersistedState({ clearSupabaseAuthStorage: false })
       setShouldRenderApp(true)
-      setShowSplash(!disableLaunchSplash)
-      setBooting(!disableLaunchSplash)
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
@@ -1681,13 +1693,16 @@ export default function HomePage() {
 
       if (error) {
         logSessionRepair('members-load-failed', { userId: session.user.id, error: error.message })
+        console.info('[BOOT] frame list load failed', { userId: session.user.id, error: error.message })
         setFrames([])
         setActiveDeviceId(null)
+        setFramesHydrated(true)
         setBooting(false)
         return
       }
 
       const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+      console.info('[BOOT] frame list loaded', { count: memberRows.length })
       logSessionRepair('members-loaded', { userId: session.user.id, source: 'db', deviceCount: memberRows.length })
       const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
       const statusMap = await fetchDeviceStatusMap(deviceIds)
@@ -1712,6 +1727,7 @@ export default function HomePage() {
       const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
 
       setActiveDeviceId(selected)
+      console.info('[BOOT] selected frame loaded', { selectedDeviceId: selected })
       setPhysicalFrameSnapshot(null)
       physicalFrameSnapshotRef.current = null
       physicalFrameRenderAtRef.current = null
@@ -1719,6 +1735,8 @@ export default function HomePage() {
       if (selected) {
         await loadDeviceSettings(selected)
       }
+
+      setFramesHydrated(true)
 
       if (disableLaunchSplash) {
         setBooting(false)
