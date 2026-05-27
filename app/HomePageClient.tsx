@@ -13690,8 +13690,10 @@ type CustomSurfSpot = {
   name: string
   lat: number
   lon: number
+  spot_zoom?: number
   parking_lat: number
   parking_lon: number
+  parking_zoom?: number
   swell_sector_start_deg: number
   swell_sector_end_deg: number
   swell_main_deg: number
@@ -13951,6 +13953,8 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
   const [name, setName] = useState(editingSpot?.name || '')
   const [spotCenter, setSpotCenter] = useState({ lat: Number(editingSpot?.lat ?? 62.2), lon: Number(editingSpot?.lon ?? 10.4) })
   const [parkingCenter, setParkingCenter] = useState({ lat: Number(editingSpot?.parking_lat ?? 62.2), lon: Number(editingSpot?.parking_lon ?? 10.4) })
+  const [spotZoom, setSpotZoom] = useState(Number(editingSpot?.spot_zoom ?? 5))
+  const [parkingZoom, setParkingZoom] = useState(Number(editingSpot?.parking_zoom ?? Number(editingSpot?.spot_zoom ?? 5)))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [swellStart, setSwellStart] = useState(Number(editingSpot?.swell_sector_start_deg ?? 315))
@@ -13979,7 +13983,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
   async function save() {
     setSaving(true)
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    const payload = { id: editingSpot?.id, name, lat, lon, parking_lat: parkingLat, parking_lon: parkingLon, swell_sector_start_deg: swellStart, swell_sector_end_deg: swellEnd, swell_main_deg: swellMain, wind_sector_start_deg: windStart, wind_sector_end_deg: windEnd, wind_main_deg: windMain }
+    const payload = { id: editingSpot?.id, name, lat, lon, spot_zoom: spotZoom, parking_lat: parkingLat, parking_lon: parkingLon, parking_zoom: parkingZoom, swell_sector_start_deg: swellStart, swell_sector_end_deg: swellEnd, swell_main_deg: swellMain, wind_sector_start_deg: windStart, wind_sector_end_deg: windEnd, wind_main_deg: windMain }
     const resp = await fetch('/api/surf/custom-spots', { method: isEdit ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify(payload) })
     setSaving(false)
     if (!resp.ok) return
@@ -14014,6 +14018,8 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
       <RealTileMap
         center={step === 3 ? parkingCenter : spotCenter}
         onCenterChange={step === 3 ? setParkingCenter : setSpotCenter}
+        zoom={step === 3 ? parkingZoom : spotZoom}
+        onZoomChange={step === 3 ? setParkingZoom : setSpotZoom}
         markerType={step === 3 ? 'parking' : 'spot'}
         draggable={step !== 2}
       />
@@ -14030,7 +14036,10 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
             className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed bg-[#2aa3ff]/30 text-[#7caed6]' : 'bg-[#2aa3ff] text-[#07131f]'}`}
             onClick={() => {
               if (step === 1 && !name.trim()) return
-              if (step === 2) setParkingCenter(spotCenter)
+              if (step === 2) {
+                setParkingCenter(spotCenter)
+                setParkingZoom(spotZoom)
+              }
               setStep((step + 1) as 1 | 2 | 3)
             }}
           >
@@ -14048,16 +14057,20 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
 function RealTileMap({
   center,
   onCenterChange,
+  zoom = 5,
+  onZoomChange,
   markerType = 'spot',
   draggable = true,
 }: {
   center: { lat: number; lon: number }
   onCenterChange: (v: { lat: number; lon: number }) => void
+  zoom?: number
+  onZoomChange?: (value: number) => void
   markerType?: 'spot' | 'parking'
   draggable?: boolean
 }) {
   const TILE = 256
-  const [zoom, setZoom] = useState(5)
+  const [localZoom, setLocalZoom] = useState(Math.max(2, Math.min(18, Math.round(zoom))))
   const [localCenter, setLocalCenter] = useState(center)
   const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
   const clampLat = (lat: number) => Math.max(-85.0511, Math.min(85.0511, lat))
@@ -14094,8 +14107,8 @@ function RealTileMap({
     if (pointers.current.size === 1) {
       const dx = e.clientX - prev.x
       const dy = e.clientY - prev.y
-      const c = project(localCenter.lat, localCenter.lon, zoom)
-      const nextCenter = unproject(c.x - dx, c.y - dy, zoom)
+      const c = project(localCenter.lat, localCenter.lon, localZoom)
+      const nextCenter = unproject(c.x - dx, c.y - dy, localZoom)
       setLocalCenter(nextCenter)
       if (rafRef.current == null) {
         rafRef.current = window.requestAnimationFrame(() => {
@@ -14108,11 +14121,14 @@ function RealTileMap({
     if (pointers.current.size === 2) {
       const vals = [...pointers.current.values()]
       const dist = Math.hypot(vals[0].x - vals[1].x, vals[0].y - vals[1].y)
-      if (!pinchRef.current) pinchRef.current = { dist, zoomStart: zoom }
+      if (!pinchRef.current) pinchRef.current = { dist, zoomStart: localZoom }
       const delta = Math.log2(Math.max(0.2, dist / pinchRef.current.dist))
       const rawNext = Math.max(2, Math.min(18, pinchRef.current.zoomStart + delta))
       const snappedNext = Math.round(rawNext)
-      if (snappedNext !== zoom) setZoom(snappedNext)
+      if (snappedNext !== localZoom) {
+        setLocalZoom(snappedNext)
+        onZoomChange?.(snappedNext)
+      }
     }
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -14123,6 +14139,10 @@ function RealTileMap({
   }
 
   useEffect(() => { setLocalCenter(center) }, [center.lat, center.lon])
+  useEffect(() => {
+    const next = Math.max(2, Math.min(18, Math.round(zoom)))
+    setLocalZoom(next)
+  }, [zoom])
   useEffect(() => {
     const updateSize = () => {
       if (!rootRef.current) return
@@ -14138,7 +14158,7 @@ function RealTileMap({
 
   const viewportW = viewport.w
   const viewportH = viewport.h
-  const tileZoom = Math.max(2, Math.min(18, Math.round(zoom)))
+  const tileZoom = Math.max(2, Math.min(18, Math.round(localZoom)))
   const world = project(localCenter.lat, localCenter.lon, tileZoom)
   const halfW = viewportW / 2
   const halfH = viewportH / 2
