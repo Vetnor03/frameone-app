@@ -987,6 +987,8 @@ export default function HomePage() {
   }
 
   const isSessionRepairDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+  const APP_STORAGE_VERSION = '2026-05-27.1'
+  const APP_STORAGE_VERSION_KEY = 'remind:storage-version'
 
   function logSessionRepair(event: string, details?: Record<string, unknown>) {
     if (!isSessionRepairDebugEnabled) return
@@ -1054,6 +1056,39 @@ export default function HomePage() {
       sessionClearedKeys: clearedSessionKeys,
       clearedSupabaseAuthStorage: shouldClearSupabaseAuthStorage,
     })
+  }
+
+  function runAppStorageMigrationIfNeeded() {
+    if (typeof window === 'undefined') return
+    const currentVersion = window.localStorage.getItem(APP_STORAGE_VERSION_KEY)
+    if (currentVersion === APP_STORAGE_VERSION) return
+
+    console.info('[STORAGE] version mismatch, clearing app keys', {
+      from: currentVersion,
+      to: APP_STORAGE_VERSION,
+    })
+    clearClientPersistedState({ clearSupabaseAuthStorage: false })
+    window.localStorage.setItem(APP_STORAGE_VERSION_KEY, APP_STORAGE_VERSION)
+  }
+
+  async function logPwaRuntimeDiagnostics() {
+    if (typeof window === 'undefined') return
+    try {
+      const swSupported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+      const cacheSupported = typeof window !== 'undefined' && 'caches' in window
+      const registration = swSupported ? await navigator.serviceWorker.getRegistration() : null
+      const cacheNames = cacheSupported ? await caches.keys() : []
+      console.info('[PWA] service worker/cache status', {
+        swSupported,
+        swRegistered: Boolean(registration),
+        swScope: registration?.scope ?? null,
+        cacheSupported,
+        cacheCount: cacheNames.length,
+        cacheNames,
+      })
+    } catch (error) {
+      console.info('[PWA] service worker/cache status', { error: error instanceof Error ? error.message : String(error) })
+    }
   }
 
   function resetAppStateAfterSignOut(options?: { clearSupabaseAuthStorage?: boolean }) {
@@ -1654,6 +1689,8 @@ export default function HomePage() {
 
         const { data: sessionData } = await supabase.auth.getSession()
         const session = sessionData.session
+        runAppStorageMigrationIfNeeded()
+        void logPwaRuntimeDiagnostics()
 
         void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
         logSessionRepair('boot-session-check', { hasSession: Boolean(session) })
@@ -1672,7 +1709,6 @@ export default function HomePage() {
 
         setAuthHydrated(true)
         console.info('[BOOT] user loaded')
-        clearClientPersistedState({ clearSupabaseAuthStorage: false })
         setShouldRenderApp(true)
 
         const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -1704,6 +1740,7 @@ export default function HomePage() {
 
         const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
         console.info('[BOOT] frame list loaded', { count: memberRows.length })
+        console.info('[BOOT] server frame count', { count: memberRows.length })
         logSessionRepair('members-loaded', { source: 'db', deviceCount: memberRows.length })
         const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
         const statusMap = await fetchDeviceStatusMap(deviceIds)
@@ -1725,6 +1762,12 @@ export default function HomePage() {
           hasCachedActiveDeviceId: Boolean(saved),
         })
         const savedExists = saved && list.some((x) => x.device_id === saved)
+        if (saved && !savedExists) {
+          console.info('[STORAGE] stale selected frame ignored', { cachedDeviceId: saved })
+        }
+        if (list.length > 0 && autoOpenedSettingsForPairingRef.current) {
+          console.info('[STORAGE] onboarding flag ignored because server frames exist', { frameCount: list.length })
+        }
         const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
 
         setActiveDeviceId(selected)
