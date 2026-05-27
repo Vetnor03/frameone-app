@@ -3,6 +3,38 @@ import { createClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
+function summarizeSurfFuelPenaltyFromSettings(settingsJson: unknown) {
+  const modules = settingsJson && typeof settingsJson === 'object' ? (settingsJson as Record<string, unknown>).modules : null
+  const surf = modules && typeof modules === 'object' ? (modules as Record<string, unknown>).surf : null
+  const surfList = Array.isArray(surf) ? surf : []
+  return surfList.map((item, index) => {
+    const row = item && typeof item === 'object' ? (item as Record<string, unknown>) : {}
+    const fp = row.fuelPenalty
+    const fpObj = fp && typeof fp === 'object' && !Array.isArray(fp) ? (fp as Record<string, unknown>) : null
+    const num = (v: unknown) => {
+      const n = typeof v === 'number' ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    const text = (v: unknown) => {
+      const t = String(v ?? '').trim()
+      return t ? t : null
+    }
+    return {
+      index,
+      id: num(row.id),
+      fuelPenaltyExists: !!fpObj,
+      enabled: fpObj ? Boolean(fpObj.enabled) : null,
+      homeAddress: fpObj ? text(fpObj.homeAddress) : null,
+      formatted: fpObj ? text(fpObj.formatted) : null,
+      homeLat: fpObj ? num(fpObj.homeLat) : null,
+      homeLon: fpObj ? num(fpObj.homeLon) : null,
+      distanceKm: fpObj ? num(fpObj.distanceKm) : null,
+      fuelLiters: fpObj ? num(fpObj.fuelLiters) : null,
+      fuelPrice: fpObj ? num(fpObj.fuelPrice) : null,
+    }
+  })
+}
+
 function bearerFromRequest(req: Request) {
   const h = req.headers.get('authorization') || req.headers.get('Authorization') || ''
   const m = h.match(/^Bearer\s+(.+)$/i)
@@ -37,6 +69,8 @@ export async function POST(req: Request) {
     if (member.error) return NextResponse.json({ ok: false, error: member.error.message }, { status: 500 })
     if (!member.data) return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 })
 
+    console.info('[SURF][FUEL_PENALTY] save-settings-received', { deviceId, surfFuelPenalty: summarizeSurfFuelPenaltyFromSettings(settingsJson) })
+
     const existing = await supabase
       .from('device_settings')
       .select('device_id')
@@ -58,6 +92,18 @@ export async function POST(req: Request) {
           .maybeSingle()
 
     if (save.error) return NextResponse.json({ ok: false, error: save.error.message }, { status: 500 })
+
+    const persisted = await supabase
+      .from('device_settings')
+      .select('settings_json')
+      .eq('device_id', deviceId)
+      .maybeSingle()
+
+    console.info('[SURF][FUEL_PENALTY] save-settings-after-write', {
+      deviceId,
+      readbackError: persisted.error?.message ?? null,
+      surfFuelPenalty: summarizeSurfFuelPenaltyFromSettings(persisted.data?.settings_json),
+    })
 
     return NextResponse.json({
       ok: true,

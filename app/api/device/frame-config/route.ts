@@ -111,6 +111,29 @@ function isActiveInstance(active: ActiveModules, base: string, id: number) {
   return active.ids.get(base)?.has(id) ?? false
 }
 
+
+function summarizeSurfFuelPenaltyFromModules(modules: UnknownRecord) {
+  const surf = Array.isArray(modules.surf) ? modules.surf : []
+  return surf.map((row, index) => {
+    const item = row && typeof row === 'object' ? (row as UnknownRecord) : {}
+    const fp = item.fuelPenalty
+    const fpObj = fp && typeof fp === 'object' && !Array.isArray(fp) ? (fp as UnknownRecord) : null
+    return {
+      index,
+      id: asInt(item.id, 0) || null,
+      fuelPenaltyExists: !!fpObj,
+      enabled: fpObj ? asBool(fpObj.enabled, false) : null,
+      homeAddress: fpObj ? asString(fpObj.homeAddress, '').trim() || null : null,
+      formatted: fpObj ? asString(fpObj.formatted, '').trim() || null : null,
+      homeLat: fpObj ? asNumber(fpObj.homeLat) : null,
+      homeLon: fpObj ? asNumber(fpObj.homeLon) : null,
+      distanceKm: fpObj ? asNumber(fpObj.distanceKm) : null,
+      fuelLiters: fpObj ? asNumber(fpObj.fuelLiters) : null,
+      fuelPrice: fpObj ? asNumber(fpObj.fuelPrice) : null,
+    }
+  })
+}
+
 function cloneObject(v: unknown): UnknownRecord {
   return v && typeof v === 'object' && !Array.isArray(v) ? { ...(v as UnknownRecord) } : {}
 }
@@ -488,6 +511,8 @@ export async function GET(req: Request) {
       cells,
       modules: responseModules,
     }
+
+    console.info('[SURF][FUEL_PENALTY] frame-config-returning', { device_id, surfFuelPenalty: summarizeSurfFuelPenaltyFromModules(responseModules) })
 
     const payload = {
       device_id,
