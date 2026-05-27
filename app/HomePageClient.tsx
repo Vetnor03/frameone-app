@@ -955,6 +955,8 @@ export default function HomePage() {
   const [booting, setBooting] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
+  const [authHydrated, setAuthHydrated] = useState(false)
+  const [framesHydrated, setFramesHydrated] = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1182,10 +1184,11 @@ export default function HomePage() {
   }, [searchParams])
 
   useEffect(() => {
-    if (!shouldRenderApp || booting) return
+    if (!shouldRenderApp || booting || !authHydrated || !framesHydrated) return
     if (stickySettingsRef.current) return
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
+      console.info('[ROUTE] pair flow redirect: no frames found after hydration')
       logSessionRepair('redirect-to-settings', { reason: 'no-devices-in-db', source: 'db' })
       autoOpenedSettingsForPairingRef.current = true
       stickySettingsRef.current = true
@@ -1194,13 +1197,17 @@ export default function HomePage() {
       return
     }
 
+    if (frames.length > 0) {
+      console.info('[ROUTE] onboarding redirect skipped: existing frame found', { frameCount: frames.length })
+    }
+
     if (frames.length > 0 && autoOpenedSettingsForPairingRef.current && activeTab === 'settings') {
       logSessionRepair('redirect-to-frame', { reason: 'devices-found-in-db', source: 'db', deviceCount: frames.length })
       stickySettingsRef.current = false
       preferInstantScrollRef.current = true
       setActiveTab('frame')
     }
-  }, [activeTab, booting, frames.length, shouldRenderApp])
+  }, [activeTab, authHydrated, booting, frames.length, framesHydrated, shouldRenderApp])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
@@ -1638,92 +1645,113 @@ export default function HomePage() {
     }
 
     ;(async () => {
-      setBooting(false)
-      setShowSplash(false)
-      setShouldRenderApp(false)
-
-      const { data: sessionData } = await supabase.auth.getSession()
-      const session = sessionData.session
-
-      void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
-      logSessionRepair('boot-session-check', { hasSession: Boolean(session), userId: session?.user?.id ?? null })
-
-      if (!session) {
-        resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
-        setBooting(false)
-        setShowSplash(false)
+      try {
+        setAuthHydrated(false)
+        setFramesHydrated(false)
+        setShowSplash(!disableLaunchSplash)
+        setBooting(!disableLaunchSplash)
         setShouldRenderApp(false)
-        router.replace('/login')
-        return
-      }
 
-      clearClientPersistedState({ clearSupabaseAuthStorage: false })
-      setShouldRenderApp(true)
-      setShowSplash(!disableLaunchSplash)
-      setBooting(!disableLaunchSplash)
+        const { data: sessionData } = await supabase.auth.getSession()
+        const session = sessionData.session
 
-      const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-        if (!nextSession) {
+        void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
+        logSessionRepair('boot-session-check', { hasSession: Boolean(session) })
+        console.info(session ? '[BOOT] session found' : '[BOOT] no session found')
+
+        if (!session) {
+          setAuthHydrated(true)
+          setFramesHydrated(true)
           resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
-          setShouldRenderApp(false)
-          setShowSplash(false)
           setBooting(false)
+          setShowSplash(false)
+          setShouldRenderApp(false)
           router.replace('/login')
+          return
         }
-      })
-      unsub = data.subscription
 
-      const { data: members, error } = await supabase
-        .from('device_members')
-        .select('device_id, role')
-        .eq('user_id', session.user.id)
-        .order('device_id', { ascending: true })
+        setAuthHydrated(true)
+        console.info('[BOOT] user loaded')
+        clearClientPersistedState({ clearSupabaseAuthStorage: false })
+        setShouldRenderApp(true)
 
-      if (error) {
-        logSessionRepair('members-load-failed', { userId: session.user.id, error: error.message })
-        setFrames([])
-        setActiveDeviceId(null)
+        const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+          if (!nextSession) {
+            resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
+            setShouldRenderApp(false)
+            setShowSplash(false)
+            setBooting(false)
+            router.replace('/login')
+          }
+        })
+        unsub = data.subscription
+
+        const { data: members, error } = await supabase
+          .from('device_members')
+          .select('device_id, role')
+          .eq('user_id', session.user.id)
+          .order('device_id', { ascending: true })
+
+        if (error) {
+          logSessionRepair('members-load-failed', { error: error.message })
+          console.info('[BOOT] frame list load failed', { error: error.message })
+          setFrames([])
+          setActiveDeviceId(null)
+          setFramesHydrated(true)
+          setBooting(false)
+          return
+        }
+
+        const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+        console.info('[BOOT] frame list loaded', { count: memberRows.length })
+        logSessionRepair('members-loaded', { source: 'db', deviceCount: memberRows.length })
+        const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+        const statusMap = await fetchDeviceStatusMap(deviceIds)
+
+        const list: MemberRow[] = memberRows.map((m) => ({
+          device_id: m.device_id,
+          role: m.role,
+          current_version: statusMap.get(m.device_id)?.current_version ?? null,
+          battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+          battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+          is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+          is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
+        }))
+        setFrames(list)
+
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
+        logSessionRepair('active-device-resolution', {
+          source: 'db-with-optional-local-fallback',
+          hasCachedActiveDeviceId: Boolean(saved),
+        })
+        const savedExists = saved && list.some((x) => x.device_id === saved)
+        const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
+
+        setActiveDeviceId(selected)
+        console.info('[BOOT] selected frame loaded', { hasSelectedFrame: Boolean(selected) })
+        setPhysicalFrameSnapshot(null)
+        physicalFrameSnapshotRef.current = null
+        physicalFrameRenderAtRef.current = null
+
+        if (selected) {
+          await loadDeviceSettings(selected)
+        }
+
+        setFramesHydrated(true)
+
+        if (disableLaunchSplash) {
+          setBooting(false)
+        } else {
+          await finishBoot()
+        }
+      } catch (error) {
+        console.error('[BOOT] startup failed', error)
+        setAuthHydrated(true)
+        setFramesHydrated(true)
+        setShouldRenderApp(false)
+        setShowSplash(false)
         setBooting(false)
-        return
-      }
-
-      const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-      logSessionRepair('members-loaded', { userId: session.user.id, source: 'db', deviceCount: memberRows.length })
-      const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-      const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-      const list: MemberRow[] = memberRows.map((m) => ({
-        device_id: m.device_id,
-        role: m.role,
-        current_version: statusMap.get(m.device_id)?.current_version ?? null,
-        battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-        battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-        is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-        is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-      }))
-      setFrames(list)
-
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
-      logSessionRepair('active-device-resolution', {
-        source: 'db-with-optional-local-fallback',
-        cachedActiveDeviceId: saved,
-      })
-      const savedExists = saved && list.some((x) => x.device_id === saved)
-      const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
-
-      setActiveDeviceId(selected)
-      setPhysicalFrameSnapshot(null)
-      physicalFrameSnapshotRef.current = null
-      physicalFrameRenderAtRef.current = null
-
-      if (selected) {
-        await loadDeviceSettings(selected)
-      }
-
-      if (disableLaunchSplash) {
-        setBooting(false)
-      } else {
-        await finishBoot()
+        router.replace('/login')
       }
     })()
 
