@@ -961,6 +961,11 @@ export default function HomePage() {
   const [bootTimeoutHit, setBootTimeoutHit] = useState(false)
   const [frameQueryFailed, setFrameQueryFailed] = useState(false)
   const [frameQueryRetrying, setFrameQueryRetrying] = useState(false)
+  const frameHydrationStageRef = useRef<string>('idle')
+  const lastResolvedStageRef = useRef<string>('idle')
+  const activePromiseStageRef = useRef<string | null>(null)
+  const retryActiveRef = useRef(false)
+  const serverFallbackActiveRef = useRef(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1091,27 +1096,35 @@ export default function HomePage() {
     await collectFrameQueryDiagnostics('before-response', first.error, requestUrl)
     setFrameQueryFailed(true)
     setFrameQueryRetrying(true)
+    retryActiveRef.current = true
     try {
-      console.info('[FRAME] retry start')
-      setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'retry_start' }))
+      console.info('[FRAME] retry-start')
+      activePromiseStageRef.current = 'retry-start'
+      frameHydrationStageRef.current = 'retry-start'
+      setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'retry-start' }))
       const retryStart = Date.now()
       await new Promise((resolve) => window.setTimeout(resolve, 550))
       const second = await queryMembers()
       const retryDuration = Date.now() - retryStart
       if (second.error) {
-        console.info('[FRAME] retry error duration', { durationMs: retryDuration, error: second.error.message })
+        console.info('[FRAME] retry-error duration', { durationMs: retryDuration, error: second.error.message })
         await collectFrameQueryDiagnostics('after-response', second.error, requestUrl)
       } else {
-        console.info('[FRAME] retry success duration', { durationMs: retryDuration })
+        console.info('[FRAME] retry-success duration', { durationMs: retryDuration })
       }
+      const resolvedStage = second.error ? 'retry-error' : 'retry-success'
+      lastResolvedStageRef.current = resolvedStage
+      frameHydrationStageRef.current = resolvedStage
+      activePromiseStageRef.current = null
       setBootDebug((prev) => ({
         ...prev,
         retryDurationMs: retryDuration,
-        frameHydrationStage: second.error ? 'retry_error' : 'retry_success',
-        lastResolvedStage: second.error ? 'retry_error' : 'retry_success',
+        frameHydrationStage: resolvedStage,
+        lastResolvedStage: resolvedStage,
       }))
       return second
     } finally {
+      retryActiveRef.current = false
       setFrameQueryRetrying(false)
     }
   }
@@ -1906,7 +1919,23 @@ export default function HomePage() {
           setFramesHydrated(true)
           setShowSplash(false)
           setBooting(false)
-          setBootDebug((prev) => ({ ...prev, bootTimeoutMs, bootTimeoutAt: new Date().toISOString(), bootTimeoutReason: 'startup-timeout' }))
+          console.error('[FRAME] emergency-timeout', {
+            lastResolvedStage: lastResolvedStageRef.current,
+            activePromiseStage: activePromiseStageRef.current,
+            retryActive: retryActiveRef.current,
+            serverFallbackActive: serverFallbackActiveRef.current,
+          })
+          setBootDebug((prev) => ({
+            ...prev,
+            bootTimeoutMs,
+            bootTimeoutAt: new Date().toISOString(),
+            bootTimeoutReason: 'startup-timeout',
+            frameHydrationStage: frameHydrationStageRef.current,
+            lastResolvedStage: lastResolvedStageRef.current,
+            activePromiseStage: activePromiseStageRef.current,
+            retryActive: retryActiveRef.current,
+            serverFallbackActive: serverFallbackActiveRef.current,
+          }))
         }, bootTimeoutMs)
 
         try {
@@ -1984,21 +2013,26 @@ export default function HomePage() {
 
         const hydrationStartAt = Date.now()
         const markStage = (stage: string, extras?: Record<string, unknown>) => {
+          frameHydrationStageRef.current = stage
           setBootDebug((prev) => ({ ...prev, frameHydrationStage: stage, ...(extras ?? {}) }))
         }
-        markStage('client_query_start')
-        console.info('[FRAME] client query start')
+        markStage('client-query-start')
+        activePromiseStageRef.current = 'client-query-start'
+        console.info('[FRAME] client-query-start')
         const clientStart = Date.now()
         const { data: members, error } = await loadDeviceMembersWithRetry(session.user.id)
         const clientDuration = Date.now() - clientStart
         if (error) {
-          console.info('[FRAME] client query error duration', { durationMs: clientDuration, error: error.message })
+          console.info('[FRAME] client-query-error duration', { durationMs: clientDuration, error: error.message })
         } else {
-          console.info('[FRAME] client query success duration', { durationMs: clientDuration })
+          console.info('[FRAME] client-query-success duration', { durationMs: clientDuration })
         }
-        markStage(error ? 'client_query_error' : 'client_query_success', {
+        const clientResolvedStage = error ? 'client-query-error' : 'client-query-success'
+        lastResolvedStageRef.current = clientResolvedStage
+        activePromiseStageRef.current = null
+        markStage(clientResolvedStage, {
           clientQueryDurationMs: clientDuration,
-          lastResolvedStage: error ? 'client_query_error' : 'client_query_success',
+          lastResolvedStage: clientResolvedStage,
         })
 
         let memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
@@ -2018,14 +2052,22 @@ export default function HomePage() {
 
           const fallbackStart = Date.now()
           try {
-            console.info('[FRAME] server fallback start')
-            markStage('server_fallback_start')
+            console.info('[FRAME] server-fallback-start')
+            serverFallbackActiveRef.current = true
+            activePromiseStageRef.current = 'server-fallback-start'
+            markStage('server-fallback-start')
             const fallbackResponse = await loadFramesFromServerFallback()
             const fallbackDuration = Date.now() - fallbackStart
-            console.info('[FRAME] server fallback response duration', { durationMs: fallbackDuration, status: fallbackResponse.status })
-            console.info('[FRAME] server fallback success duration', { durationMs: fallbackDuration })
+            console.info('[FRAME] server-fallback-response', { durationMs: fallbackDuration, status: fallbackResponse.status })
+            markStage('server-fallback-response', {
+              serverFallbackDurationMs: fallbackDuration,
+              serverFallbackStatus: fallbackResponse.status,
+            })
+            console.info('[FRAME] server-fallback-success duration', { durationMs: fallbackDuration })
             memberRows = fallbackResponse.frames
             frameSource = 'server-fallback'
+            lastResolvedStageRef.current = 'server-fallback-success'
+            activePromiseStageRef.current = null
             setBootDebug((prev) => ({
               ...prev,
               frameQueryStatus: 'ok',
@@ -2035,14 +2077,16 @@ export default function HomePage() {
               serverFallbackDurationMs: fallbackDuration,
               serverFallbackStatus: fallbackResponse.status,
               serverFallbackBody: fallbackResponse.body,
-              lastResolvedStage: 'server_fallback_success',
+              lastResolvedStage: 'server-fallback-success',
             }))
-            markStage('server_fallback_success')
+            markStage('server-fallback-success')
             logSessionRepair('members-loaded', { source: frameSource, deviceCount: memberRows.length, initialClientError: error.message })
           } catch (fallbackError) {
             const fallbackDuration = Date.now() - fallbackStart
-            console.info('[FRAME] server fallback error duration', { durationMs: fallbackDuration, error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError) })
+            console.info('[FRAME] server-fallback-error duration', { durationMs: fallbackDuration, error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError) })
             setFrameQueryFailed(true)
+            lastResolvedStageRef.current = 'server-fallback-error'
+            activePromiseStageRef.current = null
             setBootDebug((prev) => ({
               ...prev,
               frameQueryStatus: 'error',
@@ -2050,9 +2094,9 @@ export default function HomePage() {
               frameQueryFallbackUsed: true,
               frameQueryFallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
               serverFallbackDurationMs: fallbackDuration,
-              lastResolvedStage: 'server_fallback_error',
+              lastResolvedStage: 'server-fallback-error',
             }))
-            markStage('server_fallback_error')
+            markStage('server-fallback-error')
             logSessionRepair('members-load-failed', {
               error: error.message,
               source: 'client+server-fallback',
@@ -2067,12 +2111,16 @@ export default function HomePage() {
             setBooting(false)
             return
           }
+          finally {
+            serverFallbackActiveRef.current = false
+          }
         }
 
         setFrameQueryFailed(false)
         setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'ok', serverFrameCount: memberRows.length, rawFrames: memberRows }))
-        console.info('[FRAME] hydration complete', { durationMs: Date.now() - hydrationStartAt, source: frameSource })
-        markStage('hydration_complete', { lastResolvedStage: 'hydration_complete' })
+        console.info('[FRAME] finalized', { durationMs: Date.now() - hydrationStartAt, source: frameSource })
+        lastResolvedStageRef.current = 'finalized'
+        markStage('finalized', { lastResolvedStage: 'finalized' })
         console.info('[BOOT] frame list loaded', { count: memberRows.length })
         console.info('[BOOT] server frame count', { count: memberRows.length })
         if (frameSource === 'client') {
