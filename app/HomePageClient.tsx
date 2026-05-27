@@ -957,6 +957,7 @@ export default function HomePage() {
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [authHydrated, setAuthHydrated] = useState(false)
   const [framesHydrated, setFramesHydrated] = useState(false)
+  const [bootDebug, setBootDebug] = useState<Record<string, unknown>>({})
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1059,9 +1060,9 @@ export default function HomePage() {
   }
 
   function runAppStorageMigrationIfNeeded() {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined') return false
     const currentVersion = window.localStorage.getItem(APP_STORAGE_VERSION_KEY)
-    if (currentVersion === APP_STORAGE_VERSION) return
+    if (currentVersion === APP_STORAGE_VERSION) return false
 
     console.info('[STORAGE] version mismatch, clearing app keys', {
       from: currentVersion,
@@ -1069,6 +1070,7 @@ export default function HomePage() {
     })
     clearClientPersistedState({ clearSupabaseAuthStorage: false })
     window.localStorage.setItem(APP_STORAGE_VERSION_KEY, APP_STORAGE_VERSION)
+    return true
   }
 
   async function logPwaRuntimeDiagnostics() {
@@ -1207,6 +1209,7 @@ export default function HomePage() {
   const autoOpenedSettingsForPairingRef = useRef(false)
 
   const disableLaunchSplash = searchParams?.get('nosplash') === '1'
+  const debugBootParamEnabled = searchParams?.get('debugBoot') === '1'
 
   useEffect(() => {
     const tab = searchParams?.get('tab')
@@ -1223,6 +1226,7 @@ export default function HomePage() {
     if (stickySettingsRef.current) return
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
+      setBootDebug((prev) => ({ ...prev, redirectTarget: 'settings:add-frame', redirectReason: 'no-devices-in-db', addFrameTriggerSource: 'server-data' }))
       console.info('[ROUTE] pair flow redirect: no frames found after hydration')
       logSessionRepair('redirect-to-settings', { reason: 'no-devices-in-db', source: 'db' })
       autoOpenedSettingsForPairingRef.current = true
@@ -1237,6 +1241,7 @@ export default function HomePage() {
     }
 
     if (frames.length > 0 && autoOpenedSettingsForPairingRef.current && activeTab === 'settings') {
+      setBootDebug((prev) => ({ ...prev, redirectTarget: 'frame', redirectReason: 'devices-found-in-db' }))
       logSessionRepair('redirect-to-frame', { reason: 'devices-found-in-db', source: 'db', deviceCount: frames.length })
       stickySettingsRef.current = false
       preferInstantScrollRef.current = true
@@ -1689,7 +1694,8 @@ export default function HomePage() {
 
         const { data: sessionData } = await supabase.auth.getSession()
         const session = sessionData.session
-        runAppStorageMigrationIfNeeded()
+        const migrationRan = runAppStorageMigrationIfNeeded()
+        setBootDebug((prev) => ({ ...prev, authSessionExists: Boolean(session), authUserExists: Boolean(session?.user), userEmail: session?.user?.email ?? null, storageMigrationRan: Boolean(migrationRan) }))
         void logPwaRuntimeDiagnostics()
 
         void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
@@ -1697,6 +1703,7 @@ export default function HomePage() {
         console.info(session ? '[BOOT] session found' : '[BOOT] no session found')
 
         if (!session) {
+          setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'missing-auth-session' }))
           setAuthHydrated(true)
           setFramesHydrated(true)
           resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
@@ -1722,6 +1729,10 @@ export default function HomePage() {
         })
         unsub = data.subscription
 
+        const frameQueryMeta = { table: 'device_members', filters: [`user_id=eq.${session.user.id}`], select: 'device_id, role' }
+        console.info('[BOOT] frame query used', frameQueryMeta)
+        setBootDebug((prev) => ({ ...prev, frameQueryTable: frameQueryMeta.table, frameQueryFilters: frameQueryMeta.filters, frameQuerySelect: frameQueryMeta.select }))
+
         const { data: members, error } = await supabase
           .from('device_members')
           .select('device_id, role')
@@ -1729,6 +1740,7 @@ export default function HomePage() {
           .order('device_id', { ascending: true })
 
         if (error) {
+          setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'error', frameQueryErrorMessage: error.message, frameQueryErrorCode: error.code ?? null, frameQueryErrorDetails: error.details ?? null }))
           logSessionRepair('members-load-failed', { error: error.message })
           console.info('[BOOT] frame list load failed', { error: error.message })
           setFrames([])
@@ -1739,6 +1751,7 @@ export default function HomePage() {
         }
 
         const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+        setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'ok', serverFrameCount: memberRows.length, rawFrames: memberRows }))
         console.info('[BOOT] frame list loaded', { count: memberRows.length })
         console.info('[BOOT] server frame count', { count: memberRows.length })
         logSessionRepair('members-loaded', { source: 'db', deviceCount: memberRows.length })
@@ -1757,6 +1770,7 @@ export default function HomePage() {
         setFrames(list)
 
         const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
+        setBootDebug((prev) => ({ ...prev, activeDeviceIdBeforeValidation: saved }))
         logSessionRepair('active-device-resolution', {
           source: 'db-with-optional-local-fallback',
           hasCachedActiveDeviceId: Boolean(saved),
@@ -1769,6 +1783,7 @@ export default function HomePage() {
           console.info('[STORAGE] onboarding flag ignored because server frames exist', { frameCount: list.length })
         }
         const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
+        setBootDebug((prev) => ({ ...prev, activeDeviceIdAfterValidation: selected, addFrameTriggerSource: list.length === 0 ? 'server-data' : (saved && !savedExists ? 'persisted-state-invalid' : 'none') }))
 
         setActiveDeviceId(selected)
         console.info('[BOOT] selected frame loaded', { hasSelectedFrame: Boolean(selected) })
@@ -1788,6 +1803,7 @@ export default function HomePage() {
           await finishBoot()
         }
       } catch (error) {
+        setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'boot-exception' }))
         console.error('[BOOT] startup failed', error)
         setAuthHydrated(true)
         setFramesHydrated(true)
@@ -2246,6 +2262,14 @@ async function handleSelectTab(k: TabKey) {
             aria-hidden={!booting}
           >
             <ReMindSplash language={language} />
+          </div>
+        )}
+
+
+        {debugBootParamEnabled && (
+          <div className="absolute z-[120] left-2 right-2 bottom-2 rounded-md border border-[#2aa3ff] bg-black/85 text-white text-[11px] p-2 font-mono max-h-[38vh] overflow-auto">
+            <div className="font-semibold mb-1">Boot Debug Panel</div>
+            <pre className="whitespace-pre-wrap break-words">{JSON.stringify(bootDebug, null, 2)}</pre>
           </div>
         )}
       </div>
