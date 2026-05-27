@@ -991,6 +991,8 @@ export default function HomePage() {
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
   const autoPersistingRef = useRef(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
   const recentModulesRef = useRef<ModuleKey[]>([])
@@ -2505,6 +2507,8 @@ export default function HomePage() {
 
     try {
       setPersisting(true)
+      setSaveState('saving')
+      setSaveErrorMessage(null)
 
       const modulesForSave = normalizeModulesForSave(modulesJson)
 
@@ -2576,8 +2580,13 @@ export default function HomePage() {
       }
 
       setDirty(false)
+      setSaveState('saved')
       await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
     } catch (e: any) {
+      console.error('[settings-save] persist failed', {
+        activeDeviceId,
+        error: String(e?.message || e),
+      })
       logSurfFuelPenaltyDiagnostic('address-save-result', {
         activeDeviceId,
         moduleInstanceId: null,
@@ -2585,7 +2594,8 @@ export default function HomePage() {
         saveError: String(e?.message || e),
         storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
       })
-      alert(String(e?.message || e))
+      setSaveState('error')
+      setSaveErrorMessage(String(e?.message || e))
     } finally {
       setPersisting(false)
     }
@@ -2607,10 +2617,11 @@ export default function HomePage() {
   useEffect(() => {
     if (
       !activeDeviceId ||
+      !authHydrated ||
+      !framesHydrated ||
       !isLoadedRef.current ||
       persisting ||
       autoPersistingRef.current ||
-      activeTab !== 'frame' ||
       !dirty
     ) {
       return
@@ -2630,6 +2641,8 @@ export default function HomePage() {
 
       try {
         autoPersistingRef.current = true
+        setSaveState('saving')
+        setSaveErrorMessage(null)
         const {
           data: { session },
         } = await supabase.auth.getSession()
@@ -2653,8 +2666,15 @@ export default function HomePage() {
           pinnedModuleTabs,
         })
         refreshDirtyState()
+        setSaveState('saved')
         await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
-      } catch {
+      } catch (error) {
+        console.error('[settings-save] autosave failed', {
+          activeDeviceId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        setSaveState('error')
+        setSaveErrorMessage(error instanceof Error ? error.message : String(error))
         // keep unsaved state and retry on next change
       } finally {
         autoPersistingRef.current = false
@@ -2664,10 +2684,11 @@ export default function HomePage() {
     return () => window.clearTimeout(timer)
   }, [
     activeDeviceId,
-    activeTab,
+    authHydrated,
     cellsByLayout,
     dirty,
     fontSize,
+    framesHydrated,
     language,
     layoutKey,
     modulesJson,
@@ -2731,6 +2752,15 @@ async function handleSelectTab(k: TabKey) {
                 return instant ? 'auto' : 'smooth'
               }}
             />
+            <div className="mt-2 h-4 text-[11px] tracking-wide text-[color:var(--fg-60)]" aria-live="polite">
+              {saveState === 'saving'
+                ? 'Saving…'
+                : saveState === 'saved'
+                  ? tx(language).savedWord
+                  : saveState === 'error'
+                    ? `Couldn’t save, retry${saveErrorMessage ? ` (${saveErrorMessage})` : ''}`
+                    : ''}
+            </div>
 
             <div className="mt-6 flex-1 min-h-0">
               {activeTab === 'frame' && (
