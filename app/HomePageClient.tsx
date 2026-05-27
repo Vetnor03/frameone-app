@@ -958,6 +958,8 @@ export default function HomePage() {
   const [authHydrated, setAuthHydrated] = useState(false)
   const [framesHydrated, setFramesHydrated] = useState(false)
   const [bootDebug, setBootDebug] = useState<Record<string, unknown>>({})
+  const [frameQueryFailed, setFrameQueryFailed] = useState(false)
+  const [frameQueryRetrying, setFrameQueryRetrying] = useState(false)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -995,6 +997,64 @@ export default function HomePage() {
     if (!isSessionRepairDebugEnabled) return
     if (details) console.info(`[session-repair] ${event}`, details)
     else console.info(`[session-repair] ${event}`)
+  }
+
+  async function collectFrameQueryDiagnostics(stage: 'before-response' | 'after-response', error: unknown, requestUrl?: string | null) {
+    let swControllerState: string | null = null
+    let swRegistrationState: string | null = null
+
+    try {
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        swControllerState = navigator.serviceWorker.controller ? 'controlled' : 'uncontrolled'
+        const registration = await navigator.serviceWorker.getRegistration().catch(() => null)
+        swRegistrationState = registration?.active?.state ?? (registration ? 'registered-no-active-worker' : 'not-registered')
+      }
+    } catch {
+      swRegistrationState = 'error-reading-state'
+    }
+
+    const diagnostic = {
+      table: 'device_members',
+      stage,
+      requestUrl: requestUrl ?? null,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack ?? null : null,
+      online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+      serviceWorkerController: swControllerState,
+      serviceWorkerRegistration: swRegistrationState,
+      timestamp: new Date().toISOString(),
+    }
+    console.error('[BOOT] frame query diagnostics', diagnostic)
+    setBootDebug((prev) => ({ ...prev, frameQueryDiagnostic: diagnostic }))
+  }
+
+  async function loadDeviceMembersWithRetry(userId: string) {
+    const requestUrl = (() => {
+      try {
+        return new URL('/rest/v1/device_members?select=device_id,role', process.env.NEXT_PUBLIC_SUPABASE_URL ?? window.location.origin).toString()
+      } catch {
+        return null
+      }
+    })()
+
+    const queryMembers = async () => supabase
+      .from('device_members')
+      .select('device_id, role')
+      .eq('user_id', userId)
+      .order('device_id', { ascending: true })
+
+    const first = await queryMembers()
+    if (!first.error) return first
+
+    await collectFrameQueryDiagnostics('before-response', first.error, requestUrl)
+    setFrameQueryRetrying(true)
+    await new Promise((resolve) => window.setTimeout(resolve, 550))
+    const second = await queryMembers()
+    setFrameQueryRetrying(false)
+    if (second.error) {
+      await collectFrameQueryDiagnostics('after-response', second.error, requestUrl)
+    }
+    return second
   }
 
 
@@ -1223,6 +1283,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!shouldRenderApp || booting || !authHydrated || !framesHydrated) return
+    if (frameQueryFailed) return
     if (stickySettingsRef.current) return
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
@@ -1247,7 +1308,7 @@ export default function HomePage() {
       preferInstantScrollRef.current = true
       setActiveTab('frame')
     }
-  }, [activeTab, authHydrated, booting, frames.length, framesHydrated, shouldRenderApp])
+  }, [activeTab, authHydrated, booting, frameQueryFailed, frames.length, framesHydrated, shouldRenderApp])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
@@ -1733,22 +1794,18 @@ export default function HomePage() {
         console.info('[BOOT] frame query used', frameQueryMeta)
         setBootDebug((prev) => ({ ...prev, frameQueryTable: frameQueryMeta.table, frameQueryFilters: frameQueryMeta.filters, frameQuerySelect: frameQueryMeta.select }))
 
-        const { data: members, error } = await supabase
-          .from('device_members')
-          .select('device_id, role')
-          .eq('user_id', session.user.id)
-          .order('device_id', { ascending: true })
+        const { data: members, error } = await loadDeviceMembersWithRetry(session.user.id)
 
         if (error) {
+          setFrameQueryFailed(true)
           setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'error', frameQueryErrorMessage: error.message, frameQueryErrorCode: error.code ?? null, frameQueryErrorDetails: error.details ?? null }))
           logSessionRepair('members-load-failed', { error: error.message })
           console.info('[BOOT] frame list load failed', { error: error.message })
-          setFrames([])
-          setActiveDeviceId(null)
           setFramesHydrated(true)
           setBooting(false)
           return
         }
+        setFrameQueryFailed(false)
 
         const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
         setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'ok', serverFrameCount: memberRows.length, rawFrames: memberRows }))
@@ -2109,6 +2166,22 @@ async function handleSelectTab(k: TabKey) {
           aria-hidden={!shouldRenderApp || booting}
         >
           <>
+            {frameQueryFailed && (
+              <div className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-100">
+                <div className="font-semibold">Couldn&apos;t load your frames</div>
+                <div className="mt-1 text-red-100/85">
+                  {frameQueryRetrying
+                    ? 'Retrying frame lookup…'
+                    : 'This is a network/query error, not an empty account. Please retry.'}
+                </div>
+                <button
+                  className="mt-3 inline-flex rounded-md bg-red-500/30 px-3 py-1.5 font-medium"
+                  onClick={() => window.location.reload()}
+                >
+                  Retry loading
+                </button>
+              </div>
+            )}
             <TabBar
               tabs={tabs}
               activeTab={activeTab}
