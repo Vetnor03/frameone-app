@@ -553,10 +553,10 @@ export async function GET(req: Request) {
 
     const baselinePrice =
       chartRange === 'day'
-        ? previousClose
+        ? (open ?? previousClose)
         : selectedSeries.length > 0 && selectedSeries[0]?.p != null
           ? selectedSeries[0].p
-          : previousClose
+          : (open ?? previousClose)
 
     const response = {
       symbol: resolvedSymbol,

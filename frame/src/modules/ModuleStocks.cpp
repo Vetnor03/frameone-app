@@ -230,14 +230,19 @@ static bool hasPurchaseData(const StockCache& data) {
 static bool getReferenceLineValue(const StockCache& data, float& outValue) {
   outValue = NAN;
 
-  const bool isWeekOrMonth =
-      (strcmp(data.chartRange, "week") == 0) || (strcmp(data.chartRange, "month") == 0);
-  if (isWeekOrMonth && data.seriesCount > 0) {
+  const bool isWeekMonthOrYear =
+      (strcmp(data.chartRange, "week") == 0) || (strcmp(data.chartRange, "month") == 0) || (strcmp(data.chartRange, "year") == 0);
+  if (isWeekMonthOrYear && data.seriesCount > 0) {
     const float first = data.series[0];
     if (isfinite(first) && first > 0.0f) {
       outValue = first;
       return true;
     }
+  }
+
+  if (isfinite(data.open) && data.open > 0.0f) {
+    outValue = data.open;
+    return true;
   }
 
   if (isfinite(data.previousClose) && data.previousClose > 0.0f) {
