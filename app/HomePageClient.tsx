@@ -999,6 +999,31 @@ export default function HomePage() {
     else console.info(`[session-repair] ${event}`)
   }
 
+  function getSupabaseProjectAuthStorageMatchers() {
+    const urlValue = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    let hostname = ''
+    let projectRef = ''
+    try {
+      const parsed = new URL(urlValue)
+      hostname = parsed.hostname
+      projectRef = parsed.hostname.split('.')[0] ?? ''
+    } catch {}
+    const normalizedHost = hostname.toLowerCase()
+    const normalizedProjectRef = projectRef.toLowerCase()
+    return {
+      hostname,
+      projectRef,
+      matchers: (key: string) => {
+        const normalized = key.toLowerCase()
+        if (!normalized.includes('supabase')) return false
+        if (normalizedProjectRef && normalized.includes(normalizedProjectRef)) return true
+        if (normalizedHost && normalized.includes(normalizedHost)) return true
+        if (normalized.includes('sb-') && normalized.includes('-auth-token')) return true
+        return normalized.includes('auth-token')
+      },
+    }
+  }
+
   async function collectFrameQueryDiagnostics(stage: 'before-response' | 'after-response', error: unknown, requestUrl?: string | null) {
     let swControllerState: string | null = null
     let swRegistrationState: string | null = null
@@ -1092,7 +1117,7 @@ export default function HomePage() {
       const normalized = key.toLowerCase()
       if (appStateKeys.has(key)) return true
       if (appStateFragments.some((fragment) => normalized.includes(fragment))) return true
-      if (shouldClearSupabaseAuthStorage && normalized.includes('supabase')) return true
+      if (shouldClearSupabaseAuthStorage && getSupabaseProjectAuthStorageMatchers().matchers(key)) return true
       return false
     }
     const clearedLocalKeys: string[] = []
@@ -1151,6 +1176,39 @@ export default function HomePage() {
     } catch (error) {
       console.info('[PWA] service worker/cache status', { error: error instanceof Error ? error.message : String(error) })
     }
+  }
+
+  async function clearSupabaseAuthStorageAndReload() {
+    const { hostname, projectRef, matchers } = getSupabaseProjectAuthStorageMatchers()
+    const localClearedKeys: string[] = []
+    const sessionClearedKeys: string[] = []
+
+    if (typeof window !== 'undefined') {
+      const localKeys = Object.keys(window.localStorage)
+      const sessionKeys = Object.keys(window.sessionStorage)
+      for (const key of localKeys) {
+        if (!matchers(key)) continue
+        window.localStorage.removeItem(key)
+        localClearedKeys.push(key)
+      }
+      for (const key of sessionKeys) {
+        if (!matchers(key)) continue
+        window.sessionStorage.removeItem(key)
+        sessionClearedKeys.push(key)
+      }
+    }
+
+    setBootDebug((prev) => ({
+      ...prev,
+      supabaseAuthStorageClearedAt: new Date().toISOString(),
+      supabaseAuthStorageProjectHost: hostname || null,
+      supabaseAuthStorageProjectRef: projectRef || null,
+      supabaseAuthStorageLocalKeysRemoved: localClearedKeys,
+      supabaseAuthStorageSessionKeysRemoved: sessionClearedKeys,
+    }))
+    await supabase.auth.signOut().catch(() => undefined)
+    router.replace('/login')
+    window.location.reload()
   }
 
   function resetAppStateAfterSignOut(options?: { clearSupabaseAuthStorage?: boolean }) {
@@ -1755,8 +1813,26 @@ export default function HomePage() {
 
         const { data: sessionData } = await supabase.auth.getSession()
         const session = sessionData.session
+        const sessionExpiresAt = session?.expires_at
+          ? new Date(session.expires_at * 1000).toISOString()
+          : null
+        const supabaseHost = (() => {
+          try {
+            return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname
+          } catch {
+            return null
+          }
+        })()
         const migrationRan = runAppStorageMigrationIfNeeded()
-        setBootDebug((prev) => ({ ...prev, authSessionExists: Boolean(session), authUserExists: Boolean(session?.user), userEmail: session?.user?.email ?? null, storageMigrationRan: Boolean(migrationRan) }))
+        setBootDebug((prev) => ({
+          ...prev,
+          authSessionExists: Boolean(session),
+          authUserExists: Boolean(session?.user),
+          userEmail: session?.user?.email ?? null,
+          sessionExpiresAt,
+          supabaseProjectHostname: supabaseHost,
+          storageMigrationRan: Boolean(migrationRan),
+        }))
         void logPwaRuntimeDiagnostics()
 
         void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
@@ -1791,6 +1867,19 @@ export default function HomePage() {
         unsub = data.subscription
 
         const frameQueryMeta = { table: 'device_members', filters: [`user_id=eq.${session.user.id}`], select: 'device_id, role' }
+        const tokenBeforeRefresh = session?.access_token ?? null
+        const refreshResult = await supabase.auth.refreshSession()
+        const refreshedSession = refreshResult.data.session
+        const refreshSuccess = Boolean(refreshedSession?.access_token)
+        const tokenAfterRefresh = refreshedSession?.access_token ?? null
+        setBootDebug((prev) => ({
+          ...prev,
+          tokenRefreshAttempted: true,
+          tokenRefreshSuccess: refreshSuccess,
+          tokenRefreshError: refreshResult.error?.message ?? null,
+          sessionExpiresAtAfterRefresh: refreshedSession?.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : null,
+          deviceMembersFetchUsesRefreshedToken: Boolean(tokenAfterRefresh && tokenAfterRefresh !== tokenBeforeRefresh) || refreshSuccess,
+        }))
         console.info('[BOOT] frame query used', frameQueryMeta)
         setBootDebug((prev) => ({ ...prev, frameQueryTable: frameQueryMeta.table, frameQueryFilters: frameQueryMeta.filters, frameQuerySelect: frameQueryMeta.select }))
 
@@ -2342,6 +2431,15 @@ async function handleSelectTab(k: TabKey) {
         {debugBootParamEnabled && (
           <div className="absolute z-[120] left-2 right-2 bottom-2 rounded-md border border-[#2aa3ff] bg-black/85 text-white text-[11px] p-2 font-mono max-h-[38vh] overflow-auto">
             <div className="font-semibold mb-1">Boot Debug Panel</div>
+            <button
+              type="button"
+              className="mb-2 rounded border border-[#2aa3ff] px-2 py-1 text-[11px] hover:bg-[#2aa3ff]/20"
+              onClick={() => {
+                void clearSupabaseAuthStorageAndReload()
+              }}
+            >
+              Clear Supabase auth storage and reload
+            </button>
             <pre className="whitespace-pre-wrap break-words">{JSON.stringify(bootDebug, null, 2)}</pre>
           </div>
         )}
