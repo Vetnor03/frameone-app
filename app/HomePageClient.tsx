@@ -256,11 +256,6 @@ function moduleLabel(language: AppLanguage, key: ModuleKey) {
   return UI[language].modules[key]
 }
 
-function moduleLoadingText(language: AppLanguage, key: ModuleKey) {
-  const label = moduleLabel(language, key).toLowerCase()
-  return language === 'no' ? `Laster ${label}…` : `Loading ${label}…`
-}
-
 function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; subtitle: string }[] {
   const t = tx(language)
   return [
@@ -368,7 +363,6 @@ type MirrorModuleDetail = {
   stockSeries?: number[]
   stockSeriesTimestamps?: Array<number | null>
   stockPreviousClose?: number | null
-  stockBaselinePrice?: number | null
   stockPurchasePrice?: number | null
   countdownTitle?: string
   countdownDaysLeft?: number
@@ -955,22 +949,6 @@ export default function HomePage() {
   const [booting, setBooting] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
-  const [authHydrated, setAuthHydrated] = useState(false)
-  const [framesHydrated, setFramesHydrated] = useState(false)
-  const [bootDebug, setBootDebug] = useState<Record<string, unknown>>({
-    frameHydrationStage: 'idle',
-    bootTrace: [],
-  })
-  const [bootTimeoutHit, setBootTimeoutHit] = useState(false)
-  const [frameQueryFailed, setFrameQueryFailed] = useState(false)
-  const [frameQueryRetrying, setFrameQueryRetrying] = useState(false)
-  const [frameHydrationError, setFrameHydrationError] = useState<string | null>(null)
-  const frameHydrationStageRef = useRef<string>('idle')
-  const lastResolvedStageRef = useRef<string>('idle')
-  const activePromiseStageRef = useRef<string | null>(null)
-  const retryActiveRef = useRef(false)
-  const serverFallbackActiveRef = useRef(false)
-  const bootTraceRef = useRef<string[]>([])
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -991,373 +969,17 @@ export default function HomePage() {
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
   const autoPersistingRef = useRef(false)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
-  const recentModulesRef = useRef<ModuleKey[]>([])
+  const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
+  const saveToastTimerRef = useRef<number | null>(null)
 
-  function rememberModule(module: ModuleKey | null) {
-    if (!module) return
-    recentModulesRef.current = [module, ...recentModulesRef.current.filter((m) => m !== module)].slice(0, 4)
-  }
-
-  const isSessionRepairDebugEnabled = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
-  const APP_STORAGE_VERSION = '2026-05-27.1'
-  const APP_STORAGE_VERSION_KEY = 'remind:storage-version'
-
-  function logSessionRepair(event: string, details?: Record<string, unknown>) {
-    if (!isSessionRepairDebugEnabled) return
-    if (details) console.info(`[session-repair] ${event}`, details)
-    else console.info(`[session-repair] ${event}`)
-  }
-
-  function getSupabaseProjectAuthStorageMatchers() {
-    const urlValue = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-    let hostname = ''
-    let projectRef = ''
-    try {
-      const parsed = new URL(urlValue)
-      hostname = parsed.hostname
-      projectRef = parsed.hostname.split('.')[0] ?? ''
-    } catch {}
-    const normalizedHost = hostname.toLowerCase()
-    const normalizedProjectRef = projectRef.toLowerCase()
-    return {
-      hostname,
-      projectRef,
-      matchers: (key: string) => {
-        const normalized = key.toLowerCase()
-        if (!normalized.includes('supabase')) return false
-        if (normalizedProjectRef && normalized.includes(normalizedProjectRef)) return true
-        if (normalizedHost && normalized.includes(normalizedHost)) return true
-        if (normalized.includes('sb-') && normalized.includes('-auth-token')) return true
-        return normalized.includes('auth-token')
-      },
-    }
-  }
-
-  async function collectFrameQueryDiagnostics(stage: 'before-response' | 'after-response', error: unknown, requestUrl?: string | null) {
-    let swControllerState: string | null = null
-    let swRegistrationState: string | null = null
-
-    try {
-      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-        swControllerState = navigator.serviceWorker.controller ? 'controlled' : 'uncontrolled'
-        const registration = await navigator.serviceWorker.getRegistration().catch(() => null)
-        swRegistrationState = registration?.active?.state ?? (registration ? 'registered-no-active-worker' : 'not-registered')
-      }
-    } catch {
-      swRegistrationState = 'error-reading-state'
-    }
-
-    const diagnostic = {
-      table: 'device_members',
-      stage,
-      requestUrl: requestUrl ?? null,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack ?? null : null,
-      online: typeof navigator !== 'undefined' ? navigator.onLine : null,
-      serviceWorkerController: swControllerState,
-      serviceWorkerRegistration: swRegistrationState,
-      timestamp: new Date().toISOString(),
-    }
-    console.error('[BOOT] frame query diagnostics', diagnostic)
-    setBootDebug((prev) => ({ ...prev, frameQueryDiagnostic: diagnostic }))
-  }
-
-  function trace(message: string, extras?: Record<string, unknown>) {
-    console.info('[BOOT_TRACE]', message, extras ?? {})
-    bootTraceRef.current = [...bootTraceRef.current, message]
-    setBootDebug((prev) => ({
-      ...prev,
-      frameHydrationStage: frameHydrationStageRef.current,
-      lastResolvedStage: lastResolvedStageRef.current,
-      activePromiseStage: activePromiseStageRef.current,
-      bootTrace: bootTraceRef.current,
-      ...(extras ?? {}),
-    }))
-  }
-
-  function logFrameHydrationQueryDiagnostic(input: {
-    queryName: string
-    routeOrTable: string
-    activeDeviceId: string | null
-    status: 'success' | 'error' | 'skipped'
-    rowCount?: number | null
-    skippedReason?: string
-    error?: unknown
-  }) {
-    const diagnostic = {
-      ...input,
-      errorMessage: input.error instanceof Error ? input.error.message : input.error ? String(input.error) : null,
-      timestamp: new Date().toISOString(),
-    }
-    console.info('[FRAME_HYDRATION_QUERY]', diagnostic)
-  }
-
-  async function loadDeviceMembersWithRetry(userId: string) {
-    const requestUrl = (() => {
-      try {
-        return new URL('/rest/v1/device_members?select=device_id,role', process.env.NEXT_PUBLIC_SUPABASE_URL ?? window.location.origin).toString()
-      } catch {
-        return null
-      }
-    })()
-
-    const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
-      return new Promise<T>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
-        promise
-          .then(resolve)
-          .catch(reject)
-          .finally(() => window.clearTimeout(timeoutId))
-      })
-    }
-
-    const queryMembers = async () => withTimeout(
-      (async () => {
-        return await supabase
-          .from('device_members')
-          .select('device_id, role')
-          .eq('user_id', userId)
-          .order('device_id', { ascending: true })
-      })(),
-      3000,
-      'client_query_timeout_3000ms'
-    )
-
-    const first = await queryMembers()
-    if (!first.error) return first
-
-    await collectFrameQueryDiagnostics('before-response', first.error, requestUrl)
-    setFrameQueryFailed(true)
-    setFrameQueryRetrying(true)
-    retryActiveRef.current = true
-    try {
-      console.info('[FRAME] retry-start')
-      trace('retry-start')
-      activePromiseStageRef.current = 'retry-start'
-      frameHydrationStageRef.current = 'retry-start'
-      setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'retry-start' }))
-      const retryStart = Date.now()
-      await new Promise((resolve) => window.setTimeout(resolve, 550))
-      const second = await queryMembers()
-      const retryDuration = Date.now() - retryStart
-      if (second.error) {
-        console.info('[FRAME] retry-error duration', { durationMs: retryDuration, error: second.error.message })
-        await collectFrameQueryDiagnostics('after-response', second.error, requestUrl)
-      } else {
-        console.info('[FRAME] retry-success duration', { durationMs: retryDuration })
-      }
-      const resolvedStage = second.error ? 'retry-error' : 'retry-success'
-      trace(`retry-resolved-${resolvedStage}`)
-      lastResolvedStageRef.current = resolvedStage
-      frameHydrationStageRef.current = resolvedStage
-      activePromiseStageRef.current = null
-      setBootDebug((prev) => ({
-        ...prev,
-        retryDurationMs: retryDuration,
-        frameHydrationStage: resolvedStage,
-        lastResolvedStage: resolvedStage,
-      }))
-      return second
-    } finally {
-      retryActiveRef.current = false
-      setFrameQueryRetrying(false)
-    }
-  }
-
-  function isFrameMembershipNetworkError(error: unknown) {
-    if (!error) return false
-    const message = error instanceof Error ? error.message : String(error)
-    const normalized = message.toLowerCase()
-    return normalized.includes('load failed')
-      || normalized.includes('failed to fetch')
-      || normalized.includes('networkerror')
-      || normalized.includes('fetch failed')
-      || normalized.includes('typeerror')
-  }
-
-  async function loadFramesFromServerFallback() {
-    const controller = new AbortController()
-    const timeoutId = window.setTimeout(() => controller.abort('server_fallback_timeout_4000ms'), 4000)
-    let response: Response
-    try {
-      response = await fetch('/api/device/user-frames', {
-        method: 'GET',
-        cache: 'no-store',
-        credentials: 'include',
-        signal: controller.signal,
-      })
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new Error('server_fallback_timeout_4000ms')
-      }
-      throw error
-    } finally {
-      window.clearTimeout(timeoutId)
-    }
-    const bodyText = await response.text().catch(() => '')
-    let payload: any = null
-    try {
-      payload = bodyText ? JSON.parse(bodyText) : null
-    } catch {
-      payload = null
-    }
-    if (!response.ok || !payload?.ok) {
-      const message = payload?.details || payload?.error || `request_failed_${response.status}`
-      const enriched = `status=${response.status}; body=${bodyText || 'empty'}; message=${String(message)}`
-      throw new Error(enriched)
-    }
-    const frames = Array.isArray(payload.frames) ? payload.frames : []
-    return {
-      frames: frames as Array<{ device_id: string; role: string | null }>,
-      status: response.status,
-      body: bodyText,
-    }
-  }
-
-
-  function clearClientPersistedState(options?: { clearSupabaseAuthStorage?: boolean }) {
-    if (typeof window === 'undefined') return
-
-    const shouldClearSupabaseAuthStorage = options?.clearSupabaseAuthStorage === true
-    const localKeys = Object.keys(window.localStorage)
-    const sessionKeys = Object.keys(window.sessionStorage)
-    const appStateKeys = new Set([
-      'activeDeviceId',
-      'pairingFlowStep',
-      'pairingDeviceId',
-      'pairingCode',
-      'onboardingStep',
-      'newUserState',
-      'cachedUserDeviceStatus',
-      'selectedFrameId',
-      'frameSetupComplete',
-    ])
-    const appStateFragments = [
-      'pairing',
-      'onboarding',
-      'new-user',
-      'new_user',
-      'frame-selection',
-      'frame_selection',
-      'cached-user',
-      'device-status',
-      'device_status',
-      'activeframe',
-      'activedevice',
-    ]
-    const shouldWipeKey = (key: string) => {
-      const normalized = key.toLowerCase()
-      if (appStateKeys.has(key)) return true
-      if (appStateFragments.some((fragment) => normalized.includes(fragment))) return true
-      if (shouldClearSupabaseAuthStorage && getSupabaseProjectAuthStorageMatchers().matchers(key)) return true
-      return false
-    }
-    const clearedLocalKeys: string[] = []
-    const clearedSessionKeys: string[] = []
-
-    for (const key of localKeys) {
-      if (!shouldWipeKey(key)) continue
-      window.localStorage.removeItem(key)
-      clearedLocalKeys.push(key)
-    }
-
-    for (const key of sessionKeys) {
-      if (!shouldWipeKey(key)) continue
-      window.sessionStorage.removeItem(key)
-      clearedSessionKeys.push(key)
-    }
-
-    logSessionRepair('cleared-client-state', {
-      localClearedCount: clearedLocalKeys.length,
-      sessionClearedCount: clearedSessionKeys.length,
-      localClearedKeys: clearedLocalKeys,
-      sessionClearedKeys: clearedSessionKeys,
-      clearedSupabaseAuthStorage: shouldClearSupabaseAuthStorage,
-    })
-  }
-
-  function runAppStorageMigrationIfNeeded() {
-    if (typeof window === 'undefined') return false
-    const currentVersion = window.localStorage.getItem(APP_STORAGE_VERSION_KEY)
-    if (currentVersion === APP_STORAGE_VERSION) return false
-
-    console.info('[STORAGE] version mismatch, clearing app keys', {
-      from: currentVersion,
-      to: APP_STORAGE_VERSION,
-    })
-    clearClientPersistedState({ clearSupabaseAuthStorage: false })
-    window.localStorage.setItem(APP_STORAGE_VERSION_KEY, APP_STORAGE_VERSION)
-    return true
-  }
-
-  async function logPwaRuntimeDiagnostics() {
-    if (typeof window === 'undefined') return
-    try {
-      const swSupported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator
-      const cacheSupported = typeof window !== 'undefined' && 'caches' in window
-      const registration = swSupported ? await navigator.serviceWorker.getRegistration() : null
-      const cacheNames = cacheSupported ? await caches.keys() : []
-      console.info('[PWA] service worker/cache status', {
-        swSupported,
-        swRegistered: Boolean(registration),
-        swScope: registration?.scope ?? null,
-        cacheSupported,
-        cacheCount: cacheNames.length,
-        cacheNames,
-      })
-    } catch (error) {
-      console.info('[PWA] service worker/cache status', { error: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
-  async function clearSupabaseAuthStorageAndReload() {
-    const { hostname, projectRef, matchers } = getSupabaseProjectAuthStorageMatchers()
-    const localClearedKeys: string[] = []
-    const sessionClearedKeys: string[] = []
-
-    if (typeof window !== 'undefined') {
-      const localKeys = Object.keys(window.localStorage)
-      const sessionKeys = Object.keys(window.sessionStorage)
-      for (const key of localKeys) {
-        if (!matchers(key)) continue
-        window.localStorage.removeItem(key)
-        localClearedKeys.push(key)
-      }
-      for (const key of sessionKeys) {
-        if (!matchers(key)) continue
-        window.sessionStorage.removeItem(key)
-        sessionClearedKeys.push(key)
-      }
-    }
-
-    setBootDebug((prev) => ({
-      ...prev,
-      supabaseAuthStorageClearedAt: new Date().toISOString(),
-      supabaseAuthStorageProjectHost: hostname || null,
-      supabaseAuthStorageProjectRef: projectRef || null,
-      supabaseAuthStorageLocalKeysRemoved: localClearedKeys,
-      supabaseAuthStorageSessionKeysRemoved: sessionClearedKeys,
-    }))
-    await supabase.auth.signOut().catch(() => undefined)
-    router.replace('/login')
-    window.location.reload()
-  }
-
-  function resetAppStateAfterSignOut(options?: { clearSupabaseAuthStorage?: boolean }) {
-    setFrames([])
-    setActiveDeviceId(null)
-    setActiveTab('frame')
-    setPhysicalFrameSnapshot(null)
-    physicalFrameSnapshotRef.current = null
-    physicalFrameRenderAtRef.current = null
-    stickySettingsRef.current = false
-    autoOpenedSettingsForPairingRef.current = false
-    preferInstantScrollRef.current = false
-    clearClientPersistedState(options)
+  function showSavedToast(text = tx(language).saved) {
+    setSaveToast({ visible: true, text })
+    if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
+    saveToastTimerRef.current = window.setTimeout(() => {
+      setSaveToast((t) => ({ ...t, visible: false }))
+    }, 1400)
   }
 
   useEffect(() => {
@@ -1432,6 +1054,7 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
+      if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
       if (dirtyFrameRef.current != null) window.cancelAnimationFrame(dirtyFrameRef.current)
     }
   }, [])
@@ -1460,100 +1083,17 @@ export default function HomePage() {
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
   const isLoadedRef = useRef(false)
-  const autoOpenedSettingsForPairingRef = useRef(false)
 
   const disableLaunchSplash = searchParams?.get('nosplash') === '1'
-  const debugBootParamEnabled = searchParams?.get('debugBoot') === '1'
 
   useEffect(() => {
     const tab = searchParams?.get('tab')
     if (tab === 'settings') {
       stickySettingsRef.current = true
-      autoOpenedSettingsForPairingRef.current = true
       preferInstantScrollRef.current = true
       setActiveTab('settings')
     }
   }, [searchParams])
-
-  const clearStaleAddFrameRedirectDebug = useCallback((extras?: Record<string, unknown>) => {
-    setBootDebug((prev) => ({
-      ...prev,
-      redirectTarget: null,
-      redirectReason: null,
-      addFrameTriggerSource: 'none',
-      ...(prev.bootTimeoutReason === 'startup-timeout' ? { bootTimeoutReason: 'recovered-after-hydration' } : {}),
-      ...(extras ?? {}),
-    }))
-  }, [])
-
-  useEffect(() => {
-    console.info('[FRAME] post-hydration routing effect entered', {
-      shouldRenderApp,
-      booting,
-      authHydrated,
-      framesHydrated,
-      frameQueryFailed,
-      stickySettings: stickySettingsRef.current,
-      frameCount: frames.length,
-      activeTab,
-    })
-    if (!shouldRenderApp) {
-      console.info('[FRAME] skipped: shouldRenderApp=false')
-      return
-    }
-    if (booting) {
-      console.info('[FRAME] skipped: booting=true')
-      return
-    }
-    if (!authHydrated) {
-      console.info('[FRAME] skipped: authHydrated=false')
-      return
-    }
-    if (!framesHydrated) {
-      console.info('[FRAME] skipped: framesHydrated=false')
-      return
-    }
-    if (frameQueryFailed) {
-      console.info('[FRAME] skipped: frameQueryFailed=true')
-      return
-    }
-    if (stickySettingsRef.current) {
-      console.info('[FRAME] skipped: stickySettings=true')
-      return
-    }
-
-    if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
-      setBootDebug((prev) => ({
-        ...prev,
-        redirectTarget: 'settings:add-frame',
-        redirectReason: 'no-devices-in-db',
-        addFrameTriggerSource: 'server-data',
-      }))
-      console.info('[ROUTE] pair flow redirect: no frames found after hydration')
-      logSessionRepair('redirect-to-settings', { reason: 'no-devices-in-db', source: 'db' })
-      autoOpenedSettingsForPairingRef.current = true
-      stickySettingsRef.current = true
-      preferInstantScrollRef.current = true
-      setActiveTab('settings')
-      return
-    }
-
-    if (frames.length > 0) {
-      clearStaleAddFrameRedirectDebug({
-        redirectReason: 'devices-found-in-db',
-        redirectTarget: activeTab === 'settings' && autoOpenedSettingsForPairingRef.current ? 'frame' : null,
-      })
-      console.info('[ROUTE] onboarding redirect skipped: existing frame found', { frameCount: frames.length })
-    }
-
-    if (frames.length > 0 && autoOpenedSettingsForPairingRef.current && activeTab === 'settings') {
-      setBootDebug((prev) => ({ ...prev, redirectTarget: 'frame', redirectReason: 'devices-found-in-db' }))
-      logSessionRepair('redirect-to-frame', { reason: 'devices-found-in-db', source: 'db', deviceCount: frames.length })
-      stickySettingsRef.current = false
-      preferInstantScrollRef.current = true
-      setActiveTab('frame')
-    }
-  }, [activeTab, authHydrated, booting, clearStaleAddFrameRedirectDebug, frameQueryFailed, frames.length, framesHydrated, shouldRenderApp])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
@@ -1675,26 +1215,12 @@ export default function HomePage() {
   }
 
   function projectSlotMemoryIntoLayout(moduleMemory: (ModuleKey | null)[], targetLayout: LayoutKey) {
+    // We intentionally keep sparse values as null so layout switches preserve slot positions.
     const target = emptyCellsFor(targetLayout)
     const targetSlots = orderedSlotsForLayout(targetLayout)
-    const used = new Set<ModuleKey>()
 
     targetSlots.forEach((slot, idx) => {
-      const baseModule = moduleMemory[idx] ?? null
-      if (baseModule) {
-        target[slot] = baseModule
-        used.add(baseModule)
-        rememberModule(baseModule)
-        return
-      }
-
-      const fallback = recentModulesRef.current.find((m) => !used.has(m))
-      if (fallback) {
-        target[slot] = fallback
-        used.add(fallback)
-      } else {
-        target[slot] = null
-      }
+      target[slot] = moduleMemory[idx] ?? null
     })
 
     return target
@@ -1714,7 +1240,6 @@ export default function HomePage() {
     while (next.length <= slot) next.push(null)
 
     next[slot] = nextValue ?? null
-    if (nextValue) rememberModule(nextValue)
     return next
   }
 
@@ -1760,7 +1285,6 @@ export default function HomePage() {
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
       if (!resp.ok) {
-        logFrameHydrationQueryDiagnostic({ queryName: 'loadDeviceStatus', routeOrTable: '/api/device/status', activeDeviceId: deviceId, status: 'error', error: `http_${resp.status}` })
         setLastUpdatedAt(null)
         return null
       }
@@ -1778,11 +1302,9 @@ export default function HomePage() {
       setFrames((current) =>
         current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
       )
-      logFrameHydrationQueryDiagnostic({ queryName: 'loadDeviceStatus', routeOrTable: '/api/device/status', activeDeviceId: deviceId, status: 'success', rowCount: 1 })
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
       return renderIso || null
-    } catch (error) {
-      logFrameHydrationQueryDiagnostic({ queryName: 'loadDeviceStatus', routeOrTable: '/api/device/status', activeDeviceId: deviceId, status: 'error', error })
+    } catch {
       setLastUpdatedAt(null)
       return null
     }
@@ -1835,10 +1357,7 @@ export default function HomePage() {
         data: { session },
       } = await supabase.auth.getSession()
 
-      if (!session?.access_token) {
-        logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'skipped', skippedReason: 'missing-session-token' })
-        return null
-      }
+      if (!session?.access_token) return null
 
       const resp = await fetch(`/api/device/mirror-snapshot?device_id=${encodeURIComponent(deviceId)}`, {
         cache: 'no-store',
@@ -1847,10 +1366,7 @@ export default function HomePage() {
         },
       })
 
-      if (!resp.ok) {
-        logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'error', error: `http_${resp.status}` })
-        return null
-      }
+      if (!resp.ok) return null
 
       const data = await resp.json()
       const status = modulesRecordFromUnknown(data?.status)
@@ -1862,14 +1378,12 @@ export default function HomePage() {
       )
 
       applyDeviceStatus(deviceId, status)
-      logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'success', rowCount: 1 })
 
       return {
         ...snapshot,
         detailsBySlot: modulesRecordFromUnknown(data?.detailsBySlot) as Record<string, MirrorModuleDetail>,
       }
-    } catch (error) {
-      logFrameHydrationQueryDiagnostic({ queryName: 'loadMirrorSnapshot', routeOrTable: '/api/device/mirror-snapshot', activeDeviceId: deviceId, status: 'error', error })
+    } catch {
       return null
     }
   }
@@ -1900,43 +1414,13 @@ export default function HomePage() {
   }
 
   async function loadDeviceSettings(deviceId: string) {
-    setFrameHydrationError(null)
-    let data: { settings_json?: SettingsJson } | null = null
-    try {
-      const resp = await fetch(`/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '')
-        logFrameHydrationQueryDiagnostic({
-          queryName: 'loadDeviceSettings',
-          routeOrTable: '/api/device/frame-config',
-          activeDeviceId: deviceId,
-          status: 'error',
-          error: `http_${resp.status}: ${body || 'empty-body'}`,
-        })
-        setFrameHydrationError('Frame content failed to load from server config API.')
-        return
-      }
-      const payload = await resp.json()
-      data = payload && typeof payload === 'object' ? { settings_json: (payload as any).settings_json } : null
-      const rowCount = data?.settings_json && typeof data.settings_json === 'object' ? 1 : 0
-      logFrameHydrationQueryDiagnostic({
-        queryName: 'loadDeviceSettings',
-        routeOrTable: '/api/device/frame-config',
-        activeDeviceId: deviceId,
-        status: 'success',
-        rowCount,
-      })
-    } catch (error) {
-      logFrameHydrationQueryDiagnostic({
-        queryName: 'loadDeviceSettings',
-        routeOrTable: '/api/device/frame-config',
-        activeDeviceId: deviceId,
-        status: 'error',
-        error,
-      })
-      setFrameHydrationError('Frame content failed to load due to a network error.')
-      return
-    }
+    const { data, error } = await supabase
+      .from('device_settings')
+      .select('settings_json')
+      .eq('device_id', deviceId)
+      .maybeSingle()
+
+    if (error) return defaultDinnerPlanDays()
 
     const json = (data?.settings_json || {}) as SettingsJson
     const hasSavedSettings =
@@ -1955,7 +1439,6 @@ export default function HomePage() {
     }
 
     layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(nextCellsForLayout)
-    recentModulesRef.current = layoutModuleMemoryRef.current.filter((m): m is ModuleKey => Boolean(m)).slice(0, 4)
 
     const rawModules =
       json.modules && typeof json.modules === 'object'
@@ -1963,21 +1446,6 @@ export default function HomePage() {
         : ({} as Record<string, any>)
 
     const normalizedModules = normalizeModulesForSave(rawModules)
-    console.info('[SURF][FUEL_PENALTY] after-hydration-normalize', {
-      activeDeviceId: deviceId,
-      fuelPenaltyTrace: summarizeSurfFuelPenalty(normalizedModules),
-    })
-    const loadedSurfList: SurfCfg[] = Array.isArray(normalizedModules.surf) ? (normalizedModules.surf as SurfCfg[]) : []
-    const loadedBest = loadedSurfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
-    const loadedFp = loadedBest ? sanitizeFuelPenalty((loadedBest as any).fuelPenalty) : undefined
-    logSurfFuelPenaltyDiagnostic('address-loaded', {
-      activeDeviceId: deviceId,
-      moduleInstanceId: loadedBest?.id ?? null,
-      addressLoaded: Boolean(String(loadedFp?.formatted || loadedFp?.homeAddress || '').trim()),
-      storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
-      homeLabel: String(loadedFp?.formatted || loadedFp?.homeAddress || '').trim() || null,
-      fuelPenaltyEnabled: Boolean(loadedFp?.enabled),
-    })
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
       ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
       : []
@@ -1987,10 +1455,6 @@ export default function HomePage() {
     setFontSize(nextFontSize)
     setCellsByLayout(nextCellsByLayout)
     setLayoutKey(nextLayout)
-    console.info('[SURF][FUEL_PENALTY] before-set-react-state', {
-      activeDeviceId: deviceId,
-      fuelPenaltyTrace: summarizeSurfFuelPenalty(normalizedModules),
-    })
     setModulesJson(normalizedModules)
     setPinnedModuleTabs(nextPinnedTabs)
 
@@ -2017,28 +1481,29 @@ export default function HomePage() {
     if (!stickySettingsRef.current) setActiveTab('frame')
 
     if (!hasSavedSettings) {
-      setFrameHydrationError('No saved frame layout/config found for this frame.')
-      logFrameHydrationQueryDiagnostic({
-        queryName: 'loadDeviceSettings',
-        routeOrTable: '/api/device/frame-config',
-        activeDeviceId: deviceId,
-        status: 'error',
-        rowCount: 0,
-        error: 'missing-settings-json',
+      const initialSettingsJson: SettingsJson = {
+        theme: nextTheme,
+        language: nextLanguage,
+        fontSize: nextFontSize,
+        layout: 'default',
+        cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
+        modules: normalizedModules,
+        pinned_tabs: nextPinnedTabs,
+      }
+
+      await supabase.rpc('upsert_device_settings', {
+        p_device_id: deviceId,
+        p_settings: initialSettingsJson,
       })
-      return
     }
 
     isLoadedRef.current = true
   }
 
   useEffect(() => {
-    trace('component-mounted')
     let unsub: { unsubscribe: () => void } | null = null
     let cancelled = false
-    let bootDone = false
     const bootStartedAt = performance.now()
-    const bootTimeoutMs = 9000
 
     async function finishBoot() {
       const minimumSplashMs = 1350
@@ -2050,339 +1515,82 @@ export default function HomePage() {
     }
 
     ;(async () => {
-      try {
-        trace('boot-effect-entered')
-        trace('frame-hydration-useeffect-entered')
-        frameHydrationStageRef.current = 'hydration-effect-entered'
-        trace('hydration-effect-entered')
-        console.info('[FRAME] hydration effect entered')
-        setAuthHydrated(false)
-        setFramesHydrated(false)
-        setShowSplash(!disableLaunchSplash)
-        setBooting(!disableLaunchSplash)
-        setBootTimeoutHit(false)
-        setShouldRenderApp(false)
+      setBooting(false)
+      setShowSplash(false)
+      setShouldRenderApp(false)
 
-        const bootTimeout = window.setTimeout(() => {
-          if (cancelled || bootDone) return
-          setBootTimeoutHit(true)
-          setFrameQueryFailed(true)
-          setAuthHydrated(true)
-          setFramesHydrated(true)
-          setShowSplash(false)
-          setBooting(false)
-          console.error('[FRAME] emergency-timeout', {
-            lastResolvedStage: lastResolvedStageRef.current,
-            activePromiseStage: activePromiseStageRef.current,
-            retryActive: retryActiveRef.current,
-            serverFallbackActive: serverFallbackActiveRef.current,
-          })
-          setBootDebug((prev) => ({
-            ...prev,
-            bootTimeoutMs,
-            bootTimeoutAt: new Date().toISOString(),
-            bootTimeoutReason: 'startup-timeout',
-            frameHydrationStage: frameHydrationStageRef.current,
-            lastResolvedStage: lastResolvedStageRef.current,
-            activePromiseStage: activePromiseStageRef.current,
-            retryActive: retryActiveRef.current,
-            serverFallbackActive: serverFallbackActiveRef.current,
-          }))
-          trace('timeout-fired')
-        }, bootTimeoutMs)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData.session
 
-        try {
-          trace('session-check-start')
-          const { data: sessionData } = await supabase.auth.getSession()
-        const session = sessionData.session
-        const sessionExpiresAt = session?.expires_at
-          ? new Date(session.expires_at * 1000).toISOString()
-          : null
-        const supabaseHost = (() => {
-          try {
-            return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname
-          } catch {
-            return null
-          }
-        })()
-        const migrationRan = runAppStorageMigrationIfNeeded()
-        setBootDebug((prev) => ({
-          ...prev,
-          authSessionExists: Boolean(session),
-          authUserExists: Boolean(session?.user),
-          userEmail: session?.user?.email ?? null,
-          sessionExpiresAt,
-          supabaseProjectHostname: supabaseHost,
-          storageMigrationRan: Boolean(migrationRan),
-        }))
-        void logPwaRuntimeDiagnostics()
-
-        void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
-        logSessionRepair('boot-session-check', { hasSession: Boolean(session) })
-        console.info(session ? '[BOOT] session found' : '[BOOT] no session found')
-        trace(session ? 'session-found' : 'session-missing')
-
-        if (!session) {
-          frameHydrationStageRef.current = 'skipped-reason-no-session'
-          trace('hydration-skipped-reason-no-session', { frameHydrationStage: 'skipped-reason-no-session' })
-          console.info('[FRAME] skipped: no session')
-          setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'missing-auth-session' }))
-          setAuthHydrated(true)
-          setFramesHydrated(true)
-          resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
-          setBooting(false)
-          setShowSplash(false)
-          setShouldRenderApp(false)
-          router.replace('/login')
-          return
-        }
-
-        setAuthHydrated(true)
-        trace('authHydrated=true')
-        frameHydrationStageRef.current = 'hydration-start'
-        trace('hydration-start', { frameHydrationStage: 'hydration-start' })
-        console.info('[FRAME] hydration-start')
-        console.info('[BOOT] user loaded')
-        setShouldRenderApp(true)
-
-        const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-          if (!nextSession) {
-            resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
-            setShouldRenderApp(false)
-            setShowSplash(false)
-            setBooting(false)
-            router.replace('/login')
-          }
-        })
-        unsub = data.subscription
-
-        const frameQueryMeta = { table: 'device_members', filters: [`user_id=eq.${session.user.id}`], select: 'device_id, role' }
-        const tokenBeforeRefresh = session?.access_token ?? null
-        const refreshResult = await supabase.auth.refreshSession()
-        const refreshedSession = refreshResult.data.session
-        const refreshSuccess = Boolean(refreshedSession?.access_token)
-        const tokenAfterRefresh = refreshedSession?.access_token ?? null
-        setBootDebug((prev) => ({
-          ...prev,
-          tokenRefreshAttempted: true,
-          tokenRefreshSuccess: refreshSuccess,
-          tokenRefreshError: refreshResult.error?.message ?? null,
-          sessionExpiresAtAfterRefresh: refreshedSession?.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : null,
-          deviceMembersFetchUsesRefreshedToken: Boolean(tokenAfterRefresh && tokenAfterRefresh !== tokenBeforeRefresh) || refreshSuccess,
-        }))
-        console.info('[BOOT] frame query used', frameQueryMeta)
-        setBootDebug((prev) => ({ ...prev, frameQueryTable: frameQueryMeta.table, frameQueryFilters: frameQueryMeta.filters, frameQuerySelect: frameQueryMeta.select }))
-
-        const hydrationStartAt = Date.now()
-        const markStage = (stage: string, extras?: Record<string, unknown>) => {
-          frameHydrationStageRef.current = stage
-          trace(stage, { frameHydrationStage: stage, ...(extras ?? {}) })
-        }
-        markStage('client-query-start')
-        trace('client-query-start')
-        activePromiseStageRef.current = 'client-query-start'
-        console.info('[FRAME] client-query-start')
-        const clientStart = Date.now()
-        const { data: members, error } = await loadDeviceMembersWithRetry(session.user.id)
-        const clientDuration = Date.now() - clientStart
-        if (error) {
-          console.info('[FRAME] client-query-error duration', { durationMs: clientDuration, error: error.message })
-        } else {
-          console.info('[FRAME] client-query-success duration', { durationMs: clientDuration })
-        }
-        const clientResolvedStage = error ? 'client-query-error' : 'client-query-success'
-        if (error) trace('client-query-error')
-        lastResolvedStageRef.current = clientResolvedStage
-        activePromiseStageRef.current = null
-        markStage(clientResolvedStage, {
-          clientQueryDurationMs: clientDuration,
-          lastResolvedStage: clientResolvedStage,
-        })
-
-        let memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-        let frameSource: 'client' | 'server-fallback' = 'client'
-
-        setBootDebug((prev) => ({
-          ...prev,
-          serverFallbackAttempted: false,
-          serverFallbackSkippedReason: error ? null : 'client-query-succeeded',
-        }))
-
-        if (error) {
-          const fallbackStart = Date.now()
-          try {
-            console.info('[FRAME] server-fallback-start')
-            trace('server-fallback-start')
-            serverFallbackActiveRef.current = true
-            activePromiseStageRef.current = 'server-fallback-start'
-            markStage('server-fallback-start')
-            const fallbackResponse = await loadFramesFromServerFallback()
-            const fallbackDuration = Date.now() - fallbackStart
-            console.info('[FRAME] server-fallback-response', { durationMs: fallbackDuration, status: fallbackResponse.status })
-            markStage('server-fallback-response', {
-              serverFallbackDurationMs: fallbackDuration,
-              serverFallbackStatus: fallbackResponse.status,
-            })
-            console.info('[FRAME] server-fallback-success duration', { durationMs: fallbackDuration })
-            memberRows = fallbackResponse.frames
-            frameSource = 'server-fallback'
-            lastResolvedStageRef.current = 'server-fallback-success'
-            activePromiseStageRef.current = null
-            setBootDebug((prev) => ({
-              ...prev,
-              frameQueryStatus: 'ok',
-              frameQueryErrorMessage: error.message,
-              frameQueryFallbackUsed: true,
-              frameQueryFallbackCount: memberRows.length,
-              serverFallbackAttempted: true,
-              serverFallbackSkippedReason: null,
-              serverFallbackDurationMs: fallbackDuration,
-              serverFallbackStatus: fallbackResponse.status,
-              serverFallbackBody: fallbackResponse.body,
-              serverFallbackFrameCount: memberRows.length,
-              serverFallbackError: null,
-              lastResolvedStage: 'server-fallback-success',
-            }))
-            markStage('server-fallback-success')
-            logSessionRepair('members-loaded', { source: frameSource, deviceCount: memberRows.length, initialClientError: error.message })
-          } catch (fallbackError) {
-            const fallbackDuration = Date.now() - fallbackStart
-            const fallbackErrorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-            console.info('[FRAME] server-fallback-error duration', { durationMs: fallbackDuration, error: fallbackErrorMessage })
-            setFrameQueryFailed(true)
-            lastResolvedStageRef.current = 'server-fallback-error'
-            activePromiseStageRef.current = null
-            setBootDebug((prev) => ({
-              ...prev,
-              frameQueryStatus: 'error',
-              frameQueryErrorMessage: error.message,
-              frameQueryFallbackUsed: true,
-              frameQueryFallbackError: fallbackErrorMessage,
-              serverFallbackAttempted: true,
-              serverFallbackSkippedReason: null,
-              serverFallbackDurationMs: fallbackDuration,
-              serverFallbackStatus: null,
-              serverFallbackBody: null,
-              serverFallbackFrameCount: 0,
-              serverFallbackError: fallbackErrorMessage,
-              lastResolvedStage: 'server-fallback-error',
-            }))
-            markStage('server-fallback-error')
-            logSessionRepair('members-load-failed', {
-              error: error.message,
-              source: 'client+server-fallback',
-              fallbackError: fallbackErrorMessage,
-            })
-            console.info('[BOOT] frame list load failed', {
-              error: error.message,
-              fallbackError: fallbackErrorMessage,
-              source: 'client+server-fallback',
-            })
-            setFramesHydrated(true)
-            setBooting(false)
-            trace('hydration-skipped-server-fallback-error')
-            return
-          } finally {
-            serverFallbackActiveRef.current = false
-          }
-        }
-
-        setFrameQueryFailed(false)
-        if (memberRows.length > 0) {
-          setBootTimeoutHit(false)
-        }
-        setBootDebug((prev) => ({
-          ...prev,
-          frameQueryStatus: 'ok',
-          serverFrameCount: memberRows.length,
-          rawFrames: memberRows,
-          ...(memberRows.length > 0
-            ? {
-                redirectTarget: null,
-                redirectReason: null,
-                addFrameTriggerSource: 'none',
-                bootTimeoutReason: prev.bootTimeoutReason === 'startup-timeout' ? 'recovered-after-hydration' : prev.bootTimeoutReason,
-              }
-            : {}),
-        }))
-        console.info('[FRAME] finalized', { durationMs: Date.now() - hydrationStartAt, source: frameSource })
-        lastResolvedStageRef.current = 'finalized'
-        trace('finalized')
-        markStage('finalized', { lastResolvedStage: 'finalized' })
-        console.info('[BOOT] frame list loaded', { count: memberRows.length })
-        console.info('[BOOT] server frame count', { count: memberRows.length })
-        if (frameSource === 'client') {
-          logSessionRepair('members-loaded', { source: 'client', deviceCount: memberRows.length })
-        }
-        const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-        const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-        const list: MemberRow[] = memberRows.map((m) => ({
-          device_id: m.device_id,
-          role: m.role,
-          current_version: statusMap.get(m.device_id)?.current_version ?? null,
-          battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-          battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-          is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-          is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-        }))
-        setFrames(list)
-
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
-        setBootDebug((prev) => ({ ...prev, activeDeviceIdBeforeValidation: saved }))
-        logSessionRepair('active-device-resolution', {
-          source: 'db-with-optional-local-fallback',
-          hasCachedActiveDeviceId: Boolean(saved),
-        })
-        const savedExists = saved && list.some((x) => x.device_id === saved)
-        if (saved && !savedExists) {
-          console.info('[STORAGE] stale selected frame ignored', { cachedDeviceId: saved })
-        }
-        if (list.length > 0 && autoOpenedSettingsForPairingRef.current) {
-          console.info('[STORAGE] onboarding flag ignored because server frames exist', { frameCount: list.length })
-        }
-        const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
-        setBootDebug((prev) => ({ ...prev, activeDeviceIdAfterValidation: selected, addFrameTriggerSource: list.length === 0 ? 'server-data' : (saved && !savedExists ? 'persisted-state-invalid' : 'none') }))
-
-        setActiveDeviceId(selected)
-        console.info('[BOOT] selected frame loaded', { hasSelectedFrame: Boolean(selected) })
-        setPhysicalFrameSnapshot(null)
-        physicalFrameSnapshotRef.current = null
-        physicalFrameRenderAtRef.current = null
-
-        if (selected) {
-          await loadDeviceSettings(selected)
-        }
-
-        setFramesHydrated(true)
-
-        if (disableLaunchSplash) {
-          setBooting(false)
-        } else {
-          await finishBoot()
-        }
-        } finally {
-          window.clearTimeout(bootTimeout)
-        }
-      } catch (error) {
-        trace('hydration-skipped-boot-exception', { bootException: error instanceof Error ? error.message : String(error) })
-        setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'boot-exception', bootException: error instanceof Error ? error.message : String(error) }))
-        console.error('[BOOT] startup failed', error)
-        setAuthHydrated(true)
-        setFramesHydrated(true)
-        setShouldRenderApp(false)
-        setFrameQueryFailed(true)
-        setShowSplash(false)
+      if (!session) {
+        setFrames([])
+        setActiveDeviceId(null)
         setBooting(false)
+        setShowSplash(false)
+        setShouldRenderApp(false)
         router.replace('/login')
-      } finally {
-        bootDone = true
-        if (!cancelled) {
-          trace('finalized', { frameHydrationStage: 'finalized' })
-          setAuthHydrated(true)
-          setFramesHydrated(true)
+        return
+      }
+
+      setShouldRenderApp(true)
+      setShowSplash(!disableLaunchSplash)
+      setBooting(!disableLaunchSplash)
+
+      const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        if (!nextSession) {
+          setShouldRenderApp(false)
+          setShowSplash(false)
           setBooting(false)
+          router.replace('/login')
         }
+      })
+      unsub = data.subscription
+
+      const { data: members, error } = await supabase
+        .from('device_members')
+        .select('device_id, role')
+        .eq('user_id', session.user.id)
+        .order('device_id', { ascending: true })
+
+      if (error) {
+        setFrames([])
+        setActiveDeviceId(null)
+        setBooting(false)
+        return
+      }
+
+      const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+      const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+      const statusMap = await fetchDeviceStatusMap(deviceIds)
+
+      const list: MemberRow[] = memberRows.map((m) => ({
+        device_id: m.device_id,
+        role: m.role,
+        current_version: statusMap.get(m.device_id)?.current_version ?? null,
+        battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+        battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+        is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+        is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
+      }))
+      setFrames(list)
+
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
+      const savedExists = saved && list.some((x) => x.device_id === saved)
+      const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
+
+      setActiveDeviceId(selected)
+      setPhysicalFrameSnapshot(null)
+      physicalFrameSnapshotRef.current = null
+      physicalFrameRenderAtRef.current = null
+
+      if (selected) {
+        await loadDeviceSettings(selected)
+      }
+
+      if (disableLaunchSplash) {
+        setBooting(false)
+      } else {
+        await finishBoot()
       }
     })()
 
@@ -2509,14 +1717,12 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function persistSettings() {
+  async function persistSettings(showToast = true) {
     if (!activeDeviceId) return
     if (persisting) return
 
     try {
       setPersisting(true)
-      setSaveState('saving')
-      setSaveErrorMessage(null)
 
       const modulesForSave = normalizeModulesForSave(modulesJson)
 
@@ -2530,36 +1736,13 @@ export default function HomePage() {
         pinned_tabs: pinnedModuleTabs,
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const accessToken = session?.access_token
-      if (!accessToken) throw new Error(language === 'no' ? 'Mangler innloggingstoken.' : 'Missing auth token.')
-      console.info('[SURF][FUEL_PENALTY] before-save-autosave', {
-          activeDeviceId,
-          fuelPenaltyTrace: summarizeSurfFuelPenalty(modulesForSave),
-        })
-        const saveResp = await fetch('/api/device/save-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ device_id: activeDeviceId, settings_json: settingsJson }),
+      const { data, error } = await supabase.rpc('upsert_device_settings', {
+        p_device_id: activeDeviceId,
+        p_settings: settingsJson,
       })
-      const saveBody = await saveResp.json().catch(() => ({}))
-      if (!saveResp.ok || !saveBody?.ok) throw new Error(saveBody?.error || `save_failed_${saveResp.status}`)
 
-      const saveSurfList: SurfCfg[] = Array.isArray(modulesForSave.surf) ? (modulesForSave.surf as SurfCfg[]) : []
-      const saveBest = saveSurfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
-      const saveFp = saveBest ? sanitizeFuelPenalty((saveBest as any).fuelPenalty) : undefined
-      logSurfFuelPenaltyDiagnostic('address-save-result', {
-        activeDeviceId,
-        moduleInstanceId: saveBest?.id ?? null,
-        saveSuccess: true,
-        saveError: null,
-        storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
-        storageTable: saveBody?.storage?.table ?? 'device_settings',
-        storageKey: saveBody?.storage?.key ?? `device_id=${activeDeviceId}`,
-        addressPresent: Boolean(String(saveFp?.formatted || saveFp?.homeAddress || '').trim()),
-      })
+      if (error) throw error
+      if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
 
       const savedCellsForLayout = { ...cellsByLayout[layoutKey] }
 
@@ -2569,7 +1752,6 @@ export default function HomePage() {
       }
 
       layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(savedCellsForLayout)
-      recentModulesRef.current = layoutModuleMemoryRef.current.filter((m): m is ModuleKey => Boolean(m)).slice(0, 4)
 
       setCellsByLayout(nextCellsByLayout)
       setModulesJson(modulesForSave)
@@ -2592,22 +1774,9 @@ export default function HomePage() {
       }
 
       setDirty(false)
-      setSaveState('saved')
-      await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
+      if (showToast) showSavedToast(tx(language).saved)
     } catch (e: any) {
-      console.error('[settings-save] persist failed', {
-        activeDeviceId,
-        error: String(e?.message || e),
-      })
-      logSurfFuelPenaltyDiagnostic('address-save-result', {
-        activeDeviceId,
-        moduleInstanceId: null,
-        saveSuccess: false,
-        saveError: String(e?.message || e),
-        storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
-      })
-      setSaveState('error')
-      setSaveErrorMessage(String(e?.message || e))
+      alert(String(e?.message || e))
     } finally {
       setPersisting(false)
     }
@@ -2616,10 +1785,7 @@ export default function HomePage() {
 
 
   async function logout() {
-    resetAppStateAfterSignOut({ clearSupabaseAuthStorage: false })
-
     await supabase.auth.signOut()
-    resetAppStateAfterSignOut({ clearSupabaseAuthStorage: true })
     router.replace('/login')
   }
 
@@ -2627,50 +1793,32 @@ export default function HomePage() {
   const appText = 'text-[color:var(--fg)]'
 
   useEffect(() => {
-    if (
-      !activeDeviceId ||
-      !authHydrated ||
-      !framesHydrated ||
-      !isLoadedRef.current ||
-      persisting ||
-      autoPersistingRef.current ||
-      !dirty
-    ) {
-      return
-    }
+    if (!activeDeviceId || activeTab === 'frame' || !isLoadedRef.current || persisting || autoPersistingRef.current) return
+    if (activeTab === 'settings') return
 
     const timer = window.setTimeout(async () => {
+      const baseline = savedFrameStateRef.current
+      if (!baseline) return
+
       const modulesForSave = normalizeModulesForSave(modulesJson)
       const settingsJson: SettingsJson = {
-        theme,
-        language,
-        fontSize,
-        layout: layoutKey,
-        cells: cellsMapToArray(cellsByLayout[layoutKey]),
+        theme: baseline.theme,
+        language: baseline.language,
+        fontSize: baseline.fontSize,
+        layout: baseline.layoutKey,
+        cells: cellsMapToArray(baseline.cellsByLayout[baseline.layoutKey]),
         modules: modulesForSave,
         pinned_tabs: pinnedModuleTabs,
       }
 
       try {
         autoPersistingRef.current = true
-        setSaveState('saving')
-        setSaveErrorMessage(null)
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const accessToken = session?.access_token
-        if (!accessToken) throw new Error('Missing auth token')
-        console.info('[SURF][FUEL_PENALTY] before-save-autosave', {
-          activeDeviceId,
-          fuelPenaltyTrace: summarizeSurfFuelPenalty(modulesForSave),
+        const { data, error } = await supabase.rpc('upsert_device_settings', {
+          p_device_id: activeDeviceId,
+          p_settings: settingsJson,
         })
-        const saveResp = await fetch('/api/device/save-settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ device_id: activeDeviceId, settings_json: settingsJson }),
-        })
-        const saveBody = await saveResp.json().catch(() => ({}))
-        if (!saveResp.ok || !saveBody?.ok) throw new Error(saveBody?.error || 'Failed to auto-save frame settings')
+        if (error) throw error
+        if (data !== true) throw new Error('Failed to auto-save module settings')
 
         savedStateRef.current = serializeComparableState({
           theme,
@@ -2682,36 +1830,15 @@ export default function HomePage() {
           pinnedModuleTabs,
         })
         refreshDirtyState()
-        setSaveState('saved')
-        await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
-      } catch (error) {
-        console.error('[settings-save] autosave failed', {
-          activeDeviceId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        setSaveState('error')
-        setSaveErrorMessage(error instanceof Error ? error.message : String(error))
-        // keep unsaved state and retry on next change
+      } catch {
+        // keep unsaved state; user can still tap UPDATE manually
       } finally {
         autoPersistingRef.current = false
       }
-    }, 250)
+    }, 550)
 
     return () => window.clearTimeout(timer)
-  }, [
-    activeDeviceId,
-    authHydrated,
-    cellsByLayout,
-    dirty,
-    fontSize,
-    framesHydrated,
-    language,
-    layoutKey,
-    modulesJson,
-    persisting,
-    pinnedModuleTabs,
-    theme,
-  ])
+  }, [activeDeviceId, activeTab, modulesJson, pinnedModuleTabs])
 
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
@@ -2740,24 +1867,6 @@ async function handleSelectTab(k: TabKey) {
           aria-hidden={!shouldRenderApp || booting}
         >
           <>
-            {frameQueryFailed && (
-              <div className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-100">
-                <div className="font-semibold">Couldn&apos;t load your frames</div>
-                <div className="mt-1 text-red-100/85">
-                  {frameQueryRetrying
-                    ? 'Retrying frame lookup…'
-                    : bootTimeoutHit
-                      ? 'Boot timed out before frame hydration completed. Check debug details and retry.'
-                      : 'This is a network/query error, not an empty account. Please retry.'}
-                </div>
-                <button
-                  className="mt-3 inline-flex rounded-md bg-red-500/30 px-3 py-1.5 font-medium"
-                  onClick={() => window.location.reload()}
-                >
-                  Retry loading
-                </button>
-              </div>
-            )}
             <TabBar
               tabs={tabs}
               activeTab={activeTab}
@@ -2768,36 +1877,19 @@ async function handleSelectTab(k: TabKey) {
                 return instant ? 'auto' : 'smooth'
               }}
             />
-            <div className="mt-2 h-4 text-[11px] tracking-wide text-[color:var(--fg-60)]" aria-live="polite">
-              {saveState === 'saving'
-                ? 'Saving…'
-                : saveState === 'saved'
-                  ? tx(language).savedWord
-                  : saveState === 'error'
-                    ? `Couldn’t save, retry${saveErrorMessage ? ` (${saveErrorMessage})` : ''}`
-                    : ''}
-            </div>
 
             <div className="mt-6 flex-1 min-h-0">
               {activeTab === 'frame' && (
-                <>
-                  {frameHydrationError && (
-                    <div className="mb-3 rounded-xl border border-amber-300/40 bg-amber-500/10 p-3 text-sm text-amber-100">
-                      <div className="font-semibold">Frame content unavailable</div>
-                      <div className="mt-1 text-amber-100/90">{frameHydrationError}</div>
-                    </div>
-                  )}
-                  <FrameTab
-                    title={layoutMeta.title}
-                    subtitle={layoutMeta.subtitle}
-                    layoutKey={layoutKey}
-                    cells={cellsByLayout[layoutKey]}
-                    onPrev={prevLayout}
-                    onNext={nextLayout}
-                    onCellTap={openPicker}
-                    language={language}
-                  />
-                </>
+                <FrameTab
+                  title={layoutMeta.title}
+                  subtitle={layoutMeta.subtitle}
+                  layoutKey={layoutKey}
+                  cells={cellsByLayout[layoutKey]}
+                  onPrev={prevLayout}
+                  onNext={nextLayout}
+                  onCellTap={openPicker}
+                  language={language}
+                />
               )}
 
               {activeTab === 'settings' && (
@@ -2863,6 +1955,19 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
   <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
+    <button
+      onClick={() => persistSettings(true)}
+      className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+        dirty
+          ? 'border-[#2aa3ff] text-[#2aa3ff]'
+          : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
+      }`}
+      style={{ backgroundColor: 'var(--app-bg)' }}
+      disabled={!dirty || persisting}
+    >
+      {persisting ? tx(language).saving : tx(language).update}
+    </button>
+
     <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
       {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
     </div>
@@ -2919,6 +2024,7 @@ async function handleSelectTab(k: TabKey) {
               />
             )}
 
+            <SaveToast visible={saveToast.visible} text={saveToast.text} />
           </>
         </div>
 
@@ -2930,25 +2036,22 @@ async function handleSelectTab(k: TabKey) {
             <ReMindSplash language={language} />
           </div>
         )}
-
-
-        {debugBootParamEnabled && (
-          <div className="absolute z-[120] left-2 right-2 bottom-2 rounded-md border border-[#2aa3ff] bg-black/85 text-white text-[11px] p-2 font-mono max-h-[38vh] overflow-auto">
-            <div className="font-semibold mb-1">Boot Debug Panel</div>
-            <button
-              type="button"
-              className="mb-2 rounded border border-[#2aa3ff] px-2 py-1 text-[11px] hover:bg-[#2aa3ff]/20"
-              onClick={() => {
-                void clearSupabaseAuthStorageAndReload()
-              }}
-            >
-              Clear Supabase auth storage and reload
-            </button>
-            <pre className="whitespace-pre-wrap break-words">{JSON.stringify(bootDebug, null, 2)}</pre>
-          </div>
-        )}
       </div>
     </main>
+  )
+}
+
+function SaveToast({ visible, text }: { visible: boolean; text: string }) {
+  return (
+    <div
+      className={`pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-[28px] z-[80] transition-all duration-200 ${
+        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+      }`}
+    >
+      <div className="px-4 py-2 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--toast-bg)] backdrop-blur text-[color:var(--fg-80)] tracking-widest text-xs">
+        {text}
+      </div>
+    </div>
   )
 }
 
@@ -6042,7 +5145,7 @@ function buildSmoothedMirrorStockChartPath(points: Array<{ x: number; y: number 
   return commands.join(' ')
 }
 
-function buildMirrorStockChartGeometry(values: number[], baselinePrice?: number | null): MirrorStockChartGeometry {
+function buildMirrorStockChartGeometry(values: number[], previousClose?: number | null, purchasePrice?: number | null): MirrorStockChartGeometry {
   const width = MIRROR_STOCK_CHART_WIDTH
   const height = MIRROR_STOCK_CHART_HEIGHT
 
@@ -6057,12 +5160,12 @@ function buildMirrorStockChartGeometry(values: number[], baselinePrice?: number 
 
   const seriesMin = min
   const seriesMax = max
-  const hasBaselinePrice = typeof baselinePrice === 'number' && Number.isFinite(baselinePrice) && baselinePrice > 0
-  const referenceValue = hasBaselinePrice ? baselinePrice : null
+  const hasPurchasePrice = typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0
+  const referenceValue = hasPurchasePrice ? purchasePrice : previousClose
 
-  if (hasBaselinePrice) {
-    min = Math.min(min, baselinePrice)
-    max = Math.max(max, baselinePrice)
+  if (hasPurchasePrice) {
+    min = Math.min(min, purchasePrice)
+    max = Math.max(max, purchasePrice)
   }
 
   let span = max - min
@@ -6088,7 +5191,7 @@ function buildMirrorStockChartGeometry(values: number[], baselinePrice?: number 
 
   let referenceY: number | null = null
   const hasReferenceValue = typeof referenceValue === 'number' && Number.isFinite(referenceValue) && referenceValue > 0
-  const shouldShowReference = hasReferenceValue && (referenceValue >= seriesMin && referenceValue <= seriesMax)
+  const shouldShowReference = hasReferenceValue && (hasPurchasePrice || (referenceValue >= seriesMin && referenceValue <= seriesMax))
   if (shouldShowReference && max - min >= 0.0001) {
     const y = yForReferenceValue(referenceValue)
     if (y >= 0 && y <= height - 1) referenceY = y
@@ -6115,13 +5218,15 @@ function buildMirrorStockChartGeometry(values: number[], baselinePrice?: number 
 
 function MirrorStockChart({
   series,
-  baselinePrice,
+  previousClose,
+  purchasePrice,
   textColor,
   moduleId,
   chartRange,
 }: {
   series?: number[]
-  baselinePrice?: number | null
+  previousClose?: number | null
+  purchasePrice?: number | null
   textColor: string
   moduleId?: number
   chartRange?: StockChartRange
@@ -6130,8 +5235,8 @@ function MirrorStockChart({
 
   const geometry = useMemo(() => {
     if (values.length < 2) return null
-    return buildMirrorStockChartGeometry(values, baselinePrice)
-  }, [values, baselinePrice])
+    return buildMirrorStockChartGeometry(values, previousClose, purchasePrice)
+  }, [values, previousClose, purchasePrice])
 
   if (!geometry) {
     return (
@@ -6257,7 +5362,8 @@ function MirrorLargeStocksCard({
         <div className="min-h-0 flex-1 px-[clamp(0.28rem,0.85vw,0.65rem)] pt-[clamp(0.75rem,1.55vw,1.15rem)] pb-[clamp(0.75rem,1.85vw,1.35rem)]">
           <MirrorStockChart
             series={detail.stockSeries}
-            baselinePrice={detail.stockBaselinePrice ?? detail.stockPreviousClose}
+            previousClose={detail.stockPreviousClose}
+            purchasePrice={detail.stockPurchasePrice}
             textColor={textColor}
             moduleId={detail.stockModuleId}
             chartRange={detail.stockChartRange}
@@ -6342,7 +5448,8 @@ function MirrorXLStocksCard({
         <div className="min-h-0 flex-1 px-[clamp(0.25rem,0.75vw,0.5rem)] pt-[clamp(0.55rem,1.25vw,0.9rem)] pb-[clamp(0.2rem,0.65vw,0.45rem)]">
           <MirrorStockChart
             series={detail.stockSeries}
-            baselinePrice={detail.stockBaselinePrice ?? detail.stockPreviousClose}
+            previousClose={detail.stockPreviousClose}
+            purchasePrice={detail.stockPurchasePrice}
             textColor={textColor}
             moduleId={detail.stockModuleId}
             chartRange={detail.stockChartRange}
@@ -6389,7 +5496,8 @@ function MirrorMediumStocksCard({
       <div className="min-h-0 flex-1 px-[clamp(0.45rem,1.15vw,0.85rem)] pt-[clamp(0.45rem,1vw,0.8rem)] pb-[clamp(0.55rem,1.35vw,1rem)]">
         <MirrorStockChart
           series={detail.stockSeries}
-          baselinePrice={detail.stockBaselinePrice ?? detail.stockPreviousClose}
+          previousClose={detail.stockPreviousClose}
+          purchasePrice={detail.stockPurchasePrice}
           textColor={textColor}
           moduleId={detail.stockModuleId}
           chartRange={detail.stockChartRange}
@@ -6719,6 +5827,11 @@ function LandscapeFrameMirror({
     '--mirror-bg-inverse': textColor,
     '--mirror-fg-inverse': inverseColor,
   }
+
+  const loadingTextForModule = (module: ModuleKey) => {
+    if (language === 'no') return `Laster ${module}...`
+    return `Loading ${module}...`
+  }
   const displayCells = snapshot
     ? Object.keys(snapshot.cells).reduce<Record<number, ModuleKey | null>>((acc, key) => {
       const slot = Number(key)
@@ -6732,18 +5845,18 @@ function LandscapeFrameMirror({
       return <div className="text-sm tracking-widest opacity-35">—</div>
     }
 
-    const isPending = pendingSlotsByModule.get(slot) === module
-    if (isPending) {
-      return <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, module)}</div>
-    }
-
-    const liveDetail = snapshot.detailsBySlot[String(slot)]
-    if (!liveDetail && module !== 'date') {
-      return <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, module)}</div>
-    }
-
-    const detail = liveDetail ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+    const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
+
+    if (pendingSlotsByModule.get(slot) === module) {
+      return (
+        <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
+          <div className="max-w-full text-[clamp(0.66rem,1.8vw,1.02rem)] font-semibold tracking-[0.08em]">
+            {loadingTextForModule(module)}
+          </div>
+        </div>
+      )
+    }
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
       const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
@@ -7515,7 +6628,6 @@ function MyFramesSection({
   const [shareCode, setShareCode] = useState('')
   const [shareError, setShareError] = useState<string | null>(null)
   const [copyDone, setCopyDone] = useState(false)
-  const autoPairPromptedRef = useRef(false)
 
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
@@ -7563,100 +6675,61 @@ function MyFramesSection({
     }
   }
 
-  const [addFrameOpen, setAddFrameOpen] = useState(false)
-  const [addFrameCode, setAddFrameCode] = useState('')
-  const [addFrameError, setAddFrameError] = useState<string | null>(null)
-  const [addFrameLoading, setAddFrameLoading] = useState(false)
+async function addFrame() {
+  const existingDeviceIds = new Set(frames.map((f) => f.device_id))
 
-  async function submitAddFrame() {
-    const existingDeviceIds = new Set(frames.map((f) => f.device_id))
-    const cleaned = addFrameCode.trim().toUpperCase()
-    if (!cleaned) return
+  const code = prompt(t.addFramePrompt)
+  if (!code) return
+  const cleaned = code.trim().toUpperCase()
 
-    setAddFrameLoading(true)
-    setAddFrameError(null)
-    try {
-      console.info('[add-frame] submit', { pairCodeLength: cleaned.length })
+  const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
+  if (error) return alert(error.message)
+  if (data !== true) return alert(t.invalidPairCode)
 
-      const response = await fetch('/api/frame/claim-pair-code', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ pairCode: cleaned }),
-      })
+  const { data: sessionData } = await supabase.auth.getSession()
+  const session = sessionData.session
 
-      const payload = await response.json().catch(() => null)
-
-      console.info('[add-frame] result', {
-        status: response.status,
-        ok: response.ok,
-        hasPayload: Boolean(payload),
-      })
-
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error || (cleaned.length === 4 ? t.invalidPairCode : 'Unable to add frame right now.'))
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession()
-      const session = sessionData.session
-
-      if (!session) {
-        await reload()
-        setAddFrameOpen(false)
-        setAddFrameCode('')
-        return
-      }
-
-      const { data: members, error: membersError } = await supabase
-        .from('device_members')
-        .select('device_id, role')
-        .eq('user_id', session.user.id)
-        .order('device_id', { ascending: true })
-
-      if (membersError) {
-        await reload()
-      } else {
-        const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-        const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-        const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-        const merged: MemberRow[] = memberRows.map((m) => ({
-          device_id: m.device_id,
-          role: m.role,
-          current_version: statusMap.get(m.device_id)?.current_version ?? null,
-          battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-          battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-          is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-          is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-        }))
-
-        onFramesChanged(merged)
-
-        const newlyAddedFrame = merged.find((f) => !existingDeviceIds.has(f.device_id))
-        if (newlyAddedFrame) onSelectDevice(newlyAddedFrame.device_id)
-      }
-
-      setAddFrameOpen(false)
-      setAddFrameCode('')
-      alert(t.frameAdded)
-    } catch (e: any) {
-      setAddFrameError(String(e?.message || 'Unable to add frame right now. Please try again.'))
-    } finally {
-      setAddFrameLoading(false)
-    }
+  if (!session) {
+    await reload()
+    return
   }
 
-  function openAddFrame() {
-    setAddFrameError(null)
-    setAddFrameCode('')
-    setAddFrameOpen(true)
+  const { data: members, error: membersError } = await supabase
+    .from('device_members')
+    .select('device_id, role')
+    .eq('user_id', session.user.id)
+    .order('device_id', { ascending: true })
+
+  if (membersError) {
+    await reload()
+    alert(t.frameAdded)
+    return
   }
 
-  useEffect(() => {
-    if (loading || frames.length > 0 || autoPairPromptedRef.current) return
-    autoPairPromptedRef.current = true
-    openAddFrame()
-  }, [frames.length, loading])
+  const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+  const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+
+  const statusMap = await fetchDeviceStatusMap(deviceIds)
+
+  const merged: MemberRow[] = memberRows.map((m) => ({
+    device_id: m.device_id,
+    role: m.role,
+    current_version: statusMap.get(m.device_id)?.current_version ?? null,
+    battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+    battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+    is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+    is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
+  }))
+
+  onFramesChanged(merged)
+
+  const newlyAddedFrame = merged.find((f) => !existingDeviceIds.has(f.device_id))
+  if (newlyAddedFrame) {
+    onSelectDevice(newlyAddedFrame.device_id)
+  }
+
+  alert(t.frameAdded)
+}
 
   async function openShare() {
     if (!activeDeviceId) return
@@ -7743,7 +6816,7 @@ function MyFramesSection({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={openAddFrame}
+              onClick={addFrame}
               className="px-3 py-1 border border-[color:var(--bd-20)] rounded-lg text-xs tracking-widest text-[color:var(--fg-70)]"
             >
               {t.addFrame}
@@ -7805,19 +6878,6 @@ function MyFramesSection({
         </div>
       </div>
 
-
-      {addFrameOpen && (
-        <PairCodeSheet
-          language={language}
-          code={addFrameCode}
-          loading={addFrameLoading}
-          error={addFrameError}
-          onCodeChange={setAddFrameCode}
-          onClose={() => setAddFrameOpen(false)}
-          onSubmit={submitAddFrame}
-        />
-      )}
-
       {shareOpen && (
         <ShareFrameCodeSheet
           language={language}
@@ -7835,48 +6895,6 @@ function MyFramesSection({
         />
       )}
     </>
-  )
-}
-
-function PairCodeSheet({
-  language,
-  code,
-  loading,
-  error,
-  onCodeChange,
-  onClose,
-  onSubmit,
-}: {
-  language: 'en' | 'no'
-  code: string
-  loading: boolean
-  error: string | null
-  onCodeChange: (value: string) => void
-  onClose: () => void
-  onSubmit: () => void
-}) {
-  const isNo = language === 'no'
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
-      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
-        <div className="flex items-center justify-between">
-          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{isNo ? 'LEGG TIL FRAME' : 'ADD FRAME'}</div>
-          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button>
-        </div>
-        <p className="mt-4 text-[color:var(--fg-80)] text-sm">{isNo ? 'Skriv inn 4-tegns parkode.' : 'Enter the 4-character pair code.'}</p>
-        <input
-          value={code}
-          onChange={(e) => onCodeChange(e.target.value.toUpperCase())}
-          placeholder={isNo ? 'Eksempel: K7D4' : 'Example: K7D4'}
-          maxLength={8}
-          className="mt-4 w-full h-12 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 tracking-[0.25em] uppercase text-center text-[color:var(--fg-95)]"
-        />
-        <div className="mt-2 min-h-[20px] text-xs text-[color:var(--danger)]">{error || ''}</div>
-        <button onClick={onSubmit} disabled={loading || !code.trim()} className="mt-3 w-full h-12 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] tracking-widest text-sm disabled:opacity-40">
-          {loading ? (isNo ? 'LEGGER TIL…' : 'ADDING…') : (isNo ? 'LEGG TIL' : 'ADD')}
-        </button>
-      </div>
-    </div>
   )
 }
 
@@ -8162,7 +7180,6 @@ function deriveSurfSettingsFromModules(mods: Record<string, any>): SurfSettingsC
   const best = surfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
   const fp = best ? sanitizeFuelPenalty((best as any).fuelPenalty) : undefined
 
-  console.info('[SURF][FUEL_PENALTY] deriveSurfSettingsFromModules-input', { fuelPenaltyTrace: summarizeSurfFuelPenalty(mods) })
   const fuelPenalty = !!fp?.enabled
   const homeLat = Number(fp?.homeLat)
   const homeLon = Number(fp?.homeLon)
@@ -8179,38 +7196,9 @@ function deriveSurfSettingsFromModules(mods: Record<string, any>): SurfSettingsC
 function normalizeModulesForSave(mods: Record<string, any>) {
   const safe = mods && typeof mods === 'object' ? { ...mods } : {}
 
-  console.info('[SURF][FUEL_PENALTY] normalizeModulesForSave-input', { fuelPenaltyTrace: summarizeSurfFuelPenalty(safe) })
   safe.surf_settings = deriveSurfSettingsFromModules(safe)
-  console.info('[SURF][FUEL_PENALTY] normalizeModulesForSave-output', { fuelPenaltyTrace: summarizeSurfFuelPenalty(safe) })
 
   return safe
-}
-
-
-function summarizeSurfFuelPenalty(mods: Record<string, any>) {
-  const surfList = Array.isArray(mods?.surf) ? mods.surf : []
-  const perInstance = surfList.map((s: any, idx: number) => {
-    const fp = s && typeof s === 'object' ? (s as any).fuelPenalty : undefined
-    const hasObject = !!fp && typeof fp === 'object' && !Array.isArray(fp)
-    return {
-      index: idx,
-      id: Number((s as any)?.id) || null,
-      hasFuelPenalty: hasObject,
-      enabled: hasObject ? Boolean((fp as any).enabled) : null,
-      homeAddress: hasObject ? String((fp as any).homeAddress ?? '').trim() || null : null,
-      formatted: hasObject ? String((fp as any).formatted ?? '').trim() || null : null,
-      homeLat: hasObject && Number.isFinite(Number((fp as any).homeLat)) ? Number((fp as any).homeLat) : null,
-      homeLon: hasObject && Number.isFinite(Number((fp as any).homeLon)) ? Number((fp as any).homeLon) : null,
-      distanceKm: hasObject && Number.isFinite(Number((fp as any).distanceKm)) ? Number((fp as any).distanceKm) : null,
-      fuelLiters: hasObject && Number.isFinite(Number((fp as any).fuelLiters)) ? Number((fp as any).fuelLiters) : null,
-      fuelPrice: hasObject && Number.isFinite(Number((fp as any).fuelPrice)) ? Number((fp as any).fuelPrice) : null,
-    }
-  })
-  return { surfCount: surfList.length, perInstance }
-}
-
-function logSurfFuelPenaltyDiagnostic(event: string, payload: Record<string, unknown>) {
-  console.info('[SURF][FUEL_PENALTY]', event, payload)
 }
 
 type ReminderRepeatKey =
@@ -11132,7 +10120,7 @@ function GroceriesModuleSettingsTab({
     <div className="h-full flex flex-col min-h-0">
       <div ref={listScrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'groceries')}</div>
+          <div className="p-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : groupedVisibleItems.length === 0 ? (
           <div className="p-4 text-sm text-[color:var(--fg-50)]">{t.groceriesNoItems}</div>
         ) : (
@@ -12222,7 +11210,7 @@ const sortedReminders = useMemo(() => {
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
               ) : loading ? (
-                <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'reminders')}</div>
+                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : sortedReminders.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">
                   {selectedDayYmd
@@ -13662,7 +12650,7 @@ function SurfExperienceCard({
               className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
             >
                       {loading ? (
-                <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'surf')}</div>
+                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
               ) : (
@@ -13931,7 +12919,7 @@ function SurfExperienceEditor({
     <>
       <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
         {loadingExisting ? (
-          <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, 'surf')}</div>
+          <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
         ) : (
           <>
             <div>
@@ -14849,7 +13837,7 @@ function SurfSpotSheet({
 
         <div className="mt-3 max-h-[52vh] overflow-auto rounded-2xl border border-[color:var(--bd-10)]">
                   {loading ? (
-            <div className="px-4 py-4 text-[color:var(--fg-50)]">{moduleLoadingText(language, 'surf')}</div>
+            <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
           ) : filtered.length === 0 ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen spots funnet' : 'No spots found'}</div>
           ) : (

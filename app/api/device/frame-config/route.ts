@@ -1,7 +1,7 @@
 // app/api/device/frame-config/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
+import { spotIdFromLabel } from '@/app/lib/surf/spots'
 
 export const runtime = 'nodejs'
 
@@ -36,13 +36,13 @@ function asInt(v: unknown, def: number) {
   return Number.isFinite(n) ? n : def
 }
 
-function asString(v: unknown, def: string) {
-  return typeof v === 'string' ? v : def
+function asNumber(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : Number(String(v ?? ''))
+  return Number.isFinite(n) ? n : null
 }
 
-function asNumber(v: unknown): number | null {
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
+function asString(v: unknown, def: string) {
+  return typeof v === 'string' ? v : def
 }
 
 
@@ -109,29 +109,6 @@ function isActiveBase(active: ActiveModules, base: string) {
 
 function isActiveInstance(active: ActiveModules, base: string, id: number) {
   return active.ids.get(base)?.has(id) ?? false
-}
-
-
-function summarizeSurfFuelPenaltyFromModules(modules: UnknownRecord) {
-  const surf = Array.isArray(modules.surf) ? modules.surf : []
-  return surf.map((row, index) => {
-    const item = row && typeof row === 'object' ? (row as UnknownRecord) : {}
-    const fp = item.fuelPenalty
-    const fpObj = fp && typeof fp === 'object' && !Array.isArray(fp) ? (fp as UnknownRecord) : null
-    return {
-      index,
-      id: asInt(item.id, 0) || null,
-      fuelPenaltyExists: !!fpObj,
-      enabled: fpObj ? asBool(fpObj.enabled, false) : null,
-      homeAddress: fpObj ? asString(fpObj.homeAddress, '').trim() || null : null,
-      formatted: fpObj ? asString(fpObj.formatted, '').trim() || null : null,
-      homeLat: fpObj ? asNumber(fpObj.homeLat) : null,
-      homeLon: fpObj ? asNumber(fpObj.homeLon) : null,
-      distanceKm: fpObj ? asNumber(fpObj.distanceKm) : null,
-      fuelLiters: fpObj ? asNumber(fpObj.fuelLiters) : null,
-      fuelPrice: fpObj ? asNumber(fpObj.fuelPrice) : null,
-    }
-  })
 }
 
 function cloneObject(v: unknown): UnknownRecord {
@@ -258,40 +235,6 @@ export async function GET(req: Request) {
     // -------------------------------
     if (isActiveBase(active, 'surf')) {
       const surfList: UnknownRecord[] = Array.isArray(sourceModules.surf) ? sourceModules.surf : []
-      const knownSpotIds = new Set(Object.values(SURF_SPOTS).map((x) => String(x.spotId || '').trim()))
-      const customSpotIdsToResolve = Array.from(
-        new Set(
-          surfList
-            .map((s) => (s && typeof s === 'object' ? asString((s as UnknownRecord).spotId, '').trim() : ''))
-            .map((spotId) =>
-              spotId.startsWith('custom:')
-                ? spotId.slice('custom:'.length).trim()
-                : !knownSpotIds.has(spotId)
-                  ? spotId
-                  : ''
-            )
-            .filter((id) => id.length > 0)
-        )
-      )
-
-      const customSpotById = new Map<string, { name: string; lat: number | null; lon: number | null }>()
-      if (customSpotIdsToResolve.length > 0) {
-        const { data: customSpots } = await supabase
-          .from('custom_surf_spots')
-          .select('id, name, lat, lon')
-          .in('id', customSpotIdsToResolve)
-
-        for (const row of customSpots ?? []) {
-          const id = asString((row as UnknownRecord).id, '').trim()
-          if (!id) continue
-          customSpotById.set(id, {
-            name: asString((row as UnknownRecord).name, '').trim(),
-            lat: asNumber((row as UnknownRecord).lat),
-            lon: asNumber((row as UnknownRecord).lon),
-          })
-        }
-      }
-
       const sanitizedSurf: UnknownRecord[] = []
       const seenSurfIds = new Set<number>()
 
@@ -308,15 +251,9 @@ export async function GET(req: Request) {
         const derivedSpotId = !spotId && spot ? spotIdFromLabel(spot) : null
         // Keep room for custom spot ids (uuid is 36 chars; prefixed ids are longer).
         const finalSpotId = (spotId || derivedSpotId || '').slice(0, 80)
-        const customSpotId = finalSpotId.startsWith('custom:')
-          ? finalSpotId.slice('custom:'.length)
-          : !knownSpotIds.has(finalSpotId)
-            ? finalSpotId
-            : ''
-        const customSpot = customSpotId ? customSpotById.get(customSpotId) ?? null : null
-        const finalSpot = (spot || customSpot?.name || '').slice(0, 47)
-        const lat = asNumber(s.lat) ?? customSpot?.lat ?? null
-        const lon = asNumber(s.lon) ?? customSpot?.lon ?? null
+        const finalSpot = spot.slice(0, 47)
+        const lat = asNumber(s.lat)
+        const lon = asNumber(s.lon)
 
         if (!finalSpotId && !finalSpot && lat == null && lon == null) continue
 
@@ -511,8 +448,6 @@ export async function GET(req: Request) {
       cells,
       modules: responseModules,
     }
-
-    console.info('[SURF][FUEL_PENALTY] frame-config-returning', { device_id, surfFuelPenalty: summarizeSurfFuelPenaltyFromModules(responseModules) })
 
     const payload = {
       device_id,
