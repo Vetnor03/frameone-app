@@ -381,8 +381,22 @@ function directionScoreInSectorLinear(degFrom: number, sector: CustomDirectionSe
   return Math.max(1, Math.min(6, Math.round(1 + t * 5)))
 }
 
+if (process.env.NODE_ENV !== 'production') {
+  const sanitySector: CustomDirectionSector = { startDeg: 315, endDeg: 45, mainDeg: 0 }
+  const outsideWave = directionScoreInSectorLinear(180, sanitySector)
+  const edgeWave = directionScoreInSectorLinear(315, sanitySector)
+  const mainWave = directionScoreInSectorLinear(0, sanitySector)
+  const badWind = directionScoreInSectorLinear(180, sanitySector)
+  console.assert(outsideWave === 0 && outsideWave <= 1, 'Sanity: outside-sector wave should trigger wave kill-switch condition')
+  console.assert(edgeWave === 1 && edgeWave <= 1, 'Sanity: edge wave should trigger wave kill-switch condition')
+  console.assert(mainWave > 1, 'Sanity: main wave direction should not trigger wave kill-switch condition')
+  console.assert(badWind <= 1, 'Sanity: bad wind can be <=1 but kill-switch remains wave-only')
+}
+
 function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, degFrom: number, customSpotProfile?: CustomSpotScoringProfile | null) {
   const sector = tableKey === 'wave_dir' ? customSpotProfile?.waveDir : customSpotProfile?.windDir
+  // Custom-spot sectors are stored/treated as meteorological FROM directions (same as built-in waveguide tables).
+  // We pass the incoming degFrom through the same normalization + wraparound math in directionScoreInSectorLinear.
   if (sector) return { picked: `${Math.round(normDeg(degFrom))}°`, score: directionScoreInSectorLinear(degFrom, sector) }
 
   const st = getSpotTables(spotKey)
@@ -530,7 +544,7 @@ function buildModelScore(args: {
 
   let killSwitchApplied = false
   const killSwitchMultiplier = 0.1
-  if (sWaveDir.score === 1) {
+  if (sWaveDir.score <= 1) {
     total *= killSwitchMultiplier
     killSwitchApplied = true
   }
