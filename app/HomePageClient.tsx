@@ -1437,9 +1437,40 @@ export default function HomePage() {
   }, [searchParams])
 
   useEffect(() => {
-    if (!shouldRenderApp || booting || !authHydrated || !framesHydrated) return
-    if (frameQueryFailed) return
-    if (stickySettingsRef.current) return
+    console.info('[FRAME] post-hydration routing effect entered', {
+      shouldRenderApp,
+      booting,
+      authHydrated,
+      framesHydrated,
+      frameQueryFailed,
+      stickySettings: stickySettingsRef.current,
+      frameCount: frames.length,
+      activeTab,
+    })
+    if (!shouldRenderApp) {
+      console.info('[FRAME] skipped: shouldRenderApp=false')
+      return
+    }
+    if (booting) {
+      console.info('[FRAME] skipped: booting=true')
+      return
+    }
+    if (!authHydrated) {
+      console.info('[FRAME] skipped: authHydrated=false')
+      return
+    }
+    if (!framesHydrated) {
+      console.info('[FRAME] skipped: framesHydrated=false')
+      return
+    }
+    if (frameQueryFailed) {
+      console.info('[FRAME] skipped: frameQueryFailed=true')
+      return
+    }
+    if (stickySettingsRef.current) {
+      console.info('[FRAME] skipped: stickySettings=true')
+      return
+    }
 
     if (frames.length === 0 && !autoOpenedSettingsForPairingRef.current) {
       setBootDebug((prev) => ({ ...prev, redirectTarget: 'settings:add-frame', redirectReason: 'no-devices-in-db', addFrameTriggerSource: 'server-data' }))
@@ -1904,6 +1935,9 @@ export default function HomePage() {
 
     ;(async () => {
       try {
+        frameHydrationStageRef.current = 'hydration-effect-entered'
+        setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'hydration-effect-entered' }))
+        console.info('[FRAME] hydration effect entered')
         setAuthHydrated(false)
         setFramesHydrated(false)
         setShowSplash(!disableLaunchSplash)
@@ -1968,6 +2002,9 @@ export default function HomePage() {
         console.info(session ? '[BOOT] session found' : '[BOOT] no session found')
 
         if (!session) {
+          frameHydrationStageRef.current = 'skipped-reason-no-session'
+          setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'skipped-reason-no-session' }))
+          console.info('[FRAME] skipped: no session')
           setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'missing-auth-session' }))
           setAuthHydrated(true)
           setFramesHydrated(true)
@@ -1980,6 +2017,9 @@ export default function HomePage() {
         }
 
         setAuthHydrated(true)
+        frameHydrationStageRef.current = 'hydration-start'
+        setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'hydration-start' }))
+        console.info('[FRAME] hydration-start')
         console.info('[BOOT] user loaded')
         setShouldRenderApp(true)
 
