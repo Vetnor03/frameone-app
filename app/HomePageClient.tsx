@@ -13705,6 +13705,8 @@ type CustomSurfSpotWizardProps = {
   language: AppLanguage
   onClose: () => void
   onSaved: (picked: SurfSpotSelection) => void
+  editingSpot?: CustomSurfSpot | null
+  onDeleted?: () => void
 }
 
 function SurfSpotSheet({
@@ -13724,6 +13726,8 @@ function SurfSpotSheet({
   const [spots, setSpots] = useState<SpotItem[]>([])
   const [loading, setLoading] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [editingSpot, setEditingSpot] = useState<CustomSurfSpot | null>(null)
+  const [customSpots, setCustomSpots] = useState<CustomSurfSpot[]>([])
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -13773,7 +13777,9 @@ function SurfSpotSheet({
           const customResp = await fetch('/api/surf/custom-spots', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
           if (customResp.ok) {
             const customJson: any = await customResp.json()
-            customList = (Array.isArray(customJson?.items) ? customJson.items : []).map((row: CustomSurfSpot) => ({
+            const rows: CustomSurfSpot[] = Array.isArray(customJson?.items) ? customJson.items : []
+            if (!cancelled) setCustomSpots(rows)
+            customList = rows.map((row: CustomSurfSpot) => ({
               spotId: `custom:${row.id}`,
               label: String(row.name || '').trim(),
               lat: Number(row.lat),
@@ -13837,28 +13843,27 @@ function SurfSpotSheet({
           ) : filtered.length === 0 ? (
             <div className="px-4 py-4 text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen spots funnet' : 'No spots found'}</div>
           ) : (
-            filtered.map((s) => (
-              <button
-                key={`${s.spotId || 'label'}-${s.label}`}
-                onClick={() => onPicked({ spot: s.label, spotId: s.spotId, lat: s.lat, lon: s.lon })}
-                className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]"
-              >
+            filtered.map((s) => {
+              const customRow = s.custom ? customSpots.find((row) => `custom:${row.id}` === s.spotId) : null
+              return <div key={`${s.spotId || 'label'}-${s.label}`} className="w-full text-left px-4 py-4 border-b border-[color:var(--bd-10)] last:border-b-0 hover:bg-[color:var(--panel-05)]">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <button onClick={() => onPicked({ spot: s.label, spotId: s.spotId, lat: s.lat, lon: s.lon })} className="text-left flex-1">
                     <div className="text-[color:var(--fg-90)] text-base font-medium">
                       {language === 'no' && isTodaysBestLabel(s.label) ? 'Dagens Beste' : s.label}
                     </div>
                     {s.custom ? <div className="mt-1 text-[10px] tracking-[0.12em] uppercase text-[#26b6b6]">{language === 'no' ? 'Privat' : 'Private'}</div> : null}
-                  </div>
+                  </button>
                   {s.custom ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-[#26b6b6]">
-                      <path d="M7.5 10V7.5C7.5 5.01 9.51 3 12 3C14.49 3 16.5 5.01 16.5 7.5V10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      <rect x="5" y="10" width="14" height="11" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
-                    </svg>
+                    <button
+                      onClick={() => customRow && setEditingSpot(customRow)}
+                      className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+                    >
+                      {language === 'no' ? 'REDIGER' : 'EDIT'}
+                    </button>
                   ) : null}
                 </div>
-              </button>
-            ))
+              </div>
+            })
           )}
         </div>
         {wizardOpen ? (
@@ -13869,6 +13874,21 @@ function SurfSpotSheet({
               onPicked(picked)
               setWizardOpen(false)
               onClose()
+            }}
+          />
+        ) : null}
+        {editingSpot ? (
+          <CustomSurfSpotWizard
+            language={language}
+            editingSpot={editingSpot}
+            onClose={() => setEditingSpot(null)}
+            onDeleted={() => {
+              setEditingSpot(null)
+              setSpots((prev) => prev.filter((x) => x.spotId !== `custom:${editingSpot.id}`))
+            }}
+            onSaved={(picked: SurfSpotSelection) => {
+              setEditingSpot(null)
+              setSpots((prev) => prev.map((x) => x.spotId === picked.spotId ? { ...x, label: picked.spot, lat: picked.lat, lon: picked.lon } : x))
             }}
           />
         ) : null}
@@ -13925,19 +13945,21 @@ function WeatherLocationRow({
   )
 }
 
-function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWizardProps) {
+function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, onDeleted }: CustomSurfSpotWizardProps) {
+  const isEdit = !!editingSpot
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [name, setName] = useState('')
-  const [spotCenter, setSpotCenter] = useState({ lat: 62.2, lon: 10.4 })
-  const [parkingCenter, setParkingCenter] = useState({ lat: 62.2, lon: 10.4 })
+  const [name, setName] = useState(editingSpot?.name || '')
+  const [spotCenter, setSpotCenter] = useState({ lat: Number(editingSpot?.lat ?? 62.2), lon: Number(editingSpot?.lon ?? 10.4) })
+  const [parkingCenter, setParkingCenter] = useState({ lat: Number(editingSpot?.parking_lat ?? 62.2), lon: Number(editingSpot?.parking_lon ?? 10.4) })
   const [saving, setSaving] = useState(false)
-  const [swellStart, setSwellStart] = useState(315)
-  const [swellEnd, setSwellEnd] = useState(45)
-  const [swellMain, setSwellMain] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const [swellStart, setSwellStart] = useState(Number(editingSpot?.swell_sector_start_deg ?? 315))
+  const [swellEnd, setSwellEnd] = useState(Number(editingSpot?.swell_sector_end_deg ?? 45))
+  const [swellMain, setSwellMain] = useState(Number(editingSpot?.swell_main_deg ?? 0))
   const [swellArrowMoved, setSwellArrowMoved] = useState(false)
-  const [windStart, setWindStart] = useState(45)
-  const [windEnd, setWindEnd] = useState(135)
-  const [windMain, setWindMain] = useState(90)
+  const [windStart, setWindStart] = useState(Number(editingSpot?.wind_sector_start_deg ?? 45))
+  const [windEnd, setWindEnd] = useState(Number(editingSpot?.wind_sector_end_deg ?? 135))
+  const [windMain, setWindMain] = useState(Number(editingSpot?.wind_main_deg ?? 90))
   const [windArrowMoved, setWindArrowMoved] = useState(false)
 
   const lat = spotCenter.lat
@@ -13957,17 +13979,28 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
   async function save() {
     setSaving(true)
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    const resp = await fetch('/api/surf/custom-spots', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ name, lat, lon, parking_lat: parkingLat, parking_lon: parkingLon, swell_sector_start_deg: swellStart, swell_sector_end_deg: swellEnd, swell_main_deg: swellMain, wind_sector_start_deg: windStart, wind_sector_end_deg: windEnd, wind_main_deg: windMain }) })
+    const payload = { id: editingSpot?.id, name, lat, lon, parking_lat: parkingLat, parking_lon: parkingLon, swell_sector_start_deg: swellStart, swell_sector_end_deg: swellEnd, swell_main_deg: swellMain, wind_sector_start_deg: windStart, wind_sector_end_deg: windEnd, wind_main_deg: windMain }
+    const resp = await fetch('/api/surf/custom-spots', { method: isEdit ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify(payload) })
     setSaving(false)
     if (!resp.ok) return
     const json: any = await resp.json()
     onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}`, lat, lon })
     onClose()
   }
+  async function onDelete() {
+    if (!editingSpot?.id) return
+    if (!window.confirm(language === 'no' ? 'Slette denne custom spoten?' : 'Delete this custom spot?')) return
+    setDeleting(true)
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    await fetch('/api/surf/custom-spots', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ id: editingSpot.id }) })
+    setDeleting(false)
+    onDeleted?.()
+    onClose()
+  }
 
   return <div className="fixed inset-0 z-[60] bg-[#0c1117] flex flex-col">
     <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl bg-black/45 p-4 backdrop-blur-sm border border-white/10">
-      <div className="text-xs tracking-[0.14em] text-white/80">{language === 'no' ? 'LEGG TIL HEMMELIG SPOT' : 'ADD SECRET SPOT'}</div>
+      <div className="text-xs tracking-[0.14em] text-white/80">{isEdit ? (language === 'no' ? 'REDIGER HEMMELIG SPOT' : 'EDIT SECRET SPOT') : (language === 'no' ? 'LEGG TIL HEMMELIG SPOT' : 'ADD SECRET SPOT')}</div>
       <div className="mt-1 text-[11px] text-white/70">
         {language === 'no' ? 'Kun synlig for deg — denne spoten deles ikke med andre.' : 'Private to your account — this spot is not shared with other users.'}
       </div>
@@ -13988,23 +14021,26 @@ function CustomSurfSpotWizard({ language, onClose, onSaved }: CustomSurfSpotWiza
       {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
 
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(28px,calc(env(safe-area-inset-bottom)+16px))]">
-      {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Avbryt' : 'Cancel'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
-      {step < 3 ? (
-        <button
-          disabled={step === 1 && !name.trim()}
-          className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed opacity-45 text-[#7caed6]' : 'text-[#2aa3ff]'}`}
-          onClick={() => {
-            if (step === 1 && !name.trim()) return
-            if (step === 2) setParkingCenter(spotCenter)
-            setStep((step + 1) as 1 | 2 | 3)
-          }}
-        >
-          {language === 'no' ? 'Neste' : 'Next'}
-        </button>
-      ) : (
-        <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre' : 'Save')}</button>
-      )}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-[max(20px,calc(env(safe-area-inset-bottom)+10px))]">
+      <div className="pointer-events-auto grid grid-cols-2 gap-3">
+        {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Lukk' : 'Close'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
+        {step < 3 ? (
+          <button
+            disabled={step === 1 && !name.trim()}
+            className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed opacity-45 text-[#7caed6]' : 'text-[#2aa3ff]'}`}
+            onClick={() => {
+              if (step === 1 && !name.trim()) return
+              if (step === 2) setParkingCenter(spotCenter)
+              setStep((step + 1) as 1 | 2 | 3)
+            }}
+          >
+            {language === 'no' ? 'Neste' : 'Next'}
+          </button>
+        ) : (
+          <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre endringer' : 'Save changes')}</button>
+        )}
+      </div>
+      {isEdit ? <div className="pointer-events-auto pt-3"><button disabled={deleting || saving} className="w-full h-12 rounded-xl border border-[color:var(--danger-bd)] text-[color:var(--danger)]" onClick={onDelete}>{deleting ? '…' : (language === 'no' ? 'Slett spot' : 'Delete spot')}</button></div> : null}
     </div>
   </div>
 }

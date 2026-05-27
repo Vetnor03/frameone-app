@@ -33,3 +33,44 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ item: data })
 }
+
+export async function PUT(req: Request) {
+  const token = authToken(req)
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: userData } = await supabaseAdmin.auth.getUser(token)
+  const userId = userData?.user?.id
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body: any = await req.json()
+  const id = String(body?.id || '').trim()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const patch = {
+    name: body?.name,
+    lat: body?.lat,
+    lon: body?.lon,
+    parking_lat: body?.parking_lat,
+    parking_lon: body?.parking_lon,
+    swell_sector_start_deg: body?.swell_sector_start_deg,
+    swell_sector_end_deg: body?.swell_sector_end_deg,
+    swell_main_deg: body?.swell_main_deg,
+    wind_sector_start_deg: body?.wind_sector_start_deg,
+    wind_sector_end_deg: body?.wind_sector_end_deg,
+    wind_main_deg: body?.wind_main_deg,
+  }
+  const { data, error } = await supabaseAdmin.from('custom_surf_spots').update(patch).eq('id', id).eq('user_id', userId).select('*').single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return NextResponse.json({ item: data })
+}
+
+export async function DELETE(req: Request) {
+  const token = authToken(req)
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: userData } = await supabaseAdmin.auth.getUser(token)
+  const userId = userData?.user?.id
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body: any = await req.json().catch(() => ({}))
+  const id = String(body?.id || '').trim()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const { error } = await supabaseAdmin.from('custom_surf_spots').delete().eq('id', id).eq('user_id', userId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return NextResponse.json({ ok: true })
+}
