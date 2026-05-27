@@ -2106,19 +2106,13 @@ export default function HomePage() {
         let memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
         let frameSource: 'client' | 'server-fallback' = 'client'
 
-        if (error) {
-          const canTryServerFallback = isFrameMembershipNetworkError(error)
-          if (!canTryServerFallback) {
-            trace('hydration-skipped-client-query-non-network-error')
-            setFrameQueryFailed(true)
-            setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'error', frameQueryErrorMessage: error.message, frameQueryErrorCode: error.code ?? null, frameQueryErrorDetails: error.details ?? null }))
-            logSessionRepair('members-load-failed', { error: error.message, source: 'client' })
-            console.info('[BOOT] frame list load failed', { error: error.message, source: 'client' })
-            setFramesHydrated(true)
-            setBooting(false)
-            return
-          }
+        setBootDebug((prev) => ({
+          ...prev,
+          serverFallbackAttempted: false,
+          serverFallbackSkippedReason: error ? null : 'client-query-succeeded',
+        }))
 
+        if (error) {
           const fallbackStart = Date.now()
           try {
             console.info('[FRAME] server-fallback-start')
@@ -2144,16 +2138,21 @@ export default function HomePage() {
               frameQueryErrorMessage: error.message,
               frameQueryFallbackUsed: true,
               frameQueryFallbackCount: memberRows.length,
+              serverFallbackAttempted: true,
+              serverFallbackSkippedReason: null,
               serverFallbackDurationMs: fallbackDuration,
               serverFallbackStatus: fallbackResponse.status,
               serverFallbackBody: fallbackResponse.body,
+              serverFallbackFrameCount: memberRows.length,
+              serverFallbackError: null,
               lastResolvedStage: 'server-fallback-success',
             }))
             markStage('server-fallback-success')
             logSessionRepair('members-loaded', { source: frameSource, deviceCount: memberRows.length, initialClientError: error.message })
           } catch (fallbackError) {
             const fallbackDuration = Date.now() - fallbackStart
-            console.info('[FRAME] server-fallback-error duration', { durationMs: fallbackDuration, error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError) })
+            const fallbackErrorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+            console.info('[FRAME] server-fallback-error duration', { durationMs: fallbackDuration, error: fallbackErrorMessage })
             setFrameQueryFailed(true)
             lastResolvedStageRef.current = 'server-fallback-error'
             activePromiseStageRef.current = null
@@ -2162,27 +2161,32 @@ export default function HomePage() {
               frameQueryStatus: 'error',
               frameQueryErrorMessage: error.message,
               frameQueryFallbackUsed: true,
-              frameQueryFallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              frameQueryFallbackError: fallbackErrorMessage,
+              serverFallbackAttempted: true,
+              serverFallbackSkippedReason: null,
               serverFallbackDurationMs: fallbackDuration,
+              serverFallbackStatus: null,
+              serverFallbackBody: null,
+              serverFallbackFrameCount: 0,
+              serverFallbackError: fallbackErrorMessage,
               lastResolvedStage: 'server-fallback-error',
             }))
             markStage('server-fallback-error')
             logSessionRepair('members-load-failed', {
               error: error.message,
               source: 'client+server-fallback',
-              fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              fallbackError: fallbackErrorMessage,
             })
             console.info('[BOOT] frame list load failed', {
               error: error.message,
-              fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              fallbackError: fallbackErrorMessage,
               source: 'client+server-fallback',
             })
             setFramesHydrated(true)
             setBooting(false)
             trace('hydration-skipped-server-fallback-error')
             return
-          }
-          finally {
+          } finally {
             serverFallbackActiveRef.current = false
           }
         }
