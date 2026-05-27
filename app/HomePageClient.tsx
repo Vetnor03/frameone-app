@@ -13952,7 +13952,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [name, setName] = useState(editingSpot?.name || '')
   const [spotCenter, setSpotCenter] = useState({ lat: Number(editingSpot?.lat ?? 62.2), lon: Number(editingSpot?.lon ?? 10.4) })
-  const [parkingCenter, setParkingCenter] = useState({ lat: Number(editingSpot?.parking_lat ?? 62.2), lon: Number(editingSpot?.parking_lon ?? 10.4) })
+  const [parkingCenter, setParkingCenter] = useState({ lat: Number(editingSpot?.parking_lat ?? editingSpot?.lat ?? 62.2), lon: Number(editingSpot?.parking_lon ?? editingSpot?.lon ?? 10.4) })
   const [spotZoom, setSpotZoom] = useState(Number(editingSpot?.spot_zoom ?? 5))
   const [parkingZoom, setParkingZoom] = useState(Number(editingSpot?.parking_zoom ?? Number(editingSpot?.spot_zoom ?? 5)))
   const [saving, setSaving] = useState(false)
@@ -14036,10 +14036,6 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
             className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed bg-[#2aa3ff]/30 text-[#7caed6]' : 'bg-[#2aa3ff] text-[#07131f]'}`}
             onClick={() => {
               if (step === 1 && !name.trim()) return
-              if (step === 2) {
-                setParkingCenter(spotCenter)
-                setParkingZoom(spotZoom)
-              }
               setStep((step + 1) as 1 | 2 | 3)
             }}
           >
