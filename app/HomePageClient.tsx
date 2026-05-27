@@ -1961,6 +1961,17 @@ export default function HomePage() {
         : ({} as Record<string, any>)
 
     const normalizedModules = normalizeModulesForSave(rawModules)
+    const loadedSurfList: SurfCfg[] = Array.isArray(normalizedModules.surf) ? (normalizedModules.surf as SurfCfg[]) : []
+    const loadedBest = loadedSurfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
+    const loadedFp = loadedBest ? sanitizeFuelPenalty((loadedBest as any).fuelPenalty) : undefined
+    logSurfFuelPenaltyDiagnostic('address-loaded', {
+      activeDeviceId: deviceId,
+      moduleInstanceId: loadedBest?.id ?? null,
+      addressLoaded: Boolean(String(loadedFp?.formatted || loadedFp?.homeAddress || '').trim()),
+      storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
+      homeLabel: String(loadedFp?.formatted || loadedFp?.homeAddress || '').trim() || null,
+      fuelPenaltyEnabled: Boolean(loadedFp?.enabled),
+    })
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
       ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
       : []
@@ -2507,13 +2518,32 @@ export default function HomePage() {
         pinned_tabs: pinnedModuleTabs,
       }
 
-      const { data, error } = await supabase.rpc('upsert_device_settings', {
-        p_device_id: activeDeviceId,
-        p_settings: settingsJson,
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+      if (!accessToken) throw new Error(language === 'no' ? 'Mangler innloggingstoken.' : 'Missing auth token.')
+      const saveResp = await fetch('/api/device/save-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ device_id: activeDeviceId, settings_json: settingsJson }),
       })
+      const saveBody = await saveResp.json().catch(() => ({}))
+      if (!saveResp.ok || !saveBody?.ok) throw new Error(saveBody?.error || `save_failed_${saveResp.status}`)
 
-      if (error) throw error
-      if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
+      const saveSurfList: SurfCfg[] = Array.isArray(modulesForSave.surf) ? (modulesForSave.surf as SurfCfg[]) : []
+      const saveBest = saveSurfList.find((x) => isTodaysBestLabel(String(x?.spot ?? ''))) || null
+      const saveFp = saveBest ? sanitizeFuelPenalty((saveBest as any).fuelPenalty) : undefined
+      logSurfFuelPenaltyDiagnostic('address-save-result', {
+        activeDeviceId,
+        moduleInstanceId: saveBest?.id ?? null,
+        saveSuccess: true,
+        saveError: null,
+        storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
+        storageTable: saveBody?.storage?.table ?? 'device_settings',
+        storageKey: saveBody?.storage?.key ?? `device_id=${activeDeviceId}`,
+        addressPresent: Boolean(String(saveFp?.formatted || saveFp?.homeAddress || '').trim()),
+      })
 
       const savedCellsForLayout = { ...cellsByLayout[layoutKey] }
 
@@ -2548,6 +2578,13 @@ export default function HomePage() {
       setDirty(false)
       await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
     } catch (e: any) {
+      logSurfFuelPenaltyDiagnostic('address-save-result', {
+        activeDeviceId,
+        moduleInstanceId: null,
+        saveSuccess: false,
+        saveError: String(e?.message || e),
+        storageLocation: 'device_settings.settings_json.modules.surf[].fuelPenalty',
+      })
       alert(String(e?.message || e))
     } finally {
       setPersisting(false)
@@ -2593,12 +2630,18 @@ export default function HomePage() {
 
       try {
         autoPersistingRef.current = true
-        const { data, error } = await supabase.rpc('upsert_device_settings', {
-          p_device_id: activeDeviceId,
-          p_settings: settingsJson,
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const accessToken = session?.access_token
+        if (!accessToken) throw new Error('Missing auth token')
+        const saveResp = await fetch('/api/device/save-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ device_id: activeDeviceId, settings_json: settingsJson }),
         })
-        if (error) throw error
-        if (data !== true) throw new Error('Failed to auto-save frame settings')
+        const saveBody = await saveResp.json().catch(() => ({}))
+        if (!saveResp.ok || !saveBody?.ok) throw new Error(saveBody?.error || 'Failed to auto-save frame settings')
 
         savedStateRef.current = serializeComparableState({
           theme,
@@ -8092,6 +8135,10 @@ function normalizeModulesForSave(mods: Record<string, any>) {
   safe.surf_settings = deriveSurfSettingsFromModules(safe)
 
   return safe
+}
+
+function logSurfFuelPenaltyDiagnostic(event: string, payload: Record<string, unknown>) {
+  console.info('[SURF][FUEL_PENALTY]', event, payload)
 }
 
 type ReminderRepeatKey =
