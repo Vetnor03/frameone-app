@@ -14021,25 +14021,27 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
       {step === 2 ? <DirectionDial start={windStart} end={windEnd} main={windMain} onStart={setWindStart} onEnd={setWindEnd} onMain={(v) => { setWindArrowMoved(true); setWindMain(v) }} /> : null}
 
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-3 px-3 pb-[max(28px,calc(env(safe-area-inset-bottom)+16px))]">
-      {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Lukk' : 'Close'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
-      {step < 3 ? (
-        <button
-          disabled={step === 1 && !name.trim()}
-          className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed opacity-45 text-[#7caed6]' : 'text-[#2aa3ff]'}`}
-          onClick={() => {
-            if (step === 1 && !name.trim()) return
-            if (step === 2) setParkingCenter(spotCenter)
-            setStep((step + 1) as 1 | 2 | 3)
-          }}
-        >
-          {language === 'no' ? 'Neste' : 'Next'}
-        </button>
-      ) : (
-        <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre endringer' : 'Save changes')}</button>
-      )}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-[max(20px,calc(env(safe-area-inset-bottom)+10px))]">
+      <div className="pointer-events-auto grid grid-cols-2 gap-3">
+        {step === 1 ? <button className="h-12 rounded-xl border" onClick={onClose}>{language === 'no' ? 'Lukk' : 'Close'}</button> : <button className="h-12 rounded-xl border" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
+        {step < 3 ? (
+          <button
+            disabled={step === 1 && !name.trim()}
+            className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed opacity-45 text-[#7caed6]' : 'text-[#2aa3ff]'}`}
+            onClick={() => {
+              if (step === 1 && !name.trim()) return
+              if (step === 2) setParkingCenter(spotCenter)
+              setStep((step + 1) as 1 | 2 | 3)
+            }}
+          >
+            {language === 'no' ? 'Neste' : 'Next'}
+          </button>
+        ) : (
+          <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] text-[#2aa3ff]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre endringer' : 'Save changes')}</button>
+        )}
+      </div>
+      {isEdit ? <div className="pointer-events-auto pt-3"><button disabled={deleting || saving} className="w-full h-12 rounded-xl border border-[color:var(--danger-bd)] text-[color:var(--danger)]" onClick={onDelete}>{deleting ? '…' : (language === 'no' ? 'Slett spot' : 'Delete spot')}</button></div> : null}
     </div>
-    {isEdit ? <div className="px-3 pb-3"><button disabled={deleting || saving} className="w-full h-12 rounded-xl border border-[color:var(--danger-bd)] text-[color:var(--danger)]" onClick={onDelete}>{deleting ? '…' : (language === 'no' ? 'Slett spot' : 'Delete spot')}</button></div> : null}
   </div>
 }
 
