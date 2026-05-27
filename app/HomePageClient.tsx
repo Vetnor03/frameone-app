@@ -957,7 +957,10 @@ export default function HomePage() {
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [authHydrated, setAuthHydrated] = useState(false)
   const [framesHydrated, setFramesHydrated] = useState(false)
-  const [bootDebug, setBootDebug] = useState<Record<string, unknown>>({})
+  const [bootDebug, setBootDebug] = useState<Record<string, unknown>>({
+    frameHydrationStage: 'idle',
+    bootTrace: [],
+  })
   const [bootTimeoutHit, setBootTimeoutHit] = useState(false)
   const [frameQueryFailed, setFrameQueryFailed] = useState(false)
   const [frameQueryRetrying, setFrameQueryRetrying] = useState(false)
@@ -966,6 +969,7 @@ export default function HomePage() {
   const activePromiseStageRef = useRef<string | null>(null)
   const retryActiveRef = useRef(false)
   const serverFallbackActiveRef = useRef(false)
+  const bootTraceRef = useRef<string[]>([])
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1059,6 +1063,19 @@ export default function HomePage() {
     setBootDebug((prev) => ({ ...prev, frameQueryDiagnostic: diagnostic }))
   }
 
+  function trace(message: string, extras?: Record<string, unknown>) {
+    console.info('[BOOT_TRACE]', message, extras ?? {})
+    bootTraceRef.current = [...bootTraceRef.current, message]
+    setBootDebug((prev) => ({
+      ...prev,
+      frameHydrationStage: frameHydrationStageRef.current,
+      lastResolvedStage: lastResolvedStageRef.current,
+      activePromiseStage: activePromiseStageRef.current,
+      bootTrace: bootTraceRef.current,
+      ...(extras ?? {}),
+    }))
+  }
+
   async function loadDeviceMembersWithRetry(userId: string) {
     const requestUrl = (() => {
       try {
@@ -1099,6 +1116,7 @@ export default function HomePage() {
     retryActiveRef.current = true
     try {
       console.info('[FRAME] retry-start')
+      trace('retry-start')
       activePromiseStageRef.current = 'retry-start'
       frameHydrationStageRef.current = 'retry-start'
       setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'retry-start' }))
@@ -1113,6 +1131,7 @@ export default function HomePage() {
         console.info('[FRAME] retry-success duration', { durationMs: retryDuration })
       }
       const resolvedStage = second.error ? 'retry-error' : 'retry-success'
+      trace(`retry-resolved-${resolvedStage}`)
       lastResolvedStageRef.current = resolvedStage
       frameHydrationStageRef.current = resolvedStage
       activePromiseStageRef.current = null
@@ -1918,6 +1937,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    trace('component-mounted')
     let unsub: { unsubscribe: () => void } | null = null
     let cancelled = false
     let bootDone = false
@@ -1935,8 +1955,10 @@ export default function HomePage() {
 
     ;(async () => {
       try {
+        trace('boot-effect-entered')
+        trace('frame-hydration-useeffect-entered')
         frameHydrationStageRef.current = 'hydration-effect-entered'
-        setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'hydration-effect-entered' }))
+        trace('hydration-effect-entered')
         console.info('[FRAME] hydration effect entered')
         setAuthHydrated(false)
         setFramesHydrated(false)
@@ -1970,9 +1992,11 @@ export default function HomePage() {
             retryActive: retryActiveRef.current,
             serverFallbackActive: serverFallbackActiveRef.current,
           }))
+          trace('timeout-fired')
         }, bootTimeoutMs)
 
         try {
+          trace('session-check-start')
           const { data: sessionData } = await supabase.auth.getSession()
         const session = sessionData.session
         const sessionExpiresAt = session?.expires_at
@@ -2000,10 +2024,11 @@ export default function HomePage() {
         void fetch('/api/auth/diagnostics', { cache: 'no-store' }).catch(() => undefined)
         logSessionRepair('boot-session-check', { hasSession: Boolean(session) })
         console.info(session ? '[BOOT] session found' : '[BOOT] no session found')
+        trace(session ? 'session-found' : 'session-missing')
 
         if (!session) {
           frameHydrationStageRef.current = 'skipped-reason-no-session'
-          setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'skipped-reason-no-session' }))
+          trace('hydration-skipped-reason-no-session', { frameHydrationStage: 'skipped-reason-no-session' })
           console.info('[FRAME] skipped: no session')
           setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'missing-auth-session' }))
           setAuthHydrated(true)
@@ -2017,8 +2042,9 @@ export default function HomePage() {
         }
 
         setAuthHydrated(true)
+        trace('authHydrated=true')
         frameHydrationStageRef.current = 'hydration-start'
-        setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'hydration-start' }))
+        trace('hydration-start', { frameHydrationStage: 'hydration-start' })
         console.info('[FRAME] hydration-start')
         console.info('[BOOT] user loaded')
         setShouldRenderApp(true)
@@ -2054,9 +2080,10 @@ export default function HomePage() {
         const hydrationStartAt = Date.now()
         const markStage = (stage: string, extras?: Record<string, unknown>) => {
           frameHydrationStageRef.current = stage
-          setBootDebug((prev) => ({ ...prev, frameHydrationStage: stage, ...(extras ?? {}) }))
+          trace(stage, { frameHydrationStage: stage, ...(extras ?? {}) })
         }
         markStage('client-query-start')
+        trace('client-query-start')
         activePromiseStageRef.current = 'client-query-start'
         console.info('[FRAME] client-query-start')
         const clientStart = Date.now()
@@ -2068,6 +2095,7 @@ export default function HomePage() {
           console.info('[FRAME] client-query-success duration', { durationMs: clientDuration })
         }
         const clientResolvedStage = error ? 'client-query-error' : 'client-query-success'
+        if (error) trace('client-query-error')
         lastResolvedStageRef.current = clientResolvedStage
         activePromiseStageRef.current = null
         markStage(clientResolvedStage, {
@@ -2081,6 +2109,7 @@ export default function HomePage() {
         if (error) {
           const canTryServerFallback = isFrameMembershipNetworkError(error)
           if (!canTryServerFallback) {
+            trace('hydration-skipped-client-query-non-network-error')
             setFrameQueryFailed(true)
             setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'error', frameQueryErrorMessage: error.message, frameQueryErrorCode: error.code ?? null, frameQueryErrorDetails: error.details ?? null }))
             logSessionRepair('members-load-failed', { error: error.message, source: 'client' })
@@ -2093,6 +2122,7 @@ export default function HomePage() {
           const fallbackStart = Date.now()
           try {
             console.info('[FRAME] server-fallback-start')
+            trace('server-fallback-start')
             serverFallbackActiveRef.current = true
             activePromiseStageRef.current = 'server-fallback-start'
             markStage('server-fallback-start')
@@ -2149,6 +2179,7 @@ export default function HomePage() {
             })
             setFramesHydrated(true)
             setBooting(false)
+            trace('hydration-skipped-server-fallback-error')
             return
           }
           finally {
@@ -2160,6 +2191,7 @@ export default function HomePage() {
         setBootDebug((prev) => ({ ...prev, frameQueryStatus: 'ok', serverFrameCount: memberRows.length, rawFrames: memberRows }))
         console.info('[FRAME] finalized', { durationMs: Date.now() - hydrationStartAt, source: frameSource })
         lastResolvedStageRef.current = 'finalized'
+        trace('finalized')
         markStage('finalized', { lastResolvedStage: 'finalized' })
         console.info('[BOOT] frame list loaded', { count: memberRows.length })
         console.info('[BOOT] server frame count', { count: memberRows.length })
@@ -2217,6 +2249,7 @@ export default function HomePage() {
           window.clearTimeout(bootTimeout)
         }
       } catch (error) {
+        trace('hydration-skipped-boot-exception', { bootException: error instanceof Error ? error.message : String(error) })
         setBootDebug((prev) => ({ ...prev, redirectTarget: '/login', redirectReason: 'boot-exception', bootException: error instanceof Error ? error.message : String(error) }))
         console.error('[BOOT] startup failed', error)
         setAuthHydrated(true)
@@ -2229,7 +2262,7 @@ export default function HomePage() {
       } finally {
         bootDone = true
         if (!cancelled) {
-          setBootDebug((prev) => ({ ...prev, frameHydrationStage: 'finalized' }))
+          trace('finalized', { frameHydrationStage: 'finalized' })
           setAuthHydrated(true)
           setFramesHydrated(true)
           setBooting(false)
