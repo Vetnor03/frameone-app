@@ -47,6 +47,7 @@ function isRateLimited(key: string, now: number) {
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return jsonError('Login is temporarily unavailable. Please try again shortly.', 500)
@@ -72,16 +73,58 @@ export async function POST(request: Request) {
 
   const otpFlow: OtpFlow = 'login_otp'
 
-  const { error: otpError } = await anon.auth.signInWithOtp({
+  let { error: otpError } = await anon.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: true },
+    options: { shouldCreateUser: false },
   })
 
+  const detectedFlow = classifyOtpFlow(otpError?.message)
+  const shouldProvisionConfirmedUser = Boolean(otpError) && detectedFlow !== 'login_otp'
+
+  if (shouldProvisionConfirmedUser) {
+    if (!serviceRoleKey) {
+      console.warn('[auth] signInWithOtp failed and service key is missing', {
+        otpFlow,
+        detectedFlow,
+        message: otpError?.message || null,
+      })
+      return jsonError('Could not send your login code. Please try again.', 500)
+    }
+
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    const { error: createUserError } = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+    })
+
+    if (createUserError) {
+      const duplicateUserCode = createUserError.message.toLowerCase().includes('already')
+      if (!duplicateUserCode) {
+        console.warn('[auth] createUser failed', {
+          otpFlow,
+          detectedFlow,
+          message: createUserError.message,
+          name: createUserError.name,
+          status: (createUserError as { status?: number }).status,
+        })
+        return jsonError('Could not send your login code. Please try again.', 500)
+      }
+    }
+
+    const retry = await anon.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    })
+    otpError = retry.error
+  }
+
   if (otpError) {
-    const detectedFlow = classifyOtpFlow(otpError.message)
     console.warn('[auth] signInWithOtp failed', {
       otpFlow,
-      detectedFlow,
+      detectedFlow: classifyOtpFlow(otpError.message),
       message: otpError.message,
       name: otpError.name,
       status: (otpError as { status?: number }).status,
