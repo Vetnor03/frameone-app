@@ -254,6 +254,7 @@ const RUNNING_LOW_PURCHASE_COOLDOWN_DAYS = 7
 const LIKELY_AVAILABLE_RECENT_PURCHASE_DAYS = 21
 const LIKELY_AVAILABLE_HISTORY_DAYS = 45
 const MIRROR_RECIPE_SOURCE_MAX = 200
+const MIRROR_STORED_SUGGESTION_MAX = 8
 const MIN_LEARNED_AVAILABLE_DAYS = 1
 const MAX_LEARNED_AVAILABLE_DAYS = 180
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -301,6 +302,22 @@ function normalizeGroceryInsightKey(name: string) {
   return name.trim().toLocaleLowerCase()
 }
 
+function normalizeGroceryIngredientKey(name: string) {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function groceryIngredientKeysMatch(recipeIngredientKey: string, availableKey: string) {
+  if (!recipeIngredientKey || !availableKey) return false
+  if (recipeIngredientKey === availableKey) return true
+  return availableKey.includes(recipeIngredientKey) || recipeIngredientKey.includes(availableKey)
+}
+
 function maybeParseJson(value: string): unknown {
   try {
     return JSON.parse(value) as unknown
@@ -316,7 +333,7 @@ function recipeNameFromRow(row: UnknownRecord) {
 function addUniqueRecipeIngredient(target: Map<string, string>, value: unknown) {
   const name = compactGroceryInsightName(value, 28)
   if (!name) return
-  const key = normalizeGroceryInsightKey(name)
+  const key = normalizeGroceryIngredientKey(name)
   if (!target.has(key)) target.set(key, name)
 }
 
@@ -478,19 +495,122 @@ async function countdownDetail(supabase: SupabaseClient, deviceId: string, langu
   }
 }
 
-async function loadMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
+function builtInMirrorRecipeRows() {
+  return [
+    { name: 'Pasta with tomato sauce', ingredients: ['pasta', 'tomato', 'cheese'] },
+    { name: 'Chicken rice bowl', ingredients: ['chicken', 'rice', 'vegetables'] },
+    { name: 'Taco dinner', ingredients: ['tortilla', 'minced meat', 'cheese', 'tomato'] },
+    { name: 'Salmon potatoes', ingredients: ['salmon', 'potatoes', 'broccoli'] },
+    { name: 'Omelette', ingredients: ['eggs', 'cheese', 'ham'] },
+    { name: 'Yoghurt bowl', ingredients: ['yoghurt', 'banan'] },
+    { name: 'Fried rice', ingredients: ['rice', 'eggs', 'vegetables'] },
+    { name: 'Soup and bread', ingredients: ['soup', 'bread'] },
+  ]
+}
+
+async function loadLegacyMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
   const { data, error } = await supabase
     .from('recipes')
     .select('*')
     .limit(MIRROR_RECIPE_SOURCE_MAX)
 
   if (error) {
-    console.error('/api/device/mirror-snapshot recipes query failed', { error })
+    console.error('/api/device/mirror-snapshot legacy recipes query failed', { error })
     return []
   }
 
   return (Array.isArray(data) ? data.map(asRecord) : [])
     .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
+}
+
+async function loadGroceryMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
+  const { data: recipeData, error: recipeError } = await supabase
+    .from('grocery_recipes')
+    .select('id, device_id, name, locale, is_active, created_at, updated_at')
+    .limit(MIRROR_RECIPE_SOURCE_MAX)
+
+  if (recipeError) {
+    console.error('/api/device/mirror-snapshot grocery_recipes query failed', { error: recipeError })
+    return []
+  }
+
+  const recipes = (Array.isArray(recipeData) ? recipeData.map(asRecord) : [])
+    .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
+  const recipeIds = recipes.map((row) => asString(row.id).trim()).filter(Boolean)
+  if (recipeIds.length <= 0) return recipes
+
+  const { data: ingredientData, error: ingredientError } = await supabase
+    .from('grocery_recipe_ingredients')
+    .select('recipe_id, name, ingredient, item')
+    .in('recipe_id', recipeIds)
+    .limit(MIRROR_RECIPE_SOURCE_MAX * 8)
+
+  if (ingredientError) {
+    console.error('/api/device/mirror-snapshot grocery_recipe_ingredients query failed', { error: ingredientError })
+    return recipes
+  }
+
+  const ingredientsByRecipe = new Map<string, UnknownRecord[]>()
+  for (const ingredient of Array.isArray(ingredientData) ? ingredientData.map(asRecord) : []) {
+    const recipeId = asString(ingredient.recipe_id).trim()
+    if (!recipeId) continue
+    const list = ingredientsByRecipe.get(recipeId) ?? []
+    list.push(ingredient)
+    ingredientsByRecipe.set(recipeId, list)
+  }
+
+  return recipes.map((recipe) => ({
+    ...recipe,
+    ingredients: ingredientsByRecipe.get(asString(recipe.id).trim()) ?? [],
+  }))
+}
+
+async function loadMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
+  const [groceryRows, legacyRows] = await Promise.all([
+    loadGroceryMirrorRecipeRows(supabase, storageDeviceIds),
+    loadLegacyMirrorRecipeRows(supabase, storageDeviceIds),
+  ])
+  const combined = [...groceryRows, ...legacyRows]
+  return combined.length > 0 ? combined : builtInMirrorRecipeRows()
+}
+
+function parseMirrorMissingList(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => compactGroceryInsightName(item, 28)).filter(Boolean).slice(0, 2)
+  if (typeof value === 'string') {
+    const parsed = value.trim().startsWith('[') ? maybeParseJson(value) : value
+    if (Array.isArray(parsed)) return parseMirrorMissingList(parsed)
+    return value.split(/[,;\n]+/).map((item) => compactGroceryInsightName(item, 28)).filter(Boolean).slice(0, 2)
+  }
+  return []
+}
+
+async function loadMirrorStoredRecipeSuggestions(supabase: SupabaseClient, storageDeviceIds: string[]) {
+  const { data, error } = await supabase
+    .from('grocery_recipe_suggestions')
+    .select('name, missing, score, updated_at, created_at, expires_at')
+    .in('device_id', storageDeviceIds)
+    .order('score', { ascending: false })
+    .order('updated_at', { ascending: false })
+    .limit(MIRROR_STORED_SUGGESTION_MAX)
+
+  if (error) {
+    console.error('/api/device/mirror-snapshot grocery_recipe_suggestions query failed', { error })
+    return []
+  }
+
+  const nowIso = new Date().toISOString()
+  return (Array.isArray(data) ? data.map(asRecord) : [])
+    .filter((row) => {
+      const expiresAt = asString(row.expires_at)
+      return !expiresAt || expiresAt > nowIso
+    })
+    .map((row) => ({
+      name: recipeNameFromRow(row),
+      missing: parseMirrorMissingList(row.missing),
+      score: asNumber(row.score) ?? 0,
+      updatedAt: asString(row.updated_at) || asString(row.created_at),
+    }))
+    .filter((row) => row.name)
 }
 
 function groceryRunningLowLabel(language: string) {
@@ -592,7 +712,7 @@ function buildLikelyAvailableIngredientScores(params: {
   const addScore = (nameValue: unknown, score: number, lastUsed = '') => {
     const name = compactGroceryInsightName(nameValue, 28)
     if (!name) return
-    const key = normalizeGroceryInsightKey(name)
+    const key = normalizeGroceryIngredientKey(name)
     const existing = scores.get(key) ?? { name, score: 0, lastUsed: '' }
     existing.score += score
     if (lastUsed && lastUsed > existing.lastUsed) existing.lastUsed = lastUsed
@@ -630,6 +750,7 @@ function buildLikelyAvailableIngredientScores(params: {
 
 function buildMirrorMealIdeas(params: {
   recipeRows: UnknownRecord[]
+  storedSuggestions: Array<{ name: string; missing: string[]; score: number; updatedAt: string }>
   dinnerPlanTitles: string[]
   historyRows: UnknownRecord[]
   checkedRows: UnknownRecord[]
@@ -641,6 +762,12 @@ function buildMirrorMealIdeas(params: {
   const plannedTitles = new Set(params.dinnerPlanTitles.map(normalizeGroceryInsightKey))
   const ideas = new Map<string, { name: string; missing: string[]; score: number; updatedAt: string }>()
 
+  for (const row of params.storedSuggestions) {
+    const key = normalizeGroceryInsightKey(row.name)
+    if (!key || plannedTitles.has(key)) continue
+    ideas.set(key, { name: row.name, missing: row.missing, score: row.score + 1000, updatedAt: row.updatedAt })
+  }
+
   for (const row of params.recipeRows) {
     const name = recipeNameFromRow(row)
     if (!name) continue
@@ -651,12 +778,12 @@ function buildMirrorMealIdeas(params: {
     const ingredients = recipeIngredientsFromRow(row)
     if (ingredients.length < 2) continue
 
-    const matchedIngredientScores = ingredients
-      .map(([ingredientKey]) => likelyAvailable.get(ingredientKey)?.score ?? 0)
-      .filter((score) => score > 0)
-    const missing = ingredients
-      .filter(([ingredientKey]) => !likelyAvailable.has(ingredientKey))
-      .map(([, ingredientName]) => ingredientName)
+    const ingredientMatches = ingredients.map(([ingredientKey, ingredientName]) => {
+      const matched = [...likelyAvailable.entries()].find(([availableKey]) => groceryIngredientKeysMatch(ingredientKey, availableKey))
+      return { ingredientName, score: matched?.[1].score ?? 0 }
+    })
+    const matchedIngredientScores = ingredientMatches.map((match) => match.score).filter((score) => score > 0)
+    const missing = ingredientMatches.filter((match) => match.score <= 0).map((match) => match.ingredientName)
     const overlap = matchedIngredientScores.length
     if (overlap < 1 || missing.length > 2) continue
 
@@ -1520,7 +1647,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const sinceCheckedIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
   const sinceDinnerIso = isoDateOnly(new Date(Date.now() - 180 * 24 * 60 * 60 * 1000))
 
-  const [itemsResult, dinnerResult, historyResult, checkedResult, recipesResult] = await Promise.all([
+  const [itemsResult, dinnerResult, historyResult, checkedResult, recipesResult, storedSuggestionsResult] = await Promise.all([
     supabase
       .from('grocery_items')
       .select('name, quantity, updated_at')
@@ -1552,6 +1679,7 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
       .order('checked_at', { ascending: false })
       .limit(80),
     loadMirrorRecipeRows(supabase, storageDeviceIds),
+    loadMirrorStoredRecipeSuggestions(supabase, storageDeviceIds),
   ])
 
   if (itemsResult.error) throw new Error(itemsResult.error.message)
@@ -1589,8 +1717,10 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
   const activeNames = items.map((item) => asString(item.name).trim()).filter(Boolean)
   const groceryRunningLow = buildMirrorRunningLowInsights({ language, activeNames, historyRows, checkedRows })
   const recipeRows = Array.isArray(recipesResult) ? recipesResult : []
+  const storedSuggestions = Array.isArray(storedSuggestionsResult) ? storedSuggestionsResult : []
   const groceryMealIdeas = buildMirrorMealIdeas({
     recipeRows,
+    storedSuggestions,
     dinnerPlanTitles: [dinnerTodayTitle, ...groceryDinnerPlan.map((day) => day.title)].filter(Boolean),
     historyRows,
     checkedRows,
