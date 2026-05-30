@@ -992,6 +992,7 @@ export default function HomePage() {
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
+  const [remindersConnectScreenOpen, setRemindersConnectScreenOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
@@ -1924,6 +1925,7 @@ export default function HomePage() {
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
+  setRemindersConnectScreenOpen(false)
 
   setActiveTab(k)
 }
@@ -2000,7 +2002,17 @@ async function handleSelectTab(k: TabKey) {
 
               {activeTab !== 'frame' && activeTab !== 'settings' && (
                 <div className="relative h-full">
-                  <div className="absolute right-0 -top-4 z-20">
+                  <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
+                    {activeTab === 'reminders' && !remindersConnectScreenOpen && (
+                      <button
+                        type="button"
+                        onClick={() => setRemindersConnectScreenOpen(true)}
+                        className="inline-flex h-7 items-center justify-center rounded-full border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-70)] bg-[color:var(--app-bg)]/80"
+                      >
+                        {language === 'no' ? 'KOBLE APPER' : 'CONNECT APPS'}
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         const module = activeTab as ModuleKey
@@ -2028,16 +2040,25 @@ async function handleSelectTab(k: TabKey) {
                       </svg>
                     </button>
                   </div>
-                  <ModuleSettingsTab
-                    language={language}
-                    module={activeTab as ModuleKey}
-                    layoutKey={layoutKey}
-                    cells={cellsByLayout[layoutKey]}
-                    modulesJson={modulesJson}
-                    setModulesJson={setModulesJson}
-                    markDirty={markDirty}
-                    activeDeviceId={activeDeviceId}
-                  />
+
+                  {activeTab === 'reminders' && remindersConnectScreenOpen ? (
+                    <ConnectAppsScreen
+                      language={language}
+                      modulesJson={modulesJson}
+                      onBack={() => setRemindersConnectScreenOpen(false)}
+                    />
+                  ) : (
+                    <ModuleSettingsTab
+                      language={language}
+                      module={activeTab as ModuleKey}
+                      layoutKey={layoutKey}
+                      cells={cellsByLayout[layoutKey]}
+                      modulesJson={modulesJson}
+                      setModulesJson={setModulesJson}
+                      markDirty={markDirty}
+                      activeDeviceId={activeDeviceId}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -2139,6 +2160,115 @@ function SaveToast({ visible, text }: { visible: boolean; text: string }) {
     >
       <div className="px-4 py-2 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--toast-bg)] backdrop-blur text-[color:var(--fg-80)] tracking-widest text-xs">
         {text}
+      </div>
+    </div>
+  )
+}
+
+type ConnectAppKey = 'spond' | 'transponder' | 'teams'
+
+function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
+  const integrations = modulesJson?.integrations
+  const candidates = [
+    integrations && typeof integrations === 'object' && !Array.isArray(integrations) ? integrations[key] : null,
+    Array.isArray(integrations) ? integrations.find((item: any) => String(item?.key ?? item?.name ?? '').toLowerCase() === key) : null,
+    modulesJson?.[key],
+  ]
+
+  return candidates.some((item) => {
+    if (!item || typeof item !== 'object') return false
+    return !!(item.connected || item.enabled || item.accessToken || item.access_token || item.refreshToken || item.refresh_token)
+  })
+}
+
+function ConnectAppsScreen({
+  language,
+  modulesJson,
+  onBack,
+}: {
+  language: AppLanguage
+  modulesJson: Record<string, any>
+  onBack: () => void
+}) {
+  const [status, setStatus] = useState<string | null>(null)
+  const apps: Array<{ key: ConnectAppKey; name: string; description: string }> = [
+    {
+      key: 'spond',
+      name: 'Spond',
+      description:
+        language === 'no'
+          ? 'Vis Spond-meldinger på framen din'
+          : 'Show Spond messages on your frame',
+    },
+    {
+      key: 'transponder',
+      name: 'Transponder',
+      description:
+        language === 'no'
+          ? 'Vis Transponder-meldinger på framen din'
+          : 'Show Transponder messages on your frame',
+    },
+    {
+      key: 'teams',
+      name: 'Teams',
+      description:
+        language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
+    },
+  ]
+
+  return (
+    <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
+      <div className="pt-5 pb-6">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
+          >
+            {language === 'no' ? 'TILBAKE' : 'BACK'}
+          </button>
+          <div className="text-[color:var(--fg-90)] text-sm font-semibold">
+            {language === 'no' ? 'Koble til apper' : 'Connect apps'}
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2.5">
+          {apps.map((app) => {
+            const connected = connectAppIsConnected(modulesJson, app.key)
+            return (
+              <div
+                key={app.key}
+                className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[color:var(--fg-90)]">{app.name}</div>
+                    <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={connected}
+                    onClick={() => setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)}
+                    className={`shrink-0 h-8 px-3 rounded-xl border text-[11px] tracking-widest ${
+                      connected
+                        ? 'border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[#1f9d4a]'
+                        : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
+                    }`}
+                  >
+                    {connected ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {status && (
+          <div className="mt-3 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 px-4 py-3 text-sm text-[#2aa3ff]">
+            {status}
+          </div>
+        )}
       </div>
     </div>
   )
