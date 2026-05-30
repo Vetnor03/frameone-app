@@ -610,6 +610,55 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   return directMap
 }
 
+async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
+  const { data: members, error } = await supabase
+    .from('device_members')
+    .select('device_id, role')
+    .eq('user_id', userId)
+    .order('device_id', { ascending: true })
+
+  if (error) throw error
+
+  const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
+  const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
+  const statusMap = await fetchDeviceStatusMap(deviceIds)
+
+  return memberRows.map((m) => ({
+    device_id: m.device_id,
+    role: m.role,
+    current_version: statusMap.get(m.device_id)?.current_version ?? null,
+    battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
+    battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
+    is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
+    is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
+  }))
+}
+
+async function claimPairCodeAndLoadFrames(code: string, currentFrames: MemberRow[]) {
+  const cleaned = code.trim().toUpperCase()
+  const existingDeviceIds = new Set(currentFrames.map((f) => f.device_id))
+
+  const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
+  if (error) throw error
+  if (data !== true) throw new Error('INVALID_PAIR_CODE')
+
+  const { data: sessionData } = await supabase.auth.getSession()
+  const session = sessionData.session
+  if (!session) return { frames: [] as MemberRow[], newlyAddedDeviceId: null as string | null }
+
+  const frames = await fetchCurrentUserFrames(session.user.id)
+  const newlyAddedFrame = frames.find((f) => !existingDeviceIds.has(f.device_id))
+
+  return {
+    frames,
+    newlyAddedDeviceId: newlyAddedFrame?.device_id ?? null,
+  }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 
 function isTheme(value: unknown): value is 'dark' | 'light' {
   return value === 'dark' || value === 'light'
@@ -947,6 +996,10 @@ export default function HomePage() {
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
   const [frames, setFrames] = useState<MemberRow[]>([])
+  const [authReady, setAuthReady] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [framesLoaded, setFramesLoaded] = useState(false)
+  const [isFirstFramePairingComplete, setIsFirstFramePairingComplete] = useState(false)
   const [booting, setBooting] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
@@ -1118,6 +1171,13 @@ export default function HomePage() {
       { key: 'settings' as const, label: tx(language).settings },
     ]
   }, [dynamicTabs, language])
+
+  const shouldShowFirstFrameOnboarding =
+    authReady &&
+    !!userId &&
+    framesLoaded &&
+    frames.length === 0 &&
+    !isFirstFramePairingComplete
 
   const savedStateRef = useRef<string>('')
   const savedFrameStateRef = useRef<{
@@ -1516,6 +1576,10 @@ export default function HomePage() {
     }
 
     ;(async () => {
+      setAuthReady(false)
+      setUserId(null)
+      setFramesLoaded(false)
+      setIsFirstFramePairingComplete(false)
       setBooting(false)
       setShowSplash(false)
       setShouldRenderApp(false)
@@ -1524,6 +1588,9 @@ export default function HomePage() {
       const session = sessionData.session
 
       if (!session) {
+        setAuthReady(true)
+        setUserId(null)
+        setFramesLoaded(false)
         setFrames([])
         setActiveDeviceId(null)
         setBooting(false)
@@ -1533,12 +1600,20 @@ export default function HomePage() {
         return
       }
 
+      setAuthReady(true)
+      setUserId(session.user.id)
       setShouldRenderApp(true)
       setShowSplash(!disableLaunchSplash)
       setBooting(!disableLaunchSplash)
 
       const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
         if (!nextSession) {
+          setAuthReady(true)
+          setUserId(null)
+          setFramesLoaded(false)
+          setFrames([])
+          setActiveDeviceId(null)
+          setIsFirstFramePairingComplete(false)
           setShouldRenderApp(false)
           setShowSplash(false)
           setBooting(false)
@@ -1547,33 +1622,19 @@ export default function HomePage() {
       })
       unsub = data.subscription
 
-      const { data: members, error } = await supabase
-        .from('device_members')
-        .select('device_id, role')
-        .eq('user_id', session.user.id)
-        .order('device_id', { ascending: true })
-
-      if (error) {
+      let list: MemberRow[] = []
+      try {
+        list = await fetchCurrentUserFrames(session.user.id)
+      } catch {
         setFrames([])
         setActiveDeviceId(null)
         setBooting(false)
+        setFramesLoaded(false)
         return
       }
-
-      const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-      const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-      const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-      const list: MemberRow[] = memberRows.map((m) => ({
-        device_id: m.device_id,
-        role: m.role,
-        current_version: statusMap.get(m.device_id)?.current_version ?? null,
-        battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-        battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-        is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-        is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-      }))
       setFrames(list)
+      setFramesLoaded(true)
+      setIsFirstFramePairingComplete(list.length > 0)
 
       const saved = typeof window !== 'undefined' ? localStorage.getItem('activeDeviceId') : null
       const savedExists = saved && list.some((x) => x.device_id === saved)
@@ -1618,6 +1679,25 @@ export default function HomePage() {
     physicalFrameRenderAtRef.current = null
     if (typeof window !== 'undefined') localStorage.setItem('activeDeviceId', id)
     await loadDeviceSettings(id)
+  }
+
+  function handleFramesChanged(nextFrames: MemberRow[]) {
+    setFrames(nextFrames)
+    setFramesLoaded(true)
+    if (nextFrames.length > 0) setIsFirstFramePairingComplete(true)
+  }
+
+  async function handleFirstFramePairingComplete(nextFrames: MemberRow[], preferredDeviceId?: string | null) {
+    if (nextFrames.length === 0) return
+
+    handleFramesChanged(nextFrames)
+    setIsFirstFramePairingComplete(true)
+
+    const nextDeviceId = preferredDeviceId && nextFrames.some((frame) => frame.device_id === preferredDeviceId)
+      ? preferredDeviceId
+      : nextFrames[0].device_id
+
+    await selectDevice(nextDeviceId)
   }
 
   function prevLayout() {
@@ -1863,9 +1943,17 @@ async function handleSelectTab(k: TabKey) {
   return (
     <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
+        {shouldShowFirstFrameOnboarding && (
+          <FirstFrameOnboarding
+            language={language}
+            frames={frames}
+            onPairingComplete={handleFirstFramePairingComplete}
+          />
+        )}
+
         <div
-          className={`remind-app-shell ${!shouldRenderApp ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
-          aria-hidden={!shouldRenderApp || booting}
+          className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
+          aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding}
         >
           <>
             <TabBar
@@ -1904,7 +1992,7 @@ async function handleSelectTab(k: TabKey) {
                   frames={frames}
                   activeDeviceId={activeDeviceId}
                   onSelectDevice={selectDevice}
-                  onFramesChanged={setFrames}
+                  onFramesChanged={handleFramesChanged}
                   onLogout={logout}
                   onGo={(path) => router.push(path)}
                 />
@@ -6605,6 +6693,118 @@ function SettingRow({
   )
 }
 
+function PairFrameForm({
+  language,
+  frames,
+  onPairingComplete,
+  compact = false,
+}: {
+  language: AppLanguage
+  frames: MemberRow[]
+  onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null) => void | Promise<void>
+  compact?: boolean
+}) {
+  const [code, setCode] = useState('')
+  const [pairing, setPairing] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [messageKind, setMessageKind] = useState<'ok' | 'error'>('ok')
+  const t = tx(language)
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (pairing) return
+
+    const cleaned = code.trim().toUpperCase()
+    if (!cleaned) return
+
+    try {
+      setPairing(true)
+      setMessage(null)
+
+      const result = await claimPairCodeAndLoadFrames(cleaned, frames)
+      if (result.frames.length === 0) throw new Error(t.invalidPairCode)
+
+      await onPairingComplete(result.frames, result.newlyAddedDeviceId)
+      setCode('')
+      setMessageKind('ok')
+      setMessage(t.frameAdded)
+    } catch (e: unknown) {
+      setMessageKind('error')
+      const message = errorMessage(e)
+      setMessage(message === 'INVALID_PAIR_CODE' ? t.invalidPairCode : message)
+    } finally {
+      setPairing(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className={compact ? 'space-y-3' : 'w-full space-y-4'}>
+      <label className="block text-left">
+        <span className="block mb-2 text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">
+          {language === 'no' ? 'Paringskode' : 'Pair code'}
+        </span>
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          autoCapitalize="characters"
+          autoComplete="one-time-code"
+          inputMode="text"
+          maxLength={12}
+          placeholder="K7D4"
+          className="w-full h-14 rounded-2xl border border-[color:var(--bd-20)] bg-[color:var(--panel-05)] px-4 text-center text-xl tracking-[0.32em] text-[color:var(--fg)] outline-none focus:border-[#2aa3ff]"
+          disabled={pairing}
+        />
+      </label>
+
+      <button
+        type="submit"
+        disabled={pairing || code.trim().length === 0}
+        className="w-full h-14 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white tracking-[0.24em] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {pairing ? t.loading : (language === 'no' ? 'LEGG TIL FRAME' : 'ADD FRAME')}
+      </button>
+
+      {message && (
+        <div className={`text-sm ${messageKind === 'ok' ? 'text-[#2aa3ff]' : 'text-[color:var(--danger)]'}`} role="status">
+          {message}
+        </div>
+      )}
+    </form>
+  )
+}
+
+function FirstFrameOnboarding({
+  language,
+  frames,
+  onPairingComplete,
+}: {
+  language: AppLanguage
+  frames: MemberRow[]
+  onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null) => void | Promise<void>
+}) {
+  return (
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-white px-5 text-[#061b24]">
+      <div className="w-full max-w-[360px] rounded-[28px] border border-black/10 bg-white px-6 py-8 text-center shadow-[0_24px_80px_rgba(6,27,36,0.10)]">
+        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-black/10 text-xl tracking-[-0.08em]">
+          R
+        </div>
+        <h1 className="text-2xl font-medium tracking-[-0.03em] text-[#061b24]">Add your first frame</h1>
+        <p className="mt-3 mb-7 text-sm leading-6 text-[#52616b]">
+          Pair your RE:MIND frame to start using the app.
+        </p>
+
+        <div className="[--fg:#061b24] [--fg-50:rgba(6,27,36,0.50)] [--bd-20:rgba(6,27,36,0.20)] [--panel-05:rgba(6,27,36,0.03)] [--danger:#c2410c]">
+          <PairFrameForm
+            language={language}
+            frames={frames}
+            onPairingComplete={onPairingComplete}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MyFramesSection({
   language,
   frames,
@@ -6639,93 +6839,35 @@ function MyFramesSection({
         return
       }
 
-      const { data: members, error: membersError } = await supabase
-        .from('device_members')
-        .select('device_id, role')
-        .eq('user_id', session.user.id)
-        .order('device_id', { ascending: true })
-
-      if (membersError) {
-        onFramesChanged([])
-        return
-      }
-
-      const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-      const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-
-      const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-      const merged: MemberRow[] = memberRows.map((m) => ({
-        device_id: m.device_id,
-        role: m.role,
-        current_version: statusMap.get(m.device_id)?.current_version ?? null,
-        battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-        battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-        is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-        is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-      }))
-
-      onFramesChanged(merged)
+      onFramesChanged(await fetchCurrentUserFrames(session.user.id))
     } finally {
       setLoading(false)
     }
   }
 
-async function addFrame() {
-  const existingDeviceIds = new Set(frames.map((f) => f.device_id))
+  async function addFrame() {
+    const existingDeviceIds = new Set(frames.map((f) => f.device_id))
 
-  const code = prompt(t.addFramePrompt)
-  if (!code) return
-  const cleaned = code.trim().toUpperCase()
+    const code = prompt(t.addFramePrompt)
+    if (!code) return
 
-  const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
-  if (error) return alert(error.message)
-  if (data !== true) return alert(t.invalidPairCode)
+    try {
+      const result = await claimPairCodeAndLoadFrames(code, frames)
+      onFramesChanged(result.frames)
 
-  const { data: sessionData } = await supabase.auth.getSession()
-  const session = sessionData.session
+      const newlyAddedFrame = result.newlyAddedDeviceId
+        ? result.frames.find((f) => f.device_id === result.newlyAddedDeviceId)
+        : result.frames.find((f) => !existingDeviceIds.has(f.device_id))
+      if (newlyAddedFrame) {
+        onSelectDevice(newlyAddedFrame.device_id)
+      }
 
-  if (!session) {
-    await reload()
-    return
+      alert(t.frameAdded)
+    } catch (e: unknown) {
+      const message = errorMessage(e)
+      alert(message === 'INVALID_PAIR_CODE' ? t.invalidPairCode : message)
+    }
   }
-
-  const { data: members, error: membersError } = await supabase
-    .from('device_members')
-    .select('device_id, role')
-    .eq('user_id', session.user.id)
-    .order('device_id', { ascending: true })
-
-  if (membersError) {
-    await reload()
-    alert(t.frameAdded)
-    return
-  }
-
-  const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
-  const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
-
-  const statusMap = await fetchDeviceStatusMap(deviceIds)
-
-  const merged: MemberRow[] = memberRows.map((m) => ({
-    device_id: m.device_id,
-    role: m.role,
-    current_version: statusMap.get(m.device_id)?.current_version ?? null,
-    battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
-    battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
-    is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
-    is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
-  }))
-
-  onFramesChanged(merged)
-
-  const newlyAddedFrame = merged.find((f) => !existingDeviceIds.has(f.device_id))
-  if (newlyAddedFrame) {
-    onSelectDevice(newlyAddedFrame.device_id)
-  }
-
-  alert(t.frameAdded)
-}
 
   async function openShare() {
     if (!activeDeviceId) return
