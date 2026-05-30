@@ -2321,33 +2321,33 @@ function ConnectAppsScreen({
 
                   <button
                     type="button"
-                    disabled={app.key !== 'spond' && connected}
+                    disabled={(app.key !== 'spond' && connected) || (app.key === 'spond' && spondLoading)}
                     onClick={() => {
-                      if (app.key === 'spond') setSpondModalOpen(true)
-                      else setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
+                      if (app.key === 'spond') {
+                        if (connected) disconnectSpond()
+                        else setSpondModalOpen(true)
+                      } else {
+                        setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
+                      }
                     }}
-                    className={`shrink-0 h-8 px-3 rounded-xl border text-[11px] tracking-widest ${
+                    className={`shrink-0 h-8 px-3 rounded-xl border text-[11px] tracking-widest disabled:opacity-60 ${
                       connected
-                        ? 'border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[#1f9d4a]'
+                        ? app.key === 'spond'
+                          ? 'border-[#d94b4b]/35 text-[#d94b4b]'
+                          : 'border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[#1f9d4a]'
                         : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
                     }`}
                   >
-                    {connected ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                    {connected && app.key === 'spond'
+                      ? (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')
+                      : connected
+                        ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED')
+                        : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                   </button>
                 </div>
                 {app.key === 'spond' && spondConnected && (
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3">
-                    <div className="min-w-0 text-xs text-[color:var(--fg-45)]">
-                      {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={disconnectSpond}
-                      disabled={spondLoading}
-                      className="shrink-0 h-8 px-3 rounded-xl border border-[#d94b4b]/35 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
-                    >
-                      {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
-                    </button>
+                  <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
                   </div>
                 )}
               </div>
