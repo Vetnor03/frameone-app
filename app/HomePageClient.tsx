@@ -6783,23 +6783,21 @@ function FirstFrameOnboarding({
   onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null) => void | Promise<void>
 }) {
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-white px-5 text-[#061b24]">
-      <div className="w-full max-w-[360px] rounded-[28px] border border-black/10 bg-white px-6 py-8 text-center shadow-[0_24px_80px_rgba(6,27,36,0.10)]">
-        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-black/10 text-xl tracking-[-0.08em]">
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[color:var(--app-bg)] px-5 text-[color:var(--fg)]">
+      <div className="w-full max-w-[360px] rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-6 py-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur">
+        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--bd-15)] text-xl tracking-[-0.08em] text-[color:var(--fg-80)]">
           R
         </div>
-        <h1 className="text-2xl font-medium tracking-[-0.03em] text-[#061b24]">Add your first frame</h1>
-        <p className="mt-3 mb-7 text-sm leading-6 text-[#52616b]">
+        <h1 className="text-2xl font-medium tracking-[-0.03em] text-[color:var(--fg)]">Add your first frame</h1>
+        <p className="mt-3 mb-7 text-sm leading-6 text-[color:var(--fg-60)]">
           Pair your RE:MIND frame to start using the app.
         </p>
 
-        <div className="[--fg:#061b24] [--fg-50:rgba(6,27,36,0.50)] [--bd-20:rgba(6,27,36,0.20)] [--panel-05:rgba(6,27,36,0.03)] [--danger:#c2410c]">
-          <PairFrameForm
-            language={language}
-            frames={frames}
-            onPairingComplete={onPairingComplete}
-          />
-        </div>
+        <PairFrameForm
+          language={language}
+          frames={frames}
+          onPairingComplete={onPairingComplete}
+        />
       </div>
     </div>
   )
