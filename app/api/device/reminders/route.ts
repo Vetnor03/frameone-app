@@ -38,6 +38,20 @@ type DeviceReminderItem = {
   repeat: ReminderRepeatKey
   due_time: string | null
   display_time: string | null
+  source?: 'spond' | 'remind'
+  external_id?: string
+}
+
+type IntegrationItemRow = {
+  id: string
+  user_id: string
+  provider: string
+  external_id: string
+  title: string | null
+  body: string | null
+  starts_at: string | null
+  due_at: string | null
+  priority: number | null
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
@@ -378,6 +392,77 @@ function sortTimeValue(value: string | null) {
   return value || '99:99'
 }
 
+function isoToYmdInTimeZone(value: string, timeZone: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = getDatePartsInTimeZone(date, timeZone)
+  if (!Number.isFinite(parts.year) || !Number.isFinite(parts.month) || !Number.isFinite(parts.day)) return null
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`
+}
+
+function isoToHmInTimeZone(value: string, timeZone: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = getClockPartsInTimeZone(date, timeZone)
+  if (!Number.isFinite(parts.hour) || !Number.isFinite(parts.minute)) return null
+  return `${pad2(parts.hour)}:${pad2(parts.minute)}`
+}
+
+function buildSpondReminderItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string,
+  includeOverdue: boolean
+): DeviceReminderItem[] {
+  return rows.flatMap((row) => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    if (!title || !externalId) return []
+
+    const timestamp = row.starts_at || row.due_at
+    const occurrenceDate = timestamp ? isoToYmdInTimeZone(timestamp, timeZone) : todayYmd
+    if (!occurrenceDate) return []
+    if (occurrenceDate > horizonEndYmd) return []
+
+    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
+    if (!includeOverdue && daysUntil < 0) return []
+
+    const displayTime = timestamp ? isoToHmInTimeZone(timestamp, timeZone) : null
+
+    return [{
+      reminder_id: `spond:${externalId}`,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: timestamp ? formatDisplayDate(occurrenceDate, todayYmd) : 'Spond',
+      days_until: daysUntil,
+      is_overdue: daysUntil < 0,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: displayTime,
+      display_time: displayTime,
+      source: 'spond' as const,
+      external_id: externalId,
+    }]
+  })
+}
+
+function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
+  const as = a.source === 'spond' ? 0 : 1
+  const bs = b.source === 'spond' ? 0 : 1
+  if (as !== bs) return as - bs
+
+  if (a.days_until !== b.days_until) return a.days_until - b.days_until
+  if (a.occurrence_date < b.occurrence_date) return -1
+  if (a.occurrence_date > b.occurrence_date) return 1
+
+  const at = sortTimeValue(a.display_time)
+  const bt = sortTimeValue(b.display_time)
+  if (at < bt) return -1
+  if (at > bt) return 1
+
+  return a.title.localeCompare(b.title)
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -429,25 +514,55 @@ export async function GET(req: Request) {
 
     const completedKeySet = new Set(
       (Array.isArray(completionsData) ? completionsData : []).map(
-        (x: any) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`
+        (x: { reminder_id?: unknown; occurrence_date?: unknown }) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`
       )
     )
 
-    const items: DeviceReminderItem[] = rows
+    const manualItems: DeviceReminderItem[] = rows
       .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue))
       .filter((item) => !completedKeySet.has(`${item.reminder_id}__${item.occurrence_date}`))
-      .sort((a, b) => {
-        if (a.days_until !== b.days_until) return a.days_until - b.days_until
-        if (a.occurrence_date < b.occurrence_date) return -1
-        if (a.occurrence_date > b.occurrence_date) return 1
+      .map((item) => ({ ...item, source: 'remind' as const }))
 
-        const at = sortTimeValue(a.display_time)
-        const bt = sortTimeValue(b.display_time)
-        if (at < bt) return -1
-        if (at > bt) return 1
+    const { data: membersData, error: membersError } = await supabase
+      .from('device_members')
+      .select('user_id')
+      .eq('device_id', device_id)
 
-        return a.title.localeCompare(b.title)
-      })
+    if (membersError) {
+      return NextResponse.json({ error: membersError.message }, { status: 500 })
+    }
+
+    const memberUserIds = Array.from(new Set(
+      (Array.isArray(membersData) ? membersData : [])
+        .map((row: { user_id?: unknown }) => String(row.user_id || '').trim())
+        .filter(Boolean)
+    ))
+
+    let spondItems: DeviceReminderItem[] = []
+    if (memberUserIds.length > 0) {
+      const { data: integrationItemsData, error: integrationItemsError } = await supabase
+        .from('integration_items')
+        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority')
+        .eq('provider', 'spond')
+        .in('user_id', memberUserIds)
+        .order('priority', { ascending: true })
+        .order('starts_at', { ascending: true, nullsFirst: false })
+
+      if (integrationItemsError) {
+        return NextResponse.json({ error: integrationItemsError.message }, { status: 500 })
+      }
+
+      spondItems = buildSpondReminderItems(
+        Array.isArray(integrationItemsData) ? (integrationItemsData as IntegrationItemRow[]) : [],
+        todayYmd,
+        horizonEndYmd,
+        timeZone,
+        includeOverdue
+      )
+    }
+
+    const items = [...spondItems, ...manualItems]
+      .sort(compareReminderItems)
       .slice(0, limit)
 
     return NextResponse.json({
@@ -459,9 +574,9 @@ export async function GET(req: Request) {
       horizon_end_ymd: horizonEndYmd,
       items,
     })
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? 'Unknown error' },
+      { error: e instanceof Error ? e.message : 'Unknown error' },
       { status: 500 }
     )
   }

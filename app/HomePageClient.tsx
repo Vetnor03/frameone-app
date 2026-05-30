@@ -2187,10 +2187,83 @@ function ConnectAppsScreen({
   onBack,
 }: {
   language: AppLanguage
-  modulesJson: Record<string, any>
+  modulesJson: Record<string, unknown>
   onBack: () => void
 }) {
   const [status, setStatus] = useState<string | null>(null)
+  const [spondConnected, setSpondConnected] = useState(connectAppIsConnected(modulesJson, 'spond'))
+  const [spondAccount, setSpondAccount] = useState<string | null>(null)
+  const [spondModalOpen, setSpondModalOpen] = useState(false)
+  const [spondUsername, setSpondUsername] = useState('')
+  const [spondPassword, setSpondPassword] = useState('')
+  const [spondLoading, setSpondLoading] = useState(false)
+
+  async function fetchSpondStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) return
+    const resp = await fetch('/api/integrations/spond/status', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!resp.ok) return
+    const json = await resp.json()
+    setSpondConnected(json?.connected === true)
+    setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+  }
+
+  async function connectSpond() {
+    const username = spondUsername.trim()
+    if (!username || !spondPassword || spondLoading) return
+    setSpondLoading(true)
+    setStatus(null)
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      const resp = await fetch('/api/integrations/spond/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ username, password: spondPassword }),
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(json?.error || 'Failed to connect Spond')
+      setSpondConnected(true)
+      setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
+      setSpondPassword('')
+      setSpondModalOpen(false)
+      setStatus(language === 'no' ? 'Spond er tilkoblet' : 'Spond connected')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      setStatus(message || (language === 'no' ? 'Kunne ikke koble til Spond' : 'Could not connect Spond'))
+    } finally {
+      setSpondLoading(false)
+    }
+  }
+
+  async function disconnectSpond() {
+    if (spondLoading) return
+    setSpondLoading(true)
+    setStatus(null)
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      const resp = await fetch('/api/integrations/spond/disconnect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(json?.error || 'Failed to disconnect Spond')
+      setSpondConnected(false)
+      setSpondAccount(null)
+      setStatus(language === 'no' ? 'Spond er frakoblet' : 'Spond disconnected')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      setStatus(message || (language === 'no' ? 'Kunne ikke koble fra Spond' : 'Could not disconnect Spond'))
+    } finally {
+      setSpondLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSpondStatus()
+  }, [])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string }> = [
     {
       key: 'spond',
@@ -2234,7 +2307,7 @@ function ConnectAppsScreen({
 
         <div className="mt-4 space-y-2.5">
           {apps.map((app) => {
-            const connected = connectAppIsConnected(modulesJson, app.key)
+            const connected = app.key === 'spond' ? spondConnected : connectAppIsConnected(modulesJson, app.key)
             return (
               <div
                 key={app.key}
@@ -2248,8 +2321,11 @@ function ConnectAppsScreen({
 
                   <button
                     type="button"
-                    disabled={connected}
-                    onClick={() => setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)}
+                    disabled={app.key !== 'spond' && connected}
+                    onClick={() => {
+                      if (app.key === 'spond') setSpondModalOpen(true)
+                      else setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
+                    }}
                     className={`shrink-0 h-8 px-3 rounded-xl border text-[11px] tracking-widest ${
                       connected
                         ? 'border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[#1f9d4a]'
@@ -2259,6 +2335,21 @@ function ConnectAppsScreen({
                     {connected ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                   </button>
                 </div>
+                {app.key === 'spond' && spondConnected && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3">
+                    <div className="min-w-0 text-xs text-[color:var(--fg-45)]">
+                      {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={disconnectSpond}
+                      disabled={spondLoading}
+                      className="shrink-0 h-8 px-3 rounded-xl border border-[#d94b4b]/35 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60"
+                    >
+                      {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -2270,6 +2361,70 @@ function ConnectAppsScreen({
           </div>
         )}
       </div>
+
+      {spondModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Koble til Spond' : 'Connect Spond'}</div>
+                <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">
+                  {language === 'no'
+                    ? 'Innlogging sendes bare til serveren og lagres kryptert.'
+                    : 'Your login is sent only to the server and stored encrypted.'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSpondModalOpen(false)}
+                className="h-8 w-8 rounded-full border border-[color:var(--bd-15)] text-[color:var(--fg-60)]"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <label className="block">
+                <span className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'E-POST / BRUKERNAVN' : 'EMAIL / USERNAME'}</span>
+                <input
+                  value={spondUsername}
+                  onChange={(e) => setSpondUsername(e.target.value)}
+                  autoComplete="username"
+                  className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'PASSORD' : 'PASSWORD'}</span>
+                <input
+                  type="password"
+                  value={spondPassword}
+                  onChange={(e) => setSpondPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSpondModalOpen(false)}
+                className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)]"
+              >
+                {language === 'no' ? 'AVBRYT' : 'CANCEL'}
+              </button>
+              <button
+                type="button"
+                onClick={connectSpond}
+                disabled={spondLoading || !spondUsername.trim() || !spondPassword}
+                className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]"
+              >
+                {spondLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
