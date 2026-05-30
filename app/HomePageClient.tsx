@@ -992,6 +992,7 @@ export default function HomePage() {
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
+  const [remindersConnectScreenOpen, setRemindersConnectScreenOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
@@ -1924,6 +1925,7 @@ export default function HomePage() {
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
+  setRemindersConnectScreenOpen(false)
 
   setActiveTab(k)
 }
@@ -2000,7 +2002,17 @@ async function handleSelectTab(k: TabKey) {
 
               {activeTab !== 'frame' && activeTab !== 'settings' && (
                 <div className="relative h-full">
-                  <div className="absolute right-0 -top-4 z-20">
+                  <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
+                    {activeTab === 'reminders' && !remindersConnectScreenOpen && (
+                      <button
+                        type="button"
+                        onClick={() => setRemindersConnectScreenOpen(true)}
+                        className="inline-flex h-7 items-center justify-center rounded-full border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-70)] bg-[color:var(--app-bg)]/80"
+                      >
+                        {language === 'no' ? 'KOBLE APPER' : 'CONNECT APPS'}
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         const module = activeTab as ModuleKey
@@ -2028,16 +2040,25 @@ async function handleSelectTab(k: TabKey) {
                       </svg>
                     </button>
                   </div>
-                  <ModuleSettingsTab
-                    language={language}
-                    module={activeTab as ModuleKey}
-                    layoutKey={layoutKey}
-                    cells={cellsByLayout[layoutKey]}
-                    modulesJson={modulesJson}
-                    setModulesJson={setModulesJson}
-                    markDirty={markDirty}
-                    activeDeviceId={activeDeviceId}
-                  />
+
+                  {activeTab === 'reminders' && remindersConnectScreenOpen ? (
+                    <ConnectAppsScreen
+                      language={language}
+                      modulesJson={modulesJson}
+                      onBack={() => setRemindersConnectScreenOpen(false)}
+                    />
+                  ) : (
+                    <ModuleSettingsTab
+                      language={language}
+                      module={activeTab as ModuleKey}
+                      layoutKey={layoutKey}
+                      cells={cellsByLayout[layoutKey]}
+                      modulesJson={modulesJson}
+                      setModulesJson={setModulesJson}
+                      markDirty={markDirty}
+                      activeDeviceId={activeDeviceId}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -2139,6 +2160,115 @@ function SaveToast({ visible, text }: { visible: boolean; text: string }) {
     >
       <div className="px-4 py-2 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--toast-bg)] backdrop-blur text-[color:var(--fg-80)] tracking-widest text-xs">
         {text}
+      </div>
+    </div>
+  )
+}
+
+type ConnectAppKey = 'spond' | 'transponder' | 'teams'
+
+function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
+  const integrations = modulesJson?.integrations
+  const candidates = [
+    integrations && typeof integrations === 'object' && !Array.isArray(integrations) ? integrations[key] : null,
+    Array.isArray(integrations) ? integrations.find((item: any) => String(item?.key ?? item?.name ?? '').toLowerCase() === key) : null,
+    modulesJson?.[key],
+  ]
+
+  return candidates.some((item) => {
+    if (!item || typeof item !== 'object') return false
+    return !!(item.connected || item.enabled || item.accessToken || item.access_token || item.refreshToken || item.refresh_token)
+  })
+}
+
+function ConnectAppsScreen({
+  language,
+  modulesJson,
+  onBack,
+}: {
+  language: AppLanguage
+  modulesJson: Record<string, any>
+  onBack: () => void
+}) {
+  const [status, setStatus] = useState<string | null>(null)
+  const apps: Array<{ key: ConnectAppKey; name: string; description: string }> = [
+    {
+      key: 'spond',
+      name: 'Spond',
+      description:
+        language === 'no'
+          ? 'Vis Spond-meldinger på framen din'
+          : 'Show Spond messages on your frame',
+    },
+    {
+      key: 'transponder',
+      name: 'Transponder',
+      description:
+        language === 'no'
+          ? 'Vis Transponder-meldinger på framen din'
+          : 'Show Transponder messages on your frame',
+    },
+    {
+      key: 'teams',
+      name: 'Teams',
+      description:
+        language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
+    },
+  ]
+
+  return (
+    <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
+      <div className="pt-5 pb-6">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
+          >
+            {language === 'no' ? 'TILBAKE' : 'BACK'}
+          </button>
+          <div className="text-[color:var(--fg-90)] text-sm font-semibold">
+            {language === 'no' ? 'Koble til apper' : 'Connect apps'}
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2.5">
+          {apps.map((app) => {
+            const connected = connectAppIsConnected(modulesJson, app.key)
+            return (
+              <div
+                key={app.key}
+                className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[color:var(--fg-90)]">{app.name}</div>
+                    <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={connected}
+                    onClick={() => setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)}
+                    className={`shrink-0 h-8 px-3 rounded-xl border text-[11px] tracking-widest ${
+                      connected
+                        ? 'border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[#1f9d4a]'
+                        : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
+                    }`}
+                  >
+                    {connected ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {status && (
+          <div className="mt-3 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 px-4 py-3 text-sm text-[#2aa3ff]">
+            {status}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -10867,8 +10997,6 @@ function RemindersModuleSettingsTab({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
   const [tagFilter, setTagFilter] = useState<ReminderTagFilter>('all')
-  const [remindersListOpen, setRemindersListOpen] = useState(false)
-  const [connectStatus, setConnectStatus] = useState<string | null>(null)
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
@@ -11193,35 +11321,6 @@ const sortedReminders = useMemo(() => {
   }
 
   const addDate = selectedDayYmd || todayYmd
-  const activeReminderCount = reminders.length
-  const activeReminderLabel =
-    language === 'no'
-      ? `${activeReminderCount} ${activeReminderCount === 1 ? 'aktiv' : 'aktive'}`
-      : `${activeReminderCount} active`
-  const connectApps = [
-    {
-      key: 'spond',
-      name: 'Spond',
-      description:
-        language === 'no'
-          ? 'Vis Spond-meldinger på framen din'
-          : 'Show Spond messages on your frame',
-    },
-    {
-      key: 'transponder',
-      name: 'Transponder',
-      description:
-        language === 'no'
-          ? 'Vis Transponder-meldinger på framen din'
-          : 'Show Transponder messages on your frame',
-    },
-    {
-      key: 'teams',
-      name: 'Teams',
-      description:
-        language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
-    },
-  ]
   const weekdayShort = language === 'no' ? ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'] : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
   return (
@@ -11250,8 +11349,8 @@ const sortedReminders = useMemo(() => {
         }
       `}</style>
 
-      <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
-        <div className="mt-4 max-[420px]:mt-3 flex flex-col pb-6">
+      <div className="h-full flex flex-col min-h-0">
+        <div className="mt-4 max-[420px]:mt-3 flex-1 min-h-0 flex flex-col">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
               <div className="text-[color:var(--fg-90)] text-sm font-semibold capitalize">
@@ -11335,148 +11434,108 @@ const sortedReminders = useMemo(() => {
             </div>
           </div>
 
-          <div className="mt-4 max-[420px]:mt-3 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3.5 max-[420px]:p-3">
+          <div className="mt-2 max-[420px]:mt-1.5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm text-[color:var(--fg-90)] truncate">
+                {selectedDayYmd ? formatReminderDateLabel(language, selectedDayYmd) : (language === 'no' ? 'Viser alle datoer' : 'Showing all dates')}
+              </div>
+            </div>
+
             <button
-              type="button"
-              onClick={() => setRemindersListOpen((v) => !v)}
-              className="w-full flex items-center justify-between rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3"
+              onClick={() => setSelectedDayYmd(null)}
+              disabled={!selectedDayYmd}
+              className={`shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] tracking-widest text-[11px] ${
+                selectedDayYmd ? 'text-[color:var(--fg-70)]' : 'invisible pointer-events-none'
+              }`}
             >
-              <div className="text-left">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
-                    {language === 'no' ? 'PÅMINNELSER' : 'REMINDERS'}
-                  </div>
-                  <div className="rounded-full border border-[color:var(--bd-15)] px-2 py-0.5 text-[10px] tracking-widest text-[color:var(--fg-55)]">
-                    {activeReminderLabel}
-                  </div>
-                </div>
-                <div className="mt-1 text-xs text-[color:var(--fg-40)]">
-                  {remindersListOpen
-                    ? language === 'no'
-                      ? 'Trykk for å skjule listen'
-                      : 'Tap to hide the list'
-                    : language === 'no'
-                      ? 'Trykk for å vise og redigere'
-                      : 'Tap to view and edit'}
-                </div>
-              </div>
-
-              <div
-                className={`text-[color:var(--fg-60)] text-base leading-none transition-transform duration-200 ${
-                  remindersListOpen ? 'rotate-180' : 'rotate-0'
-                }`}
-              >
-                ▾
-              </div>
+              {language === 'no' ? 'TØM' : 'CLEAR'}
             </button>
+          </div>
 
-            {remindersListOpen && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm text-[color:var(--fg-90)] truncate">
-                      {selectedDayYmd ? formatReminderDateLabel(language, selectedDayYmd) : (language === 'no' ? 'Viser alle datoer' : 'Showing all dates')}
-                    </div>
-                  </div>
+          <div className="mt-2 max-[420px]:mt-1.5 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
+            {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
+              const active = tagFilter === opt
+              return (
+                <button
+                  key={opt}
+                  onClick={() => setTagFilter(opt)}
+                  className={`h-8 max-[420px]:h-[30px] rounded-xl border text-[11px] tracking-widest transition ${
+                    active
+                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                      : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
+                  }`}
+                >
+                  {reminderTagFilterLabel(language, opt)}
+                </button>
+              )
+            })}
+          </div>
 
-                  <button
-                    onClick={() => setSelectedDayYmd(null)}
-                    disabled={!selectedDayYmd}
-                    className={`shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-15)] tracking-widest text-[11px] ${
-                      selectedDayYmd ? 'text-[color:var(--fg-70)]' : 'invisible pointer-events-none'
-                    }`}
-                  >
-                    {language === 'no' ? 'TØM' : 'CLEAR'}
-                  </button>
+          <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
+            <div className="h-full overflow-y-auto no-scrollbar pr-1">
+              {!activeDeviceId ? (
+                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
+              ) : loading ? (
+                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+              ) : sortedReminders.length === 0 ? (
+                <div className="text-sm text-[color:var(--fg-50)]">
+                  {selectedDayYmd
+                    ? language === 'no'
+                      ? 'Ingen påminnelser på denne datoen'
+                      : 'No reminders on this date'
+                    : language === 'no'
+                      ? 'Ingen påminnelser ennå'
+                      : 'No reminders yet'}
                 </div>
-
-                <div className="mt-2 max-[420px]:mt-1.5 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
-                  {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
-                    const active = tagFilter === opt
-                    return (
-                      <button
-                        key={opt}
-                        onClick={() => setTagFilter(opt)}
-                        className={`h-8 max-[420px]:h-[30px] rounded-xl border text-[11px] tracking-widest transition ${
-                          active
-                            ? 'border-[#2aa3ff] text-[#2aa3ff]'
-                            : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
-                        }`}
-                      >
-                        {reminderTagFilterLabel(language, opt)}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className="mt-2 max-[420px]:mt-1.5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--app-bg)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3">
-                  <div className="max-h-[42vh] overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
-                    {!activeDeviceId ? (
-                      <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
-                    ) : loading ? (
-                      <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
-                    ) : sortedReminders.length === 0 ? (
-                      <div className="text-sm text-[color:var(--fg-50)]">
-                        {selectedDayYmd
-                          ? language === 'no'
-                            ? 'Ingen påminnelser på denne datoen'
-                            : 'No reminders on this date'
-                          : language === 'no'
-                            ? 'Ingen påminnelser ennå'
-                            : 'No reminders yet'}
+              ) : (
+                <div className="divide-y divide-[color:var(--bd-10)]">
+                  {sortedReminders.map((item) => (
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectReminderDate(item.displayDate)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          selectReminderDate(item.displayDate)
+                        }
+                      }}
+                      className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
+                        {formatReminderTitleWithTime(item)}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
+                          {`${formatReminderFullDateLabel(language, item.displayDate)}${
+                            normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
+                          } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="divide-y divide-[color:var(--bd-10)]">
-                        {sortedReminders.map((item) => (
-                          <div
-                            key={item.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => selectReminderDate(item.displayDate)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
-                                selectReminderDate(item.displayDate)
-                              }
+                      <div className="shrink-0 self-center">
+                        {completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
+                          <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
+                            {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingReminder(item)
+                              setSheetOpen(true)
                             }}
-                            className="flex items-start justify-between gap-2.5 py-1.5 first:pt-0 last:pb-0 cursor-pointer"
+                            className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
                           >
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[color:var(--fg-95)] text-sm leading-tight font-medium">
-                                {formatReminderTitleWithTime(item)}
-                              </div>
-                              <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
-                                {`${formatReminderFullDateLabel(language, item.displayDate)}${
-                                  normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
-                                } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
-                              </div>
-                            </div>
-                            <div className="shrink-0 self-center">
-                              {completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
-                                <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
-                                  {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setEditingReminder(item)
-                                    setSheetOpen(true)
-                                  }}
-                                  className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
-                                >
-                                  {language === 'no' ? 'REDIGER' : 'EDIT'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                            {language === 'no' ? 'REDIGER' : 'EDIT'}
+                          </button>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <div className="py-5 flex flex-col items-center relative z-20">
@@ -11503,35 +11562,6 @@ const sortedReminders = useMemo(() => {
             >
               {language === 'no' ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}
             </button>
-          </div>
-
-          <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
-            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">
-              {language === 'no' ? 'KOBLE TIL APPER' : 'CONNECT APPS'}
-            </div>
-            <div className="mt-3 grid gap-2.5">
-              {connectApps.map((app) => (
-                <button
-                  key={app.key}
-                  type="button"
-                  onClick={() => setConnectStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)}
-                  className="w-full rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3 text-left transition active:scale-[0.99]"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[color:var(--fg-90)]">{app.name}</div>
-                      <div className="mt-1 text-xs text-[color:var(--fg-45)]">{app.description}</div>
-                    </div>
-                    <div className="shrink-0 text-[color:var(--fg-45)] text-lg">›</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            {connectStatus && (
-              <div className="mt-3 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 px-4 py-3 text-sm text-[#2aa3ff]">
-                {connectStatus}
-              </div>
-            )}
           </div>
         </div>
       </div>
