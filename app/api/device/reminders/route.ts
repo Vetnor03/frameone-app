@@ -1,7 +1,7 @@
 // app/api/device/reminders/route.ts
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
@@ -28,6 +28,20 @@ type ReminderRow = {
   is_done: boolean | null
 }
 
+type ExternalReminderRow = {
+  provider: string | null
+  external_id: string | null
+  title: string | null
+  text: string | null
+  due_at: string | null
+  source_metadata: Record<string, unknown> | null
+}
+
+type ReminderCompletionRow = {
+  reminder_id: string | null
+  occurrence_date: string | null
+}
+
 type DeviceReminderItem = {
   reminder_id: string
   title: string
@@ -38,6 +52,10 @@ type DeviceReminderItem = {
   repeat: ReminderRepeatKey
   due_time: string | null
   display_time: string | null
+  source?: 'remind' | 'spond'
+  provider?: string | null
+  external_id?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
@@ -336,6 +354,10 @@ function buildOccurrencesForRow(
       repeat,
       due_time: dueTime,
       display_time: dueTime,
+      source: 'remind',
+      provider: null,
+      external_id: null,
+      metadata: null,
     })
   }
 
@@ -376,6 +398,60 @@ function buildOccurrencesForRow(
 
 function sortTimeValue(value: string | null) {
   return value || '99:99'
+}
+
+async function resolveDeviceOwnerUserId(supabase: SupabaseClient, deviceId: string) {
+  const { data: ownerRow, error: ownerError } = await supabase
+    .from('device_members')
+    .select('user_id, role')
+    .eq('device_id', deviceId)
+    .eq('role', 'owner')
+    .maybeSingle()
+
+  if (ownerError) throw new Error(ownerError.message)
+  if (ownerRow?.user_id) return String(ownerRow.user_id)
+
+  const { data: memberRow, error: memberError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', deviceId)
+    .order('user_id', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (memberError) throw new Error(memberError.message)
+  return memberRow?.user_id ? String(memberRow.user_id) : null
+}
+
+function externalItemToDeviceReminderItem(row: ExternalReminderRow, todayYmd: string, timeZone: string): DeviceReminderItem | null {
+  const due = new Date(String(row?.due_at ?? ''))
+  if (!Number.isFinite(due.getTime())) return null
+
+  const { year, month, day } = getDatePartsInTimeZone(due, timeZone)
+  const { hour, minute } = getClockPartsInTimeZone(due, timeZone)
+  const occurrenceYmd = `${year}-${pad2(month)}-${pad2(day)}`
+  const dueTime = `${pad2(hour)}:${pad2(minute)}`
+  const title = String(row?.title ?? row?.text ?? '').trim()
+  const externalId = String(row?.external_id ?? '').trim()
+  if (!title || !externalId) return null
+
+  const days_until = diffDaysFromYmd(todayYmd, occurrenceYmd)
+
+  return {
+    reminder_id: `spond:${externalId}`,
+    title,
+    occurrence_date: occurrenceYmd,
+    display_date: formatDisplayDate(occurrenceYmd, todayYmd),
+    days_until,
+    is_overdue: days_until < 0,
+    repeat: 'none',
+    due_time: dueTime,
+    display_time: dueTime,
+    source: 'spond',
+    provider: 'spond',
+    external_id: externalId,
+    metadata: row?.source_metadata && typeof row.source_metadata === 'object' ? row.source_metadata : null,
+  }
 }
 
 export async function GET(req: Request) {
@@ -427,15 +503,44 @@ export async function GET(req: Request) {
     const horizonEndYmd = toLocalYmd(addDaysLocal(today, horizonDays))
     const rows = Array.isArray(data) ? (data as ReminderRow[]) : []
 
+    const ownerUserId = await resolveDeviceOwnerUserId(supabase, device_id)
+    let externalRows: ExternalReminderRow[] = []
+    if (ownerUserId) {
+      const minDueAt = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      const { data: externalData, error: externalError } = await supabase
+        .from('external_reminder_items')
+        .select('provider, external_id, title, text, due_at, source_metadata')
+        .eq('user_id', ownerUserId)
+        .eq('provider', 'spond')
+        .is('dismissed_at', null)
+        .gte('due_at', minDueAt)
+        .order('due_at', { ascending: true })
+        .limit(12)
+
+      if (externalError) {
+        return NextResponse.json({ error: externalError.message }, { status: 500 })
+      }
+      externalRows = Array.isArray(externalData) ? (externalData as ExternalReminderRow[]) : []
+    }
+
     const completedKeySet = new Set(
-      (Array.isArray(completionsData) ? completionsData : []).map(
-        (x: any) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`
+      (Array.isArray(completionsData) ? (completionsData as ReminderCompletionRow[]) : []).map(
+        (x) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`
       )
     )
 
-    const items: DeviceReminderItem[] = rows
+    const manualItems = rows
       .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue))
       .filter((item) => !completedKeySet.has(`${item.reminder_id}__${item.occurrence_date}`))
+
+    const externalItems = externalRows
+      .map((row) => externalItemToDeviceReminderItem(row, todayYmd, timeZone))
+      .filter(Boolean) as DeviceReminderItem[]
+
+    const todaySpondItems = externalItems.filter((item) => item.days_until === 0).slice(0, 3)
+    const otherSpondItems = externalItems.filter((item) => item.days_until !== 0).slice(0, 2)
+
+    const items: DeviceReminderItem[] = [...manualItems, ...todaySpondItems, ...otherSpondItems]
       .sort((a, b) => {
         if (a.days_until !== b.days_until) return a.days_until - b.days_until
         if (a.occurrence_date < b.occurrence_date) return -1
@@ -459,9 +564,9 @@ export async function GET(req: Request) {
       horizon_end_ymd: horizonEndYmd,
       items,
     })
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? 'Unknown error' },
+      { error: e instanceof Error ? e.message : 'Unknown error' },
       { status: 500 }
     )
   }

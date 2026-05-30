@@ -7360,11 +7360,23 @@ type ReminderUiItem = {
   tag: ReminderTag | null
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
+  source?: 'remind' | 'spond'
+  provider?: string | null
+  externalId?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 type ReminderCompletionItem = {
   reminderId: string
   occurrenceDate: string
+}
+
+type SpondProviderStatus = {
+  connected: boolean
+  status: string
+  last_sync_at: string | null
+  error_message: string | null
+  provider_enabled?: boolean
 }
 
 type ReminderListItem = ReminderUiItem & { displayDate: string }
@@ -10863,6 +10875,9 @@ function RemindersModuleSettingsTab({
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [spondStatus, setSpondStatus] = useState<SpondProviderStatus | null>(null)
+  const [spondSheetOpen, setSpondSheetOpen] = useState(false)
+  const [spondBusy, setSpondBusy] = useState(false)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
@@ -10938,9 +10953,104 @@ const items: ReminderUiItem[] = (data || [])
   }))
   .filter((x) => x.title && x.date)
 
-      setReminders(items)
+      let externalItems: ReminderUiItem[] = []
+      try {
+        const resp = await fetch('/api/providers/spond/items', { cache: 'no-store' })
+        const json = await resp.json().catch(() => null)
+        if (resp.ok && Array.isArray(json?.items)) {
+          externalItems = json.items
+            .map((row: any) => {
+              const due = new Date(String(row.due_at ?? ''))
+              if (!Number.isFinite(due.getTime())) return null
+              return {
+                id: `spond:${String(row.external_id ?? '')}`,
+                title: String(row.title ?? row.text ?? '').trim(),
+                date: toLocalYmd(due),
+                time: normalizeReminderTime(`${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}`),
+                tag: 'event',
+                repeat: 'none',
+                customRepeatDays: null,
+                source: 'spond',
+                provider: 'spond',
+                externalId: String(row.external_id ?? ''),
+                metadata: row.source_metadata && typeof row.source_metadata === 'object' ? row.source_metadata : null,
+              } as ReminderUiItem
+            })
+            .filter((x: ReminderUiItem | null) => x && x.title && x.externalId) as ReminderUiItem[]
+        }
+      } catch {
+        externalItems = []
+      }
+
+      setReminders([...items.map((item) => ({ ...item, source: 'remind' as const })), ...externalItems])
+      await loadSpondStatus()
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadSpondStatus() {
+    try {
+      const resp = await fetch('/api/providers/spond/status', { cache: 'no-store' })
+      const json = await resp.json().catch(() => null)
+      if (resp.ok && json?.ok) {
+        setSpondStatus({
+          connected: !!json.connected,
+          status: String(json.status ?? 'disconnected'),
+          last_sync_at: json.last_sync_at ?? null,
+          error_message: json.error_message ?? null,
+          provider_enabled: json.provider_enabled !== false,
+        })
+      }
+    } catch {
+      // Keep Spond optional; reminders should still work if provider status cannot load.
+    }
+  }
+
+  async function syncSpond() {
+    setSpondBusy(true)
+    try {
+      const resp = await fetch('/api/providers/spond/sync', { method: 'POST' })
+      const json = await resp.json().catch(() => null)
+      if (!resp.ok || json?.ok === false) throw new Error(json?.error || 'Spond sync failed')
+      await loadReminders()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error))
+      await loadSpondStatus()
+    } finally {
+      setSpondBusy(false)
+    }
+  }
+
+  async function disconnectSpond() {
+    if (!window.confirm(language === 'no' ? 'Koble fra Spond?' : 'Disconnect Spond?')) return
+    setSpondBusy(true)
+    try {
+      const resp = await fetch('/api/providers/spond/disconnect', { method: 'POST' })
+      const json = await resp.json().catch(() => null)
+      if (!resp.ok || json?.ok === false) throw new Error(json?.error || 'Disconnect failed')
+      setSpondStatus({ connected: false, status: 'disconnected', last_sync_at: null, error_message: null })
+      await loadReminders()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSpondBusy(false)
+    }
+  }
+
+  async function dismissSpondItem(item: ReminderUiItem) {
+    if (!item.externalId) return
+    try {
+      const resp = await fetch('/api/providers/spond/dismiss', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ external_id: item.externalId }),
+      })
+      const json = await resp.json().catch(() => null)
+      if (!resp.ok || json?.ok === false) throw new Error(json?.error || 'Dismiss failed')
+      setReminders((prev) => prev.filter((x) => x.id !== item.id))
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -11341,6 +11451,40 @@ const sortedReminders = useMemo(() => {
             })}
           </div>
 
+          <div className="mt-2 max-[420px]:mt-1.5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] tracking-widest text-[color:var(--fg-45)]">SPOND</div>
+                <div className="mt-0.5 text-xs text-[color:var(--fg-70)] truncate">
+                  {spondStatus?.connected
+                    ? spondStatus.status === 'error'
+                      ? (language === 'no' ? 'Tilkoblet, men synk feilet' : 'Connected, sync needs attention')
+                      : (language === 'no' ? 'Tilkoblet' : 'Connected')
+                    : (language === 'no' ? 'Vis Spond-arrangementer i påminnelser' : 'Show Spond events in reminders')}
+                </div>
+                {spondStatus?.error_message && (
+                  <div className="mt-1 text-[11px] text-[#d94b4b] line-clamp-1">{spondStatus.error_message}</div>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {spondStatus?.connected ? (
+                  <>
+                    <button onClick={syncSpond} disabled={spondBusy} className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[10px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-50">
+                      {spondBusy ? (language === 'no' ? 'SYNKER…' : 'SYNCING…') : 'SYNC'}
+                    </button>
+                    <button onClick={disconnectSpond} disabled={spondBusy} className="h-8 px-3 rounded-xl border border-[color:var(--danger-bd)] text-[10px] tracking-widest text-[color:var(--danger)] disabled:opacity-50">
+                      {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => setSpondSheetOpen(true)} disabled={spondStatus?.provider_enabled === false} className="h-8 px-3 rounded-xl border border-[#2aa3ff] text-[10px] tracking-widest text-[#2aa3ff] disabled:opacity-50">
+                    {language === 'no' ? 'KOBLE TIL SPOND' : 'CONNECT SPOND'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
             <div className="h-full overflow-y-auto no-scrollbar pr-1">
               {!activeDeviceId ? (
@@ -11378,13 +11522,23 @@ const sortedReminders = useMemo(() => {
                         {formatReminderTitleWithTime(item)}
                         </div>
                         <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
-                          {`${formatReminderFullDateLabel(language, item.displayDate)}${
+                          {`${item.source === 'spond' ? 'Spond • ' : ''}${formatReminderFullDateLabel(language, item.displayDate)}${
                             normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
-                          } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+                          }${item.source === 'spond' ? '' : ` • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}`}
                         </div>
                       </div>
                       <div className="shrink-0 self-center">
-                        {completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
+                        {item.source === 'spond' ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              dismissSpondItem(item)
+                            }}
+                            className="h-6.5 px-2.5 rounded-lg border border-[color:var(--bd-20)] text-[10px] tracking-widest text-[color:var(--fg-70)]"
+                          >
+                            {language === 'no' ? 'SKJUL' : 'HIDE'}
+                          </button>
+                        ) : completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
                           <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
                             {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
                           </span>
@@ -11436,6 +11590,32 @@ const sortedReminders = useMemo(() => {
         </div>
       </div>
 
+      {spondSheetOpen && (
+        <SpondConnectSheet
+          language={language}
+          busy={spondBusy}
+          onClose={() => setSpondSheetOpen(false)}
+          onConnect={async (username, password) => {
+            setSpondBusy(true)
+            try {
+              const resp = await fetch('/api/providers/spond/connect', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+              })
+              const json = await resp.json().catch(() => null)
+              if (!resp.ok || json?.ok === false) throw new Error(json?.error || 'Spond connection failed')
+              setSpondSheetOpen(false)
+              await loadReminders()
+            } catch (error) {
+              alert(error instanceof Error ? error.message : String(error))
+            } finally {
+              setSpondBusy(false)
+            }
+          }}
+        />
+      )}
+
     {sheetOpen && activeDeviceId && (
         <ReminderDraftSheet
           language={language}
@@ -11469,6 +11649,73 @@ const sortedReminders = useMemo(() => {
         />
       )}
     </>
+  )
+}
+
+
+function SpondConnectSheet({
+  language,
+  busy,
+  onClose,
+  onConnect,
+}: {
+  language: AppLanguage
+  busy: boolean
+  onClose: () => void
+  onConnect: (username: string, password: string) => void | Promise<void>
+}) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">
+            {language === 'no' ? 'KOBLE TIL SPOND' : 'CONNECT SPOND'}
+          </div>
+          <button onClick={onClose} disabled={busy} className="text-[color:var(--fg-60)] text-xl">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-3 text-xs leading-relaxed text-[color:var(--fg-55)]">
+          {language === 'no'
+            ? 'Dette kobler Spond til RE:MIND-kontoen din. Spond-passordet krypteres på serveren og sendes aldri til rammen.'
+            : 'This links Spond to your RE:MIND account. Your Spond password is encrypted on the server and is never sent to the frame.'}
+        </div>
+
+        <label className="mt-5 block text-[10px] tracking-widest text-[color:var(--fg-45)]">SPOND EMAIL</label>
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+          inputMode="email"
+          className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+        />
+
+        <label className="mt-4 block text-[10px] tracking-widest text-[color:var(--fg-45)]">SPOND PASSWORD</label>
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          type="password"
+          className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
+        />
+
+        <button
+          onClick={() => onConnect(username.trim(), password)}
+          disabled={busy || !username.trim() || !password}
+          className={`mt-6 w-full h-12 rounded-2xl border tracking-widest text-sm ${
+            busy || !username.trim() || !password
+              ? 'border-[color:var(--bd-15)] text-[color:var(--fg-35)]'
+              : 'border-[#2aa3ff] text-[#2aa3ff]'
+          }`}
+        >
+          {busy ? (language === 'no' ? 'KOBLER TIL…' : 'CONNECTING…') : language === 'no' ? 'KOBLE TIL' : 'CONNECT'}
+        </button>
+      </div>
+    </div>
   )
 }
 
