@@ -51,6 +51,7 @@ struct ReminderItem {
   char occurrenceDate[16] = {0}; // YYYY-MM-DD
   char displayDate[24] = {0};
   char repeat[20] = {0};
+  char source[12] = {0};
   int daysUntil = 0;
   bool isOverdue = false;
 };
@@ -300,10 +301,13 @@ static void buildReminderTitleWithTime(const ReminderItem& r, char* out, size_t 
   if (!out || outSize == 0) return;
   out[0] = '\0';
 
+  const bool isSpond = strcmp(r.source, "spond") == 0;
+  const char* prefix = isSpond ? "[S] " : "";
+
   if (r.time[0]) {
-    snprintf(out, outSize, "%s %s", r.title, r.time);
+    snprintf(out, outSize, "%s%s %s", prefix, r.title, r.time);
   } else {
-    safeCopy(out, outSize, r.title);
+    snprintf(out, outSize, "%s%s", prefix, r.title);
   }
 }
 
@@ -538,6 +542,9 @@ static bool fetchReminders() {
 
     const char* rawRepeat = it["repeat"] | "";
     safeCopy(r.repeat, sizeof(r.repeat), rawRepeat);
+
+    const char* rawSource = it["source"] | "remind";
+    safeCopy(r.source, sizeof(r.source), rawSource);
 
     r.daysUntil = it["days_until"] | 0;
     r.isOverdue = it["is_overdue"] | false;
