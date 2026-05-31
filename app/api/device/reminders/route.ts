@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { isTeamsMeetingVisibleAt } from '@/app/lib/integrations/teams/visibility'
+import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, reminderSortTimestamp, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -29,32 +29,6 @@ type ReminderRow = {
   repeat_type: ReminderRepeatKey | null
   custom_repeat_days: number | null
   is_done: boolean | null
-}
-
-type DeviceReminderItem = {
-  reminder_id: string
-  title: string
-  occurrence_date: string
-  display_date: string
-  days_until: number
-  is_overdue: boolean
-  repeat: ReminderRepeatKey
-  due_time: string | null
-  display_time: string | null
-  source?: 'spond' | 'teams' | 'remind'
-  external_id?: string
-}
-
-type IntegrationItemRow = {
-  id: string
-  user_id: string
-  provider: string
-  external_id: string
-  title: string | null
-  body: string | null
-  starts_at: string | null
-  due_at: string | null
-  priority: number | null
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
@@ -119,50 +93,6 @@ function addYearsLocal(d: Date, years: number) {
   x.setMonth(month)
   x.setDate(Math.min(day, daysInTargetMonth))
   return x
-}
-
-function getWeekdayOccurrenceInMonth(d: Date) {
-  return Math.ceil(d.getDate() / 7)
-}
-
-function isLastWeekdayOfMonth(d: Date) {
-  const nextSameWeekday = addDaysLocal(d, 7)
-  return nextSameWeekday.getMonth() !== d.getMonth()
-}
-
-function getNthWeekdayOfMonth(year: number, month: number, weekday: number, occurrence: number) {
-  const first = new Date(year, month, 1)
-  const firstWeekday = first.getDay()
-  const offset = (weekday - firstWeekday + 7) % 7
-  const day = 1 + offset + (occurrence - 1) * 7
-
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  if (day > daysInMonth) return null
-
-  return new Date(year, month, day)
-}
-
-function getLastWeekdayOfMonth(year: number, month: number, weekday: number) {
-  const lastDay = new Date(year, month + 1, 0)
-  const lastWeekday = lastDay.getDay()
-  const offsetBack = (lastWeekday - weekday + 7) % 7
-  return new Date(year, month, lastDay.getDate() - offsetBack)
-}
-
-function addMonthsByWeekdayPattern(d: Date, months: number) {
-  const source = new Date(d)
-  const targetMonthDate = new Date(source.getFullYear(), source.getMonth() + months, 1)
-
-  const year = targetMonthDate.getFullYear()
-  const month = targetMonthDate.getMonth()
-  const weekday = source.getDay()
-
-  if (isLastWeekdayOfMonth(source)) {
-    return getLastWeekdayOfMonth(year, month, weekday)
-  }
-
-  const occurrence = getWeekdayOccurrenceInMonth(source)
-  return getNthWeekdayOfMonth(year, month, weekday, occurrence) || getLastWeekdayOfMonth(year, month, weekday)
 }
 
 function nextReminderOccurrenceDate(
@@ -391,116 +321,6 @@ function buildOccurrencesForRow(
   return items
 }
 
-function sortTimeValue(value: string | null) {
-  return value || '99:99'
-}
-
-function isoToYmdInTimeZone(value: string, timeZone: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  const parts = getDatePartsInTimeZone(date, timeZone)
-  if (!Number.isFinite(parts.year) || !Number.isFinite(parts.month) || !Number.isFinite(parts.day)) return null
-  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`
-}
-
-function isoToHmInTimeZone(value: string, timeZone: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  const parts = getClockPartsInTimeZone(date, timeZone)
-  if (!Number.isFinite(parts.hour) || !Number.isFinite(parts.minute)) return null
-  return `${pad2(parts.hour)}:${pad2(parts.minute)}`
-}
-
-function buildSpondReminderItems(
-  rows: IntegrationItemRow[],
-  todayYmd: string,
-  horizonEndYmd: string,
-  timeZone: string,
-  includeOverdue: boolean
-): DeviceReminderItem[] {
-  return rows.flatMap((row) => {
-    const title = String(row.title || '').trim()
-    const externalId = String(row.external_id || '').trim()
-    if (!title || !externalId) return []
-
-    const timestamp = row.starts_at || row.due_at
-    const occurrenceDate = timestamp ? isoToYmdInTimeZone(timestamp, timeZone) : todayYmd
-    if (!occurrenceDate) return []
-    if (occurrenceDate > horizonEndYmd) return []
-
-    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
-    if (!includeOverdue && daysUntil < 0) return []
-
-    const displayTime = timestamp ? isoToHmInTimeZone(timestamp, timeZone) : null
-
-    return [{
-      reminder_id: `spond:${externalId}`,
-      title,
-      occurrence_date: occurrenceDate,
-      display_date: timestamp ? formatDisplayDate(occurrenceDate, todayYmd) : 'Spond',
-      days_until: daysUntil,
-      is_overdue: daysUntil < 0,
-      repeat: 'none' as ReminderRepeatKey,
-      due_time: displayTime,
-      display_time: displayTime,
-      source: 'spond' as const,
-      external_id: externalId,
-    }]
-  })
-}
-
-
-function buildTeamsMeetingItems(
-  rows: IntegrationItemRow[],
-  todayYmd: string,
-  timeZone: string,
-  now = new Date()
-): DeviceReminderItem[] {
-  return rows.flatMap((row) => {
-    const title = String(row.title || '').trim()
-    const externalId = String(row.external_id || '').trim()
-    const startsAt = row.starts_at
-    if (!title || !externalId || !startsAt) return []
-    if (!isTeamsMeetingVisibleAt(startsAt, now)) return []
-
-    const occurrenceDate = isoToYmdInTimeZone(startsAt, timeZone)
-    if (occurrenceDate !== todayYmd) return []
-
-    const displayTime = isoToHmInTimeZone(startsAt, timeZone)
-    return [{
-      reminder_id: `teams:${externalId}`,
-      title,
-      occurrence_date: occurrenceDate,
-      display_date: 'Today',
-      days_until: 0,
-      is_overdue: false,
-      repeat: 'none' as ReminderRepeatKey,
-      due_time: displayTime,
-      display_time: displayTime,
-      source: 'teams' as const,
-      external_id: externalId,
-    }]
-  })
-}
-
-function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
-  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : 2
-  const as = sourceRank(a.source)
-  const bs = sourceRank(b.source)
-  if (as !== bs) return as - bs
-
-  if (a.days_until !== b.days_until) return a.days_until - b.days_until
-  if (a.occurrence_date < b.occurrence_date) return -1
-  if (a.occurrence_date > b.occurrence_date) return 1
-
-  const at = sortTimeValue(a.display_time)
-  const bt = sortTimeValue(b.display_time)
-  if (at < bt) return -1
-  if (at > bt) return 1
-
-  return a.title.localeCompare(b.title)
-}
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -601,7 +421,7 @@ export async function GET(req: Request) {
         includeOverdue
       )
 
-      await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId)))
+      await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays })))
 
       const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
         .from('integration_items')
@@ -617,13 +437,30 @@ export async function GET(req: Request) {
       teamsItems = buildTeamsMeetingItems(
         Array.isArray(teamsIntegrationItemsData) ? (teamsIntegrationItemsData as IntegrationItemRow[]) : [],
         todayYmd,
+        horizonEndYmd,
         timeZone
       )
     }
 
-    const items = [...teamsItems, ...spondItems, ...manualItems]
-      .sort(compareReminderItems)
-      .slice(0, limit)
+    const sortedCandidates = [...teamsItems, ...spondItems, ...manualItems].sort(compareReminderItems)
+    const items = sortedCandidates.slice(0, limit)
+
+    console.info('[device/reminders] final frame reminder candidates', {
+      device_id,
+      timezone: timeZone,
+      today_ymd: todayYmd,
+      now_hm: nowHm,
+      horizon_end_ymd: horizonEndYmd,
+      limit,
+      candidates: sortedCandidates.map((item, index) => ({
+        title: item.title,
+        source: item.source || 'remind',
+        provider: item.source || 'remind',
+        type: item.source === 'teams' ? 'meeting' : item.source === 'spond' ? 'spond' : 'reminder',
+        sort_timestamp: reminderSortTimestamp(item),
+        reason: index < limit ? 'keep: within limit and visible/upcoming filters' : 'drop: beyond response limit',
+      })),
+    })
 
     return NextResponse.json({
       device_id,

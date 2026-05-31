@@ -74,11 +74,16 @@ function zonedWallTimeToUtc(year: number, month: number, day: number, hour: numb
   return new Date(utcGuess.getTime() + (targetUtc - renderedUtc))
 }
 
-export function todayUtcRange(timeZone: string, now = new Date()) {
+export function calendarUtcRange(timeZone: string, horizonDays = 0, now = new Date()) {
+  const safeHorizonDays = Number.isFinite(horizonDays) && horizonDays > 0 ? Math.floor(horizonDays) : 0
   const { year, month, day } = getDatePartsInTimeZone(now, timeZone)
   const start = zonedWallTimeToUtc(year, month, day, 0, 0, 0, timeZone)
-  const end = zonedWallTimeToUtc(year, month, day + 1, 0, 0, 0, timeZone)
+  const end = zonedWallTimeToUtc(year, month, day + safeHorizonDays + 1, 0, 0, 0, timeZone)
   return { startIso: start.toISOString(), endIso: end.toISOString() }
+}
+
+export function todayUtcRange(timeZone: string, now = new Date()) {
+  return calendarUtcRange(timeZone, 0, now)
 }
 
 export async function getAuthenticatedTeamsUserId(req: Request) {
@@ -128,12 +133,12 @@ async function refreshIfNeeded(userId: string, credentials: TeamsStoredCredentia
   return next
 }
 
-export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, timeZone: string) {
+export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, timeZone: string, options: { horizonDays?: number } = {}) {
   const supabase = getSupabaseAdmin()
   const safeTimeZone = normalizeTimeZone(timeZone)
   const credentials: TeamsStoredCredentials = { ...tokenSet, time_zone: safeTimeZone }
   const profile = await fetchMicrosoftProfile(credentials.access_token)
-  const { startIso, endIso } = todayUtcRange(safeTimeZone)
+  const { startIso, endIso } = calendarUtcRange(safeTimeZone, options.horizonDays)
   const meetings = await fetchMicrosoftCalendarView(credentials.access_token, startIso, endIso)
   const now = new Date().toISOString()
 
@@ -190,7 +195,7 @@ export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, 
   return { integration: data, meetings }
 }
 
-export async function syncTeamsFromStoredConnection(userId: string) {
+export async function syncTeamsFromStoredConnection(userId: string, options: { horizonDays?: number } = {}) {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('user_integrations')
@@ -204,7 +209,7 @@ export async function syncTeamsFromStoredConnection(userId: string) {
   try {
     const stored = decryptJson<TeamsStoredCredentials>(data.encrypted_credentials)
     const credentials = await refreshIfNeeded(userId, stored)
-    const result = await syncTeamsForUser(userId, credentials, credentials.time_zone || DEFAULT_TZ)
+    const result = await syncTeamsForUser(userId, credentials, credentials.time_zone || DEFAULT_TZ, options)
     return { connected: true, meetings: result.meetings }
   } catch (error) {
     await supabase
@@ -216,10 +221,10 @@ export async function syncTeamsFromStoredConnection(userId: string) {
   }
 }
 
-export async function getTeamsMeetingsForUser(userId: string, shouldSync = true) {
+export async function getTeamsMeetingsForUser(userId: string, shouldSync = true, options: { horizonDays?: number } = {}) {
   if (shouldSync) {
     try {
-      await syncTeamsFromStoredConnection(userId)
+      await syncTeamsFromStoredConnection(userId, options)
     } catch {
       // Fall back to cached meetings when Microsoft Graph is temporarily unavailable.
     }
