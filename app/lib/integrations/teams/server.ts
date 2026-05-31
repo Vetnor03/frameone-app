@@ -8,6 +8,7 @@ import {
   type TeamsStoredCredentials,
   type TeamsTokenSet,
 } from './client'
+import { isTeamsMeetingVisibleAt } from './visibility'
 
 export const TEAMS_PROVIDER = 'teams'
 const DEFAULT_TZ = 'Europe/Oslo'
@@ -215,13 +216,6 @@ export async function syncTeamsFromStoredConnection(userId: string) {
   }
 }
 
-function isFutureTeamsMeeting(startsAt: string, endsAt: string | null | undefined, now = new Date()) {
-  const completionAt = endsAt || startsAt
-  if (!completionAt) return false
-  const completionDate = new Date(completionAt)
-  return Number.isFinite(completionDate.getTime()) && completionDate.getTime() > now.getTime()
-}
-
 export async function getTeamsMeetingsForUser(userId: string, shouldSync = true) {
   if (shouldSync) {
     try {
@@ -245,7 +239,7 @@ export async function getTeamsMeetingsForUser(userId: string, shouldSync = true)
       const raw = row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw) ? row.raw as Record<string, unknown> : {}
       const startsAt = typeof row.starts_at === 'string' ? row.starts_at : ''
       const endsAt = typeof row.due_at === 'string' && row.due_at ? row.due_at : startsAt
-      if (!startsAt || !isFutureTeamsMeeting(startsAt, endsAt)) return null
+      if (!startsAt || !isTeamsMeetingVisibleAt(startsAt)) return null
       return {
         id: String(row.external_id || ''),
         title: String(row.title || 'Meeting'),
