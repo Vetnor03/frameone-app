@@ -2196,6 +2196,9 @@ function ConnectAppsScreen({
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
+  const [teamsConnected, setTeamsConnected] = useState(connectAppIsConnected(modulesJson, 'teams'))
+  const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
+  const [teamsLoading, setTeamsLoading] = useState(false)
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -2208,6 +2211,26 @@ function ConnectAppsScreen({
     const json = await resp.json()
     setSpondConnected(json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+  }
+
+  async function fetchTeamsStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) return
+    const resp = await fetch('/api/integrations/teams/status', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!resp.ok) return
+    const json = await resp.json()
+    setTeamsConnected(json?.connected === true)
+    setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+  }
+
+  async function connectTeams() {
+    if (teamsLoading || teamsConnected) return
+    setTeamsLoading(true)
+    setStatus(null)
+    window.location.href = '/api/integrations/teams/connect'
   }
 
   async function connectSpond() {
@@ -2262,6 +2285,7 @@ function ConnectAppsScreen({
 
   useEffect(() => {
     fetchSpondStatus()
+    fetchTeamsStatus()
   }, [])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string }> = [
     {
@@ -2306,7 +2330,7 @@ function ConnectAppsScreen({
 
         <div className="mt-4 space-y-2.5">
           {apps.map((app) => {
-            const connected = app.key === 'spond' ? spondConnected : connectAppIsConnected(modulesJson, app.key)
+            const connected = app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : connectAppIsConnected(modulesJson, app.key)
             return (
               <div
                 key={app.key}
@@ -2320,11 +2344,13 @@ function ConnectAppsScreen({
 
                   <button
                     type="button"
-                    disabled={(app.key !== 'spond' && connected) || (app.key === 'spond' && spondLoading)}
+                    disabled={(app.key === 'teams' && (teamsLoading || connected)) || (app.key !== 'spond' && app.key !== 'teams' && connected) || (app.key === 'spond' && spondLoading)}
                     onClick={() => {
                       if (app.key === 'spond') {
                         if (connected) disconnectSpond()
                         else setSpondModalOpen(true)
+                      } else if (app.key === 'teams') {
+                        connectTeams()
                       } else {
                         setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
                       }
@@ -2337,7 +2363,9 @@ function ConnectAppsScreen({
                         : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
                     }`}
                   >
-                    {connected && app.key === 'spond'
+                    {teamsLoading && app.key === 'teams'
+                      ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
+                      : connected && app.key === 'spond'
                       ? (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')
                       : connected
                         ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED')
@@ -2347,6 +2375,11 @@ function ConnectAppsScreen({
                 {app.key === 'spond' && spondConnected && (
                   <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
+                  </div>
+                )}
+                {app.key === 'teams' && teamsConnected && (
+                  <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    {teamsAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${teamsAccount}` : (language === 'no' ? 'Microsoft-kalenderen er tilkoblet sikkert på serveren' : 'Microsoft calendar connected securely on the server')}
                   </div>
                 )}
               </div>
