@@ -2206,6 +2206,7 @@ function ConnectAppsScreen({
   const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [integrationSetupError, setIntegrationSetupError] = useState<string | null>(null)
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -2218,6 +2219,11 @@ function ConnectAppsScreen({
     const json = await resp.json()
     setSpondConnected(json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+    if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
+      setIntegrationSetupError(json.setup_error.message)
+      setStatusTone('error')
+      setStatus((current) => current || json.setup_error.message)
+    }
   }
 
 
@@ -2232,10 +2238,20 @@ function ConnectAppsScreen({
     const json = await resp.json()
     setTeamsConnected(json?.connected === true)
     setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+    if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
+      setIntegrationSetupError(json.setup_error.message)
+      setStatusTone('error')
+      setStatus((current) => current || json.setup_error.message)
+    }
   }
 
   async function connectTeams() {
     if (teamsLoading || teamsConnected) return
+    if (integrationSetupError) {
+      setStatusTone('error')
+      setStatus(integrationSetupError)
+      return
+    }
     setTeamsLoading(true)
     setStatus(null)
     setStatusTone('info')
@@ -2374,11 +2390,18 @@ function ConnectAppsScreen({
 
                   <button
                     type="button"
-                    disabled={(app.key === 'teams' && (connected || teamsLoading)) || (app.key !== 'spond' && app.key !== 'teams' && connected) || (app.key === 'spond' && spondLoading)}
+                    disabled={
+                      (app.key === 'teams' && (connected || teamsLoading || Boolean(integrationSetupError))) ||
+                      (app.key !== 'spond' && app.key !== 'teams' && connected) ||
+                      (app.key === 'spond' && (spondLoading || (!connected && Boolean(integrationSetupError))))
+                    }
                     onClick={() => {
                       if (app.key === 'spond') {
                         if (connected) disconnectSpond()
-                        else setSpondModalOpen(true)
+                        else if (integrationSetupError) {
+                          setStatusTone('error')
+                          setStatus(integrationSetupError)
+                        } else setSpondModalOpen(true)
                       } else if (app.key === 'teams') {
                         connectTeams()
                       } else {

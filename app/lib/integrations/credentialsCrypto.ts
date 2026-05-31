@@ -33,7 +33,17 @@ export function isIntegrationCredentialsKeyConfigError(error: unknown) {
 }
 
 export function integrationCredentialsKeyUserMessage(integrationName = 'Teams') {
-  return `${integrationName} connection is not configured on the server yet. Add INTEGRATION_CREDENTIALS_KEY and redeploy.`
+  return `${integrationName} needs a server encryption key before it can connect. Add INTEGRATION_CREDENTIALS_KEY in your deployment environment variables and redeploy.`
+}
+
+export function integrationCredentialsKeySetupError(integrationName = 'Teams') {
+  const status = getIntegrationCredentialsKeyStatus()
+  if (status.valid) return null
+  return {
+    code: 'missing_integration_credentials_key',
+    envName: status.envName,
+    message: integrationCredentialsKeyUserMessage(integrationName),
+  }
 }
 
 export type EncryptedPayload = {
