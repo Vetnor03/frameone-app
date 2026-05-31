@@ -2165,6 +2165,7 @@ async function handleSelectTab(k: TabKey) {
 }
 
 type ConnectAppKey = 'spond' | 'transponder' | 'teams'
+type DisconnectableConnectAppKey = ConnectAppKey
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -2206,6 +2207,9 @@ function ConnectAppsScreen({
   const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
+  const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
+  const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams', string>>>({})
 
   async function fetchSpondStatus() {
@@ -2217,6 +2221,7 @@ function ConnectAppsScreen({
     })
     if (!resp.ok) return
     const json = await resp.json()
+    setLocallyDisconnectedApps((current) => ({ ...current, spond: json?.connected === true ? false : current.spond }))
     setSpondConnected(json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
@@ -2236,6 +2241,7 @@ function ConnectAppsScreen({
     })
     if (!resp.ok) return
     const json = await resp.json()
+    setLocallyDisconnectedApps((current) => ({ ...current, teams: json?.connected === true ? false : current.teams }))
     setTeamsConnected(json?.connected === true)
     setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
@@ -2286,6 +2292,7 @@ function ConnectAppsScreen({
       })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Failed to connect Spond')
+      setLocallyDisconnectedApps((current) => ({ ...current, spond: false }))
       setSpondConnected(true)
       setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
       setSpondPassword('')
@@ -2301,29 +2308,41 @@ function ConnectAppsScreen({
     }
   }
 
-  async function disconnectSpond() {
-    if (spondLoading) return
-    setSpondLoading(true)
+  async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'spond' ? 'Spond' : 'Transponder'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'spond' ? setSpondLoading : null
+    if (disconnectingApp === provider) return
+    setProviderLoading?.(true)
+    setDisconnectingApp(provider)
     setStatus(null)
     setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-      const resp = await fetch('/api/integrations/spond/disconnect', {
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble fra appen' : 'Sign in to disconnect this app')
+      const resp = await fetch(`/api/integrations/${provider}/disconnect`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       })
       const json = await resp.json().catch(() => ({}))
-      if (!resp.ok) throw new Error(json?.error || 'Failed to disconnect Spond')
-      setSpondConnected(false)
-      setSpondAccount(null)
+      if (!resp.ok) throw new Error(json?.error || `Failed to disconnect ${appName}`)
+      if (provider === 'teams') {
+        setTeamsConnected(false)
+        setTeamsAccount(null)
+      } else if (provider === 'spond') {
+        setSpondConnected(false)
+        setSpondAccount(null)
+      }
+      setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
+      setDisconnectConfirmApp(null)
       setStatusTone('success')
-      setStatus(language === 'no' ? 'Spond er frakoblet' : 'Spond disconnected')
+      setStatus(language === 'no' ? `${appName} er frakoblet` : `${appName} disconnected`)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       setStatusTone('error')
-      setStatus(message || (language === 'no' ? 'Kunne ikke koble fra Spond' : 'Could not disconnect Spond'))
+      setStatus(message || (language === 'no' ? `Kunne ikke koble fra ${appName}` : `Could not disconnect ${appName}`))
     } finally {
-      setSpondLoading(false)
+      setProviderLoading?.(false)
+      setDisconnectingApp(null)
     }
   }
 
@@ -2377,7 +2396,7 @@ function ConnectAppsScreen({
 
         <div className="mt-4 space-y-2.5">
           {apps.map((app) => {
-            const connected = app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : connectAppIsConnected(modulesJson, app.key)
+            const connected = locallyDisconnectedApps[app.key] ? false : app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : connectAppIsConnected(modulesJson, app.key)
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
             return (
               <div
@@ -2390,52 +2409,78 @@ function ConnectAppsScreen({
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={
-                      (app.key === 'teams' && (connected || teamsLoading)) ||
-                      (app.key !== 'spond' && app.key !== 'teams' && connected) ||
-                      (app.key === 'spond' && spondLoading)
-                    }
-                    onClick={() => {
-                      if (app.key === 'spond') {
-                        if (connected) disconnectSpond()
-                        else if (setupError) {
-                          setStatusTone('error')
-                          setStatus(setupError)
-                        } else setSpondModalOpen(true)
-                      } else if (app.key === 'teams') {
-                        connectTeams()
-                      } else {
-                        setStatusTone('info')
-                        setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
-                      }
-                    }}
-                    className={`shrink-0 h-8 px-3 rounded-xl border text-[11px] tracking-widest disabled:opacity-60 ${
-                      connected
-                        ? app.key === 'spond'
-                          ? 'border-[#d94b4b]/35 text-[#d94b4b]'
-                          : 'border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[#1f9d4a]'
-                        : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
-                    }`}
-                  >
-                    {app.key === 'teams' && teamsLoading
-                      ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
-                      : connected && app.key === 'spond'
-                        ? (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')
-                        : connected
-                          ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED')
-                          : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
-                  </button>
+                  {connected ? (
+                    <span className="shrink-0 h-8 px-3 rounded-xl border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[11px] tracking-widest text-[#1f9d4a] inline-flex items-center">
+                      {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={app.key === 'teams' && teamsLoading}
+                      onClick={() => {
+                        if (app.key === 'spond') {
+                          if (setupError) {
+                            setStatusTone('error')
+                            setStatus(setupError)
+                          } else setSpondModalOpen(true)
+                        } else if (app.key === 'teams') {
+                          connectTeams()
+                        } else {
+                          setStatusTone('info')
+                          setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
+                        }
+                      }}
+                      className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
+                    >
+                      {app.key === 'teams' && teamsLoading
+                        ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
+                        : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                    </button>
+                  )}
                 </div>
                 {app.key === 'spond' && spondConnected && (
-                  <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">
+                      {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDisconnectConfirmApp('spond')}
+                      disabled={spondLoading}
+                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
+                    >
+                      {spondLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
+                    </button>
                   </div>
                 )}
                 {app.key === 'teams' && teamsConnected && (
-                  <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    {teamsAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${teamsAccount}` : (language === 'no' ? 'Kalenderen leses sikkert på serveren' : 'Calendar is read securely on the server')}
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">
+                      {teamsAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${teamsAccount}` : (language === 'no' ? 'Kalenderen leses sikkert på serveren' : 'Calendar is read securely on the server')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDisconnectConfirmApp('teams')}
+                      disabled={teamsLoading}
+                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
+                    >
+                      {teamsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
+                    </button>
+                  </div>
+                )}
+                {app.key !== 'spond' && app.key !== 'teams' && connected && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">
+                      {language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDisconnectConfirmApp(app.key)}
+                      disabled={disconnectingApp === app.key}
+                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
+                    >
+                      {disconnectingApp === app.key ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
+                    </button>
                   </div>
                 )}
               </div>
@@ -2457,6 +2502,45 @@ function ConnectAppsScreen({
           </div>
         )}
       </div>
+
+      {disconnectConfirmApp && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
+            <div className="text-base font-semibold text-[color:var(--fg-90)]">
+              {language === 'no'
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'spond' ? 'Spond' : 'Transponder'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'spond' ? 'Spond' : 'Transponder'}?`}
+            </div>
+            <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
+              {language === 'no'
+                ? 'Lagrede innlogginger og synkroniserte data fjernes fra denne integrasjonen.'
+                : 'Stored credentials and synced data will be removed for this integration.'}
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDisconnectConfirmApp(null)}
+                disabled={disconnectingApp !== null}
+                className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
+              >
+                {language === 'no' ? 'AVBRYT' : 'CANCEL'}
+              </button>
+              <button
+                type="button"
+                onClick={() => disconnectIntegration(disconnectConfirmApp)}
+                disabled={disconnectingApp === disconnectConfirmApp}
+                className="h-11 flex-1 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 text-xs tracking-widest text-[#ff7a7a] disabled:opacity-60"
+              >
+                {(disconnectingApp === disconnectConfirmApp)
+                  ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…')
+                  : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {spondModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
