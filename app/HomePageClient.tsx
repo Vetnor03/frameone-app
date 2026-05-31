@@ -427,6 +427,7 @@ type SettingsJson = {
   cells?: { slot: number; module: string }[]
   modules?: Record<string, any>
   pinned_tabs?: ModuleKey[]
+  layout_module_memory?: (ModuleKey | null)[]
 }
 
 type MemberRow = {
@@ -1030,17 +1031,6 @@ export default function HomePage() {
   const [persisting, setPersisting] = useState(false)
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
-  const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
-  const saveToastTimerRef = useRef<number | null>(null)
-
-  function showSavedToast(text = tx(language).saved) {
-    setSaveToast({ visible: true, text })
-    if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
-    saveToastTimerRef.current = window.setTimeout(() => {
-      setSaveToast((toast) => ({ ...toast, visible: false }))
-    }, 1400)
-  }
-
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
   }, [physicalFrameSnapshot])
@@ -1113,7 +1103,6 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
-      if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
       if (dirtyFrameRef.current != null) window.cancelAnimationFrame(dirtyFrameRef.current)
     }
   }, [])
@@ -1243,7 +1232,6 @@ export default function HomePage() {
 
   const dirtyFrameRef = useRef<number | null>(null)
   const frameAutoSavePendingRef = useRef(false)
-  const frameAutoSaveTimerRef = useRef<number | null>(null)
   const persistSettingsRef = useRef<() => Promise<boolean>>(async () => false)
   const pendingDirtyStateRef = useRef<{
     theme?: 'dark' | 'light'
@@ -1305,12 +1293,28 @@ export default function HomePage() {
     return Object.keys(emptyCellsFor(targetLayout)).map(Number).sort((a, b) => a - b)
   }
 
-  function buildSlotIndexedMemoryFromCells(cells: Record<number, ModuleKey | null>) {
-    // Memory is slot-aligned: array index === slot number.
-    return Object.keys(cells)
+  function sanitizeLayoutModuleMemory(value: unknown): (ModuleKey | null)[] {
+    if (!Array.isArray(value)) return []
+
+    return value.map((item) => (typeof item === 'string' ? baseModuleKeyFromStored(item) : null))
+  }
+
+  function mergeCellsIntoSlotMemory(
+    memory: (ModuleKey | null)[],
+    layout: LayoutKey,
+    cells: Record<number, ModuleKey | null>
+  ) {
+    const next = [...memory]
+    const validSlots = emptyCellsFor(layout)
+
+    Object.keys(validSlots)
       .map(Number)
-      .sort((a, b) => a - b)
-      .map((slot) => cells[slot])
+      .forEach((slot) => {
+        while (next.length <= slot) next.push(null)
+        next[slot] = cells[slot] ?? null
+      })
+
+    return next
   }
 
   function projectSlotMemoryIntoLayout(moduleMemory: (ModuleKey | null)[], targetLayout: LayoutKey) {
@@ -1318,8 +1322,8 @@ export default function HomePage() {
     const target = emptyCellsFor(targetLayout)
     const targetSlots = orderedSlotsForLayout(targetLayout)
 
-    targetSlots.forEach((slot, idx) => {
-      target[slot] = moduleMemory[idx] ?? null
+    targetSlots.forEach((slot) => {
+      target[slot] = moduleMemory[slot] ?? null
     })
 
     return target
@@ -1537,7 +1541,11 @@ export default function HomePage() {
       [nextLayout]: nextCellsForLayout,
     }
 
-    layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(nextCellsForLayout)
+    layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory(
+      sanitizeLayoutModuleMemory(json.layout_module_memory),
+      nextLayout,
+      nextCellsForLayout
+    )
 
     const rawModules =
       json.modules && typeof json.modules === 'object'
@@ -1588,6 +1596,7 @@ export default function HomePage() {
         cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
         modules: normalizedModules,
         pinned_tabs: nextPinnedTabs,
+        layout_module_memory: layoutModuleMemoryRef.current,
       }
 
       await supabase.rpc('upsert_device_settings', {
@@ -1853,15 +1862,22 @@ export default function HomePage() {
       setPersisting(true)
 
       const modulesForSave = normalizeModulesForSave(modulesJson)
+      const currentCellsForLayout = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
+      const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
+        layoutModuleMemoryRef.current,
+        layoutKey,
+        currentCellsForLayout
+      )
 
       const settingsJson: SettingsJson = {
         theme,
         language,
         fontSize,
         layout: layoutKey,
-        cells: cellsMapToArray(cellsByLayout[layoutKey]),
+        cells: cellsMapToArray(currentCellsForLayout),
         modules: modulesForSave,
         pinned_tabs: pinnedModuleTabs,
+        layout_module_memory: nextLayoutModuleMemory,
       }
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
@@ -1872,14 +1888,14 @@ export default function HomePage() {
       if (error) throw error
       if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
 
-      const savedCellsForLayout = { ...cellsByLayout[layoutKey] }
+      const savedCellsForLayout = { ...currentCellsForLayout }
 
       const nextCellsByLayout = {
         ...makeEmptyCellsByLayout(),
         [layoutKey]: savedCellsForLayout,
       }
 
-      layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(savedCellsForLayout)
+      layoutModuleMemoryRef.current = nextLayoutModuleMemory
 
       setCellsByLayout(nextCellsByLayout)
       setModulesJson(modulesForSave)
@@ -1902,7 +1918,6 @@ export default function HomePage() {
       }
 
       setDirty(false)
-      showSavedToast(tx(language).saved)
       await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
 
       return true
@@ -1919,21 +1934,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!frameAutoSavePendingRef.current || !dirty || persisting) return
 
-    if (frameAutoSaveTimerRef.current != null) window.clearTimeout(frameAutoSaveTimerRef.current)
-
-    frameAutoSaveTimerRef.current = window.setTimeout(() => {
-      frameAutoSaveTimerRef.current = null
-      void persistSettingsRef.current().then((saved) => {
-        if (saved) frameAutoSavePendingRef.current = false
-      })
-    }, 650)
-
-    return () => {
-      if (frameAutoSaveTimerRef.current != null) {
-        window.clearTimeout(frameAutoSaveTimerRef.current)
-        frameAutoSaveTimerRef.current = null
-      }
-    }
+    void persistSettingsRef.current().then((saved) => {
+      if (saved) frameAutoSavePendingRef.current = false
+    })
   }, [dirty, persisting, activeDeviceId, theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, pinnedModuleTabs])
 
   persistSettingsRef.current = persistSettings
@@ -2145,8 +2148,6 @@ async function handleSelectTab(k: TabKey) {
               />
             )}
 
-            <SaveToast visible={saveToast.visible} text={saveToast.text} />
-
           </>
         </div>
 
@@ -2160,20 +2161,6 @@ async function handleSelectTab(k: TabKey) {
         )}
       </div>
     </main>
-  )
-}
-
-function SaveToast({ visible, text }: { visible: boolean; text: string }) {
-  return (
-    <div
-      className={`pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-[28px] z-[80] transition-all duration-200 ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-      }`}
-    >
-      <div className="px-4 py-2 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--toast-bg)] backdrop-blur text-[color:var(--fg-80)] tracking-widest text-xs">
-        {text}
-      </div>
-    </div>
   )
 }
 
