@@ -33,15 +33,25 @@ export function isIntegrationCredentialsKeyConfigError(error: unknown) {
 }
 
 export function integrationCredentialsKeyUserMessage(integrationName = 'Teams') {
-  return `${integrationName} needs a server encryption key before it can connect. Add INTEGRATION_CREDENTIALS_KEY in your deployment environment variables and redeploy.`
+  return `${integrationName} is not fully configured on the server yet. Contact an administrator to finish setup.`
+}
+
+export function logIntegrationCredentialsKeySetupError(integrationName = 'Teams') {
+  const status = getIntegrationCredentialsKeyStatus()
+  if (status.valid) return null
+  console.error(`[integrations:${integrationName.toLowerCase()}] credentials encryption key setup error`, {
+    envName: status.envName,
+    configured: status.configured,
+    error: status.error,
+  })
+  return status
 }
 
 export function integrationCredentialsKeySetupError(integrationName = 'Teams') {
-  const status = getIntegrationCredentialsKeyStatus()
-  if (status.valid) return null
+  const status = logIntegrationCredentialsKeySetupError(integrationName)
+  if (!status) return null
   return {
-    code: 'missing_integration_credentials_key',
-    envName: status.envName,
+    code: status.configured ? 'invalid_integration_credentials_key' : 'missing_integration_credentials_key',
     message: integrationCredentialsKeyUserMessage(integrationName),
   }
 }

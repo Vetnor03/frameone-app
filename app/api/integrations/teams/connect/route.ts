@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError } from '@/app/lib/integrations/credentialsCrypto'
-import { buildMicrosoftAuthUrl, getMicrosoftRedirectUri } from '@/app/lib/integrations/teams/client'
+import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError, logIntegrationCredentialsKeySetupError } from '@/app/lib/integrations/credentialsCrypto'
+import { buildMicrosoftAuthUrl, getMicrosoftRedirectUri, logMicrosoftOAuthConfigError, microsoftOAuthUserMessage } from '@/app/lib/integrations/teams/client'
 import { buildTeamsOAuthState, getAuthenticatedTeamsUserId, normalizeTimeZone } from '@/app/lib/integrations/teams/server'
 
 export const runtime = 'nodejs'
@@ -8,10 +8,12 @@ export const runtime = 'nodejs'
 function teamsConnectionErrorMessage(error: unknown) {
   if (!(error instanceof Error)) return 'Failed to start Microsoft OAuth'
   if (isIntegrationCredentialsKeyConfigError(error)) {
-    return integrationCredentialsKeyUserMessage()
+    logIntegrationCredentialsKeySetupError('Teams')
+    return integrationCredentialsKeyUserMessage('Teams')
   }
   if (error.message.startsWith('Missing MICROSOFT_')) {
-    return 'Teams connection is not configured on the server yet. Add the Microsoft OAuth settings and redeploy.'
+    logMicrosoftOAuthConfigError('teams-connect')
+    return microsoftOAuthUserMessage()
   }
   return error.message
 }
@@ -27,6 +29,9 @@ export async function GET(req: Request) {
   try {
     const userId = await getAuthenticatedTeamsUserId(req)
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const microsoftConfigError = logMicrosoftOAuthConfigError('teams-connect')
+    if (microsoftConfigError) return appRedirect(req, microsoftOAuthUserMessage())
 
     const url = new URL(req.url)
     const timeZone = normalizeTimeZone(url.searchParams.get('tz'))
