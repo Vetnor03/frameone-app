@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
 
 export const runtime = 'nodejs'
 
@@ -38,7 +39,7 @@ type DeviceReminderItem = {
   repeat: ReminderRepeatKey
   due_time: string | null
   display_time: string | null
-  source?: 'spond' | 'remind'
+  source?: 'spond' | 'teams' | 'remind'
   external_id?: string
 }
 
@@ -446,9 +447,42 @@ function buildSpondReminderItems(
   })
 }
 
+
+function buildTeamsMeetingItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  timeZone: string
+): DeviceReminderItem[] {
+  return rows.flatMap((row) => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    const startsAt = row.starts_at
+    if (!title || !externalId || !startsAt) return []
+
+    const occurrenceDate = isoToYmdInTimeZone(startsAt, timeZone)
+    if (occurrenceDate !== todayYmd) return []
+
+    const displayTime = isoToHmInTimeZone(startsAt, timeZone)
+    return [{
+      reminder_id: `teams:${externalId}`,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: 'Today',
+      days_until: 0,
+      is_overdue: false,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: displayTime,
+      display_time: displayTime,
+      source: 'teams' as const,
+      external_id: externalId,
+    }]
+  })
+}
+
 function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
-  const as = a.source === 'spond' ? 0 : 1
-  const bs = b.source === 'spond' ? 0 : 1
+  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : 2
+  const as = sourceRank(a.source)
+  const bs = sourceRank(b.source)
   if (as !== bs) return as - bs
 
   if (a.days_until !== b.days_until) return a.days_until - b.days_until
@@ -539,6 +573,7 @@ export async function GET(req: Request) {
     ))
 
     let spondItems: DeviceReminderItem[] = []
+    let teamsItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
       const { data: integrationItemsData, error: integrationItemsError } = await supabase
         .from('integration_items')
@@ -559,9 +594,28 @@ export async function GET(req: Request) {
         timeZone,
         includeOverdue
       )
+
+      await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId)))
+
+      const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
+        .from('integration_items')
+        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority')
+        .eq('provider', 'teams')
+        .in('user_id', memberUserIds)
+        .order('starts_at', { ascending: true, nullsFirst: false })
+
+      if (teamsIntegrationItemsError) {
+        return NextResponse.json({ error: teamsIntegrationItemsError.message }, { status: 500 })
+      }
+
+      teamsItems = buildTeamsMeetingItems(
+        Array.isArray(teamsIntegrationItemsData) ? (teamsIntegrationItemsData as IntegrationItemRow[]) : [],
+        todayYmd,
+        timeZone
+      )
     }
 
-    const items = [...spondItems, ...manualItems]
+    const items = [...teamsItems, ...spondItems, ...manualItems]
       .sort(compareReminderItems)
       .slice(0, limit)
 
