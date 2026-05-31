@@ -47,6 +47,7 @@ struct ReminderItem {
   bool used = false;
   char id[48] = {0};
   char title[96] = {0};
+  char source[16] = {0};
   char time[12] = {0};           // HH:MM or empty
   char occurrenceDate[16] = {0}; // YYYY-MM-DD
   char displayDate[24] = {0};
@@ -300,7 +301,9 @@ static void buildReminderTitleWithTime(const ReminderItem& r, char* out, size_t 
   if (!out || outSize == 0) return;
   out[0] = '\0';
 
-  if (r.time[0]) {
+  if (r.time[0] && strcmp(r.source, "teams") == 0) {
+    snprintf(out, outSize, "%s %s", r.time, r.title);
+  } else if (r.time[0]) {
     snprintf(out, outSize, "%s %s", r.title, r.time);
   } else {
     safeCopy(out, outSize, r.title);
@@ -523,6 +526,9 @@ static bool fetchReminders() {
 
     const char* rawTitle = it["title"] | "";
     utf8ToLatin1(r.title, sizeof(r.title), rawTitle);
+
+    const char* rawSource = it["source"] | "";
+    safeCopy(r.source, sizeof(r.source), rawSource);
 
     char rawTime[24] = {0};
     safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
