@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError } from '@/app/lib/integrations/credentialsCrypto'
-import { exchangeMicrosoftCode, getMicrosoftRedirectUri } from '@/app/lib/integrations/teams/client'
+import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError, logIntegrationCredentialsKeySetupError } from '@/app/lib/integrations/credentialsCrypto'
+import { exchangeMicrosoftCode, getMicrosoftRedirectUri, logMicrosoftOAuthConfigError, microsoftOAuthUserMessage } from '@/app/lib/integrations/teams/client'
 import { parseTeamsOAuthState, syncTeamsForUser } from '@/app/lib/integrations/teams/server'
 
 export const runtime = 'nodejs'
@@ -8,10 +8,12 @@ export const runtime = 'nodejs'
 function teamsAuthErrorMessage(error: unknown) {
   if (!(error instanceof Error)) return 'Microsoft auth failed'
   if (isIntegrationCredentialsKeyConfigError(error)) {
-    return integrationCredentialsKeyUserMessage()
+    logIntegrationCredentialsKeySetupError('Teams')
+    return integrationCredentialsKeyUserMessage('Teams')
   }
   if (error.message.startsWith('Missing MICROSOFT_')) {
-    return 'Teams connection is not configured on the server yet. Add the Microsoft OAuth settings and redeploy.'
+    logMicrosoftOAuthConfigError('teams-callback')
+    return microsoftOAuthUserMessage()
   }
   return error.message
 }

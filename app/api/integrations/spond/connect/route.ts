@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError } from '@/app/lib/integrations/credentialsCrypto'
+import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError, logIntegrationCredentialsKeySetupError } from '@/app/lib/integrations/credentialsCrypto'
 import { SpondError } from '@/app/lib/integrations/spond/client'
 import { getAuthenticatedUserId, publicIntegrationStatus, syncSpondForUser } from '@/app/lib/integrations/spond/server'
 
@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     if (error instanceof SpondError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.code === 'rate_limited' ? 429 : 400 })
     }
+    if (isIntegrationCredentialsKeyConfigError(error)) logIntegrationCredentialsKeySetupError('Spond')
     const message = isIntegrationCredentialsKeyConfigError(error)
       ? integrationCredentialsKeyUserMessage('Spond')
       : 'Failed to connect Spond.'

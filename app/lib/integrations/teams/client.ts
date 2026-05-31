@@ -45,7 +45,36 @@ type TokenResponse = {
 
 const MICROSOFT_AUTHORITY = 'https://login.microsoftonline.com/common'
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
+const REQUIRED_MICROSOFT_ENV = ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'] as const
 export const TEAMS_SCOPES = ['offline_access', 'Calendars.Read', 'User.Read'] as const
+
+export function getMicrosoftOAuthConfigStatus() {
+  const missing = REQUIRED_MICROSOFT_ENV.filter((name) => !process.env[name])
+  return {
+    configured: missing.length === 0,
+    missing,
+  }
+}
+
+export function logMicrosoftOAuthConfigError(context = 'teams') {
+  const status = getMicrosoftOAuthConfigStatus()
+  if (status.configured) return null
+  console.error(`[integrations:${context}] Microsoft OAuth setup error`, { missing: status.missing })
+  return status
+}
+
+export function microsoftOAuthUserMessage() {
+  return 'Teams is not fully configured on the server yet. Contact an administrator to finish Microsoft connection setup.'
+}
+
+export function microsoftOAuthSetupError(context = 'teams') {
+  const status = logMicrosoftOAuthConfigError(context)
+  if (!status) return null
+  return {
+    code: 'missing_microsoft_oauth_config',
+    message: microsoftOAuthUserMessage(),
+  }
+}
 
 function requiredEnv(name: string) {
   const value = process.env[name]

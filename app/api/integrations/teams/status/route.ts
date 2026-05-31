@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { integrationCredentialsKeySetupError } from '@/app/lib/integrations/credentialsCrypto'
+import { microsoftOAuthSetupError } from '@/app/lib/integrations/teams/client'
 import { getAuthenticatedUserId, getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { publicTeamsIntegrationStatus, TEAMS_PROVIDER } from '@/app/lib/integrations/teams/server'
 
@@ -20,6 +21,6 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({
     ...publicTeamsIntegrationStatus(data),
-    setup_error: integrationCredentialsKeySetupError('Teams'),
+    setup_error: microsoftOAuthSetupError('teams-status') || integrationCredentialsKeySetupError('Teams'),
   })
 }
