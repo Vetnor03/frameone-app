@@ -23,7 +23,7 @@ export type SpondFetchResult = {
 
 export class SpondError extends Error {
   status: number
-  code: 'invalid_credentials' | 'rate_limited' | 'expired' | 'upstream' | 'unknown'
+  code: 'invalid_credentials' | 'rate_limited' | 'expired' | 'verification_required' | 'upstream' | 'parse_changed' | 'unknown'
 
   constructor(message: string, status: number, code: SpondError['code'] = 'unknown') {
     super(message)
@@ -33,19 +33,21 @@ export class SpondError extends Error {
   }
 }
 
+// Unofficial/experimental Spond integration. These endpoints mirror the community
+// Python package at https://pypi.org/project/spond/ and may change without notice.
 const API_BASE = 'https://api.spond.com/core/v1'
 const MAX_EVENTS = 100
 const MAX_POSTS = 50
-const MAX_CHATS = 50
+const MAX_CHATS = 100
 
 function cleanString(value: unknown, max = 240) {
   if (typeof value !== 'string') return ''
   return value.replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
-function findText(row: JsonRecord, keys: string[]) {
+function findText(row: JsonRecord, keys: string[], max = 500) {
   for (const key of keys) {
-    const value = cleanString(row[key], 500)
+    const value = cleanString(row[key], max)
     if (value) return value
   }
   return ''
@@ -56,7 +58,7 @@ function asRecord(value: unknown): JsonRecord | null {
 }
 
 function asArray(value: unknown): JsonRecord[] {
-  return Array.isArray(value) ? value.map(asRecord).filter(Boolean) as JsonRecord[] : []
+  return Array.isArray(value) ? value.map(asRecord).filter((item): item is JsonRecord => Boolean(item)) : []
 }
 
 function findTimestamp(row: JsonRecord, keys: string[]) {
@@ -80,15 +82,24 @@ async function parseJsonResponse(resp: Response) {
   try {
     return JSON.parse(text) as unknown
   } catch {
-    return { message: text }
+    throw new SpondError('Spond returned an unexpected response.', resp.status, 'parse_changed')
   }
 }
 
+function hasVerificationChallenge(data: unknown) {
+  const row = asRecord(data)
+  if (!row) return false
+  const haystack = ['error', 'errorKey', 'errorCode', 'message']
+    .map((key) => cleanString(row[key], 180).toLowerCase())
+    .join(' ')
+  return haystack.includes('2fa') || haystack.includes('totp') || haystack.includes('verification') || haystack.includes('challenge')
+}
+
 function toSpondError(resp: Response, data: unknown) {
-  if (resp.status === 401 || resp.status === 403) return new SpondError('Spond login failed. Check the username and password.', resp.status, 'invalid_credentials')
-  if (resp.status === 429) return new SpondError('Spond is rate limiting requests. Try again later.', resp.status, 'rate_limited')
-  const message = cleanString(asRecord(data)?.message, 180) || `Spond request failed with status ${resp.status}`
-  return new SpondError(message, resp.status, 'upstream')
+  if (hasVerificationChallenge(data)) return new SpondError('Spond needs extra verification before this account can connect.', resp.status, 'verification_required')
+  if (resp.status === 401 || resp.status === 403) return new SpondError('Spond login failed.', resp.status, 'invalid_credentials')
+  if (resp.status === 429) return new SpondError('Spond is rate limiting requests.', resp.status, 'rate_limited')
+  return new SpondError('Spond is temporarily unavailable.', resp.status, 'upstream')
 }
 
 export async function spondLogin(credentials: SpondCredentials) {
@@ -101,9 +112,10 @@ export async function spondLogin(credentials: SpondCredentials) {
   const data = await parseJsonResponse(resp)
   if (!resp.ok) throw toSpondError(resp, data)
 
+  if (hasVerificationChallenge(data)) throw new SpondError('Spond needs extra verification before this account can connect.', resp.status, 'verification_required')
   const access = asRecord(data)?.accessToken
   const token = asRecord(access)?.token
-  if (typeof token !== 'string' || !token) throw new SpondError('Spond login did not return an access token.', resp.status, 'invalid_credentials')
+  if (typeof token !== 'string' || !token) throw new SpondError('Spond login failed.', resp.status, 'invalid_credentials')
   return token
 }
 
@@ -116,7 +128,7 @@ async function spondGet(path: string, token: string, params?: Record<string, str
   })
   const data = await parseJsonResponse(resp)
   if (!resp.ok) {
-    if (resp.status === 401 || resp.status === 403) throw new SpondError('Spond session expired. Reconnect Spond.', resp.status, 'expired')
+    if (resp.status === 401 || resp.status === 403) throw new SpondError('Spond session expired.', resp.status, 'expired')
     throw toSpondError(resp, data)
   }
   return data
@@ -130,10 +142,20 @@ async function spondPost(path: string, token: string) {
   })
   const data = await parseJsonResponse(resp)
   if (!resp.ok) {
-    if (resp.status === 401 || resp.status === 403) throw new SpondError('Spond session expired. Reconnect Spond.', resp.status, 'expired')
+    if (resp.status === 401 || resp.status === 403) throw new SpondError('Spond session expired.', resp.status, 'expired')
     throw toSpondError(resp, data)
   }
   return data
+}
+
+function rawMetadata(type: string, row: JsonRecord, timestamp: string | null): JsonRecord {
+  return {
+    type,
+    source: 'spond_unofficial',
+    id: cleanString(row.id || row.uid || row.chatId, 120),
+    group_id: cleanString(row.groupId || row.groupUid, 120) || null,
+    timestamp,
+  }
 }
 
 function mapEvent(row: JsonRecord): SpondMappedItem | null {
@@ -142,8 +164,8 @@ function mapEvent(row: JsonRecord): SpondMappedItem | null {
   if (!id || !title) return null
   const start = findTimestamp(row, ['meetupTimestamp', 'startTimestamp', 'startTime', 'startsAt'])
   const end = findTimestamp(row, ['endTimestamp', 'dueTimestamp', 'endTime', 'endsAt'])
-  const body = findText(row, ['description', 'body', 'message']) || null
-  return { provider: 'spond', external_id: `event:${id}`, title, body, starts_at: start, due_at: end || start, priority: 0, raw: { type: 'event', ...row } }
+  const body = findText(row, ['description', 'body', 'message'], 1000) || null
+  return { provider: 'spond', external_id: `event:${id}`, title, body, starts_at: start, due_at: end || start, priority: 0, raw: rawMetadata('event', row, start) }
 }
 
 function mapPost(row: JsonRecord): SpondMappedItem | null {
@@ -151,8 +173,8 @@ function mapPost(row: JsonRecord): SpondMappedItem | null {
   const title = findText(row, ['heading', 'subject', 'title', 'name', 'message', 'body', 'text'])
   if (!id || !title) return null
   const created = findTimestamp(row, ['createdTime', 'createdTimestamp', 'createdAt', 'timestamp'])
-  const body = findText(row, ['message', 'body', 'text', 'description']) || null
-  return { provider: 'spond', external_id: `post:${id}`, title, body, starts_at: created, due_at: created, priority: 10, raw: { type: 'post', ...row } }
+  const body = findText(row, ['message', 'body', 'text', 'description'], 1000) || null
+  return { provider: 'spond', external_id: `post:${id}`, title, body, starts_at: created, due_at: created, priority: 10, raw: rawMetadata('post', row, created) }
 }
 
 function mapChat(row: JsonRecord): SpondMappedItem | null {
@@ -161,8 +183,8 @@ function mapChat(row: JsonRecord): SpondMappedItem | null {
   const title = findText(latest, ['subject', 'title', 'name', 'text', 'message', 'body']) || findText(row, ['name', 'title'])
   if (!id || !title) return null
   const timestamp = findTimestamp(latest, ['createdTime', 'createdTimestamp', 'createdAt', 'timestamp', 'sentAt']) || findTimestamp(row, ['updatedTime', 'updatedAt'])
-  const body = findText(latest, ['text', 'message', 'body']) || null
-  return { provider: 'spond', external_id: `chat:${id}`, title, body, starts_at: timestamp, due_at: timestamp, priority: 20, raw: { type: 'chat', ...row } }
+  const body = findText(latest, ['text', 'message', 'body'], 1000) || null
+  return { provider: 'spond', external_id: `chat:${id}`, title, body, starts_at: timestamp, due_at: timestamp, priority: 20, raw: rawMetadata('chat', row, timestamp) }
 }
 
 function dedupeItems(items: Array<SpondMappedItem | null>) {

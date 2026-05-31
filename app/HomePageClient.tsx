@@ -2280,6 +2280,12 @@ function ConnectAppsScreen({
   async function connectSpond() {
     const username = spondUsername.trim()
     if (!username || !spondPassword || spondLoading) return
+    const spondSetupError = integrationSetupErrors.spond
+    if (spondSetupError) {
+      setStatusTone('error')
+      setStatus(spondSetupError)
+      return
+    }
     setSpondLoading(true)
     setStatus(null)
     setStatusTone('info')
@@ -2547,11 +2553,11 @@ function ConnectAppsScreen({
           <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Koble til Spond' : 'Connect Spond'}</div>
+                <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Koble til Spond-kontoen din' : 'Connect your Spond account'}</div>
                 <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">
                   {language === 'no'
-                    ? 'Innlogging sendes bare til serveren og lagres kryptert.'
-                    : 'Your login is sent only to the server and stored encrypted.'}
+                    ? 'Eksperimentell, uoffisiell Spond-tilkobling. Innlogging sendes bare til serveren og lagres kryptert.'
+                    : 'Experimental, unofficial Spond connection. Your login is sent only to the server and stored encrypted.'}
                 </div>
               </div>
               <button
@@ -2565,7 +2571,7 @@ function ConnectAppsScreen({
 
             <div className="mt-5 space-y-3">
               <label className="block">
-                <span className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'E-POST / BRUKERNAVN' : 'EMAIL / USERNAME'}</span>
+                <span className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'E-POST / TELEFON' : 'EMAIL / PHONE'}</span>
                 <input
                   value={spondUsername}
                   onChange={(e) => setSpondUsername(e.target.value)}

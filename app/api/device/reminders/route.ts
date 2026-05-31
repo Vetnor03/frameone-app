@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
 
 export const runtime = 'nodejs'
@@ -575,6 +576,8 @@ export async function GET(req: Request) {
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
+      await syncSpondIfStaleForUsers(memberUserIds)
+
       const { data: integrationItemsData, error: integrationItemsError } = await supabase
         .from('integration_items')
         .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority')
