@@ -452,13 +452,18 @@ function buildSpondReminderItems(
 function buildTeamsMeetingItems(
   rows: IntegrationItemRow[],
   todayYmd: string,
-  timeZone: string
+  timeZone: string,
+  now = new Date()
 ): DeviceReminderItem[] {
   return rows.flatMap((row) => {
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
     const startsAt = row.starts_at
-    if (!title || !externalId || !startsAt) return []
+    const completionAt = row.due_at || startsAt
+    if (!title || !externalId || !startsAt || !completionAt) return []
+
+    const completionDate = new Date(completionAt)
+    if (Number.isNaN(completionDate.getTime()) || completionDate.getTime() <= now.getTime()) return []
 
     const occurrenceDate = isoToYmdInTimeZone(startsAt, timeZone)
     if (occurrenceDate !== todayYmd) return []

@@ -177,7 +177,7 @@ function normalizeLocation(event: GraphEvent) {
 export function normalizeGraphEvent(event: GraphEvent): TeamsMeeting | null {
   if (!event.id || event.isCancelled) return null
   const startsAt = dateTimeToIso(event.start?.dateTime)
-  const endsAt = dateTimeToIso(event.end?.dateTime)
+  const endsAt = dateTimeToIso(event.end?.dateTime) || startsAt
   if (!startsAt || !endsAt) return null
   const location = normalizeLocation(event)
   const joinUrl = String(event.onlineMeeting?.joinUrl || '').trim()
