@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
+import { isTeamsMeetingVisibleAt } from '@/app/lib/integrations/teams/visibility'
 
 export const runtime = 'nodejs'
 
@@ -459,11 +460,8 @@ function buildTeamsMeetingItems(
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
     const startsAt = row.starts_at
-    const completionAt = row.due_at || startsAt
-    if (!title || !externalId || !startsAt || !completionAt) return []
-
-    const completionDate = new Date(completionAt)
-    if (Number.isNaN(completionDate.getTime()) || completionDate.getTime() <= now.getTime()) return []
+    if (!title || !externalId || !startsAt) return []
+    if (!isTeamsMeetingVisibleAt(startsAt, now)) return []
 
     const occurrenceDate = isoToYmdInTimeZone(startsAt, timeZone)
     if (occurrenceDate !== todayYmd) return []
