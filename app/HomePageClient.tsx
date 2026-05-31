@@ -1242,6 +1242,9 @@ export default function HomePage() {
   }
 
   const dirtyFrameRef = useRef<number | null>(null)
+  const frameAutoSavePendingRef = useRef(false)
+  const frameAutoSaveTimerRef = useRef<number | null>(null)
+  const persistSettingsRef = useRef<() => Promise<boolean>>(async () => false)
   const pendingDirtyStateRef = useRef<{
     theme?: 'dark' | 'light'
     language?: AppLanguage
@@ -1291,6 +1294,10 @@ export default function HomePage() {
       pendingDirtyStateRef.current = null
       refreshDirtyState(pending ?? undefined)
     })
+  }
+
+  function scheduleFrameAutoSave() {
+    frameAutoSavePendingRef.current = true
   }
 
 
@@ -1757,6 +1764,7 @@ export default function HomePage() {
       layoutKey: nextLayoutKey,
       cellsByLayout: nextCellsByLayout,
     })
+    scheduleFrameAutoSave()
   }
 
   function nextLayout() {
@@ -1780,6 +1788,7 @@ export default function HomePage() {
       layoutKey: nextLayoutKey,
       cellsByLayout: nextCellsByLayout,
     })
+    scheduleFrameAutoSave()
   }
 
   function openPicker(slot: number) {
@@ -1809,6 +1818,7 @@ export default function HomePage() {
     setPickerOpen(false)
     setPickerSlot(null)
     markDirty({ cellsByLayout: nextCellsByLayout })
+    scheduleFrameAutoSave()
   }
 
   function clearCell() {
@@ -1832,6 +1842,7 @@ export default function HomePage() {
     setPickerOpen(false)
     setPickerSlot(null)
     markDirty({ cellsByLayout: nextCellsByLayout })
+    scheduleFrameAutoSave()
   }
 
   async function persistSettings() {
@@ -1904,6 +1915,28 @@ export default function HomePage() {
   }
 
 
+
+  useEffect(() => {
+    if (!frameAutoSavePendingRef.current || !dirty || persisting) return
+
+    if (frameAutoSaveTimerRef.current != null) window.clearTimeout(frameAutoSaveTimerRef.current)
+
+    frameAutoSaveTimerRef.current = window.setTimeout(() => {
+      frameAutoSaveTimerRef.current = null
+      void persistSettingsRef.current().then((saved) => {
+        if (saved) frameAutoSavePendingRef.current = false
+      })
+    }, 650)
+
+    return () => {
+      if (frameAutoSaveTimerRef.current != null) {
+        window.clearTimeout(frameAutoSaveTimerRef.current)
+        frameAutoSaveTimerRef.current = null
+      }
+    }
+  }, [dirty, persisting, activeDeviceId, theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, pinnedModuleTabs])
+
+  persistSettingsRef.current = persistSettings
 
   async function logout() {
     await supabase.auth.signOut()
@@ -2056,20 +2089,7 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
-                <button
-                  onClick={() => persistSettings()}
-                  className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
-                    dirty
-                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
-                      : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
-                  }`}
-                  style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!dirty || persisting}
-                >
-                  {persisting ? tx(language).saving : tx(language).update}
-                </button>
-
-                <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
+                <div className="h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
                   {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
               </div>
