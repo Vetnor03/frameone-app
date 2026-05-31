@@ -256,6 +256,11 @@ function moduleLabel(language: AppLanguage, key: ModuleKey) {
   return UI[language].modules[key]
 }
 
+function moduleLoadingText(language: AppLanguage, key: ModuleKey) {
+  const label = moduleLabel(language, key).toLowerCase()
+  return language === 'no' ? `Laster ${label}…` : `Loading ${label}…`
+}
+
 function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; subtitle: string }[] {
   const t = tx(language)
   return [
@@ -6187,7 +6192,12 @@ function LandscapeFrameMirror({
       return <div className="text-sm tracking-widest opacity-35">—</div>
     }
 
-    const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+    const liveDetail = snapshot.detailsBySlot[String(slot)]
+    if (!liveDetail && module !== 'date') {
+      return <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, module)}</div>
+    }
+
+    const detail = liveDetail ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
