@@ -7,6 +7,35 @@ const LEGACY_KEY_ENV = 'SPOND_CREDENTIALS_KEY'
 export const MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR = `Missing ${KEY_ENV}`
 export const INVALID_INTEGRATION_CREDENTIALS_KEY_ERROR = `${KEY_ENV} must be a base64-encoded 32-byte key`
 
+export function getIntegrationCredentialsKeyStatus() {
+  const envName = process.env[KEY_ENV] ? KEY_ENV : LEGACY_KEY_ENV
+  const raw = process.env[KEY_ENV] || process.env[LEGACY_KEY_ENV] || ''
+  if (!raw) {
+    return { configured: false, valid: false, envName: KEY_ENV, error: MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR }
+  }
+
+  const key = Buffer.from(raw, 'base64')
+  if (key.length !== 32) {
+    return {
+      configured: true,
+      valid: false,
+      envName,
+      error: envName === KEY_ENV ? INVALID_INTEGRATION_CREDENTIALS_KEY_ERROR : `${LEGACY_KEY_ENV} must be a base64-encoded 32-byte key`,
+    }
+  }
+
+  return { configured: true, valid: true, envName, error: null }
+}
+
+export function isIntegrationCredentialsKeyConfigError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  return error.message === MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR || error.message.includes('must be a base64-encoded 32-byte key')
+}
+
+export function integrationCredentialsKeyUserMessage(integrationName = 'Teams') {
+  return `${integrationName} connection is not configured on the server yet. Add INTEGRATION_CREDENTIALS_KEY and redeploy.`
+}
+
 export type EncryptedPayload = {
   v: 1
   alg: 'aes-256-gcm'
@@ -16,15 +45,9 @@ export type EncryptedPayload = {
 }
 
 function getKey() {
-  const envName = process.env[KEY_ENV] ? KEY_ENV : LEGACY_KEY_ENV
-  const raw = process.env[KEY_ENV] || process.env[LEGACY_KEY_ENV] || ''
-  if (!raw) throw new Error(MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR)
-
-  const key = Buffer.from(raw, 'base64')
-  if (key.length !== 32) {
-    throw new Error(envName === KEY_ENV ? INVALID_INTEGRATION_CREDENTIALS_KEY_ERROR : `${LEGACY_KEY_ENV} must be a base64-encoded 32-byte key`)
-  }
-  return key
+  const status = getIntegrationCredentialsKeyStatus()
+  if (!status.valid) throw new Error(status.error || MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR)
+  return Buffer.from(process.env[status.envName] || '', 'base64')
 }
 
 export function encryptJson(value: unknown): EncryptedPayload {
