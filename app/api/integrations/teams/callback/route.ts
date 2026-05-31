@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR } from '@/app/lib/integrations/credentialsCrypto'
+import { integrationCredentialsKeyUserMessage, isIntegrationCredentialsKeyConfigError } from '@/app/lib/integrations/credentialsCrypto'
 import { exchangeMicrosoftCode, getMicrosoftRedirectUri } from '@/app/lib/integrations/teams/client'
 import { parseTeamsOAuthState, syncTeamsForUser } from '@/app/lib/integrations/teams/server'
 
@@ -7,11 +7,11 @@ export const runtime = 'nodejs'
 
 function teamsAuthErrorMessage(error: unknown) {
   if (!(error instanceof Error)) return 'Microsoft auth failed'
-  if (error.message === MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR) {
-    return 'Server is missing integration credential encryption configuration.'
+  if (isIntegrationCredentialsKeyConfigError(error)) {
+    return integrationCredentialsKeyUserMessage()
   }
-  if (error.message.includes('must be a base64-encoded 32-byte key')) {
-    return 'Server integration credential encryption key is invalid.'
+  if (error.message.startsWith('Missing MICROSOFT_')) {
+    return 'Teams connection is not configured on the server yet. Add the Microsoft OAuth settings and redeploy.'
   }
   return error.message
 }

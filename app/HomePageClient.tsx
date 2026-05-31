@@ -2191,6 +2191,7 @@ function ConnectAppsScreen({
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'connected' ? 'success' : initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
     if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Teams er tilkoblet' : 'Teams connected'
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
@@ -2237,6 +2238,7 @@ function ConnectAppsScreen({
     if (teamsLoading || teamsConnected) return
     setTeamsLoading(true)
     setStatus(null)
+    setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Teams' : 'Sign in to connect Teams')
@@ -2247,6 +2249,7 @@ function ConnectAppsScreen({
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       setTeamsLoading(false)
+      setStatusTone('error')
       setStatus(message || (language === 'no' ? 'Kunne ikke starte Teams-tilkobling' : 'Could not start Teams connection'))
     }
   }
@@ -2256,6 +2259,7 @@ function ConnectAppsScreen({
     if (!username || !spondPassword || spondLoading) return
     setSpondLoading(true)
     setStatus(null)
+    setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       const resp = await fetch('/api/integrations/spond/connect', {
@@ -2269,9 +2273,11 @@ function ConnectAppsScreen({
       setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
       setSpondPassword('')
       setSpondModalOpen(false)
+      setStatusTone('success')
       setStatus(language === 'no' ? 'Spond er tilkoblet' : 'Spond connected')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
+      setStatusTone('error')
       setStatus(message || (language === 'no' ? 'Kunne ikke koble til Spond' : 'Could not connect Spond'))
     } finally {
       setSpondLoading(false)
@@ -2282,6 +2288,7 @@ function ConnectAppsScreen({
     if (spondLoading) return
     setSpondLoading(true)
     setStatus(null)
+    setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       const resp = await fetch('/api/integrations/spond/disconnect', {
@@ -2292,9 +2299,11 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Failed to disconnect Spond')
       setSpondConnected(false)
       setSpondAccount(null)
+      setStatusTone('success')
       setStatus(language === 'no' ? 'Spond er frakoblet' : 'Spond disconnected')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
+      setStatusTone('error')
       setStatus(message || (language === 'no' ? 'Kunne ikke koble fra Spond' : 'Could not disconnect Spond'))
     } finally {
       setSpondLoading(false)
@@ -2373,6 +2382,7 @@ function ConnectAppsScreen({
                       } else if (app.key === 'teams') {
                         connectTeams()
                       } else {
+                        setStatusTone('info')
                         setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
                       }
                     }}
@@ -2409,7 +2419,15 @@ function ConnectAppsScreen({
         </div>
 
         {status && (
-          <div className="mt-3 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 px-4 py-3 text-sm text-[#2aa3ff]">
+          <div
+            className={`mt-3 rounded-2xl border px-4 py-3 text-sm ${
+              statusTone === 'error'
+                ? 'border-[#d94b4b]/35 bg-[#d94b4b]/10 text-[#ff7a7a]'
+                : statusTone === 'success'
+                  ? 'border-[#1f9d4a]/35 bg-[#1f9d4a]/10 text-[#35c76a]'
+                  : 'border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[#2aa3ff]'
+            }`}
+          >
             {status}
           </div>
         )}

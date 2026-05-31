@@ -29,6 +29,18 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+
+## Integration setup
+
+Spond and Teams store service tokens encrypted at rest. Before enabling either integration in a deployed environment, set these server-side environment variables and redeploy:
+
+```bash
+# Generate once per environment and keep it stable; rotating it invalidates stored integration tokens.
+openssl rand -base64 32
+```
+
+Add the generated value as `INTEGRATION_CREDENTIALS_KEY`. Teams also requires `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` from the Microsoft OAuth app registration. If the Microsoft redirect URL differs from `/api/integrations/teams/callback` on the app origin, set `MICROSOFT_REDIRECT_URI` as well.
+
 ## Deploy on Vercel
 deploy test
 
