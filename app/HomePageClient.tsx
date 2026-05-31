@@ -2189,13 +2189,22 @@ function ConnectAppsScreen({
   modulesJson: Record<string, unknown>
   onBack: () => void
 }) {
-  const [status, setStatus] = useState<string | null>(null)
+  const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
+  const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
+  const [status, setStatus] = useState<string | null>(() => {
+    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Teams er tilkoblet' : 'Teams connected'
+    if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
+    return null
+  })
   const [spondConnected, setSpondConnected] = useState(connectAppIsConnected(modulesJson, 'spond'))
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondModalOpen, setSpondModalOpen] = useState(false)
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
+  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
+  const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
+  const [teamsLoading, setTeamsLoading] = useState(false)
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -2208,6 +2217,38 @@ function ConnectAppsScreen({
     const json = await resp.json()
     setSpondConnected(json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+  }
+
+
+  async function fetchTeamsStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) return
+    const resp = await fetch('/api/integrations/teams/status', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!resp.ok) return
+    const json = await resp.json()
+    setTeamsConnected(json?.connected === true)
+    setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+  }
+
+  async function connectTeams() {
+    if (teamsLoading || teamsConnected) return
+    setTeamsLoading(true)
+    setStatus(null)
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Teams' : 'Sign in to connect Teams')
+      const params = new URLSearchParams({ access_token: accessToken })
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (timeZone) params.set('tz', timeZone)
+      window.location.href = `/api/integrations/teams/connect?${params.toString()}`
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      setTeamsLoading(false)
+      setStatus(message || (language === 'no' ? 'Kunne ikke starte Teams-tilkobling' : 'Could not start Teams connection'))
+    }
   }
 
   async function connectSpond() {
@@ -2262,6 +2303,10 @@ function ConnectAppsScreen({
 
   useEffect(() => {
     fetchSpondStatus()
+    fetchTeamsStatus()
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string }> = [
     {
@@ -2306,7 +2351,7 @@ function ConnectAppsScreen({
 
         <div className="mt-4 space-y-2.5">
           {apps.map((app) => {
-            const connected = app.key === 'spond' ? spondConnected : connectAppIsConnected(modulesJson, app.key)
+            const connected = app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : connectAppIsConnected(modulesJson, app.key)
             return (
               <div
                 key={app.key}
@@ -2320,11 +2365,13 @@ function ConnectAppsScreen({
 
                   <button
                     type="button"
-                    disabled={(app.key !== 'spond' && connected) || (app.key === 'spond' && spondLoading)}
+                    disabled={(app.key === 'teams' && (connected || teamsLoading)) || (app.key !== 'spond' && app.key !== 'teams' && connected) || (app.key === 'spond' && spondLoading)}
                     onClick={() => {
                       if (app.key === 'spond') {
                         if (connected) disconnectSpond()
                         else setSpondModalOpen(true)
+                      } else if (app.key === 'teams') {
+                        connectTeams()
                       } else {
                         setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
                       }
@@ -2337,16 +2384,23 @@ function ConnectAppsScreen({
                         : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
                     }`}
                   >
-                    {connected && app.key === 'spond'
-                      ? (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')
-                      : connected
-                        ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED')
-                        : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                    {app.key === 'teams' && teamsLoading
+                      ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
+                      : connected && app.key === 'spond'
+                        ? (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')
+                        : connected
+                          ? (language === 'no' ? 'TILKOBLET' : 'CONNECTED')
+                          : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                   </button>
                 </div>
                 {app.key === 'spond' && spondConnected && (
                   <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     {spondAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${spondAccount}` : (language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server')}
+                  </div>
+                )}
+                {app.key === 'teams' && teamsConnected && (
+                  <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    {teamsAccount ? `${language === 'no' ? 'Konto' : 'Account'}: ${teamsAccount}` : (language === 'no' ? 'Kalenderen leses sikkert på serveren' : 'Calendar is read securely on the server')}
                   </div>
                 )}
               </div>
