@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { decryptJson, encryptJson } from '@/app/lib/integrations/spond/crypto'
+import { decryptJson, encryptJson } from '@/app/lib/integrations/crypto'
 
 export const TEAMS_PROVIDER = 'teams'
 
