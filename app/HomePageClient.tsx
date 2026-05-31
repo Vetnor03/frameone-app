@@ -1023,11 +1023,18 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
-  const autoPersistingRef = useRef(false)
-  const latestComparableStateRef = useRef('')
-  const [autoSaveReady, setAutoSaveReady] = useState(false)
-  const [autoSaveRetryKey, setAutoSaveRetryKey] = useState(0)
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
+
+  const [saveToast, setSaveToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: tx(language).saved })
+  const saveToastTimerRef = useRef<number | null>(null)
+
+  function showSavedToast(text = tx(language).saved) {
+    setSaveToast({ visible: true, text })
+    if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
+    saveToastTimerRef.current = window.setTimeout(() => {
+      setSaveToast((toast) => ({ ...toast, visible: false }))
+    }, 1400)
+  }
 
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
@@ -1101,6 +1108,7 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
+      if (saveToastTimerRef.current) window.clearTimeout(saveToastTimerRef.current)
       if (dirtyFrameRef.current != null) window.cancelAnimationFrame(dirtyFrameRef.current)
     }
   }, [])
@@ -1280,19 +1288,6 @@ export default function HomePage() {
     })
   }
 
-  const currentComparableState = useMemo(() => serializeComparableState({
-    theme,
-    language,
-    fontSize,
-    layoutKey,
-    cellsByLayout,
-    modulesJson,
-    pinnedModuleTabs,
-  }), [theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, pinnedModuleTabs])
-
-  useEffect(() => {
-    latestComparableStateRef.current = currentComparableState
-  }, [currentComparableState])
 
   function orderedSlotsForLayout(targetLayout: LayoutKey) {
     return Object.keys(emptyCellsFor(targetLayout)).map(Number).sort((a, b) => a - b)
@@ -1615,7 +1610,6 @@ export default function HomePage() {
       setShowSplash(false)
       setShouldRenderApp(false)
       isLoadedRef.current = false
-      setAutoSaveReady(false)
 
       const { data: sessionData } = await supabase.auth.getSession()
       const session = sessionData.session
@@ -1627,7 +1621,6 @@ export default function HomePage() {
         setFrames([])
         setActiveDeviceId(null)
         isLoadedRef.current = false
-        setAutoSaveReady(false)
         setBooting(false)
         setShowSplash(false)
         setShouldRenderApp(false)
@@ -1649,7 +1642,6 @@ export default function HomePage() {
           setFrames([])
           setActiveDeviceId(null)
           isLoadedRef.current = false
-          setAutoSaveReady(false)
           setIsFirstFramePairingComplete(false)
           setShouldRenderApp(false)
           setShowSplash(false)
@@ -1666,7 +1658,6 @@ export default function HomePage() {
         setFrames([])
         setActiveDeviceId(null)
         isLoadedRef.current = false
-        setAutoSaveReady(false)
         setBooting(false)
         setFramesLoaded(false)
         return
@@ -1713,7 +1704,6 @@ export default function HomePage() {
 
   async function selectDevice(id: string) {
     isLoadedRef.current = false
-    setAutoSaveReady(false)
     setActiveDeviceId(id)
     setPhysicalFrameSnapshot(null)
     physicalFrameSnapshotRef.current = null
@@ -1839,9 +1829,9 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function persistSettings(options?: { silent?: boolean }) {
+  async function persistSettings() {
     if (!activeDeviceId) return false
-    if (persisting || autoPersistingRef.current) return false
+    if (persisting) return false
 
     try {
       setPersisting(true)
@@ -1896,11 +1886,12 @@ export default function HomePage() {
       }
 
       setDirty(false)
+      showSavedToast(tx(language).saved)
       await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
 
       return true
     } catch (e: any) {
-      if (!options?.silent) alert(String(e?.message || e))
+      alert(String(e?.message || e))
       return false
     } finally {
       setPersisting(false)
@@ -1917,99 +1908,6 @@ export default function HomePage() {
   const appBg = 'var(--app-bg)'
   const appText = 'text-[color:var(--fg)]'
 
-  useEffect(() => {
-    if (!activeDeviceId || !isLoadedRef.current || autoSaveReady) return
-    if (currentComparableState === savedStateRef.current) setAutoSaveReady(true)
-  }, [activeDeviceId, autoSaveReady, currentComparableState])
-
-  useEffect(() => {
-    if (!activeDeviceId || !autoSaveReady || !isLoadedRef.current || autoPersistingRef.current) return
-    if (currentComparableState === savedStateRef.current) return
-
-    const timer = window.setTimeout(async () => {
-      if (!activeDeviceId || !autoSaveReady || !isLoadedRef.current || autoPersistingRef.current) return
-      if (currentComparableState === savedStateRef.current) return
-
-      let didSave = false
-
-      try {
-        autoPersistingRef.current = true
-        setPersisting(true)
-
-        const modulesForSave = normalizeModulesForSave(modulesJson)
-        const settingsJson: SettingsJson = {
-          theme,
-          language,
-          fontSize,
-          layout: layoutKey,
-          cells: cellsMapToArray(cellsByLayout[layoutKey]),
-          modules: modulesForSave,
-          pinned_tabs: pinnedModuleTabs,
-        }
-
-        const { data, error } = await supabase.rpc('upsert_device_settings', {
-          p_device_id: activeDeviceId,
-          p_settings: settingsJson,
-        })
-        if (error) throw error
-        if (data !== true) throw new Error('Failed to auto-save settings')
-
-        const savedCellsForLayout = { ...cellsByLayout[layoutKey] }
-        const nextCellsByLayout = {
-          ...makeEmptyCellsByLayout(),
-          [layoutKey]: savedCellsForLayout,
-        }
-
-        layoutModuleMemoryRef.current = buildSlotIndexedMemoryFromCells(savedCellsForLayout)
-        setCellsByLayout(nextCellsByLayout)
-        setModulesJson(modulesForSave)
-
-        savedStateRef.current = serializeComparableState({
-          theme,
-          language,
-          fontSize,
-          layoutKey,
-          cellsByLayout: nextCellsByLayout,
-          modulesJson: modulesForSave,
-          pinnedModuleTabs,
-        })
-        savedFrameStateRef.current = {
-          theme,
-          language,
-          fontSize,
-          layoutKey,
-          cellsByLayout: nextCellsByLayout,
-        }
-        didSave = true
-        setDirty(false)
-        await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
-      } catch {
-        // Auto-save is intentionally silent; the next user change will try again.
-      } finally {
-        setPersisting(false)
-        autoPersistingRef.current = false
-
-        if (latestComparableStateRef.current !== savedStateRef.current) {
-          setDirty(true)
-          if (didSave) setAutoSaveRetryKey((key) => key + 1)
-        }
-      }
-    }, 800)
-
-    return () => window.clearTimeout(timer)
-  }, [
-    activeDeviceId,
-    autoSaveReady,
-    currentComparableState,
-    autoSaveRetryKey,
-    theme,
-    language,
-    fontSize,
-    layoutKey,
-    cellsByLayout,
-    modulesJson,
-    pinnedModuleTabs,
-  ])
 
 async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
@@ -2153,6 +2051,19 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
+                <button
+                  onClick={() => persistSettings()}
+                  className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+                    dirty
+                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                      : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
+                  }`}
+                  style={{ backgroundColor: 'var(--app-bg)' }}
+                  disabled={!dirty || persisting}
+                >
+                  {persisting ? tx(language).saving : tx(language).update}
+                </button>
+
                 <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
                   {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
@@ -2209,6 +2120,8 @@ async function handleSelectTab(k: TabKey) {
               />
             )}
 
+            <SaveToast visible={saveToast.visible} text={saveToast.text} />
+
           </>
         </div>
 
@@ -2222,6 +2135,20 @@ async function handleSelectTab(k: TabKey) {
         )}
       </div>
     </main>
+  )
+}
+
+function SaveToast({ visible, text }: { visible: boolean; text: string }) {
+  return (
+    <div
+      className={`pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-[28px] z-[80] transition-all duration-200 ${
+        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+      }`}
+    >
+      <div className="px-4 py-2 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--toast-bg)] backdrop-blur text-[color:var(--fg-80)] tracking-widest text-xs">
+        {text}
+      </div>
+    </div>
   )
 }
 
