@@ -1107,24 +1107,49 @@ export default function HomePage() {
 
   const layoutMeta = allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0]
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
-  const pendingMirrorSlotsByModule = useMemo(() => {
-    if (!physicalFrameSnapshot) return new Map<number, ModuleKey>()
+  const mirrorSnapshot = useMemo<PhysicalFrameSnapshot | null>(() => {
+    const currentCells = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
+    const currentModulesJson = normalizeModulesForSave(modulesJson)
 
-    const next = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
-    const prev = physicalFrameSnapshot.cells
-    const pending = new Map<number, ModuleKey>()
+    if (!physicalFrameSnapshot) {
+      return {
+        theme,
+        language,
+        fontSize,
+        layoutKey,
+        cells: currentCells,
+        modulesJson: currentModulesJson,
+        detailsBySlot: {},
+        updatedAt: null,
+        renderAt: null,
+      }
+    }
 
-    Object.keys(next).forEach((slotKey) => {
-      const slot = Number(slotKey)
-      if (!Number.isFinite(slot)) return
-      const nextModule = next[slot]
-      if (!nextModule) return
-      if (nextModule === prev[slot]) return
-      pending.set(slot, nextModule)
-    })
+    const detailsBySlot = Object.entries(physicalFrameSnapshot.detailsBySlot).reduce<Record<string, MirrorModuleDetail>>(
+      (acc, [slotKey, detail]) => {
+        const slot = Number(slotKey)
+        if (!Number.isFinite(slot)) return acc
+        const currentModule = currentCells[slot]
+        if (!currentModule) return acc
+        if (detail?.module && detail.module !== currentModule) return acc
+        if (!detail?.module && physicalFrameSnapshot.cells[slot] !== currentModule) return acc
+        acc[slotKey] = detail
+        return acc
+      },
+      {}
+    )
 
-    return pending
-  }, [cellsByLayout, layoutKey, physicalFrameSnapshot])
+    return {
+      ...physicalFrameSnapshot,
+      theme,
+      language,
+      fontSize,
+      layoutKey,
+      cells: currentCells,
+      modulesJson: currentModulesJson,
+      detailsBySlot,
+    }
+  }, [cellsByLayout, fontSize, language, layoutKey, modulesJson, physicalFrameSnapshot, theme])
 
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
@@ -1871,6 +1896,8 @@ export default function HomePage() {
       }
 
       setDirty(false)
+      await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
+
       return true
     } catch (e: any) {
       if (!options?.silent) alert(String(e?.message || e))
@@ -1955,6 +1982,7 @@ export default function HomePage() {
         }
         didSave = true
         setDirty(false)
+        await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
       } catch {
         // Auto-save is intentionally silent; the next user change will try again.
       } finally {
@@ -1994,11 +2022,10 @@ async function handleSelectTab(k: TabKey) {
   if (isPhoneLandscapeMirror) {
     return (
       <LandscapeFrameMirror
-        snapshot={physicalFrameSnapshot}
+        snapshot={mirrorSnapshot}
         fallbackLanguage={language}
         theme={theme}
         status={activeFrameStatus}
-        pendingSlotsByModule={pendingMirrorSlotsByModule}
       />
     )
   }
@@ -6200,13 +6227,11 @@ function LandscapeFrameMirror({
   fallbackLanguage,
   theme,
   status,
-  pendingSlotsByModule,
 }: {
   snapshot: PhysicalFrameSnapshot | null
   fallbackLanguage: AppLanguage
   theme: 'dark' | 'light'
   status: MemberRow | null
-  pendingSlotsByModule: Map<number, ModuleKey>
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const isDark = theme === 'dark'
@@ -6230,18 +6255,6 @@ function LandscapeFrameMirror({
     '--mirror-fg-inverse': inverseColor,
   }
 
-  const loadingTextForModule = (module: ModuleKey) => {
-    if (language === 'no') return `Laster ${module}...`
-    return `Loading ${module}...`
-  }
-  const displayCells = snapshot
-    ? Object.keys(snapshot.cells).reduce<Record<number, ModuleKey | null>>((acc, key) => {
-      const slot = Number(key)
-      acc[slot] = pendingSlotsByModule.get(slot) ?? snapshot.cells[slot]
-      return acc
-    }, {})
-    : null
-
   const renderMirrorCell: FrameCellRenderer = (module, slot, size) => {
     if (!snapshot || !module) {
       return <div className="text-sm tracking-widest opacity-35">—</div>
@@ -6249,16 +6262,6 @@ function LandscapeFrameMirror({
 
     const detail = snapshot.detailsBySlot[String(slot)] ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
-
-    if (pendingSlotsByModule.get(slot) === module) {
-      return (
-        <div className="flex h-full w-full items-center justify-center px-3 text-center leading-tight">
-          <div className="max-w-full text-[clamp(0.66rem,1.8vw,1.02rem)] font-semibold tracking-[0.08em]">
-            {loadingTextForModule(module)}
-          </div>
-        </div>
-      )
-    }
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
       const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
@@ -6646,7 +6649,7 @@ function LandscapeFrameMirror({
         {snapshot ? (
           <FrameLayoutRenderer
             layoutKey={snapshot.layoutKey}
-            cells={displayCells ?? snapshot.cells}
+            cells={snapshot.cells}
             language={language}
             renderCellContent={renderMirrorCell}
             frameClassName="pointer-events-none select-none"
