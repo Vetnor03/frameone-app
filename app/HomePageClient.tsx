@@ -1232,7 +1232,6 @@ export default function HomePage() {
 
   const dirtyFrameRef = useRef<number | null>(null)
   const frameAutoSavePendingRef = useRef(false)
-  const frameAutoSaveTimerRef = useRef<number | null>(null)
   const persistSettingsRef = useRef<() => Promise<boolean>>(async () => false)
   const pendingDirtyStateRef = useRef<{
     theme?: 'dark' | 'light'
@@ -1935,21 +1934,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!frameAutoSavePendingRef.current || !dirty || persisting) return
 
-    if (frameAutoSaveTimerRef.current != null) window.clearTimeout(frameAutoSaveTimerRef.current)
-
-    frameAutoSaveTimerRef.current = window.setTimeout(() => {
-      frameAutoSaveTimerRef.current = null
-      void persistSettingsRef.current().then((saved) => {
-        if (saved) frameAutoSavePendingRef.current = false
-      })
-    }, 650)
-
-    return () => {
-      if (frameAutoSaveTimerRef.current != null) {
-        window.clearTimeout(frameAutoSaveTimerRef.current)
-        frameAutoSaveTimerRef.current = null
-      }
-    }
+    void persistSettingsRef.current().then((saved) => {
+      if (saved) frameAutoSavePendingRef.current = false
+    })
   }, [dirty, persisting, activeDeviceId, theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, pinnedModuleTabs])
 
   persistSettingsRef.current = persistSettings
