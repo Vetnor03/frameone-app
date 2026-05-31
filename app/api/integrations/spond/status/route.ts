@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { integrationCredentialsKeySetupError } from '@/app/lib/integrations/credentialsCrypto'
 import { getAuthenticatedUserId, getSupabaseAdmin, publicIntegrationStatus, SPOND_PROVIDER } from '@/app/lib/integrations/spond/server'
 
 export const runtime = 'nodejs'
@@ -16,5 +17,8 @@ export async function GET(req: Request) {
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(publicIntegrationStatus(data))
+  return NextResponse.json({
+    ...publicIntegrationStatus(data),
+    setup_error: integrationCredentialsKeySetupError('Spond'),
+  })
 }
