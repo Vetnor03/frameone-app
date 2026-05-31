@@ -1,4 +1,4 @@
-import { decryptJson, encryptJson } from '@/app/lib/integrations/spond/crypto'
+import { decryptJson, encryptJson } from '@/app/lib/integrations/credentialsCrypto'
 import { getAuthenticatedUserId, getBearerToken, getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import {
   fetchMicrosoftCalendarView,

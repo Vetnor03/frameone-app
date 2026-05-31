@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR } from '@/app/lib/integrations/credentialsCrypto'
 import { SpondError } from '@/app/lib/integrations/spond/client'
 import { getAuthenticatedUserId, publicIntegrationStatus, syncSpondForUser } from '@/app/lib/integrations/spond/server'
 
@@ -27,8 +28,8 @@ export async function POST(req: Request) {
     if (error instanceof SpondError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.code === 'rate_limited' ? 429 : 400 })
     }
-    const message = error instanceof Error && error.message === 'Missing SPOND_CREDENTIALS_KEY'
-      ? 'Server is missing Spond credential encryption configuration.'
+    const message = error instanceof Error && error.message === MISSING_INTEGRATION_CREDENTIALS_KEY_ERROR
+      ? 'Server is missing integration credential encryption configuration.'
       : 'Failed to connect Spond.'
     return NextResponse.json({ error: message }, { status: 500 })
   }
