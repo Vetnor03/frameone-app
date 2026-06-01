@@ -1368,9 +1368,47 @@ function bundleAtIsoHour(series: MarineSeries, targetIsoHourUtc: string) {
   return makeBundleAt(series, hourOffset)
 }
 
-function waveHeightLabelForValue(spotKeyForTables: string, waveHeight: number) {
+type WaveHeightBucket = {
+  label?: string
+  min?: number
+  max?: number | null
+  score_1_6?: number
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function defaultWaveHeightTable(): WaveHeightBucket[] {
+  const tablesRecord: Record<string, unknown> = isRecord(TABLES) ? TABLES : {}
+  const spotsMap = isRecord(tablesRecord.spots) ? tablesRecord.spots : null
+  if (!spotsMap) return []
+
+  for (const spot of Object.values(spotsMap)) {
+    if (!isRecord(spot)) continue
+    const waveHeight = spot.wave_height
+    if (Array.isArray(waveHeight) && waveHeight.length) return waveHeight as WaveHeightBucket[]
+  }
+
+  return []
+}
+
+function waveHeightTableForSpot(spotKeyForTables: string): WaveHeightBucket[] {
   const st = getSpotTables(spotKeyForTables)
-  const raw = bucketLabelFromRangeTable(st?.wave_height ?? [], waveHeight)
+  const spotWaveHeight = st?.wave_height
+  if (Array.isArray(spotWaveHeight) && spotWaveHeight.length) return spotWaveHeight as WaveHeightBucket[]
+
+  // Custom/private spots do not have per-spot wave-height tables, but they should
+  // still display the same rounded-up height ranges used by built-in spots.
+  return defaultWaveHeightTable()
+}
+
+function waveHeightBucketRawForValue(spotKeyForTables: string, waveHeight: number) {
+  return bucketLabelFromRangeTable(waveHeightTableForSpot(spotKeyForTables), waveHeight)
+}
+
+function waveHeightLabelForValue(spotKeyForTables: string, waveHeight: number) {
+  const raw = waveHeightBucketRawForValue(spotKeyForTables, waveHeight)
   return formatBucketLabelForUi(raw) ?? fmtRange(waveHeight, waveHeight)
 }
 
@@ -2033,7 +2071,7 @@ export async function GET(req: Request) {
       const selectedSwellNow = selectedSwellFromPick(marineNow, pickedNow)
       const waveHeightNow = selectedSwellNow.height_m
 
-      const waveBucketRaw = bucketLabelFromRangeTable(st?.wave_height ?? [], waveHeightNow)
+      const waveBucketRaw = waveHeightBucketRawForValue(chosen.spotLabel, waveHeightNow)
       const periodBucketRaw = bucketLabelFromRangeTable(
         st?.wave_period ?? [],
         selectedSwellNow.period_s
@@ -2301,7 +2339,7 @@ export async function GET(req: Request) {
     const selectedSwellNow = selectedSwellFromPick(marineNow, pickedNow)
     const waveHeightNow = selectedSwellNow.height_m
 
-    const waveBucketRaw = bucketLabelFromRangeTable(st?.wave_height ?? [], waveHeightNow)
+    const waveBucketRaw = waveHeightBucketRawForValue(spotKeyForTables, waveHeightNow)
     const periodBucketRaw = bucketLabelFromRangeTable(
       st?.wave_period ?? [],
       selectedSwellNow.period_s
