@@ -1,6 +1,6 @@
 // app/api/surf/score/route.ts  (FULL FILE - copy/paste)
 import { NextResponse } from 'next/server'
-import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
+import { SURF_SPOTS, findSpotByLabel, type SurfSpot } from '@/app/lib/surf/spots'
 import { scoreSurf, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
 import { normalizeSurfRating1to6 } from '@/app/lib/surf/ratings'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
@@ -439,6 +439,26 @@ type MarineBundle = {
   wind_direction_deg_from: number
 }
 
+type ForecastPoint = {
+  requestLat: number
+  requestLon: number
+  lat: number
+  lon: number
+  gridKey: string
+  source: 'open-meteo'
+}
+
+type ForecastCoordinateResolution = {
+  inputLat: number
+  inputLon: number
+  requestLat: number
+  requestLon: number
+  source: 'exact' | 'near_builtin_spot'
+  matchedSpotId: string | null
+  matchedSpotLabel: string | null
+  distanceKm: number | null
+}
+
 type MarineSeries = {
   mt: string[]
   wt: string[]
@@ -452,6 +472,8 @@ type MarineSeries = {
   sP: number[]
   windS: number[]
   windD: number[]
+  forecastPoint: ForecastPoint
+  coordinateResolution: ForecastCoordinateResolution
 }
 
 const SECONDARY_MIN_M = 0.05
@@ -462,9 +484,75 @@ const NEAR_FLAT_SWELL_PERIOD_S = 4
 const CLEARLY_STRONGER_ENERGY_RATIO = 1.75
 const CLEARLY_STRONGER_CORRECTED_M = 0.35
 
-function toNum(x: any) {
+function toForecastNum(x: any) {
   const n = Number(x)
-  return Number.isFinite(n) ? n : 0
+  return Number.isFinite(n) ? n : Number.NaN
+}
+
+function requireForecastNumber(value: number, field: string, timeUtc: string) {
+  if (!Number.isFinite(value)) {
+    throw new Error(`Forecast data missing ${field} at ${timeUtc}`)
+  }
+  return value
+}
+
+function haversineKm(a: LatLon, b: LatLon) {
+  const R = 6371
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180
+  const lat1 = (a.lat * Math.PI) / 180
+  const lat2 = (b.lat * Math.PI) / 180
+  const sinDLat = Math.sin(dLat / 2)
+  const sinDLon = Math.sin(dLon / 2)
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
+}
+
+const NEAR_IDENTICAL_FORECAST_SPOT_KM = 0.25
+
+function nearestBuiltInSurfSpot(lat: number, lon: number, maxDistanceKm = NEAR_IDENTICAL_FORECAST_SPOT_KM) {
+  const point = { lat, lon }
+  let best: { spot: SurfSpot; distanceKm: number } | null = null
+
+  for (const spot of Object.values(SURF_SPOTS)) {
+    if (!spot || spot.spotId === TODAYS_BEST_ID) continue
+    const distanceKm = haversineKm(point, { lat: spot.lat, lon: spot.lon })
+    if (distanceKm > maxDistanceKm) continue
+    if (!best || distanceKm < best.distanceKm) best = { spot, distanceKm }
+  }
+
+  return best
+}
+
+function resolveForecastCoordinates(lat: number, lon: number): ForecastCoordinateResolution {
+  const nearest = nearestBuiltInSurfSpot(lat, lon)
+  if (nearest) {
+    return {
+      inputLat: lat,
+      inputLon: lon,
+      requestLat: nearest.spot.lat,
+      requestLon: nearest.spot.lon,
+      source: 'near_builtin_spot',
+      matchedSpotId: nearest.spot.spotId,
+      matchedSpotLabel: nearest.spot.label,
+      distanceKm: nearest.distanceKm,
+    }
+  }
+
+  return {
+    inputLat: lat,
+    inputLon: lon,
+    requestLat: lat,
+    requestLon: lon,
+    source: 'exact',
+    matchedSpotId: null,
+    matchedSpotLabel: null,
+    distanceKm: null,
+  }
+}
+
+function forecastGridKey(lat: number, lon: number) {
+  return `${round6(lat)},${round6(lon)}`
 }
 
 function correctedHeightForPick(h: number, p: number) {
@@ -512,21 +600,23 @@ function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
   const mi = clampInt(series.mi + hourOffset, 0, series.mt.length - 1)
   const wi = clampInt(series.wi + hourOffset, 0, series.wt.length - 1)
 
-  const pH = toNum(series.pH[mi])
-  const pD = toNum(series.pD[mi])
-  const pP = toNum(series.pP[mi])
+  const timeUtc = series.mt[mi]
+  const pH = requireForecastNumber(series.pH[mi], 'wave_height', timeUtc)
+  const pD = requireForecastNumber(series.pD[mi], 'wave_direction', timeUtc)
+  const pP = requireForecastNumber(series.pP[mi], 'wave_period', timeUtc)
 
-  const sH = toNum(series.sH[mi])
-  const sD = toNum(series.sD[mi])
-  const sP = toNum(series.sP[mi])
+  const sH = Number.isFinite(series.sH[mi]) ? series.sH[mi] : 0
+  const sD = Number.isFinite(series.sD[mi]) ? series.sD[mi] : 0
+  const sP = Number.isFinite(series.sP[mi]) ? series.sP[mi] : 0
 
-  const wind_speed = toNum(series.windS[wi])
-  const wind_dir = toNum(series.windD[wi])
+  const windTimeUtc = series.wt[wi] ?? timeUtc
+  const wind_speed = requireForecastNumber(series.windS[wi], 'wind_speed_10m', windTimeUtc)
+  const wind_dir = requireForecastNumber(series.windD[wi], 'wind_direction_10m', windTimeUtc)
 
   const secondaryPresent = sH >= SECONDARY_MIN_M
 
   return {
-    time_utc: series.mt[mi],
+    time_utc: timeUtc,
     primary: {
       present: pH > 0.01,
       height_m: pH,
@@ -546,18 +636,22 @@ function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
 
 async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries> {
   const timeHour = isoHourUTC()
+  const coord = resolveForecastCoordinates(lat, lon)
+  const requestLat = coord.requestLat
+  const requestLon = coord.requestLon
 
   const marineUrl =
-    `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}` +
-    `&longitude=${lon}` +
+    `https://marine-api.open-meteo.com/v1/marine?latitude=${requestLat}` +
+    `&longitude=${requestLon}` +
     `&hourly=` +
     `wave_height,wave_direction,wave_period,` +
     `secondary_swell_wave_height,secondary_swell_wave_direction,secondary_swell_wave_period` +
-    `&timezone=UTC`
+    `&timezone=UTC` +
+    `&cell_selection=sea`
 
   const windUrl =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
-    `&longitude=${lon}` +
+    `https://api.open-meteo.com/v1/forecast?latitude=${requestLat}` +
+    `&longitude=${requestLon}` +
     `&hourly=wind_speed_10m,wind_direction_10m` +
     `&timezone=UTC&wind_speed_unit=ms`
 
@@ -579,24 +673,35 @@ async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries
   const mi = nearestHourIndex(mt, timeHour)
   const wi = nearestHourIndex(wt, timeHour)
 
-  const pH: number[] = Array.isArray(marine?.hourly?.wave_height) ? marine.hourly.wave_height.map(toNum) : []
-  const pD: number[] = Array.isArray(marine?.hourly?.wave_direction) ? marine.hourly.wave_direction.map(toNum) : []
-  const pP: number[] = Array.isArray(marine?.hourly?.wave_period) ? marine.hourly.wave_period.map(toNum) : []
+  const pH: number[] = Array.isArray(marine?.hourly?.wave_height) ? marine.hourly.wave_height.map(toForecastNum) : []
+  const pD: number[] = Array.isArray(marine?.hourly?.wave_direction) ? marine.hourly.wave_direction.map(toForecastNum) : []
+  const pP: number[] = Array.isArray(marine?.hourly?.wave_period) ? marine.hourly.wave_period.map(toForecastNum) : []
 
   const sH: number[] = Array.isArray(marine?.hourly?.secondary_swell_wave_height)
-    ? marine.hourly.secondary_swell_wave_height.map(toNum)
+    ? marine.hourly.secondary_swell_wave_height.map(toForecastNum)
     : []
   const sD: number[] = Array.isArray(marine?.hourly?.secondary_swell_wave_direction)
-    ? marine.hourly.secondary_swell_wave_direction.map(toNum)
+    ? marine.hourly.secondary_swell_wave_direction.map(toForecastNum)
     : []
   const sP: number[] = Array.isArray(marine?.hourly?.secondary_swell_wave_period)
-    ? marine.hourly.secondary_swell_wave_period.map(toNum)
+    ? marine.hourly.secondary_swell_wave_period.map(toForecastNum)
     : []
 
-  const windS: number[] = Array.isArray(wind?.hourly?.wind_speed_10m) ? wind.hourly.wind_speed_10m.map(toNum) : []
-  const windD: number[] = Array.isArray(wind?.hourly?.wind_direction_10m) ? wind.hourly.wind_direction_10m.map(toNum) : []
+  const windS: number[] = Array.isArray(wind?.hourly?.wind_speed_10m) ? wind.hourly.wind_speed_10m.map(toForecastNum) : []
+  const windD: number[] = Array.isArray(wind?.hourly?.wind_direction_10m) ? wind.hourly.wind_direction_10m.map(toForecastNum) : []
 
-  return { mt, wt, mi, wi, pH, pD, pP, sH, sD, sP, windS, windD }
+  const gridLat = Number(marine?.latitude)
+  const gridLon = Number(marine?.longitude)
+  const forecastPoint: ForecastPoint = {
+    requestLat,
+    requestLon,
+    lat: Number.isFinite(gridLat) ? gridLat : requestLat,
+    lon: Number.isFinite(gridLon) ? gridLon : requestLon,
+    gridKey: forecastGridKey(Number.isFinite(gridLat) ? gridLat : requestLat, Number.isFinite(gridLon) ? gridLon : requestLon),
+    source: 'open-meteo',
+  }
+
+  return { mt, wt, mi, wi, pH, pD, pP, sH, sD, sP, windS, windD, forecastPoint, coordinateResolution: coord }
 }
 
 /** ---------- User experience fetch ---------- **/
@@ -1155,6 +1260,93 @@ type BestPick = {
   correctedHeight: number
   blendedFloat: number
   confidence: number
+}
+
+type NormalizedSurfCondition = {
+  hourOffset: number
+  marine: MarineBundle
+  picked: ReturnType<typeof pickBestSwell>
+  scored: any
+}
+
+function currentNormalizedCondition(
+  series: MarineSeries,
+  spotKey: string,
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
+): NormalizedSurfCondition {
+  const marine = makeBundleAt(series, 0)
+  const picked = pickBestSwell({ spotKey, marine, userExperiences, customSpotProfile })
+  return { hourOffset: 0, marine, picked, scored: picked.chosenScore }
+}
+
+function bestNormalizedCondition(
+  series: MarineSeries,
+  spotKey: string,
+  hours: number,
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
+): NormalizedSurfCondition {
+  const best = bestWithinWindow(series, spotKey, hours, userExperiences, customSpotProfile)
+  return { hourOffset: best.hourOffset, marine: best.marine, picked: best.picked, scored: best.scored }
+}
+
+function spotKeyForResolvedForecast(
+  fallbackSpotKey: string,
+  series: MarineSeries,
+  customSpotProfile: CustomSpotScoringProfile | null
+) {
+  const matched = series.coordinateResolution.matchedSpotLabel
+  if (customSpotProfile && matched) return matched
+  return fallbackSpotKey
+}
+
+function scoringProfileForResolvedForecast(
+  series: MarineSeries,
+  customSpotProfile: CustomSpotScoringProfile | null
+) {
+  return customSpotProfile && series.coordinateResolution.matchedSpotLabel ? null : customSpotProfile
+}
+
+function surfDebugConditionLog(args: {
+  spotId: string | null
+  spotName: string | null
+  lat: number
+  lon: number
+  series: MarineSeries
+  condition: NormalizedSurfCondition
+  finalRating: number | null
+  compareToSpotId?: string | null
+  compareToSpotName?: string | null
+  spotKey: string
+}) {
+  const selected = selectedSwellFromPick(args.condition.marine, args.condition.picked)
+  console.info('[surf-score:condition]', {
+    spot_id: args.spotId,
+    spot_name: args.spotName,
+    lat: args.lat,
+    lon: args.lon,
+    compare_to_spot_id: args.compareToSpotId ?? args.series.coordinateResolution.matchedSpotId,
+    compare_to_spot_name: args.compareToSpotName ?? args.series.coordinateResolution.matchedSpotLabel,
+    scoring_spot_key: args.spotKey,
+    forecast: {
+      source: args.series.forecastPoint.source,
+      request_lat: args.series.forecastPoint.requestLat,
+      request_lon: args.series.forecastPoint.requestLon,
+      resolved_lat: args.series.forecastPoint.lat,
+      resolved_lon: args.series.forecastPoint.lon,
+      grid_key: args.series.forecastPoint.gridKey,
+      coordinate_resolution: args.series.coordinateResolution,
+    },
+    selected_timestamp_bucket: args.condition.marine.time_utc,
+    selected_hour_offset: args.condition.hourOffset,
+    wave_height_m: selected.height_m,
+    wave_period_s: selected.period_s,
+    swell_direction_deg_from: selected.direction_deg_from,
+    wind_speed_ms: args.condition.marine.wind_speed_ms,
+    wind_direction_deg_from: args.condition.marine.wind_direction_deg_from,
+    final_rating: args.finalRating,
+  })
 }
 
 function bestWithinWindow(
@@ -1920,14 +2112,18 @@ export async function GET(req: Request) {
         try {
           const series = await fetchMarineSeries(s.lat, s.lon)
           const userExperiences = userExperiencesForSpot(userExpBySpotId, s.spotId)
+          const candidateCustomProfile = ((s as any).customSpotProfile ?? null) as CustomSpotScoringProfile | null
+          const candidateSpotKey = spotKeyForResolvedForecast(s.label, series, candidateCustomProfile)
+          const candidateScoringProfile = scoringProfileForResolvedForecast(series, candidateCustomProfile)
 
-          const best = bestWithinWindow(series, s.label, hours, userExperiences, (s as any).customSpotProfile ?? null)
+          const best = bestWithinWindow(series, candidateSpotKey, hours, userExperiences, candidateScoringProfile)
           const tablesTotal = Number(best?.tablesTotal ?? -Infinity)
 
           return {
             ok: true as const,
             spotId: s.spotId,
             spotLabel: s.label,
+            scoringSpotKey: candidateSpotKey,
             lat: s.lat,
             lon: s.lon,
             series,
@@ -1935,7 +2131,7 @@ export async function GET(req: Request) {
             drive_minutes: null as number | null,
             fuel_penalty_points: 0,
             effective_tables_total: tablesTotal,
-            customSpotProfile: (s as any).customSpotProfile ?? null,
+            customSpotProfile: candidateScoringProfile,
           }
         } catch {
           return { ok: false as const }
@@ -1945,6 +2141,7 @@ export async function GET(req: Request) {
       const results = settled.filter((x: any) => x && x.ok) as Array<{
         spotId: string
         spotLabel: string
+        scoringSpotKey: string
         lat: number
         lon: number
         series: MarineSeries
@@ -2055,7 +2252,7 @@ export async function GET(req: Request) {
       const chosenHeights: number[] = []
       for (let off = 0; off < hours; off++) {
         const b = makeBundleAt(chosen.series, off)
-        const p = pickBestSwell({ spotKey: chosen.spotLabel, marine: b, userExperiences: chosenUserExperiences, customSpotProfile: chosen.customSpotProfile ?? null })
+        const p = pickBestSwell({ spotKey: chosen.scoringSpotKey, marine: b, userExperiences: chosenUserExperiences, customSpotProfile: chosen.customSpotProfile ?? null })
         const h = selectedSwellFromPick(b, p).height_m
         if (Number.isFinite(h)) chosenHeights.push(h)
       }
@@ -2067,11 +2264,22 @@ export async function GET(req: Request) {
         maxH = Math.max(...chosenHeights)
       }
 
-      const st = getSpotTables(chosen.spotLabel)
+      const st = getSpotTables(chosen.scoringSpotKey)
       const selectedSwellNow = selectedSwellFromPick(marineNow, pickedNow)
       const waveHeightNow = selectedSwellNow.height_m
 
-      const waveBucketRaw = waveHeightBucketRawForValue(chosen.spotLabel, waveHeightNow)
+      surfDebugConditionLog({
+        spotId: chosen.spotId,
+        spotName: chosen.spotLabel,
+        lat: chosen.lat,
+        lon: chosen.lon,
+        series: chosen.series,
+        condition: { hourOffset: chosen.best.hourOffset, marine: marineNow, picked: pickedNow, scored: scoredNow },
+        finalRating: pickedNow.finalRating ?? scoredNow.rating ?? null,
+        spotKey: chosen.scoringSpotKey,
+      })
+
+      const waveBucketRaw = waveHeightBucketRawForValue(chosen.scoringSpotKey, waveHeightNow)
       const periodBucketRaw = bucketLabelFromRangeTable(
         st?.wave_period ?? [],
         selectedSwellNow.period_s
@@ -2081,17 +2289,17 @@ export async function GET(req: Request) {
       const bucketLabelForFrame = formatBucketLabelForUi(waveBucketRaw) ?? fmtRange(minH, maxH)
 
       const dayparts = daypartsOn
-        ? buildDayparts(chosen.series, chosen.spotLabel, chosenUserExperiences, chosen.customSpotProfile ?? null)
+        ? buildDayparts(chosen.series, chosen.scoringSpotKey, chosenUserExperiences, chosen.customSpotProfile ?? null)
         : undefined
 
       const daily = dailyOn
-        ? buildDailyFrom4hWindows(chosen.series, chosen.spotLabel, days, chosenUserExperiences, chosen.customSpotProfile ?? null)
+        ? buildDailyFrom4hWindows(chosen.series, chosen.scoringSpotKey, days, chosenUserExperiences, chosen.customSpotProfile ?? null)
         : undefined
 
       return surfJsonResponse({
         spot: chosen.spotLabel,
         spotId: chosen.spotId,
-        geo: { lat: chosen.lat, lon: chosen.lon, source: 'todays_best', query: null },
+        geo: { lat: chosen.lat, lon: chosen.lon, source: 'todays_best', query: null, forecast: chosen.series.forecastPoint, coordinate_resolution: chosen.series.coordinateResolution },
         time_utc: marineNow.time_utc,
 
         sun: { sunrise: sun.sunrise, sunset: sun.sunset },
@@ -2300,30 +2508,35 @@ export async function GET(req: Request) {
     const temp_c = extras?.temp_c ?? null
     const weather_label = extras?.weather_label ?? weather.main
 
-    const spotKeyForTables = spotLabel ?? spotQ ?? spotId ?? 'Unknown'
+    const initialSpotKeyForTables = spotLabel ?? spotQ ?? spotId ?? 'Unknown'
+    const spotKeyForTables = spotKeyForResolvedForecast(initialSpotKeyForTables, series, customSpotProfile)
+    const scoringCustomSpotProfile = scoringProfileForResolvedForecast(series, customSpotProfile)
 
-    let marineNow: MarineBundle
-    let pickedNow: ReturnType<typeof pickBestSwell>
-    let scoredNow: any
-    let chosenHourOffset = 0
+    const currentCondition = currentNormalizedCondition(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile)
+    const selectedCondition = bestOn
+      ? bestNormalizedCondition(series, spotKeyForTables, hours, spotUserExperiences, scoringCustomSpotProfile)
+      : currentCondition
 
-    if (bestOn) {
-      const best = bestWithinWindow(series, spotKeyForTables, hours, spotUserExperiences, customSpotProfile)
-      marineNow = best.marine
-      pickedNow = best.picked
-      scoredNow = best.scored
-      chosenHourOffset = best.hourOffset
-    } else {
-      marineNow = makeBundleAt(series, 0)
-      pickedNow = pickBestSwell({ spotKey: spotKeyForTables, marine: marineNow, userExperiences: spotUserExperiences, customSpotProfile })
-      scoredNow = pickedNow.chosenScore
-      chosenHourOffset = 0
-    }
+    const marineNow = selectedCondition.marine
+    const pickedNow = selectedCondition.picked
+    const scoredNow = selectedCondition.scored
+    const chosenHourOffset = selectedCondition.hourOffset
+
+    surfDebugConditionLog({
+      spotId,
+      spotName: spotLabel ?? spotQ ?? spotId,
+      lat,
+      lon,
+      series,
+      condition: selectedCondition,
+      finalRating: pickedNow.finalRating ?? scoredNow.rating ?? null,
+      spotKey: spotKeyForTables,
+    })
 
     const chosenHeights: number[] = []
     for (let off = 0; off < hours; off++) {
       const b = makeBundleAt(series, off)
-      const p = pickBestSwell({ spotKey: spotKeyForTables, marine: b, userExperiences: spotUserExperiences, customSpotProfile })
+      const p = pickBestSwell({ spotKey: spotKeyForTables, marine: b, userExperiences: spotUserExperiences, customSpotProfile: scoringCustomSpotProfile })
       const h = selectedSwellFromPick(b, p).height_m
       if (Number.isFinite(h)) chosenHeights.push(h)
     }
@@ -2348,13 +2561,13 @@ export async function GET(req: Request) {
 
     const bucketLabelForFrame = formatBucketLabelForUi(waveBucketRaw) ?? fmtRange(minH, maxH)
 
-    const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences, customSpotProfile) : undefined
-    const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences, customSpotProfile) : undefined
+    const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile) : undefined
+    const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences, scoringCustomSpotProfile) : undefined
 
     return surfJsonResponse({
       spot: spotLabel ?? spotQ ?? spotId,
       spotId,
-      geo: { lat, lon, source: geoSource, query: geoQuery },
+      geo: { lat, lon, source: geoSource, query: geoQuery, forecast: series.forecastPoint, coordinate_resolution: series.coordinateResolution },
       time_utc: marineNow.time_utc,
 
       sun: { sunrise: sun.sunrise, sunset: sun.sunset },
@@ -2460,7 +2673,9 @@ export async function GET(req: Request) {
           enabled: bestOn,
           hours,
           chosen_hour_offset: chosenHourOffset,
-          note: bestOn ? 'Main rating/lines/time are best within window' : 'Main rating/lines/time are NOW (hourOffset=0)',
+          note: bestOn ? 'Main rating/lines/time use the same normalized condition object as NOW, selected by bestWithinWindow' : 'Main rating/lines/time are NOW (hourOffset=0)',
+          current_condition_time_utc: currentCondition.marine.time_utc,
+          current_condition_rating: currentCondition.picked.finalRating ?? currentCondition.scored?.rating ?? null,
         },
         extras: {
           wx_cache_ttl_ms: WX_CACHE_TTL_MS,
