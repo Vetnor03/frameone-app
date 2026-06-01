@@ -411,9 +411,6 @@ static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
       }
 
       if (DeviceIdentity::hasToken()) {
-        ensureDisplay();
-        ScreenPairing::showPaired();
-        delay(2200);
         return true;
       }
     }
@@ -456,8 +453,6 @@ static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
       }
 
       if (DeviceIdentity::hasToken()) {
-        ScreenPairing::showPaired();
-        delay(2600);
         return true;
       }
     }
