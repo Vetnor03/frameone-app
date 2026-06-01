@@ -551,7 +551,7 @@ async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries
     `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}` +
     `&longitude=${lon}` +
     `&hourly=` +
-    `swell_wave_height,swell_wave_direction,swell_wave_period,` +
+    `wave_height,wave_direction,wave_period,` +
     `secondary_swell_wave_height,secondary_swell_wave_direction,secondary_swell_wave_period` +
     `&timezone=UTC`
 
@@ -579,9 +579,9 @@ async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries
   const mi = nearestHourIndex(mt, timeHour)
   const wi = nearestHourIndex(wt, timeHour)
 
-  const pH: number[] = Array.isArray(marine?.hourly?.swell_wave_height) ? marine.hourly.swell_wave_height.map(toNum) : []
-  const pD: number[] = Array.isArray(marine?.hourly?.swell_wave_direction) ? marine.hourly.swell_wave_direction.map(toNum) : []
-  const pP: number[] = Array.isArray(marine?.hourly?.swell_wave_period) ? marine.hourly.swell_wave_period.map(toNum) : []
+  const pH: number[] = Array.isArray(marine?.hourly?.wave_height) ? marine.hourly.wave_height.map(toNum) : []
+  const pD: number[] = Array.isArray(marine?.hourly?.wave_direction) ? marine.hourly.wave_direction.map(toNum) : []
+  const pP: number[] = Array.isArray(marine?.hourly?.wave_period) ? marine.hourly.wave_period.map(toNum) : []
 
   const sH: number[] = Array.isArray(marine?.hourly?.secondary_swell_wave_height)
     ? marine.hourly.secondary_swell_wave_height.map(toNum)
