@@ -8,8 +8,8 @@ This document is intentionally based on what is verifiable from `frame/src/` cod
 
 - Firmware is Arduino-style for ESP32 (`.ino`, `Arduino.h`, `WiFi.h`, `Preferences.h`, `esp_sleep.h`).
 - Display stack uses GxEPD2 and Adafruit GFX-style fonts.
-- Main sketch file is `frame/src/frame_v2.4.7.ino`.
-- Current firmware version constant in code: `FW_VER = "v2.4.7"`.
+- Main sketch file is `frame/src/frame_v2.4.8.ino`.
+- Current firmware version constant in code: `FW_VER = "v2.4.8"`.
 
 ### Key dependencies detected from includes
 
@@ -78,7 +78,7 @@ This document is intentionally based on what is verifiable from `frame/src/` cod
 ### Wi-Fi provisioning / captive portal
 
 - If saved STA connect fails, firmware starts AP provisioning portal (blocking):
-  - AP SSID pattern: `Frame-Setup-XXXX` (from MAC suffix).
+  - AP SSID pattern: `FRAME-000-XXXX` (from MAC suffix).
   - DNS catch-all via `DNSServer` for captive behavior.
   - HTTP server on port 80 serves form and saves credentials to `Preferences` namespace `wifi`.
   - Device restarts after credential save.

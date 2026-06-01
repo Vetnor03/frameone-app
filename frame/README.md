@@ -12,13 +12,13 @@ This firmware runs an ESP32-based e-paper smart frame that:
 - Uses change detection (config/data/power/periodic/firmware) to decide whether to redraw.
 - Returns to deep sleep with timer + power-sense wake sources.
 
-The main entrypoint is `frame/src/frame_v2.4.7.ino`.
+The main entrypoint is `frame/src/frame_v2.4.8.ino`.
 
 ## Firmware architecture
 
 ```text
 frame/src/
-├── frame_v2.4.7.ino      # Boot + runtime orchestration
+├── frame_v2.4.8.ino      # Boot + runtime orchestration
 ├── core/                 # Shared config, parsed frame config, layout/theme primitives
 ├── device/               # Device identity, Wi-Fi creds/provisioning, time sync, battery logic
 ├── display/              # E-paper driver wrapper + pairing/setup screens
@@ -127,7 +127,7 @@ frame/src/
 There are **two update-related mechanisms** in code:
 
 1. **Redraw-for-firmware-version** (`UpdateChecker`):
-   - Compares stored `fw_ver` to `FW_VER` string (`v2.4.7`) to force one redraw after new firmware runs.
+   - Compares stored `fw_ver` to `FW_VER` string (`v2.4.8`) to force one redraw after new firmware runs.
 
 2. **Firmware binary OTA** (`FirmwareUpdater`):
    - Daily-gated by main sketch (`after 02:00`, once per day via `ota_day`).
@@ -159,7 +159,7 @@ There are **two update-related mechanisms** in code:
 
 ## Working on this firmware
 
-- Start changes from `frame_v2.4.7.ino` flow first; most regressions come from sleep/pairing/redraw decisions.
+- Start changes from `frame_v2.4.8.ino` flow first; most regressions come from sleep/pairing/redraw decisions.
 - Keep token-loss behavior intact: several auth failures intentionally clear token and trigger re-pair.
 - Preserve low-memory patterns (static/global config/cache usage, bounded `StaticJsonDocument` sizes, array caps).
 - Validate any power changes against deep-sleep wake behavior (`EXT1` + timer).
