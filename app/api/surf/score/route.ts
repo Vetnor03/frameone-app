@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
 import { scoreSurf, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
+import { normalizeSurfRating1to6 } from '@/app/lib/surf/ratings'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
@@ -248,7 +249,7 @@ async function fetchCustomSpotById(req: Request, spotId: string) {
   return data || null
 }
 
-async function fetchCustomSpotsForUser(req: Request): Promise<Array<{ id: string; name: string; lat: number; lon: number }>> {
+async function fetchCustomSpotsForUser(req: Request): Promise<Array<{ id: string; name: string; lat: number; lon: number; swell_sector_start_deg: number; swell_sector_end_deg: number; swell_main_deg: number; wind_sector_start_deg: number; wind_sector_end_deg: number; wind_main_deg: number }>> {
   const token = authBearerFromReq(req)
   if (!token) return []
   const userId = await resolveOwnerUserIdFromBearerToken(token)
@@ -257,7 +258,7 @@ async function fetchCustomSpotsForUser(req: Request): Promise<Array<{ id: string
   const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data, error } = await supabaseAdmin
     .from('custom_surf_spots')
-    .select('id, name, lat, lon')
+    .select('id, name, lat, lon, swell_sector_start_deg, swell_sector_end_deg, swell_main_deg, wind_sector_start_deg, wind_sector_end_deg, wind_main_deg')
     .eq('user_id', userId)
 
   if (error || !Array.isArray(data)) return []
@@ -268,6 +269,12 @@ async function fetchCustomSpotsForUser(req: Request): Promise<Array<{ id: string
       name: String(row?.name || '').trim(),
       lat: Number(row?.lat),
       lon: Number(row?.lon),
+      swell_sector_start_deg: Number(row?.swell_sector_start_deg),
+      swell_sector_end_deg: Number(row?.swell_sector_end_deg),
+      swell_main_deg: Number(row?.swell_main_deg),
+      wind_sector_start_deg: Number(row?.wind_sector_start_deg),
+      wind_sector_end_deg: Number(row?.wind_sector_end_deg),
+      wind_main_deg: Number(row?.wind_main_deg),
     }))
     .filter((row) => row.id && row.name && Number.isFinite(row.lat) && Number.isFinite(row.lon))
 }
@@ -852,6 +859,7 @@ function pickBestSwell(args: {
       forecastTimeUtc: marine.time_utc,
       whySelected,
       userExperiences,
+      customSpotProfile,
     })
 
     return {
@@ -1115,13 +1123,14 @@ function bestWithinWindow(
   series: MarineSeries,
   spotKeyForTables: string,
   hours: number,
-  userExperiences: UserSurfExperienceRecord[]
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
 ): BestPick {
   let best: BestPick | null = null
 
   for (let off = 0; off < hours; off++) {
     const marine = makeBundleAt(series, off)
-    const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences })
+    const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
     const scored = picked.chosenScore
 
     const tablesTotal = scoredTablesTotal(scored)
@@ -1330,7 +1339,8 @@ function waveHeightLabelForValue(spotKeyForTables: string, waveHeight: number) {
 function buildDayparts(
   series: MarineSeries,
   spotKeyForTables: string,
-  userExperiences: UserSurfExperienceRecord[]
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
 ) {
   const now = new Date()
   const nowLocal = tzPartsYMDH(DAYPARTS_TZ, now)
@@ -1361,7 +1371,7 @@ function buildDayparts(
       const iso = series.mt[idx]
       const marine = bundleAtIsoHour(series, iso)
 
-      const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences })
+      const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
       const scored = picked.chosenScore
 
       const tablesTotal = scoredTablesTotal(scored)
@@ -1507,11 +1517,12 @@ function evalHourAtIdx(
   series: MarineSeries,
   spotKey: string,
   idx: number,
-  userExperiences: UserSurfExperienceRecord[]
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
 ): HourEval {
   const iso = series.mt[clampInt(idx, 0, series.mt.length - 1)]
   const marine = bundleAtIsoHour(series, iso)
-  const picked = pickBestSwell({ spotKey, marine, userExperiences })
+  const picked = pickBestSwell({ spotKey, marine, userExperiences, customSpotProfile })
   const scored = picked.chosenScore
 
   const tablesTotal = scoredTablesTotal(scored)
@@ -1544,7 +1555,8 @@ function best4hWindowForLocalDay(
   y: number,
   m: number,
   d: number,
-  userExperiences: UserSurfExperienceRecord[]
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
 ) {
   const indices: number[] = []
   for (let i = 0; i < series.mt.length; i++) {
@@ -1579,7 +1591,7 @@ function best4hWindowForLocalDay(
       continue
 
     const hrs = [start, start + 1, start + 2, start + 3].map((i) =>
-      evalHourAtIdx(series, spotKey, i, userExperiences)
+      evalHourAtIdx(series, spotKey, i, userExperiences, customSpotProfile)
     )
 
     const avgBlend = avg(hrs.map((h) => scoredBlendFloat(h.scored)))
@@ -1617,7 +1629,8 @@ function buildDailyFrom4hWindows(
   series: MarineSeries,
   spotKey: string,
   days: number,
-  userExperiences: UserSurfExperienceRecord[]
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
 ) {
   const nowLocal = tzPartsYMD(DAILY_TZ, new Date())
   const out: any[] = []
@@ -1628,7 +1641,7 @@ function buildDailyFrom4hWindows(
     const ymd = addDaysYMD(nowLocal.y, nowLocal.m, nowLocal.day, di)
     const wd = weekdayLabelForYMD(DAILY_TZ, ymd.y, ymd.m, ymd.d)
 
-    const best = best4hWindowForLocalDay(series, spotKey, ymd.y, ymd.m, ymd.d, userExperiences)
+    const best = best4hWindowForLocalDay(series, spotKey, ymd.y, ymd.m, ymd.d, userExperiences, customSpotProfile)
 
     if (!best) {
       out.push({
@@ -1658,6 +1671,7 @@ function buildDailyFrom4hWindows(
       windSpeedMs: windS,
       windDirDeg: windDirFrom,
       userExperiences,
+      customSpotProfile,
     })
 
     const waveLabel = waveHeightLabelForValue(spotKey, waveH)
@@ -1674,6 +1688,76 @@ function buildDailyFrom4hWindows(
   }
 
   return out
+}
+
+
+function compactExperienceBreakdown(scored: any) {
+  const exp = scored?.breakdown?.experience
+  if (!exp || typeof exp !== 'object') return { matched: false }
+  return {
+    matched: !!exp.matched,
+    rating_1_6: exp.rating_1_6 ?? null,
+    model_rating_1_6: exp.model_rating_1_6 ?? null,
+    blended_rating_1_6: exp.blended_rating_1_6 ?? null,
+    blended_rating_float: exp.blended_rating_float ?? null,
+    confidence: exp.confidence ?? null,
+    match_type: exp.match_type ?? null,
+    source: exp.source ?? null,
+  }
+}
+
+function compactScoredPart(part: any) {
+  const normalized = normalizeSurfRating1to6(part)
+  return {
+    ...part,
+    rating: normalized.rating ?? null,
+    ratingFromExperience: normalized.ratingFromExperience || undefined,
+    experienceDiceValue: normalized.experienceDiceValue,
+    breakdown: {
+      experience: compactExperienceBreakdown(part),
+    },
+  }
+}
+
+function compactSurfPayload(payload: any) {
+  const normalized = normalizeSurfRating1to6(payload)
+  const compact: any = {
+    spot: payload?.spot ?? null,
+    spotId: payload?.spotId ?? null,
+    spotIdResolved: payload?.spotIdResolved ?? payload?.spotId ?? null,
+    rating: normalized.rating ?? null,
+    score: normalized.rating ?? null,
+    line1: payload?.line1 ?? null,
+    line2: payload?.line2 ?? null,
+    ratingFromExperience: normalized.ratingFromExperience || undefined,
+    experienceDiceValue: normalized.experienceDiceValue,
+    breakdown: {
+      experience: compactExperienceBreakdown(payload),
+    },
+    inputs: payload?.inputs ?? {},
+    forecast: payload?.forecast ?? {},
+    ui: payload?.ui ?? {},
+    sun: payload?.sun ?? {},
+    air: payload?.air ?? {},
+    water: payload?.water ?? {},
+    weather: payload?.weather ?? {},
+    temp_c: payload?.temp_c ?? null,
+    weather_label: payload?.weather_label ?? null,
+    time_utc: payload?.time_utc ?? null,
+  }
+
+  if (Array.isArray(payload?.dayparts)) {
+    compact.dayparts = payload.dayparts.map(compactScoredPart)
+  }
+  if (Array.isArray(payload?.daily)) {
+    compact.daily = payload.daily.map(compactScoredPart)
+  }
+
+  return compact
+}
+
+function surfJsonResponse(payload: any, compact: boolean, init?: { status?: number }) {
+  return jsonNoStore(compact ? compactSurfPayload(payload) : payload, init)
 }
 
 export async function GET(req: Request) {
@@ -1708,6 +1792,7 @@ export async function GET(req: Request) {
     const home: LatLon | null = fuelOn && homeLatQ != null && homeLonQ != null ? { lat: homeLatQ, lon: homeLonQ } : null
 
     const bestOn = bestModeEnabled(url, hours)
+    const compactOn = truthy1(url.searchParams.get('compact')) || truthy1(url.searchParams.get('frame'))
 
     const hasBearer = !!authBearerFromReq(req)
     const customSpotsForUser = hasBearer ? await fetchCustomSpotsForUser(req) : []
@@ -1744,6 +1829,10 @@ export async function GET(req: Request) {
         label: row.name,
         lat: row.lat,
         lon: row.lon,
+        customSpotProfile: {
+          waveDir: { startDeg: Number(row.swell_sector_start_deg), endDeg: Number(row.swell_sector_end_deg), mainDeg: Number(row.swell_main_deg) },
+          windDir: { startDeg: Number(row.wind_sector_start_deg), endDeg: Number(row.wind_sector_end_deg), mainDeg: Number(row.wind_main_deg) },
+        } as CustomSpotScoringProfile,
       }))
 
       const candidates = mapCandidates.concat(customCandidates)
@@ -1759,7 +1848,7 @@ export async function GET(req: Request) {
           const series = await fetchMarineSeries(s.lat, s.lon)
           const userExperiences = userExperiencesForSpot(userExpBySpotId, s.spotId)
 
-          const best = bestWithinWindow(series, s.label, hours, userExperiences)
+          const best = bestWithinWindow(series, s.label, hours, userExperiences, (s as any).customSpotProfile ?? null)
           const tablesTotal = Number(best?.tablesTotal ?? -Infinity)
 
           return {
@@ -1773,6 +1862,7 @@ export async function GET(req: Request) {
             drive_minutes: null as number | null,
             fuel_penalty_points: 0,
             effective_tables_total: tablesTotal,
+            customSpotProfile: (s as any).customSpotProfile ?? null,
           }
         } catch {
           return { ok: false as const }
@@ -1789,6 +1879,7 @@ export async function GET(req: Request) {
         drive_minutes: number | null
         fuel_penalty_points: number
         effective_tables_total: number
+        customSpotProfile?: CustomSpotScoringProfile | null
       }>
 
       if (!results.length) {
@@ -1891,7 +1982,7 @@ export async function GET(req: Request) {
       const chosenHeights: number[] = []
       for (let off = 0; off < hours; off++) {
         const b = makeBundleAt(chosen.series, off)
-        const p = pickBestSwell({ spotKey: chosen.spotLabel, marine: b, userExperiences: chosenUserExperiences })
+        const p = pickBestSwell({ spotKey: chosen.spotLabel, marine: b, userExperiences: chosenUserExperiences, customSpotProfile: chosen.customSpotProfile ?? null })
         const h = selectedSwellFromPick(b, p).height_m
         if (Number.isFinite(h)) chosenHeights.push(h)
       }
@@ -1917,14 +2008,14 @@ export async function GET(req: Request) {
       const bucketLabelForFrame = formatBucketLabelForUi(waveBucketRaw) ?? fmtRange(minH, maxH)
 
       const dayparts = daypartsOn
-        ? buildDayparts(chosen.series, chosen.spotLabel, chosenUserExperiences)
+        ? buildDayparts(chosen.series, chosen.spotLabel, chosenUserExperiences, chosen.customSpotProfile ?? null)
         : undefined
 
       const daily = dailyOn
-        ? buildDailyFrom4hWindows(chosen.series, chosen.spotLabel, days, chosenUserExperiences)
+        ? buildDailyFrom4hWindows(chosen.series, chosen.spotLabel, days, chosenUserExperiences, chosen.customSpotProfile ?? null)
         : undefined
 
-      return jsonNoStore({
+      return surfJsonResponse({
         spot: chosen.spotLabel,
         spotId: chosen.spotId,
         geo: { lat: chosen.lat, lon: chosen.lon, source: 'todays_best', query: null },
@@ -2054,7 +2145,7 @@ export async function GET(req: Request) {
             sst_cache_ttl_ms: SST_CACHE_TTL_MS,
           },
         },
-      })
+      }, compactOn)
     }
 
     // ---------- Normal existing logic ----------
@@ -2150,7 +2241,7 @@ export async function GET(req: Request) {
     let chosenHourOffset = 0
 
     if (bestOn) {
-      const best = bestWithinWindow(series, spotKeyForTables, hours, spotUserExperiences)
+      const best = bestWithinWindow(series, spotKeyForTables, hours, spotUserExperiences, customSpotProfile)
       marineNow = best.marine
       pickedNow = best.picked
       scoredNow = best.scored
@@ -2190,10 +2281,10 @@ export async function GET(req: Request) {
 
     const bucketLabelForFrame = formatBucketLabelForUi(waveBucketRaw) ?? fmtRange(minH, maxH)
 
-    const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences) : undefined
-    const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences) : undefined
+    const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences, customSpotProfile) : undefined
+    const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences, customSpotProfile) : undefined
 
-    return jsonNoStore({
+    return surfJsonResponse({
       spot: spotLabel ?? spotQ ?? spotId,
       spotId,
       geo: { lat, lon, source: geoSource, query: geoQuery },
@@ -2309,7 +2400,7 @@ export async function GET(req: Request) {
           sst_cache_ttl_ms: SST_CACHE_TTL_MS,
         },
       },
-    })
+    }, compactOn)
   } catch (e: any) {
     return jsonNoStore({ error: String(e?.message ?? e) }, { status: 500 })
   }

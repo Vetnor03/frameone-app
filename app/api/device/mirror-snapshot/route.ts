@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
+import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1306,6 +1307,7 @@ async function surfDetail(
   url.searchParams.set('dayparts', '1')
   url.searchParams.set('daily', '1')
   url.searchParams.set('days', '5')
+  url.searchParams.set('compact', '1')
 
   if (spotId === '__todays_best__') {
     const fuelPenalty = truthy(surfSettings.fuelPenalty)
@@ -1321,17 +1323,17 @@ async function surfDetail(
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${bearer}` } }))
   const forecast = asRecord(data.forecast)
   const inputs = asRecord(data.inputs)
-  const rating = asNumber(data.rating) ?? asNumber(data.score) ?? undefined
+  const rating = normalizeSurfRating1to6(data).rating
   const waveRange = asString(forecast.wave_height_range_label || data.line1 || data.line2, '')
-  const isExperienceBased = isSurfScoreExperienceBased(data)
+  const isExperienceBased = surfRatingIsExperienceBased(data)
   const normalizeSurfPeriod = (part: unknown): SurfMirrorDaily | null => {
     const record = asRecord(part)
     const label = asString(record.label).trim()
-    const partRating = asNumber(record.rating) ?? undefined
+    const partRating = normalizeSurfRating1to6(record).rating
     const partWaveRange = asString(record.wave_height_range_label || record.waveRange || record.wave_range, '').trim()
     const partSwellPeriodS = asNumber(record.swell_period_s ?? record.swellPeriodS) ?? undefined
     const partWindSpeedMs = asNumber(record.wind_speed_ms ?? record.windSpeedMs) ?? undefined
-    const partRatingFromExperience = isSurfScoreExperienceBased(record)
+    const partRatingFromExperience = surfRatingIsExperienceBased(record)
     const partExperienceDiceValue = surfExperienceDiceValue(record, partRating)
     const dateLocal = asString(record.date_local || record.dateLocal, '').trim()
     if (

@@ -899,12 +899,28 @@ static bool httpGetJson(const String& url, StaticJsonDocument<24576>& docOut) {
 
   if (!ok || httpCode != 200) return false;
 
+  const int contentLength = NetClient::lastContentLength();
+
+#if SURF_DEBUG
+  Serial.print("Content-Length: ");
+  Serial.println(contentLength);
+  Serial.print("Actual bytes read: ");
+  Serial.println(body.length());
+#endif
+
   DeserializationError err = deserializeJson(docOut, body);
   if (err) {
     Serial.print("Surf JSON deserialize failed: ");
     Serial.println(err.c_str());
-    Serial.print("Body bytes=");
+    Serial.print("Content-Length=");
+    Serial.println(contentLength);
+    Serial.print("Actual bytes read=");
     Serial.println(body.length());
+    Serial.print("Body first 200=");
+    Serial.println(body.substring(0, body.length() < 200 ? body.length() : 200));
+    Serial.print("Body last 200=");
+    unsigned int len = body.length();
+    Serial.println(body.substring(len > 200 ? len - 200 : 0));
     return false;
   }
 
@@ -933,6 +949,7 @@ static String buildSurfUrlBase(const SurfInstanceConfig& cfg, const char* spotId
   }
 
   url += "&hours=4";
+  url += "&frame=1";
   return url;
 }
 
@@ -1202,6 +1219,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   String urlW = String(BASE_URL) + "/api/surf/score?";
   urlW += "spotId=" + urlEncode(out.spotIdResolved);
   urlW += "&hours=4";
+  urlW += "&frame=1";
   if (wantDayparts) urlW += "&dayparts=1";
   if (wantDaily) appendDailyParamsIfWanted(urlW);
 
