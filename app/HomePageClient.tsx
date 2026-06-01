@@ -964,23 +964,15 @@ function isSpotReadyForExperience(spotLabel: string, spotId: string) {
 function ReMindSplash({ language }: { language: AppLanguage }) {
   return (
     <div
-      className="flex-1 flex items-center justify-center"
+      className="remind-splash-stage"
       role="status"
       aria-live="polite"
       aria-label={tx(language).loadingFrame}
     >
-      <div className="remind-splash text-[color:var(--fg)]">
-        <svg className="remind-splash-logo" viewBox="0 0 256 256" aria-hidden="true">
-          <path className="remind-logo-frame" d="M64 192H82V154H98L122 192H192V77H64V192Z" />
-          <path className="remind-logo-r" d="M82 154V112H106C126 112 138 120 138 136S126 154 106 154H82" />
-          <text className="remind-logo-e" x="148" y="181">e</text>
-          <g className="remind-logo-mind" aria-hidden="true">
-            <text x="70" y="226">m</text>
-            <text x="110" y="226">i</text>
-            <text x="154" y="226">n</text>
-            <text x="196" y="226">d</text>
-          </g>
-        </svg>
+      <div className="remind-splash" aria-hidden="true">
+        <div className="remind-splash-glow" />
+        <div className="remind-splash-wordmark">RE:MIND</div>
+        <div className="remind-splash-rule" />
       </div>
     </div>
   )
@@ -1614,7 +1606,7 @@ export default function HomePage() {
     const bootStartedAt = performance.now()
 
     async function finishBoot() {
-      const minimumSplashMs = 1350
+      const minimumSplashMs = 900
       const remaining = minimumSplashMs - (performance.now() - bootStartedAt)
       if (remaining > 0) {
         await new Promise((resolve) => window.setTimeout(resolve, remaining))

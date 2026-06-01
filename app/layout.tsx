@@ -14,7 +14,6 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: versionedIconPath("/apple-touch-icon.png"), sizes: "180x180", type: "image/png" }],
   },
-  themeColor: "#061b24",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -28,6 +27,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#031018",
 };
 
 export default function RootLayout({
