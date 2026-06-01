@@ -249,7 +249,45 @@ async function fetchCustomSpotById(req: Request, spotId: string) {
   return data || null
 }
 
-async function fetchCustomSpotsForUser(req: Request): Promise<Array<{ id: string; name: string; lat: number; lon: number; swell_sector_start_deg: number; swell_sector_end_deg: number; swell_main_deg: number; wind_sector_start_deg: number; wind_sector_end_deg: number; wind_main_deg: number }>> {
+type CustomSurfSpotRow = {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  swell_sector_start_deg: number
+  swell_sector_end_deg: number
+  swell_main_deg: number
+  wind_sector_start_deg: number
+  wind_sector_end_deg: number
+  wind_main_deg: number
+}
+
+function customSpotProfileFromRow(
+  row: Pick<
+    CustomSurfSpotRow,
+    | 'swell_sector_start_deg'
+    | 'swell_sector_end_deg'
+    | 'swell_main_deg'
+    | 'wind_sector_start_deg'
+    | 'wind_sector_end_deg'
+    | 'wind_main_deg'
+  >
+): CustomSpotScoringProfile {
+  return {
+    waveDir: {
+      startDeg: Number(row.swell_sector_start_deg),
+      endDeg: Number(row.swell_sector_end_deg),
+      mainDeg: Number(row.swell_main_deg),
+    },
+    windDir: {
+      startDeg: Number(row.wind_sector_start_deg),
+      endDeg: Number(row.wind_sector_end_deg),
+      mainDeg: Number(row.wind_main_deg),
+    },
+  }
+}
+
+async function fetchCustomSpotsForUser(req: Request): Promise<CustomSurfSpotRow[]> {
   const token = authBearerFromReq(req)
   if (!token) return []
   const userId = await resolveOwnerUserIdFromBearerToken(token)
@@ -1829,10 +1867,7 @@ export async function GET(req: Request) {
         label: row.name,
         lat: row.lat,
         lon: row.lon,
-        customSpotProfile: {
-          waveDir: { startDeg: Number(row.swell_sector_start_deg), endDeg: Number(row.swell_sector_end_deg), mainDeg: Number(row.swell_main_deg) },
-          windDir: { startDeg: Number(row.wind_sector_start_deg), endDeg: Number(row.wind_sector_end_deg), mainDeg: Number(row.wind_main_deg) },
-        } as CustomSpotScoringProfile,
+        customSpotProfile: customSpotProfileFromRow(row),
       }))
 
       const candidates = mapCandidates.concat(customCandidates)
@@ -2155,7 +2190,7 @@ export async function GET(req: Request) {
     let lat: number | null = null
     let lon: number | null = null
     let geoSource: string = 'unknown'
-    let geoQuery: string | null = null
+    const geoQuery: string | null = null
 
     let customSpotProfile: CustomSpotScoringProfile | null = null
     if (latQ != null && lonQ != null) {
@@ -2165,14 +2200,11 @@ export async function GET(req: Request) {
       spotId = spotIdQ || null
       spotLabel = spotQ || (spotId ? SURF_SPOTS[spotId]?.label ?? null : null)
 
-      if (!spotLabel && spotId) {
+      if (spotId && !SURF_SPOTS[spotId]) {
         const cs = await fetchCustomSpotById(req, spotId)
         if (cs) {
-          spotLabel = String(cs.name || '').trim() || null
-          customSpotProfile = {
-            waveDir: { startDeg: Number(cs.swell_sector_start_deg), endDeg: Number(cs.swell_sector_end_deg), mainDeg: Number(cs.swell_main_deg) },
-            windDir: { startDeg: Number(cs.wind_sector_start_deg), endDeg: Number(cs.wind_sector_end_deg), mainDeg: Number(cs.wind_main_deg) },
-          }
+          spotLabel = spotLabel || String(cs.name || '').trim() || null
+          customSpotProfile = customSpotProfileFromRow(cs)
           geoSource = 'query_latlon_custom'
         }
       }
@@ -2192,10 +2224,7 @@ export async function GET(req: Request) {
         lat = Number(cs.lat)
         lon = Number(cs.lon)
         geoSource = 'spotId_custom'
-        customSpotProfile = {
-          waveDir: { startDeg: Number(cs.swell_sector_start_deg), endDeg: Number(cs.swell_sector_end_deg), mainDeg: Number(cs.swell_main_deg) },
-          windDir: { startDeg: Number(cs.wind_sector_start_deg), endDeg: Number(cs.wind_sector_end_deg), mainDeg: Number(cs.wind_main_deg) },
-        }
+        customSpotProfile = customSpotProfileFromRow(cs)
       }
     } else if (spotQ) {
       const s = findSpotByLabel(spotQ)
