@@ -7,6 +7,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
+import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -5018,47 +5019,11 @@ function mirrorSurfString(value: unknown) {
 }
 
 function mirrorSurfPartExperienceBased(part: Record<string, unknown>) {
-  if (booleanish(part.ratingFromExperience) || booleanish(part.isExperienceBased) || booleanish(part.basedOnExperience)) return true
-  const source = String(part.ratingSource ?? part.source ?? '').toLowerCase()
-  if (source.includes('experience') || source.includes('user_surf_experiences')) return true
-
-  const experience = recordFromUnknown(part.experience)
-  if (booleanish(experience.matched) || booleanish(experience.isExperienceBased)) return true
-
-  const breakdownExperience = recordFromUnknown(recordFromUnknown(part.breakdown).experience)
-  if (booleanish(breakdownExperience.matched) || booleanish(breakdownExperience.isExperienceBased)) return true
-
-  const pickedExperience = recordFromUnknown(recordFromUnknown(part.picked).experience)
-  return booleanish(pickedExperience.matched) || booleanish(pickedExperience.isExperienceBased)
+  return surfRatingIsExperienceBased(part)
 }
 
 function mirrorSurfPartDiceValue(part: Record<string, unknown>, fallbackRating: number | undefined) {
-  const breakdownExperience = recordFromUnknown(recordFromUnknown(part.breakdown).experience)
-  const topExperience = recordFromUnknown(part.experience)
-  const picked = recordFromUnknown(part.picked)
-  const pickedBreakdownExperience = recordFromUnknown(recordFromUnknown(picked.breakdown).experience)
-  const pickedExperience = recordFromUnknown(picked.experience)
-  const candidates = [
-    part.experienceDiceValue,
-    fallbackRating,
-    part.finalRating,
-    part.experienceRating,
-    breakdownExperience.blended_rating_1_6,
-    topExperience.blended_rating_1_6,
-    pickedBreakdownExperience.blended_rating_1_6,
-    pickedExperience.blended_rating_1_6,
-    breakdownExperience.rating_1_6,
-    topExperience.rating_1_6,
-    pickedBreakdownExperience.rating_1_6,
-    pickedExperience.rating_1_6,
-  ]
-
-  for (const candidate of candidates) {
-    const value = finiteMirrorNumber(candidate)
-    if (value !== undefined && value >= 1 && value <= 6) return Math.round(value)
-  }
-
-  return undefined
+  return normalizeSurfRating1to6(part, fallbackRating).experienceDiceValue
 }
 
 type MirrorLargeSurfDaypart = {
@@ -5073,7 +5038,7 @@ type MirrorLargeSurfDaypart = {
 
 function normalizeMirrorLargeSurfDaypart(part: unknown, fallbackLabel: string): MirrorLargeSurfDaypart {
   const record = recordFromUnknown(part)
-  const rating = finiteMirrorNumber(record.rating ?? record.finalRating ?? record.score)
+  const rating = normalizeSurfRating1to6(record).rating
   const waveRange =
     mirrorSurfString(record.waveRange) ||
     mirrorSurfString(record.wave_height_range_label) ||
@@ -5107,7 +5072,7 @@ function MirrorLargeSurfCard({
   frameBackground: string
   textColor: string
 }) {
-  const rating = finiteMirrorNumber(detail.rating ?? detail.primary)
+  const rating = normalizeSurfRating1to6(detail, detail.primary).rating
   const spotName = detail.secondary || detail.primary || 'Surf'
   const fallbackWaveRange = detail.waveRange || detail.tertiary || '--'
   const fallbackParts: MirrorLargeSurfDaypart[] = [
@@ -5260,7 +5225,7 @@ function MirrorXLSurfCard({
   frameBackground: string
   textColor: string
 }) {
-  const rating = finiteMirrorNumber(detail.rating ?? detail.primary)
+  const rating = normalizeSurfRating1to6(detail, detail.primary).rating
   const spotName = detail.secondary || detail.primary || 'Surf'
   const waveRange = detail.waveRange || detail.tertiary || '--'
   const rawDaily = Array.isArray(detail.surfDaily) ? detail.surfDaily : []

@@ -6,6 +6,7 @@
 namespace {
   static const uint32_t HTTP_TIMEOUT_MS = 15000;
   static const int MAX_RETRIES = 3;
+  static int g_lastContentLength = -1;
 
   bool doRequestWithRetry(
     const String& url,
@@ -17,6 +18,7 @@ namespace {
   ) {
     httpCodeOut = 0;
     bodyOut = "";
+    g_lastContentLength = -1;
 
     for (int attempt = 1; attempt <= MAX_RETRIES; ++attempt) {
       if (WiFi.status() != WL_CONNECTED) {
@@ -48,6 +50,7 @@ namespace {
       }
 
       if (httpCodeOut > 0) {
+        g_lastContentLength = http.getSize();
         bodyOut = http.getString();
         http.end();
 
@@ -86,4 +89,8 @@ bool NetClient::httpPostAuth(const String& url, const String& bearerToken, int& 
 
 bool NetClient::httpPostAuthJson(const String& url, const String& bearerToken, const String& jsonBody, int& httpCodeOut, String& bodyOut) {
   return doRequestWithRetry(url, &bearerToken, "POST", &jsonBody, httpCodeOut, bodyOut);
+}
+
+int NetClient::lastContentLength() {
+  return g_lastContentLength;
 }
