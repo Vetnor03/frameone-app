@@ -1230,6 +1230,19 @@ function formatBucketLabelForUi(label: string | null | undefined): string | null
   return s
 }
 
+function degToCompass8(deg: number) {
+  if (!Number.isFinite(deg)) return 'N'
+  const d = ((deg % 360) + 360) % 360
+  if (d >= 337.5 || d < 22.5) return 'N'
+  if (d < 67.5) return 'NE'
+  if (d < 112.5) return 'E'
+  if (d < 157.5) return 'SE'
+  if (d < 202.5) return 'S'
+  if (d < 247.5) return 'SW'
+  if (d < 292.5) return 'W'
+  return 'NW'
+}
+
 function fmtRange(min: number, max: number) {
   const a = Number.isFinite(min) ? min : 0
   const b = Number.isFinite(max) ? max : 0
@@ -1305,7 +1318,8 @@ function scoringProfileForResolvedForecast(
   series: MarineSeries,
   customSpotProfile: CustomSpotScoringProfile | null
 ) {
-  return customSpotProfile && series.coordinateResolution.matchedSpotLabel ? null : customSpotProfile
+  void series
+  return customSpotProfile
 }
 
 function surfDebugConditionLog(args: {
@@ -1319,16 +1333,37 @@ function surfDebugConditionLog(args: {
   compareToSpotId?: string | null
   compareToSpotName?: string | null
   spotKey: string
+  cardMode: 'current' | 'best_next_4h'
+  displayedSwell?: Sideswell
+  displayedWindSpeedMs?: number
+  displayedWindDirectionDegFrom?: number
+  displayedWaveLabel?: string | null
+  displayedPeriodS?: number | null
+  displayedWindSpeedRoundedMs?: number | null
 }) {
   const selected = selectedSwellFromPick(args.condition.marine, args.condition.picked)
-  console.info('[surf-score:condition]', {
+  const displayed = args.displayedSwell ?? selected
+  console.info(args.cardMode === 'current' ? '[surf-score:current-card]' : '[surf-score:condition]', {
     spot_id: args.spotId,
     spot_name: args.spotName,
     lat: args.lat,
     lon: args.lon,
     compare_to_spot_id: args.compareToSpotId ?? args.series.coordinateResolution.matchedSpotId,
     compare_to_spot_name: args.compareToSpotName ?? args.series.coordinateResolution.matchedSpotLabel,
+    card_mode: args.cardMode,
     scoring_spot_key: args.spotKey,
+    selected_timestamp: args.condition.marine.time_utc,
+    selected_timestamp_bucket: args.condition.marine.time_utc,
+    selected_hour_offset: args.condition.hourOffset,
+    resolved_forecast_point: {
+      source: args.series.forecastPoint.source,
+      request_lat: args.series.forecastPoint.requestLat,
+      request_lon: args.series.forecastPoint.requestLon,
+      resolved_lat: args.series.forecastPoint.lat,
+      resolved_lon: args.series.forecastPoint.lon,
+      grid_key: args.series.forecastPoint.gridKey,
+      coordinate_resolution: args.series.coordinateResolution,
+    },
     forecast: {
       source: args.series.forecastPoint.source,
       request_lat: args.series.forecastPoint.requestLat,
@@ -1338,13 +1373,19 @@ function surfDebugConditionLog(args: {
       grid_key: args.series.forecastPoint.gridKey,
       coordinate_resolution: args.series.coordinateResolution,
     },
-    selected_timestamp_bucket: args.condition.marine.time_utc,
-    selected_hour_offset: args.condition.hourOffset,
+    raw_wave_height_m: displayed.height_m,
+    raw_period_s: displayed.period_s,
+    raw_swell_direction_deg_from: displayed.direction_deg_from,
+    raw_wind_speed_ms: args.displayedWindSpeedMs ?? args.condition.marine.wind_speed_ms,
+    raw_wind_direction_deg_from: args.displayedWindDirectionDegFrom ?? args.condition.marine.wind_direction_deg_from,
     wave_height_m: selected.height_m,
     wave_period_s: selected.period_s,
     swell_direction_deg_from: selected.direction_deg_from,
     wind_speed_ms: args.condition.marine.wind_speed_ms,
     wind_direction_deg_from: args.condition.marine.wind_direction_deg_from,
+    displayed_wave: args.displayedWaveLabel ?? (Number.isFinite(displayed.height_m) ? `${displayed.height_m.toFixed(1)}m` : null),
+    displayed_period_s: args.displayedPeriodS ?? (Number.isFinite(displayed.period_s) ? Math.round(displayed.period_s) : null),
+    displayed_wind_speed_ms: args.displayedWindSpeedRoundedMs ?? (Number.isFinite(args.displayedWindSpeedMs ?? args.condition.marine.wind_speed_ms) ? Math.round(args.displayedWindSpeedMs ?? args.condition.marine.wind_speed_ms) : null),
     final_rating: args.finalRating,
   })
 }
@@ -2277,6 +2318,7 @@ export async function GET(req: Request) {
         condition: { hourOffset: chosen.best.hourOffset, marine: marineNow, picked: pickedNow, scored: scoredNow },
         finalRating: pickedNow.finalRating ?? scoredNow.rating ?? null,
         spotKey: chosen.scoringSpotKey,
+        cardMode: 'best_next_4h',
       })
 
       const waveBucketRaw = waveHeightBucketRawForValue(chosen.scoringSpotKey, waveHeightNow)
@@ -2521,22 +2563,19 @@ export async function GET(req: Request) {
     const pickedNow = selectedCondition.picked
     const scoredNow = selectedCondition.scored
     const chosenHourOffset = selectedCondition.hourOffset
-
-    surfDebugConditionLog({
-      spotId,
-      spotName: spotLabel ?? spotQ ?? spotId,
-      lat,
-      lon,
-      series,
-      condition: selectedCondition,
-      finalRating: pickedNow.finalRating ?? scoredNow.rating ?? null,
-      spotKey: spotKeyForTables,
-    })
+    const displayPickedNow = bestOn
+      ? pickedNow
+      : pickBestSwell({ spotKey: spotKeyForTables, marine: marineNow, userExperiences: spotUserExperiences, customSpotProfile: null })
 
     const chosenHeights: number[] = []
     for (let off = 0; off < hours; off++) {
       const b = makeBundleAt(series, off)
-      const p = pickBestSwell({ spotKey: spotKeyForTables, marine: b, userExperiences: spotUserExperiences, customSpotProfile: scoringCustomSpotProfile })
+      const p = pickBestSwell({
+        spotKey: spotKeyForTables,
+        marine: b,
+        userExperiences: spotUserExperiences,
+        customSpotProfile: bestOn ? scoringCustomSpotProfile : null,
+      })
       const h = selectedSwellFromPick(b, p).height_m
       if (Number.isFinite(h)) chosenHeights.push(h)
     }
@@ -2549,7 +2588,7 @@ export async function GET(req: Request) {
     }
 
     const st = getSpotTables(spotKeyForTables)
-    const selectedSwellNow = selectedSwellFromPick(marineNow, pickedNow)
+    const selectedSwellNow = selectedSwellFromPick(marineNow, displayPickedNow)
     const waveHeightNow = selectedSwellNow.height_m
 
     const waveBucketRaw = waveHeightBucketRawForValue(spotKeyForTables, waveHeightNow)
@@ -2560,6 +2599,26 @@ export async function GET(req: Request) {
     const windBucketRaw = bucketLabelFromRangeTable(st?.wind_speed ?? [], marineNow.wind_speed_ms)
 
     const bucketLabelForFrame = formatBucketLabelForUi(waveBucketRaw) ?? fmtRange(minH, maxH)
+    const displayedLine1 = `${waveHeightNow.toFixed(1)}m @ ${Math.round(selectedSwellNow.period_s)}s`
+    const displayedLine2 = `${degToCompass8(selectedSwellNow.direction_deg_from)} swell, ${degToCompass8(marineNow.wind_direction_deg_from)} wind`
+
+    surfDebugConditionLog({
+      spotId,
+      spotName: spotLabel ?? spotQ ?? spotId,
+      lat,
+      lon,
+      series,
+      condition: selectedCondition,
+      finalRating: pickedNow.finalRating ?? scoredNow.rating ?? null,
+      spotKey: spotKeyForTables,
+      cardMode: bestOn ? 'best_next_4h' : 'current',
+      displayedSwell: selectedSwellNow,
+      displayedWindSpeedMs: marineNow.wind_speed_ms,
+      displayedWindDirectionDegFrom: marineNow.wind_direction_deg_from,
+      displayedWaveLabel: bucketLabelForFrame,
+      displayedPeriodS: Number.isFinite(selectedSwellNow.period_s) ? Math.round(selectedSwellNow.period_s) : null,
+      displayedWindSpeedRoundedMs: Number.isFinite(marineNow.wind_speed_ms) ? Math.round(marineNow.wind_speed_ms) : null,
+    })
 
     const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile) : undefined
     const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences, scoringCustomSpotProfile) : undefined
@@ -2595,6 +2654,9 @@ export async function GET(req: Request) {
         ratingSource: pickedNow.ratingSource,
         displayHeightSource: pickedNow.displayHeightSource,
         whySelected: pickedNow.whySelected,
+        displayedSelectedSwellHeight: selectedSwellNow.height_m,
+        displayedSelectedSwellPeriod: selectedSwellNow.period_s,
+        displayedSelectedSwellDirection: selectedSwellNow.direction_deg_from,
       },
 
       inputs: {
@@ -2610,8 +2672,8 @@ export async function GET(req: Request) {
 
       rating: scoredNow.rating,
       score: scoredNow.score,
-      line1: scoredNow.line1,
-      line2: scoredNow.line2,
+      line1: displayedLine1,
+      line2: displayedLine2,
       breakdown: scoredNow.breakdown,
 
       ui: {
@@ -2655,6 +2717,9 @@ export async function GET(req: Request) {
         ratingSource: pickedNow.ratingSource,
         displayHeightSource: pickedNow.displayHeightSource,
         whySelected: pickedNow.whySelected,
+        displayedSelectedSwellHeight: selectedSwellNow.height_m,
+        displayedSelectedSwellPeriod: selectedSwellNow.period_s,
+        displayedSelectedSwellDirection: selectedSwellNow.direction_deg_from,
         primary_swell_metrics: pickedNow.primaryMetrics,
         secondary_swell_metrics: pickedNow.secondaryMetrics,
 
