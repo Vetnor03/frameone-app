@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { versionedIconPath } from './lib/iconVersion'
+import { APP_ICON_PATH, APP_ICON_SIZE, versionedIconPath } from './lib/iconVersion'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -12,26 +12,26 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#061b24',
     icons: [
       {
-        src: versionedIconPath('/icon-192x192.png'),
-        sizes: '192x192',
+        src: versionedIconPath(APP_ICON_PATH),
+        sizes: APP_ICON_SIZE,
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: versionedIconPath('/icon-512x512.png'),
-        sizes: '512x512',
+        src: versionedIconPath(APP_ICON_PATH),
+        sizes: APP_ICON_SIZE,
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: versionedIconPath('/android-chrome-192x192.png'),
-        sizes: '192x192',
+        src: versionedIconPath(APP_ICON_PATH),
+        sizes: APP_ICON_SIZE,
         type: 'image/png',
         purpose: 'maskable',
       },
       {
-        src: versionedIconPath('/android-chrome-512x512.png'),
-        sizes: '512x512',
+        src: versionedIconPath(APP_ICON_PATH),
+        sizes: APP_ICON_SIZE,
         type: 'image/png',
         purpose: 'maskable',
       },
