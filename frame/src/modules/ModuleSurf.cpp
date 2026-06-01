@@ -1595,19 +1595,37 @@ static int currentSurfDaypartIndex() {
   return 3;
 }
 
+static int surfTrendRatingAt(const SurfCache& data, int idx) {
+  if (idx < 0 || idx >= 4) return -1;
+
+  const SurfDayPart& part = data.day[idx];
+  if (!part.valid) return -1;
+  if (part.rating < 1 || part.rating > 6) return -1;
+  return part.rating;
+}
+
 static char surfTrendSymbol(const SurfCache& data) {
   if (!data.hasDayparts) return 0;
 
-  const int current = currentSurfDaypartIndex();
-  const int next = (current + 1) % 4;
-  const SurfDayPart& curPart = data.day[current];
-  const SurfDayPart& nextPart = data.day[next];
-  if (!curPart.valid || !nextPart.valid) return 0;
-  if (curPart.rating < 1 || curPart.rating > 6) return 0;
-  if (nextPart.rating < 1 || nextPart.rating > 6) return 0;
+  int fromIndex = currentSurfDaypartIndex();
+  if (fromIndex >= 3) fromIndex = 2;
+  if (fromIndex < 0) fromIndex = 0;
 
-  if (nextPart.rating > curPart.rating) return '^';
-  if (nextPart.rating < curPart.rating) return 'v';
+  int fromRating = surfTrendRatingAt(data, fromIndex);
+  int toRating = surfTrendRatingAt(data, fromIndex + 1);
+
+  if (fromRating < 1 || toRating < 1) {
+    for (int i = 0; i < 3; i++) {
+      fromRating = surfTrendRatingAt(data, i);
+      toRating = surfTrendRatingAt(data, i + 1);
+      if (fromRating >= 1 && toRating >= 1) break;
+    }
+  }
+
+  if (fromRating < 1 || toRating < 1) return 0;
+
+  if (toRating > fromRating) return '^';
+  if (toRating < fromRating) return 'v';
   return '-';
 }
 
@@ -1615,18 +1633,21 @@ static void drawSurfTrendIndicator(int x, int y, char symbol, uint16_t col) {
   auto& d = DisplayCore::get();
   if (!symbol) return;
 
-  const int w = 9;
-  const int h = 7;
+  const int w = 11;
+  const int h = 11;
   const int cx = x + w / 2;
 
   if (symbol == '^') {
-    d.drawLine(cx, y, x, y + h, col);
-    d.drawLine(cx, y, x + w, y + h, col);
+    d.drawLine(cx, y, x, y + 5, col);
+    d.drawLine(cx, y, x + w, y + 5, col);
+    d.drawFastVLine(cx, y + 1, h, col);
   } else if (symbol == 'v') {
-    d.drawLine(x, y, cx, y + h, col);
-    d.drawLine(x + w, y, cx, y + h, col);
+    d.drawFastVLine(cx, y, h, col);
+    d.drawLine(x, y + 5, cx, y + h, col);
+    d.drawLine(x + w, y + 5, cx, y + h, col);
   } else {
     d.drawFastHLine(x, y + h / 2, w, col);
+    d.drawFastHLine(x, y + h / 2 + 1, w, col);
   }
 }
 
@@ -1943,7 +1964,7 @@ static void renderCommon(const Cell& c,
     drawTextCenteredAt(c.x + c.w / 2, titleBaseline, spotName, FONT_B12, ink);
 
     const char trend = surfTrendSymbol(data);
-    if (trend) drawSurfTrendIndicator(c.x + c.w - 19, c.y + 9, trend, ink);
+    if (trend) drawSurfTrendIndicator(c.x + c.w - 21, c.y + 8, trend, ink);
 
     {
       int underlineY = (titleBaseline + ty1) + (int)th + titleUnderlineGap;
