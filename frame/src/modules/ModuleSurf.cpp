@@ -1507,6 +1507,22 @@ static void fillQuad(int x0,int y0,int x1,int y1,int x2,int y2,int x3,int y3,uin
   d.fillTriangle(x0,y0, x2,y2, x3,y3, col);
 }
 
+static int arrowHeadLenForLen(int len) {
+  return clampi(len / 3, 10, 22);
+}
+
+static int arrowVerticalReachForLen(int len) {
+  const int L = clampi(len, 18, 120);
+  return (L + arrowHeadLenForLen(L)) / 2;
+}
+
+static int fitArrowLenToVerticalBand(int len, int bandH) {
+  int fitted = clampi(len, 18, 120);
+  const int maxReach = bandH > 0 ? bandH / 2 : 0;
+  while (fitted > 18 && arrowVerticalReachForLen(fitted) > maxReach) fitted--;
+  return fitted;
+}
+
 static void drawArrowFlatTailCentered(int cx, int cy, int len, float degTo, int thickness, uint16_t col) {
   auto& d = DisplayCore::get();
 
@@ -1517,7 +1533,7 @@ static void drawArrowFlatTailCentered(int cx, int cy, int len, float degTo, int 
   float dx = sinf(a);
   float dy = -cosf(a);
 
-  int headLen  = clampi(L / 3, 10, 22);
+  int headLen  = arrowHeadLenForLen(L);
   int shaftLen = L - headLen;
 
   int xTailEnd = cx - (int)lroundf(dx * (float)shaftLen * 0.5f);
@@ -1749,6 +1765,7 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
                                   uint16_t ink) {
   (void)y;
   (void)h;
+  (void)ratingCenterY;
 
   const int padX = 12;
   const int innerX = x + padX;
@@ -1762,20 +1779,11 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
 
   drawTextCenteredAt(x + w / 2, headerBaselineY, "Details:", FONT_B12, ink);
 
-  const int arrowLenWave = clampi(slotW - 4, 28, 62);
-  const int arrowLenWind = clampi(windW - 4, 28, 62);
+  int arrowLenWave = clampi(slotW - 4, 28, 62);
+  int arrowLenWind = clampi(windW - 4, 28, 62);
 
   int waveArrowCx = waveX + slotW / 2;
   int windArrowCx = windX + windW / 2;
-
-  const int arrowLenMax = (arrowLenWave > arrowLenWind) ? arrowLenWave : arrowLenWind;
-  const int arrowHeadLenMax = clampi(arrowLenMax / 3, 10, 22);
-  const int arrowDownReachMax = (arrowLenMax + arrowHeadLenMax) / 2;
-  const int arrowY = ratingCenterY - 18;
-  const int arrowLowestY = arrowY + arrowDownReachMax;
-
-  drawSurfDirectionArrow(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom, ink);
-  drawSurfDirectionArrow(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom, ink);
 
   char perTxt[12] = {0};
   if (isfinite(data.swellPeriodS) && data.swellPeriodS > 0) snprintf(perTxt, sizeof(perTxt), "%.0f s", data.swellPeriodS);
@@ -1790,14 +1798,43 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
   fontBoxMetrics(FONT_B9, py1, ph);
   fontBoxMetrics(FONT_B9, wy1, wh);
 
+  int16_t headerY1; uint16_t headerH;
+  fontBoxMetrics(FONT_B12, headerY1, headerH);
+
   int textTop = bottomTextBaselineY + py1;
   int iconH = 18;
-  int iconCenterY = (arrowLowestY + textTop) / 2;
-  int iconTop = iconCenterY - iconH / 2;
 
-  if (iconTop < arrowLowestY + 4) iconTop = arrowLowestY + 4;
-  if (iconTop + iconH > textTop - 4) iconTop = textTop - 4 - iconH;
-  if (iconTop < headerBaselineY + 12) iconTop = headerBaselineY + 12;
+  const int arrowGapHeader = 8;
+  const int arrowGapIcon = 6;
+  const int iconGapText = 4;
+  int iconTop = textTop - iconGapText - iconH;
+
+  int arrowSafeTop = headerBaselineY + headerY1 + (int)headerH + arrowGapHeader;
+  int arrowSafeBottom = iconTop - arrowGapIcon;
+
+  if (arrowSafeBottom < arrowSafeTop) {
+    iconTop = headerBaselineY + headerY1 + (int)headerH + arrowGapHeader + arrowGapIcon;
+    if (iconTop + iconH > textTop - iconGapText) iconTop = textTop - iconGapText - iconH;
+    arrowSafeBottom = iconTop - arrowGapIcon;
+  }
+
+  const int arrowBandH = arrowSafeBottom - arrowSafeTop;
+  arrowLenWave = fitArrowLenToVerticalBand(arrowLenWave, arrowBandH);
+  arrowLenWind = fitArrowLenToVerticalBand(arrowLenWind, arrowBandH);
+
+  const int arrowReachWave = arrowVerticalReachForLen(arrowLenWave);
+  const int arrowReachWind = arrowVerticalReachForLen(arrowLenWind);
+  const int arrowReachMax = (arrowReachWave > arrowReachWind) ? arrowReachWave : arrowReachWind;
+  int arrowY = (arrowSafeTop + arrowSafeBottom) / 2;
+  if (arrowY - arrowReachMax < arrowSafeTop) arrowY = arrowSafeTop + arrowReachMax;
+  if (arrowY + arrowReachMax > arrowSafeBottom) arrowY = arrowSafeBottom - arrowReachMax;
+
+  drawSurfDirectionArrow(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom, ink);
+  drawSurfDirectionArrow(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom, ink);
+
+  if (iconTop < arrowY + arrowReachMax + arrowGapIcon) iconTop = arrowY + arrowReachMax + arrowGapIcon;
+  if (iconTop + iconH > textTop - iconGapText) iconTop = textTop - iconGapText - iconH;
+  if (iconTop < headerBaselineY + headerY1 + (int)headerH + arrowGapHeader) iconTop = headerBaselineY + headerY1 + (int)headerH + arrowGapHeader;
 
   const int waveIconW = 28;
   const int windIconW = 36;
@@ -2242,20 +2279,27 @@ static void renderCommon(const Cell& c,
       const int waveArrowCx = waveSlotX + slotW / 2;
       const int windArrowCx = windSlotX + windSlotW / 2;
 
-      const int arrowLenWave = clampi(slotW - 20, 20, 34);
-      const int arrowLenWind = arrowLenWave;
-      const int arrowLenMax = arrowLenWave;
+      int arrowLenWave = clampi(slotW - 20, 20, 34);
+      int arrowLenWind = arrowLenWave;
 
       const int iconH = 14;
       const int waveIconW = 28;
       const int windIconW = 36;
       const int iconY = middleVisualCenterY - iconH / 2;
 
-      const int arrowBaseY = middleRatingBaseline + 2;
-      const int arrowHeadLenMax = clampi(arrowLenMax / 3, 10, 22);
-      const int arrowDownReachMax = (arrowLenMax + arrowHeadLenMax) / 2;
       const int minArrowToIconGap = 7;
-      const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax) - 20;
+      const int arrowSafeTop = c.y + 34;
+      const int arrowSafeBottom = iconY - minArrowToIconGap;
+      const int arrowBandH = arrowSafeBottom - arrowSafeTop;
+      arrowLenWave = fitArrowLenToVerticalBand(arrowLenWave, arrowBandH);
+      arrowLenWind = fitArrowLenToVerticalBand(arrowLenWind, arrowBandH);
+
+      const int arrowReachWave = arrowVerticalReachForLen(arrowLenWave);
+      const int arrowReachWind = arrowVerticalReachForLen(arrowLenWind);
+      const int arrowReachMax = (arrowReachWave > arrowReachWind) ? arrowReachWave : arrowReachWind;
+      int arrowY = (arrowSafeTop + arrowSafeBottom) / 2;
+      if (arrowY - arrowReachMax < arrowSafeTop) arrowY = arrowSafeTop + arrowReachMax;
+      if (arrowY + arrowReachMax > arrowSafeBottom) arrowY = arrowSafeBottom - arrowReachMax;
 
       drawSurfDirectionArrow(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom, ink);
       drawSurfDirectionArrow(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom, ink);
