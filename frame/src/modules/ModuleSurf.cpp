@@ -12,6 +12,7 @@
 #include <ArduinoJson.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 #include "Fonts/FreeSans9ptNO.h"
 #include "Fonts/FreeSansBold12ptNO.h"
@@ -1234,7 +1235,7 @@ static void tick(int idx, CellSize wantSize) {
 
   const uint32_t now = millis();
 
-  const bool wantDayparts = (wantSize == CELL_LARGE);
+  const bool wantDayparts = (wantSize == CELL_MEDIUM || wantSize == CELL_LARGE);
   const bool wantDaily = (wantSize == CELL_XL);
 
   bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
@@ -1506,13 +1507,23 @@ static void fillQuad(int x0,int y0,int x1,int y1,int x2,int y2,int x3,int y3,uin
   d.fillTriangle(x0,y0, x2,y2, x3,y3, col);
 }
 
+static float normalizeDirectionDeg(float deg) {
+  if (!isfinite(deg)) return NAN;
+  float n = fmodf(deg, 360.0f);
+  if (n < 0.0f) n += 360.0f;
+  return n;
+}
+
 static void drawArrowFlatTailCentered(int cx, int cy, int len, float degTo, int thickness, uint16_t col) {
   auto& d = DisplayCore::get();
 
   int L = clampi(len, 18, 120);
   int t = clampi(thickness, 2, 10);
 
-  float a = degTo * (float)M_PI / 180.0f;
+  float normalizedDegTo = normalizeDirectionDeg(degTo);
+  if (!isfinite(normalizedDegTo)) return;
+
+  float a = normalizedDegTo * (float)M_PI / 180.0f;
   float dx = sinf(a);
   float dy = -cosf(a);
 
@@ -1546,6 +1557,88 @@ static void drawArrowFlatTailCentered(int cx, int cy, int len, float degTo, int 
   int xL = xShaftFront + hx, yL = yShaftFront + hy;
   int xR = xShaftFront - hx, yR = yShaftFront - hy;
   d.fillTriangle(xTip, yTip, xL, yL, xR, yR, col);
+}
+
+
+static void drawSurfDirectionArrow(int cx, int cy, int len, float degFrom, uint16_t col) {
+  auto& d = DisplayCore::get();
+
+  float normalizedFrom = normalizeDirectionDeg(degFrom);
+  if (isfinite(normalizedFrom)) {
+    drawArrowFlatTailCentered(cx, cy, len, normalizeDirectionDeg(normalizedFrom + 180.0f), 3, col);
+  } else {
+    d.drawFastHLine(cx - len / 2, cy, len, col);
+  }
+}
+
+static int currentSurfDaypartIndex() {
+  struct tm tmNow;
+  if (!getLocalTime(&tmNow, 10)) return 0;
+
+  const int hour = tmNow.tm_hour;
+  if (hour >= 21) return 0;
+  if (hour < 10) return 0;
+  if (hour < 14) return 1;
+  if (hour < 18) return 2;
+  return 3;
+}
+
+static char surfTrendSymbol(const SurfCache& data) {
+  if (!data.hasDayparts) return 0;
+
+  int validCount = 0;
+  for (int i = 0; i < 4; i++) {
+    if (data.day[i].valid && data.day[i].rating >= 1 && data.day[i].rating <= 6) validCount++;
+  }
+  if (validCount <= 1) return 0;
+
+  int currentIndex = currentSurfDaypartIndex();
+  if (currentIndex < 0) currentIndex = 0;
+  if (currentIndex > 3) currentIndex = 3;
+
+  int fromIndex = currentIndex;
+  if (fromIndex >= 3) fromIndex = 2;
+  if (!data.day[fromIndex].valid || data.day[fromIndex].rating < 1 || data.day[fromIndex].rating > 6) {
+    for (int i = 0; i < 3; i++) {
+      if (data.day[i].valid && data.day[i].rating >= 1 && data.day[i].rating <= 6 &&
+          data.day[i + 1].valid && data.day[i + 1].rating >= 1 && data.day[i + 1].rating <= 6) {
+        fromIndex = i;
+        break;
+      }
+    }
+  }
+
+  int toIndex = fromIndex + 1;
+  if (toIndex > 3) return 0;
+  if (!data.day[fromIndex].valid || !data.day[toIndex].valid) return 0;
+
+  const int fromRating = data.day[fromIndex].rating;
+  const int toRating = data.day[toIndex].rating;
+  if (fromRating < 1 || fromRating > 6 || toRating < 1 || toRating > 6) return 0;
+
+  const int delta = toRating - fromRating;
+  if (delta > 0) return '^';
+  if (delta < 0) return 'v';
+  return '-';
+}
+
+static void drawSurfTrendIndicator(int x, int y, char symbol, uint16_t col) {
+  auto& d = DisplayCore::get();
+  if (!symbol) return;
+
+  const int w = 9;
+  const int h = 7;
+  const int cx = x + w / 2;
+
+  if (symbol == '^') {
+    d.drawLine(cx, y, x, y + h, col);
+    d.drawLine(cx, y, x + w, y + h, col);
+  } else if (symbol == 'v') {
+    d.drawLine(x, y, cx, y + h, col);
+    d.drawLine(x + w, y, cx, y + h, col);
+  } else {
+    d.drawFastHLine(x, y + h / 2, w, col);
+  }
 }
 
 static void drawTextCenteredInRect(int x, int y, int w, int h,
@@ -1681,7 +1774,6 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
                                   int ratingCenterY,
                                   int bottomTextBaselineY,
                                   uint16_t ink) {
-  auto& d = DisplayCore::get();
   (void)y;
   (void)h;
 
@@ -1709,11 +1801,8 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
   const int arrowY = ratingCenterY - 18;
   const int arrowLowestY = arrowY + arrowDownReachMax;
 
-  if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
-  else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
-
-  if (isfinite(data.windDirDegFrom)) drawArrowFlatTailCentered(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom + 180.0f, 3, ink);
-  else d.drawFastHLine(windArrowCx - arrowLenWind / 2, arrowY, arrowLenWind, ink);
+  drawSurfDirectionArrow(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom, ink);
+  drawSurfDirectionArrow(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom, ink);
 
   char perTxt[12] = {0};
   if (isfinite(data.swellPeriodS) && data.swellPeriodS > 0) snprintf(perTxt, sizeof(perTxt), "%.0f s", data.swellPeriodS);
@@ -1842,6 +1931,9 @@ static void renderCommon(const Cell& c,
 
     int titleBaseline = c.y + topPad - ty1 + headerNudgeDown;
     drawTextCenteredAt(c.x + c.w / 2, titleBaseline, spotName, FONT_B12, ink);
+
+    const char trend = surfTrendSymbol(data);
+    if (trend) drawSurfTrendIndicator(c.x + c.w - 19, c.y + 9, trend, ink);
 
     {
       int underlineY = (titleBaseline + ty1) + (int)th + titleUnderlineGap;
@@ -2192,11 +2284,8 @@ static void renderCommon(const Cell& c,
       const int minArrowToIconGap = 7;
       const int arrowY = min(arrowBaseY, iconY - minArrowToIconGap - arrowDownReachMax) - 20;
 
-      if (isfinite(data.swellDirDegFrom)) drawArrowFlatTailCentered(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom + 180.0f, 3, ink);
-      else d.drawFastHLine(waveArrowCx - arrowLenWave / 2, arrowY, arrowLenWave, ink);
-
-      if (isfinite(data.windDirDegFrom)) drawArrowFlatTailCentered(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom + 180.0f, 3, ink);
-      else d.drawFastHLine(windArrowCx - arrowLenWind / 2, arrowY, arrowLenWind, ink);
+      drawSurfDirectionArrow(waveArrowCx, arrowY, arrowLenWave, data.swellDirDegFrom, ink);
+      drawSurfDirectionArrow(windArrowCx, arrowY, arrowLenWind, data.windDirDegFrom, ink);
 
       const int waveIconX = waveArrowCx - waveIconW / 2;
       const int windIconX = windArrowCx - windIconW / 2;
