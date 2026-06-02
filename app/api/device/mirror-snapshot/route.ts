@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { spotIdFromLabel } from '@/app/lib/surf/spots'
+import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 
@@ -1292,7 +1292,7 @@ function isTodaysBestSurfConfig(spotId: string, spot: string) {
   return normalizedSpot === "today's best" || normalizedSpot === 'todays best' || normalizedSpot === 'dagens beste'
 }
 
-function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSettings: UnknownRecord, spotIdOverride?: string) {
+function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSettings: UnknownRecord, deviceId?: string, spotIdOverride?: string) {
   const spot = asString(cfg.spot || cfg.label).trim()
   const configuredSpotId = asString(cfg.spotId).trim()
   const spotId = configuredSpotId || (spot ? spotIdFromLabel(spot) ?? '' : '')
@@ -1310,6 +1310,7 @@ function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSetti
 
   url.searchParams.set('hours', '4')
   url.searchParams.set('frame', '1')
+  if (deviceId) url.searchParams.set('device_id', deviceId)
 
   if (!spotIdOverride && isTodaysBestSurfConfig(spotId, spot)) {
     const fuelPenalty = truthy(surfSettings.fuelPenalty)
@@ -1337,7 +1338,8 @@ async function surfDetail(
   language: string,
   surfSettings: UnknownRecord
 ): Promise<Detail> {
-  const base = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings)
+  const deviceId = asString(cfg.__device_id).trim()
+  const base = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, deviceId)
   const headers = { Authorization: `Bearer ${authToken}` }
 
   // Mirror the firmware's render path: Today's Best is first resolved with the exact
@@ -1346,7 +1348,7 @@ async function surfDetail(
   if (base.isTodaysBest) {
     const winnerSpotId = resolvedSurfSpotId(data)
     if (winnerSpotId) {
-      const winner = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, winnerSpotId)
+      const winner = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, deviceId, winnerSpotId)
       winner.url.searchParams.set('dayparts', '1')
       winner.url.searchParams.set('daily', '1')
       winner.url.searchParams.set('days', '5')
@@ -1406,6 +1408,31 @@ async function surfDetail(
   const water = asRecord(data.water)
   const sun = asRecord(data.sun)
   const weather = asRecord(data.weather)
+
+  if (!base.isTodaysBest) {
+    const resolvedSpotId = resolvedSurfSpotId(data) || base.spotId
+    const spotType = resolvedSpotId && SURF_SPOTS[resolvedSpotId] ? 'built-in' : 'custom'
+    console.info('[mirror-snapshot:selected-surf]', {
+      frame_id: deviceId || null,
+      device_id: deviceId || null,
+      source_endpoint_used: base.url.toString(),
+      configured_spot_id: base.spotId || null,
+      resolved_spot_id: resolvedSpotId || null,
+      spot_name: asString(data.spot, base.spot || (language === 'no' ? 'Surf' : 'Surf')),
+      spot_type: spotType,
+      forecast_source: asString(asRecord(data.geo).source) || null,
+      forecast_grid_point: asRecord(data.geo).forecast ?? null,
+      selected_timestamp: asString(data.time_utc) || null,
+      wave_min_m: asNumber(forecast.wave_height_min_m) ?? null,
+      wave_max_m: asNumber(forecast.wave_height_max_m) ?? null,
+      wave_range: waveRange || null,
+      period_s: asNumber(inputs.swell_period_s) ?? null,
+      swell_direction_deg: asNumber(inputs.swell_direction_deg) ?? null,
+      wind_speed_ms: asNumber(inputs.wind_speed_ms) ?? null,
+      wind_direction_deg: asNumber(inputs.wind_direction_deg) ?? null,
+      rating,
+    })
+  }
 
   return {
     module: 'surf',
@@ -1835,7 +1862,7 @@ export async function GET(req: Request) {
       try {
         if (parsed.base === 'date') detailsBySlot[String(slot)] = { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
         else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language)
-        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, deviceToken || bearer, language, asRecord(modules.surf_settings))
+        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, { ...cfg, __device_id: deviceId }, deviceToken || bearer, language, asRecord(modules.surf_settings))
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)

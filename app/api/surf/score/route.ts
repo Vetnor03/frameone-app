@@ -1326,6 +1326,10 @@ function scoringProfileForResolvedForecast(
 }
 
 function surfDebugConditionLog(args: {
+  deviceId?: string | null
+  sourceEndpoint?: string | null
+  spotType?: 'built-in' | 'custom' | 'unknown'
+  experienceSpotId?: string | null
   spotId: string | null
   spotName: string | null
   lat: number
@@ -1347,8 +1351,13 @@ function surfDebugConditionLog(args: {
   const selected = selectedSwellFromPick(args.condition.marine, args.condition.picked)
   const displayed = args.displayedSwell ?? selected
   console.info(args.cardMode === 'current' ? '[surf-score:current-card]' : '[surf-score:condition]', {
+    frame_id: args.deviceId ?? null,
+    device_id: args.deviceId ?? null,
+    source_endpoint_used: args.sourceEndpoint ?? '/api/surf/score',
     spot_id: args.spotId,
     spot_name: args.spotName,
+    spot_type: args.spotType ?? 'unknown',
+    experience_spot_id: args.experienceSpotId ?? args.spotId,
     lat: args.lat,
     lon: args.lon,
     compare_to_spot_id: args.compareToSpotId ?? args.series.coordinateResolution.matchedSpotId,
@@ -2539,7 +2548,11 @@ export async function GET(req: Request) {
     }
 
     const series = await fetchMarineSeries(lat, lon)
-    const spotUserExperiences = userExperiencesForSpot(userExpBySpotId, spotId)
+
+    const selectedSpotType: 'built-in' | 'custom' = customSpotProfile ? 'custom' : 'built-in'
+    const matchedBuiltInSpotId = customSpotProfile ? series.coordinateResolution.matchedSpotId : null
+    const experienceSpotId = matchedBuiltInSpotId || spotId
+    const spotUserExperiences = userExperiencesForSpot(userExpBySpotId, experienceSpotId)
 
     const [sun, dailyExtras, water] = await Promise.all([
       fetchSunTimes(lat, lon),
@@ -2568,7 +2581,7 @@ export async function GET(req: Request) {
     const chosenHourOffset = selectedCondition.hourOffset
     const displayPickedNow = bestOn
       ? pickedNow
-      : pickBestSwell({ spotKey: spotKeyForTables, marine: marineNow, userExperiences: spotUserExperiences, customSpotProfile: null })
+      : pickBestSwell({ spotKey: spotKeyForTables, marine: marineNow, userExperiences: spotUserExperiences, customSpotProfile: scoringCustomSpotProfile })
 
     const chosenHeights: number[] = []
     for (let off = 0; off < hours; off++) {
@@ -2577,7 +2590,7 @@ export async function GET(req: Request) {
         spotKey: spotKeyForTables,
         marine: b,
         userExperiences: spotUserExperiences,
-        customSpotProfile: bestOn ? scoringCustomSpotProfile : null,
+        customSpotProfile: scoringCustomSpotProfile,
       })
       const h = selectedSwellFromPick(b, p).height_m
       if (Number.isFinite(h)) chosenHeights.push(h)
@@ -2606,6 +2619,10 @@ export async function GET(req: Request) {
     const displayedLine2 = `${degToCompass8(selectedSwellNow.direction_deg_from)} swell, ${degToCompass8(marineNow.wind_direction_deg_from)} wind`
 
     surfDebugConditionLog({
+      deviceId: url.searchParams.get('device_id') || null,
+      sourceEndpoint: `/api/surf/score?${url.searchParams.toString()}`,
+      spotType: selectedSpotType,
+      experienceSpotId,
       spotId,
       spotName: spotLabel ?? spotQ ?? spotId,
       lat,

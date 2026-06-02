@@ -950,6 +950,7 @@ static String buildSurfUrlBase(const SurfInstanceConfig& cfg, const char* spotId
 
   url += "&hours=4";
   url += "&frame=1";
+  url += "&device_id=" + urlEncode(DeviceIdentity::getDeviceId().c_str());
   return url;
 }
 
@@ -1143,6 +1144,13 @@ static bool parseScoreResponseIntoCache(const StaticJsonDocument<24576>& doc, Su
   Serial.print("cached.rating="); Serial.println(out.rating);
   Serial.print("cached.ratingFromExperience="); Serial.println(out.ratingFromExperience ? "true" : "false");
   Serial.print("cached.experienceDiceValue="); Serial.println(out.experienceDiceValue);
+  Serial.print("selected.timestamp="); Serial.println((const char*)(doc["time_utc"] | doc["inputs"]["time_utc"] | ""));
+  Serial.print("wave.range="); Serial.println(out.waveRangeNext);
+  Serial.print("wave.height_m="); Serial.println(out.swellHeightM);
+  Serial.print("period_s="); Serial.println(out.swellPeriodS);
+  Serial.print("swell.direction_deg="); Serial.println(out.swellDirDegFrom);
+  Serial.print("wind.speed_ms="); Serial.println(out.windSpeedMs);
+  Serial.print("wind.direction_deg="); Serial.println(out.windDirDegFrom);
 #endif
 
   return true;
@@ -1220,6 +1228,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   urlW += "spotId=" + urlEncode(out.spotIdResolved);
   urlW += "&hours=4";
   urlW += "&frame=1";
+  urlW += "&device_id=" + urlEncode(DeviceIdentity::getDeviceId().c_str());
   if (wantDayparts) urlW += "&dayparts=1";
   if (wantDaily) appendDailyParamsIfWanted(urlW);
 
