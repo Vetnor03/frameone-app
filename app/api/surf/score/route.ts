@@ -2484,39 +2484,48 @@ export async function GET(req: Request) {
     const geoQuery: string | null = null
 
     let customSpotProfile: CustomSpotScoringProfile | null = null
-    if (latQ != null && lonQ != null) {
-      lat = latQ
-      lon = lonQ
-      geoSource = 'query_latlon'
-      spotId = spotIdQ || null
-      spotLabel = spotQ || (spotId ? SURF_SPOTS[spotId]?.label ?? null : null)
-
-      if (spotId && !SURF_SPOTS[spotId]) {
-        const cs = await fetchCustomSpotById(req, spotId)
-        if (cs) {
-          spotLabel = spotLabel || String(cs.name || '').trim() || null
-          customSpotProfile = customSpotProfileFromRow(cs)
-          geoSource = 'query_latlon_custom'
-        }
-      }
-    } else if (spotIdQ) {
+    if (spotIdQ) {
       const s = SURF_SPOTS[spotIdQ]
       if (s) {
         spotId = s.spotId
         spotLabel = s.label
         lat = s.lat
         lon = s.lon
-        geoSource = 'spotId_map'
+        geoSource = latQ != null || lonQ != null ? 'spotId_map_ignored_query_latlon' : 'spotId_map'
+
+        if (latQ === 0 && lonQ === 0 && (s.lat !== 0 || s.lon !== 0)) {
+          console.warn('[surf-score:coordinates]', {
+            message: 'Ignoring lat=0/lon=0 for known built-in surf spot',
+            spot_id: s.spotId,
+            spot_name: s.label,
+            request_lat: latQ,
+            request_lon: lonQ,
+            resolved_lat: s.lat,
+            resolved_lon: s.lon,
+          })
+        }
       } else {
         const cs = await fetchCustomSpotById(req, spotIdQ)
         if (!cs) return jsonNoStore({ error: 'Unknown spotId', spotId: spotIdQ }, { status: 400 })
         spotId = String(cs.id)
         spotLabel = String(cs.name)
-        lat = Number(cs.lat)
-        lon = Number(cs.lon)
-        geoSource = 'spotId_custom'
+        if (latQ != null && lonQ != null) {
+          lat = latQ
+          lon = lonQ
+          geoSource = 'query_latlon_custom'
+        } else {
+          lat = Number(cs.lat)
+          lon = Number(cs.lon)
+          geoSource = 'spotId_custom'
+        }
         customSpotProfile = customSpotProfileFromRow(cs)
       }
+    } else if (latQ != null && lonQ != null) {
+      lat = latQ
+      lon = lonQ
+      geoSource = 'query_latlon'
+      spotId = null
+      spotLabel = spotQ || null
     } else if (spotQ) {
       const s = findSpotByLabel(spotQ)
       if (!s) {
