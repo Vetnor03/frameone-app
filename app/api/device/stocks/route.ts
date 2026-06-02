@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { resolveStockBaselinePrice } from '@/app/lib/stocks/baseline'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -447,6 +448,7 @@ export async function GET(req: Request) {
     }
 
     let day: SeriesPoint[] = []
+    let hasSyntheticDaySeries = false
     try {
       if (!apiKey) throw new Error('Missing FINNHUB_API_KEY')
       const result = await fetchCandles(resolvedSymbol, '30', nowSec - 36 * 3600, nowSec, apiKey)
@@ -512,6 +514,7 @@ export async function GET(req: Request) {
         const yahoo = await fetchYahooCandles(resolvedSymbol, chartRange)
         if (yahoo.status === 'ok' && yahoo.points.length > 0) {
           seriesByRange[chartRange] = yahoo.points
+          if (chartRange === 'day') day = yahoo.points
           selectedSeries = yahoo.points
         }
       } catch (error: unknown) {
@@ -524,6 +527,10 @@ export async function GET(req: Request) {
         { t: new Date((nowSec - 24 * 3600) * 1000).toISOString(), p: previousClose },
         { t: new Date(nowSec * 1000).toISOString(), p: price },
       ]
+      if (chartRange === 'day') {
+        seriesByRange.day = selectedSeries
+        hasSyntheticDaySeries = true
+      }
     }
 
 
@@ -551,12 +558,21 @@ export async function GET(req: Request) {
           : rangeChangePct
     const displayReturnPct = returnSincePurchasePct ?? selectedRangeReturnPct
 
-    const baselinePrice =
-      chartRange === 'day'
-        ? (open ?? previousClose)
-        : selectedSeries.length > 0 && selectedSeries[0]?.p != null
-          ? selectedSeries[0].p
-          : (open ?? previousClose)
+    const firstIntradayPrice = !hasSyntheticDaySeries && seriesByRange.day.length > 0 ? seriesByRange.day[0]?.p ?? null : null
+    const { baselinePrice, baselineSource } = resolveStockBaselinePrice({
+      openPrice: open,
+      firstIntradayPrice,
+      previousClose,
+    })
+
+    console.info('/api/device/stocks baseline', {
+      ticker: resolvedSymbol,
+      currentPrice,
+      openPrice: open,
+      previousClose,
+      baselinePrice,
+      baselineSource,
+    })
 
     const response = {
       symbol: resolvedSymbol,
@@ -569,6 +585,7 @@ export async function GET(req: Request) {
       ...(rangeChangePct != null ? { rangeChangePercent: rangeChangePct } : {}),
       ...(displayReturnPct != null ? { displayReturnPercent: displayReturnPct } : {}),
       ...(baselinePrice != null && Number.isFinite(baselinePrice) ? { baselinePrice } : {}),
+      ...(baselineSource ? { baselineSource } : {}),
       quote: {
         price: currentPrice,
         change,

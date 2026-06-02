@@ -51,6 +51,8 @@ struct StockCache {
   float purchasePrice = NAN;
   float personalChangePercent = NAN;
   float selectedRangePercent = NAN;
+  float baselinePrice = NAN;
+  char baselineSource[16] = {0};
 
   char chartRange[8] = {0};
   uint8_t seriesCount = 0;
@@ -230,23 +232,11 @@ static bool hasPurchaseData(const StockCache& data) {
 static bool getReferenceLineValue(const StockCache& data, float& outValue) {
   outValue = NAN;
 
-  const bool isWeekMonthOrYear =
-      (strcmp(data.chartRange, "week") == 0) || (strcmp(data.chartRange, "month") == 0) || (strcmp(data.chartRange, "year") == 0);
-  if (isWeekMonthOrYear && data.seriesCount > 0) {
-    const float first = data.series[0];
-    if (isfinite(first) && first > 0.0f) {
-      outValue = first;
-      return true;
-    }
-  }
-
-  if (isfinite(data.open) && data.open > 0.0f) {
-    outValue = data.open;
-    return true;
-  }
-
-  if (isfinite(data.previousClose) && data.previousClose > 0.0f) {
-    outValue = data.previousClose;
+  // The backend resolves this per stock as: today's market open, then first
+  // intraday datapoint, then previous close. Keep the renderer tied to that
+  // payload value so mirror and physical frame use the same baseline source.
+  if (isfinite(data.baselinePrice) && data.baselinePrice > 0.0f) {
+    outValue = data.baselinePrice;
     return true;
   }
 
@@ -327,6 +317,12 @@ static void drawChartBox(int x, int y, int w, int h, const StockCache& data) {
     if (sv < mn) mn = sv;
     if (sv > mx) mx = sv;
   }
+  float referenceValue = NAN;
+  if (getReferenceLineValue(data, referenceValue) && isfinite(referenceValue) && referenceValue > 0.0f) {
+    if (referenceValue < mn) mn = referenceValue;
+    if (referenceValue > mx) mx = referenceValue;
+  }
+
   float span = mx - mn;
   if (span < 0.0001f) span = 1.0f;
   auto& d = DisplayCore::get();
@@ -495,6 +491,9 @@ static bool parseQuoteJson(const String& body, const StockInstanceConfig& cfg, S
   out.low = doc["quote"]["low"] | NAN;
   out.purchasePrice = doc["purchasePrice"] | NAN;
   out.personalChangePercent = doc["personalChangePercent"] | NAN;
+  out.baselinePrice = doc["baselinePrice"] | NAN;
+  const char* baselineSource = doc["baselineSource"] | "";
+  if (baselineSource && baselineSource[0]) strlcpy(out.baselineSource, baselineSource, sizeof(out.baselineSource));
 
   if (!isfinite(out.price)) out.price = doc["quote"]["c"] | NAN;
   if (!isfinite(out.change)) out.change = doc["quote"]["d"] | NAN;
@@ -537,6 +536,10 @@ static bool parseQuoteJson(const String& body, const StockInstanceConfig& cfg, S
   Serial.println(out.changePercent, 4);
   Serial.print("[STOCKS] selectedSeries count: ");
   Serial.println(out.seriesCount);
+  Serial.print("[STOCKS] baseline price/source: ");
+  Serial.print(out.baselinePrice, 4);
+  Serial.print(" / ");
+  Serial.println(out.baselineSource);
 
   return true;
 }
