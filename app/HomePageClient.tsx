@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
-import { findSpotByLabel } from './lib/surf/spots'
+import { SURF_SPOTS, findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
@@ -8104,6 +8104,7 @@ function ModuleSettingsTab({
         modulesJson={modulesJson}
         setModulesJson={setModulesJson}
         markDirty={markDirty}
+        activeDeviceId={activeDeviceId}
       />
     )
   }
@@ -12497,6 +12498,294 @@ function ReminderTagPickerSheet({
   )
 }
 
+
+type SurfSelectedCompareCase = {
+  label?: string
+  endpoint?: string
+  diagnosticEndpoint?: string
+  device_id?: string
+  frame_id?: string
+  spot?: unknown
+  resolved?: unknown
+  selected?: unknown
+}
+
+function surfCompareSpotId(value: unknown) {
+  const record = recordFromUnknown(value)
+  return String(record.spotId ?? record.spot_id ?? '').trim()
+}
+
+function surfCompareStripCustomPrefix(value: string) {
+  const trimmed = value.trim()
+  return trimmed.startsWith('custom:') ? trimmed.slice('custom:'.length).trim() : trimmed
+}
+
+function surfCompareDistanceKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const toRad = (x: number) => (x * Math.PI) / 180
+  const r = 6371
+  const dLat = toRad(b.lat - a.lat)
+  const dLon = toRad(b.lon - a.lon)
+  const lat1 = toRad(a.lat)
+  const lat2 = toRad(b.lat)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
+  return 2 * r * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
+
+function surfCompareCaseSummary(value: unknown): SurfSelectedCompareCase {
+  const record = recordFromUnknown(value)
+  return {
+    label: typeof record.label === 'string' ? record.label : undefined,
+    endpoint: typeof record.endpoint === 'string' ? record.endpoint : undefined,
+    diagnosticEndpoint: typeof record.diagnosticEndpoint === 'string' ? record.diagnosticEndpoint : undefined,
+    device_id: typeof record.device_id === 'string' ? record.device_id : undefined,
+    frame_id: typeof record.frame_id === 'string' ? record.frame_id : undefined,
+    spot: record.spot,
+    resolved: record.resolved,
+    selected: record.selected,
+  }
+}
+
+function surfCompareFirstDivergences(value: unknown) {
+  const record = recordFromUnknown(value)
+  return Object.fromEntries(
+    Object.entries(record).map(([key, comparison]) => {
+      const c = recordFromUnknown(comparison)
+      return [key, c.firstDivergence ?? null]
+    })
+  )
+}
+
+function SurfSelectedCompareDebugPanel({
+  language,
+  activeDeviceId,
+  surfList,
+}: {
+  language: AppLanguage
+  activeDeviceId: string | null
+  surfList: SurfCfg[]
+}) {
+  const visible = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_SURF_SELECTED_COMPARE_DEBUG === '1'
+  const [customSpots, setCustomSpots] = useState<CustomSurfSpot[]>([])
+  const [customLoading, setCustomLoading] = useState(false)
+  const [builtInSpotId, setBuiltInSpotId] = useState('hellesto')
+  const [customSpotId, setCustomSpotId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [resultJson, setResultJson] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const builtInOptions = useMemo(() => {
+    const ids = new Set<string>()
+    for (const cfg of surfList) {
+      const id = surfCompareStripCustomPrefix(String(cfg?.spotId || '').trim())
+      if (id && id !== '__todays_best__' && SURF_SPOTS[id]) ids.add(id)
+    }
+    ids.add('hellesto')
+    return Array.from(ids).map((id) => ({ id, label: SURF_SPOTS[id]?.label ?? id }))
+  }, [surfList])
+
+  const configuredCustomId = useMemo(() => {
+    for (const cfg of surfList) {
+      const id = surfCompareSpotId(cfg)
+      if (id.startsWith('custom:')) return surfCompareStripCustomPrefix(id)
+      if (id && !SURF_SPOTS[id] && id !== '__todays_best__') return id
+    }
+    return ''
+  }, [surfList])
+
+  const nearestCustomId = useMemo(() => {
+    const builtIn = SURF_SPOTS[builtInSpotId]
+    if (!builtIn || customSpots.length === 0) return ''
+    let best = customSpots[0]
+    let bestDistance = Number.POSITIVE_INFINITY
+    for (const spot of customSpots) {
+      const lat = Number(spot.lat)
+      const lon = Number(spot.lon)
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+      const d = surfCompareDistanceKm({ lat: builtIn.lat, lon: builtIn.lon }, { lat, lon })
+      if (d < bestDistance) {
+        best = spot
+        bestDistance = d
+      }
+    }
+    return best?.id ?? ''
+  }, [builtInSpotId, customSpots])
+
+  const effectiveCustomSpotId = customSpotId || configuredCustomId || nearestCustomId
+
+  useEffect(() => {
+    if (!visible) return
+    const configuredBuiltIn = surfList
+      .map((cfg) => surfCompareStripCustomPrefix(String(cfg?.spotId || '').trim()))
+      .find((id) => id && id !== '__todays_best__' && SURF_SPOTS[id])
+    if (configuredBuiltIn) setBuiltInSpotId(configuredBuiltIn)
+  }, [surfList, visible])
+
+  useEffect(() => {
+    if (!visible) return
+    if (customSpotId) return
+    if (configuredCustomId) setCustomSpotId(configuredCustomId)
+  }, [configuredCustomId, customSpotId, visible])
+
+  useEffect(() => {
+    if (!visible) return
+    let cancelled = false
+    ;(async () => {
+      setCustomLoading(true)
+      try {
+        const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+        if (!accessToken) return
+        const resp = await fetch('/api/surf/custom-spots', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: 'no-store',
+        })
+        if (!resp.ok) return
+        const json: unknown = await resp.json()
+        const items = recordFromUnknown(json).items
+        const rows = Array.isArray(items) ? items.filter((item): item is CustomSurfSpot => !!recordFromUnknown(item).id) : []
+        if (!cancelled) setCustomSpots(rows)
+      } finally {
+        if (!cancelled) setCustomLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [visible])
+
+  useEffect(() => {
+    if (!visible) return
+    if (customSpotId || configuredCustomId || !nearestCustomId) return
+    setCustomSpotId(nearestCustomId)
+  }, [configuredCustomId, customSpotId, nearestCustomId, visible])
+
+  if (!visible) return null
+
+  async function runCompare() {
+    setLoading(true)
+    setError(null)
+    setCopied(false)
+    try {
+      if (!activeDeviceId) throw new Error('No active frame/device selected')
+      if (!builtInSpotId) throw new Error('No built-in surf spot selected')
+      if (!effectiveCustomSpotId) throw new Error('No custom surf spot selected or available')
+
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error('No logged-in session token')
+
+      const params = new URLSearchParams({
+        debug: 'selected-surf',
+        device_id: activeDeviceId,
+        builtInSpotId,
+        customSpotId: effectiveCustomSpotId,
+      })
+      const resp = await fetch(`/api/debug/surf-selected-compare?${params.toString()}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const json: unknown = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        const message = String(recordFromUnknown(json).error || `Debug compare failed (${resp.status})`)
+        throw new Error(message)
+      }
+
+      const root = recordFromUnknown(json)
+      const cases = recordFromUnknown(root.cases)
+      const compact = {
+        firstDivergence: surfCompareFirstDivergences(root.comparisons),
+        selectedValueFirstDivergence: surfCompareFirstDivergences(root.selectedValueComparisons),
+        normalizedSelectedPayloads: {
+          frameBuiltIn: surfCompareCaseSummary(cases.frameBuiltIn),
+          mirrorBuiltIn: surfCompareCaseSummary(cases.mirrorBuiltIn),
+          frameCustom: surfCompareCaseSummary(cases.frameCustom),
+          mirrorCustom: surfCompareCaseSummary(cases.mirrorCustom),
+        },
+      }
+      setResultJson(JSON.stringify(compact, null, 2))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown debug compare error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function copyResult() {
+    if (!resultJson) return
+    await navigator.clipboard.writeText(resultJson)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1600)
+  }
+
+  return (
+    <div className="rounded-[1.4rem] border border-dashed border-[#2aa3ff]/55 bg-[#2aa3ff]/[0.07] p-4 text-[color:var(--fg-80)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold tracking-[0.18em] text-[#2aa3ff]">TEMP SURF DEBUG</div>
+          <div className="mt-1 text-xs text-[color:var(--fg-55)]">
+            Calls /api/debug/surf-selected-compare for the active frame. Remove after selected-spot parity is verified.
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs tracking-[0.12em] text-[color:var(--fg-60)]">
+          BUILT-IN SPOT
+          <select
+            value={builtInSpotId}
+            onChange={(e) => setBuiltInSpotId(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--panel)] px-3 py-2 text-sm tracking-normal text-[color:var(--fg)]"
+          >
+            {builtInOptions.map((spot) => <option key={spot.id} value={spot.id}>{spot.label}</option>)}
+          </select>
+        </label>
+        <label className="block text-xs tracking-[0.12em] text-[color:var(--fg-60)]">
+          CUSTOM SPOT
+          <select
+            value={effectiveCustomSpotId}
+            onChange={(e) => setCustomSpotId(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--panel)] px-3 py-2 text-sm tracking-normal text-[color:var(--fg)]"
+            disabled={customLoading || customSpots.length === 0}
+          >
+            {customSpots.length === 0 ? <option value="">{customLoading ? 'Loading custom spots…' : 'No custom spots found'}</option> : null}
+            {customSpots.map((spot) => (
+              <option key={spot.id} value={spot.id}>{spot.name || spot.id}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={runCompare}
+          disabled={loading || !activeDeviceId || !effectiveCustomSpotId}
+          className="rounded-full bg-[#2aa3ff] px-4 py-2 text-xs font-semibold tracking-[0.14em] text-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {loading ? 'RUNNING…' : 'RUN SELECTED SURF COMPARE'}
+        </button>
+        <button
+          type="button"
+          onClick={copyResult}
+          disabled={!resultJson}
+          className="rounded-full border border-[color:var(--bd-20)] px-4 py-2 text-xs font-semibold tracking-[0.14em] text-[color:var(--fg-75)] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {copied ? 'COPIED' : 'COPY JSON'}
+        </button>
+        <span className="text-xs text-[color:var(--fg-45)]">Device: {activeDeviceId || 'none'}</span>
+      </div>
+
+      {error ? <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</div> : null}
+      {resultJson ? (
+        <textarea
+          readOnly
+          value={resultJson}
+          className="mt-3 h-72 w-full resize-y rounded-xl border border-[color:var(--bd-15)] bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-[color:var(--fg-85)]"
+        />
+      ) : null}
+    </div>
+  )
+}
+
 function SurfModuleSettingsTab({
   language,
   layoutKey,
@@ -12504,6 +12793,7 @@ function SurfModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
+  activeDeviceId,
 }: {
   language: AppLanguage
   layoutKey: LayoutKey
@@ -12511,6 +12801,7 @@ function SurfModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: () => void
+  activeDeviceId: string | null
 }) {
   const [surfView, setSurfView] = useState<'main' | 'log'>('main')
   const [, setSurfViewTitle] = useState('SURF')
@@ -12680,6 +12971,12 @@ function SurfModuleSettingsTab({
                   />
                 )
               })}
+
+              <SurfSelectedCompareDebugPanel
+                language={language}
+                activeDeviceId={activeDeviceId}
+                surfList={surfList}
+              />
 
               <SurfExperienceCard
                 language={language}
