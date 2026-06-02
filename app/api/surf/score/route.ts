@@ -907,6 +907,44 @@ function betterByScoredThenHeight(args: {
   return 0
 }
 
+function swellDirectionScore(scored: ReturnType<typeof scoreSurf> | null | undefined) {
+  const score = Number(scored?.breakdown?.tables?.wave_dir?.score)
+  return Number.isFinite(score) ? score : null
+}
+
+function swellCombinedScore(scored: ReturnType<typeof scoreSurf> | null | undefined) {
+  const total = Number(scored?.breakdown?.tables?.total)
+  return Number.isFinite(total) ? total : null
+}
+
+function swellSelectionDebug(args: {
+  marine: MarineBundle
+  selected: Sideswell
+  selectedSource: 'primary' | 'secondary'
+  primaryScore: ReturnType<typeof scoreSurf>
+  secondaryScore?: ReturnType<typeof scoreSurf> | null
+}) {
+  const { marine, selected, selectedSource, primaryScore, secondaryScore } = args
+  const secondaryPresent = marine.secondary.present
+
+  return {
+    selected_swell_source: selectedSource,
+    primary_swell_direction_deg_from: marine.primary.direction_deg_from,
+    primary_swell_height_m: marine.primary.height_m,
+    primary_swell_period_s: marine.primary.period_s,
+    primary_swell_direction_score: swellDirectionScore(primaryScore),
+    primary_combined_score: swellCombinedScore(primaryScore),
+    secondary_swell_direction_deg_from: secondaryPresent ? marine.secondary.direction_deg_from : null,
+    secondary_swell_height_m: secondaryPresent ? marine.secondary.height_m : null,
+    secondary_swell_period_s: secondaryPresent ? marine.secondary.period_s : null,
+    secondary_swell_direction_score: secondaryPresent ? swellDirectionScore(secondaryScore) : null,
+    secondary_combined_score: secondaryPresent ? swellCombinedScore(secondaryScore) : null,
+    selected_swell_height_m: selected.height_m,
+    selected_swell_period_s: selected.period_s,
+    selected_swell_direction_deg_from: selected.direction_deg_from,
+  }
+}
+
 function pickBestSwell(args: {
   spotKey: string
   marine: MarineBundle
@@ -931,7 +969,12 @@ function pickBestSwell(args: {
     customSpotProfile,
   })
 
-  const withDebug = <T extends { chosen: 'primary' | 'secondary'; chosenScore: ReturnType<typeof scoreSurf> }>(
+  const withDebug = <T extends {
+    chosen: 'primary' | 'secondary'
+    chosenScore: ReturnType<typeof scoreSurf>
+    primaryScore: ReturnType<typeof scoreSurf>
+    secondaryScore?: ReturnType<typeof scoreSurf> | null
+  }>(
     picked: T,
     whySelected: string
   ) => {
@@ -967,6 +1010,14 @@ function pickBestSwell(args: {
       customSpotProfile,
     })
 
+    const selectionDebug = swellSelectionDebug({
+      marine,
+      selected: main,
+      selectedSource: picked.chosen,
+      primaryScore: picked.primaryScore,
+      secondaryScore: picked.secondaryScore,
+    })
+
     return {
       ...picked,
       chosenScore: combinedScore,
@@ -985,6 +1036,8 @@ function pickBestSwell(args: {
       ratingSource: scoredExperienceMatched(combinedScore) ? 'experience_blend' : 'tables',
       displayHeightSource: picked.chosen,
       whySelected,
+      selectionDebug,
+      ...selectionDebug,
       primaryMetrics,
       secondaryMetrics,
     }
@@ -1034,6 +1087,23 @@ function pickBestSwell(args: {
       },
       whySelected
     )
+
+  if (normalizeCustomSpotScoringProfile(customSpotProfile)) {
+    const customCmp = betterByScoredThenHeight({
+      scoredA: primaryScore,
+      scoredB: secondaryScore,
+      correctedHeightA: primaryMetrics.correctedHeight,
+      correctedHeightB: secondaryMetrics.correctedHeight,
+    })
+
+    if (customCmp > 0) return pickSecondary('custom spot secondary scored higher with custom sector profile')
+
+    return pickPrimary(
+      customCmp < 0
+        ? 'custom spot primary scored higher with custom sector profile'
+        : 'custom spot scores tied with custom sector profile; primary fallback'
+    )
+  }
 
   if (primaryMetrics.usable && secondaryMetrics.nearFlat) {
     return pickPrimary('primary usable; secondary is near-flat/short-period')
@@ -1357,6 +1427,20 @@ function surfDebugConditionLog(args: {
     raw_swell_direction_deg_from: displayed.direction_deg_from,
     raw_wind_speed_ms: args.displayedWindSpeedMs ?? args.condition.marine.wind_speed_ms,
     raw_wind_direction_deg_from: args.displayedWindDirectionDegFrom ?? args.condition.marine.wind_direction_deg_from,
+    selected_swell_source: args.condition.picked.selected_swell_source ?? args.condition.picked.chosen,
+    primary_swell_direction_deg_from: args.condition.picked.primary_swell_direction_deg_from ?? args.condition.marine.primary.direction_deg_from,
+    primary_swell_height_m: args.condition.picked.primary_swell_height_m ?? args.condition.marine.primary.height_m,
+    primary_swell_period_s: args.condition.picked.primary_swell_period_s ?? args.condition.marine.primary.period_s,
+    primary_swell_direction_score: args.condition.picked.primary_swell_direction_score ?? null,
+    primary_combined_score: args.condition.picked.primary_combined_score ?? null,
+    secondary_swell_direction_deg_from: args.condition.picked.secondary_swell_direction_deg_from ?? (args.condition.marine.secondary.present ? args.condition.marine.secondary.direction_deg_from : null),
+    secondary_swell_height_m: args.condition.picked.secondary_swell_height_m ?? (args.condition.marine.secondary.present ? args.condition.marine.secondary.height_m : null),
+    secondary_swell_period_s: args.condition.picked.secondary_swell_period_s ?? (args.condition.marine.secondary.present ? args.condition.marine.secondary.period_s : null),
+    secondary_swell_direction_score: args.condition.picked.secondary_swell_direction_score ?? null,
+    secondary_combined_score: args.condition.picked.secondary_combined_score ?? null,
+    selected_swell_height_m: args.condition.picked.selected_swell_height_m ?? selected.height_m,
+    selected_swell_period_s: args.condition.picked.selected_swell_period_s ?? selected.period_s,
+    selected_swell_direction_deg_from: args.condition.picked.selected_swell_direction_deg_from ?? selected.direction_deg_from,
     wave_height_m: selected.height_m,
     wave_period_s: selected.period_s,
     swell_direction_deg_from: selected.direction_deg_from,
@@ -2351,6 +2435,8 @@ export async function GET(req: Request) {
 
         picked: {
           which: pickedNow.chosen,
+          ...pickedNow.selectionDebug,
+          swell_selection: pickedNow.selectionDebug,
           selectedSwellIndex: pickedNow.selectedSwellIndex,
           selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
           contributingSwellIndexes: pickedNow.contributingSwellIndexes,
@@ -2411,6 +2497,8 @@ export async function GET(req: Request) {
             chosen_user_experience_logged_at: chosenUserExperiences.map((x) => x.logged_at),
           },
 
+          ...pickedNow.selectionDebug,
+          swell_selection: pickedNow.selectionDebug,
           selectedSwellIndex: pickedNow.selectedSwellIndex,
           selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
           contributingSwellIndexes: pickedNow.contributingSwellIndexes,
@@ -2652,6 +2740,8 @@ export async function GET(req: Request) {
 
       picked: {
         which: pickedNow.chosen,
+        ...pickedNow.selectionDebug,
+        swell_selection: pickedNow.selectionDebug,
         selectedSwellIndex: pickedNow.selectedSwellIndex,
         selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
         contributingSwellIndexes: pickedNow.contributingSwellIndexes,
@@ -2715,6 +2805,8 @@ export async function GET(req: Request) {
           user_experience_logged_at: spotUserExperiences.map((x) => x.logged_at),
         },
 
+        ...pickedNow.selectionDebug,
+        swell_selection: pickedNow.selectionDebug,
         selectedSwellIndex: pickedNow.selectedSwellIndex,
         selectedMainSwellIndex: pickedNow.selectedMainSwellIndex,
         contributingSwellIndexes: pickedNow.contributingSwellIndexes,
