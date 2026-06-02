@@ -1,6 +1,22 @@
 // app/lib/surfScoring.ts  (FULL FILE - copy/paste)
 import TABLES from '../lib/surf/waveguide_tables.json'
 import EXP from '../lib/surf/waveguide_experience.json'
+import {
+  normalizeCustomDirectionSector,
+  normalizeCustomSpotScoringProfile,
+  scoreCustomDirectionInSector,
+  type CustomDirectionSector,
+  type CustomSpotScoringProfile,
+} from './surf/customSpotScoring'
+
+export { normalizeCustomDirectionSector, normalizeCustomSpotScoringProfile, scoreCustomDirectionInSector } from './surf/customSpotScoring'
+
+export type {
+  CustomDirectionSector,
+  CustomDirectionScoreRow,
+  CustomSpotScoringProfile,
+  NormalizedCustomDirectionScoring,
+} from './surf/customSpotScoring'
 
 type Dir8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW'
 type TableKey = 'wave_dir' | 'wave_height' | 'wave_period' | 'wind_dir' | 'wind_speed'
@@ -129,6 +145,7 @@ type ScoreBreakdown = {
     killSwitchMultiplier?: number
   }
 
+  custom_spot_scoring_profile?: CustomSpotScoringProfile | null
   selectedMainSwellIndex?: number
   contributingSwellIndexes?: number[]
   swellMixSignature?: NormalizedSwellMixSignature
@@ -142,17 +159,6 @@ type ScoreBreakdown = {
   method: string
 }
 
-
-export type CustomDirectionSector = {
-  startDeg: number
-  endDeg: number
-  mainDeg: number
-}
-
-export type CustomSpotScoringProfile = {
-  waveDir?: CustomDirectionSector | null
-  windDir?: CustomDirectionSector | null
-}
 
 export type SurfScoreResult = {
   rating: number // 1..6
@@ -360,44 +366,37 @@ function scoreToLabelFromTables(total: number): string {
 // ---------------------
 // Direction score
 // ---------------------
-function directionScoreInSectorLinear(degFrom: number, sector: CustomDirectionSector): number {
-  const norm = (d: number) => ((d % 360) + 360) % 360
-  const dist = (a: number, b: number) => {
-    const d = Math.abs(norm(a) - norm(b))
-    return d > 180 ? 360 - d : d
-  }
-  const inSector = (a: number, start: number, end: number) => {
-    const aa = norm(a), s = norm(start), e = norm(end)
-    return s <= e ? aa >= s && aa <= e : aa >= s || aa <= e
-  }
-  if (!inSector(degFrom, sector.startDeg, sector.endDeg)) return 0
-  const span = (() => {
-    const s = norm(sector.startDeg), e = norm(sector.endDeg)
-    return s <= e ? e - s : 360 - s + e
-  })()
-  const maxDist = Math.max(1, Math.min(span / 2, Math.max(dist(sector.mainDeg, sector.startDeg), dist(sector.mainDeg, sector.endDeg))))
-  const dMain = dist(degFrom, sector.mainDeg)
-  const t = Math.max(0, 1 - dMain / maxDist)
-  return Math.max(1, Math.min(6, Math.round(1 + t * 5)))
-}
-
 if (process.env.NODE_ENV !== 'production') {
   const sanitySector: CustomDirectionSector = { startDeg: 315, endDeg: 45, mainDeg: 0 }
-  const outsideWave = directionScoreInSectorLinear(180, sanitySector)
-  const edgeWave = directionScoreInSectorLinear(315, sanitySector)
-  const mainWave = directionScoreInSectorLinear(0, sanitySector)
-  const badWind = directionScoreInSectorLinear(180, sanitySector)
-  console.assert(outsideWave === 0 && outsideWave <= 1, 'Sanity: outside-sector wave should trigger wave kill-switch condition')
-  console.assert(edgeWave === 1 && edgeWave <= 1, 'Sanity: edge wave should trigger wave kill-switch condition')
-  console.assert(mainWave > 1, 'Sanity: main wave direction should not trigger wave kill-switch condition')
-  console.assert(badWind <= 1, 'Sanity: bad wind can be <=1 but kill-switch remains wave-only')
+  const outsideWave = scoreCustomDirectionInSector(180, sanitySector)
+  const edgeWave = scoreCustomDirectionInSector(315, sanitySector)
+  const mainWave = scoreCustomDirectionInSector(0, sanitySector)
+  const wrapWave = scoreCustomDirectionInSector(350, sanitySector)
+  console.assert(outsideWave === 1, 'Sanity: outside-sector custom direction scores 1')
+  console.assert(edgeWave === 1, 'Sanity: sector edge custom direction scores 1')
+  console.assert(mainWave === 6, 'Sanity: main custom direction scores 6')
+  console.assert(wrapWave > 1, 'Sanity: wraparound sectors use circular distance')
+}
+
+
+function customSpotProfileForBreakdown(profile?: CustomSpotScoringProfile | null): CustomSpotScoringProfile | null {
+  const normalized = normalizeCustomSpotScoringProfile(profile)
+  if (!normalized) return null
+  return {
+    waveDir: normalized.waveDir
+      ? { startDeg: normalized.waveDir.startDeg, endDeg: normalized.waveDir.endDeg, mainDeg: normalized.waveDir.mainDeg }
+      : null,
+    windDir: normalized.windDir
+      ? { startDeg: normalized.windDir.startDeg, endDeg: normalized.windDir.endDeg, mainDeg: normalized.windDir.mainDeg }
+      : null,
+  }
 }
 
 function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, degFrom: number, customSpotProfile?: CustomSpotScoringProfile | null) {
-  const sector = tableKey === 'wave_dir' ? customSpotProfile?.waveDir : customSpotProfile?.windDir
+  const sector = normalizeCustomDirectionSector(tableKey === 'wave_dir' ? customSpotProfile?.waveDir ?? null : customSpotProfile?.windDir ?? null)
   // Custom-spot sectors are stored/treated as meteorological FROM directions (same as built-in waveguide tables).
-  // We pass the incoming degFrom through the same normalization + wraparound math in directionScoreInSectorLinear.
-  if (sector) return { picked: `${Math.round(normDeg(degFrom))}°`, score: directionScoreInSectorLinear(degFrom, sector) }
+  // Build and use a normalized virtual direction table shape so malformed rows do not silently default every score to 1.
+  if (sector) return { picked: `${Math.round(normDeg(degFrom))}°`, score: scoreCustomDirectionInSector(degFrom, sector) }
 
   const st = getSpotTables(spotKey)
   const arr: any[] = Array.isArray(st?.[tableKey]) ? st[tableKey] : []
@@ -590,8 +589,8 @@ function normalizeSwellComponent(raw: any, index: number): SwellMixComponent | n
   }
 }
 
-function componentHitsSpot(spotKey: string, s: SwellMixComponent) {
-  return s.height_m >= 0.35 && s.period_s >= 5 && dirBucketScore1to6('wave_dir', spotKey, s.direction_deg_from).score > 1
+function componentHitsSpot(spotKey: string, s: SwellMixComponent, customSpotProfile?: CustomSpotScoringProfile | null) {
+  return s.height_m >= 0.35 && s.period_s >= 5 && dirBucketScore1to6('wave_dir', spotKey, s.direction_deg_from, customSpotProfile).score > 1
 }
 
 function buildSwellMixSignature(args: {
@@ -602,6 +601,7 @@ function buildSwellMixSignature(args: {
   windDirFrom: number
   tideM?: number | null
   forecastTimeUtc?: string | null
+  customSpotProfile?: CustomSpotScoringProfile | null
 }): NormalizedSwellMixSignature {
   const source = Array.isArray(args.swells) && args.swells.length ? args.swells : [args.fallback]
   const swells = source
@@ -1169,8 +1169,9 @@ export function scoreSurf(params: {
     windDirFrom: wd,
     tideM: params.tideM,
     forecastTimeUtc: params.forecastTimeUtc,
+    customSpotProfile: params.customSpotProfile,
   })
-  const contributingSwells = rawSignature.swells.filter((s) => componentHitsSpot(spotKey, s))
+  const contributingSwells = rawSignature.swells.filter((s) => componentHitsSpot(spotKey, s, params.customSpotProfile))
   const scoreSwells = contributingSwells.length ? contributingSwells : rawSignature.swells
   const selectedOverride = params.selectedMainSwellIndex != null
     ? scoreSwells.find((s) => s.index === params.selectedMainSwellIndex)
@@ -1263,6 +1264,7 @@ export function scoreSurf(params: {
         best_record: exp.best_record,
       },
       tables: model.tables,
+      custom_spot_scoring_profile: customSpotProfileForBreakdown(params.customSpotProfile),
       selectedMainSwellIndex,
       contributingSwellIndexes: scoreSwells.map((x) => x.index),
       swellMixSignature,

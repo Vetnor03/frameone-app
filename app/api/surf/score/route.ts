@@ -1,7 +1,7 @@
 // app/api/surf/score/route.ts  (FULL FILE - copy/paste)
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
-import { scoreSurf, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
+import { scoreSurf, normalizeCustomSpotScoringProfile, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
 import { normalizeSurfRating1to6 } from '@/app/lib/surf/ratings'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
@@ -273,7 +273,7 @@ function customSpotProfileFromRow(
     | 'wind_main_deg'
   >
 ): CustomSpotScoringProfile {
-  return {
+  return normalizeCustomSpotScoringProfile({
     waveDir: {
       startDeg: Number(row.swell_sector_start_deg),
       endDeg: Number(row.swell_sector_end_deg),
@@ -284,7 +284,7 @@ function customSpotProfileFromRow(
       endDeg: Number(row.wind_sector_end_deg),
       mainDeg: Number(row.wind_main_deg),
     },
-  }
+  }) ?? {}
 }
 
 async function fetchCustomSpotsForUser(req: Request): Promise<CustomSurfSpotRow[]> {
@@ -1305,6 +1305,8 @@ function surfDebugConditionLog(args: {
 }) {
   const selected = selectedSwellFromPick(args.condition.marine, args.condition.picked)
   const displayed = args.displayedSwell ?? selected
+  const scoredTables = args.condition.scored?.breakdown?.tables ?? null
+  const profile = args.condition.scored?.breakdown?.custom_spot_scoring_profile ?? null
   console.info(args.cardMode === 'current' ? '[surf-score:current-card]' : '[surf-score:condition]', {
     spot_id: args.spotId,
     spot_name: args.spotName,
@@ -1314,6 +1316,11 @@ function surfDebugConditionLog(args: {
     compare_to_spot_name: args.compareToSpotName ?? args.series.coordinateResolution.matchedSpotLabel,
     card_mode: args.cardMode,
     scoring_spot_key: args.spotKey,
+    scoring_spot_type: profile ? 'custom' : 'normal',
+    custom_sector_config_loaded: !!profile,
+    swell_sector_start: profile?.waveDir?.startDeg ?? null,
+    swell_sector_end: profile?.waveDir?.endDeg ?? null,
+    swell_best_direction: profile?.waveDir?.mainDeg ?? null,
     selected_timestamp: args.condition.marine.time_utc,
     selected_timestamp_bucket: args.condition.marine.time_utc,
     selected_hour_offset: args.condition.hourOffset,
@@ -1343,8 +1350,26 @@ function surfDebugConditionLog(args: {
     wave_height_m: selected.height_m,
     wave_period_s: selected.period_s,
     swell_direction_deg_from: selected.direction_deg_from,
+    swell_direction_score: scoredTables?.wave_dir?.score ?? null,
     wind_speed_ms: args.condition.marine.wind_speed_ms,
+    wind_sector_start: profile?.windDir?.startDeg ?? null,
+    wind_sector_end: profile?.windDir?.endDeg ?? null,
+    wind_best_direction: profile?.windDir?.mainDeg ?? null,
     wind_direction_deg_from: args.condition.marine.wind_direction_deg_from,
+    wind_direction_score: scoredTables?.wind_dir?.score ?? null,
+    height_score: scoredTables?.wave_height?.score ?? null,
+    period_score: scoredTables?.wave_period?.score ?? null,
+    wind_speed_score: scoredTables?.wind_speed?.score ?? null,
+    tide_score: null,
+    raw_component_scores: scoredTables ? {
+      swell_direction: scoredTables.wave_dir?.score ?? null,
+      height: scoredTables.wave_height?.score ?? null,
+      period: scoredTables.wave_period?.score ?? null,
+      wind_speed: scoredTables.wind_speed?.score ?? null,
+      wind_direction: scoredTables.wind_dir?.score ?? null,
+      weighted_total: scoredTables.total ?? null,
+      label: scoredTables.label ?? null,
+    } : null,
     displayed_wave: args.displayedWaveLabel ?? (Number.isFinite(displayed.height_m) ? `${displayed.height_m.toFixed(1)}m` : null),
     displayed_period_s: args.displayedPeriodS ?? (Number.isFinite(displayed.period_s) ? Math.round(displayed.period_s) : null),
     displayed_wind_speed_ms: args.displayedWindSpeedRoundedMs ?? (Number.isFinite(args.displayedWindSpeedMs ?? args.condition.marine.wind_speed_ms) ? Math.round(args.displayedWindSpeedMs ?? args.condition.marine.wind_speed_ms) : null),
