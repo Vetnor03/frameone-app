@@ -8,6 +8,7 @@ import {
   type CustomDirectionSector,
   type CustomSpotScoringProfile,
 } from './surf/customSpotScoring'
+import { isValidRangeBound, rangeBucketMatches, rangeBucketSortValue } from './surf/rangeBuckets'
 
 export { normalizeCustomDirectionSector, normalizeCustomSpotScoringProfile, scoreCustomDirectionInSector } from './surf/customSpotScoring'
 
@@ -358,8 +359,8 @@ function tableRowShapeError(tableKey: RangeTableKey, row: unknown, index: number
   const min = row.min
   const max = row.max
   const score = Number(row.score_1_6)
-  if (min != null && !Number.isFinite(Number(min))) return `${tableKey}[${index}].min is not numeric/null`
-  if (max != null && !Number.isFinite(Number(max))) return `${tableKey}[${index}].max is not numeric/null`
+  if (!isValidRangeBound(min, 'min')) return `${tableKey}[${index}].min is not numeric/null/open`
+  if (!isValidRangeBound(max, 'max')) return `${tableKey}[${index}].max is not numeric/null/open`
   if (!Number.isFinite(score)) return `${tableKey}[${index}].score_1_6 is not numeric`
   return null
 }
@@ -542,17 +543,10 @@ function rangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number,
   const arrRaw: any[] = Array.isArray(st?.[tableKey]) ? st[tableKey] : []
   if (arrRaw.length) {
     const v = Number.isFinite(value) ? value : 0
-    const arr = [...arrRaw].sort((a, b) => Number(a?.min ?? Number.NEGATIVE_INFINITY) - Number(b?.min ?? Number.NEGATIVE_INFINITY))
+    const arr = [...arrRaw].sort((a, b) => rangeBucketSortValue(a) - rangeBucketSortValue(b))
 
     for (const b of arr) {
-      const mnRaw = b?.min
-      const mxRaw = b?.max
-      const mn = mnRaw === null || mnRaw === undefined ? Number.NEGATIVE_INFINITY : Number(mnRaw)
-      const mx = mxRaw === null || mxRaw === undefined ? Number.POSITIVE_INFINITY : Number(mxRaw)
-      if (!Number.isFinite(mn) || !Number.isFinite(mx)) continue
-      const minMatches = b?.min_exclusive === true ? v > mn : v >= mn
-      const maxMatches = profileSource === 'global_custom_generic' && b?.max_inclusive !== true ? v < mx : v <= mx
-      if (minMatches && maxMatches) {
+      if (rangeBucketMatches(b, v, { upperExclusive: profileSource === 'global_custom_generic' })) {
         return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
       }
     }

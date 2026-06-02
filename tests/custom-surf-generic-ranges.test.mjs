@@ -2,17 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import TABLES from '../app/lib/surf/waveguide_tables.json' with { type: 'json' }
+import { rangeBucketMatches } from '../app/lib/surf/rangeBuckets.ts'
 
 const PROFILE = 'GLOBAL_CUSTOM_SPOT'
 
 function scoreFromProfile(tableKey, value) {
   const rows = [...TABLES.spots[PROFILE][tableKey]].sort((a, b) => (a.min ?? Number.NEGATIVE_INFINITY) - (b.min ?? Number.NEGATIVE_INFINITY))
   const row = rows.find((b) => {
-    const min = b.min == null ? Number.NEGATIVE_INFINITY : Number(b.min)
-    const max = b.max == null ? Number.POSITIVE_INFINITY : Number(b.max)
-    const minMatches = b.min_exclusive === true ? value > min : value >= min
-    const maxMatches = b.max_inclusive === true ? value <= max : value < max
-    return minMatches && maxMatches
+    return rangeBucketMatches(b, value, { upperExclusive: true })
   })
 
   assert.ok(row, `${tableKey} has a bucket for ${value}`)
@@ -32,26 +29,34 @@ function assertContinuous(tableKey) {
 
 test('custom generic wave-period buckets are continuous and lower-inclusive upper-exclusive', () => {
   assertContinuous('wave_period')
-  assert.equal(scoreFromProfile('wave_period', 4.5), 1)
+  assert.equal(scoreFromProfile('wave_period', 0), 1)
+  assert.equal(scoreFromProfile('wave_period', 4.9), 1)
   assert.equal(scoreFromProfile('wave_period', 4.999), 1)
   assert.equal(scoreFromProfile('wave_period', 5.0), 2)
   assert.equal(scoreFromProfile('wave_period', 6.999), 2)
   assert.equal(scoreFromProfile('wave_period', 7.0), 3)
   assert.equal(scoreFromProfile('wave_period', 13.0), 6)
+  assert.equal(scoreFromProfile('wave_period', 20.0), 6)
 })
 
 test('custom generic wave-height buckets are continuous and lower-inclusive upper-exclusive', () => {
   assertContinuous('wave_height')
+  assert.equal(scoreFromProfile('wave_height', 0), 1)
+  assert.equal(scoreFromProfile('wave_height', 0.22), 1)
+  assert.equal(scoreFromProfile('wave_height', 0.26), 1)
+  assert.equal(scoreFromProfile('wave_height', 0.28), 1)
   assert.equal(scoreFromProfile('wave_height', 0.299), 1)
   assert.equal(scoreFromProfile('wave_height', 0.3), 2)
   assert.equal(scoreFromProfile('wave_height', 1.099), 3)
   assert.equal(scoreFromProfile('wave_height', 1.1), 4)
   assert.equal(scoreFromProfile('wave_height', 1.999), 5)
   assert.equal(scoreFromProfile('wave_height', 2.0), 6)
+  assert.equal(scoreFromProfile('wave_height', 3.0), 6)
 })
 
 test('custom generic wind-speed buckets are continuous and lower-inclusive upper-exclusive', () => {
   assertContinuous('wind_speed')
+  assert.equal(scoreFromProfile('wind_speed', 0), 6)
   assert.equal(scoreFromProfile('wind_speed', 1.999), 6)
   assert.equal(scoreFromProfile('wind_speed', 2.0), 5)
   assert.equal(scoreFromProfile('wind_speed', 3.999), 5)
@@ -60,4 +65,13 @@ test('custom generic wind-speed buckets are continuous and lower-inclusive upper
   assert.equal(scoreFromProfile('wind_speed', 5.5), 3)
   assert.equal(scoreFromProfile('wind_speed', 8.999), 2)
   assert.equal(scoreFromProfile('wind_speed', 9.0), 1)
+  assert.equal(scoreFromProfile('wind_speed', 12.0), 1)
+})
+
+test('range bucket matcher supports explicit open-ended bounds', () => {
+  assert.equal(rangeBucketMatches({ min: null, max: 5 }, 4.9, { upperExclusive: true }), true)
+  assert.equal(rangeBucketMatches({ min: null, max: 5 }, 5, { upperExclusive: true }), false)
+  assert.equal(rangeBucketMatches({ min: 13, max: null }, 20, { upperExclusive: true }), true)
+  assert.equal(rangeBucketMatches({ min: 'open', max: 0.3 }, 0.22, { upperExclusive: true }), true)
+  assert.equal(rangeBucketMatches({ min: '-Infinity', max: 2 }, 0, { upperExclusive: true }), true)
 })
