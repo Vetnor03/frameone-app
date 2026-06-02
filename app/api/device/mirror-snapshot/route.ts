@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
+import { buildFrameConfigPayload } from '@/app/api/device/frame-config/builder'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1794,7 +1795,7 @@ export async function GET(req: Request) {
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
     const { data: authData, error: authError } = await supabase.auth.getUser(bearer)
-    if (authError || !authData.user) return NextResponse.json({ error: 'Invalid user token' }, { status: 401 })
+    if (authError || !authData.user) return NextResponse.json({ error: 'Invalid or expired user token' }, { status: 401 })
 
     const { data: member, error: memberError } = await supabase
       .from('device_members')
@@ -1803,7 +1804,7 @@ export async function GET(req: Request) {
       .eq('user_id', authData.user.id)
       .maybeSingle()
     if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 })
-    if (!member) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
+    if (!member) return NextResponse.json({ error: 'User is not a member of this device' }, { status: 403 })
 
     const [{ data: deviceRow, error: deviceError }, { data: statusRow, error: statusError }] = await Promise.all([
       supabase.from('devices').select('device_token').eq('device_id', deviceId).maybeSingle(),
@@ -1814,10 +1815,11 @@ export async function GET(req: Request) {
         .maybeSingle(),
     ])
     if (deviceError) return NextResponse.json({ error: deviceError.message }, { status: 500 })
+    if (!deviceRow) return NextResponse.json({ error: 'Device record not found' }, { status: 404 })
     if (statusError) return NextResponse.json({ error: statusError.message }, { status: 500 })
 
     const origin = appOrigin(req)
-    const frameConfig = asRecord(await fetchJson(`${origin}/api/device/frame-config?device_id=${encodeURIComponent(deviceId)}`))
+    const frameConfig = asRecord(await buildFrameConfigPayload(supabase, deviceId))
     const settings = asRecord(frameConfig.settings_json)
     const modules = asRecord(settings.modules)
     const cells = Array.isArray(settings.cells) ? settings.cells.map(asRecord) : []
