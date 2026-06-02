@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { spotIdFromLabel } from '@/app/lib/surf/spots'
+import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload } from '@/app/api/device/frame-config/builder'
@@ -1299,6 +1299,7 @@ function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSetti
   const spotId = configuredSpotId || (spot ? spotIdFromLabel(spot) ?? '' : '')
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
+  const isBuiltInSpot = !!spotId && !!SURF_SPOTS[spotId]
   const url = new URL('/api/surf/score', origin)
 
   if (spotIdOverride) url.searchParams.set('spotId', spotIdOverride)
@@ -1306,8 +1307,11 @@ function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSetti
   else if (spot) url.searchParams.set('spot', spot)
   else url.searchParams.set('spot', 'Surf')
 
-  if (!spotIdOverride && lat != null) url.searchParams.set('lat', String(lat))
-  if (!spotIdOverride && lon != null) url.searchParams.set('lon', String(lon))
+  // Built-in spots are resolved server-side from the shared surf spot registry.
+  // Do not forward stale/default coordinates such as lat=0/lon=0 from mirror config,
+  // because query lat/lon must only describe true custom spots.
+  if (!spotIdOverride && !isBuiltInSpot && lat != null) url.searchParams.set('lat', String(lat))
+  if (!spotIdOverride && !isBuiltInSpot && lon != null) url.searchParams.set('lon', String(lon))
 
   url.searchParams.set('hours', '4')
   url.searchParams.set('frame', '1')
