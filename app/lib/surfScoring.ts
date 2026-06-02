@@ -19,7 +19,10 @@ export type {
 } from './surf/customSpotScoring'
 
 type Dir8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW'
+type RangeTableKey = 'wave_height' | 'wave_period' | 'wind_speed'
+
 const GLOBAL_CUSTOM_SPOT_RANGE_PROFILE = 'GLOBAL_CUSTOM_SPOT'
+const RANGE_TABLE_KEYS: RangeTableKey[] = ['wave_height', 'wave_period', 'wind_speed']
 
 export type SwellMixComponent = {
   index: number
@@ -325,6 +328,68 @@ function pickBucket(buckets: string[], value: number): string {
 // ---------------------
 // Tables access (new + current + legacy), mojibake-safe
 // ---------------------
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function rangeProfileImportDebugContext(spotKey: string, profile: unknown) {
+  const tablesUnknown: unknown = TABLES
+  const tablesRecord = isPlainRecord(tablesUnknown) ? tablesUnknown : null
+  const spotsMap = isPlainRecord(tablesRecord?.spots) ? tablesRecord.spots as Record<string, unknown> : null
+  return {
+    requested_spot_key: spotKey,
+    normalized_spot_key: normalizeSpotKey(spotKey),
+    imported_tables_type: Array.isArray(tablesUnknown) ? 'array' : typeof tablesUnknown,
+    root_keys: tablesRecord ? Object.keys(tablesRecord).slice(0, 12) : [],
+    spots_map_loaded: !!spotsMap,
+    spots_count: spotsMap ? Object.keys(spotsMap).length : 0,
+    global_custom_spot_present: !!(spotsMap && findKeyByNormalized(spotsMap, GLOBAL_CUSTOM_SPOT_RANGE_PROFILE)),
+    resolved_profile_keys: isPlainRecord(profile) ? Object.keys(profile) : [],
+  }
+}
+
+function tableRowShapeError(tableKey: RangeTableKey, row: unknown, index: number): string | null {
+  if (!isPlainRecord(row)) return `${tableKey}[${index}] is not an object`
+  if (!Object.prototype.hasOwnProperty.call(row, 'min')) return `${tableKey}[${index}] is missing min`
+  if (!Object.prototype.hasOwnProperty.call(row, 'max')) return `${tableKey}[${index}] is missing max`
+  if (!Object.prototype.hasOwnProperty.call(row, 'score_1_6')) return `${tableKey}[${index}] is missing score_1_6`
+
+  const min = row.min
+  const max = row.max
+  const score = Number(row.score_1_6)
+  if (min != null && !Number.isFinite(Number(min))) return `${tableKey}[${index}].min is not numeric/null`
+  if (max != null && !Number.isFinite(Number(max))) return `${tableKey}[${index}].max is not numeric/null`
+  if (!Number.isFinite(score)) return `${tableKey}[${index}].score_1_6 is not numeric`
+  return null
+}
+
+function validateCustomRangeProfile(profile: unknown, spotKey: string) {
+  if (!isPlainRecord(profile)) {
+    throw new Error(`Global custom spot range profile ${spotKey} is missing or not an object`)
+  }
+
+  for (const key of RANGE_TABLE_KEYS) {
+    const table = profile[key]
+    if (!Array.isArray(table) || table.length === 0) {
+      throw new Error(`Global custom spot range profile ${spotKey}.${key} is missing or not a non-empty array`)
+    }
+
+    const rowError = table.map((row: unknown, index: number) => tableRowShapeError(key, row, index)).find(Boolean)
+    if (rowError) throw new Error(`Global custom spot range profile ${spotKey}.${rowError}`)
+  }
+}
+
+function logCustomRangeProfileError(error: unknown, context: Record<string, unknown>) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error('[surf-score:custom-range-profile:error]', {
+    message,
+    name: error instanceof Error ? error.name : null,
+    stack: error instanceof Error ? error.stack : null,
+    ...context,
+  })
+}
+
 function getSpotTables(spotKey: string): any | null {
   const want = normalizeSpotKey(spotKey)
   const T: any = TABLES as any
@@ -430,10 +495,24 @@ function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, 
 // ---------------------
 // Range score (min/max arrays) + legacy fallback
 // ---------------------
-function rangeScore1to6(tableKey: 'wave_height' | 'wave_period' | 'wind_speed', spotKey: string, value: number, opts?: { profileSource?: 'global_custom_generic' | 'spot_specific_table' }) {
-  const st = getSpotTables(spotKey)
+function rangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number, opts?: { profileSource?: 'global_custom_generic' | 'spot_specific_table' }) {
   const profileSource = opts?.profileSource ?? 'spot_specific_table'
   const source = profileSource === 'global_custom_generic' ? 'generic_custom_table' : 'spot_specific_table'
+  const st = getSpotTables(spotKey)
+
+  if (profileSource === 'global_custom_generic') {
+    try {
+      validateCustomRangeProfile(st, spotKey)
+    } catch (error) {
+      logCustomRangeProfileError(error, {
+        table_key: tableKey,
+        value,
+        profile_source: profileSource,
+        ...rangeProfileImportDebugContext(spotKey, st),
+      })
+      throw error
+    }
+  }
 
   const mkLabel = (b: any) => {
     const lbl = String(b?.label ?? '').trim()
@@ -550,9 +629,25 @@ function buildModelScore(args: {
   const directionProfileSource: 'custom_sector' | 'spot_specific_table' = isCustomSpot ? 'custom_sector' : 'spot_specific_table'
 
   const sWaveDir = dirBucketScore1to6('wave_dir', args.spotKey, args.sd, args.customSpotProfile)
-  const sWaveH = rangeScore1to6('wave_height', rangeSpotKey, args.h, { profileSource: rangeProfileSource })
-  const sWaveP = rangeScore1to6('wave_period', rangeSpotKey, args.p, { profileSource: rangeProfileSource })
-  const sWindS = rangeScore1to6('wind_speed', rangeSpotKey, args.ws, { profileSource: rangeProfileSource })
+  let sWaveH: ReturnType<typeof rangeScore1to6>
+  let sWaveP: ReturnType<typeof rangeScore1to6>
+  let sWindS: ReturnType<typeof rangeScore1to6>
+  try {
+    sWaveH = rangeScore1to6('wave_height', rangeSpotKey, args.h, { profileSource: rangeProfileSource })
+    sWaveP = rangeScore1to6('wave_period', rangeSpotKey, args.p, { profileSource: rangeProfileSource })
+    sWindS = rangeScore1to6('wind_speed', rangeSpotKey, args.ws, { profileSource: rangeProfileSource })
+  } catch (error) {
+    if (rangeProfileSource === 'global_custom_generic') {
+      logCustomRangeProfileError(error, {
+        phase: 'build_model_score_range_lookup',
+        scoring_spot_key: args.spotKey,
+        range_profile_spot_used: rangeSpotKey,
+        inputs: { wave_height_m: args.h, wave_period_s: args.p, wind_speed_ms: args.ws },
+        ...rangeProfileImportDebugContext(rangeSpotKey, getSpotTables(rangeSpotKey)),
+      })
+    }
+    throw error
+  }
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
 
   let total =
