@@ -2758,7 +2758,14 @@ export async function GET(req: Request) {
         },
       },
     }, compactOn)
-  } catch (e: any) {
-    return jsonNoStore({ error: String(e?.message ?? e) }, { status: 500 })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('[surf-score:error]', {
+      message,
+      name: e instanceof Error ? e.name : null,
+      stack: e instanceof Error ? e.stack : null,
+      url: req.url,
+    })
+    return jsonNoStore({ error: message }, { status: 500 })
   }
 }
