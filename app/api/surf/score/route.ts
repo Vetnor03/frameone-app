@@ -1,6 +1,6 @@
 // app/api/surf/score/route.ts  (FULL FILE - copy/paste)
 import { NextResponse } from 'next/server'
-import { SURF_SPOTS, findSpotByLabel, type SurfSpot } from '@/app/lib/surf/spots'
+import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
 import { scoreSurf, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
 import { normalizeSurfRating1to6 } from '@/app/lib/surf/ratings'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
@@ -453,7 +453,7 @@ type ForecastCoordinateResolution = {
   inputLon: number
   requestLat: number
   requestLon: number
-  source: 'exact' | 'near_builtin_spot'
+  source: 'exact'
   matchedSpotId: string | null
   matchedSpotLabel: string | null
   distanceKm: number | null
@@ -496,49 +496,11 @@ function requireForecastNumber(value: number, field: string, timeUtc: string) {
   return value
 }
 
-function haversineKm(a: LatLon, b: LatLon) {
-  const R = 6371
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180
-  const dLon = ((b.lon - a.lon) * Math.PI) / 180
-  const lat1 = (a.lat * Math.PI) / 180
-  const lat2 = (b.lat * Math.PI) / 180
-  const sinDLat = Math.sin(dLat / 2)
-  const sinDLon = Math.sin(dLon / 2)
-  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
-}
-
-const NEAR_IDENTICAL_FORECAST_SPOT_KM = 0.25
-
-function nearestBuiltInSurfSpot(lat: number, lon: number, maxDistanceKm = NEAR_IDENTICAL_FORECAST_SPOT_KM) {
-  const point = { lat, lon }
-  let best: { spot: SurfSpot; distanceKm: number } | null = null
-
-  for (const spot of Object.values(SURF_SPOTS)) {
-    if (!spot || spot.spotId === TODAYS_BEST_ID) continue
-    const distanceKm = haversineKm(point, { lat: spot.lat, lon: spot.lon })
-    if (distanceKm > maxDistanceKm) continue
-    if (!best || distanceKm < best.distanceKm) best = { spot, distanceKm }
-  }
-
-  return best
-}
-
 function resolveForecastCoordinates(lat: number, lon: number): ForecastCoordinateResolution {
-  const nearest = nearestBuiltInSurfSpot(lat, lon)
-  if (nearest) {
-    return {
-      inputLat: lat,
-      inputLon: lon,
-      requestLat: nearest.spot.lat,
-      requestLon: nearest.spot.lon,
-      source: 'near_builtin_spot',
-      matchedSpotId: nearest.spot.spotId,
-      matchedSpotLabel: nearest.spot.label,
-      distanceKm: nearest.distanceKm,
-    }
-  }
-
+  // Preserve the caller's exact coordinates for the Open-Meteo request. In
+  // particular, custom spots must not snap to nearby built-in surf spots: they
+  // should use their own stored lat/lon and whichever forecast grid Open-Meteo
+  // resolves for those coordinates.
   return {
     inputLat: lat,
     inputLon: lon,
@@ -1306,23 +1268,20 @@ function bestNormalizedCondition(
 
 function spotKeyForResolvedForecast(
   fallbackSpotKey: string,
-  series: MarineSeries,
-  customSpotProfile: CustomSpotScoringProfile | null
+  _series: MarineSeries,
+  _customSpotProfile: CustomSpotScoringProfile | null
 ) {
-  const matched = series.coordinateResolution.matchedSpotLabel
-  if (customSpotProfile && matched) return matched
   return fallbackSpotKey
 }
 
 function scoringProfileForResolvedForecast(
-  series: MarineSeries,
+  _series: MarineSeries,
   customSpotProfile: CustomSpotScoringProfile | null
 ) {
-  // When a custom spot resolves to a near-identical built-in spot, use the
-  // built-in spot's forecast/scoring path for the selected condition so raw
-  // displayed wave/period/wind values match the corresponding built-in card.
-  // Custom sector profiles still apply for custom-only forecast points.
-  return customSpotProfile && series.coordinateResolution.matchedSpotLabel ? null : customSpotProfile
+  // Custom spot sectors are scoring inputs only. They should affect the
+  // rating/score while the raw displayed wave, period, and wind values continue
+  // to come directly from the forecast bundle selected for the spot's own grid.
+  return customSpotProfile
 }
 
 function surfDebugConditionLog(args: {
@@ -2509,15 +2468,22 @@ export async function GET(req: Request) {
         if (!cs) return jsonNoStore({ error: 'Unknown spotId', spotId: spotIdQ }, { status: 400 })
         spotId = String(cs.id)
         spotLabel = String(cs.name)
-        if (latQ != null && lonQ != null) {
-          lat = latQ
-          lon = lonQ
-          geoSource = 'query_latlon_custom'
-        } else {
-          lat = Number(cs.lat)
-          lon = Number(cs.lon)
-          geoSource = 'spotId_custom'
+        lat = Number(cs.lat)
+        lon = Number(cs.lon)
+        geoSource = latQ != null || lonQ != null ? 'spotId_custom_ignored_query_latlon' : 'spotId_custom'
+
+        if ((latQ != null && latQ !== lat) || (lonQ != null && lonQ !== lon)) {
+          console.warn('[surf-score:coordinates]', {
+            message: 'Ignoring query lat/lon for custom surf spot; using stored custom spot coordinates',
+            spot_id: spotId,
+            spot_name: spotLabel,
+            request_lat: latQ,
+            request_lon: lonQ,
+            resolved_lat: lat,
+            resolved_lon: lon,
+          })
         }
+
         customSpotProfile = customSpotProfileFromRow(cs)
       }
     } else if (latQ != null && lonQ != null) {
