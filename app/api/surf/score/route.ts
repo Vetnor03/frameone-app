@@ -1318,8 +1318,11 @@ function scoringProfileForResolvedForecast(
   series: MarineSeries,
   customSpotProfile: CustomSpotScoringProfile | null
 ) {
-  void series
-  return customSpotProfile
+  // When a custom spot resolves to a near-identical built-in spot, use the
+  // built-in spot's forecast/scoring path for the selected condition so raw
+  // displayed wave/period/wind values match the corresponding built-in card.
+  // Custom sector profiles still apply for custom-only forecast points.
+  return customSpotProfile && series.coordinateResolution.matchedSpotLabel ? null : customSpotProfile
 }
 
 function surfDebugConditionLog(args: {
