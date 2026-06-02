@@ -1285,31 +1285,33 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
   }
 }
 
-async function surfDetail(
-  origin: string,
-  cfg: UnknownRecord,
-  bearer: string,
-  language: string,
-  surfSettings: UnknownRecord
-): Promise<Detail> {
+function isTodaysBestSurfConfig(spotId: string, spot: string) {
+  if (spotId.toLowerCase() === '__todays_best__') return true
+
+  const normalizedSpot = spot.trim().toLowerCase()
+  return normalizedSpot === "today's best" || normalizedSpot === 'todays best' || normalizedSpot === 'dagens beste'
+}
+
+function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSettings: UnknownRecord, spotIdOverride?: string) {
   const spot = asString(cfg.spot || cfg.label).trim()
   const configuredSpotId = asString(cfg.spotId).trim()
   const spotId = configuredSpotId || (spot ? spotIdFromLabel(spot) ?? '' : '')
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
   const url = new URL('/api/surf/score', origin)
-  if (spotId) url.searchParams.set('spotId', spotId)
-  else if (spot) url.searchParams.set('spot', spot)
-  if (lat != null) url.searchParams.set('lat', String(lat))
-  if (lon != null) url.searchParams.set('lon', String(lon))
-  // Match the physical frame firmware, which asks for the best surf in the next 4 hours.
-  url.searchParams.set('hours', '4')
-  url.searchParams.set('dayparts', '1')
-  url.searchParams.set('daily', '1')
-  url.searchParams.set('days', '5')
-  url.searchParams.set('compact', '1')
 
-  if (spotId === '__todays_best__') {
+  if (spotIdOverride) url.searchParams.set('spotId', spotIdOverride)
+  else if (spotId) url.searchParams.set('spotId', spotId)
+  else if (spot) url.searchParams.set('spot', spot)
+  else url.searchParams.set('spot', 'Surf')
+
+  if (!spotIdOverride && lat != null) url.searchParams.set('lat', String(lat))
+  if (!spotIdOverride && lon != null) url.searchParams.set('lon', String(lon))
+
+  url.searchParams.set('hours', '4')
+  url.searchParams.set('frame', '1')
+
+  if (!spotIdOverride && isTodaysBestSurfConfig(spotId, spot)) {
     const fuelPenalty = truthy(surfSettings.fuelPenalty)
     const homeLat = asNumber(surfSettings.homeLat)
     const homeLon = asNumber(surfSettings.homeLon)
@@ -1320,7 +1322,43 @@ async function surfDetail(
     }
   }
 
-  const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${bearer}` } }))
+  return { url, spot, spotId, isTodaysBest: isTodaysBestSurfConfig(spotId, spot) }
+}
+
+function resolvedSurfSpotId(payload: UnknownRecord) {
+  const picked = asRecord(payload.picked)
+  return asString(payload.spotId || payload.spot_id || picked.spotId || picked.spot_id).trim()
+}
+
+async function surfDetail(
+  origin: string,
+  cfg: UnknownRecord,
+  authToken: string,
+  language: string,
+  surfSettings: UnknownRecord
+): Promise<Detail> {
+  const base = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings)
+  const headers = { Authorization: `Bearer ${authToken}` }
+
+  // Mirror the firmware's render path: Today's Best is first resolved with the exact
+  // physical-frame query, then the winning spot is fetched again for daypart/daily data.
+  let data = asRecord(await fetchJson(base.url.toString(), { headers }))
+  if (base.isTodaysBest) {
+    const winnerSpotId = resolvedSurfSpotId(data)
+    if (winnerSpotId) {
+      const winner = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, winnerSpotId)
+      winner.url.searchParams.set('dayparts', '1')
+      winner.url.searchParams.set('daily', '1')
+      winner.url.searchParams.set('days', '5')
+      data = asRecord(await fetchJson(winner.url.toString(), { headers }))
+    }
+  } else {
+    base.url.searchParams.set('dayparts', '1')
+    base.url.searchParams.set('daily', '1')
+    base.url.searchParams.set('days', '5')
+    data = asRecord(await fetchJson(base.url.toString(), { headers }))
+  }
+
   const forecast = asRecord(data.forecast)
   const inputs = asRecord(data.inputs)
   const rating = normalizeSurfRating1to6(data).rating
@@ -1372,7 +1410,7 @@ async function surfDetail(
   return {
     module: 'surf',
     primary: String(rating ?? '--'),
-    secondary: asString(data.spot, spot || (language === 'no' ? 'Surf' : 'Surf')),
+    secondary: asString(data.spot, base.spot || (language === 'no' ? 'Surf' : 'Surf')),
     tertiary: waveRange,
     rating,
     waveRange,
@@ -1392,7 +1430,7 @@ async function surfDetail(
     windSpeedMs: asNumber(inputs.wind_speed_ms) ?? undefined,
     swellDirectionDeg: asNumber(inputs.swell_direction_deg) ?? undefined,
     windDirectionDeg: asNumber(inputs.wind_direction_deg) ?? undefined,
-    isTodaysBest: spotId === '__todays_best__',
+    isTodaysBest: base.isTodaysBest,
   }
 }
 
@@ -1797,7 +1835,7 @@ export async function GET(req: Request) {
       try {
         if (parsed.base === 'date') detailsBySlot[String(slot)] = { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
         else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language)
-        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, bearer, language, asRecord(modules.surf_settings))
+        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, deviceToken || bearer, language, asRecord(modules.surf_settings))
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
