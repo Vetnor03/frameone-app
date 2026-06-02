@@ -19,7 +19,7 @@ export type {
 } from './surf/customSpotScoring'
 
 type Dir8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW'
-type TableKey = 'wave_dir' | 'wave_height' | 'wave_period' | 'wind_dir' | 'wind_speed'
+const GLOBAL_CUSTOM_SPOT_RANGE_PROFILE = 'GLOBAL_CUSTOM_SPOT'
 
 export type SwellMixComponent = {
   index: number
@@ -127,10 +127,14 @@ type ScoreBreakdown = {
 
   tables?: {
     wave_dir: { picked: string; score: number }
-    wave_height: { bucket: string; score: number }
-    wave_period: { bucket: string; score: number }
+    wave_height: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
+    wave_period: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
     wind_dir: { picked: string; score: number }
-    wind_speed: { bucket: string; score: number }
+    wind_speed: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
+    direction_profile_source?: 'custom_sector' | 'spot_specific_table'
+    range_profile_source?: 'global_custom_generic' | 'spot_specific_table' | 'legacy_table' | 'missing_default'
+    range_profile_spot_used?: string
+    fallback_default_profile_used?: boolean
     total: number
     label: string
     weights: {
@@ -426,8 +430,10 @@ function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, 
 // ---------------------
 // Range score (min/max arrays) + legacy fallback
 // ---------------------
-function rangeScore1to6(tableKey: 'wave_height' | 'wave_period' | 'wind_speed', spotKey: string, value: number) {
+function rangeScore1to6(tableKey: 'wave_height' | 'wave_period' | 'wind_speed', spotKey: string, value: number, opts?: { profileSource?: 'global_custom_generic' | 'spot_specific_table' }) {
   const st = getSpotTables(spotKey)
+  const profileSource = opts?.profileSource ?? 'spot_specific_table'
+  const source = profileSource === 'global_custom_generic' ? 'generic_custom_table' : 'spot_specific_table'
 
   const mkLabel = (b: any) => {
     const lbl = String(b?.label ?? '').trim()
@@ -444,28 +450,39 @@ function rangeScore1to6(tableKey: 'wave_height' | 'wave_period' | 'wind_speed', 
   const arrRaw: any[] = Array.isArray(st?.[tableKey]) ? st[tableKey] : []
   if (arrRaw.length) {
     const v = Number.isFinite(value) ? value : 0
-    const arr = [...arrRaw].sort((a, b) => Number(a?.min ?? 0) - Number(b?.min ?? 0))
+    const arr = [...arrRaw].sort((a, b) => Number(a?.min ?? Number.NEGATIVE_INFINITY) - Number(b?.min ?? Number.NEGATIVE_INFINITY))
 
     for (const b of arr) {
-      const mn = Number(b?.min ?? Number.NEGATIVE_INFINITY)
+      const mnRaw = b?.min
       const mxRaw = b?.max
+      const mn = mnRaw === null || mnRaw === undefined ? Number.NEGATIVE_INFINITY : Number(mnRaw)
       const mx = mxRaw === null || mxRaw === undefined ? Number.POSITIVE_INFINITY : Number(mxRaw)
       if (!Number.isFinite(mn) || !Number.isFinite(mx)) continue
-      if (v >= mn && v <= mx) {
-        return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6) }
+      const minMatches = b?.min_exclusive === true ? v > mn : v >= mn
+      const maxMatches = profileSource === 'global_custom_generic' && b?.max_inclusive !== true ? v < mx : v <= mx
+      if (minMatches && maxMatches) {
+        return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
       }
+    }
+
+    if (profileSource === 'global_custom_generic') {
+      throw new Error(`Global custom spot range profile ${spotKey}.${tableKey} has no bucket for value ${v}`)
     }
 
     for (const b of arr) {
       const mn = Number(b?.min)
       if (!Number.isFinite(mn)) continue
       if (v <= mn) {
-        return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6) }
+        return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
       }
     }
 
     const last = arr[arr.length - 1]
-    return { bucket: mkLabel(last), score: clamp(Math.round(Number(last?.score_1_6 ?? 1)), 1, 6) }
+    return { bucket: mkLabel(last), score: clamp(Math.round(Number(last?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
+  }
+
+  if (profileSource === 'global_custom_generic') {
+    throw new Error(`Global custom spot range profile ${spotKey}.${tableKey} is missing`)
   }
 
   const legacyTable = (TABLES as any)?.tables?.[tableKey]
@@ -474,10 +491,10 @@ function rangeScore1to6(tableKey: 'wave_height' | 'wave_period' | 'wind_speed', 
     const bucket = pickBucket(buckets, value)
     const row = legacyTable?.spots?.[normalizeSpotKey(spotKey)]
     const sc = Number(row?.[bucket] ?? 1)
-    return { bucket, score: clamp(Math.round(sc), 1, 6) }
+    return { bucket, score: clamp(Math.round(sc), 1, 6), source: 'legacy_table', profile_source: 'legacy_table' as const, profile_spot_used: normalizeSpotKey(spotKey) }
   }
 
-  return { bucket: '', score: 1 }
+  return { bucket: '', score: 1, source: 'missing_default', profile_source: 'missing_default' as const, profile_spot_used: normalizeSpotKey(spotKey) }
 }
 
 // ---------------------
@@ -527,10 +544,15 @@ function buildModelScore(args: {
 }) {
   const weights = getWeights()
 
+  const isCustomSpot = !!normalizeCustomSpotScoringProfile(args.customSpotProfile)
+  const rangeSpotKey = isCustomSpot ? GLOBAL_CUSTOM_SPOT_RANGE_PROFILE : args.spotKey
+  const rangeProfileSource: 'global_custom_generic' | 'spot_specific_table' = isCustomSpot ? 'global_custom_generic' : 'spot_specific_table'
+  const directionProfileSource: 'custom_sector' | 'spot_specific_table' = isCustomSpot ? 'custom_sector' : 'spot_specific_table'
+
   const sWaveDir = dirBucketScore1to6('wave_dir', args.spotKey, args.sd, args.customSpotProfile)
-  const sWaveH = rangeScore1to6('wave_height', args.spotKey, args.h)
-  const sWaveP = rangeScore1to6('wave_period', args.spotKey, args.p)
-  const sWindS = rangeScore1to6('wind_speed', args.spotKey, args.ws)
+  const sWaveH = rangeScore1to6('wave_height', rangeSpotKey, args.h, { profileSource: rangeProfileSource })
+  const sWaveP = rangeScore1to6('wave_period', rangeSpotKey, args.p, { profileSource: rangeProfileSource })
+  const sWindS = rangeScore1to6('wind_speed', rangeSpotKey, args.ws, { profileSource: rangeProfileSource })
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
 
   let total =
@@ -555,10 +577,14 @@ function buildModelScore(args: {
     rating,
     tables: {
       wave_dir: { picked: sWaveDir.picked, score: sWaveDir.score },
-      wave_height: { bucket: sWaveH.bucket, score: sWaveH.score },
-      wave_period: { bucket: sWaveP.bucket, score: sWaveP.score },
+      wave_height: { bucket: sWaveH.bucket, score: sWaveH.score, source: sWaveH.source, profile_source: sWaveH.profile_source, profile_spot_used: sWaveH.profile_spot_used },
+      wave_period: { bucket: sWaveP.bucket, score: sWaveP.score, source: sWaveP.source, profile_source: sWaveP.profile_source, profile_spot_used: sWaveP.profile_spot_used },
       wind_dir: { picked: sWindDir.picked, score: sWindDir.score },
-      wind_speed: { bucket: sWindS.bucket, score: sWindS.score },
+      wind_speed: { bucket: sWindS.bucket, score: sWindS.score, source: sWindS.source, profile_source: sWindS.profile_source, profile_spot_used: sWindS.profile_spot_used },
+      direction_profile_source: directionProfileSource,
+      range_profile_source: rangeProfileSource,
+      range_profile_spot_used: rangeSpotKey,
+      fallback_default_profile_used: [sWaveH, sWaveP, sWindS].some((s) => s.source === 'missing_default'),
       total,
       label,
       weights,
