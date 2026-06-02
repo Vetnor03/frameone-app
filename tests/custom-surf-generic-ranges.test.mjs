@@ -32,9 +32,10 @@ function assertContinuous(tableKey) {
 
 test('custom generic wave-period buckets are continuous and lower-inclusive upper-exclusive', () => {
   assertContinuous('wave_period')
-  assert.equal(scoreFromProfile('wave_period', 4.85), 1)
+  assert.equal(scoreFromProfile('wave_period', 4.5), 1)
   assert.equal(scoreFromProfile('wave_period', 4.999), 1)
   assert.equal(scoreFromProfile('wave_period', 5.0), 2)
+  assert.equal(scoreFromProfile('wave_period', 6.999), 2)
   assert.equal(scoreFromProfile('wave_period', 7.0), 3)
   assert.equal(scoreFromProfile('wave_period', 13.0), 6)
 })
@@ -43,16 +44,20 @@ test('custom generic wave-height buckets are continuous and lower-inclusive uppe
   assertContinuous('wave_height')
   assert.equal(scoreFromProfile('wave_height', 0.299), 1)
   assert.equal(scoreFromProfile('wave_height', 0.3), 2)
+  assert.equal(scoreFromProfile('wave_height', 1.099), 3)
   assert.equal(scoreFromProfile('wave_height', 1.1), 4)
+  assert.equal(scoreFromProfile('wave_height', 1.999), 5)
   assert.equal(scoreFromProfile('wave_height', 2.0), 6)
 })
 
-test('custom generic wind-speed buckets are continuous and keep 9.0 in the 7-9 bucket', () => {
+test('custom generic wind-speed buckets are continuous and lower-inclusive upper-exclusive', () => {
   assertContinuous('wind_speed')
-  assert.equal(scoreFromProfile('wind_speed', 0), 6)
+  assert.equal(scoreFromProfile('wind_speed', 1.999), 6)
   assert.equal(scoreFromProfile('wind_speed', 2.0), 5)
+  assert.equal(scoreFromProfile('wind_speed', 3.999), 5)
   assert.equal(scoreFromProfile('wind_speed', 4.0), 4)
+  assert.equal(scoreFromProfile('wind_speed', 5.499), 4)
   assert.equal(scoreFromProfile('wind_speed', 5.5), 3)
-  assert.equal(scoreFromProfile('wind_speed', 9.0), 2)
-  assert.equal(scoreFromProfile('wind_speed', 9.001), 1)
+  assert.equal(scoreFromProfile('wind_speed', 8.999), 2)
+  assert.equal(scoreFromProfile('wind_speed', 9.0), 1)
 })

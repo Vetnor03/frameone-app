@@ -60,8 +60,8 @@
         { "label": "2-4", "min": 2.0, "max": 4.0, "score_1_6": 5 },
         { "label": "4-5.5", "min": 4.0, "max": 5.5, "score_1_6": 4 },
         { "label": "5.5-7", "min": 5.5, "max": 7.0, "score_1_6": 3 },
-        { "label": "7-9", "min": 7.0, "max": 9.0, "max_inclusive": true, "score_1_6": 2 },
-        { "label": ">9", "min": 9.0, "min_exclusive": true, "max": null, "score_1_6": 1 }
+        { "label": "7-9", "min": 7.0, "max": 9.0, "score_1_6": 2 },
+        { "label": "9+", "min": 9.0, "max": null, "score_1_6": 1 }
       ]
     },
 

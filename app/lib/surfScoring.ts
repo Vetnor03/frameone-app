@@ -390,6 +390,19 @@ function logCustomRangeProfileError(error: unknown, context: Record<string, unkn
   })
 }
 
+function fallbackRangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number, reason: string, profileSource: 'global_custom_generic' | 'spot_specific_table' = 'global_custom_generic') {
+  const source = profileSource === 'global_custom_generic' ? 'generic_custom_table_fallback' : 'spot_specific_table_fallback'
+  return {
+    bucket: `fallback:${tableKey}`,
+    score: 1,
+    source,
+    profile_source: profileSource,
+    profile_spot_used: spotKey,
+    fallback_reason: reason,
+    fallback_value: Number.isFinite(value) ? value : 0,
+  }
+}
+
 function getSpotTables(spotKey: string): any | null {
   const want = normalizeSpotKey(spotKey)
   const T: any = TABLES as any
@@ -545,7 +558,15 @@ function rangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number,
     }
 
     if (profileSource === 'global_custom_generic') {
-      throw new Error(`Global custom spot range profile ${spotKey}.${tableKey} has no bucket for value ${v}`)
+      const error = new Error(`Global custom spot range profile ${spotKey}.${tableKey} has no bucket for value ${v}`)
+      logCustomRangeProfileError(error, {
+        phase: 'range_score_lookup_no_bucket',
+        table_key: tableKey,
+        value: v,
+        profile_source: profileSource,
+        ...rangeProfileImportDebugContext(spotKey, st),
+      })
+      return fallbackRangeScore1to6(tableKey, spotKey, v, 'no_matching_bucket', profileSource)
     }
 
     for (const b of arr) {
@@ -645,8 +666,12 @@ function buildModelScore(args: {
         inputs: { wave_height_m: args.h, wave_period_s: args.p, wind_speed_ms: args.ws },
         ...rangeProfileImportDebugContext(rangeSpotKey, getSpotTables(rangeSpotKey)),
       })
+      sWaveH = fallbackRangeScore1to6('wave_height', rangeSpotKey, args.h, 'range_lookup_failed', rangeProfileSource)
+      sWaveP = fallbackRangeScore1to6('wave_period', rangeSpotKey, args.p, 'range_lookup_failed', rangeProfileSource)
+      sWindS = fallbackRangeScore1to6('wind_speed', rangeSpotKey, args.ws, 'range_lookup_failed', rangeProfileSource)
+    } else {
+      throw error
     }
-    throw error
   }
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
 

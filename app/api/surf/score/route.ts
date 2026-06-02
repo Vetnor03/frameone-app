@@ -1116,14 +1116,17 @@ function bucketLabelFromRangeTable(arrRaw: any[], value: number): string | null 
   if (!Array.isArray(arrRaw) || !arrRaw.length) return null
   const v = Number.isFinite(value) ? value : 0
 
-  const arr = [...arrRaw].sort((a, b) => Number(a?.min ?? 0) - Number(b?.min ?? 0))
+  const arr = [...arrRaw].sort((a, b) => Number(a?.min ?? Number.NEGATIVE_INFINITY) - Number(b?.min ?? Number.NEGATIVE_INFINITY))
 
   for (const b of arr) {
-    const mn = Number(b?.min ?? Number.NEGATIVE_INFINITY)
+    const mnRaw = b?.min
     const mxRaw = b?.max
+    const mn = mnRaw === null || mnRaw === undefined ? Number.NEGATIVE_INFINITY : Number(mnRaw)
     const mx = mxRaw === null || mxRaw === undefined ? Number.POSITIVE_INFINITY : Number(mxRaw)
     if (!Number.isFinite(mn) || !Number.isFinite(mx)) continue
-    if (v >= mn && v <= mx) {
+    const minMatches = b?.min_exclusive === true ? v > mn : v >= mn
+    const maxMatches = b?.max_inclusive === true ? v <= mx : v < mx
+    if (minMatches && maxMatches) {
       const lbl = String(b?.label ?? '').trim()
       if (lbl) return lbl
       if (Number.isFinite(mn) && Number.isFinite(mx)) return `${mn}-${mx}`
