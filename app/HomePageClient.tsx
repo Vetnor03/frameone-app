@@ -1111,46 +1111,22 @@ export default function HomePage() {
   const layoutMeta = allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0]
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
   const mirrorSnapshot = useMemo<PhysicalFrameSnapshot | null>(() => {
-    const currentCells = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
-    const currentModulesJson = normalizeModulesForSave(modulesJson)
-
-    if (!physicalFrameSnapshot) {
-      return {
-        theme,
-        language,
-        fontSize,
-        layoutKey,
-        cells: currentCells,
-        modulesJson: currentModulesJson,
-        detailsBySlot: {},
-        updatedAt: null,
-        renderAt: null,
-      }
+    if (physicalFrameSnapshot) {
+      return physicalFrameSnapshot
     }
 
-    const detailsBySlot = Object.entries(physicalFrameSnapshot.detailsBySlot).reduce<Record<string, MirrorModuleDetail>>(
-      (acc, [slotKey, detail]) => {
-        const slot = Number(slotKey)
-        if (!Number.isFinite(slot)) return acc
-        const currentModule = currentCells[slot]
-        if (!currentModule) return acc
-        if (detail?.module && detail.module !== currentModule) return acc
-        if (!detail?.module && physicalFrameSnapshot.cells[slot] !== currentModule) return acc
-        acc[slotKey] = detail
-        return acc
-      },
-      {}
-    )
+    const currentCells = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
 
     return {
-      ...physicalFrameSnapshot,
       theme,
       language,
       fontSize,
       layoutKey,
       cells: currentCells,
-      modulesJson: currentModulesJson,
-      detailsBySlot,
+      modulesJson: normalizeModulesForSave(modulesJson),
+      detailsBySlot: {},
+      updatedAt: null,
+      renderAt: null,
     }
   }, [cellsByLayout, fontSize, language, layoutKey, modulesJson, physicalFrameSnapshot, theme])
 
@@ -1964,7 +1940,7 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={mirrorSnapshot}
         fallbackLanguage={language}
-        theme={theme}
+        theme={mirrorSnapshot?.theme ?? theme}
         status={activeFrameStatus}
       />
     )
