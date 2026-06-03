@@ -13020,7 +13020,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
       ) : days.length === 0 ? (
         <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
       ) : (
-        <div className="relative mt-4 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-10 after:bg-[linear-gradient(to_right,rgba(6,27,36,0),var(--app-bg)_88%)] after:content-['']">
+        <div className="relative mt-4">
           <div className="-mx-1 flex gap-3 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
             {days.map((day, index) => {
               const buckets = Array.isArray(day.buckets) ? day.buckets : []
