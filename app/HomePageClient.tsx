@@ -12997,7 +12997,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
             <div className="mt-1 truncate text-xl font-semibold leading-tight text-[color:var(--fg-90)]" title={spotName || spotLabel || 'Surf forecast'}>
               {spotName || spotLabel || (language === 'no' ? 'Velg spot' : 'Choose spot')}
             </div>
-            <div className="mt-1 text-sm text-[color:var(--fg-50)]">
+            <div className="mt-1 text-sm text-[color:var(--fg-80)]">
               Only visible in app
             </div>
           </div>
@@ -13012,13 +13012,13 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
         </div>
 
         {!spotLabel || spotLabel === 'Not set' ? (
-        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg en surfspot for å se varselet.' : 'Choose a surf spot to see the forecast.'}</div>
+        <div className="mt-4 text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Velg en surfspot for å se varselet.' : 'Choose a surf spot to see the forecast.'}</div>
       ) : loading ? (
-        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster varsel…' : 'Loading forecast…'}</div>
+        <div className="mt-4 text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Laster varsel…' : 'Loading forecast…'}</div>
       ) : error ? (
-        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Varsel er ikke tilgjengelig akkurat nå.' : 'Forecast is unavailable right now.'}</div>
+        <div className="mt-4 text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Varsel er ikke tilgjengelig akkurat nå.' : 'Forecast is unavailable right now.'}</div>
       ) : days.length === 0 ? (
-        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
+        <div className="mt-4 text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
       ) : (
         <div className="relative mt-4">
           <div className="-mx-1 flex gap-3 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
@@ -13050,7 +13050,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
                         </div>
                       </div>
                     )) : (
-                      <div className="text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen data.' : 'No data.'}</div>
+                      <div className="text-xs text-[color:var(--fg-80)]">{language === 'no' ? 'Ingen data.' : 'No data.'}</div>
                     )}
                   </div>
                 </div>
@@ -13286,7 +13286,7 @@ function SurfSpotRow({
       ? 'Dagens Beste'
       : spotLabel}
 </div>
-            <div className="mt-1 text-sm text-[color:var(--fg-50)]">
+            <div className="mt-1 text-sm text-[color:var(--fg-80)]">
               {language === 'no' ? 'Dette er spoten som vises på framen.' : 'This is the spot shown on your frame.'}
             </div>
           </div>
@@ -13462,7 +13462,7 @@ function SurfExperienceCard({
       <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
         <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'LOGG ERFARING' : 'LOG EXPERIENCE'}</div>
 
-        <div className="mt-3 text-[color:var(--fg-60)] text-sm">{language === 'no' ? 'Lagre hvordan surfen faktisk føltes.' : 'Save how the surf actually felt.'}</div>
+        <div className="mt-3 text-[color:var(--fg-80)] text-sm">{language === 'no' ? 'Lagre hvordan surfen faktisk føltes.' : 'Save how the surf actually felt.'}</div>
 
         <div className="mt-4">
           <button
@@ -13487,7 +13487,7 @@ function SurfExperienceCard({
           >
             <div className="text-left">
               <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SISTE' : 'LATEST'}</div>
-              <div className="mt-1 text-xs text-[color:var(--fg-40)]">
+              <div className="mt-1 text-xs text-[color:var(--fg-80)]">
                 {latestOpen
                   ? language === 'no'
                     ? 'Trykk for å skjule nylige erfaringer'
@@ -13514,9 +13514,9 @@ function SurfExperienceCard({
               className="mt-3 space-y-2 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]"
             >
                       {loading ? (
-                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
+                <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
               ) : items.length === 0 ? (
-                <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
+                <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Ingen erfaringer logget ennå.' : 'No experiences logged yet.'}</div>
               ) : (
                 items.map((item) => {
                   const feelingChoice = ratingToFeelingChoice(item.rating_1_6)
@@ -13822,7 +13822,7 @@ function SurfExperienceEditor({
               </div>
             </div>
 
-            <div className="mt-3 text-xs text-[color:var(--fg-50)]">
+            <div className="mt-3 text-xs text-[color:var(--fg-80)]">
               {formatTimeLabel(language, selectedAt)}
             </div>
 
@@ -13889,7 +13889,7 @@ function SurfExperienceEditor({
                       ? 'text-[color:var(--danger)]'
                       : statusKind === 'ok'
                         ? 'text-[#2aa3ff]'
-                        : 'text-[color:var(--fg-50)]'
+                        : 'text-[color:var(--fg-80)]'
                   }
                 >
                   {status}
@@ -14003,10 +14003,10 @@ function DuplicateExperienceSheet({
         <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4">
           <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'EKSISTERENDE' : 'EXISTING'}</div>
           <div className="mt-2 text-[color:var(--fg-90)]">{existing?.spot || '--'}</div>
-          <div className="mt-1 text-sm text-[color:var(--fg-60)]">
+          <div className="mt-1 text-sm text-[color:var(--fg-80)]">
             {existing?.logged_at ? formatTimeLabel(language, new Date(existing.logged_at)) : '--'}
           </div>
-          <div className="mt-1 text-sm text-[color:var(--fg-60)]">{formatFeelingFromRating(language, existing?.rating_1_6)}</div>
+          <div className="mt-1 text-sm text-[color:var(--fg-80)]">{formatFeelingFromRating(language, existing?.rating_1_6)}</div>
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-3">
