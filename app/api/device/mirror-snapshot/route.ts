@@ -1618,10 +1618,9 @@ function formatReminderMirrorItems(items: UnknownRecord[]) {
     .map((item) => {
       const title = asString(item.title).trim()
       const displayTime = asString(item.display_time).trim()
-      const source = asString(item.source).trim()
       if (!title) return ''
       if (!displayTime) return title
-      return source === 'teams' ? `${displayTime} ${title}` : `${title} ${displayTime}`
+      return `${displayTime} ${title}`
     })
     .filter(Boolean)
 }

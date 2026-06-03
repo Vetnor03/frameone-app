@@ -22,6 +22,8 @@
 #define FONT_B12 (&FreeSansBold12pt8b)
 #define FONT_B18 (&FreeSansBold18pt8b)
 
+static const GFXfont* REMINDER_CONTENT_FONT = FONT_B12;
+
 #define REMINDERS_DEBUG 1
 
 #if REMINDERS_DEBUG
@@ -47,7 +49,6 @@ struct ReminderItem {
   bool used = false;
   char id[48] = {0};
   char title[96] = {0};
-  char source[16] = {0};
   char time[12] = {0};           // HH:MM or empty
   char occurrenceDate[16] = {0}; // YYYY-MM-DD
   char displayDate[24] = {0};
@@ -301,10 +302,8 @@ static void buildReminderTitleWithTime(const ReminderItem& r, char* out, size_t 
   if (!out || outSize == 0) return;
   out[0] = '\0';
 
-  if (r.time[0] && strcmp(r.source, "teams") == 0) {
+  if (r.time[0]) {
     snprintf(out, outSize, "%s %s", r.time, r.title);
-  } else if (r.time[0]) {
-    snprintf(out, outSize, "%s %s", r.title, r.time);
   } else {
     safeCopy(out, outSize, r.title);
   }
@@ -526,9 +525,6 @@ static bool fetchReminders() {
 
     const char* rawTitle = it["title"] | "";
     utf8ToLatin1(r.title, sizeof(r.title), rawTitle);
-
-    const char* rawSource = it["source"] | "";
-    safeCopy(r.source, sizeof(r.source), rawSource);
 
     char rawTime[24] = {0};
     safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
@@ -1113,7 +1109,7 @@ static void drawNextRemindersList(int x, int y, int w, int h,
   int blockH = pickedCount * lineH;
 
   int16_t dx1, dy1; uint16_t dtw, dth;
-  measureText("00.00", FONT_B9, dx1, dy1, dtw, dth);
+  measureText("00.00", REMINDER_CONTENT_FONT, dx1, dy1, dtw, dth);
   int dateColW = (int)dtw;
 
   int maxNameW = w - padL - dateColW - gap - 12;
@@ -1135,23 +1131,23 @@ static void drawNextRemindersList(int x, int y, int w, int h,
     buildReminderTitleWithTime(r, fullBuf, sizeof(fullBuf));
 
     char titleBuf[128];
-    fitTextToWidth(fullBuf, titleBuf, sizeof(titleBuf), maxNameW, FONT_B12);
+    fitTextToWidth(fullBuf, titleBuf, sizeof(titleBuf), maxNameW, REMINDER_CONTENT_FONT);
 
     int rowY = startY + i * lineH;
     int baselineY = rowY + lineH / 2;
 
     int16_t tx1, ty1; uint16_t tw, th;
-    measureText(dateStr, FONT_B9, tx1, ty1, tw, th);
+    measureText(dateStr, REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
 
     int dateX = startX + (dateColW - (int)tw);
 
-    d.setFont(FONT_B9);
+    d.setFont(REMINDER_CONTENT_FONT);
     d.setTextColor(ink);
     d.setCursor(dateX - tx1, baselineY);
     d.print(dateStr);
 
     int nameX = startX + dateColW + gap;
-    d.setFont(FONT_B12);
+    d.setFont(REMINDER_CONTENT_FONT);
     d.setTextColor(ink);
     d.setCursor(nameX, baselineY);
     d.print(titleBuf);
@@ -1291,16 +1287,16 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
                    titleBuf,
                    sizeof(titleBuf),
                    secW - textPadX * 2 - 4,
-                   FONT_B12);
+                   REMINDER_CONTENT_FONT);
 
     int16_t tx1, ty1;
     uint16_t tw, th;
-    measureText(titleBuf, FONT_B12, tx1, ty1, tw, th);
+    measureText(titleBuf, REMINDER_CONTENT_FONT, tx1, ty1, tw, th);
 
     int cx = secX0 + secW / 2;
     int baselineY = contentTop + (contentH - (int)th) / 2 - ty1;
 
-    d.setFont(FONT_B12);
+    d.setFont(REMINDER_CONTENT_FONT);
     d.setTextColor(ink);
     d.setCursor(cx - (int)tw / 2 - tx1, baselineY);
     d.print(titleBuf);
@@ -1443,7 +1439,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   const int contentH = contentBottom - contentTop;
 
   if (contentH > 10 && visibleCount > 0) {
-    drawBucketLinesCentered(c, bucket, visibleCount, contentTop, contentH, FONT_B12);
+    drawBucketLinesCentered(c, bucket, visibleCount, contentTop, contentH, REMINDER_CONTENT_FONT);
   }
 }
 
