@@ -12722,6 +12722,13 @@ function SurfModuleSettingsTab({
                 )
               })}
 
+              <SurfForecastCard
+                language={language}
+                cfg={forecastSurfEntry?.cfg || null}
+                active={surfView === 'main'}
+                onPicked={pickForecastSpot}
+              />
+
               <SurfExperienceCard
                 language={language}
                 refreshKey={experienceListVersion}
@@ -12746,13 +12753,6 @@ function SurfModuleSettingsTab({
                     scrollToBottomSmooth()
                   }, 80)
                 }}
-              />
-
-              <SurfForecastCard
-                language={language}
-                cfg={forecastSurfEntry?.cfg || null}
-                active={surfView === 'main'}
-                onPicked={pickForecastSpot}
               />
             </div>
           ) : (
