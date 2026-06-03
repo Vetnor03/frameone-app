@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
+import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
@@ -7581,6 +7582,26 @@ type SurfExperienceRowData = {
   wind_dir_from_deg?: number | null
 }
 
+
+type AppSurfForecastBucket = {
+  label: string
+  time_utc?: string | null
+  rating?: number | null
+  ratingFromExperience?: boolean
+  experienceDiceValue?: number | null
+  wave_height_range_label?: string | null
+  swell_direction_deg?: number | null
+  wind_speed_ms?: number | null
+  wind_direction_deg?: number | null
+}
+
+type AppSurfForecastDay = {
+  label: string
+  date_local?: string | null
+  date_label?: string | null
+  buckets?: AppSurfForecastBucket[]
+}
+
 type SoccerCfg = {
   id: number
   teamId?: string
@@ -12643,6 +12664,26 @@ function SurfModuleSettingsTab({
     commitSurfList(next)
   }
 
+  const forecastSurfEntry =
+    surfInstances
+      .map(({ id }) => ({ id, cfg: surfList.find((x) => Number(x?.id) === id) || null }))
+      .find((entry) => entry.cfg && String(entry.cfg.spot || entry.cfg.spotId || '').trim()) ||
+    surfInstances.map(({ id }) => ({ id, cfg: surfList.find((x) => Number(x?.id) === id) || null }))[0] ||
+    null
+
+  function pickForecastSpot(picked: Partial<SurfCfg>) {
+    const id = forecastSurfEntry?.id ?? 1
+    const currentFuel = sanitizeFuelPenalty(forecastSurfEntry?.cfg?.fuelPenalty || { enabled: false }) || { enabled: false }
+    const nextSpot = String(picked?.spot ?? '').trim()
+
+    if (!isTodaysBestLabel(nextSpot)) {
+      upsertSurf(id, { ...picked, fuelPenalty: { ...currentFuel, enabled: false } })
+      return
+    }
+
+    upsertSurf(id, picked)
+  }
+
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="relative mt-5 flex-1 min-h-0">
@@ -12706,6 +12747,13 @@ function SurfModuleSettingsTab({
                   }, 80)
                 }}
               />
+
+              <SurfForecastCard
+                language={language}
+                cfg={forecastSurfEntry?.cfg || null}
+                active={surfView === 'main'}
+                onPicked={pickForecastSpot}
+              />
             </div>
           ) : (
             <SurfExperienceEditor
@@ -12742,6 +12790,244 @@ function SurfModuleSettingsTab({
         </div>
       </div>
     </div>
+  )
+}
+
+
+const appSurfForecastCache = new Map<string, { exp: number; data: { spot?: string; appForecast?: AppSurfForecastDay[] } }>()
+
+function appSurfForecastCacheKey(cfg: SurfCfg) {
+  const fuel = sanitizeFuelPenalty(cfg.fuelPenalty)
+  return [
+    String(cfg.spotId || ''),
+    String(cfg.spot || ''),
+    Number.isFinite(Number(cfg.lat)) ? Number(cfg.lat).toFixed(5) : '',
+    Number.isFinite(Number(cfg.lon)) ? Number(cfg.lon).toFixed(5) : '',
+    fuel?.enabled ? 'fuel' : 'nofuel',
+    Number.isFinite(Number(fuel?.homeLat)) ? Number(fuel?.homeLat).toFixed(5) : '',
+    Number.isFinite(Number(fuel?.homeLon)) ? Number(fuel?.homeLon).toFixed(5) : '',
+  ].join('|')
+}
+
+function formatForecastDate(language: AppLanguage, day: AppSurfForecastDay) {
+  const raw = String(day.date_local || '').trim()
+  if (!raw) return String(day.date_label || '')
+  const date = new Date(`${raw}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return String(day.date_label || raw)
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-GB', { day: 'numeric', month: 'short' }).format(date)
+}
+
+function forecastDayTitle(language: AppLanguage, index: number, fallback: string) {
+  if (index === 0) return language === 'no' ? 'I dag' : 'Today'
+  if (index === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
+  return fallback
+}
+
+function compactMetric(value: number | null | undefined, suffix: string) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '--'
+  return `${Math.round(n)} ${suffix}`
+}
+
+function ForecastDirectionArrow({ degrees }: { degrees: number | null | undefined }) {
+  return (
+    <span className="inline-flex w-4 shrink-0 justify-center text-[color:var(--fg-70)] leading-none" style={mirrorDirectionToStyle(degrees ?? undefined)}>
+      ↑
+    </span>
+  )
+}
+
+function surfRatingColor(rating: number | null | undefined) {
+  switch (Math.round(Number(rating) || 0)) {
+    case 1: return '#dc2626'
+    case 2: return '#d97706'
+    case 3: return '#facc15'
+    case 4: return '#84cc16'
+    case 5: return '#15803d'
+    case 6: return '#a855f7'
+    default: return 'rgba(255,255,255,0.28)'
+  }
+}
+
+function AppSurfForecastRatingBars({ rating }: { rating: number | null | undefined }) {
+  const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
+  const color = surfRatingColor(rating)
+
+  return (
+    <div className="flex items-center gap-1.5" aria-label={`Surf rating ${value} of 6`}>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <span
+          key={index}
+          className="block h-2.5 w-3.5 rounded-[0.2rem] border"
+          style={{
+            backgroundColor: index < value ? color : 'transparent',
+            borderColor: color,
+            opacity: index < value ? 0.96 : 0.72,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLanguage; cfg: SurfCfg | null; active: boolean; onPicked: (cfgPatch: Partial<SurfCfg>) => void }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [spotName, setSpotName] = useState('')
+  const [days, setDays] = useState<AppSurfForecastDay[]>([])
+
+  const spotLabel = String(cfg?.spot || cfg?.spotId || '').trim()
+  const cacheKey = cfg ? appSurfForecastCacheKey(cfg) : ''
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadForecast() {
+      if (!active || !cfg || !spotLabel || spotLabel === 'Not set') {
+        setLoading(false)
+        setError('')
+        setSpotName(spotLabel || '')
+        setDays([])
+        return
+      }
+
+      const cached = appSurfForecastCache.get(cacheKey)
+      if (cached && cached.exp > Date.now()) {
+        setSpotName(String(cached.data.spot || spotLabel))
+        setDays(Array.isArray(cached.data.appForecast) ? cached.data.appForecast : [])
+        setError('')
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      setError('')
+      try {
+        const fuel = sanitizeFuelPenalty(cfg.fuelPenalty)
+        const homeLat = Number(fuel?.homeLat)
+        const homeLon = Number(fuel?.homeLon)
+        const data = await fetchSurfScore({
+          spotId: cfg.spotId,
+          spot: cfg.spot,
+          lat: cfg.lat,
+          lon: cfg.lon,
+          hours: 4,
+          best: true,
+          appForecast: true,
+          fuelPenalty: !!fuel?.enabled,
+          homeLat: Number.isFinite(homeLat) ? homeLat : undefined,
+          homeLon: Number.isFinite(homeLon) ? homeLon : undefined,
+        })
+
+        if (cancelled) return
+        const next = Array.isArray(data?.appForecast) ? (data.appForecast as AppSurfForecastDay[]) : []
+        appSurfForecastCache.set(cacheKey, { exp: Date.now() + 10 * 60 * 1000, data: { spot: data?.spot, appForecast: next } })
+        setSpotName(String(data?.spot || spotLabel))
+        setDays(next)
+      } catch (e: unknown) {
+        if (cancelled) return
+        setDays([])
+        setSpotName(spotLabel)
+        setError(e instanceof Error ? e.message : String(e || 'Forecast unavailable'))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadForecast()
+
+    return () => {
+      cancelled = true
+    }
+  }, [active, cacheKey, cfg, spotLabel])
+
+  return (
+    <>
+      <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">SPOT</div>
+            <div className="mt-1 truncate text-xl font-semibold leading-tight text-[color:var(--fg-90)]" title={spotName || spotLabel || 'Surf forecast'}>
+              {spotName || spotLabel || (language === 'no' ? 'Velg spot' : 'Choose spot')}
+            </div>
+            <div className="mt-1 text-sm text-[color:var(--fg-50)]">
+              {language === 'no' ? 'Tilliten går ned jo lenger frem du ser.' : 'Confidence goes down the further out you go.'}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="shrink-0 h-10 px-4 rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs hover:bg-[color:var(--panel-05)]"
+          >
+            {language === 'no' ? 'ENDRE' : 'CHANGE'}
+          </button>
+        </div>
+
+        {!spotLabel || spotLabel === 'Not set' ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg en surfspot for å se varselet.' : 'Choose a surf spot to see the forecast.'}</div>
+      ) : loading ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster varsel…' : 'Loading forecast…'}</div>
+      ) : error ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Varsel er ikke tilgjengelig akkurat nå.' : 'Forecast is unavailable right now.'}</div>
+      ) : days.length === 0 ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
+      ) : (
+        <div className="mt-4 -mx-1 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
+          <div className="flex w-max gap-3">
+            {days.map((day, index) => {
+              const buckets = Array.isArray(day.buckets) ? day.buckets : []
+              const title = forecastDayTitle(language, index, day.label)
+              return (
+                <div key={String(day.date_local || day.label)} className="w-[176px] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3 [scroll-snap-align:start]">
+                  <div className="text-lg font-medium leading-tight text-[color:var(--fg-80)]">{title}</div>
+
+                  <div className="mt-3 space-y-3">
+                    {buckets.length ? buckets.map((bucket) => (
+                      <div key={`${day.date_local}-${bucket.label}`}>
+                        <div className="text-[11px] tracking-[0.16em] text-[color:var(--fg-45)] uppercase">{bucket.label}</div>
+                        <div className="mt-1 text-[color:var(--fg-85)]">
+                          <AppSurfForecastRatingBars rating={bucket.rating} />
+                        </div>
+                        <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="shrink-0 text-[color:var(--fg-55)]">Swell:</span>
+                            <ForecastDirectionArrow degrees={bucket.swell_direction_deg} />
+                            <span className="truncate">{bucket.wave_height_range_label || '--'}</span>
+                          </div>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="shrink-0 text-[color:var(--fg-55)]">Wind:</span>
+                            <ForecastDirectionArrow degrees={bucket.wind_direction_deg} />
+                            <span className="truncate">{compactMetric(bucket.wind_speed_ms, 'm/s')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen data.' : 'No data.'}</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        )}
+      </div>
+
+      {open && (
+        <SurfSpotSheet
+          language={language}
+          title={language === 'no' ? 'Spot' : 'Spot'}
+          hideTodaysBest={false}
+          onClose={() => setOpen(false)}
+          onPicked={(picked) => {
+            onPicked(picked)
+            setOpen(false)
+          }}
+        />
+      )}
+    </>
   )
 }
 

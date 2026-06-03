@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
 import { scoreSurf, normalizeCustomSpotScoringProfile, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
-import { normalizeSurfRating1to6 } from '@/app/lib/surf/ratings'
+import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
@@ -24,6 +24,11 @@ const DAYPART_TARGETS: Array<{ label: 'Morning' | 'Noon' | 'Afternoon' | 'Evenin
 
 // Daily (XL): computed only when ?daily=1 (and days<=5)
 const DAILY_TZ = 'Europe/Oslo'
+const APP_FORECAST_TARGETS: Array<{ label: 'Morning' | 'Noon' | 'Evening'; hourLocal: number }> = [
+  { label: 'Morning', hourLocal: 8 },
+  { label: 'Noon', hourLocal: 12 },
+  { label: 'Evening', hourLocal: 20 },
+]
 
 // ------------------------------
 // Response headers (avoid stale / caching weirdness)
@@ -2081,6 +2086,88 @@ function buildDailyFrom4hWindows(
 }
 
 
+function appForecastDayRange(series: MarineSeries) {
+  const keys: string[] = []
+  const seen = new Set<string>()
+
+  for (const tIso of series.mt) {
+    const dt = new Date(`${tIso}:00Z`)
+    if (Number.isNaN(dt.getTime())) continue
+    const p = tzPartsYMD(DAILY_TZ, dt)
+    const key = ymdKey(p.y, p.m, p.day)
+    if (seen.has(key)) continue
+    seen.add(key)
+    keys.push(key)
+  }
+
+  const today = tzPartsYMD(DAILY_TZ, new Date())
+  const todayKey = ymdKey(today.y, today.m, today.day)
+  const start = keys.indexOf(todayKey)
+  return (start >= 0 ? keys.slice(start) : keys).map((key) => {
+    const [y, m, d] = key.split('-').map((part) => Number(part))
+    return { y, m, d, key }
+  })
+}
+
+function localDateLabelForYMD(y: number, m: number, d: number) {
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  return new Intl.DateTimeFormat('en-GB', { timeZone: DAILY_TZ, day: '2-digit', month: 'short' }).format(dt)
+}
+
+function buildAppSurfForecast(
+  series: MarineSeries,
+  spotKeyForTables: string,
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null
+) {
+  return appForecastDayRange(series)
+    .map((ymd) => {
+      const buckets = APP_FORECAST_TARGETS.map((target) => {
+        const isoTarget = isoHourUTCFromLocalYMDH(DAILY_TZ, ymd.y, ymd.m, ymd.d, target.hourLocal)
+        const idx = nearestHourIndex(series.mt, isoTarget)
+        const actualIso = series.mt[idx]
+        if (!actualIso) return null
+
+        const actual = tzPartsYMD(DAILY_TZ, new Date(`${actualIso}:00Z`))
+        if (actual.y !== ymd.y || actual.m !== ymd.m || actual.day !== ymd.d) return null
+
+        const marine = bundleAtIsoHour(series, actualIso)
+        const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
+        const scored = picked.chosenScore
+        const selected = selectedSwellFromPick(marine, picked)
+        const waveLabel = waveHeightLabelForValue(spotKeyForTables, selected.height_m)
+
+        return {
+          label: target.label,
+          time_utc: marine.time_utc,
+          rating: scored?.rating ?? null,
+          ratingFromExperience: surfRatingIsExperienceBased(scored) || scoredExperienceMatched(scored) || picked.ratingSource === 'experience_blend' || undefined,
+          experienceDiceValue: normalizeSurfRating1to6(scored).experienceDiceValue,
+          wave_height_range_label: waveLabel,
+          swell_height_m: Number.isFinite(selected.height_m) ? selected.height_m : null,
+          swell_period_s: Number.isFinite(selected.period_s) ? Math.round(selected.period_s) : null,
+          swell_direction_deg: Number.isFinite(selected.direction_deg_from) ? selected.direction_deg_from : null,
+          wind_speed_ms: Number.isFinite(marine.wind_speed_ms) ? Math.round(marine.wind_speed_ms) : null,
+          wind_direction_deg: Number.isFinite(marine.wind_direction_deg_from) ? marine.wind_direction_deg_from : null,
+          breakdown: scored?.breakdown ?? null,
+          ratingSource: picked.ratingSource,
+          finalRating: picked.finalRating,
+          modelRating: picked.modelRating,
+          experienceRating: picked.experienceRating,
+        }
+      }).filter(Boolean)
+
+      return {
+        label: weekdayLabelForYMD(DAILY_TZ, ymd.y, ymd.m, ymd.d),
+        date_local: ymd.key,
+        date_label: localDateLabelForYMD(ymd.y, ymd.m, ymd.d),
+        buckets,
+      }
+    })
+    .filter((day) => day.buckets.length > 0)
+}
+
+
 function compactExperienceBreakdown(scored: any) {
   const exp = scored?.breakdown?.experience
   if (!exp || typeof exp !== 'object') return { matched: false }
@@ -2170,6 +2257,7 @@ export async function GET(req: Request) {
     const daypartsOn = truthy1(url.searchParams.get('dayparts'))
 
     const dailyOn = truthy1(url.searchParams.get('daily'))
+    const appForecastOn = truthy1(url.searchParams.get('appForecast'))
     const daysQ = asInt(url.searchParams.get('days'))
     const days = clampInt(daysQ ?? 5, 1, 5)
 
@@ -2419,6 +2507,10 @@ export async function GET(req: Request) {
         ? buildDailyFrom4hWindows(chosen.series, chosen.scoringSpotKey, days, chosenUserExperiences, chosen.customSpotProfile ?? null)
         : undefined
 
+      const appForecast = appForecastOn
+        ? buildAppSurfForecast(chosen.series, chosen.scoringSpotKey, chosenUserExperiences, chosen.customSpotProfile ?? null)
+        : undefined
+
       return surfJsonResponse({
         spot: chosen.spotLabel,
         spotId: chosen.spotId,
@@ -2488,6 +2580,7 @@ export async function GET(req: Request) {
 
         ...(daypartsOn ? { dayparts } : {}),
         ...(dailyOn ? { daily } : {}),
+        ...(appForecastOn ? { appForecast } : {}),
 
         debug: {
           auth: {
@@ -2723,6 +2816,7 @@ export async function GET(req: Request) {
 
     const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile) : undefined
     const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences, scoringCustomSpotProfile) : undefined
+    const appForecast = appForecastOn ? buildAppSurfForecast(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile) : undefined
 
     return surfJsonResponse({
       spot: spotLabel ?? spotQ ?? spotId,
@@ -2796,6 +2890,7 @@ export async function GET(req: Request) {
 
       ...(daypartsOn ? { dayparts } : {}),
       ...(dailyOn ? { daily } : {}),
+      ...(appForecastOn ? { appForecast } : {}),
 
       debug: {
         auth: {

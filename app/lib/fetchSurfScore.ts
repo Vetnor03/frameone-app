@@ -9,6 +9,7 @@ type SurfScoreParams = {
   hours?: number
   dayparts?: boolean
   daily?: boolean
+  appForecast?: boolean
   days?: number
   best?: boolean
   fuelPenalty?: boolean
@@ -33,6 +34,7 @@ export async function fetchSurfScore(params: SurfScoreParams) {
 
   if (params.dayparts) addParam(url, 'dayparts', 1)
   if (params.daily) addParam(url, 'daily', 1)
+  if (params.appForecast) addParam(url, 'appForecast', 1)
   addParam(url, 'days', params.days)
 
   if (params.best !== undefined) addParam(url, 'best', params.best ? 1 : 0)
