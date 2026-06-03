@@ -13020,13 +13020,13 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
       ) : days.length === 0 ? (
         <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
       ) : (
-        <div className="mt-4 -mx-1 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
-          <div className="flex w-max gap-3">
+        <div className="relative mt-4 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-10 after:bg-[linear-gradient(to_right,rgba(6,27,36,0),var(--app-bg)_88%)] after:content-['']">
+          <div className="-mx-1 flex gap-3 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
             {days.map((day, index) => {
               const buckets = Array.isArray(day.buckets) ? day.buckets : []
               const title = forecastDayTitle(language, index, day.label)
               return (
-                <div key={String(day.date_local || day.label)} className="w-[176px] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3 [scroll-snap-align:start]">
+                <div key={String(day.date_local || day.label)} className="w-[calc((100%_-_0.75rem)/2)] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3 [scroll-snap-align:start]">
                   <div className="text-lg font-medium leading-tight text-[color:var(--fg-80)]">{title}</div>
 
                   <div className="mt-3 space-y-3">
