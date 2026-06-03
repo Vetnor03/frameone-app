@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
+import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
@@ -7581,6 +7582,26 @@ type SurfExperienceRowData = {
   wind_dir_from_deg?: number | null
 }
 
+
+type AppSurfForecastBucket = {
+  label: string
+  time_utc?: string | null
+  rating?: number | null
+  ratingFromExperience?: boolean
+  experienceDiceValue?: number | null
+  wave_height_range_label?: string | null
+  swell_direction_deg?: number | null
+  wind_speed_ms?: number | null
+  wind_direction_deg?: number | null
+}
+
+type AppSurfForecastDay = {
+  label: string
+  date_local?: string | null
+  date_label?: string | null
+  buckets?: AppSurfForecastBucket[]
+}
+
 type SoccerCfg = {
   id: number
   teamId?: string
@@ -12643,6 +12664,11 @@ function SurfModuleSettingsTab({
     commitSurfList(next)
   }
 
+  const forecastSurfCfg =
+    surfInstances
+      .map(({ id }) => surfList.find((x) => Number(x?.id) === id) || null)
+      .find((cfg) => cfg && String(cfg.spot || cfg.spotId || '').trim()) || null
+
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="relative mt-5 flex-1 min-h-0">
@@ -12706,6 +12732,8 @@ function SurfModuleSettingsTab({
                   }, 80)
                 }}
               />
+
+              <SurfForecastCard language={language} cfg={forecastSurfCfg} active={surfView === 'main'} />
             </div>
           ) : (
             <SurfExperienceEditor
@@ -12741,6 +12769,184 @@ function SurfModuleSettingsTab({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+
+const appSurfForecastCache = new Map<string, { exp: number; data: { spot?: string; appForecast?: AppSurfForecastDay[] } }>()
+
+function appSurfForecastCacheKey(cfg: SurfCfg) {
+  const fuel = sanitizeFuelPenalty(cfg.fuelPenalty)
+  return [
+    String(cfg.spotId || ''),
+    String(cfg.spot || ''),
+    Number.isFinite(Number(cfg.lat)) ? Number(cfg.lat).toFixed(5) : '',
+    Number.isFinite(Number(cfg.lon)) ? Number(cfg.lon).toFixed(5) : '',
+    fuel?.enabled ? 'fuel' : 'nofuel',
+    Number.isFinite(Number(fuel?.homeLat)) ? Number(fuel?.homeLat).toFixed(5) : '',
+    Number.isFinite(Number(fuel?.homeLon)) ? Number(fuel?.homeLon).toFixed(5) : '',
+  ].join('|')
+}
+
+function formatForecastDate(language: AppLanguage, day: AppSurfForecastDay) {
+  const raw = String(day.date_local || '').trim()
+  if (!raw) return String(day.date_label || '')
+  const date = new Date(`${raw}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return String(day.date_label || raw)
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-GB', { day: 'numeric', month: 'short' }).format(date)
+}
+
+function forecastDayTitle(language: AppLanguage, index: number, fallback: string) {
+  if (index === 0) return language === 'no' ? 'I dag' : 'Today'
+  if (index === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
+  if (index === 2) return language === 'no' ? 'Neste dag' : 'Next day'
+  return fallback
+}
+
+function compactMetric(value: number | null | undefined, suffix: string) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '--'
+  return `${Math.round(n)} ${suffix}`
+}
+
+function ForecastDirectionArrow({ degrees }: { degrees: number | null | undefined }) {
+  return (
+    <span className="inline-flex w-4 shrink-0 justify-center text-[color:var(--fg-70)] leading-none" style={mirrorDirectionToStyle(degrees ?? undefined)}>
+      ↑
+    </span>
+  )
+}
+
+function SurfForecastCard({ language, cfg, active }: { language: AppLanguage; cfg: SurfCfg | null; active: boolean }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [spotName, setSpotName] = useState('')
+  const [days, setDays] = useState<AppSurfForecastDay[]>([])
+
+  const spotLabel = String(cfg?.spot || cfg?.spotId || '').trim()
+  const cacheKey = cfg ? appSurfForecastCacheKey(cfg) : ''
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadForecast() {
+      if (!active || !cfg || !spotLabel || spotLabel === 'Not set') {
+        setLoading(false)
+        setError('')
+        setSpotName(spotLabel || '')
+        setDays([])
+        return
+      }
+
+      const cached = appSurfForecastCache.get(cacheKey)
+      if (cached && cached.exp > Date.now()) {
+        setSpotName(String(cached.data.spot || spotLabel))
+        setDays(Array.isArray(cached.data.appForecast) ? cached.data.appForecast : [])
+        setError('')
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      setError('')
+      try {
+        const fuel = sanitizeFuelPenalty(cfg.fuelPenalty)
+        const homeLat = Number(fuel?.homeLat)
+        const homeLon = Number(fuel?.homeLon)
+        const data = await fetchSurfScore({
+          spotId: cfg.spotId,
+          spot: cfg.spot,
+          lat: cfg.lat,
+          lon: cfg.lon,
+          hours: 4,
+          best: true,
+          appForecast: true,
+          fuelPenalty: !!fuel?.enabled,
+          homeLat: Number.isFinite(homeLat) ? homeLat : undefined,
+          homeLon: Number.isFinite(homeLon) ? homeLon : undefined,
+        })
+
+        if (cancelled) return
+        const next = Array.isArray(data?.appForecast) ? (data.appForecast as AppSurfForecastDay[]) : []
+        appSurfForecastCache.set(cacheKey, { exp: Date.now() + 10 * 60 * 1000, data: { spot: data?.spot, appForecast: next } })
+        setSpotName(String(data?.spot || spotLabel))
+        setDays(next)
+      } catch (e: unknown) {
+        if (cancelled) return
+        setDays([])
+        setSpotName(spotLabel)
+        setError(e instanceof Error ? e.message : String(e || 'Forecast unavailable'))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadForecast()
+
+    return () => {
+      cancelled = true
+    }
+  }, [active, cacheKey, cfg, spotLabel])
+
+  return (
+    <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+      <div className="min-w-0 truncate tracking-widest text-xs text-[color:var(--fg-50)]" title={spotName || spotLabel || 'Surf forecast'}>
+        {spotName || spotLabel || (language === 'no' ? 'Ingen spot valgt' : 'No spot selected')}
+      </div>
+      <div className="mt-2 text-sm text-[color:var(--fg-50)]">
+        {language === 'no' ? 'Tilliten går ned jo lenger frem du ser.' : 'Confidence goes down the further out you go.'}
+      </div>
+
+      {!spotLabel || spotLabel === 'Not set' ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg en surfspot for å se varselet.' : 'Choose a surf spot to see the forecast.'}</div>
+      ) : loading ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster varsel…' : 'Loading forecast…'}</div>
+      ) : error ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Varsel er ikke tilgjengelig akkurat nå.' : 'Forecast is unavailable right now.'}</div>
+      ) : days.length === 0 ? (
+        <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
+      ) : (
+        <div className="mt-4 -mx-1 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
+          <div className="flex w-max gap-3">
+            {days.map((day, index) => {
+              const buckets = Array.isArray(day.buckets) ? day.buckets : []
+              const title = forecastDayTitle(language, index, day.label)
+              const dateText = formatForecastDate(language, day)
+              const dateLine = index < 3 ? `${day.label} · ${dateText}` : dateText
+              return (
+                <div key={String(day.date_local || day.label)} className="w-[172px] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 [scroll-snap-align:start]">
+                  <div className="text-sm font-semibold text-[color:var(--fg-90)]">{title}</div>
+                  <div className="mt-0.5 text-xs text-[color:var(--fg-45)]">{dateLine}</div>
+
+                  <div className="mt-4 space-y-4">
+                    {buckets.length ? buckets.map((bucket) => (
+                      <div key={`${day.date_local}-${bucket.label}`}>
+                        <div className="text-[11px] tracking-[0.16em] text-[color:var(--fg-45)] uppercase">{bucket.label}</div>
+                        <div className="mt-1 text-[color:var(--fg-85)]">
+                          <MirrorSurfRatingBars rating={bucket.rating ?? undefined} muted="rgba(255,255,255,0.28)" compact />
+                        </div>
+                        <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <ForecastDirectionArrow degrees={bucket.swell_direction_deg} />
+                            <span className="truncate">{bucket.wave_height_range_label || '--'}</span>
+                          </div>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <ForecastDirectionArrow degrees={bucket.wind_direction_deg} />
+                            <span className="truncate">{compactMetric(bucket.wind_speed_ms, 'm/s')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'Ingen data.' : 'No data.'}</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
