@@ -12895,9 +12895,45 @@ function surfRatingColor(rating: number | null | undefined) {
   }
 }
 
-function AppSurfForecastRatingBars({ rating }: { rating: number | null | undefined }) {
+function AppSurfForecastRatingBars({ rating, isExperienceBased }: { rating: number | null | undefined; isExperienceBased?: boolean }) {
   const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
   const color = surfRatingColor(rating)
+
+  if (isExperienceBased) {
+    return (
+      <div className="flex items-center gap-1.5" aria-label={`Experience-based surf rating ${value} of 6`}>
+        {Array.from({ length: 6 }).map((_, index) => {
+          const face = index + 1
+          const filled = face <= value
+          const dots = filled ? MIRROR_DICE_DOTS[face] ?? [] : []
+
+          return (
+            <span
+              key={face}
+              className="relative block h-3.5 w-3.5 shrink-0 rounded-[0.22rem] border"
+              style={{
+                backgroundColor: filled ? color : 'transparent',
+                borderColor: color,
+                opacity: filled ? 0.96 : 0.72,
+              }}
+            >
+              {dots.map(([left, top], dotIndex) => (
+                <span
+                  key={`${face}-${dotIndex}`}
+                  className="absolute h-1 w-1 rounded-full bg-[color:var(--app-bg)]"
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                />
+              ))}
+            </span>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center gap-1.5" aria-label={`Surf rating ${value} of 6`}>
@@ -13034,7 +13070,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
                       <div key={`${day.date_local}-${bucket.label}`}>
                         <div className="text-[11px] tracking-[0.16em] text-[color:var(--fg-45)] uppercase">{bucket.label}</div>
                         <div className="mt-1 text-[color:var(--fg-85)]">
-                          <AppSurfForecastRatingBars rating={bucket.rating} />
+                          <AppSurfForecastRatingBars rating={bucket.experienceDiceValue ?? bucket.rating} isExperienceBased={Boolean(bucket.ratingFromExperience)} />
                         </div>
                         <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
                           <div className="flex min-w-0 items-center gap-1.5">
