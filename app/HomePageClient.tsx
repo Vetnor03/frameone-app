@@ -12998,7 +12998,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
               {spotName || spotLabel || (language === 'no' ? 'Velg spot' : 'Choose spot')}
             </div>
             <div className="mt-1 text-sm text-[color:var(--fg-50)]">
-              {language === 'no' ? 'Tilliten går ned jo lenger frem du ser.' : 'Confidence goes down the further out you go.'}
+              {language === 'no' ? 'Tilliten går ned jo lenger frem du ser.' : 'Only visible in app'}
             </div>
           </div>
 
