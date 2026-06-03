@@ -7562,6 +7562,8 @@ type SurfCfg = {
   fuelPenalty?: FuelPenaltyCfg
 }
 
+type SurfForecastCfg = Omit<SurfCfg, 'id'>
+
 type SurfSettingsCfg = {
   fuelPenalty?: boolean
   homeLat?: number
@@ -7724,6 +7726,34 @@ function sanitizeFuelPenalty(x: any): FuelPenaltyCfg | undefined {
   return { enabled: false }
 }
 
+function sanitizeSurfForecastCfg(value: unknown): SurfForecastCfg | null {
+  if (!value || typeof value !== 'object') return null
+
+  const x = value as Record<string, unknown>
+  const spot = String(x.spot || '').trim().slice(0, 80)
+  let spotId = String(x.spotId || '').trim().slice(0, 80)
+
+  if (!spotId && spot) {
+    const found = findSpotByLabel(spot)
+    if (found?.spotId) spotId = found.spotId
+  }
+
+  const lat = Number.isFinite(Number(x.lat)) ? Number(x.lat) : undefined
+  const lon = Number.isFinite(Number(x.lon)) ? Number(x.lon) : undefined
+  const fuelPenalty = sanitizeFuelPenalty(x.fuelPenalty)
+
+  if (!spot && !spotId && lat == null && lon == null) return null
+
+  const out: SurfForecastCfg = {}
+  if (spot) out.spot = spot
+  if (spotId) out.spotId = spotId
+  if (lat != null) out.lat = lat
+  if (lon != null) out.lon = lon
+  if (fuelPenalty) out.fuelPenalty = fuelPenalty
+
+  return out
+}
+
 function deriveSurfSettingsFromModules(mods: Record<string, any>): SurfSettingsCfg {
   const surfList: SurfCfg[] = Array.isArray(mods?.surf) ? (mods.surf as SurfCfg[]) : []
 
@@ -7745,6 +7775,10 @@ function deriveSurfSettingsFromModules(mods: Record<string, any>): SurfSettingsC
 
 function normalizeModulesForSave(mods: Record<string, any>) {
   const safe = mods && typeof mods === 'object' ? { ...mods } : {}
+  const surfForecast = sanitizeSurfForecastCfg(safe.surf_forecast)
+
+  if (surfForecast) safe.surf_forecast = surfForecast
+  else delete safe.surf_forecast
 
   safe.surf_settings = deriveSurfSettingsFromModules(safe)
 
@@ -12664,24 +12698,24 @@ function SurfModuleSettingsTab({
     commitSurfList(next)
   }
 
-  const forecastSurfEntry =
+  const firstConfiguredSurf =
     surfInstances
-      .map(({ id }) => ({ id, cfg: surfList.find((x) => Number(x?.id) === id) || null }))
-      .find((entry) => entry.cfg && String(entry.cfg.spot || entry.cfg.spotId || '').trim()) ||
-    surfInstances.map(({ id }) => ({ id, cfg: surfList.find((x) => Number(x?.id) === id) || null }))[0] ||
+      .map(({ id }) => surfList.find((x) => Number(x?.id) === id) || null)
+      .find((cfg) => cfg && String(cfg.spot || cfg.spotId || '').trim()) ||
     null
+  const savedForecastCfg = sanitizeSurfForecastCfg(modulesJson.surf_forecast)
+  const forecastSurfCfg = savedForecastCfg || firstConfiguredSurf
 
   function pickForecastSpot(picked: Partial<SurfCfg>) {
-    const id = forecastSurfEntry?.id ?? 1
-    const currentFuel = sanitizeFuelPenalty(forecastSurfEntry?.cfg?.fuelPenalty || { enabled: false }) || { enabled: false }
+    const currentFuel = sanitizeFuelPenalty(forecastSurfCfg?.fuelPenalty || { enabled: false }) || { enabled: false }
     const nextSpot = String(picked?.spot ?? '').trim()
+    const forecastPatch = !isTodaysBestLabel(nextSpot)
+      ? { ...picked, fuelPenalty: { ...currentFuel, enabled: false } }
+      : picked
+    const nextForecast = sanitizeSurfForecastCfg(forecastPatch)
 
-    if (!isTodaysBestLabel(nextSpot)) {
-      upsertSurf(id, { ...picked, fuelPenalty: { ...currentFuel, enabled: false } })
-      return
-    }
-
-    upsertSurf(id, picked)
+    setModulesJson((prev) => normalizeModulesForSave({ ...prev, surf_forecast: nextForecast || undefined }))
+    markDirty()
   }
 
   return (
@@ -12724,7 +12758,7 @@ function SurfModuleSettingsTab({
 
               <SurfForecastCard
                 language={language}
-                cfg={forecastSurfEntry?.cfg || null}
+                cfg={forecastSurfCfg || null}
                 active={surfView === 'main'}
                 onPicked={pickForecastSpot}
               />
@@ -12796,7 +12830,7 @@ function SurfModuleSettingsTab({
 
 const appSurfForecastCache = new Map<string, { exp: number; data: { spot?: string; appForecast?: AppSurfForecastDay[] } }>()
 
-function appSurfForecastCacheKey(cfg: SurfCfg) {
+function appSurfForecastCacheKey(cfg: SurfForecastCfg) {
   const fuel = sanitizeFuelPenalty(cfg.fuelPenalty)
   return [
     String(cfg.spotId || ''),
@@ -12870,7 +12904,7 @@ function AppSurfForecastRatingBars({ rating }: { rating: number | null | undefin
   )
 }
 
-function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLanguage; cfg: SurfCfg | null; active: boolean; onPicked: (cfgPatch: Partial<SurfCfg>) => void }) {
+function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLanguage; cfg: SurfForecastCfg | null; active: boolean; onPicked: (cfgPatch: Partial<SurfCfg>) => void }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -12947,7 +12981,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
       <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">SPOT</div>
+            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">FORECAST</div>
             <div className="mt-1 truncate text-xl font-semibold leading-tight text-[color:var(--fg-90)]" title={spotName || spotLabel || 'Surf forecast'}>
               {spotName || spotLabel || (language === 'no' ? 'Velg spot' : 'Choose spot')}
             </div>
@@ -13018,7 +13052,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
       {open && (
         <SurfSpotSheet
           language={language}
-          title={language === 'no' ? 'Spot' : 'Spot'}
+          title={language === 'no' ? 'Varsel' : 'Forecast'}
           hideTodaysBest={false}
           onClose={() => setOpen(false)}
           onPicked={(picked) => {
@@ -13240,6 +13274,9 @@ function SurfSpotRow({
       ? 'Dagens Beste'
       : spotLabel}
 </div>
+            <div className="mt-1 text-sm text-[color:var(--fg-50)]">
+              {language === 'no' ? 'Dette er spoten som vises på framen.' : 'This is the spot shown on your frame.'}
+            </div>
           </div>
 
           <button
