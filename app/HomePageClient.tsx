@@ -12664,10 +12664,25 @@ function SurfModuleSettingsTab({
     commitSurfList(next)
   }
 
-  const forecastSurfCfg =
+  const forecastSurfEntry =
     surfInstances
-      .map(({ id }) => surfList.find((x) => Number(x?.id) === id) || null)
-      .find((cfg) => cfg && String(cfg.spot || cfg.spotId || '').trim()) || null
+      .map(({ id }) => ({ id, cfg: surfList.find((x) => Number(x?.id) === id) || null }))
+      .find((entry) => entry.cfg && String(entry.cfg.spot || entry.cfg.spotId || '').trim()) ||
+    surfInstances.map(({ id }) => ({ id, cfg: surfList.find((x) => Number(x?.id) === id) || null }))[0] ||
+    null
+
+  function pickForecastSpot(picked: Partial<SurfCfg>) {
+    const id = forecastSurfEntry?.id ?? 1
+    const currentFuel = sanitizeFuelPenalty(forecastSurfEntry?.cfg?.fuelPenalty || { enabled: false }) || { enabled: false }
+    const nextSpot = String(picked?.spot ?? '').trim()
+
+    if (!isTodaysBestLabel(nextSpot)) {
+      upsertSurf(id, { ...picked, fuelPenalty: { ...currentFuel, enabled: false } })
+      return
+    }
+
+    upsertSurf(id, picked)
+  }
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -12733,7 +12748,12 @@ function SurfModuleSettingsTab({
                 }}
               />
 
-              <SurfForecastCard language={language} cfg={forecastSurfCfg} active={surfView === 'main'} />
+              <SurfForecastCard
+                language={language}
+                cfg={forecastSurfEntry?.cfg || null}
+                active={surfView === 'main'}
+                onPicked={pickForecastSpot}
+              />
             </div>
           ) : (
             <SurfExperienceEditor
@@ -12800,7 +12820,6 @@ function formatForecastDate(language: AppLanguage, day: AppSurfForecastDay) {
 function forecastDayTitle(language: AppLanguage, index: number, fallback: string) {
   if (index === 0) return language === 'no' ? 'I dag' : 'Today'
   if (index === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
-  if (index === 2) return language === 'no' ? 'Neste dag' : 'Next day'
   return fallback
 }
 
@@ -12818,7 +12837,41 @@ function ForecastDirectionArrow({ degrees }: { degrees: number | null | undefine
   )
 }
 
-function SurfForecastCard({ language, cfg, active }: { language: AppLanguage; cfg: SurfCfg | null; active: boolean }) {
+function surfRatingColor(rating: number | null | undefined) {
+  switch (Math.round(Number(rating) || 0)) {
+    case 1: return '#dc2626'
+    case 2: return '#d97706'
+    case 3: return '#facc15'
+    case 4: return '#84cc16'
+    case 5: return '#15803d'
+    case 6: return '#a855f7'
+    default: return 'rgba(255,255,255,0.28)'
+  }
+}
+
+function AppSurfForecastRatingBars({ rating }: { rating: number | null | undefined }) {
+  const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
+  const color = surfRatingColor(rating)
+
+  return (
+    <div className="flex items-center gap-1.5" aria-label={`Surf rating ${value} of 6`}>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <span
+          key={index}
+          className="block h-2.5 w-3.5 rounded-[0.2rem] border"
+          style={{
+            backgroundColor: index < value ? color : 'transparent',
+            borderColor: color,
+            opacity: index < value ? 0.96 : 0.72,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLanguage; cfg: SurfCfg | null; active: boolean; onPicked: (cfgPatch: Partial<SurfCfg>) => void }) {
+  const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [spotName, setSpotName] = useState('')
@@ -12890,15 +12943,29 @@ function SurfForecastCard({ language, cfg, active }: { language: AppLanguage; cf
   }, [active, cacheKey, cfg, spotLabel])
 
   return (
-    <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
-      <div className="min-w-0 truncate tracking-widest text-xs text-[color:var(--fg-50)]" title={spotName || spotLabel || 'Surf forecast'}>
-        {spotName || spotLabel || (language === 'no' ? 'Ingen spot valgt' : 'No spot selected')}
-      </div>
-      <div className="mt-2 text-sm text-[color:var(--fg-50)]">
-        {language === 'no' ? 'Tilliten går ned jo lenger frem du ser.' : 'Confidence goes down the further out you go.'}
-      </div>
+    <>
+      <div className="rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="tracking-widest text-xs text-[color:var(--fg-50)]">SPOT</div>
+            <div className="mt-1 truncate text-xl font-semibold leading-tight text-[color:var(--fg-90)]" title={spotName || spotLabel || 'Surf forecast'}>
+              {spotName || spotLabel || (language === 'no' ? 'Velg spot' : 'Choose spot')}
+            </div>
+            <div className="mt-1 text-sm text-[color:var(--fg-50)]">
+              {language === 'no' ? 'Tilliten går ned jo lenger frem du ser.' : 'Confidence goes down the further out you go.'}
+            </div>
+          </div>
 
-      {!spotLabel || spotLabel === 'Not set' ? (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="shrink-0 h-10 px-4 rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-70)] tracking-widest text-xs hover:bg-[color:var(--panel-05)]"
+          >
+            {language === 'no' ? 'ENDRE' : 'CHANGE'}
+          </button>
+        </div>
+
+        {!spotLabel || spotLabel === 'Not set' ? (
         <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg en surfspot for å se varselet.' : 'Choose a surf spot to see the forecast.'}</div>
       ) : loading ? (
         <div className="mt-4 text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster varsel…' : 'Loading forecast…'}</div>
@@ -12912,26 +12979,25 @@ function SurfForecastCard({ language, cfg, active }: { language: AppLanguage; cf
             {days.map((day, index) => {
               const buckets = Array.isArray(day.buckets) ? day.buckets : []
               const title = forecastDayTitle(language, index, day.label)
-              const dateText = formatForecastDate(language, day)
-              const dateLine = index < 3 ? `${day.label} · ${dateText}` : dateText
               return (
-                <div key={String(day.date_local || day.label)} className="w-[172px] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 [scroll-snap-align:start]">
-                  <div className="text-sm font-semibold text-[color:var(--fg-90)]">{title}</div>
-                  <div className="mt-0.5 text-xs text-[color:var(--fg-45)]">{dateLine}</div>
+                <div key={String(day.date_local || day.label)} className="w-[176px] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3 [scroll-snap-align:start]">
+                  <div className="text-lg font-medium leading-tight text-[color:var(--fg-80)]">{title}</div>
 
-                  <div className="mt-4 space-y-4">
+                  <div className="mt-3 space-y-3">
                     {buckets.length ? buckets.map((bucket) => (
                       <div key={`${day.date_local}-${bucket.label}`}>
                         <div className="text-[11px] tracking-[0.16em] text-[color:var(--fg-45)] uppercase">{bucket.label}</div>
                         <div className="mt-1 text-[color:var(--fg-85)]">
-                          <MirrorSurfRatingBars rating={bucket.rating ?? undefined} muted="rgba(255,255,255,0.28)" compact />
+                          <AppSurfForecastRatingBars rating={bucket.rating} />
                         </div>
                         <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
                           <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="shrink-0 text-[color:var(--fg-55)]">Swell:</span>
                             <ForecastDirectionArrow degrees={bucket.swell_direction_deg} />
                             <span className="truncate">{bucket.wave_height_range_label || '--'}</span>
                           </div>
                           <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="shrink-0 text-[color:var(--fg-55)]">Wind:</span>
                             <ForecastDirectionArrow degrees={bucket.wind_direction_deg} />
                             <span className="truncate">{compactMetric(bucket.wind_speed_ms, 'm/s')}</span>
                           </div>
@@ -12946,8 +13012,22 @@ function SurfForecastCard({ language, cfg, active }: { language: AppLanguage; cf
             })}
           </div>
         </div>
+        )}
+      </div>
+
+      {open && (
+        <SurfSpotSheet
+          language={language}
+          title={language === 'no' ? 'Spot' : 'Spot'}
+          hideTodaysBest={false}
+          onClose={() => setOpen(false)}
+          onPicked={(picked) => {
+            onPicked(picked)
+            setOpen(false)
+          }}
+        />
       )}
-    </div>
+    </>
   )
 }
 
