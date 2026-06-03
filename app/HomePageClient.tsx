@@ -8149,7 +8149,7 @@ function ModuleSettingsTab({
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: () => void
+  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
   scheduleAutoSave: () => void
   activeDeviceId: string | null
 }) {
@@ -12570,7 +12570,7 @@ function SurfModuleSettingsTab({
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: () => void
+  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
   scheduleAutoSave: () => void
 }) {
   const [surfView, setSurfView] = useState<'main' | 'log'>('main')
@@ -12684,8 +12684,10 @@ function SurfModuleSettingsTab({
       })
       .filter((x) => Number.isFinite(x.id) && x.id >= 1 && x.id <= 255)
 
-    setModulesJson((prev) => normalizeModulesForSave({ ...prev, surf: fixed }))
-    markDirty()
+    const nextModules = normalizeModulesForSave({ ...modulesJson, surf: fixed })
+
+    setModulesJson(nextModules)
+    markDirty({ modulesJson: nextModules })
     scheduleAutoSave()
   }
 
@@ -12721,8 +12723,10 @@ function SurfModuleSettingsTab({
       : picked
     const nextForecast = sanitizeSurfForecastCfg(forecastPatch)
 
-    setModulesJson((prev) => normalizeModulesForSave({ ...prev, surf_forecast: nextForecast || undefined }))
-    markDirty()
+    const nextModules = normalizeModulesForSave({ ...modulesJson, surf_forecast: nextForecast || undefined })
+
+    setModulesJson(nextModules)
+    markDirty({ modulesJson: nextModules })
     scheduleAutoSave()
   }
 
