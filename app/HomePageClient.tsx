@@ -12922,9 +12922,23 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
   const [error, setError] = useState('')
   const [spotName, setSpotName] = useState('')
   const [days, setDays] = useState<AppSurfForecastDay[]>([])
+  const [forecastPage, setForecastPage] = useState(0)
+  const forecastScrollerRef = useRef<HTMLDivElement | null>(null)
 
   const spotLabel = String(cfg?.spot || cfg?.spotId || '').trim()
   const cacheKey = cfg ? appSurfForecastCacheKey(cfg) : ''
+  const forecastPages = useMemo(() => {
+    const chunks: AppSurfForecastDay[][] = []
+    for (let index = 0; index < days.length; index += 2) {
+      chunks.push(days.slice(index, index + 2))
+    }
+    return chunks
+  }, [days])
+  const forecastPageCount = Math.min(4, forecastPages.length)
+  const resetForecastPager = useCallback(() => {
+    setForecastPage(0)
+    requestAnimationFrame(() => forecastScrollerRef.current?.scrollTo({ left: 0 }))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -12935,6 +12949,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
         setError('')
         setSpotName(spotLabel || '')
         setDays([])
+        resetForecastPager()
         return
       }
 
@@ -12942,6 +12957,7 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
       if (cached && cached.exp > Date.now()) {
         setSpotName(String(cached.data.spot || spotLabel))
         setDays(Array.isArray(cached.data.appForecast) ? cached.data.appForecast : [])
+        resetForecastPager()
         setError('')
         setLoading(false)
         return
@@ -12971,9 +12987,11 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
         appSurfForecastCache.set(cacheKey, { exp: Date.now() + 10 * 60 * 1000, data: { spot: data?.spot, appForecast: next } })
         setSpotName(String(data?.spot || spotLabel))
         setDays(next)
+        resetForecastPager()
       } catch (e: unknown) {
         if (cancelled) return
         setDays([])
+        resetForecastPager()
         setSpotName(spotLabel)
         setError(e instanceof Error ? e.message : String(e || 'Forecast unavailable'))
       } finally {
@@ -12986,7 +13004,13 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
     return () => {
       cancelled = true
     }
-  }, [active, cacheKey, cfg, spotLabel])
+  }, [active, cacheKey, cfg, resetForecastPager, spotLabel])
+
+  const handleForecastScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget
+    const nextPage = target.clientWidth > 0 ? Math.round(target.scrollLeft / target.clientWidth) : 0
+    setForecastPage(Math.max(0, Math.min(forecastPageCount - 1, nextPage)))
+  }, [forecastPageCount])
 
   return (
     <>
@@ -13021,42 +13045,74 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
         <div className="mt-4 text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Ingen varseldata tilgjengelig.' : 'No forecast data available.'}</div>
       ) : (
         <div className="relative mt-4">
-          <div className="-mx-1 flex gap-3 overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-snap-type:x_proximity]">
-            {days.map((day, index) => {
-              const buckets = Array.isArray(day.buckets) ? day.buckets : []
-              const title = forecastDayTitle(language, index, day.label)
-              return (
-                <div key={String(day.date_local || day.label)} className="w-[calc((100%_-_0.75rem)/2)] shrink-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3 [scroll-snap-align:start]">
-                  <div className="text-lg font-medium leading-tight text-[color:var(--fg-80)]">{title}</div>
+          <div
+            ref={forecastScrollerRef}
+            onScroll={handleForecastScroll}
+            className="-mx-1 flex overflow-x-auto no-scrollbar px-1 pb-1 [-webkit-overflow-scrolling:touch] [scroll-behavior:smooth] [scroll-snap-type:x_mandatory]"
+            aria-label={language === 'no' ? 'Surfvarsel sider' : 'Surf forecast pages'}
+          >
+            {forecastPages.map((pageDays, pageIndex) => (
+              <div
+                key={`surf-forecast-page-${pageIndex}`}
+                className="grid w-full shrink-0 grid-cols-2 gap-3 [scroll-snap-align:start] [scroll-snap-stop:always]"
+              >
+                {pageDays.map((day, dayOffset) => {
+                  const index = pageIndex * 2 + dayOffset
+                  const buckets = Array.isArray(day.buckets) ? day.buckets : []
+                  const title = forecastDayTitle(language, index, day.label)
+                  return (
+                    <div key={String(day.date_local || day.label)} className="min-w-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
+                      <div className="text-lg font-medium leading-tight text-[color:var(--fg-80)]">{title}</div>
 
-                  <div className="mt-3 space-y-3">
-                    {buckets.length ? buckets.map((bucket) => (
-                      <div key={`${day.date_local}-${bucket.label}`}>
-                        <div className="text-[11px] tracking-[0.16em] text-[color:var(--fg-45)] uppercase">{bucket.label}</div>
-                        <div className="mt-1 text-[color:var(--fg-85)]">
-                          <AppSurfForecastRatingBars rating={bucket.rating} />
-                        </div>
-                        <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="shrink-0 text-[color:var(--fg-55)]">Swell:</span>
-                            <ForecastDirectionArrow degrees={bucket.swell_direction_deg} />
-                            <span className="truncate">{bucket.wave_height_range_label || '--'}</span>
+                      <div className="mt-3 space-y-3">
+                        {buckets.length ? buckets.map((bucket) => (
+                          <div key={`${day.date_local}-${bucket.label}`}>
+                            <div className="text-[11px] tracking-[0.16em] text-[color:var(--fg-45)] uppercase">{bucket.label}</div>
+                            <div className="mt-1 text-[color:var(--fg-85)]">
+                              <AppSurfForecastRatingBars rating={bucket.rating} />
+                            </div>
+                            <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <span className="shrink-0 text-[color:var(--fg-55)]">Swell:</span>
+                                <ForecastDirectionArrow degrees={bucket.swell_direction_deg} />
+                                <span className="truncate">{bucket.wave_height_range_label || '--'}</span>
+                              </div>
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <span className="shrink-0 text-[color:var(--fg-55)]">Wind:</span>
+                                <ForecastDirectionArrow degrees={bucket.wind_direction_deg} />
+                                <span className="truncate">{compactMetric(bucket.wind_speed_ms, 'm/s')}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="shrink-0 text-[color:var(--fg-55)]">Wind:</span>
-                            <ForecastDirectionArrow degrees={bucket.wind_direction_deg} />
-                            <span className="truncate">{compactMetric(bucket.wind_speed_ms, 'm/s')}</span>
-                          </div>
-                        </div>
+                        )) : (
+                          <div className="text-xs text-[color:var(--fg-80)]">{language === 'no' ? 'Ingen data.' : 'No data.'}</div>
+                        )}
                       </div>
-                    )) : (
-                      <div className="text-xs text-[color:var(--fg-80)]">{language === 'no' ? 'Ingen data.' : 'No data.'}</div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+                    </div>
+                  )
+                })}
+                {pageDays.length === 1 ? <div aria-hidden="true" /> : null}
+              </div>
+            ))}
           </div>
+          {forecastPageCount > 1 ? (
+            <div className="mt-4 flex justify-center">
+              <div className="relative flex gap-2" aria-label={language === 'no' ? 'Surfvarsel posisjon' : 'Surf forecast position'}>
+                {Array.from({ length: forecastPageCount }).map((_, index) => (
+                  <span
+                    key={index}
+                    className="h-1.5 w-8 rounded-full bg-[color:var(--fg-30)] opacity-45"
+                    aria-hidden="true"
+                  />
+                ))}
+                <span
+                  className="absolute left-0 top-0 h-1.5 w-8 rounded-full bg-[color:var(--accent)] shadow-[0_0_14px_rgba(56,178,255,0.35)] transition-transform duration-300 ease-out"
+                  style={{ transform: `translateX(${Math.min(forecastPage, forecastPageCount - 1) * 2.5}rem)` }}
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
         )}
       </div>
