@@ -2061,6 +2061,7 @@ async function handleSelectTab(k: TabKey) {
                       modulesJson={modulesJson}
                       setModulesJson={setModulesJson}
                       markDirty={markDirty}
+                      scheduleAutoSave={scheduleFrameAutoSave}
                       activeDeviceId={activeDeviceId}
                     />
                   )}
@@ -8139,6 +8140,7 @@ function ModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
+  scheduleAutoSave,
   activeDeviceId,
 }: {
   language: AppLanguage
@@ -8148,6 +8150,7 @@ function ModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: () => void
+  scheduleAutoSave: () => void
   activeDeviceId: string | null
 }) {
   if (module === 'surf') {
@@ -8159,6 +8162,7 @@ function ModuleSettingsTab({
         modulesJson={modulesJson}
         setModulesJson={setModulesJson}
         markDirty={markDirty}
+        scheduleAutoSave={scheduleAutoSave}
       />
     )
   }
@@ -12559,6 +12563,7 @@ function SurfModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
+  scheduleAutoSave,
 }: {
   language: AppLanguage
   layoutKey: LayoutKey
@@ -12566,6 +12571,7 @@ function SurfModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: () => void
+  scheduleAutoSave: () => void
 }) {
   const [surfView, setSurfView] = useState<'main' | 'log'>('main')
   const [, setSurfViewTitle] = useState('SURF')
@@ -12680,6 +12686,7 @@ function SurfModuleSettingsTab({
 
     setModulesJson((prev) => normalizeModulesForSave({ ...prev, surf: fixed }))
     markDirty()
+    scheduleAutoSave()
   }
 
   function upsertSurf(id: number, patch: Partial<SurfCfg>) {
@@ -12716,6 +12723,7 @@ function SurfModuleSettingsTab({
 
     setModulesJson((prev) => normalizeModulesForSave({ ...prev, surf_forecast: nextForecast || undefined }))
     markDirty()
+    scheduleAutoSave()
   }
 
   return (
