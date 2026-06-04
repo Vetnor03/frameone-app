@@ -53,8 +53,164 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   const t = setTimeout(() => ac.abort(), timeoutMs)
   try {
     return await fetch(url, { ...init, signal: ac.signal })
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      const err = new Error('timeout')
+      ;(err as any).code = 'timeout'
+      throw err
+    }
+    throw e
   } finally {
     clearTimeout(t)
+  }
+}
+
+type OpenMeteoSource = 'live' | 'stale_cache' | 'unavailable'
+type OpenMeteoFetchResult<T = any> = {
+  data: T | null
+  source: OpenMeteoSource
+  error: string | null
+  cache_age_ms: number | null
+  stale_expires_at: string | null
+}
+type SurfRequestContext = {
+  openMeteoInFlight: Map<string, Promise<OpenMeteoFetchResult<any>>>
+}
+
+const OPEN_METEO_FORECAST_TIMEOUT_MS = 3500
+const OPEN_METEO_MARINE_TIMEOUT_MS = 5000
+const OPEN_METEO_FORECAST_CACHE_TTL_MS = 15 * 60 * 1000
+const OPEN_METEO_MARINE_CACHE_TTL_MS = 15 * 60 * 1000
+const OPEN_METEO_STALE_CACHE_TTL_MS = 2 * 60 * 60 * 1000
+const OPEN_METEO_CACHE_MAX_ENTRIES = 200
+const OPEN_METEO_COORD_BUCKET_DEGREES = 0.05
+
+type OpenMeteoCacheEntry = {
+  exp: number
+  staleExp: number
+  createdAt: number
+  lastAccess: number
+  v: any
+}
+
+const __openMeteoJsonCache =
+  (globalThis as any).__surfOpenMeteoJsonCache || new Map<string, OpenMeteoCacheEntry>()
+;(globalThis as any).__surfOpenMeteoJsonCache = __openMeteoJsonCache
+
+function createSurfRequestContext(): SurfRequestContext {
+  return { openMeteoInFlight: new Map() }
+}
+
+function pruneExpiringOpenMeteoCache<T>(cache: Map<string, { exp: number; v: T }>, now = Date.now()) {
+  for (const [key, entry] of cache) {
+    if (entry.exp <= now) cache.delete(key)
+  }
+
+  while (cache.size > OPEN_METEO_CACHE_MAX_ENTRIES) {
+    const oldestKey = cache.keys().next().value
+    if (!oldestKey) break
+    cache.delete(oldestKey)
+  }
+}
+
+function openMeteoStaleExpiresAt(entry: OpenMeteoCacheEntry | undefined) {
+  return entry ? new Date(entry.staleExp).toISOString() : null
+}
+
+function openMeteoCacheAgeMs(entry: OpenMeteoCacheEntry | undefined, now = Date.now()) {
+  return entry ? Math.max(0, now - entry.createdAt) : null
+}
+
+function pruneOpenMeteoCache(now = Date.now()) {
+  for (const [key, entry] of __openMeteoJsonCache) {
+    if (entry.staleExp <= now) __openMeteoJsonCache.delete(key)
+  }
+
+  while (__openMeteoJsonCache.size > OPEN_METEO_CACHE_MAX_ENTRIES) {
+    let oldestKey: string | null = null
+    let oldestAccess = Number.POSITIVE_INFINITY
+    for (const [key, entry] of __openMeteoJsonCache) {
+      if (entry.lastAccess < oldestAccess) {
+        oldestAccess = entry.lastAccess
+        oldestKey = key
+      }
+    }
+    if (!oldestKey) break
+    __openMeteoJsonCache.delete(oldestKey)
+  }
+}
+
+function normalizeOpenMeteoCacheKey(url: string) {
+  const u = new URL(url)
+  const roundCoord = (value: string | null) => {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return value ?? ''
+    const bucketed = Math.round(n / OPEN_METEO_COORD_BUCKET_DEGREES) * OPEN_METEO_COORD_BUCKET_DEGREES
+    return bucketed.toFixed(2)
+  }
+
+  if (u.hostname === 'api.open-meteo.com' || u.hostname === 'marine-api.open-meteo.com') {
+    u.searchParams.set('latitude', roundCoord(u.searchParams.get('latitude')))
+    u.searchParams.set('longitude', roundCoord(u.searchParams.get('longitude')))
+  }
+
+  const entries = Array.from(u.searchParams.entries()).sort(([a], [b]) => a.localeCompare(b))
+  u.search = ''
+  for (const [k, v] of entries) u.searchParams.append(k, v)
+  return u.toString()
+}
+
+function openMeteoErrorCode(e: any): string {
+  if (e?.code === 'timeout' || e?.name === 'AbortError' || String(e?.message ?? '').toLowerCase().includes('timeout')) return 'timeout'
+  const status = Number(e?.status)
+  if (Number.isFinite(status)) return String(status)
+  return String(e?.message ?? 'fetch_error')
+}
+
+async function fetchOpenMeteoJson(
+  ctx: SurfRequestContext,
+  url: string,
+  opts: { timeoutMs: number; cacheTtlMs: number; allowStale?: boolean }
+): Promise<OpenMeteoFetchResult<any>> {
+  const key = normalizeOpenMeteoCacheKey(url)
+  const now = Date.now()
+  pruneOpenMeteoCache(now)
+  const cached = __openMeteoJsonCache.get(key)
+  if (cached && cached.exp > now) {
+    cached.lastAccess = now
+    return { data: cached.v, source: 'live', error: null, cache_age_ms: openMeteoCacheAgeMs(cached, now), stale_expires_at: openMeteoStaleExpiresAt(cached) }
+  }
+
+  const existing = ctx.openMeteoInFlight.get(key)
+  if (existing) return existing
+
+  const p = (async (): Promise<OpenMeteoFetchResult<any>> => {
+    try {
+      const resp = await fetchWithTimeout(url, {}, opts.timeoutMs)
+      if (!resp.ok) {
+        const err = new Error(String(resp.status))
+        ;(err as any).status = resp.status
+        throw err
+      }
+      const data = await resp.json()
+      __openMeteoJsonCache.set(key, { exp: now + opts.cacheTtlMs, staleExp: now + OPEN_METEO_STALE_CACHE_TTL_MS, createdAt: now, lastAccess: now, v: data })
+      pruneOpenMeteoCache(now)
+      return { data, source: 'live', error: null, cache_age_ms: 0, stale_expires_at: new Date(now + OPEN_METEO_STALE_CACHE_TTL_MS).toISOString() }
+    } catch (e: any) {
+      const error = openMeteoErrorCode(e)
+      if (opts.allowStale !== false && cached && cached.staleExp > now) {
+        cached.lastAccess = now
+        return { data: cached.v, source: 'stale_cache', error, cache_age_ms: openMeteoCacheAgeMs(cached, now), stale_expires_at: openMeteoStaleExpiresAt(cached) }
+      }
+      return { data: null, source: 'unavailable', error, cache_age_ms: null, stale_expires_at: null }
+    }
+  })()
+
+  ctx.openMeteoInFlight.set(key, p)
+  try {
+    return await p
+  } finally {
+    ctx.openMeteoInFlight.delete(key)
   }
 }
 
@@ -85,9 +241,10 @@ function sunCacheKey(lat: number, lon: number) {
   return `sun|${r(lat)},${r(lon)}|${day}`
 }
 
-async function fetchSunTimes(lat: number, lon: number): Promise<SunTimes> {
+async function fetchSunTimes(lat: number, lon: number, ctx = createSurfRequestContext()): Promise<SunTimes> {
   const key = sunCacheKey(lat, lon)
   const now = Date.now()
+  pruneExpiringOpenMeteoCache(__sunCache, now)
   const cached = __sunCache.get(key)
   if (cached && cached.exp > now) return cached.v
 
@@ -98,10 +255,10 @@ async function fetchSunTimes(lat: number, lon: number): Promise<SunTimes> {
     `&forecast_days=1` +
     `&timezone=${encodeURIComponent('Europe/Oslo')}`
 
-  const resp = await fetchWithTimeout(url, {}, 12000)
-  if (!resp.ok) throw new Error('Sunrise/sunset fetch failed')
+  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: SUN_CACHE_TTL_MS })
+  if (!fetched.data) return { sunrise: '--:--', sunset: '--:--' }
 
-  const j: any = await resp.json()
+  const j: any = fetched.data
   const sunriseIso = j?.daily?.sunrise?.[0]
   const sunsetIso = j?.daily?.sunset?.[0]
 
@@ -111,6 +268,7 @@ async function fetchSunTimes(lat: number, lon: number): Promise<SunTimes> {
   }
 
   __sunCache.set(key, { exp: now + SUN_CACHE_TTL_MS, v })
+  pruneExpiringOpenMeteoCache(__sunCache, now)
   return v
 }
 
@@ -125,9 +283,16 @@ type DailyExtras = {
   weather_label: string
 }
 
+type DailyExtrasResult = DailyExtras & {
+  source: OpenMeteoSource
+  error: string | null
+  cache_age_ms: number | null
+  stale_expires_at: string | null
+}
+
 const WX_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 const __wxCache =
-  (globalThis as any).__surfWxCache || new Map<string, { exp: number; v: DailyExtras }>()
+  (globalThis as any).__surfWxCache || new Map<string, { exp: number; v: DailyExtrasResult }>()
 ;(globalThis as any).__surfWxCache = __wxCache
 
 function wxCacheKey(lat: number, lon: number) {
@@ -146,11 +311,12 @@ function weatherMainFromCode(code: number | null): 'Sunny' | 'Cloudy' | 'Rain' |
   return 'Cloudy'
 }
 
-async function fetchDailyExtras(lat: number, lon: number): Promise<DailyExtras> {
+async function fetchDailyExtras(lat: number, lon: number, ctx = createSurfRequestContext()): Promise<DailyExtrasResult> {
   const key = wxCacheKey(lat, lon)
   const now = Date.now()
+  pruneExpiringOpenMeteoCache(__wxCache, now)
   const cached = __wxCache.get(key)
-  if (cached && cached.exp > now) return cached.v
+  if (cached && cached.exp > now) return { ...cached.v, source: cached.v.source ?? 'live', error: cached.v.error ?? null, cache_age_ms: cached.v.cache_age_ms ?? null, stale_expires_at: cached.v.stale_expires_at ?? null }
 
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
@@ -159,10 +325,22 @@ async function fetchDailyExtras(lat: number, lon: number): Promise<DailyExtras> 
     `&forecast_days=1` +
     `&timezone=${encodeURIComponent('Europe/Oslo')}`
 
-  const resp = await fetchWithTimeout(url, {}, 12000)
-  if (!resp.ok) throw new Error('Daily extras fetch failed')
+  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: WX_CACHE_TTL_MS })
+  if (!fetched.data) {
+    return {
+      sun: { sunrise: '--:--', sunset: '--:--' },
+      air: { temp_min_c: null, temp_max_c: null },
+      weather: { code: null, main: 'Cloudy' },
+      temp_c: null,
+      weather_label: 'Unavailable',
+      source: 'unavailable',
+      error: fetched.error,
+      cache_age_ms: fetched.cache_age_ms,
+      stale_expires_at: fetched.stale_expires_at,
+    }
+  }
 
-  const j: any = await resp.json()
+  const j: any = fetched.data
 
   const tmin = j?.daily?.temperature_2m_min?.[0]
   const tmax = j?.daily?.temperature_2m_max?.[0]
@@ -179,15 +357,20 @@ async function fetchDailyExtras(lat: number, lon: number): Promise<DailyExtras> 
   const temp_c =
     tminN != null && tmaxN != null ? (tminN + tmaxN) / 2 : (tmaxN ?? tminN ?? null)
 
-  const v: DailyExtras = {
+  const v: DailyExtrasResult = {
     sun: { sunrise: hhmmFromIsoLocal(sunriseIso), sunset: hhmmFromIsoLocal(sunsetIso) },
     air: { temp_min_c: tminN, temp_max_c: tmaxN },
     weather: { code: codeN, main },
     temp_c,
     weather_label: main,
+    source: fetched.source,
+    error: fetched.error,
+    cache_age_ms: fetched.cache_age_ms,
+    stale_expires_at: fetched.stale_expires_at,
   }
 
   __wxCache.set(key, { exp: now + WX_CACHE_TTL_MS, v })
+  pruneExpiringOpenMeteoCache(__wxCache, now)
   return v
 }
 
@@ -206,15 +389,19 @@ async function resolveOwnerUserIdFromBearerToken(rawBearer: string): Promise<str
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) return null
 
-  const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: bearer } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+  if (bearerLooksLikeUserJwt(bearer)) {
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: bearer } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
 
-  const { data: { user } } = await userSupabase.auth.getUser()
-  if (user?.id) return user.id
+    const { data: { user } } = await userSupabase.auth.getUser()
+    if (user?.id) return user.id
+  } else {
+    console.info('Bearer is not user JWT, trying device auth fallback')
+  }
 
-  const rawToken = bearer.replace(/^Bearer\s+/i, '').trim()
+  const rawToken = rawTokenFromBearer(bearer)
   if (!rawToken) return null
 
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
@@ -340,9 +527,10 @@ function localYmdInTz(timeZone: string, d: Date) {
   return fmt.format(d)
 }
 
-async function fetchWaterTempMinMaxToday(lat: number, lon: number): Promise<WaterMinMax> {
+async function fetchWaterTempMinMaxToday(lat: number, lon: number, ctx = createSurfRequestContext()): Promise<WaterMinMax> {
   const key = sstCacheKey(lat, lon)
   const now = Date.now()
+  pruneExpiringOpenMeteoCache(__sstCache, now)
   const cached = __sstCache.get(key)
   if (cached && cached.exp > now) return cached.v
 
@@ -354,10 +542,10 @@ async function fetchWaterTempMinMaxToday(lat: number, lon: number): Promise<Wate
     `&cell_selection=sea` +
     `&forecast_days=1`
 
-  const resp = await fetchWithTimeout(url, {}, 12000)
-  if (!resp.ok) throw new Error('SST fetch failed')
+  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, cacheTtlMs: SST_CACHE_TTL_MS })
+  if (!fetched.data) return { temp_min_c: null, temp_max_c: null }
 
-  const j: any = await resp.json()
+  const j: any = fetched.data
   const times: any[] = Array.isArray(j?.hourly?.time) ? j.hourly.time : []
   const temps: any[] = Array.isArray(j?.hourly?.sea_surface_temperature) ? j.hourly.sea_surface_temperature : []
 
@@ -378,6 +566,7 @@ async function fetchWaterTempMinMaxToday(lat: number, lon: number): Promise<Wate
 
   const v: WaterMinMax = { temp_min_c: tmin, temp_max_c: tmax }
   __sstCache.set(key, { exp: now + SST_CACHE_TTL_MS, v })
+  pruneExpiringOpenMeteoCache(__sstCache, now)
   return v
 }
 
@@ -479,6 +668,15 @@ type MarineSeries = {
   windD: number[]
   forecastPoint: ForecastPoint
   coordinateResolution: ForecastCoordinateResolution
+  marine_source: OpenMeteoSource
+  marine_error: string | null
+  marine_cache_age_ms: number | null
+  marine_stale_expires_at: string | null
+  weather_source: OpenMeteoSource
+  weather_error: string | null
+  weather_cache_age_ms: number | null
+  weather_stale_expires_at: string | null
+  wind_unavailable: boolean
 }
 
 const SECONDARY_MIN_M = 0.05
@@ -601,7 +799,7 @@ function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
   }
 }
 
-async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries> {
+async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfRequestContext()): Promise<MarineSeries> {
   const timeHour = isoHourUTC()
   const coord = resolveForecastCoordinates(lat, lon)
   const requestLat = coord.requestLat
@@ -622,23 +820,23 @@ async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries
     `&hourly=wind_speed_10m,wind_direction_10m` +
     `&timezone=UTC&wind_speed_unit=ms`
 
-  const [marineResp, windResp] = await Promise.all([
-    fetchWithTimeout(marineUrl, {}, 12000),
-    fetchWithTimeout(windUrl, {}, 12000),
+  const [marineFetched, windFetched] = await Promise.all([
+    fetchOpenMeteoJson(ctx, marineUrl, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, cacheTtlMs: OPEN_METEO_MARINE_CACHE_TTL_MS }),
+    fetchOpenMeteoJson(ctx, windUrl, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: OPEN_METEO_FORECAST_CACHE_TTL_MS }),
   ])
-  if (!marineResp.ok) throw new Error('Marine fetch failed')
-  if (!windResp.ok) throw new Error('Wind fetch failed')
+  if (!marineFetched.data) throw new Error(`Marine fetch failed${marineFetched.error ? `: ${marineFetched.error}` : ''}`)
 
-  const marine = await marineResp.json()
-  const wind = await windResp.json()
+  const marine = marineFetched.data
+  const wind = windFetched.data
 
   const mt: string[] = marine?.hourly?.time ?? []
-  const wt: string[] = wind?.hourly?.time ?? []
+  const wtRaw: string[] = wind?.hourly?.time ?? []
   if (!Array.isArray(mt) || !mt.length) throw new Error('Marine data missing time')
-  if (!Array.isArray(wt) || !wt.length) throw new Error('Wind data missing time')
+  const wt: string[] = Array.isArray(wtRaw) && wtRaw.length ? wtRaw : mt
 
   const mi = nearestHourIndex(mt, timeHour)
   const wi = nearestHourIndex(wt, timeHour)
+  const windUnavailable = !windFetched.data
 
   const pH: number[] = Array.isArray(marine?.hourly?.wave_height) ? marine.hourly.wave_height.map(toForecastNum) : []
   const pD: number[] = Array.isArray(marine?.hourly?.wave_direction) ? marine.hourly.wave_direction.map(toForecastNum) : []
@@ -654,8 +852,12 @@ async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries
     ? marine.hourly.secondary_swell_wave_period.map(toForecastNum)
     : []
 
-  const windS: number[] = Array.isArray(wind?.hourly?.wind_speed_10m) ? wind.hourly.wind_speed_10m.map(toForecastNum) : []
-  const windD: number[] = Array.isArray(wind?.hourly?.wind_direction_10m) ? wind.hourly.wind_direction_10m.map(toForecastNum) : []
+  const windS: number[] = Array.isArray(wind?.hourly?.wind_speed_10m)
+    ? wind.hourly.wind_speed_10m.map(toForecastNum)
+    : mt.map(() => 0)
+  const windD: number[] = Array.isArray(wind?.hourly?.wind_direction_10m)
+    ? wind.hourly.wind_direction_10m.map(toForecastNum)
+    : mt.map(() => 0)
 
   const gridLat = Number(marine?.latitude)
   const gridLon = Number(marine?.longitude)
@@ -668,12 +870,47 @@ async function fetchMarineSeries(lat: number, lon: number): Promise<MarineSeries
     source: 'open-meteo',
   }
 
-  return { mt, wt, mi, wi, pH, pD, pP, sH, sD, sP, windS, windD, forecastPoint, coordinateResolution: coord }
+  return {
+    mt,
+    wt,
+    mi,
+    wi,
+    pH,
+    pD,
+    pP,
+    sH,
+    sD,
+    sP,
+    windS,
+    windD,
+    forecastPoint,
+    coordinateResolution: coord,
+    marine_source: marineFetched.source,
+    marine_error: marineFetched.error,
+    marine_cache_age_ms: marineFetched.cache_age_ms,
+    marine_stale_expires_at: marineFetched.stale_expires_at,
+    weather_source: windFetched.source,
+    weather_error: windFetched.error,
+    weather_cache_age_ms: windFetched.cache_age_ms,
+    weather_stale_expires_at: windFetched.stale_expires_at,
+    wind_unavailable: windUnavailable,
+  }
 }
 
 /** ---------- User experience fetch ---------- **/
 
 type UserExpMap = Record<string, UserSurfExperienceRecord[]>
+
+
+function rawTokenFromBearer(bearer: string) {
+  return String(bearer || '').replace(/^Bearer\s+/i, '').trim()
+}
+
+function bearerLooksLikeUserJwt(bearer: string) {
+  const token = rawTokenFromBearer(bearer)
+  const parts = token.split('.')
+  return parts.length === 3 && parts.every(Boolean)
+}
 
 function authBearerFromReq(req: Request) {
   const raw = req.headers.get('authorization') || ''
@@ -701,30 +938,36 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
   const ids = Array.from(new Set(spotIds.map((s) => String(s || '').trim()).filter(Boolean)))
   if (!ids.length) return out
 
-  const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: bearer,
+  let userSupabase: ReturnType<typeof createClient> | null = null
+  let ownerUserId: string | null = null
+
+  if (bearerLooksLikeUserJwt(bearer)) {
+    userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: bearer,
+        },
       },
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  })
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    })
 
-  const {
-    data: { user },
-    error: userErr,
-  } = await userSupabase.auth.getUser()
+    const {
+      data: { user },
+      error: userErr,
+    } = await userSupabase.auth.getUser()
 
-  console.log('SURF AUTH userErr:', userErr?.message ?? null)
-  console.log('SURF AUTH user id:', user?.id ?? null)
-
-  let ownerUserId: string | null = user?.id ?? null
+    console.log('SURF AUTH userErr:', userErr?.message ?? null)
+    console.log('SURF AUTH user id:', user?.id ?? null)
+    ownerUserId = user?.id ?? null
+  } else {
+    console.info('Bearer is not user JWT, trying device auth fallback')
+  }
 
   if (!ownerUserId) {
-    const rawToken = bearer.replace(/^Bearer\s+/i, '').trim()
+    const rawToken = rawTokenFromBearer(bearer)
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
 
     const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -796,6 +1039,8 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
     return out
   }
 
+  if (!userSupabase) return out
+
   const { data, error } = await userSupabase
     .from('user_surf_experiences')
     .select(`
@@ -822,7 +1067,7 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
 
   if (error || !Array.isArray(data)) return out
 
-  for (const row of data) {
+  for (const row of data as any[]) {
     const sid = String(row?.spot_id ?? '').trim()
     if (!sid) continue
     if (!out[sid]) out[sid] = []
@@ -2321,6 +2566,7 @@ export async function GET(req: Request) {
   try {
     
     console.log('RAW AUTH HEADER:', req.headers.get('authorization'))
+    const requestContext = createSurfRequestContext()
     const url = new URL(req.url)
     console.log('SURF SCORE QUERY:', Object.fromEntries(url.searchParams.entries()))
 
@@ -2400,7 +2646,7 @@ export async function GET(req: Request) {
 
       const settled = await mapWithConcurrency(candidates, CONCURRENCY, async (s) => {
         try {
-          const series = await fetchMarineSeries(s.lat, s.lon)
+          const series = await fetchMarineSeries(s.lat, s.lon, requestContext)
           const userExperiences = userExperiencesForSpot(userExpBySpotId, s.spotId)
           const candidateCustomProfile = ((s as any).customSpotProfile ?? null) as CustomSpotScoringProfile | null
           const candidateSpotKey = spotKeyForResolvedForecast(s.label, series, candidateCustomProfile)
@@ -2528,16 +2774,24 @@ export async function GET(req: Request) {
       const chosenUserExperiences = userExperiencesForSpot(userExpBySpotId, chosen.spotId)
 
       const [sun, dailyExtras, water] = await Promise.all([
-        fetchSunTimes(chosen.lat, chosen.lon),
-        fetchDailyExtras(chosen.lat, chosen.lon).catch(() => null as any),
-        fetchWaterTempMinMaxToday(chosen.lat, chosen.lon).catch(() => ({ temp_min_c: null, temp_max_c: null })),
+        fetchSunTimes(chosen.lat, chosen.lon, requestContext),
+        fetchDailyExtras(chosen.lat, chosen.lon, requestContext).catch(() => null as any),
+        fetchWaterTempMinMaxToday(chosen.lat, chosen.lon, requestContext).catch(() => ({ temp_min_c: null, temp_max_c: null })),
       ])
 
-      const extras = dailyExtras as DailyExtras | null
+      const extras = dailyExtras as (DailyExtrasResult | null)
       const air = extras?.air ?? { temp_min_c: null, temp_max_c: null }
       const weather = extras?.weather ?? { code: null, main: 'Cloudy' }
       const temp_c = extras?.temp_c ?? null
       const weather_label = extras?.weather_label ?? weather.main
+      const weather_source = chosen.series.weather_source
+      const weather_error = chosen.series.weather_error ?? extras?.error ?? null
+      const weather_cache_age_ms = chosen.series.weather_cache_age_ms
+      const weather_stale_expires_at = chosen.series.weather_stale_expires_at
+      const daily_weather_source = extras?.source ?? 'unavailable'
+      const daily_weather_error = extras?.error ?? null
+      const daily_weather_cache_age_ms = extras?.cache_age_ms ?? null
+      const daily_weather_stale_expires_at = extras?.stale_expires_at ?? null
 
       const chosenHeights: number[] = []
       for (let off = 0; off < hours; off++) {
@@ -2640,6 +2894,11 @@ export async function GET(req: Request) {
           swell_period_s: selectedSwellNow.period_s,
           wind_speed_ms: marineNow.wind_speed_ms,
           wind_direction_deg: marineNow.wind_direction_deg_from,
+          wind_source: chosen.series.weather_source,
+          wind_error: chosen.series.weather_error,
+          wind_cache_age_ms: chosen.series.weather_cache_age_ms,
+          wind_stale_expires_at: chosen.series.weather_stale_expires_at,
+          wind_unavailable: chosen.series.wind_unavailable,
           primary_swell: marineNow.primary,
           secondary_swell: marineNow.secondary,
         },
@@ -2670,6 +2929,19 @@ export async function GET(req: Request) {
         ...(appForecastOn ? { appForecast } : {}),
 
         debug: {
+          weather_source,
+          weather_error,
+          weather_cache_age_ms,
+          weather_stale_expires_at,
+          marine_source: chosen.series.marine_source,
+          marine_error: chosen.series.marine_error,
+          marine_cache_age_ms: chosen.series.marine_cache_age_ms,
+          marine_stale_expires_at: chosen.series.marine_stale_expires_at,
+          wind_unavailable: chosen.series.wind_unavailable,
+          daily_weather_source,
+          daily_weather_error,
+          daily_weather_cache_age_ms,
+          daily_weather_stale_expires_at,
           auth: {
             has_bearer: hasBearer,
             chosen_user_experiences_for_spot: chosenUserExperiences.length,
@@ -2816,20 +3088,28 @@ export async function GET(req: Request) {
       return jsonNoStore({ error: 'No coordinates resolved' }, { status: 500 })
     }
 
-    const series = await fetchMarineSeries(lat, lon)
+    const series = await fetchMarineSeries(lat, lon, requestContext)
     const spotUserExperiences = userExperiencesForSpot(userExpBySpotId, spotId)
 
     const [sun, dailyExtras, water] = await Promise.all([
-      fetchSunTimes(lat, lon),
-      fetchDailyExtras(lat, lon).catch(() => null as any),
-      fetchWaterTempMinMaxToday(lat, lon).catch(() => ({ temp_min_c: null, temp_max_c: null })),
+      fetchSunTimes(lat, lon, requestContext),
+      fetchDailyExtras(lat, lon, requestContext).catch(() => null as any),
+      fetchWaterTempMinMaxToday(lat, lon, requestContext).catch(() => ({ temp_min_c: null, temp_max_c: null })),
     ])
 
-    const extras = dailyExtras as DailyExtras | null
+    const extras = dailyExtras as (DailyExtrasResult | null)
     const air = extras?.air ?? { temp_min_c: null, temp_max_c: null }
     const weather = extras?.weather ?? { code: null, main: 'Cloudy' }
     const temp_c = extras?.temp_c ?? null
     const weather_label = extras?.weather_label ?? weather.main
+    const weather_source = series.weather_source
+    const weather_error = series.weather_error ?? extras?.error ?? null
+    const weather_cache_age_ms = series.weather_cache_age_ms
+    const weather_stale_expires_at = series.weather_stale_expires_at
+    const daily_weather_source = extras?.source ?? 'unavailable'
+    const daily_weather_error = extras?.error ?? null
+    const daily_weather_cache_age_ms = extras?.cache_age_ms ?? null
+    const daily_weather_stale_expires_at = extras?.stale_expires_at ?? null
 
     const initialSpotKeyForTables = spotLabel ?? spotQ ?? spotId ?? 'Unknown'
     const spotKeyForTables = spotKeyForResolvedForecast(initialSpotKeyForTables, series, customSpotProfile)
@@ -2957,6 +3237,11 @@ export async function GET(req: Request) {
         swell_period_s: selectedSwellNow.period_s,
         wind_speed_ms: marineNow.wind_speed_ms,
         wind_direction_deg: marineNow.wind_direction_deg_from,
+        wind_source: series.weather_source,
+        wind_error: series.weather_error,
+        wind_cache_age_ms: series.weather_cache_age_ms,
+        wind_stale_expires_at: series.weather_stale_expires_at,
+        wind_unavailable: series.wind_unavailable,
         primary_swell: marineNow.primary,
         secondary_swell: marineNow.secondary,
       },
@@ -2987,6 +3272,19 @@ export async function GET(req: Request) {
       ...(appForecastOn ? { appForecast } : {}),
 
       debug: {
+        weather_source,
+        weather_error,
+        weather_cache_age_ms,
+        weather_stale_expires_at,
+        marine_source: series.marine_source,
+        marine_error: series.marine_error,
+        marine_cache_age_ms: series.marine_cache_age_ms,
+        marine_stale_expires_at: series.marine_stale_expires_at,
+        wind_unavailable: series.wind_unavailable,
+        daily_weather_source,
+        daily_weather_error,
+        daily_weather_cache_age_ms,
+        daily_weather_stale_expires_at,
         auth: {
           has_bearer: hasBearer,
           user_experiences_for_spot: spotUserExperiences.length,
