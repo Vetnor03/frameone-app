@@ -7588,14 +7588,19 @@ type SurfExperienceRowData = {
 
 type AppSurfForecastBucket = {
   label: string
+  target_time_utc?: string | null
   time_utc?: string | null
+  selected_hour_index?: number | null
   rating?: number | null
   ratingFromExperience?: boolean
   experienceDiceValue?: number | null
   wave_height_range_label?: string | null
+  swell_height_m?: number | null
+  swell_period_s?: number | null
   swell_direction_deg?: number | null
   wind_speed_ms?: number | null
   wind_direction_deg?: number | null
+  debug?: Record<string, unknown> | null
 }
 
 type AppSurfForecastDay = {
@@ -12896,58 +12901,16 @@ function surfRatingColor(rating: number | null | undefined) {
 }
 
 function AppSurfForecastRatingBars({ rating, isExperienceBased }: { rating: number | null | undefined; isExperienceBased?: boolean }) {
-  const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
   const color = surfRatingColor(rating)
-
-  if (isExperienceBased) {
-    return (
-      <div className="flex items-center gap-1.5" aria-label={`Experience-based surf rating ${value} of 6`}>
-        {Array.from({ length: 6 }).map((_, index) => {
-          const face = index + 1
-          const filled = face <= value
-          const dots = filled ? MIRROR_DICE_DOTS[face] ?? [] : []
-
-          return (
-            <span
-              key={face}
-              className="relative block h-3.5 w-3.5 shrink-0 rounded-[0.22rem] border"
-              style={{
-                backgroundColor: filled ? color : 'transparent',
-                borderColor: color,
-                opacity: filled ? 0.96 : 0.72,
-              }}
-            >
-              {dots.map(([left, top], dotIndex) => (
-                <span
-                  key={`${face}-${dotIndex}`}
-                  className="absolute h-1 w-1 rounded-full bg-[color:var(--app-bg)]"
-                  style={{
-                    left: `${left}%`,
-                    top: `${top}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                />
-              ))}
-            </span>
-          )
-        })}
-      </div>
-    )
-  }
-
   return (
-    <div className="flex items-center gap-1.5" aria-label={`Surf rating ${value} of 6`}>
-      {Array.from({ length: 6 }).map((_, index) => (
-        <span
-          key={index}
-          className="block h-2.5 w-3.5 rounded-[0.2rem] border"
-          style={{
-            backgroundColor: index < value ? color : 'transparent',
-            borderColor: color,
-            opacity: index < value ? 0.96 : 0.72,
-          }}
-        />
-      ))}
+    <div style={{ color }}>
+      <DiceRating
+        rating={Number.isFinite(Number(rating)) ? Number(rating) : undefined}
+        isExperienceBased={Boolean(isExperienceBased)}
+        muted="rgba(255,255,255,0.24)"
+        paperColor="var(--app-bg)"
+        compact
+      />
     </div>
   )
 }

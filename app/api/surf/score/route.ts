@@ -1308,7 +1308,7 @@ type BestPick = {
   hourOffset: number
   marine: MarineBundle
   picked: ReturnType<typeof pickBestSwell>
-  scored: any
+  scored: ReturnType<typeof scoreSurf>
   tablesTotal: number
   correctedHeight: number
   blendedFloat: number
@@ -1319,7 +1319,7 @@ type NormalizedSurfCondition = {
   hourOffset: number
   marine: MarineBundle
   picked: ReturnType<typeof pickBestSwell>
-  scored: any
+  scored: ReturnType<typeof scoreSurf>
 }
 
 function currentNormalizedCondition(
@@ -1731,6 +1731,122 @@ function waveHeightLabelForValue(spotKeyForTables: string, waveHeight: number) {
   return formatBucketLabelForUi(raw) ?? fmtRange(waveHeight, waveHeight)
 }
 
+type ScoredSurfTimeBucket = {
+  idx: number
+  target_time_utc?: string | null
+  marine: MarineBundle
+  picked: ReturnType<typeof pickBestSwell>
+  scored: ReturnType<typeof scoreSurf>
+  selected: Sideswell
+  waveLabel: string
+  tablesTotal: number
+  correctedHeight: number
+}
+
+function scoreSurfBucketAtIdx(
+  series: MarineSeries,
+  spotKeyForTables: string,
+  idx: number,
+  userExperiences: UserSurfExperienceRecord[],
+  customSpotProfile?: CustomSpotScoringProfile | null,
+  targetTimeUtc?: string | null
+): ScoredSurfTimeBucket | null {
+  const iso = series.mt[clampInt(idx, 0, series.mt.length - 1)]
+  if (!iso) return null
+
+  const marine = bundleAtIsoHour(series, iso)
+  const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
+  const scored = picked.chosenScore
+  const selected = selectedSwellFromPick(marine, picked)
+  const tablesTotal = scoredTablesTotal(scored)
+  const correctedHeight = correctedHeightForPick(selected.height_m, selected.period_s)
+
+  return {
+    idx,
+    target_time_utc: targetTimeUtc ?? null,
+    marine,
+    picked,
+    scored,
+    selected,
+    waveLabel: waveHeightLabelForValue(spotKeyForTables, selected.height_m),
+    tablesTotal,
+    correctedHeight,
+  }
+}
+
+function bestScoredSurfBucketAroundTargetIso(args: {
+  series: MarineSeries
+  spotKeyForTables: string
+  isoTargetHour: string
+  userExperiences: UserSurfExperienceRecord[]
+  customSpotProfile?: CustomSpotScoringProfile | null
+  requireSameLocalDay?: { timeZone: string; y: number; m: number; d: number }
+}) {
+  const targetIdx = nearestHourIndex(args.series.mt, args.isoTargetHour)
+  const candidateIndexes = Array.from(new Set([targetIdx - 2, targetIdx - 1, targetIdx, targetIdx + 1].map((i) =>
+    clampInt(i, 0, args.series.mt.length - 1)
+  )))
+
+  let best: ScoredSurfTimeBucket | null = null
+
+  for (const idx of candidateIndexes) {
+    const iso = args.series.mt[idx]
+    if (!iso) continue
+
+    if (args.requireSameLocalDay) {
+      const actual = tzPartsYMD(args.requireSameLocalDay.timeZone, new Date(`${iso}:00Z`))
+      if (actual.y !== args.requireSameLocalDay.y || actual.m !== args.requireSameLocalDay.m || actual.day !== args.requireSameLocalDay.d) continue
+    }
+
+    const cand = scoreSurfBucketAtIdx(
+      args.series,
+      args.spotKeyForTables,
+      idx,
+      args.userExperiences,
+      args.customSpotProfile,
+      args.isoTargetHour
+    )
+    if (!cand) continue
+
+    if (!best) {
+      best = cand
+      continue
+    }
+
+    const cmp = betterByScoredThenHeight({
+      scoredA: best.scored,
+      scoredB: cand.scored,
+      correctedHeightA: best.correctedHeight,
+      correctedHeightB: cand.correctedHeight,
+    })
+
+    if (cmp > 0) best = cand
+  }
+
+  return best
+}
+
+function scoredSurfBucketDebug(bucket: ScoredSurfTimeBucket, fuel?: Record<string, unknown>) {
+  const exp = (bucket.scored?.breakdown?.experience ?? {}) as { source?: string | null; matched?: boolean; match_type?: string | null; confidence?: number | null }
+  return {
+    target_time_utc: bucket.target_time_utc ?? null,
+    selected_time_utc: bucket.marine.time_utc,
+    selected_hour_index: bucket.idx,
+    selected_swell: bucket.picked.selectionDebug,
+    selected_swell_source: bucket.picked.selected_swell_source ?? bucket.picked.chosen,
+    selected_swell_index: bucket.picked.selectedMainSwellIndex,
+    experience_source: exp?.source ?? bucket.picked.ratingSource ?? null,
+    experience_matched: !!exp?.matched,
+    experience_match_type: bucket.picked.experienceMatchType ?? exp?.match_type ?? null,
+    confidence: bucket.picked.experienceConfidence ?? exp?.confidence ?? null,
+    fuel_penalty: fuel ?? null,
+    model_rating: bucket.picked.modelRating ?? null,
+    experience_rating: bucket.picked.experienceRating ?? null,
+    final_score: bucket.picked.finalRating ?? bucket.scored?.rating ?? null,
+    why_selected: bucket.picked.whySelected ?? null,
+  }
+}
+
 function buildDayparts(
   series: MarineSeries,
   spotKeyForTables: string,
@@ -1746,81 +1862,31 @@ function buildDayparts(
     ? addDaysYMD(nowLocal.y, nowLocal.m, nowLocal.day, dayOffset)
     : { y: nowLocal.y, m: nowLocal.m, d: nowLocal.day }
 
-  function bestAroundTargetIso(isoTargetHour: string) {
-    const targetIdx = nearestHourIndex(series.mt, isoTargetHour)
-
-    const candidates = [targetIdx - 2, targetIdx - 1, targetIdx, targetIdx + 1].map((i) =>
-      clampInt(i, 0, series.mt.length - 1)
-    )
-
-    let best: {
-      idx: number
-      marine: MarineBundle
-      picked: ReturnType<typeof pickBestSwell>
-      scored: any
-      tablesTotal: number
-      correctedHeight: number
-    } | null = null
-
-    for (const idx of candidates) {
-      const iso = series.mt[idx]
-      const marine = bundleAtIsoHour(series, iso)
-
-      const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
-      const scored = picked.chosenScore
-
-      const tablesTotal = scoredTablesTotal(scored)
-
-      const chosenH = selectedSwellFromPick(marine, picked).height_m
-      const chosenP = selectedSwellFromPick(marine, picked).period_s
-      const corr = correctedHeightForPick(chosenH, chosenP)
-
-      const cand = { idx, marine, picked, scored, tablesTotal, correctedHeight: corr }
-
-      if (!best) {
-        best = cand
-        continue
-      }
-
-      const cmp = betterByScoredThenHeight({
-        scoredA: best.scored,
-        scoredB: cand.scored,
-        correctedHeightA: best.correctedHeight,
-        correctedHeightB: cand.correctedHeight,
-      })
-
-      if (cmp > 0) best = cand
-    }
-
-    return best!
-  }
-
   return DAYPART_TARGETS.map((dp) => {
     const isoTarget = isoHourUTCFromLocalYMDH(DAYPARTS_TZ, ymdBase.y, ymdBase.m, ymdBase.d, dp.hourLocal)
-    const best = bestAroundTargetIso(isoTarget)
-
-    const marine = best.marine
-    const picked = best.picked
-    const scored = best.scored
-
-    const waveHeight = selectedSwellFromPick(marine, picked).height_m
-    const waveLabel = waveHeightLabelForValue(spotKeyForTables, waveHeight)
-    const swellPeriod = selectedSwellFromPick(marine, picked).period_s
+    const best = bestScoredSurfBucketAroundTargetIso({
+      series,
+      spotKeyForTables,
+      isoTargetHour: isoTarget,
+      userExperiences,
+      customSpotProfile,
+    })
+    if (!best) return null
 
     return {
       label: dp.label,
-      time_utc: marine.time_utc,
-      rating: scored?.rating ?? null,
-      wave_height_range_label: waveLabel,
-      swell_period_s: Number.isFinite(swellPeriod) ? Math.round(swellPeriod) : null,
-      wind_speed_ms: Number.isFinite(marine.wind_speed_ms) ? Math.round(marine.wind_speed_ms) : null,
-      breakdown: scored?.breakdown ?? null,
-      ratingSource: picked.ratingSource,
-      finalRating: picked.finalRating,
-      modelRating: picked.modelRating,
-      experienceRating: picked.experienceRating,
+      time_utc: best.marine.time_utc,
+      rating: best.scored?.rating ?? null,
+      wave_height_range_label: best.waveLabel,
+      swell_period_s: Number.isFinite(best.selected.period_s) ? Math.round(best.selected.period_s) : null,
+      wind_speed_ms: Number.isFinite(best.marine.wind_speed_ms) ? Math.round(best.marine.wind_speed_ms) : null,
+      breakdown: best.scored?.breakdown ?? null,
+      ratingSource: best.picked.ratingSource,
+      finalRating: best.picked.finalRating,
+      modelRating: best.picked.modelRating,
+      experienceRating: best.picked.experienceRating,
     }
-  })
+  }).filter(Boolean)
 }
 
 // ------------------------------
@@ -1897,7 +1963,7 @@ type HourEval = {
   idx: number
   marine: MarineBundle
   picked: ReturnType<typeof pickBestSwell>
-  scored: any
+  scored: ReturnType<typeof scoreSurf>
   rating: number
   tablesTotal: number
   correctedHeight: number
@@ -2118,32 +2184,45 @@ function buildAppSurfForecast(
   series: MarineSeries,
   spotKeyForTables: string,
   userExperiences: UserSurfExperienceRecord[],
-  customSpotProfile?: CustomSpotScoringProfile | null
+  customSpotProfile?: CustomSpotScoringProfile | null,
+  fuelDebug?: Record<string, unknown>
 ) {
   return appForecastDayRange(series)
     .map((ymd) => {
       const buckets = APP_FORECAST_TARGETS.map((target) => {
         const isoTarget = isoHourUTCFromLocalYMDH(DAILY_TZ, ymd.y, ymd.m, ymd.d, target.hourLocal)
-        const idx = nearestHourIndex(series.mt, isoTarget)
-        const actualIso = series.mt[idx]
-        if (!actualIso) return null
+        const best = bestScoredSurfBucketAroundTargetIso({
+          series,
+          spotKeyForTables,
+          isoTargetHour: isoTarget,
+          userExperiences,
+          customSpotProfile,
+          requireSameLocalDay: { timeZone: DAILY_TZ, y: ymd.y, m: ymd.m, d: ymd.d },
+        })
+        if (!best) return null
 
-        const actual = tzPartsYMD(DAILY_TZ, new Date(`${actualIso}:00Z`))
-        if (actual.y !== ymd.y || actual.m !== ymd.m || actual.day !== ymd.d) return null
+        const marine = best.marine
+        const picked = best.picked
+        const scored = best.scored
+        const selected = best.selected
+        const debug = scoredSurfBucketDebug(best, fuelDebug)
 
-        const marine = bundleAtIsoHour(series, actualIso)
-        const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
-        const scored = picked.chosenScore
-        const selected = selectedSwellFromPick(marine, picked)
-        const waveLabel = waveHeightLabelForValue(spotKeyForTables, selected.height_m)
+        console.info('[surf-score:app-forecast-bucket]', {
+          spotKey: spotKeyForTables,
+          label: target.label,
+          date_local: ymd.key,
+          ...debug,
+        })
 
         return {
           label: target.label,
+          target_time_utc: isoTarget,
           time_utc: marine.time_utc,
+          selected_hour_index: best.idx,
           rating: scored?.rating ?? null,
           ratingFromExperience: surfRatingIsExperienceBased(scored) || scoredExperienceMatched(scored) || picked.ratingSource === 'experience_blend' || undefined,
           experienceDiceValue: normalizeSurfRating1to6(scored).experienceDiceValue,
-          wave_height_range_label: waveLabel,
+          wave_height_range_label: best.waveLabel,
           swell_height_m: Number.isFinite(selected.height_m) ? selected.height_m : null,
           swell_period_s: Number.isFinite(selected.period_s) ? Math.round(selected.period_s) : null,
           swell_direction_deg: Number.isFinite(selected.direction_deg_from) ? selected.direction_deg_from : null,
@@ -2154,6 +2233,7 @@ function buildAppSurfForecast(
           finalRating: picked.finalRating,
           modelRating: picked.modelRating,
           experienceRating: picked.experienceRating,
+          debug,
         }
       }).filter(Boolean)
 
@@ -2508,7 +2588,14 @@ export async function GET(req: Request) {
         : undefined
 
       const appForecast = appForecastOn
-        ? buildAppSurfForecast(chosen.series, chosen.scoringSpotKey, chosenUserExperiences, chosen.customSpotProfile ?? null)
+        ? buildAppSurfForecast(chosen.series, chosen.scoringSpotKey, chosenUserExperiences, chosen.customSpotProfile ?? null, {
+            enabled: fuelOn,
+            applies_to: 'todays_best_spot_selection',
+            drive_minutes: chosen.drive_minutes,
+            fuel_penalty_points: chosen.fuel_penalty_points,
+            effective_tables_total: chosen.effective_tables_total,
+            home_provided: !!home,
+          })
         : undefined
 
       return surfJsonResponse({
@@ -2816,7 +2903,14 @@ export async function GET(req: Request) {
 
     const dayparts = daypartsOn ? buildDayparts(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile) : undefined
     const daily = dailyOn ? buildDailyFrom4hWindows(series, spotKeyForTables, days, spotUserExperiences, scoringCustomSpotProfile) : undefined
-    const appForecast = appForecastOn ? buildAppSurfForecast(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile) : undefined
+    const appForecast = appForecastOn
+      ? buildAppSurfForecast(series, spotKeyForTables, spotUserExperiences, scoringCustomSpotProfile, {
+          enabled: fuelOn,
+          applies_to: 'todays_best_only',
+          home_provided: !!home,
+          fuel_penalty_points: 0,
+        })
+      : undefined
 
     return surfJsonResponse({
       spot: spotLabel ?? spotQ ?? spotId,
