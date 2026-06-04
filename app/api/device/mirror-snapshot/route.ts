@@ -129,6 +129,8 @@ type Detail = {
 type UnknownRecord = Record<string, unknown>
 
 const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+const MIRROR_FETCH_TIMEOUT_MS = 8000
+const WEATHER_FETCH_TIMEOUT_MS = 6500
 
 const SOCCER_TEAM_ABBREVIATIONS: Array<[string, string]> = [
   ['AFC Bournemouth', 'BOU'],
@@ -986,10 +988,27 @@ function appOrigin(req: Request) {
   return `${url.protocol}//${url.host}`
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
-  const resp = await fetch(url, { ...init, cache: 'no-store' })
-  if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`)
-  return resp.json() as Promise<unknown>
+async function fetchJson(url: string, init?: RequestInit & { timeoutMs?: number }) {
+  const timeoutMs = init?.timeoutMs ?? MIRROR_FETCH_TIMEOUT_MS
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const { timeoutMs: _timeoutMs, signal: callerSignal, ...fetchInit } = init || {}
+
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort()
+    else callerSignal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
+  try {
+    const resp = await fetch(url, { ...fetchInit, cache: 'no-store', signal: controller.signal })
+    if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`)
+    return resp.json() as Promise<unknown>
+  } catch (e: unknown) {
+    const isAbort = e instanceof Error && e.name === 'AbortError'
+    throw new Error(isAbort ? `Fetch timed out after ${timeoutMs}ms` : e instanceof Error ? e.message : String(e || 'Fetch failed'))
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function arrayNumberAt(values: unknown, index: number): number | null {
@@ -1234,7 +1253,28 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
   url.searchParams.set('precipitation_unit', 'mm')
   url.searchParams.set('timezone', 'auto')
 
-  const data = asRecord(await fetchJson(url.toString()))
+  let data: UnknownRecord
+  try {
+    data = asRecord(await fetchJson(url.toString(), { timeoutMs: WEATHER_FETCH_TIMEOUT_MS }))
+  } catch (e: unknown) {
+    const reason = e instanceof Error ? e.message : String(e || 'Unknown weather error')
+    console.error('[mirror-snapshot:weather]', { stage: 'open-meteo-failed', label, lat, lon, reason })
+    return {
+      module: 'weather',
+      primary: '--°',
+      secondary: label || (language === 'no' ? 'Vær utilgjengelig' : 'Weather unavailable'),
+      tertiary: language === 'no' ? 'Prøv igjen snart' : 'Try again soon',
+      weatherLowTemp: '--°',
+      weatherHighTemp: '--°',
+      weatherAdvice: language === 'no' ? 'Værdata er midlertidig utilgjengelig.' : 'Weather data is temporarily unavailable.',
+      weatherWindLine: language === 'no' ? 'Vind --' : 'Wind --',
+      weatherPrecipLine: language === 'no' ? 'Nedbør --' : 'Precip --',
+      weatherSunLine: 'Sun --:-- / --:--',
+      weatherHumidityLine: 'Humidity --%',
+      weatherWmo: null,
+      weatherDays: [],
+    }
+  }
   const current = asRecord(data.current)
   const daily = asRecord(data.daily)
   const currentTempC = asNumber(current.temperature_2m)
@@ -1846,8 +1886,13 @@ export async function GET(req: Request) {
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, deviceId, language)
-      } catch {
-        // Leave this slot to the client-side config fallback if live data is unavailable.
+      } catch (e: unknown) {
+        console.error('[mirror-snapshot:slot-detail-failed]', { slot, module: parsed.base, id: parsed.id, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })
+        detailsBySlot[String(slot)] = {
+          primary: '--',
+          secondary: parsed.base,
+          tertiary: language === 'no' ? 'Midlertidig utilgjengelig' : 'Temporarily unavailable',
+        }
       }
     }))
 

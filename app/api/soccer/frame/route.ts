@@ -4,7 +4,51 @@ import { TEAM_ID_MAP } from '@/app/lib/soccer/teamIdMap'
 
 export const runtime = 'nodejs'
 
-const API_KEY = process.env.FOOTBALL_DATA_API_KEY!
+const API_KEY = process.env.FOOTBALL_DATA_API_KEY
+const SOCCER_FETCH_TIMEOUT_MS = 8000
+
+type SoccerLogContext = Record<string, unknown>
+
+class SoccerExternalApiError extends Error {
+  status: number
+  debugReason: string
+
+  constructor(message: string, status: number, debugReason: string) {
+    super(message)
+    this.name = 'SoccerExternalApiError'
+    this.status = status
+    this.debugReason = debugReason
+  }
+}
+
+function soccerLog(stage: string, context: SoccerLogContext = {}) {
+  console.info('[soccer-frame]', { stage, ...context })
+}
+
+function soccerError(stage: string, context: SoccerLogContext = {}) {
+  console.error('[soccer-frame]', { stage, ...context })
+}
+
+function errorMessage(e: unknown) {
+  return e instanceof Error ? e.message : String(e || 'Unknown error')
+}
+
+function emptyFramePayload(args: { teamKey: string; teamId: number; domesticCompetitionCode: string | null; competitionName?: string | null }) {
+  return {
+    teamKey: args.teamKey,
+    teamId: args.teamId,
+    domesticCompetitionCode: args.domesticCompetitionCode,
+    competitionName: args.competitionName ?? null,
+    next: null,
+    last: null,
+    standing: null,
+    table: [],
+    lastScorers: [],
+    topScorer: null,
+    nextLineup: buildNextLineupStub(),
+    empty: true,
+  }
+}
 
 const DOMESTIC_COMPETITION_MAP: Record<string, string> = {
   arsenal: 'PL',
@@ -213,36 +257,70 @@ function buildNextLineupStub() {
   }
 }
 
-async function fetchJson(url: string, extraHeaders?: Record<string, string>) {
-  const res = await fetch(url, {
-    headers: {
-      'X-Auth-Token': API_KEY,
-      ...(extraHeaders || {}),
-    },
-    cache: 'no-store',
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `Request failed (${res.status})`)
+async function fetchJson(url: string, stage: string, extraHeaders?: Record<string, string>) {
+  if (!API_KEY) {
+    soccerError('config:missing-api-key', { stage, envVar: 'FOOTBALL_DATA_API_KEY' })
+    throw new SoccerExternalApiError('Football data API key is not configured', 502, 'missing FOOTBALL_DATA_API_KEY')
   }
 
-  return res.json()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), SOCCER_FETCH_TIMEOUT_MS)
+  const startedAt = Date.now()
+  soccerLog('external-fetch:start', { stage, url })
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'X-Auth-Token': API_KEY,
+        ...(extraHeaders || {}),
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    const durationMs = Date.now() - startedAt
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      const debugReason = text || `football-data returned HTTP ${res.status}`
+      soccerError('external-fetch:http-error', { stage, status: res.status, durationMs, debugReason })
+      throw new SoccerExternalApiError('Football data API request failed', res.status, debugReason)
+    }
+
+    const json = await res.json()
+    soccerLog('external-fetch:parsed', { stage, status: res.status, durationMs, keys: json && typeof json === 'object' ? Object.keys(json).slice(0, 10) : [] })
+    return json
+  } catch (e: unknown) {
+    const durationMs = Date.now() - startedAt
+    if (e instanceof SoccerExternalApiError) throw e
+    const isAbort = e instanceof Error && e.name === 'AbortError'
+    const debugReason = isAbort ? `football-data request timed out after ${SOCCER_FETCH_TIMEOUT_MS}ms` : errorMessage(e)
+    soccerError('external-fetch:network-error', { stage, durationMs, debugReason })
+    throw new SoccerExternalApiError('Football data API request failed', 502, debugReason)
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function GET(req: NextRequest) {
-  const teamKey = String(req.nextUrl.searchParams.get('teamId') || '').trim()
+  const requestId = crypto.randomUUID()
+  const rawTeamKey = req.nextUrl.searchParams.get('teamId')
+  const teamKey = String(rawTeamKey || '').trim().toLowerCase()
+  soccerLog('request:start', { requestId, rawTeamId: rawTeamKey, teamKey, apiKeyConfigured: Boolean(API_KEY) })
 
   if (!teamKey) {
-    return NextResponse.json({ error: 'Missing teamId' }, { status: 400 })
+    soccerError('teamId:invalid', { requestId, rawTeamId: rawTeamKey, reason: 'missing' })
+    return NextResponse.json({ error: 'Missing teamId', code: 'missing_team_id' }, { status: 400 })
   }
 
   const teamId = TEAM_ID_MAP[teamKey]
+  soccerLog('teamId:parsed', { requestId, teamKey, teamId: teamId ?? null })
   if (!teamId) {
-    return NextResponse.json({ error: 'Unknown team' }, { status: 400 })
+    soccerError('teamId:unsupported', { requestId, teamKey, supportedTeamIds: Object.keys(TEAM_ID_MAP) })
+    return NextResponse.json({ error: `Unsupported teamId: ${teamKey}`, code: 'unsupported_team_id', teamId: teamKey }, { status: 400 })
   }
 
   const domesticCompetitionCode = DOMESTIC_COMPETITION_MAP[teamKey] || null
+  soccerLog('team:resolved', { requestId, teamKey, teamId, domesticCompetitionCode })
 
   try {
     const today = new Date()
@@ -254,16 +332,20 @@ export async function GET(req: NextRequest) {
 
     const [nextData, lastData] = await Promise.all([
       fetchJson(
-        `https://api.football-data.org/v4/teams/${teamId}/matches?status=SCHEDULED&dateFrom=${ymdUtc(today)}&dateTo=${ymdUtc(futureTo)}&limit=3`
+        `https://api.football-data.org/v4/teams/${teamId}/matches?status=SCHEDULED&dateFrom=${ymdUtc(today)}&dateTo=${ymdUtc(futureTo)}&limit=3`,
+        'next-matches'
       ),
       fetchJson(
         `https://api.football-data.org/v4/teams/${teamId}/matches?status=FINISHED&dateFrom=${ymdUtc(pastFrom)}&dateTo=${ymdUtc(today)}&limit=3`,
+        'last-matches',
         { 'X-Unfold-Goals': 'true' }
       ),
     ])
 
     const nextMatches = Array.isArray(nextData?.matches) ? nextData.matches : []
     const lastMatches = Array.isArray(lastData?.matches) ? lastData.matches : []
+
+    soccerLog('matches:parsed', { requestId, nextCount: nextMatches.length, lastCount: lastMatches.length })
 
     const nextMatch = nextMatches[0] || null
     const prevMatch = lastMatches[lastMatches.length - 1] || null
@@ -276,8 +358,8 @@ export async function GET(req: NextRequest) {
     if (domesticCompetitionCode) {
       try {
         const [standingsData, scorersData] = await Promise.all([
-          fetchJson(`https://api.football-data.org/v4/competitions/${domesticCompetitionCode}/standings`),
-          fetchJson(`https://api.football-data.org/v4/competitions/${domesticCompetitionCode}/scorers?limit=20`),
+          fetchJson(`https://api.football-data.org/v4/competitions/${domesticCompetitionCode}/standings`, 'standings'),
+          fetchJson(`https://api.football-data.org/v4/competitions/${domesticCompetitionCode}/scorers?limit=20`, 'scorers'),
         ])
 
         competitionName = standingsData?.competition?.name || null
@@ -294,7 +376,8 @@ export async function GET(req: NextRequest) {
 
         const scorers = Array.isArray(scorersData?.scorers) ? scorersData.scorers : []
         topScorer = pickTopScorerForTeam(scorers, teamId)
-      } catch {
+      } catch (e: unknown) {
+        soccerError('competition:optional-data-failed', { requestId, teamKey, domesticCompetitionCode, reason: errorMessage(e) })
         standing = null
         topScorer = null
         competitionName = null
@@ -307,7 +390,7 @@ export async function GET(req: NextRequest) {
     // ✅ NEW lineup
     const nextLineup = buildNextLineupStub()
 
-    return NextResponse.json({
+    const payload = {
       teamKey,
       teamId,
       domesticCompetitionCode,
@@ -321,11 +404,21 @@ export async function GET(req: NextRequest) {
 
       // ✅ NEW
       nextLineup,
-    })
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || 'Unknown error' },
-      { status: 500 }
-    )
+      empty: !nextMatch && !prevMatch && !standing && table.length === 0 && !topScorer,
+    }
+    soccerLog('response:payload', { requestId, teamKey, teamId, empty: payload.empty, hasNext: Boolean(payload.next), hasLast: Boolean(payload.last), tableRows: payload.table.length })
+    return NextResponse.json(payload)
+  } catch (e: unknown) {
+    const debugReason = e instanceof SoccerExternalApiError ? e.debugReason : errorMessage(e)
+    soccerError('request:failed', { requestId, teamKey, teamId, reason: debugReason, name: e instanceof Error ? e.name : typeof e })
+
+    if (e instanceof SoccerExternalApiError) {
+      return NextResponse.json(
+        { error: 'External soccer API failed', code: 'external_soccer_api_failed', debugReason },
+        { status: 502 }
+      )
+    }
+
+    return NextResponse.json(emptyFramePayload({ teamKey, teamId, domesticCompetitionCode }))
   }
 }

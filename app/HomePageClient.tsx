@@ -263,6 +263,11 @@ function moduleLoadingText(language: AppLanguage, key: ModuleKey) {
   return language === 'no' ? `Laster ${label}…` : `Loading ${label}…`
 }
 
+function moduleUnavailableText(language: AppLanguage, key: ModuleKey) {
+  const label = moduleLabel(language, key)
+  return language === 'no' ? `${label} utilgjengelig` : `${label} unavailable`
+}
+
 function allLayouts(language: AppLanguage): { key: LayoutKey; title: string; subtitle: string }[] {
   const t = tx(language)
   return [
@@ -1440,12 +1445,20 @@ export default function HomePage() {
 
       if (!session?.access_token) return null
 
-      const resp = await fetch(`/api/device/mirror-snapshot?device_id=${encodeURIComponent(deviceId)}`, {
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 9000)
+      let resp: Response
+      try {
+        resp = await fetch(`/api/device/mirror-snapshot?device_id=${encodeURIComponent(deviceId)}`, {
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          signal: controller.signal,
+        })
+      } finally {
+        window.clearTimeout(timeout)
+      }
 
       if (!resp.ok) return null
 
@@ -1464,7 +1477,8 @@ export default function HomePage() {
         ...snapshot,
         detailsBySlot: modulesRecordFromUnknown(data?.detailsBySlot) as Record<string, MirrorModuleDetail>,
       }
-    } catch {
+    } catch (error) {
+      console.error('[mirror-snapshot:client-load-failed]', { reason: errorMessage(error) })
       return null
     }
   }
@@ -2990,7 +3004,7 @@ function frameModuleDetail(
   modulesJson: Record<string, unknown>,
   language: AppLanguage,
   cells: Record<number, ModuleKey | null>
-): { primary: string; secondary?: string; tertiary?: string } {
+): MirrorModuleDetail {
   const cfg = moduleConfigForSlot(module, slot, cells, modulesJson)
   const t = tx(language)
 
@@ -3007,7 +3021,19 @@ function frameModuleDetail(
 
   if (module === 'weather') {
     const label = String(cfg.label ?? '').trim()
-    return { primary: t.modules.weather, secondary: label || (language === 'no' ? 'Lagret sted' : 'Saved location') }
+    return {
+      module: 'weather',
+      primary: '--°',
+      secondary: label || moduleUnavailableText(language, 'weather'),
+      tertiary: language === 'no' ? 'Ingen live værdata' : 'No live weather data',
+      weatherLowTemp: '--°',
+      weatherHighTemp: '--°',
+      weatherAdvice: language === 'no' ? 'Prøv igjen snart' : 'Try again soon',
+      weatherWindLine: language === 'no' ? 'Vind --' : 'Wind --',
+      weatherPrecipLine: language === 'no' ? 'Nedbør --' : 'Precip --',
+      weatherWmo: null,
+      weatherDays: [],
+    }
   }
 
   if (module === 'surf') {
@@ -6330,11 +6356,10 @@ function LandscapeFrameMirror({
     }
 
     const liveDetail = snapshot.detailsBySlot[String(slot)]
-    if (!liveDetail && module !== 'date') {
+    const detail = liveDetail ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
+    if (!liveDetail && module !== 'date' && module !== 'weather' && module !== 'soccer') {
       return <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, module)}</div>
     }
-
-    const detail = liveDetail ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
