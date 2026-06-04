@@ -17,23 +17,20 @@ test('one Today’s Best spot failure is isolated from other candidate scores', 
   assert.match(route, /const results = settled\.filter\(\(x: any\) => x && x\.ok\)/)
 })
 
-test('Open-Meteo requests are deduped and nearby grid points share a bounded per-request cache key', () => {
-  assert.match(route, /openMeteoInFlight: Map<string, Promise<OpenMeteoFetchResult<any>>>/)
-  assert.match(route, /ctx\.openMeteoInFlight\.get\(key\)/)
-  assert.match(route, /OPEN_METEO_COORD_BUCKET_DEGREES = 0\.05/)
-  assert.match(route, /Math\.round\(n \/ OPEN_METEO_COORD_BUCKET_DEGREES\) \* OPEN_METEO_COORD_BUCKET_DEGREES/)
-  assert.match(route, /ctx\.openMeteoInFlight\.set\(key, p\)/)
+test('Open-Meteo requests route through the shared cache with snapshot controls', () => {
+  assert.match(route, /fetchCachedForecastJson\(\{[\s\S]*?dataType: 'surf'/)
+  assert.match(route, /forceRefresh: opts\.forceRefresh \?\? ctx\.forceRefresh \?\? false/)
+  assert.match(route, /configUpdatedAt: opts\.configUpdatedAt \?\? ctx\.configUpdatedAt \?\? null/)
+  assert.doesNotMatch(route, /__openMeteoJsonCache/)
+  assert.doesNotMatch(route, /openMeteoInFlight/)
 })
 
-test('global Open-Meteo stale cache is bounded and cannot serve very old data silently', () => {
-  assert.match(route, /OPEN_METEO_CACHE_MAX_ENTRIES = 200/)
-  assert.match(route, /OPEN_METEO_STALE_CACHE_TTL_MS = 2 \* 60 \* 60 \* 1000/)
-  assert.match(route, /function pruneOpenMeteoCache/)
-  assert.match(route, /__openMeteoJsonCache\.size > OPEN_METEO_CACHE_MAX_ENTRIES/)
-  assert.match(route, /entry\.staleExp <= now/)
-  assert.match(route, /source: 'stale_cache'/)
+test('Open-Meteo stale metadata remains available without route-local stale cache', () => {
+  assert.match(route, /source: fetched\.debug\.staleUsed \? 'stale_cache' : 'live'/)
   assert.match(route, /cache_age_ms/)
   assert.match(route, /stale_expires_at/)
+  assert.match(route, /marine_cache_debug/)
+  assert.match(route, /weather_cache_debug/)
 })
 
 test('device bearer fallback skips scary malformed-JWT auth logs', () => {
