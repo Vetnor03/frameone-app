@@ -822,6 +822,47 @@ function moduleConfig(modules: UnknownRecord, base: string, id: number) {
   return asRecord(raw)
 }
 
+function fallbackDetailForModule(base: string, cfg: UnknownRecord, language: string): Detail {
+  if (base === 'date') return { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
+
+  if (base === 'weather') {
+    const label = asString(cfg.label).trim()
+    return {
+      module: 'weather',
+      primary: language === 'no' ? 'Vær' : 'Weather',
+      secondary: label || (language === 'no' ? 'Lagret sted' : 'Saved location'),
+    }
+  }
+
+  if (base === 'surf') {
+    const spot = asString(cfg.spot || cfg.label).trim()
+    return { module: 'surf', primary: language === 'no' ? 'Surf' : 'Surf', secondary: spot || (language === 'no' ? 'Lagret spot' : 'Saved spot') }
+  }
+
+  if (base === 'soccer') {
+    const team = asString(cfg.teamName || cfg.team).trim()
+    const competition = asString(cfg.competitionName).trim()
+    return { module: 'soccer', primary: team || (language === 'no' ? 'Fotball' : 'Soccer'), secondary: competition || (language === 'no' ? 'Lagret lag' : 'Saved team') }
+  }
+
+  if (base === 'stocks') {
+    const symbol = asString(cfg.symbol).trim().toUpperCase()
+    const name = asString(cfg.name).trim()
+    return { module: 'stocks', primary: symbol || (language === 'no' ? 'Aksjer' : 'Stocks'), secondary: name || (language === 'no' ? 'Lagret investering' : 'Saved investment') }
+  }
+
+  if (base === 'groceries') {
+    return { module: 'groceries', primary: language === 'no' ? 'Dagligvarer' : 'Groceries', secondary: language === 'no' ? 'Synkronisert med frame' : 'Synced with frame' }
+  }
+
+  if (base === 'countdown') {
+    const title = asString(cfg.title || cfg.name).trim()
+    return { module: 'countdown', primary: title || (language === 'no' ? 'Nedtelling' : 'Countdown') }
+  }
+
+  return { primary: base || 'Module' }
+}
+
 function formatTemp(value: unknown, units: string) {
   return formatWeatherTemp(value, units === 'imperial' ? 'imperial' : 'metric')
 }
@@ -986,10 +1027,24 @@ function appOrigin(req: Request) {
   return `${url.protocol}//${url.host}`
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
-  const resp = await fetch(url, { ...init, cache: 'no-store' })
-  if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`)
-  return resp.json() as Promise<unknown>
+const FETCH_JSON_TIMEOUT_MS = 10000
+
+async function fetchJson(url: string, init?: RequestInit, timeoutMs = FETCH_JSON_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const resp = await fetch(url, { ...init, cache: 'no-store', signal: controller.signal })
+    if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`)
+    return resp.json() as Promise<unknown>
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Fetch timed out after ${timeoutMs}ms`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function arrayNumberAt(values: unknown, index: number): number | null {
@@ -1846,8 +1901,14 @@ export async function GET(req: Request) {
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, deviceId, language)
-      } catch {
-        // Leave this slot to the client-side config fallback if live data is unavailable.
+      } catch (error: unknown) {
+        detailsBySlot[String(slot)] = fallbackDetailForModule(parsed.base, cfg, language)
+        console.warn('[mirror-snapshot:detail-fallback]', {
+          device_id: deviceId,
+          slot,
+          module: parsed.base,
+          message: error instanceof Error ? error.message : String(error),
+        })
       }
     }))
 
