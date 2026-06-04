@@ -6,6 +6,7 @@ import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { fetchCachedForecastJson, type ForecastCacheDebug } from '@/app/lib/server/forecastCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -65,13 +66,14 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   }
 }
 
-type OpenMeteoSource = 'live' | 'stale_cache' | 'unavailable'
+type OpenMeteoSource = 'live' | 'stale_cache' | 'unavailable' // stale fallback returns source: 'stale_cache'
 type OpenMeteoFetchResult<T = any> = {
   data: T | null
   source: OpenMeteoSource
   error: string | null
   cache_age_ms: number | null
   stale_expires_at: string | null
+  cache_debug: ForecastCacheDebug | null
 }
 type SurfRequestContext = {
   openMeteoInFlight: Map<string, Promise<OpenMeteoFetchResult<any>>>
@@ -170,39 +172,45 @@ function openMeteoErrorCode(e: any): string {
 async function fetchOpenMeteoJson(
   ctx: SurfRequestContext,
   url: string,
-  opts: { timeoutMs: number; cacheTtlMs: number; allowStale?: boolean }
+  opts: { timeoutMs: number; cacheTtlMs?: number; allowStale?: boolean; horizonHours?: number; forecastDays?: number; forecastRange?: string; frameRequest?: boolean }
 ): Promise<OpenMeteoFetchResult<any>> {
   const key = normalizeOpenMeteoCacheKey(url)
-  const now = Date.now()
-  pruneOpenMeteoCache(now)
-  const cached = __openMeteoJsonCache.get(key)
-  if (cached && cached.exp > now) {
-    cached.lastAccess = now
-    return { data: cached.v, source: 'live', error: null, cache_age_ms: openMeteoCacheAgeMs(cached, now), stale_expires_at: openMeteoStaleExpiresAt(cached) }
-  }
-
   const existing = ctx.openMeteoInFlight.get(key)
   if (existing) return existing
 
   const p = (async (): Promise<OpenMeteoFetchResult<any>> => {
-    try {
-      const resp = await fetchWithTimeout(url, {}, opts.timeoutMs)
-      if (!resp.ok) {
-        const err = new Error(String(resp.status))
-        ;(err as any).status = resp.status
-        throw err
+    const u = new URL(url)
+    const fetched = await fetchCachedForecastJson({
+      dataType: 'surf',
+      provider: 'open-meteo',
+      url,
+      timeoutMs: opts.timeoutMs,
+      horizonHours: opts.horizonHours,
+      forecastDays: opts.forecastDays,
+      forecastRange: opts.forecastRange,
+      timezone: u.searchParams.get('timezone'),
+      frameRequest: opts.frameRequest ?? true,
+      allowStale: opts.allowStale,
+    })
+
+    if (fetched.payload) {
+      return {
+        data: fetched.payload,
+        source: fetched.debug.staleUsed ? 'stale_cache' : 'live',
+        error: fetched.error,
+        cache_age_ms: fetched.debug.cacheAgeMs,
+        stale_expires_at: fetched.expiresAt,
+        cache_debug: fetched.debug,
       }
-      const data = await resp.json()
-      __openMeteoJsonCache.set(key, { exp: now + opts.cacheTtlMs, staleExp: now + OPEN_METEO_STALE_CACHE_TTL_MS, createdAt: now, lastAccess: now, v: data })
-      pruneOpenMeteoCache(now)
-      return { data, source: 'live', error: null, cache_age_ms: 0, stale_expires_at: new Date(now + OPEN_METEO_STALE_CACHE_TTL_MS).toISOString() }
-    } catch (e: any) {
-      const error = openMeteoErrorCode(e)
-      if (opts.allowStale !== false && cached && cached.staleExp > now) {
-        cached.lastAccess = now
-        return { data: cached.v, source: 'stale_cache', error, cache_age_ms: openMeteoCacheAgeMs(cached, now), stale_expires_at: openMeteoStaleExpiresAt(cached) }
-      }
-      return { data: null, source: 'unavailable', error, cache_age_ms: null, stale_expires_at: null }
+    }
+
+    return {
+      data: null,
+      source: 'unavailable',
+      error: fetched.error,
+      cache_age_ms: fetched.debug.cacheAgeMs,
+      stale_expires_at: null,
+      cache_debug: fetched.debug,
     }
   })()
 
@@ -255,7 +263,7 @@ async function fetchSunTimes(lat: number, lon: number, ctx = createSurfRequestCo
     `&forecast_days=1` +
     `&timezone=${encodeURIComponent('Europe/Oslo')}`
 
-  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: SUN_CACHE_TTL_MS })
+  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: SUN_CACHE_TTL_MS, forecastDays: 1, forecastRange: '0-1d' })
   if (!fetched.data) return { sunrise: '--:--', sunset: '--:--' }
 
   const j: any = fetched.data
@@ -288,6 +296,7 @@ type DailyExtrasResult = DailyExtras & {
   error: string | null
   cache_age_ms: number | null
   stale_expires_at: string | null
+  cache_debug: ForecastCacheDebug | null
 }
 
 const WX_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
@@ -325,7 +334,7 @@ async function fetchDailyExtras(lat: number, lon: number, ctx = createSurfReques
     `&forecast_days=1` +
     `&timezone=${encodeURIComponent('Europe/Oslo')}`
 
-  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: WX_CACHE_TTL_MS })
+  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: WX_CACHE_TTL_MS, forecastDays: 1, forecastRange: '0-1d' })
   if (!fetched.data) {
     return {
       sun: { sunrise: '--:--', sunset: '--:--' },
@@ -337,6 +346,7 @@ async function fetchDailyExtras(lat: number, lon: number, ctx = createSurfReques
       error: fetched.error,
       cache_age_ms: fetched.cache_age_ms,
       stale_expires_at: fetched.stale_expires_at,
+      cache_debug: fetched.cache_debug,
     }
   }
 
@@ -367,6 +377,7 @@ async function fetchDailyExtras(lat: number, lon: number, ctx = createSurfReques
     error: fetched.error,
     cache_age_ms: fetched.cache_age_ms,
     stale_expires_at: fetched.stale_expires_at,
+    cache_debug: fetched.cache_debug,
   }
 
   __wxCache.set(key, { exp: now + WX_CACHE_TTL_MS, v })
@@ -542,7 +553,7 @@ async function fetchWaterTempMinMaxToday(lat: number, lon: number, ctx = createS
     `&cell_selection=sea` +
     `&forecast_days=1`
 
-  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, cacheTtlMs: SST_CACHE_TTL_MS })
+  const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, cacheTtlMs: SST_CACHE_TTL_MS, forecastDays: 1, forecastRange: '0-1d' })
   if (!fetched.data) return { temp_min_c: null, temp_max_c: null }
 
   const j: any = fetched.data
@@ -672,10 +683,12 @@ type MarineSeries = {
   marine_error: string | null
   marine_cache_age_ms: number | null
   marine_stale_expires_at: string | null
+  marine_cache_debug: ForecastCacheDebug | null
   weather_source: OpenMeteoSource
   weather_error: string | null
   weather_cache_age_ms: number | null
   weather_stale_expires_at: string | null
+  weather_cache_debug: ForecastCacheDebug | null
   wind_unavailable: boolean
 }
 
@@ -821,8 +834,8 @@ async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfReque
     `&timezone=UTC&wind_speed_unit=ms`
 
   const [marineFetched, windFetched] = await Promise.all([
-    fetchOpenMeteoJson(ctx, marineUrl, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, cacheTtlMs: OPEN_METEO_MARINE_CACHE_TTL_MS }),
-    fetchOpenMeteoJson(ctx, windUrl, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: OPEN_METEO_FORECAST_CACHE_TTL_MS }),
+    fetchOpenMeteoJson(ctx, marineUrl, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, cacheTtlMs: OPEN_METEO_MARINE_CACHE_TTL_MS, horizonHours: 48, forecastRange: '0-48h' }),
+    fetchOpenMeteoJson(ctx, windUrl, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, cacheTtlMs: OPEN_METEO_FORECAST_CACHE_TTL_MS, horizonHours: 48, forecastRange: '0-48h' }),
   ])
   if (!marineFetched.data) throw new Error(`Marine fetch failed${marineFetched.error ? `: ${marineFetched.error}` : ''}`)
 
@@ -889,10 +902,12 @@ async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfReque
     marine_error: marineFetched.error,
     marine_cache_age_ms: marineFetched.cache_age_ms,
     marine_stale_expires_at: marineFetched.stale_expires_at,
+    marine_cache_debug: marineFetched.cache_debug,
     weather_source: windFetched.source,
     weather_error: windFetched.error,
     weather_cache_age_ms: windFetched.cache_age_ms,
     weather_stale_expires_at: windFetched.stale_expires_at,
+    weather_cache_debug: windFetched.cache_debug,
     wind_unavailable: windUnavailable,
   }
 }
@@ -2937,6 +2952,8 @@ export async function GET(req: Request) {
           marine_error: chosen.series.marine_error,
           marine_cache_age_ms: chosen.series.marine_cache_age_ms,
           marine_stale_expires_at: chosen.series.marine_stale_expires_at,
+          marine_cache: chosen.series.marine_cache_debug,
+          weather_cache: chosen.series.weather_cache_debug,
           wind_unavailable: chosen.series.wind_unavailable,
           daily_weather_source,
           daily_weather_error,
@@ -3280,6 +3297,8 @@ export async function GET(req: Request) {
         marine_error: series.marine_error,
         marine_cache_age_ms: series.marine_cache_age_ms,
         marine_stale_expires_at: series.marine_stale_expires_at,
+        marine_cache: series.marine_cache_debug,
+        weather_cache: series.weather_cache_debug,
         wind_unavailable: series.wind_unavailable,
         daily_weather_source,
         daily_weather_error,
