@@ -12901,16 +12901,60 @@ function surfRatingColor(rating: number | null | undefined) {
 }
 
 function AppSurfForecastRatingBars({ rating, isExperienceBased }: { rating: number | null | undefined; isExperienceBased?: boolean }) {
+  const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
   const color = surfRatingColor(rating)
+
+  if (isExperienceBased) {
+    return (
+      <div className="flex items-center gap-1.5" aria-label={`Experience-based surf rating ${value} of 6`}>
+        {Array.from({ length: 6 }).map((_, index) => {
+          const face = index + 1
+          const filled = face <= value
+          const dots = filled ? MIRROR_DICE_DOTS[face] ?? [] : []
+
+          return (
+            <span
+              key={face}
+              className="relative block h-3.5 w-3.5 shrink-0 rounded-[0.2rem] border"
+              style={{
+                backgroundColor: filled ? color : 'transparent',
+                borderColor: filled ? color : 'rgba(255,255,255,0.24)',
+                borderWidth: filled ? 1 : 1.25,
+                opacity: filled ? 0.96 : 0.72,
+              }}
+            >
+              {dots.map(([left, top], dotIndex) => (
+                <span
+                  key={`${face}-${dotIndex}`}
+                  className="absolute h-0.5 w-0.5 rounded-full"
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    transform: 'translate(-50%, -50%)',
+                    backgroundColor: 'var(--app-bg)',
+                  }}
+                />
+              ))}
+            </span>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
-    <div style={{ color }}>
-      <DiceRating
-        rating={Number.isFinite(Number(rating)) ? Number(rating) : undefined}
-        isExperienceBased={Boolean(isExperienceBased)}
-        muted="rgba(255,255,255,0.24)"
-        paperColor="var(--app-bg)"
-        compact
-      />
+    <div className="flex items-center gap-1.5" aria-label={`Surf rating ${value} of 6`}>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <span
+          key={index}
+          className="block h-2.5 w-3.5 rounded-[0.2rem] border"
+          style={{
+            backgroundColor: index < value ? color : 'transparent',
+            borderColor: color,
+            opacity: index < value ? 0.96 : 0.72,
+          }}
+        />
+      ))}
     </div>
   )
 }
