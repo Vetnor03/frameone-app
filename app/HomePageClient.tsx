@@ -12877,7 +12877,14 @@ function forecastDayTitle(language: AppLanguage, index: number, fallback: string
 function compactMetric(value: number | null | undefined, suffix: string) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '--'
-  return `${Math.round(n)} ${suffix}`
+  return `${Math.round(n)}${suffix}`
+}
+
+function formatSurfForecastSwellLine(rangeLabel: string | null | undefined, periodS: number | null | undefined) {
+  const range = String(rangeLabel || '--').replace(/-/g, '–')
+  const period = Number(periodS)
+  if (!Number.isFinite(period)) return range
+  return `${range} · ${Math.round(period)}s`
 }
 
 function ForecastDirectionArrow({ degrees }: { degrees: number | null | undefined }) {
@@ -13081,12 +13088,10 @@ function SurfForecastCard({ language, cfg, active, onPicked }: { language: AppLa
                         </div>
                         <div className="mt-2 space-y-1 text-xs text-[color:var(--fg-65)]">
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="shrink-0 text-[color:var(--fg-55)]">Swell:</span>
                             <ForecastDirectionArrow degrees={bucket.swell_direction_deg} />
-                            <span className="truncate">{bucket.wave_height_range_label || '--'}</span>
+                            <span className="truncate">{formatSurfForecastSwellLine(bucket.wave_height_range_label, bucket.swell_period_s)}</span>
                           </div>
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="shrink-0 text-[color:var(--fg-55)]">Wind:</span>
                             <ForecastDirectionArrow degrees={bucket.wind_direction_deg} />
                             <span className="truncate">{compactMetric(bucket.wind_speed_ms, 'm/s')}</span>
                           </div>
