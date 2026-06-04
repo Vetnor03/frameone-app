@@ -1,14 +1,25 @@
+import crypto from 'crypto'
+
 export type ForecastCacheDataType = 'weather' | 'surf'
 export type ForecastCacheTier = 'immediate' | 'short_term' | 'long_range'
+export type OpenMeteoCacheStatus = 'hit' | 'miss' | 'stale' | 'deduped' | 'bypassed'
 
 export type ForecastCacheDebug = {
   cacheKey: string
+  cacheKeyHash: string
+  cacheKeyPrefix: string
   cacheHit: boolean
   cacheTier: ForecastCacheTier
   cacheAgeMs: number | null
   ttlMs: number
   staleUsed: boolean
   externalFetch: boolean
+  inFlightDeduped: boolean
+  forceRefresh: boolean
+  openMeteoUrl: string
+  openMeteoCacheStatus: OpenMeteoCacheStatus
+  openMeteoCacheAgeMs: number | null
+  openMeteoCacheTtlMs: number
 }
 
 export type ForecastCacheFetchResult<T = unknown> = {
@@ -39,12 +50,12 @@ type ForecastCacheOptions = {
   allowStale?: boolean
   staleTtlMs?: number
   fetcher?: typeof fetch
+  forceRefresh?: boolean
+  configUpdatedAt?: string | number | Date | null
 }
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000
-const ONE_HOUR_MS = 60 * 60 * 1000
-const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
-const DEFAULT_STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const FOUR_HOURS_MS = 4 * 60 * 60 * 1000
 const FORECAST_CACHE_MAX_ENTRIES = 500
 const FORECAST_CACHE_COORD_BUCKET_DEGREES = 0.05
 
@@ -73,6 +84,19 @@ function roundedCoord(value: string | null) {
   return (Math.round(n / FORECAST_CACHE_COORD_BUCKET_DEGREES) * FORECAST_CACHE_COORD_BUCKET_DEGREES).toFixed(2)
 }
 
+function normalizeParamValue(key: string, value: string) {
+  if (key === 'hourly' || key === 'daily' || key === 'current') {
+    return value.split(',').map((part) => part.trim()).filter(Boolean).sort().join(',')
+  }
+  return value
+}
+
+function parseTimeMs(value: ForecastCacheOptions['configUpdatedAt']) {
+  if (value == null || value === '') return null
+  const ms = value instanceof Date ? value.getTime() : typeof value === 'number' ? value : Date.parse(String(value))
+  return Number.isFinite(ms) ? ms : null
+}
+
 export function forecastCacheTier(input: { horizonHours?: number; forecastDays?: number; forecastRange?: string }): ForecastCacheTier {
   const horizonHours = Number(input.horizonHours)
   const forecastDays = Number(input.forecastDays)
@@ -82,22 +106,19 @@ export function forecastCacheTier(input: { horizonHours?: number; forecastDays?:
   return 'long_range'
 }
 
-export function forecastCacheTtlMs(input: { horizonHours?: number; forecastDays?: number; forecastRange?: string; frameRequest?: boolean }) {
-  const tier = forecastCacheTier(input)
-  const ttlMs = tier === 'immediate' ? FIFTEEN_MINUTES_MS : tier === 'short_term' ? ONE_HOUR_MS : TWELVE_HOURS_MS
-  return input.frameRequest ? Math.max(ttlMs, FIFTEEN_MINUTES_MS) : ttlMs
+export function forecastCacheTtlMs(input?: { frameRequest?: boolean; configUnchangedSinceFetch?: boolean }) {
+  return input?.frameRequest && input.configUnchangedSinceFetch ? FOUR_HOURS_MS : FIFTEEN_MINUTES_MS
 }
 
-export function forecastCacheKey(options: Pick<ForecastCacheOptions, 'dataType' | 'provider' | 'url' | 'timezone' | 'forecastRange'>) {
+export function forecastCacheKey(options: Pick<ForecastCacheOptions, 'dataType' | 'provider' | 'url' | 'timezone'>) {
   const u = new URL(options.url)
   const lat = roundedCoord(u.searchParams.get('latitude'))
   const lon = roundedCoord(u.searchParams.get('longitude'))
   const normalizedParams = sortedParams(u)
     .filter(([key]) => key !== 'latitude' && key !== 'longitude')
-    .map(([key, value]) => `${key}=${value}`)
+    .map(([key, value]) => `${key}=${normalizeParamValue(key, value)}`)
     .join('&')
   const timezone = options.timezone ?? u.searchParams.get('timezone') ?? ''
-  const range = options.forecastRange ?? ''
   return [
     `type=${options.dataType}`,
     `provider=${options.provider}`,
@@ -105,14 +126,80 @@ export function forecastCacheKey(options: Pick<ForecastCacheOptions, 'dataType' 
     `path=${u.pathname}`,
     `grid=${lat},${lon}`,
     `timezone=${timezone}`,
-    `range=${range}`,
     `params=${normalizedParams}`,
   ].join('|')
 }
 
+function cacheKeyHash(key: string) {
+  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 16)
+}
+
+function cacheKeyPrefix(key: string) {
+  return key.slice(0, 96)
+}
+
+function openMeteoUrlWithoutSecrets(url: string) {
+  const u = new URL(url)
+  return u.toString()
+}
+
+function ttlForEntry(options: ForecastCacheOptions, entry?: ForecastCacheEntry) {
+  if (!entry) return FIFTEEN_MINUTES_MS
+  const configUpdatedAt = parseTimeMs(options.configUpdatedAt)
+  const configUnchangedSinceFetch = !!options.frameRequest && configUpdatedAt != null && configUpdatedAt <= entry.fetchedAt
+  return Math.min(forecastCacheTtlMs({ frameRequest: options.frameRequest, configUnchangedSinceFetch }), FOUR_HOURS_MS)
+}
+
+function makeDebug(input: {
+  key: string
+  options: ForecastCacheOptions
+  tier: ForecastCacheTier
+  status: OpenMeteoCacheStatus
+  cacheHit: boolean
+  cacheAgeMs: number | null
+  ttlMs: number
+  staleUsed: boolean
+  externalFetch: boolean
+  inFlightDeduped: boolean
+}): ForecastCacheDebug {
+  return {
+    cacheKey: input.key,
+    cacheKeyHash: cacheKeyHash(input.key),
+    cacheKeyPrefix: cacheKeyPrefix(input.key),
+    cacheHit: input.cacheHit,
+    cacheTier: input.tier,
+    cacheAgeMs: input.cacheAgeMs,
+    ttlMs: input.ttlMs,
+    staleUsed: input.staleUsed,
+    externalFetch: input.externalFetch,
+    inFlightDeduped: input.inFlightDeduped,
+    forceRefresh: !!input.options.forceRefresh,
+    openMeteoUrl: openMeteoUrlWithoutSecrets(input.options.url),
+    openMeteoCacheStatus: input.status,
+    openMeteoCacheAgeMs: input.cacheAgeMs,
+    openMeteoCacheTtlMs: input.ttlMs,
+  }
+}
+
+function logForecastCache(level: 'info' | 'warn', debug: ForecastCacheDebug, extra: Record<string, unknown> = {}) {
+  const logPayload = {
+    cacheKeyHash: debug.cacheKeyHash,
+    cacheKeyPrefix: debug.cacheKeyPrefix,
+    status: debug.openMeteoCacheStatus,
+    ttlMs: debug.ttlMs,
+    ageMs: debug.cacheAgeMs,
+    inFlightDeduped: debug.inFlightDeduped,
+    forceRefresh: debug.forceRefresh,
+    url: debug.openMeteoUrl,
+    ...extra,
+  }
+  if (level === 'warn') console.warn('[open-meteo-cache]', logPayload)
+  else console.info('[open-meteo-cache]', logPayload)
+}
+
 function pruneForecastCache(now = Date.now()) {
   for (const [key, entry] of __forecastResponseCache) {
-    if (entry.staleExpiresAt <= now) __forecastResponseCache.delete(key)
+    if (entry.staleExpiresAt <= now || entry.fetchedAt + FOUR_HOURS_MS <= now) __forecastResponseCache.delete(key)
   }
 
   while (__forecastResponseCache.size > FORECAST_CACHE_MAX_ENTRIES) {
@@ -164,39 +251,49 @@ export async function fetchCachedForecastJson<T = unknown>(options: ForecastCach
   const now = Date.now()
   const key = forecastCacheKey(options)
   const tier = forecastCacheTier(options)
-  const ttlMs = forecastCacheTtlMs(options)
-  const staleTtlMs = options.staleTtlMs ?? DEFAULT_STALE_TTL_MS
   pruneForecastCache(now)
 
   const cached = __forecastResponseCache.get(key) as ForecastCacheEntry<T> | undefined
-  if (cached && cached.expiresAt > now) {
-    const debug = { cacheKey: key, cacheHit: true, cacheTier: tier, cacheAgeMs: now - cached.fetchedAt, ttlMs, staleUsed: false, externalFetch: false }
-    console.info('[forecast-cache]', debug)
-    return { payload: cached.payload, debug, error: null, fetchedAt: new Date(cached.fetchedAt).toISOString(), expiresAt: new Date(cached.expiresAt).toISOString() }
+  const ttlMs = ttlForEntry(options, cached)
+  const cachedAgeMs = cached ? Math.max(0, now - cached.fetchedAt) : null
+  const cachedFresh = !!cached && cachedAgeMs != null && cachedAgeMs <= ttlMs && cachedAgeMs < FOUR_HOURS_MS
+
+  if (!options.forceRefresh && cached && cachedFresh) {
+    const debug = makeDebug({ key, options, tier, status: 'hit', cacheHit: true, cacheAgeMs: cachedAgeMs, ttlMs, staleUsed: false, externalFetch: false, inFlightDeduped: false })
+    logForecastCache('info', debug)
+    return { payload: cached.payload, debug, error: null, fetchedAt: new Date(cached.fetchedAt).toISOString(), expiresAt: new Date(cached.fetchedAt + ttlMs).toISOString() }
   }
 
   const existing = __forecastResponseInFlight.get(key)
-  if (existing) return existing as Promise<ForecastCacheFetchResult<T>>
+  if (existing) {
+    const result = await existing as ForecastCacheFetchResult<T>
+    const ageMs = result.fetchedAt ? Math.max(0, Date.now() - Date.parse(result.fetchedAt)) : result.debug.cacheAgeMs
+    const debug = makeDebug({ key, options, tier, status: 'deduped', cacheHit: result.debug.cacheHit, cacheAgeMs: ageMs, ttlMs: result.debug.ttlMs || ttlMs, staleUsed: result.debug.staleUsed, externalFetch: false, inFlightDeduped: true })
+    logForecastCache('info', debug)
+    return { ...result, debug }
+  }
 
   const promise = (async (): Promise<ForecastCacheFetchResult<T>> => {
     try {
+      const status: OpenMeteoCacheStatus = options.forceRefresh ? 'bypassed' : cached ? 'stale' : 'miss'
       const payload = await fetchJsonWithTimeout(options.url, options.timeoutMs, options.fetcher) as T
       const fetchedAt = Date.now()
-      const expiresAt = fetchedAt + ttlMs
-      __forecastResponseCache.set(key, { fetchedAt, expiresAt, staleExpiresAt: fetchedAt + staleTtlMs, payload })
+      const expiresAt = fetchedAt + FIFTEEN_MINUTES_MS
+      __forecastResponseCache.set(key, { fetchedAt, expiresAt, staleExpiresAt: fetchedAt + FOUR_HOURS_MS, payload })
       pruneForecastCache(fetchedAt)
-      const debug = { cacheKey: key, cacheHit: false, cacheTier: tier, cacheAgeMs: 0, ttlMs, staleUsed: false, externalFetch: true }
-      console.info('[forecast-cache]', debug)
+      const debug = makeDebug({ key, options, tier, status, cacheHit: false, cacheAgeMs: 0, ttlMs: FIFTEEN_MINUTES_MS, staleUsed: false, externalFetch: true, inFlightDeduped: false })
+      logForecastCache('info', debug)
       return { payload, debug, error: null, fetchedAt: new Date(fetchedAt).toISOString(), expiresAt: new Date(expiresAt).toISOString() }
     } catch (e: unknown) {
       const error = errorCode(e)
-      if (options.allowStale !== false && cached && cached.staleExpiresAt > now) {
-        const debug = { cacheKey: key, cacheHit: false, cacheTier: tier, cacheAgeMs: now - cached.fetchedAt, ttlMs, staleUsed: true, externalFetch: true }
-        console.warn('[forecast-cache]', { ...debug, error })
-        return { payload: cached.payload, debug, error, fetchedAt: new Date(cached.fetchedAt).toISOString(), expiresAt: new Date(cached.expiresAt).toISOString() }
+      const staleAgeMs = cached ? Math.max(0, now - cached.fetchedAt) : null
+      if (!options.forceRefresh && options.allowStale !== false && cached && staleAgeMs != null && staleAgeMs < FOUR_HOURS_MS) {
+        const debug = makeDebug({ key, options, tier, status: 'stale', cacheHit: false, cacheAgeMs: staleAgeMs, ttlMs: FOUR_HOURS_MS, staleUsed: true, externalFetch: true, inFlightDeduped: false })
+        logForecastCache('warn', debug, { error })
+        return { payload: cached.payload, debug, error, fetchedAt: new Date(cached.fetchedAt).toISOString(), expiresAt: new Date(cached.fetchedAt + FOUR_HOURS_MS).toISOString() }
       }
-      const debug = { cacheKey: key, cacheHit: false, cacheTier: tier, cacheAgeMs: null, ttlMs, staleUsed: false, externalFetch: true }
-      console.warn('[forecast-cache]', { ...debug, error })
+      const debug = makeDebug({ key, options, tier, status: options.forceRefresh ? 'bypassed' : cached ? 'stale' : 'miss', cacheHit: false, cacheAgeMs: staleAgeMs, ttlMs: FIFTEEN_MINUTES_MS, staleUsed: false, externalFetch: true, inFlightDeduped: false })
+      logForecastCache('warn', debug, { error })
       return { payload: null, debug, error, fetchedAt: null, expiresAt: null }
     }
   })()
@@ -216,11 +313,11 @@ export function __resetForecastCacheForTests() {
 
 export function __seedForecastCacheForTests<T = unknown>(options: ForecastCacheOptions, payload: T, fetchedAt: number, ttlMs?: number, staleTtlMs?: number) {
   const key = forecastCacheKey(options)
-  const effectiveTtlMs = ttlMs ?? forecastCacheTtlMs(options)
+  const effectiveTtlMs = ttlMs ?? FIFTEEN_MINUTES_MS
   __forecastResponseCache.set(key, {
     fetchedAt,
     expiresAt: fetchedAt + effectiveTtlMs,
-    staleExpiresAt: fetchedAt + (staleTtlMs ?? DEFAULT_STALE_TTL_MS),
+    staleExpiresAt: fetchedAt + Math.min(staleTtlMs ?? FOUR_HOURS_MS, FOUR_HOURS_MS),
     payload,
   })
   return key

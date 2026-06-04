@@ -1234,7 +1234,7 @@ function computeSelectedWeatherPeriods(data: UnknownRecord, fallbackFullDay: {
   }
 }
 
-async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Detail> {
+async function weatherDetail(cfg: UnknownRecord, language: string, configUpdatedAt?: string | null): Promise<Detail> {
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
   const label = asString(cfg.label).trim()
@@ -1266,6 +1266,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
       timezone: 'auto',
       frameRequest: true,
       allowStale: true,
+      configUpdatedAt: configUpdatedAt ?? null,
     })
     if (!fetched.payload) throw new Error(fetched.error || 'Open-Meteo weather unavailable')
     data = asRecord(fetched.payload)
@@ -1347,7 +1348,7 @@ function isTodaysBestSurfConfig(spotId: string, spot: string) {
   return normalizedSpot === "today's best" || normalizedSpot === 'todays best' || normalizedSpot === 'dagens beste'
 }
 
-function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSettings: UnknownRecord, spotIdOverride?: string) {
+function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSettings: UnknownRecord, spotIdOverride?: string, configUpdatedAt?: string | null) {
   const spot = asString(cfg.spot || cfg.label).trim()
   const configuredSpotId = asString(cfg.spotId).trim()
   const spotId = configuredSpotId || (spot ? spotIdFromLabel(spot) ?? '' : '')
@@ -1369,6 +1370,7 @@ function buildPhysicalSurfScoreUrl(origin: string, cfg: UnknownRecord, surfSetti
 
   url.searchParams.set('hours', '4')
   url.searchParams.set('frame', '1')
+  if (configUpdatedAt) url.searchParams.set('configUpdatedAt', configUpdatedAt)
 
   if (!spotIdOverride && isTodaysBestSurfConfig(spotId, spot)) {
     const fuelPenalty = truthy(surfSettings.fuelPenalty)
@@ -1394,9 +1396,10 @@ async function surfDetail(
   cfg: UnknownRecord,
   authToken: string,
   language: string,
-  surfSettings: UnknownRecord
+  surfSettings: UnknownRecord,
+  configUpdatedAt?: string | null
 ): Promise<Detail> {
-  const base = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings)
+  const base = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, undefined, configUpdatedAt)
   const headers = { Authorization: `Bearer ${authToken}` }
 
   // Mirror the firmware's render path: Today's Best is first resolved with the exact
@@ -1405,7 +1408,7 @@ async function surfDetail(
   if (base.isTodaysBest) {
     const winnerSpotId = resolvedSurfSpotId(data)
     if (winnerSpotId) {
-      const winner = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, winnerSpotId)
+      const winner = buildPhysicalSurfScoreUrl(origin, cfg, surfSettings, winnerSpotId, configUpdatedAt)
       winner.url.searchParams.set('dayparts', '1')
       winner.url.searchParams.set('daily', '1')
       winner.url.searchParams.set('days', '5')
@@ -1893,8 +1896,8 @@ export async function GET(req: Request) {
 
       try {
         if (parsed.base === 'date') detailsBySlot[String(slot)] = { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
-        else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language)
-        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, deviceToken || bearer, language, asRecord(modules.surf_settings))
+        else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language, asString(frameConfig.updated_at) || null)
+        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, deviceToken || bearer, language, asRecord(modules.surf_settings), asString(frameConfig.updated_at) || null)
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
