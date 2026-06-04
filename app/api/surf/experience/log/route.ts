@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { findSpotByLabel, SURF_SPOTS } from '@/app/lib/surf/spots'
 import { scoreSurf } from '@/app/lib/surfScoring'
+import { fetchCachedForecastJson } from '@/app/lib/server/forecastCache'
 
 export const runtime = 'nodejs'
 
@@ -102,16 +103,6 @@ function isoHourUTCFromDate(d: Date) {
 function correctedHeight(h: number, p: number) {
   if (!(h > 0) || !(p > 0)) return h
   return h * (p / 10)
-}
-
-async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 12000) {
-  const ac = new AbortController()
-  const t = setTimeout(() => ac.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: ac.signal })
-  } finally {
-    clearTimeout(t)
-  }
 }
 
 function pickLoggedSwell(args: {
@@ -260,16 +251,16 @@ async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, 
     `&past_days=7` +
     `&forecast_days=7`
 
-  const [marineResp, windResp] = await Promise.all([
-    fetchWithTimeout(marineUrl, {}, 12000),
-    fetchWithTimeout(windUrl, {}, 12000),
+  const [marineFetched, windFetched] = await Promise.all([
+    fetchCachedForecastJson({ dataType: 'surf', provider: 'open-meteo', url: marineUrl, timeoutMs: 12000, forecastDays: 7, forecastRange: 'past7-forecast7d', timezone: 'UTC', frameRequest: false, allowStale: true }),
+    fetchCachedForecastJson({ dataType: 'surf', provider: 'open-meteo', url: windUrl, timeoutMs: 12000, forecastDays: 7, forecastRange: 'past7-forecast7d', timezone: 'UTC', frameRequest: false, allowStale: true }),
   ])
 
-  if (!marineResp.ok) throw new Error('Marine fetch failed')
-  if (!windResp.ok) throw new Error('Wind fetch failed')
+  if (!marineFetched.payload) throw new Error('Marine fetch failed')
+  if (!windFetched.payload) throw new Error('Wind fetch failed')
 
-  const marine: any = await marineResp.json()
-  const wind: any = await windResp.json()
+  const marine: any = marineFetched.payload
+  const wind: any = windFetched.payload
 
   const mt: string[] = Array.isArray(marine?.hourly?.time) ? marine.hourly.time : []
   const wt: string[] = Array.isArray(wind?.hourly?.time) ? wind.hourly.time : []

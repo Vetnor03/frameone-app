@@ -4,6 +4,7 @@ import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload } from '@/app/api/device/frame-config/builder'
+import { fetchCachedForecastJson } from '@/app/lib/server/forecastCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1255,7 +1256,20 @@ async function weatherDetail(cfg: UnknownRecord, language: string): Promise<Deta
 
   let data: UnknownRecord
   try {
-    data = asRecord(await fetchJson(url.toString(), { timeoutMs: WEATHER_FETCH_TIMEOUT_MS }))
+    const fetched = await fetchCachedForecastJson({
+      dataType: 'weather',
+      provider: 'open-meteo',
+      url: url.toString(),
+      timeoutMs: WEATHER_FETCH_TIMEOUT_MS,
+      forecastDays: 5,
+      forecastRange: '0-5d',
+      timezone: 'auto',
+      frameRequest: true,
+      allowStale: true,
+    })
+    if (!fetched.payload) throw new Error(fetched.error || 'Open-Meteo weather unavailable')
+    data = asRecord(fetched.payload)
+    console.info('[mirror-snapshot:weather]', { stage: 'open-meteo-cache', label, lat, lon, ...fetched.debug })
   } catch (e: unknown) {
     const reason = e instanceof Error ? e.message : String(e || 'Unknown weather error')
     console.error('[mirror-snapshot:weather]', { stage: 'open-meteo-failed', label, lat, lon, reason })
