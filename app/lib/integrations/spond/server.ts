@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { decryptJson, encryptJson } from './crypto'
+import { isSpondEventExternalId } from '@/app/lib/device/remindersFeed'
 import { fetchSpondItems, SpondError, type SpondCredentials, type SpondMappedItem } from './client'
 
 export const SPOND_PROVIDER = 'spond'
@@ -127,7 +128,7 @@ export async function syncSpondForUser(userId: string, credentials: SpondCredent
     .single()
 
   if (error) throw new Error(error.message)
-  return { integration: data, itemCount: rows.length }
+  return { integration: data, itemCount: rows.filter((row) => isSpondEventExternalId(row.external_id)).length }
 }
 
 export async function markSpondSyncFailure(userId: string, error: unknown) {

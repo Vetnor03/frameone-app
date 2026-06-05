@@ -141,6 +141,10 @@ export function isoToHmInTimeZone(value: string, timeZone: string) {
   return `${pad2(parts.hour)}:${pad2(parts.minute)}`
 }
 
+export function isSpondEventExternalId(externalId: string | null | undefined) {
+  return String(externalId || '').trim().startsWith('event:')
+}
+
 export function buildSpondReminderItems(
   rows: IntegrationItemRow[],
   todayYmd: string,
@@ -151,7 +155,7 @@ export function buildSpondReminderItems(
   return rows.flatMap((row) => {
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
-    if (!title || !externalId) return []
+    if (!title || !externalId || !isSpondEventExternalId(externalId)) return []
 
     const timestamp = row.starts_at || row.due_at
     const occurrenceDate = timestamp ? isoToYmdInTimeZone(timestamp, timeZone) : todayYmd

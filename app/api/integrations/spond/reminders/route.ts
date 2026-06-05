@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     .select('id,provider,external_id,title,body,starts_at,due_at,priority,updated_at')
     .eq('user_id', userId)
     .eq('provider', SPOND_PROVIDER)
+    .like('external_id', 'event:%')
     .order('priority', { ascending: true })
     .order('starts_at', { ascending: true, nullsFirst: false })
 
