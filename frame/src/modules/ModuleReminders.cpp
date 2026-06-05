@@ -727,31 +727,243 @@ static void drawCenteredSmallNoteAtY(const Cell& c, const char* txt, int y) {
   d.setFont(nullptr);
 }
 
-static void drawCenteredBulletLine(const Cell& c,
-                                   int centerY,
-                                   const char* text,
-                                   const GFXfont* font,
-                                   int anchorTextStartX) {
+static void drawBulletWrappedItem(int bulletX,
+                                  int textX,
+                                  int firstBaselineY,
+                                  const char lines[][128],
+                                  int lineCount,
+                                  const GFXfont* font,
+                                  int lineStep,
+                                  uint16_t ink) {
+  if (lineCount <= 0) return;
+
   auto& d = DisplayCore::get();
-
-  int16_t tx1, ty1;
-  uint16_t tw, th;
-  measureText(text, font, tx1, ty1, tw, th);
-
   const int dotR = 3;
-  const int gap = 10;
-
-  int textBaseline = centerY - (int)th / 2 - ty1;
-  int dotCx = anchorTextStartX - gap - dotR;
-  int dotCy = centerY;
-
-  d.fillCircle(dotCx, dotCy, dotR, Theme::ink());
+  d.fillCircle(bulletX, firstBaselineY - lineStep / 2 + 2, dotR, ink);
 
   d.setFont(font);
-  d.setTextColor(Theme::ink());
-  d.setCursor(anchorTextStartX, textBaseline);
-  d.print(text);
+  d.setTextColor(ink);
+  d.setTextSize(1);
+  for (int i = 0; i < lineCount; i++) {
+    d.setCursor(textX, firstBaselineY + i * lineStep);
+    d.print(lines[i]);
+  }
   d.setFont(nullptr);
+}
+
+static int measuredTextHeight(const char* text, const GFXfont* font) {
+  int16_t x1, y1;
+  uint16_t tw, th;
+  measureText(text, font, x1, y1, tw, th);
+  return (int)th;
+}
+
+static int smartLineStep(const GFXfont* font) {
+  if (font == FONT_B12) return 21;
+  if (font == FONT_B9) return 16;
+  return fontLineHeight(font) + 3;
+}
+
+static int smartItemGap(const GFXfont* font, bool wrapped) {
+  if (!wrapped) return (font == FONT_B9) ? 8 : 12;
+  return (font == FONT_B9) ? 7 : 9;
+}
+
+static void appendReminderLabel(const char* title, const char* label, char* out, size_t outSize) {
+  if (!out || outSize == 0) return;
+  out[0] = '\0';
+  if (!title) title = "";
+  if (label && label[0]) snprintf(out, outSize, "%s  %s", title, label);
+  else safeCopy(out, outSize, title);
+}
+
+static int wrapTextToLines(const char* src,
+                           char lines[][128],
+                           int maxLines,
+                           int maxWidth,
+                           const GFXfont* font) {
+  if (!lines || maxLines <= 0) return 0;
+  for (int i = 0; i < maxLines; i++) lines[i][0] = '\0';
+  if (!src || !src[0]) return 0;
+
+  char work[160];
+  safeCopy(work, sizeof(work), src);
+
+  int lineCount = 0;
+  char current[128] = {0};
+
+  char* save = nullptr;
+  char* word = strtok_r(work, " ", &save);
+  while (word) {
+    char candidate[128];
+    if (current[0]) snprintf(candidate, sizeof(candidate), "%s %s", current, word);
+    else safeCopy(candidate, sizeof(candidate), word);
+
+    if (textWidth(candidate, font) <= maxWidth) {
+      safeCopy(current, sizeof(current), candidate);
+    } else {
+      if (current[0]) {
+        safeCopy(lines[lineCount++], 128, current);
+        current[0] = '\0';
+        if (lineCount >= maxLines) break;
+      }
+
+      if (textWidth(word, font) <= maxWidth) {
+        safeCopy(current, sizeof(current), word);
+      } else {
+        fitTextToWidth(word, lines[lineCount++], 128, maxWidth, font);
+        current[0] = '\0';
+        if (lineCount >= maxLines) break;
+      }
+    }
+
+    word = strtok_r(nullptr, " ", &save);
+  }
+
+  if (lineCount < maxLines && current[0]) {
+    safeCopy(lines[lineCount++], 128, current);
+  }
+
+  return lineCount;
+}
+
+struct SmartReminderLine {
+  int itemIdx = -1;
+  char title[128] = {0};
+  char oneLine[160] = {0};
+  char lines[5][128] = {{0}};
+  int lineCount = 0;
+};
+
+struct SmartReminderLayout {
+  bool fits = false;
+  bool wrapped = false;
+  bool includeLabel = false;
+  const GFXfont* font = FONT_B12;
+  int count = 0;
+  int blockH = 0;
+  int maxLineW = 0;
+  int lineStep = 0;
+  int itemGap = 0;
+  SmartReminderLine items[4];
+};
+
+static bool buildSmartReminderLayout(const ReminderBucket& bucket,
+                                     int count,
+                                     int rotation,
+                                     int maxTextW,
+                                     int maxH,
+                                     const char* label,
+                                     const GFXfont* font,
+                                     bool includeLabel,
+                                     bool allowWrap,
+                                     SmartReminderLayout& out) {
+  out = SmartReminderLayout{};
+  out.font = font;
+  out.count = count;
+  out.includeLabel = includeLabel;
+  out.wrapped = allowWrap;
+  out.lineStep = smartLineStep(font);
+  out.itemGap = smartItemGap(font, allowWrap);
+
+  if (count <= 0 || bucket.count <= 0 || maxTextW <= 0 || maxH <= 0) return false;
+
+  int totalH = 0;
+  int maxLineW = 0;
+
+  for (int i = 0; i < count; i++) {
+    int pick = wrapIndex(rotation + i, bucket.count);
+    int itemIdx = bucket.itemIdx[pick];
+    if (itemIdx < 0 || itemIdx >= g_cache.count) return false;
+
+    SmartReminderLine& item = out.items[i];
+    item.itemIdx = itemIdx;
+    buildReminderTitleWithTime(g_cache.items[itemIdx], item.title, sizeof(item.title));
+    appendReminderLabel(item.title, includeLabel ? label : "", item.oneLine, sizeof(item.oneLine));
+
+    if (!allowWrap) {
+      if (textWidth(item.oneLine, font) > maxTextW) return false;
+      safeCopy(item.lines[0], sizeof(item.lines[0]), item.oneLine);
+      item.lineCount = 1;
+      int lineW = textWidth(item.lines[0], font);
+      if (lineW > maxLineW) maxLineW = lineW;
+      totalH += measuredTextHeight(item.lines[0], font);
+    } else {
+      item.lineCount = wrapTextToLines(item.oneLine, item.lines, 5, maxTextW, font);
+      if (item.lineCount <= 0) return false;
+      for (int line = 0; line < item.lineCount; line++) {
+        int lineW = textWidth(item.lines[line], font);
+        if (lineW > maxLineW) maxLineW = lineW;
+      }
+      totalH += item.lineCount * out.lineStep;
+    }
+
+    if (i > 0) totalH += out.itemGap;
+  }
+
+  if (totalH > maxH) return false;
+
+  out.blockH = totalH;
+  out.maxLineW = maxLineW;
+  out.fits = true;
+  return true;
+}
+
+static bool findSmartReminderLayout(const ReminderBucket& bucket,
+                                    int desiredCount,
+                                    int maxTextW,
+                                    int maxH,
+                                    const char* label,
+                                    SmartReminderLayout& out) {
+  const int rotation = getRotationStep4h();
+
+  for (int count = desiredCount; count >= 1; count--) {
+    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+                                 REMINDER_CONTENT_FONT, true, false, out)) return true;
+
+    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+                                 REMINDER_CONTENT_FONT, false, false, out)) return true;
+
+    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+                                 REMINDER_CONTENT_FONT, false, true, out)) return true;
+
+    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+                                 FONT_B9, false, true, out)) return true;
+  }
+
+  return false;
+}
+
+static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
+                                         int rotation,
+                                         int maxTextW,
+                                         int maxH,
+                                         SmartReminderLayout& out) {
+  out = SmartReminderLayout{};
+  out.font = FONT_B9;
+  out.count = 1;
+  out.wrapped = false;
+  out.includeLabel = false;
+  out.lineStep = smartLineStep(FONT_B9);
+  out.itemGap = 0;
+
+  if (bucket.count <= 0 || maxTextW <= 0) return false;
+  int itemIdx = bucket.itemIdx[wrapIndex(rotation, bucket.count)];
+  if (itemIdx < 0 || itemIdx >= g_cache.count) return false;
+
+  SmartReminderLine& item = out.items[0];
+  item.itemIdx = itemIdx;
+  buildReminderTitleWithTime(g_cache.items[itemIdx], item.title, sizeof(item.title));
+  fitTextToWidth(item.title, item.lines[0], sizeof(item.lines[0]), maxTextW, FONT_B9);
+  item.lineCount = item.lines[0][0] ? 1 : 0;
+  if (item.lineCount <= 0) return false;
+
+  out.blockH = measuredTextHeight(item.lines[0], FONT_B9);
+  if (out.blockH > maxH) return false;
+
+  out.maxLineW = textWidth(item.lines[0], FONT_B9);
+  out.fits = true;
+  return true;
 }
 
 static void drawBucketLinesCentered(const Cell& c,
@@ -760,42 +972,57 @@ static void drawBucketLinesCentered(const Cell& c,
                                     int yTop,
                                     int totalH,
                                     const GFXfont* lineFont) {
-  const int rotation = getRotationStep4h();
-  const int lineH = fontLineHeight(lineFont);
-  const int lineGap = 12;
+  (void)lineFont;
+  if (visibleCount <= 0 || bucket.count <= 0 || totalH <= 0) return;
+
   const int dotR = 3;
   const int gap = 10;
+  const int sidePad = 18;
+  const int maxTextW = c.w - sidePad * 2 - dotR * 2 - gap;
+  if (maxTextW <= 20) return;
 
-  int blockH = visibleCount * lineH + (visibleCount - 1) * lineGap;
-  int startY = yTop + (totalH - blockH) / 2;
+  char label[32];
+  buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, label, sizeof(label));
 
-  char lines[4][128];
-  int widths[4] = {0, 0, 0, 0};
-  int longestW = 0;
-
-  for (int i = 0; i < visibleCount; i++) {
-    lines[i][0] = 0;
-
-    int pick = wrapIndex(rotation + i, bucket.count);
-    int itemIdx = bucket.itemIdx[pick];
-    if (itemIdx < 0 || itemIdx >= g_cache.count) continue;
-
-    char fullBuf[128];
-    buildReminderTitleWithTime(g_cache.items[itemIdx], fullBuf, sizeof(fullBuf));
-
-    fitTextToWidth(fullBuf, lines[i], sizeof(lines[i]), c.w - 44, lineFont);
-    widths[i] = textWidth(lines[i], lineFont);
-    if (widths[i] > longestW) longestW = widths[i];
+  SmartReminderLayout layout;
+  if (!findSmartReminderLayout(bucket, min(visibleCount, 4), maxTextW, totalH, label, layout)) {
+    if (!buildEmergencyReminderLayout(bucket, getRotationStep4h(), maxTextW, totalH, layout)) {
+      return;
+    }
   }
 
-  int totalLongestW = dotR * 2 + gap + longestW;
-  int anchorTextStartX = c.x + (c.w - totalLongestW) / 2 + dotR * 2 + gap;
+  const int rowW = dotR * 2 + gap + layout.maxLineW;
+  int textX = c.x + (c.w - rowW) / 2 + dotR * 2 + gap;
+  int minTextX = c.x + sidePad + dotR * 2 + gap;
+  if (textX < minTextX) textX = minTextX;
+  int bulletX = textX - gap - dotR;
 
-  for (int i = 0; i < visibleCount; i++) {
-    if (!lines[i][0]) continue;
+  int y = yTop + (totalH - layout.blockH) / 2;
+  if (y < yTop) y = yTop;
 
-    int centerY = startY + i * (lineH + lineGap) + lineH / 2;
-    drawCenteredBulletLine(c, centerY, lines[i], lineFont, anchorTextStartX);
+  const uint16_t ink = Theme::ink();
+  for (int i = 0; i < layout.count; i++) {
+    SmartReminderLine& item = layout.items[i];
+    if (item.lineCount <= 0) continue;
+
+    int firstBaselineY;
+    if (layout.wrapped) {
+      firstBaselineY = y + layout.lineStep - 4;
+    } else {
+      int textH = measuredTextHeight(item.lines[0], layout.font);
+      int16_t x1, y1; uint16_t tw, th;
+      measureText(item.lines[0], layout.font, x1, y1, tw, th);
+      firstBaselineY = y - y1;
+      (void)textH;
+    }
+
+    drawBulletWrappedItem(bulletX, textX, firstBaselineY,
+                          item.lines, item.lineCount, layout.font,
+                          layout.lineStep, ink);
+
+    int itemH = layout.wrapped ? item.lineCount * layout.lineStep
+                               : measuredTextHeight(item.lines[0], layout.font);
+    y += itemH + layout.itemGap;
   }
 }
 
