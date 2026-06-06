@@ -1214,8 +1214,6 @@ export default function HomePage() {
   }
 
   const dirtyFrameRef = useRef<number | null>(null)
-  const frameAutoSavePendingRef = useRef(false)
-  const persistSettingsRef = useRef<() => Promise<boolean>>(async () => false)
   const pendingDirtyStateRef = useRef<{
     theme?: 'dark' | 'light'
     language?: AppLanguage
@@ -1265,10 +1263,6 @@ export default function HomePage() {
       pendingDirtyStateRef.current = null
       refreshDirtyState(pending ?? undefined)
     })
-  }
-
-  function scheduleFrameAutoSave() {
-    frameAutoSavePendingRef.current = true
   }
 
 
@@ -1765,7 +1759,6 @@ export default function HomePage() {
       layoutKey: nextLayoutKey,
       cellsByLayout: nextCellsByLayout,
     })
-    scheduleFrameAutoSave()
   }
 
   function nextLayout() {
@@ -1789,7 +1782,6 @@ export default function HomePage() {
       layoutKey: nextLayoutKey,
       cellsByLayout: nextCellsByLayout,
     })
-    scheduleFrameAutoSave()
   }
 
   function openPicker(slot: number) {
@@ -1819,7 +1811,6 @@ export default function HomePage() {
     setPickerOpen(false)
     setPickerSlot(null)
     markDirty({ cellsByLayout: nextCellsByLayout })
-    scheduleFrameAutoSave()
   }
 
   function clearCell() {
@@ -1843,7 +1834,6 @@ export default function HomePage() {
     setPickerOpen(false)
     setPickerSlot(null)
     markDirty({ cellsByLayout: nextCellsByLayout })
-    scheduleFrameAutoSave()
   }
 
   async function persistSettings() {
@@ -1921,17 +1911,6 @@ export default function HomePage() {
     }
   }
 
-
-
-  useEffect(() => {
-    if (!frameAutoSavePendingRef.current || !dirty || persisting) return
-
-    void persistSettingsRef.current().then((saved) => {
-      if (saved) frameAutoSavePendingRef.current = false
-    })
-  }, [dirty, persisting, activeDeviceId, theme, language, fontSize, layoutKey, cellsByLayout, modulesJson, pinnedModuleTabs])
-
-  persistSettingsRef.current = persistSettings
 
   async function logout() {
     await supabase.auth.signOut()
@@ -2075,7 +2054,6 @@ async function handleSelectTab(k: TabKey) {
                       modulesJson={modulesJson}
                       setModulesJson={setModulesJson}
                       markDirty={markDirty}
-                      scheduleAutoSave={scheduleFrameAutoSave}
                       activeDeviceId={activeDeviceId}
                     />
                   )}
@@ -2085,7 +2063,20 @@ async function handleSelectTab(k: TabKey) {
 
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
-                <div className="h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
+                <button
+                  onClick={() => persistSettings()}
+                  className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
+                    dirty
+                      ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                      : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
+                  }`}
+                  style={{ backgroundColor: 'var(--app-bg)' }}
+                  disabled={!dirty || persisting}
+                >
+                  {persisting ? tx(language).saving : tx(language).update}
+                </button>
+
+                <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
                   {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
               </div>
@@ -8170,7 +8161,6 @@ function ModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
-  scheduleAutoSave,
   activeDeviceId,
 }: {
   language: AppLanguage
@@ -8180,7 +8170,6 @@ function ModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
-  scheduleAutoSave: () => void
   activeDeviceId: string | null
 }) {
   if (module === 'surf') {
@@ -8192,7 +8181,6 @@ function ModuleSettingsTab({
         modulesJson={modulesJson}
         setModulesJson={setModulesJson}
         markDirty={markDirty}
-        scheduleAutoSave={scheduleAutoSave}
       />
     )
   }
@@ -8822,7 +8810,7 @@ function SoccerModuleSettingsTab({
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: () => void
+  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
 }) {
   const soccerSlots = Object.entries(cells)
     .filter(([, m]) => m === 'soccer')
@@ -8839,8 +8827,9 @@ function SoccerModuleSettingsTab({
 
   function commitSoccerList(nextList: SoccerCfg[]) {
     const fixed = normalizeSoccerList(nextList)
-    setModulesJson((prev) => ({ ...prev, soccer: fixed }))
-    markDirty()
+    const nextModules = { ...modulesJson, soccer: fixed }
+    setModulesJson(nextModules)
+    markDirty({ modulesJson: nextModules })
   }
 
   function upsertTeam(id: number, patch: Partial<SoccerCfg>) {
@@ -8971,7 +8960,7 @@ function StocksModuleSettingsTab({
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: () => void
+  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
 }) {
   const stockSlots = Object.entries(cells)
     .filter(([, m]) => m === 'stocks')
@@ -8988,8 +8977,9 @@ function StocksModuleSettingsTab({
 
   function commitStockList(nextList: StockCfg[]) {
     const fixed = normalizeStocksList(nextList)
-    setModulesJson((prev) => ({ ...prev, stocks: fixed }))
-    markDirty()
+    const nextModules = { ...modulesJson, stocks: fixed }
+    setModulesJson(nextModules)
+    markDirty({ modulesJson: nextModules })
   }
 
   function upsertStock(id: number, patch: Partial<StockCfg>) {
@@ -12593,7 +12583,6 @@ function SurfModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
-  scheduleAutoSave,
 }: {
   language: AppLanguage
   layoutKey: LayoutKey
@@ -12601,7 +12590,6 @@ function SurfModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
-  scheduleAutoSave: () => void
 }) {
   const [surfView, setSurfView] = useState<'main' | 'log'>('main')
   const [, setSurfViewTitle] = useState('SURF')
@@ -12718,7 +12706,6 @@ function SurfModuleSettingsTab({
 
     setModulesJson(nextModules)
     markDirty({ modulesJson: nextModules })
-    scheduleAutoSave()
   }
 
   function upsertSurf(id: number, patch: Partial<SurfCfg>) {
@@ -12757,7 +12744,6 @@ function SurfModuleSettingsTab({
 
     setModulesJson(nextModules)
     markDirty({ modulesJson: nextModules })
-    scheduleAutoSave()
   }
 
   return (
@@ -13163,7 +13149,7 @@ function WeatherModuleSettingsTab({
   cells: Record<number, ModuleKey | null>
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
-  markDirty: () => void
+  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
 }) {
   const weatherSlots = Object.entries(cells)
     .filter(([, m]) => m === 'weather')
@@ -13193,8 +13179,9 @@ function WeatherModuleSettingsTab({
       }))
       .filter((x) => Number.isFinite(x.id) && x.id >= 1 && x.id <= 255 && Number.isFinite(x.lat) && Number.isFinite(x.lon))
 
-    setModulesJson((prev) => ({ ...prev, weather: fixed }))
-    markDirty()
+    const nextModules = { ...modulesJson, weather: fixed }
+    setModulesJson(nextModules)
+    markDirty({ modulesJson: nextModules })
   }
 
   function upsertLocation(id: number, patch: any) {
