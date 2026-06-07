@@ -4,7 +4,7 @@ import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload } from '@/app/api/device/frame-config/builder'
-import { fetchCachedForecastJson } from '@/app/lib/server/forecastCache'
+import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1242,30 +1242,13 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
   const showHiLo = cfg.hiLo == null ? true : truthy(cfg.hiLo)
   if (lat == null || lon == null) return { primary: 'WEATHER', secondary: label || (language === 'no' ? 'Lagret sted' : 'Saved location') }
 
-  const url = new URL('https://api.open-meteo.com/v1/forecast')
-  url.searchParams.set('latitude', String(lat))
-  url.searchParams.set('longitude', String(lon))
-  url.searchParams.set('current', 'temperature_2m,weather_code,relative_humidity_2m')
-  url.searchParams.set('hourly', 'temperature_2m,weather_code,wind_speed_10m,precipitation')
-  url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,wind_speed_10m_max,sunrise,sunset')
-  url.searchParams.set('forecast_days', '5')
-  url.searchParams.set('temperature_unit', 'celsius')
-  url.searchParams.set('wind_speed_unit', 'ms')
-  url.searchParams.set('precipitation_unit', 'mm')
-  url.searchParams.set('timezone', 'auto')
-
   let data: UnknownRecord
   try {
-    const fetched = await fetchCachedForecastJson({
-      dataType: 'weather',
-      provider: 'open-meteo',
-      url: url.toString(),
+    const fetched = await fetchWeatherForecast({
+      lat,
+      lon,
       timeoutMs: WEATHER_FETCH_TIMEOUT_MS,
-      forecastDays: 5,
-      forecastRange: '0-5d',
-      timezone: 'auto',
       frameRequest: true,
-      allowStale: true,
       configUpdatedAt: configUpdatedAt ?? null,
     })
     if (!fetched.payload) throw new Error(fetched.error || 'Open-Meteo weather unavailable')
