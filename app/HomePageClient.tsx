@@ -15264,67 +15264,112 @@ function weatherDetailWaterLabel(language: AppLanguage, value: number | null | u
   return no ? 'Varmt' : 'Warm'
 }
 
-async function fetchWeatherDetailsData(cfg: WeatherLocationCfg, signal: AbortSignal): Promise<WeatherDetailsData> {
+const WEATHER_DETAILS_FRESH_MS = 15 * 60 * 1000
+const WEATHER_DETAILS_STALE_MS = 4 * 60 * 60 * 1000
+const WEATHER_DETAILS_GRID_DEGREES = 0.05
+
+type WeatherDetailsCacheEntry = {
+  fetchedAt: number
+  data: WeatherDetailsData
+}
+
+const weatherDetailsCache = new Map<string, WeatherDetailsCacheEntry>()
+const weatherDetailsInFlight = new Map<string, Promise<WeatherDetailsData>>()
+
+function weatherDetailsGridCoord(value: number) {
+  return (Math.round(value / WEATHER_DETAILS_GRID_DEGREES) * WEATHER_DETAILS_GRID_DEGREES).toFixed(2)
+}
+
+function weatherDetailsCacheKey(cfg: WeatherLocationCfg) {
   const lat = Number(cfg?.lat)
   const lon = Number(cfg?.lon)
-  const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast')
-  weatherUrl.searchParams.set('latitude', String(lat))
-  weatherUrl.searchParams.set('longitude', String(lon))
-  weatherUrl.searchParams.set('current', 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,precipitation')
-  weatherUrl.searchParams.set('hourly', 'temperature_2m,weather_code,precipitation_probability,precipitation')
-  weatherUrl.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_sum,precipitation_probability_max')
-  weatherUrl.searchParams.set('forecast_days', '1')
-  weatherUrl.searchParams.set('timezone', 'auto')
+  return `grid=${weatherDetailsGridCoord(lat)},${weatherDetailsGridCoord(lon)}`
+}
 
-  const marineUrl = new URL('https://marine-api.open-meteo.com/v1/marine')
-  marineUrl.searchParams.set('latitude', String(lat))
-  marineUrl.searchParams.set('longitude', String(lon))
-  marineUrl.searchParams.set('hourly', 'sea_surface_temperature')
-  marineUrl.searchParams.set('forecast_days', '1')
-  marineUrl.searchParams.set('timezone', 'auto')
+function weatherDetailsCachedState(cfg: WeatherLocationCfg) {
+  const key = weatherDetailsCacheKey(cfg)
+  const cached = weatherDetailsCache.get(key)
+  if (!cached) return { key, cached: null, fresh: false, staleUsable: false, ageMs: null as number | null }
+  const ageMs = Date.now() - cached.fetchedAt
+  return {
+    key,
+    cached,
+    fresh: ageMs <= WEATHER_DETAILS_FRESH_MS,
+    staleUsable: ageMs <= WEATHER_DETAILS_STALE_MS,
+    ageMs,
+  }
+}
 
-  const [weatherResp, marineResp] = await Promise.allSettled([
-    fetch(weatherUrl.toString(), { signal }),
-    fetch(marineUrl.toString(), { signal }),
-  ])
-
-  if (weatherResp.status !== 'fulfilled' || !weatherResp.value.ok) throw new Error('Weather unavailable')
-  const weather = await weatherResp.value.json()
-  const marine = marineResp.status === 'fulfilled' && marineResp.value.ok ? await marineResp.value.json().catch(() => null) : null
-
-  const hourlyTimes = Array.isArray(weather?.hourly?.time) ? weather.hourly.time : []
-  const currentTime = String(weather?.current?.time || '')
+function weatherDetailsFromPayload(weatherPayload: unknown, marinePayload: unknown): WeatherDetailsData {
+  const weather = recordFromUnknown(weatherPayload)
+  const marine = recordFromUnknown(marinePayload)
+  const current = recordFromUnknown(weather.current)
+  const hourlyPayload = recordFromUnknown(weather.hourly)
+  const daily = recordFromUnknown(weather.daily)
+  const marineHourly = recordFromUnknown(marine.hourly)
+  const hourlyTimes = Array.isArray(hourlyPayload.time) ? hourlyPayload.time : []
+  const currentTime = String(current.time || '')
   const startIndex = Math.max(0, hourlyTimes.findIndex((t: unknown) => String(t) >= currentTime))
   const hourly = hourlyTimes.slice(startIndex, startIndex + 6).map((time: unknown, offset: number) => {
     const index = startIndex + offset
     return {
       time: weatherDetailFormatTime(String(time || '')),
-      tempC: weatherDetailArrayNumberAt(weather?.hourly?.temperature_2m, index),
-      wmo: weatherDetailArrayNumberAt(weather?.hourly?.weather_code, index),
+      tempC: weatherDetailArrayNumberAt(hourlyPayload.temperature_2m, index),
+      wmo: weatherDetailArrayNumberAt(hourlyPayload.weather_code, index),
     }
   })
 
-  const marineTemps = Array.isArray(marine?.hourly?.sea_surface_temperature) ? marine.hourly.sea_surface_temperature : []
+  const marineTemps = Array.isArray(marineHourly.sea_surface_temperature) ? marineHourly.sea_surface_temperature : []
   const waterValues = marineTemps.map(weatherDetailNumber).filter((n: number | null): n is number => n != null)
   const waterTempC = waterValues.length ? waterValues[Math.min(Math.max(startIndex, 0), waterValues.length - 1)] : null
 
   return {
-    currentTempC: weatherDetailNumber(weather?.current?.temperature_2m),
-    apparentTempC: weatherDetailNumber(weather?.current?.apparent_temperature),
-    wmo: weatherDetailNumber(weather?.current?.weather_code),
-    highC: weatherDetailArrayNumberAt(weather?.daily?.temperature_2m_max, 0),
-    lowC: weatherDetailArrayNumberAt(weather?.daily?.temperature_2m_min, 0),
-    sunrise: weatherDetailArrayStringAt(weather?.daily?.sunrise, 0),
-    sunset: weatherDetailArrayStringAt(weather?.daily?.sunset, 0),
-    uvIndex: weatherDetailArrayNumberAt(weather?.daily?.uv_index_max, 0),
-    windSpeedMs: weatherDetailNumber(weather?.current?.wind_speed_10m),
-    windDirectionDeg: weatherDetailNumber(weather?.current?.wind_direction_10m),
-    precipProbability: weatherDetailArrayNumberAt(weather?.daily?.precipitation_probability_max, 0),
-    precipMm: weatherDetailNumber(weather?.current?.precipitation) ?? weatherDetailArrayNumberAt(weather?.daily?.precipitation_sum, 0),
+    currentTempC: weatherDetailNumber(current.temperature_2m),
+    apparentTempC: weatherDetailNumber(current.apparent_temperature),
+    wmo: weatherDetailNumber(current.weather_code),
+    highC: weatherDetailArrayNumberAt(daily.temperature_2m_max, 0),
+    lowC: weatherDetailArrayNumberAt(daily.temperature_2m_min, 0),
+    sunrise: weatherDetailArrayStringAt(daily.sunrise, 0),
+    sunset: weatherDetailArrayStringAt(daily.sunset, 0),
+    uvIndex: weatherDetailArrayNumberAt(daily.uv_index_max, 0),
+    windSpeedMs: weatherDetailNumber(current.wind_speed_10m),
+    windDirectionDeg: weatherDetailNumber(current.wind_direction_10m),
+    precipProbability: weatherDetailArrayNumberAt(daily.precipitation_probability_max, 0),
+    precipMm: weatherDetailNumber(current.precipitation) ?? weatherDetailArrayNumberAt(daily.precipitation_sum, 0),
     waterTempC,
     hourly,
   }
 }
+
+async function refreshWeatherDetailsData(cfg: WeatherLocationCfg, key: string): Promise<WeatherDetailsData> {
+  const lat = Number(cfg?.lat)
+  const lon = Number(cfg?.lon)
+  const existing = weatherDetailsInFlight.get(key)
+  if (existing) {
+    console.info('[weather-details-client-cache]', { key, status: 'deduped' })
+    return existing
+  }
+
+  const promise = (async () => {
+    console.info('[weather-details-client-cache]', { key, status: 'fresh-fetch' })
+    const resp = await fetch(`/api/weather/details?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`, { cache: 'no-store' })
+    if (!resp.ok) throw new Error('Weather unavailable')
+    const payload = recordFromUnknown(await resp.json())
+    const data = weatherDetailsFromPayload(payload.weather, payload.marine)
+    const fetchedAtPayload = recordFromUnknown(payload.fetched_at)
+    const fetchedAtMs = Date.parse(String(fetchedAtPayload.weather || ''))
+    weatherDetailsCache.set(key, { fetchedAt: Number.isFinite(fetchedAtMs) ? fetchedAtMs : Date.now(), data })
+    return data
+  })()
+
+  weatherDetailsInFlight.set(key, promise)
+  try {
+    return await promise
+  } finally {
+    weatherDetailsInFlight.delete(key)
+  }
+}
+
 
 function WeatherDetailMetricBar({ value, max, color }: { value: number | null | undefined; max: number; color: string }) {
   const n = Number(value)
@@ -15343,14 +15388,35 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
 
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true)
-    setError(null)
-    fetchWeatherDetailsData(cfg, controller.signal)
-      .then((next) => setData(next))
+    const lat = Number(cfg?.lat)
+    const lon = Number(cfg?.lon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setData(null)
+      setError('Weather location unavailable')
+      setLoading(false)
+      return () => controller.abort()
+    }
+
+    const state = weatherDetailsCachedState(cfg)
+    if (state.cached && state.staleUsable) {
+      setData(state.cached.data)
+      setError(null)
+      console.info('[weather-details-client-cache]', { key: state.key, status: state.fresh ? 'hit' : 'stale-while-refresh', ageMs: state.ageMs })
+      setLoading(!state.fresh)
+      if (state.fresh) return () => controller.abort()
+    } else {
+      setLoading(true)
+      setError(null)
+    }
+
+    refreshWeatherDetailsData(cfg, state.key)
+      .then((next) => {
+        if (!controller.signal.aborted) setData(next)
+      })
       .catch((err) => {
         if (controller.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Weather unavailable')
-        setData(null)
+        if (!state.cached?.data) setData(null)
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
