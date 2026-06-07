@@ -13221,6 +13221,7 @@ function WeatherModuleSettingsTab({
               id={id}
               title={title}
               label={label}
+              cfg={cfg}
               onPicked={(picked) => upsertLocation(id, picked)}
             />
           )
@@ -14832,12 +14833,14 @@ function WeatherLocationRow({
   id,
   title,
   label,
+  cfg,
   onPicked,
 }: {
   language: AppLanguage
   id: number
   title: string
   label: string
+  cfg: WeatherLocationCfg | null
   onPicked: (cfgPatch: any) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -14859,6 +14862,10 @@ function WeatherLocationRow({
           </button>
         </div>
       </div>
+
+      {cfg && Number.isFinite(Number(cfg.lat)) && Number.isFinite(Number(cfg.lon)) && (
+        <WeatherDetailsCard language={language} cfg={cfg} />
+      )}
 
       {open && (
         <WeatherLocationSheet
@@ -15157,6 +15164,290 @@ function DirectionDial({ start, end, main, onStart, onEnd, onMain }: { start: nu
       <circle cx={m.x} cy={m.y} r="11" fill="#2aa3ff" style={{ pointerEvents: "auto", touchAction: "none" }} onPointerDown={(ev) => { const mv = (e2: PointerEvent) => move(e2.clientX, e2.clientY, (v) => onMain(clampAngleToSector(v, start, end))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); ev.preventDefault() }} />
     </svg>
   </div>
+}
+
+
+type WeatherLocationCfg = {
+  id?: number | string
+  label?: string
+  lat?: number | string
+  lon?: number | string
+  units?: string
+  refresh?: number
+  hiLo?: boolean
+  cond?: boolean
+}
+
+type WeatherDetailsData = {
+  currentTempC: number | null
+  apparentTempC: number | null
+  wmo: number | null
+  highC: number | null
+  lowC: number | null
+  sunrise: string | null
+  sunset: string | null
+  uvIndex: number | null
+  windSpeedMs: number | null
+  windDirectionDeg: number | null
+  precipProbability: number | null
+  precipMm: number | null
+  waterTempC: number | null
+  hourly: Array<{ time: string; tempC: number | null; wmo: number | null }>
+}
+
+function weatherDetailNumber(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function weatherDetailArrayNumberAt(value: unknown, index: number): number | null {
+  return Array.isArray(value) ? weatherDetailNumber(value[index]) : null
+}
+
+function weatherDetailArrayStringAt(value: unknown, index: number): string | null {
+  if (!Array.isArray(value)) return null
+  const text = String(value[index] ?? '').trim()
+  return text || null
+}
+
+function weatherDetailFormatTemp(value: number | null | undefined) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '--°'
+  return `${Math.round(n)}°`
+}
+
+function weatherDetailFormatTime(value: string | null | undefined) {
+  if (!value) return '--:--'
+  const match = String(value).match(/T(\d{2}:\d{2})/)
+  return match?.[1] || String(value).slice(0, 5) || '--:--'
+}
+
+function weatherDetailConditionLabel(language: AppLanguage, wmo: number | null | undefined) {
+  const no = language === 'no'
+  if (wmo === 0) return no ? 'Klart' : 'Clear'
+  if (wmo === 1) return no ? 'Mest klart' : 'Mostly clear'
+  if (wmo === 2) return no ? 'Delvis skyet' : 'Partly cloudy'
+  if (wmo === 3) return no ? 'Skyet' : 'Cloudy'
+  if (wmo === 45 || wmo === 48) return no ? 'Tåke' : 'Fog'
+  if (wmo != null && wmo >= 51 && wmo <= 57) return no ? 'Yr' : 'Drizzle'
+  if (wmo != null && ((wmo >= 61 && wmo <= 67) || (wmo >= 80 && wmo <= 82))) return no ? 'Regn' : 'Rain'
+  if (wmo != null && ((wmo >= 71 && wmo <= 77) || wmo === 85 || wmo === 86)) return no ? 'Snø' : 'Snow'
+  if (wmo === 95 || wmo === 96 || wmo === 99) return no ? 'Torden' : 'Thunder'
+  return no ? 'Skyet' : 'Cloudy'
+}
+
+function weatherDetailDirectionText(degrees: number | null | undefined) {
+  const n = Number(degrees)
+  if (!Number.isFinite(n)) return '--'
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  return dirs[Math.round(((n % 360) + 360) % 360 / 45) % 8]
+}
+
+function weatherDetailUvLabel(language: AppLanguage, value: number | null | undefined) {
+  const n = Number(value)
+  const no = language === 'no'
+  if (!Number.isFinite(n)) return no ? 'Ukjent' : 'Unavailable'
+  if (n < 3) return no ? 'Lav' : 'Low'
+  if (n < 6) return no ? 'Moderat' : 'Moderate'
+  if (n < 8) return no ? 'Høy' : 'High'
+  if (n < 11) return no ? 'Svært høy' : 'Very high'
+  return no ? 'Ekstrem' : 'Extreme'
+}
+
+function weatherDetailWaterLabel(language: AppLanguage, value: number | null | undefined) {
+  const n = Number(value)
+  const no = language === 'no'
+  if (!Number.isFinite(n)) return no ? 'Ikke tilgjengelig' : 'Unavailable'
+  if (n < 10) return no ? 'Kaldt' : 'Cold'
+  if (n < 16) return no ? 'Kjølig' : 'Cool'
+  if (n < 21) return no ? 'Mildt' : 'Mild'
+  return no ? 'Varmt' : 'Warm'
+}
+
+async function fetchWeatherDetailsData(cfg: WeatherLocationCfg, signal: AbortSignal): Promise<WeatherDetailsData> {
+  const lat = Number(cfg?.lat)
+  const lon = Number(cfg?.lon)
+  const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast')
+  weatherUrl.searchParams.set('latitude', String(lat))
+  weatherUrl.searchParams.set('longitude', String(lon))
+  weatherUrl.searchParams.set('current', 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,precipitation')
+  weatherUrl.searchParams.set('hourly', 'temperature_2m,weather_code,precipitation_probability,precipitation')
+  weatherUrl.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_sum,precipitation_probability_max')
+  weatherUrl.searchParams.set('forecast_days', '1')
+  weatherUrl.searchParams.set('timezone', 'auto')
+
+  const marineUrl = new URL('https://marine-api.open-meteo.com/v1/marine')
+  marineUrl.searchParams.set('latitude', String(lat))
+  marineUrl.searchParams.set('longitude', String(lon))
+  marineUrl.searchParams.set('hourly', 'sea_surface_temperature')
+  marineUrl.searchParams.set('forecast_days', '1')
+  marineUrl.searchParams.set('timezone', 'auto')
+
+  const [weatherResp, marineResp] = await Promise.allSettled([
+    fetch(weatherUrl.toString(), { signal }),
+    fetch(marineUrl.toString(), { signal }),
+  ])
+
+  if (weatherResp.status !== 'fulfilled' || !weatherResp.value.ok) throw new Error('Weather unavailable')
+  const weather = await weatherResp.value.json()
+  const marine = marineResp.status === 'fulfilled' && marineResp.value.ok ? await marineResp.value.json().catch(() => null) : null
+
+  const hourlyTimes = Array.isArray(weather?.hourly?.time) ? weather.hourly.time : []
+  const currentTime = String(weather?.current?.time || '')
+  const startIndex = Math.max(0, hourlyTimes.findIndex((t: unknown) => String(t) >= currentTime))
+  const hourly = hourlyTimes.slice(startIndex, startIndex + 6).map((time: unknown, offset: number) => {
+    const index = startIndex + offset
+    return {
+      time: weatherDetailFormatTime(String(time || '')),
+      tempC: weatherDetailArrayNumberAt(weather?.hourly?.temperature_2m, index),
+      wmo: weatherDetailArrayNumberAt(weather?.hourly?.weather_code, index),
+    }
+  })
+
+  const marineTemps = Array.isArray(marine?.hourly?.sea_surface_temperature) ? marine.hourly.sea_surface_temperature : []
+  const waterValues = marineTemps.map(weatherDetailNumber).filter((n: number | null): n is number => n != null)
+  const waterTempC = waterValues.length ? waterValues[Math.min(Math.max(startIndex, 0), waterValues.length - 1)] : null
+
+  return {
+    currentTempC: weatherDetailNumber(weather?.current?.temperature_2m),
+    apparentTempC: weatherDetailNumber(weather?.current?.apparent_temperature),
+    wmo: weatherDetailNumber(weather?.current?.weather_code),
+    highC: weatherDetailArrayNumberAt(weather?.daily?.temperature_2m_max, 0),
+    lowC: weatherDetailArrayNumberAt(weather?.daily?.temperature_2m_min, 0),
+    sunrise: weatherDetailArrayStringAt(weather?.daily?.sunrise, 0),
+    sunset: weatherDetailArrayStringAt(weather?.daily?.sunset, 0),
+    uvIndex: weatherDetailArrayNumberAt(weather?.daily?.uv_index_max, 0),
+    windSpeedMs: weatherDetailNumber(weather?.current?.wind_speed_10m),
+    windDirectionDeg: weatherDetailNumber(weather?.current?.wind_direction_10m),
+    precipProbability: weatherDetailArrayNumberAt(weather?.daily?.precipitation_probability_max, 0),
+    precipMm: weatherDetailNumber(weather?.current?.precipitation) ?? weatherDetailArrayNumberAt(weather?.daily?.precipitation_sum, 0),
+    waterTempC,
+    hourly,
+  }
+}
+
+function WeatherDetailMetricBar({ value, max, color }: { value: number | null | undefined; max: number; color: string }) {
+  const n = Number(value)
+  const pct = Number.isFinite(n) ? Math.max(8, Math.min(100, (n / max) * 100)) : 0
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--panel-10)]">
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color, opacity: Number.isFinite(n) ? 0.95 : 0.25 }} />
+    </div>
+  )
+}
+
+function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: WeatherLocationCfg }) {
+  const [data, setData] = useState<WeatherDetailsData | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
+    fetchWeatherDetailsData(cfg, controller.signal)
+      .then((next) => setData(next))
+      .catch((err) => {
+        if (controller.signal.aborted) return
+        setError(err instanceof Error ? err.message : 'Weather unavailable')
+        setData(null)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [cfg?.lat, cfg?.lon])
+
+  const currentTemp = weatherDetailFormatTemp(data?.currentTempC)
+  const feelsLike = weatherDetailFormatTemp(data?.apparentTempC)
+  const condition = weatherDetailConditionLabel(language, data?.wmo)
+  const hourly = data?.hourly?.length ? data.hourly : []
+  const windDirection = weatherDetailDirectionText(data?.windDirectionDeg)
+  const no = language === 'no'
+
+  return (
+    <div className="rounded-[1.75rem] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
+      {loading && !data ? (
+        <div className="py-5 text-center text-sm tracking-[0.14em] text-[color:var(--fg-45)]">{no ? 'HENTER VÆR…' : 'LOADING WEATHER…'}</div>
+      ) : error ? (
+        <div className="py-5 text-center text-sm text-[color:var(--fg-65)]">{no ? 'Detaljert varsel er ikke tilgjengelig akkurat nå.' : 'Detailed forecast is unavailable right now.'}</div>
+      ) : data ? (
+        <>
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+            <div>
+              <div className="text-[10px] font-medium tracking-[0.22em] text-[color:var(--fg-45)]">{no ? 'NÅ' : 'CURRENTLY'}</div>
+              <div className="mt-1 text-5xl font-light leading-none tracking-[-0.08em] text-[color:var(--fg-95)]">{currentTemp}</div>
+            </div>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="h-11 w-11 shrink-0 text-[color:var(--fg-90)]">
+                <MirrorWeatherIcon wmo={data.wmo} />
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold text-[color:var(--fg-90)]">{condition}</div>
+                <div className="mt-0.5 truncate text-sm text-[color:var(--fg-55)]">{no ? 'Føles som' : 'Feels like'} {feelsLike}</div>
+              </div>
+            </div>
+            <div className="text-right text-sm font-semibold tracking-[0.08em] text-[color:var(--fg-75)]">
+              <span>H: {weatherDetailFormatTemp(data.highC)}</span>
+              <span className="ml-2">L: {weatherDetailFormatTemp(data.lowC)}</span>
+            </div>
+          </div>
+
+          <div className="my-4 h-px bg-[color:var(--bd-10)]" />
+
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar [-webkit-overflow-scrolling:touch]">
+            {hourly.map((hour) => (
+              <div key={hour.time} className="min-w-[3.35rem] flex-1 rounded-2xl bg-[color:var(--panel-05)] px-2 py-2 text-center">
+                <div className="text-xs font-medium text-[color:var(--fg-55)]">{hour.time.slice(0, 2)}</div>
+                <div className="mx-auto mt-1 h-7 w-7 text-[color:var(--fg-85)]"><MirrorWeatherIcon wmo={hour.wmo} /></div>
+                <div className="mt-1 text-sm font-semibold text-[color:var(--fg-90)]">{weatherDetailFormatTemp(hour.tempC)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 divide-y divide-[color:var(--bd-10)] border-t border-[color:var(--bd-10)]">
+            <div className="grid grid-cols-[1fr_1fr] gap-3 py-3 text-sm">
+              <div className="flex items-center justify-between gap-2 text-[color:var(--fg-80)]"><span className="tracking-[0.12em] text-[color:var(--fg-50)]">{no ? 'SOL OPP' : 'SUNRISE'}</span><span className="font-semibold text-[color:var(--fg-90)]">{weatherDetailFormatTime(data.sunrise)}</span></div>
+              <div className="flex items-center justify-between gap-2 text-[color:var(--fg-80)]"><span className="tracking-[0.12em] text-[color:var(--fg-50)]">{no ? 'SOL NED' : 'SUNSET'}</span><span className="font-semibold text-[color:var(--fg-90)]">{weatherDetailFormatTime(data.sunset)}</span></div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3">
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">UV Index</span><span className="font-semibold text-[color:var(--fg-90)]">{data.uvIndex != null ? Math.round(data.uvIndex) : '--'}</span></div>
+                <div className="mt-2"><WeatherDetailMetricBar value={data.uvIndex} max={11} color="#9be66d" /></div>
+              </div>
+              <div className="w-20 text-right text-sm font-medium text-[color:var(--fg-75)]">{weatherDetailUvLabel(language, data.uvIndex)}</div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3">
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">{no ? 'Vanntemperatur' : 'Water temperature'}</span><span className="font-semibold text-[color:var(--fg-90)]">{data.waterTempC != null ? weatherDetailFormatTemp(data.waterTempC) : '--'}</span></div>
+                <div className="mt-2"><WeatherDetailMetricBar value={data.waterTempC} max={24} color="#63c8ff" /></div>
+              </div>
+              <div className="w-24 text-right text-sm font-medium text-[color:var(--fg-75)]">{weatherDetailWaterLabel(language, data.waterTempC)}</div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3 text-sm">
+              <div className="text-[color:var(--fg-70)]">{no ? 'Vind' : 'Wind'}</div>
+              <div className="flex items-center gap-3 font-semibold text-[color:var(--fg-90)]">
+                <span>{data.windSpeedMs != null ? `${Math.round(data.windSpeedMs)} m/s` : '--'}</span>
+                <span className="inline-flex text-base leading-none text-[color:var(--fg-70)]" style={mirrorDirectionToStyle(data.windDirectionDeg ?? undefined)}>↑</span>
+                <span>{windDirection}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-3 text-sm">
+              <div className="text-[color:var(--fg-70)]">{no ? 'Nedbør' : 'Precipitation'}</div>
+              <div className="font-semibold text-[color:var(--fg-90)]">
+                {data.precipProbability != null ? `${Math.round(data.precipProbability)}%` : '--'}
+                <span className="ml-4 text-[color:var(--fg-70)]">{data.precipMm != null ? `${Number(data.precipMm).toFixed(data.precipMm < 1 ? 1 : 0)} mm` : '-- mm'}</span>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
 }
 
 function WeatherLocationSheet({
