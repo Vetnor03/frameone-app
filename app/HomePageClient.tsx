@@ -15253,8 +15253,8 @@ function weatherDetailPrecipMmNumber(mm: number | null | undefined) {
 function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
   const m = weatherDetailPrecipMmNumber(mm)
   if (!Number.isFinite(m)) return '-- mm'
-  const displayMm = m > 0 && m < 0.01 ? 0.01 : m
-  return `${displayMm.toFixed(displayMm < 1 ? 2 : 1)} mm`
+  const displayMm = m > 0 && m < 0.1 ? 0.1 : m
+  return `${displayMm.toFixed(1)} mm`
 }
 
 function weatherDetailFormatPrecip(probability: number | null | undefined, mm: number | null | undefined) {
@@ -15312,26 +15312,56 @@ function weatherDetailNearestIndexFromIndexes(hourlyTimes: unknown[], indexes: n
   return bestIndex
 }
 
-function weatherDetailMaxArrayNumberAtIndexes(value: unknown, indexes: number[]) {
-  let max: number | null = null
-  indexes.forEach((index) => {
-    const n = weatherDetailArrayNumberAt(value, index)
-    if (n == null) return
-    max = max == null ? n : Math.max(max, n)
-  })
-  return max
+type WeatherDetailPrecipAggregationDebug = {
+  source: string
+  window: string
+  indexes: number[]
 }
 
-function weatherDetailSumArrayNumberAtIndexes(value: unknown, indexes: number[]) {
-  let sum = 0
-  let hasValue = false
+function weatherDetailAggregatePrecipFromHourly(
+  hourlyPayload: Record<string, unknown>,
+  indexes: number[],
+  debug: WeatherDetailPrecipAggregationDebug
+) {
+  let precipProbability: number | null = null
+  let precipMm = 0
+  let hasPrecipMm = false
+  const rawPrecipProbabilities: Array<number | null> = []
+  const rawPrecipAmountsMm: Array<number | null> = []
+
   indexes.forEach((index) => {
-    const n = weatherDetailArrayNumberAt(value, index)
-    if (n == null) return
-    sum += n
-    hasValue = true
+    const probability = weatherDetailArrayNumberAt(hourlyPayload.precipitation_probability, index)
+    rawPrecipProbabilities.push(probability)
+    if (probability != null) {
+      precipProbability = precipProbability == null ? probability : Math.max(precipProbability, probability)
+    }
+
+    const amountMm = weatherDetailArrayNumberAt(hourlyPayload.precipitation, index)
+    rawPrecipAmountsMm.push(amountMm)
+    if (amountMm != null) {
+      precipMm += amountMm
+      hasPrecipMm = true
+    }
   })
-  return hasValue ? sum : null
+
+  const aggregated = {
+    precipProbability,
+    precipMm: hasPrecipMm ? precipMm : null,
+    probabilityAggregationMethod: 'max' as const,
+    amountAggregationMethod: 'sum' as const,
+  }
+
+  console.debug('[weather-precip-aggregation]', {
+    ...debug,
+    rawPrecipProbability: rawPrecipProbabilities,
+    rawPrecipAmountMmBeforeFormatting: rawPrecipAmountsMm,
+    aggregatedPrecipProbability: aggregated.precipProbability,
+    aggregatedPrecipAmountMmBeforeFormatting: aggregated.precipMm,
+    probabilityAggregationMethod: aggregated.probabilityAggregationMethod,
+    amountAggregationMethod: aggregated.amountAggregationMethod,
+  })
+
+  return aggregated
 }
 
 function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Record<string, unknown>, daily: Record<string, unknown>): WeatherForecastDay[] {
@@ -15349,13 +15379,18 @@ function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Re
     const periods = periodDefs.map((period) => {
       const periodIndexes = weatherDetailPeriodIndexes(hourlyTimes, dateKey, period.start, period.end)
       const index = weatherDetailNearestIndexFromIndexes(hourlyTimes, periodIndexes, period.target)
+      const precip = weatherDetailAggregatePrecipFromHourly(hourlyPayload, periodIndexes, {
+        source: 'open-meteo hourly forecast',
+        window: `forecast-daypart:${dateKey}:${period.key}:${period.start}-${period.end}`,
+        indexes: periodIndexes,
+      })
       return {
         key: period.key,
         label: period.label,
         tempC: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.temperature_2m, index) : null,
         windMs: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.wind_speed_10m, index) : null,
-        precipProbability: weatherDetailMaxArrayNumberAtIndexes(hourlyPayload.precipitation_probability, periodIndexes),
-        precipMm: weatherDetailSumArrayNumberAtIndexes(hourlyPayload.precipitation, periodIndexes),
+        precipProbability: precip.precipProbability,
+        precipMm: precip.precipMm,
         wmo: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.weather_code, index) : null,
       }
     })
@@ -15464,7 +15499,14 @@ function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknow
   const marineHourly = recordFromUnknown(marine.hourly)
   const hourlyTimes = Array.isArray(hourlyPayload.time) ? hourlyPayload.time : []
   const currentTime = String(current.time || '')
-  const startIndex = Math.max(0, hourlyTimes.findIndex((t: unknown) => String(t) >= currentTime))
+  const firstCurrentOrFutureIndex = currentTime ? hourlyTimes.findIndex((t: unknown) => String(t) >= currentTime) : -1
+  const startIndex = Math.max(0, firstCurrentOrFutureIndex)
+  const currentPrecipIndexes = firstCurrentOrFutureIndex >= 0 ? [firstCurrentOrFutureIndex] : []
+  const currentPrecip = weatherDetailAggregatePrecipFromHourly(hourlyPayload, currentPrecipIndexes, {
+    source: 'open-meteo hourly forecast',
+    window: `current-hour:${currentTime || 'unknown'}`,
+    indexes: currentPrecipIndexes,
+  })
   const hourly = hourlyTimes.slice(startIndex, startIndex + 6).map((time: unknown, offset: number) => {
     const index = startIndex + offset
     return {
@@ -15489,8 +15531,8 @@ function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknow
     uvIndex: weatherDetailArrayNumberAt(daily.uv_index_max, 0),
     windSpeedMs: weatherDetailNumber(current.wind_speed_10m),
     windDirectionDeg: weatherDetailNumber(current.wind_direction_10m),
-    precipProbability: weatherDetailArrayNumberAt(daily.precipitation_probability_max, 0),
-    precipMm: weatherDetailArrayNumberAt(daily.precipitation_sum, 0) ?? weatherDetailNumber(current.precipitation),
+    precipProbability: currentPrecip.precipProbability,
+    precipMm: currentPrecip.precipMm ?? weatherDetailNumber(current.precipitation),
     waterTempC,
     hourly,
     forecastDays: buildWeatherDetailForecastDays(language, hourlyPayload, daily),
