@@ -15193,6 +15193,26 @@ type WeatherDetailsData = {
   precipMm: number | null
   waterTempC: number | null
   hourly: Array<{ time: string; tempC: number | null; wmo: number | null }>
+  forecastDays: WeatherForecastDay[]
+}
+
+type WeatherForecastPeriod = {
+  key: 'morning' | 'noon' | 'evening'
+  label: string
+  tempC: number | null
+  windMs: number | null
+  precipProbability: number | null
+  precipMm: number | null
+  wmo: number | null
+}
+
+type WeatherForecastDay = {
+  date: string
+  dayLabel: string
+  wmo: number | null
+  condition: string
+  uvIndex: number | null
+  periods: WeatherForecastPeriod[]
 }
 
 function weatherDetailNumber(value: unknown): number | null {
@@ -15211,9 +15231,99 @@ function weatherDetailArrayStringAt(value: unknown, index: number): string | nul
 }
 
 function weatherDetailFormatTemp(value: number | null | undefined) {
+  if (value == null) return '--°'
   const n = Number(value)
   if (!Number.isFinite(n)) return '--°'
   return `${Math.round(n)}°`
+}
+
+function weatherDetailFormatWind(value: number | null | undefined) {
+  if (value == null) return '--'
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '--'
+  return `${Math.round(n)} m/s`
+}
+
+function weatherDetailFormatPrecip(probability: number | null | undefined, mm: number | null | undefined) {
+  const p = probability == null ? Number.NaN : Number(probability)
+  const m = mm == null ? Number.NaN : Number(mm)
+  const hasProbability = Number.isFinite(p)
+  const hasMm = Number.isFinite(m)
+  if (!hasProbability && !hasMm) return '--'
+  if (hasProbability && hasMm) return `${Math.round(p)}% · ${m.toFixed(m < 1 ? 1 : 0)} mm`
+  if (hasProbability) return `${Math.round(p)}%`
+  return `${m.toFixed(m < 1 ? 1 : 0)} mm`
+}
+
+function weatherDetailDateKey(value: unknown) {
+  const text = String(value || '')
+  return text.includes('T') ? text.slice(0, 10) : text
+}
+
+function weatherDetailHour(value: unknown) {
+  const match = String(value || '').match(/T(\d{2})/)
+  if (!match) return null
+  const hour = Number(match[1])
+  return Number.isFinite(hour) ? hour : null
+}
+
+function weatherDetailDayLabel(language: AppLanguage, dateKey: string) {
+  if (!dateKey) return '--'
+  const date = new Date(`${dateKey}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return dateKey.slice(5) || '--'
+  return date.toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-US', { weekday: 'short' }).replace('.', '')
+}
+
+function weatherDetailNearestIndexForPeriod(hourlyTimes: unknown[], dateKey: string, startHour: number, endHour: number, targetHour: number) {
+  let bestIndex = -1
+  let bestDistance = Number.POSITIVE_INFINITY
+  hourlyTimes.forEach((time, index) => {
+    if (weatherDetailDateKey(time) !== dateKey) return
+    const hour = weatherDetailHour(time)
+    if (hour == null || hour < startHour || hour > endHour) return
+    const distance = Math.abs(hour - targetHour)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestIndex = index
+    }
+  })
+  return bestIndex
+}
+
+function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Record<string, unknown>, daily: Record<string, unknown>): WeatherForecastDay[] {
+  const no = language === 'no'
+  const dailyTimes = Array.isArray(daily.time) ? daily.time : []
+  const hourlyTimes = Array.isArray(hourlyPayload.time) ? hourlyPayload.time : []
+  const periodDefs: Array<{ key: WeatherForecastPeriod['key']; label: string; start: number; end: number; target: number }> = [
+    { key: 'morning', label: no ? 'Morgen' : 'Morning', start: 6, end: 10, target: 8 },
+    { key: 'noon', label: no ? 'Midt på dagen' : 'Noon', start: 11, end: 15, target: 13 },
+    { key: 'evening', label: no ? 'Kveld' : 'Evening', start: 17, end: 21, target: 19 },
+  ]
+
+  return dailyTimes.slice(0, 7).map((day, dayIndex) => {
+    const dateKey = weatherDetailDateKey(day)
+    const periods = periodDefs.map((period) => {
+      const index = weatherDetailNearestIndexForPeriod(hourlyTimes, dateKey, period.start, period.end, period.target)
+      return {
+        key: period.key,
+        label: period.label,
+        tempC: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.temperature_2m, index) : null,
+        windMs: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.wind_speed_10m, index) : null,
+        precipProbability: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.precipitation_probability, index) : null,
+        precipMm: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.precipitation, index) : null,
+        wmo: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.weather_code, index) : null,
+      }
+    })
+    const representativeWmo = periods.find((period) => period.key === 'noon')?.wmo ?? periods.find((period) => period.wmo != null)?.wmo ?? weatherDetailArrayNumberAt(daily.weather_code, dayIndex)
+    return {
+      date: dateKey,
+      dayLabel: weatherDetailDayLabel(language, dateKey),
+      wmo: representativeWmo,
+      condition: weatherDetailConditionLabel(language, representativeWmo),
+      uvIndex: weatherDetailArrayNumberAt(daily.uv_index_max, dayIndex),
+      periods,
+    }
+  })
 }
 
 function weatherDetailFormatTime(value: string | null | undefined) {
@@ -15300,7 +15410,7 @@ function weatherDetailsCachedState(cfg: WeatherLocationCfg) {
   }
 }
 
-function weatherDetailsFromPayload(weatherPayload: unknown, marinePayload: unknown): WeatherDetailsData {
+function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknown, marinePayload: unknown): WeatherDetailsData {
   const weather = recordFromUnknown(weatherPayload)
   const marine = recordFromUnknown(marinePayload)
   const current = recordFromUnknown(weather.current)
@@ -15338,10 +15448,11 @@ function weatherDetailsFromPayload(weatherPayload: unknown, marinePayload: unkno
     precipMm: weatherDetailNumber(current.precipitation) ?? weatherDetailArrayNumberAt(daily.precipitation_sum, 0),
     waterTempC,
     hourly,
+    forecastDays: buildWeatherDetailForecastDays(language, hourlyPayload, daily),
   }
 }
 
-async function refreshWeatherDetailsData(cfg: WeatherLocationCfg, key: string): Promise<WeatherDetailsData> {
+async function refreshWeatherDetailsData(language: AppLanguage, cfg: WeatherLocationCfg, key: string): Promise<WeatherDetailsData> {
   const lat = Number(cfg?.lat)
   const lon = Number(cfg?.lon)
   const existing = weatherDetailsInFlight.get(key)
@@ -15355,7 +15466,7 @@ async function refreshWeatherDetailsData(cfg: WeatherLocationCfg, key: string): 
     const resp = await fetch(`/api/weather/details?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`, { cache: 'no-store' })
     if (!resp.ok) throw new Error('Weather unavailable')
     const payload = recordFromUnknown(await resp.json())
-    const data = weatherDetailsFromPayload(payload.weather, payload.marine)
+    const data = weatherDetailsFromPayload(language, payload.weather, payload.marine)
     const fetchedAtPayload = recordFromUnknown(payload.fetched_at)
     const fetchedAtMs = Date.parse(String(fetchedAtPayload.weather || ''))
     weatherDetailsCache.set(key, { fetchedAt: Number.isFinite(fetchedAtMs) ? fetchedAtMs : Date.now(), data })
@@ -15370,6 +15481,78 @@ async function refreshWeatherDetailsData(cfg: WeatherLocationCfg, key: string): 
   }
 }
 
+
+
+function WeatherForecastCard({ language, loading, days }: { language: AppLanguage; loading: boolean; days: WeatherForecastDay[] }) {
+  const no = language === 'no'
+  const visibleDays = days.slice(0, 7)
+
+  return (
+    <div className="rounded-[1.75rem] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-medium tracking-[0.22em] text-[color:var(--fg-45)]">{no ? 'KOMMENDE UKE' : 'NEXT WEEK'}</div>
+          <div className="mt-1 text-base font-semibold text-[color:var(--fg-90)]">{no ? 'Morgen · dag · kveld' : 'Morning · noon · evening'}</div>
+        </div>
+        <div className="text-right text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--fg-45)]">{no ? 'Varsel' : 'Forecast'}</div>
+      </div>
+
+      {loading ? (
+        <div className="-mx-1 mt-4 flex gap-2 overflow-hidden px-1 pb-1">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="min-w-[9.5rem] rounded-2xl bg-[color:var(--panel-05)] px-3 py-3">
+              <div className="h-3 w-10 rounded-full bg-[color:var(--panel-10)]" />
+              <div className="mt-3 h-8 w-8 rounded-full bg-[color:var(--panel-10)]" />
+              <div className="mt-4 space-y-2">
+                <div className="h-3 rounded-full bg-[color:var(--panel-10)]" />
+                <div className="h-3 rounded-full bg-[color:var(--panel-10)]" />
+                <div className="h-3 rounded-full bg-[color:var(--panel-10)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : visibleDays.length ? (
+        <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar [-webkit-overflow-scrolling:touch]">
+          {visibleDays.map((day) => (
+            <div key={day.date} className="min-w-[9.75rem] rounded-2xl bg-[color:var(--panel-05)] px-3 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--fg-90)]">{day.dayLabel}</div>
+                  <div className="mt-0.5 max-w-[6.5rem] truncate text-xs font-medium text-[color:var(--fg-55)]">{day.condition}</div>
+                </div>
+                <div className="h-8 w-8 shrink-0 text-[color:var(--fg-85)]"><MirrorWeatherIcon wmo={day.wmo} /></div>
+              </div>
+
+              <div className="mt-3 divide-y divide-[color:var(--bd-10)] border-t border-[color:var(--bd-10)]">
+                {day.periods.map((period) => (
+                  <div key={period.key} className="py-2">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-medium text-[color:var(--fg-55)]">{period.label}</span>
+                      <span className="font-semibold text-[color:var(--fg-90)]">{weatherDetailFormatTemp(period.tempC)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[color:var(--fg-65)]">
+                      <span>{weatherDetailFormatWind(period.windMs)}</span>
+                      <span className="text-right">{weatherDetailFormatPrecip(period.precipProbability, period.precipMm)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {day.uvIndex != null ? (
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-[color:var(--bd-10)] pt-2 text-[11px] text-[color:var(--fg-65)]">
+                  <span>UV</span>
+                  <span className="font-semibold text-[color:var(--fg-85)]">{Math.round(day.uvIndex)}</span>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-5 text-center text-sm text-[color:var(--fg-65)]">{no ? 'Ukesvarsel er ikke tilgjengelig akkurat nå.' : 'Weekly forecast is unavailable right now.'}</div>
+      )}
+    </div>
+  )
+}
 
 function WeatherDetailMetricBar({ value, max, color }: { value: number | null | undefined; max: number; color: string }) {
   const n = Number(value)
@@ -15409,7 +15592,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
       setError(null)
     }
 
-    refreshWeatherDetailsData(cfg, state.key)
+    refreshWeatherDetailsData(language, cfg, state.key)
       .then((next) => {
         if (!controller.signal.aborted) setData(next)
       })
@@ -15422,7 +15605,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [cfg?.lat, cfg?.lon])
+  }, [cfg?.lat, cfg?.lon, language])
 
   const currentTemp = weatherDetailFormatTemp(data?.currentTempC)
   const condition = weatherDetailConditionLabel(language, data?.wmo)
@@ -15431,7 +15614,8 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
   const no = language === 'no'
 
   return (
-    <div className="rounded-[1.75rem] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
+    <>
+      <div className="rounded-[1.75rem] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
       {loading && !data ? (
         <div className="py-5 text-center text-sm tracking-[0.14em] text-[color:var(--fg-45)]">{no ? 'HENTER VÆR…' : 'LOADING WEATHER…'}</div>
       ) : error ? (
@@ -15510,7 +15694,9 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
           </div>
         </>
       ) : null}
-    </div>
+      </div>
+      <WeatherForecastCard language={language} loading={loading && !data} days={data?.forecastDays ?? []} />
+    </>
   )
 }
 

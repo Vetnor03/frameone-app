@@ -12,6 +12,7 @@ export type WeatherForecastFetchOptions = {
   lat: number
   lon: number
   timeoutMs: number
+  forecastDays?: number
   frameRequest?: boolean
   configUpdatedAt?: string | number | Date | null
   fetcher?: typeof fetch
@@ -22,7 +23,7 @@ export type WeatherMarineFetchOptions = WeatherForecastFetchOptions
 const WEATHER_FORECAST_DAYS = 5
 const WEATHER_TIMEZONE = 'auto'
 
-export function buildWeatherForecastUrl(lat: number, lon: number) {
+export function buildWeatherForecastUrl(lat: number, lon: number, forecastDays = WEATHER_FORECAST_DAYS) {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(lat))
   url.searchParams.set('longitude', String(lon))
@@ -53,7 +54,7 @@ export function buildWeatherForecastUrl(lat: number, lon: number) {
     'sunset',
     'uv_index_max',
   ].join(','))
-  url.searchParams.set('forecast_days', String(WEATHER_FORECAST_DAYS))
+  url.searchParams.set('forecast_days', String(forecastDays))
   url.searchParams.set('temperature_unit', 'celsius')
   url.searchParams.set('wind_speed_unit', 'ms')
   url.searchParams.set('precipitation_unit', 'mm')
@@ -75,10 +76,10 @@ export async function fetchWeatherForecast<T = unknown>(options: WeatherForecast
   return fetchCachedForecastJson<T>({
     dataType: 'weather',
     provider: 'open-meteo',
-    url: buildWeatherForecastUrl(options.lat, options.lon).toString(),
+    url: buildWeatherForecastUrl(options.lat, options.lon, options.forecastDays ?? WEATHER_FORECAST_DAYS).toString(),
     timeoutMs: options.timeoutMs,
-    forecastDays: WEATHER_FORECAST_DAYS,
-    forecastRange: '0-5d',
+    forecastDays: options.forecastDays ?? WEATHER_FORECAST_DAYS,
+    forecastRange: `0-${options.forecastDays ?? WEATHER_FORECAST_DAYS}d`,
     timezone: WEATHER_TIMEZONE,
     frameRequest: !!options.frameRequest,
     allowStale: true,
