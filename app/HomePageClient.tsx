@@ -15253,8 +15253,8 @@ function weatherDetailPrecipMmNumber(mm: number | null | undefined) {
 function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
   const m = weatherDetailPrecipMmNumber(mm)
   if (!Number.isFinite(m)) return '-- mm'
-  const displayMm = m > 0 && m < 0.1 ? 0.1 : m
-  return `${displayMm.toFixed(displayMm < 1 ? 1 : 0)} mm`
+  const displayMm = m > 0 && m < 0.01 ? 0.01 : m
+  return `${displayMm.toFixed(displayMm < 1 ? 2 : 1)} mm`
 }
 
 function weatherDetailFormatPrecip(probability: number | null | undefined, mm: number | null | undefined) {
