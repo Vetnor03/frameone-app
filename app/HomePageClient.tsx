@@ -15425,7 +15425,6 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
   }, [cfg?.lat, cfg?.lon])
 
   const currentTemp = weatherDetailFormatTemp(data?.currentTempC)
-  const feelsLike = weatherDetailFormatTemp(data?.apparentTempC)
   const condition = weatherDetailConditionLabel(language, data?.wmo)
   const hourly = data?.hourly?.length ? data.hourly : []
   const windDirection = weatherDetailDirectionText(data?.windDirectionDeg)
@@ -15439,7 +15438,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
         <div className="py-5 text-center text-sm text-[color:var(--fg-65)]">{no ? 'Detaljert varsel er ikke tilgjengelig akkurat nå.' : 'Detailed forecast is unavailable right now.'}</div>
       ) : data ? (
         <>
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+          <div className="grid grid-cols-[auto_1fr] items-center gap-3">
             <div>
               <div className="text-[10px] font-medium tracking-[0.22em] text-[color:var(--fg-45)]">{no ? 'NÅ' : 'CURRENTLY'}</div>
               <div className="mt-1 text-5xl font-light leading-none tracking-[-0.08em] text-[color:var(--fg-95)]">{currentTemp}</div>
@@ -15450,12 +15449,11 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
               </div>
               <div className="min-w-0">
                 <div className="truncate text-base font-semibold text-[color:var(--fg-90)]">{condition}</div>
-                <div className="mt-0.5 truncate text-sm text-[color:var(--fg-55)]">{no ? 'Føles som' : 'Feels like'} {feelsLike}</div>
+                <div className="mt-0.5 truncate text-sm font-semibold tracking-[0.08em] text-[color:var(--fg-75)]">
+                  <span>H: {weatherDetailFormatTemp(data.highC)}</span>
+                  <span className="ml-2">L: {weatherDetailFormatTemp(data.lowC)}</span>
+                </div>
               </div>
-            </div>
-            <div className="text-right text-sm font-semibold tracking-[0.08em] text-[color:var(--fg-75)]">
-              <span>H: {weatherDetailFormatTemp(data.highC)}</span>
-              <span className="ml-2">L: {weatherDetailFormatTemp(data.lowC)}</span>
             </div>
           </div>
 
