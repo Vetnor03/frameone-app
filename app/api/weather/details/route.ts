@@ -5,6 +5,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const WEATHER_DETAILS_TIMEOUT_MS = 8000
+const WEATHER_DETAILS_FORECAST_DAYS = 7
 
 function numericParam(url: URL, key: string) {
   const value = Number(url.searchParams.get(key))
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
   }
 
   const [weatherResult, marineResult] = await Promise.allSettled([
-    fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, frameRequest: false }),
+    fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays: WEATHER_DETAILS_FORECAST_DAYS, frameRequest: false }),
     fetchWeatherMarine({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, frameRequest: false }),
   ])
 
