@@ -15250,10 +15250,6 @@ function weatherDetailPrecipMmNumber(mm: number | null | undefined) {
   return Number.isFinite(m) ? m : Number.NaN
 }
 
-function weatherDetailHasMeasurablePrecipMm(mm: number | null | undefined) {
-  return weatherDetailPrecipMmNumber(mm) > 0
-}
-
 function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
   const m = weatherDetailPrecipMmNumber(mm)
   if (!Number.isFinite(m)) return '-- mm'
@@ -15261,18 +15257,15 @@ function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
   return `${displayMm.toFixed(displayMm < 1 ? 1 : 0)} mm`
 }
 
-function weatherDetailFormatMeasurablePrecipMm(mm: number | null | undefined) {
-  return weatherDetailHasMeasurablePrecipMm(mm) ? weatherDetailFormatPrecipMm(mm) : null
-}
-
 function weatherDetailFormatPrecip(probability: number | null | undefined, mm: number | null | undefined) {
   const p = probability == null ? Number.NaN : Number(probability)
   const hasProbability = Number.isFinite(p)
-  const mmText = weatherDetailFormatMeasurablePrecipMm(mm)
-  if (!hasProbability && !mmText) return '--'
-  if (hasProbability && mmText) return `${Math.round(p)}% · ${mmText}`
+  const m = weatherDetailPrecipMmNumber(mm)
+  const hasAmount = Number.isFinite(m)
+  if (!hasProbability && !hasAmount) return '--'
+  if (hasProbability && hasAmount) return `${Math.round(p)}% · ${weatherDetailFormatPrecipMm(m)}`
   if (hasProbability) return `${Math.round(p)}%`
-  return mmText
+  return weatherDetailFormatPrecipMm(m)
 }
 
 function weatherDetailDateKey(value: unknown) {
@@ -15294,13 +15287,22 @@ function weatherDetailDayLabel(language: AppLanguage, dateKey: string) {
   return date.toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-US', { weekday: 'short' }).replace('.', '')
 }
 
-function weatherDetailNearestIndexForPeriod(hourlyTimes: unknown[], dateKey: string, startHour: number, endHour: number, targetHour: number) {
+function weatherDetailPeriodIndexes(hourlyTimes: unknown[], dateKey: string, startHour: number, endHour: number) {
+  return hourlyTimes.reduce<number[]>((indexes, time, index) => {
+    if (weatherDetailDateKey(time) !== dateKey) return indexes
+    const hour = weatherDetailHour(time)
+    if (hour == null || hour < startHour || hour > endHour) return indexes
+    indexes.push(index)
+    return indexes
+  }, [])
+}
+
+function weatherDetailNearestIndexFromIndexes(hourlyTimes: unknown[], indexes: number[], targetHour: number) {
   let bestIndex = -1
   let bestDistance = Number.POSITIVE_INFINITY
-  hourlyTimes.forEach((time, index) => {
-    if (weatherDetailDateKey(time) !== dateKey) return
-    const hour = weatherDetailHour(time)
-    if (hour == null || hour < startHour || hour > endHour) return
+  indexes.forEach((index) => {
+    const hour = weatherDetailHour(hourlyTimes[index])
+    if (hour == null) return
     const distance = Math.abs(hour - targetHour)
     if (distance < bestDistance) {
       bestDistance = distance
@@ -15308,6 +15310,28 @@ function weatherDetailNearestIndexForPeriod(hourlyTimes: unknown[], dateKey: str
     }
   })
   return bestIndex
+}
+
+function weatherDetailMaxArrayNumberAtIndexes(value: unknown, indexes: number[]) {
+  let max: number | null = null
+  indexes.forEach((index) => {
+    const n = weatherDetailArrayNumberAt(value, index)
+    if (n == null) return
+    max = max == null ? n : Math.max(max, n)
+  })
+  return max
+}
+
+function weatherDetailSumArrayNumberAtIndexes(value: unknown, indexes: number[]) {
+  let sum = 0
+  let hasValue = false
+  indexes.forEach((index) => {
+    const n = weatherDetailArrayNumberAt(value, index)
+    if (n == null) return
+    sum += n
+    hasValue = true
+  })
+  return hasValue ? sum : null
 }
 
 function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Record<string, unknown>, daily: Record<string, unknown>): WeatherForecastDay[] {
@@ -15323,14 +15347,15 @@ function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Re
   return dailyTimes.slice(0, 7).map((day, dayIndex) => {
     const dateKey = weatherDetailDateKey(day)
     const periods = periodDefs.map((period) => {
-      const index = weatherDetailNearestIndexForPeriod(hourlyTimes, dateKey, period.start, period.end, period.target)
+      const periodIndexes = weatherDetailPeriodIndexes(hourlyTimes, dateKey, period.start, period.end)
+      const index = weatherDetailNearestIndexFromIndexes(hourlyTimes, periodIndexes, period.target)
       return {
         key: period.key,
         label: period.label,
         tempC: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.temperature_2m, index) : null,
         windMs: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.wind_speed_10m, index) : null,
-        precipProbability: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.precipitation_probability, index) : null,
-        precipMm: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.precipitation, index) : null,
+        precipProbability: weatherDetailMaxArrayNumberAtIndexes(hourlyPayload.precipitation_probability, periodIndexes),
+        precipMm: weatherDetailSumArrayNumberAtIndexes(hourlyPayload.precipitation, periodIndexes),
         wmo: index >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.weather_code, index) : null,
       }
     })
@@ -15465,7 +15490,7 @@ function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknow
     windSpeedMs: weatherDetailNumber(current.wind_speed_10m),
     windDirectionDeg: weatherDetailNumber(current.wind_direction_10m),
     precipProbability: weatherDetailArrayNumberAt(daily.precipitation_probability_max, 0),
-    precipMm: weatherDetailNumber(current.precipitation) ?? weatherDetailArrayNumberAt(daily.precipitation_sum, 0),
+    precipMm: weatherDetailArrayNumberAt(daily.precipitation_sum, 0) ?? weatherDetailNumber(current.precipitation),
     waterTempC,
     hourly,
     forecastDays: buildWeatherDetailForecastDays(language, hourlyPayload, daily),
@@ -15631,7 +15656,6 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
   const condition = weatherDetailConditionLabel(language, data?.wmo)
   const hourly = data?.hourly?.length ? data.hourly : []
   const windDirection = weatherDetailDirectionText(data?.windDirectionDeg)
-  const currentPrecipMm = weatherDetailFormatMeasurablePrecipMm(data?.precipMm)
   const no = language === 'no'
 
   return (
@@ -15707,10 +15731,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
 
             <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-3 text-sm">
               <div className="text-[color:var(--fg-70)]">{no ? 'Nedbør' : 'Precipitation'}</div>
-              <div className="font-semibold text-[color:var(--fg-90)]">
-                {data.precipProbability != null ? `${Math.round(data.precipProbability)}%` : currentPrecipMm ?? '--'}
-                {data.precipProbability != null && currentPrecipMm ? <span className="ml-4 text-[color:var(--fg-70)]">{currentPrecipMm}</span> : null}
-              </div>
+              <div className="font-semibold text-[color:var(--fg-90)]">{weatherDetailFormatPrecip(data.precipProbability, data.precipMm)}</div>
             </div>
           </div>
         </>
