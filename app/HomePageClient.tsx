@@ -15244,21 +15244,33 @@ function weatherDetailFormatWind(value: number | null | undefined) {
   return `${Math.round(n)} m/s`
 }
 
-function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
-  if (mm == null) return '-- mm'
+function weatherDetailPrecipMmNumber(mm: number | null | undefined) {
+  if (mm == null) return Number.NaN
   const m = Number(mm)
+  return Number.isFinite(m) ? m : Number.NaN
+}
+
+function weatherDetailHasMeasurablePrecipMm(mm: number | null | undefined) {
+  return weatherDetailPrecipMmNumber(mm) > 0
+}
+
+function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
+  const m = weatherDetailPrecipMmNumber(mm)
   if (!Number.isFinite(m)) return '-- mm'
   const displayMm = m > 0 && m < 0.1 ? 0.1 : m
   return `${displayMm.toFixed(displayMm < 1 ? 1 : 0)} mm`
 }
 
+function weatherDetailFormatMeasurablePrecipMm(mm: number | null | undefined) {
+  return weatherDetailHasMeasurablePrecipMm(mm) ? weatherDetailFormatPrecipMm(mm) : null
+}
+
 function weatherDetailFormatPrecip(probability: number | null | undefined, mm: number | null | undefined) {
   const p = probability == null ? Number.NaN : Number(probability)
   const hasProbability = Number.isFinite(p)
-  const mmText = weatherDetailFormatPrecipMm(mm)
-  const hasMm = mmText !== '-- mm'
-  if (!hasProbability && !hasMm) return '--'
-  if (hasProbability && hasMm) return `${Math.round(p)}% · ${mmText}`
+  const mmText = weatherDetailFormatMeasurablePrecipMm(mm)
+  if (!hasProbability && !mmText) return '--'
+  if (hasProbability && mmText) return `${Math.round(p)}% · ${mmText}`
   if (hasProbability) return `${Math.round(p)}%`
   return mmText
 }
@@ -15619,6 +15631,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
   const condition = weatherDetailConditionLabel(language, data?.wmo)
   const hourly = data?.hourly?.length ? data.hourly : []
   const windDirection = weatherDetailDirectionText(data?.windDirectionDeg)
+  const currentPrecipMm = weatherDetailFormatMeasurablePrecipMm(data?.precipMm)
   const no = language === 'no'
 
   return (
@@ -15695,8 +15708,8 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
             <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-3 text-sm">
               <div className="text-[color:var(--fg-70)]">{no ? 'Nedbør' : 'Precipitation'}</div>
               <div className="font-semibold text-[color:var(--fg-90)]">
-                {data.precipProbability != null ? `${Math.round(data.precipProbability)}%` : '--'}
-                <span className="ml-4 text-[color:var(--fg-70)]">{weatherDetailFormatPrecipMm(data.precipMm)}</span>
+                {data.precipProbability != null ? `${Math.round(data.precipProbability)}%` : currentPrecipMm ?? '--'}
+                {data.precipProbability != null && currentPrecipMm ? <span className="ml-4 text-[color:var(--fg-70)]">{currentPrecipMm}</span> : null}
               </div>
             </div>
           </div>
