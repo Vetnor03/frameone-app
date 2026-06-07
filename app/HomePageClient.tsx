@@ -15244,15 +15244,23 @@ function weatherDetailFormatWind(value: number | null | undefined) {
   return `${Math.round(n)} m/s`
 }
 
+function weatherDetailFormatPrecipMm(mm: number | null | undefined) {
+  if (mm == null) return '-- mm'
+  const m = Number(mm)
+  if (!Number.isFinite(m)) return '-- mm'
+  const displayMm = m > 0 && m < 0.1 ? 0.1 : m
+  return `${displayMm.toFixed(displayMm < 1 ? 1 : 0)} mm`
+}
+
 function weatherDetailFormatPrecip(probability: number | null | undefined, mm: number | null | undefined) {
   const p = probability == null ? Number.NaN : Number(probability)
-  const m = mm == null ? Number.NaN : Number(mm)
   const hasProbability = Number.isFinite(p)
-  const hasMm = Number.isFinite(m)
+  const mmText = weatherDetailFormatPrecipMm(mm)
+  const hasMm = mmText !== '-- mm'
   if (!hasProbability && !hasMm) return '--'
-  if (hasProbability && hasMm) return `${Math.round(p)}% · ${m.toFixed(m < 1 ? 1 : 0)} mm`
+  if (hasProbability && hasMm) return `${Math.round(p)}% · ${mmText}`
   if (hasProbability) return `${Math.round(p)}%`
-  return `${m.toFixed(m < 1 ? 1 : 0)} mm`
+  return mmText
 }
 
 function weatherDetailDateKey(value: unknown) {
@@ -15688,7 +15696,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
               <div className="text-[color:var(--fg-70)]">{no ? 'Nedbør' : 'Precipitation'}</div>
               <div className="font-semibold text-[color:var(--fg-90)]">
                 {data.precipProbability != null ? `${Math.round(data.precipProbability)}%` : '--'}
-                <span className="ml-4 text-[color:var(--fg-70)]">{data.precipMm != null ? `${Number(data.precipMm).toFixed(data.precipMm < 1 ? 1 : 0)} mm` : '-- mm'}</span>
+                <span className="ml-4 text-[color:var(--fg-70)]">{weatherDetailFormatPrecipMm(data.precipMm)}</span>
               </div>
             </div>
           </div>
