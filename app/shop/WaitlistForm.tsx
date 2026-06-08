@@ -99,16 +99,6 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
       <button className="shop-button w-full rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
         {status === 'submitting' ? 'Joining...' : 'Join Waitlist'}
       </button>
-      <div className="mt-2 border-t border-black/10 pt-4">
-        <p className="text-[13px] font-medium leading-[1.3] tracking-[-0.005em] text-black/75">Stay on top of what matters</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {['Spond', 'Microsoft Teams', 'Outlook'].map((integration) => (
-            <span key={integration} className="inline-flex items-center rounded-full border border-black/10 bg-white/60 px-3 py-1.5 text-[11px] font-medium leading-none tracking-[0.04em] text-black/60">
-              {integration}
-            </span>
-          ))}
-        </div>
-      </div>
       {message ? (
         <p className={`text-sm leading-[1.4] ${status === 'error' ? 'text-red-700' : 'text-black/65'}`}>
           {message}
