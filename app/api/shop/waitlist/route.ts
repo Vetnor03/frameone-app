@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { sendWaitlistWelcomeEmail } from '@/app/lib/waitlistEmail'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     .single<WaitlistSignup>()
 
   if (!error) {
+    await sendWaitlistWelcomeEmail(data)
     return NextResponse.json({ ok: true, signup: data })
   }
 
