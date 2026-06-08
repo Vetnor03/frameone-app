@@ -12,6 +12,13 @@ type VercelAnalyticsWindow = Window & {
   va?: (event: 'event', name: string, data?: Record<string, string>) => void
 }
 
+type WaitlistSignupResponse = {
+  signup?: {
+    waitlist_number?: number | null
+  }
+  error?: string
+}
+
 export default function WaitlistForm({ compact = false, source = 'shop' }: Props) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -37,7 +44,7 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
       return
     }
 
-    const result = await response.json().catch(() => null)
+    const result = (await response.json().catch(() => null)) as WaitlistSignupResponse | null
 
     if (!response.ok) {
       setStatus('error')
@@ -47,7 +54,12 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
 
     ;(window as VercelAnalyticsWindow).va?.('event', 'waitlist_signup', { source })
     setStatus('success')
-    setMessage('Thank you! You are now on the RE:MIND waitlist.')
+    const waitlistNumber = result?.signup?.waitlist_number
+    setMessage(
+      typeof waitlistNumber === 'number'
+        ? `Thank you! You are now on the RE:MIND waitlist. You are #${waitlistNumber}.`
+        : 'Thank you! You are now on the RE:MIND waitlist.',
+    )
     setEmail('')
     setName('')
   }
