@@ -149,9 +149,9 @@ export default async function ShopPage({
 
       <header className="border-b border-black/10 bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px] px-6 py-6 md:px-14">
-          <div className="flex items-center justify-between">
-            <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</a>
-            <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
+          <div className="relative flex items-center justify-between md:justify-center">
+            <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em] md:absolute md:left-0">RE:MIND</a>
+            <nav className="hidden items-center justify-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
               <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
               <a href="#mattes" className="pb-1">Mattes</a>
               <a href="#accessories" className="pb-1">Accessories</a>
@@ -290,7 +290,7 @@ export default async function ShopPage({
                 More presence.
               </p>
               <ul className="mt-6 grid gap-2 text-sm leading-[1.45] text-black/70 sm:grid-cols-2">
-                {['Family reminders', 'Calendar events', 'Weather forecasts', 'Surf conditions', 'School updates'].map((item) => (
+                {['Family reminders', 'Calendar events', 'Weather forecasts', 'Work updates', 'School updates', 'Grocery lists'].map((item) => (
                   <li key={item} className="flex items-center gap-2">
                     <span className="text-black" aria-hidden>✓</span>
                     <span>{item}</span>
