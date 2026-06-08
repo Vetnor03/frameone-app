@@ -211,3 +211,57 @@ test('default Open-Meteo cache TTL is 15 minutes', () => {
   assert.equal(forecastCacheTtlMs(), 15 * 60 * 1000)
   assert.equal(forecastCacheTtlMs({ frameRequest: true, configUnchangedSinceFetch: true }), 4 * 60 * 60 * 1000)
 })
+
+test('nearby custom coordinates share a conservative rounded cache key without broad bucketing', async () => {
+  __resetForecastCacheForTests()
+  let calls = 0
+  const fetcher = async () => {
+    calls += 1
+    return okJson({ marker: calls })
+  }
+
+  const base = surfOptions(fetcher)
+  const nearby = surfOptions(fetcher, { url: base.url.replace('latitude=60.3929', 'latitude=60.3931').replace('longitude=5.3221', 'longitude=5.3222') })
+  const farther = surfOptions(fetcher, { url: base.url.replace('latitude=60.3929', 'latitude=60.3950') })
+
+  assert.equal(forecastCacheKey(base), forecastCacheKey(nearby))
+  assert.notEqual(forecastCacheKey(base), forecastCacheKey(farther))
+
+  const first = await fetchCachedForecastJson(base)
+  const second = await fetchCachedForecastJson(nearby)
+
+  assert.equal(calls, 1)
+  assert.equal(first.payload.marker, 1)
+  assert.equal(second.payload.marker, 1)
+})
+
+test('daily-only Open-Meteo forecasts use a longer safe TTL', async () => {
+  __resetForecastCacheForTests()
+  const fetcher = async () => okJson({ daily: { weather_code: [1] } })
+  const result = await fetchCachedForecastJson(weatherOptions(fetcher, {
+    url: 'https://api.open-meteo.com/v1/forecast?latitude=60.3929&longitude=5.3221&daily=weather_code,temperature_2m_max&forecast_days=1&timezone=Europe%2FOslo',
+    forecastDays: 1,
+    forecastRange: '0-1d',
+  }))
+
+  assert.equal(result.debug.openMeteoCacheTtlMs, 2 * 60 * 60 * 1000)
+})
+
+test('failed fetches are not cached permanently and the next request can recover', async () => {
+  __resetForecastCacheForTests()
+  let calls = 0
+  const fetcher = async () => {
+    calls += 1
+    if (calls === 1) return new Response('temporary failure', { status: 503 })
+    return okJson({ marker: 'recovered' })
+  }
+
+  const failed = await fetchCachedForecastJson(weatherOptions(fetcher))
+  const recovered = await fetchCachedForecastJson(weatherOptions(fetcher))
+
+  assert.equal(calls, 2)
+  assert.equal(failed.payload, null)
+  assert.equal(failed.error, '503')
+  assert.equal(recovered.payload.marker, 'recovered')
+  assert.equal(recovered.debug.openMeteoCacheStatus, 'miss')
+})

@@ -6,7 +6,8 @@ import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import { fetchCachedForecastJson, type ForecastCacheDebug } from '@/app/lib/server/forecastCache'
+import { type ForecastCacheDebug } from '@/app/lib/server/forecastCache'
+import { buildOpenMeteoUrl, fetchOpenMeteoJson as fetchCachedOpenMeteoJson } from '@/app/lib/server/openMeteo'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -105,19 +106,27 @@ async function fetchOpenMeteoJson(
   opts: { timeoutMs: number; cacheTtlMs?: number; allowStale?: boolean; horizonHours?: number; forecastDays?: number; forecastRange?: string; frameRequest?: boolean; forceRefresh?: boolean; configUpdatedAt?: string | null }
 ): Promise<OpenMeteoFetchResult<any>> {
   const u = new URL(url)
-  const fetched = await fetchCachedForecastJson({
+  const endpoint = u.hostname.startsWith('marine-api') ? 'marine' : 'forecast'
+  const fetched = await fetchCachedOpenMeteoJson({
     dataType: 'surf',
-    provider: 'open-meteo',
-    url,
+    endpoint,
+    lat: Number(u.searchParams.get('latitude')),
+    lon: Number(u.searchParams.get('longitude')),
+    current: u.searchParams.get('current')?.split(','),
+    hourly: u.searchParams.get('hourly')?.split(','),
+    daily: u.searchParams.get('daily')?.split(','),
     timeoutMs: opts.timeoutMs,
     horizonHours: opts.horizonHours,
-    forecastDays: opts.forecastDays,
+    forecastDays: opts.forecastDays ?? (u.searchParams.get('forecast_days') ? Number(u.searchParams.get('forecast_days')) : undefined),
+    pastDays: u.searchParams.get('past_days') ? Number(u.searchParams.get('past_days')) : undefined,
     forecastRange: opts.forecastRange,
-    timezone: u.searchParams.get('timezone'),
+    timezone: u.searchParams.get('timezone') ?? undefined,
+    params: Object.fromEntries(Array.from(u.searchParams.entries()).filter(([key]) => !['latitude', 'longitude', 'current', 'hourly', 'daily', 'forecast_days', 'past_days', 'timezone'].includes(key))),
     frameRequest: opts.frameRequest ?? true,
     allowStale: opts.allowStale,
     forceRefresh: opts.forceRefresh ?? ctx.forceRefresh ?? false,
     configUpdatedAt: opts.configUpdatedAt ?? ctx.configUpdatedAt ?? null,
+    cacheTtlMs: opts.cacheTtlMs,
   })
 
   if (fetched.payload) {
@@ -175,12 +184,7 @@ async function fetchSunTimes(lat: number, lon: number, ctx = createSurfRequestCo
   const cached = __sunCache.get(key)
   if (cached && cached.exp > now) return cached.v
 
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
-    `&longitude=${lon}` +
-    `&daily=sunrise,sunset` +
-    `&forecast_days=1` +
-    `&timezone=${encodeURIComponent('Europe/Oslo')}`
+  const url = buildOpenMeteoUrl({ endpoint: 'forecast', lat, lon, daily: ['sunrise', 'sunset'], forecastDays: 1, timezone: 'Europe/Oslo' }).toString()
 
   const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, forecastDays: 1, forecastRange: '0-1d' })
   if (!fetched.data) return { sunrise: '--:--', sunset: '--:--' }
@@ -246,12 +250,7 @@ async function fetchDailyExtras(lat: number, lon: number, ctx = createSurfReques
   const cached = __wxCache.get(key)
   if (cached && cached.exp > now) return { ...cached.v, source: cached.v.source ?? 'live', error: cached.v.error ?? null, cache_age_ms: cached.v.cache_age_ms ?? null, stale_expires_at: cached.v.stale_expires_at ?? null }
 
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
-    `&longitude=${lon}` +
-    `&daily=temperature_2m_min,temperature_2m_max,sunrise,sunset,weather_code` +
-    `&forecast_days=1` +
-    `&timezone=${encodeURIComponent('Europe/Oslo')}`
+  const url = buildOpenMeteoUrl({ endpoint: 'forecast', lat, lon, daily: ['temperature_2m_min', 'temperature_2m_max', 'sunrise', 'sunset', 'weather_code'], forecastDays: 1, timezone: 'Europe/Oslo' }).toString()
 
   const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, forecastDays: 1, forecastRange: '0-1d' })
   if (!fetched.data) {
@@ -464,13 +463,7 @@ async function fetchWaterTempMinMaxToday(lat: number, lon: number, ctx = createS
   const cached = __sstCache.get(key)
   if (cached && cached.exp > now) return cached.v
 
-  const url =
-    `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}` +
-    `&longitude=${lon}` +
-    `&hourly=sea_surface_temperature` +
-    `&timezone=${encodeURIComponent('Europe/Oslo')}` +
-    `&cell_selection=sea` +
-    `&forecast_days=1`
+  const url = buildOpenMeteoUrl({ endpoint: 'marine', lat, lon, hourly: ['sea_surface_temperature'], timezone: 'Europe/Oslo', forecastDays: 1, params: { cell_selection: 'sea' } }).toString()
 
   const fetched = await fetchOpenMeteoJson(ctx, url, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, forecastDays: 1, forecastRange: '0-1d' })
   if (!fetched.data) return { temp_min_c: null, temp_max_c: null }
@@ -737,20 +730,23 @@ async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfReque
   const requestLat = coord.requestLat
   const requestLon = coord.requestLon
 
-  const marineUrl =
-    `https://marine-api.open-meteo.com/v1/marine?latitude=${requestLat}` +
-    `&longitude=${requestLon}` +
-    `&hourly=` +
-    `wave_height,wave_direction,wave_period,` +
-    `secondary_swell_wave_height,secondary_swell_wave_direction,secondary_swell_wave_period` +
-    `&timezone=UTC` +
-    `&cell_selection=sea`
+  const marineUrl = buildOpenMeteoUrl({
+    endpoint: 'marine',
+    lat: requestLat,
+    lon: requestLon,
+    hourly: ['wave_height', 'wave_direction', 'wave_period', 'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'],
+    timezone: 'UTC',
+    params: { cell_selection: 'sea' },
+  }).toString()
 
-  const windUrl =
-    `https://api.open-meteo.com/v1/forecast?latitude=${requestLat}` +
-    `&longitude=${requestLon}` +
-    `&hourly=wind_speed_10m,wind_direction_10m` +
-    `&timezone=UTC&wind_speed_unit=ms`
+  const windUrl = buildOpenMeteoUrl({
+    endpoint: 'forecast',
+    lat: requestLat,
+    lon: requestLon,
+    hourly: ['wind_speed_10m', 'wind_direction_10m'],
+    timezone: 'UTC',
+    params: { wind_speed_unit: 'ms' },
+  }).toString()
 
   const [marineFetched, windFetched] = await Promise.all([
     fetchOpenMeteoJson(ctx, marineUrl, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, horizonHours: 48, forecastRange: '0-48h' }),
