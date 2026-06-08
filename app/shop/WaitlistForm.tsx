@@ -75,6 +75,12 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
 
   return (
     <form onSubmit={handleSubmit} className="mt-7 grid w-full gap-3 md:mt-0">
+      <div className="mb-1">
+        <h3 className="text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-black/85">Join the waitlist</h3>
+        <p className="mt-2 max-w-[34ch] text-[13px] leading-[1.55] text-black/55">
+          Be among the first to hear about RE:MIND and get access to launch updates and early-bird pricing.
+        </p>
+      </div>
       <input
         className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
         placeholder="Name (optional)"
