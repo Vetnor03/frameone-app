@@ -10447,8 +10447,59 @@ function GroceriesModuleSettingsTab({
     if (!normalizedName || !activeDeviceId) return
 
     const nowIso = new Date().toISOString()
-    const optimisticId = `local-${Math.random().toString(36).slice(2)}`
     const nextQty = Math.max(1, Number(quantity) || 1)
+    const normalizedKey = normalizedName.toLocaleLowerCase()
+    const matchNowMs = Date.now()
+    const matchingVisibleItems = items.filter((item) => (
+      !isDinnerVirtualId(item.id)
+      && item.name.trim().toLocaleLowerCase() === normalizedKey
+      && groceryIsVisible(item, matchNowMs)
+    ))
+    const existingItem = matchingVisibleItems.find((item) => !item.isChecked && item.category === category)
+      ?? matchingVisibleItems.find((item) => !item.isChecked)
+      ?? matchingVisibleItems.find((item) => item.category === category)
+
+    if (existingItem) {
+      const mergedQty = existingItem.quantity + nextQty
+      setItems((prev) => prev.map((item) => (
+        item.id === existingItem.id
+          ? {
+              ...item,
+              quantity: mergedQty,
+              isChecked: false,
+              checkedAt: null,
+              updatedAt: nowIso,
+            }
+          : item
+      )))
+      suppressRealtimeUntilRef.current = Date.now() + 1200
+
+      const { data, error } = await supabase
+        .from('grocery_items')
+        .update({
+          quantity: mergedQty,
+          is_checked: false,
+          checked_at: null,
+        })
+        .eq('id', existingItem.id)
+        .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+        .single()
+
+      if (error) {
+        alert(error.message)
+        await loadGroceries({ silent: true, preserveScroll: true })
+        return
+      }
+
+      const updatedItem = groceryItemFromRow(data)
+      if (updatedItem) upsertItemInState(updatedItem)
+      await rememberHistoryItem(updatedItem?.name ?? existingItem.name, updatedItem?.category ?? existingItem.category, nowIso)
+      void markGroceryProbablyOutInsight(updatedItem?.name ?? existingItem.name)
+      await loadHistory()
+      return
+    }
+
+    const optimisticId = `local-${Math.random().toString(36).slice(2)}`
     setItems((prev) => [
       {
         id: optimisticId,
