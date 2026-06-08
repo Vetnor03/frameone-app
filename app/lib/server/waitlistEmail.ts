@@ -6,15 +6,15 @@ type WaitlistWelcomeEmail = {
 
 export async function sendWaitlistWelcomeEmail({ email, productInterest }: WaitlistWelcomeEmail) {
   // TODO: Connect an email provider such as Resend, Postmark, or Supabase Edge Functions.
-  // Subject: Velkommen til RE:MIND-ventelisten
+  // Subject: Welcome to the RE:MIND waitlist
   // Body:
-  // Takk for at du meldte deg på.
+  // Thanks for signing up.
   //
-  // Du er nå blant de første som får oppdateringer om RE:MIND frem mot lansering.
+  // You're now among the first to get RE:MIND updates ahead of launch.
   //
-  // Vi lanserer etter planen høsten 2026.
+  // We currently plan to launch in autumn 2026.
   //
-  // Hilsen
+  // Best,
   // RE:MIND
   console.info('Waitlist welcome email pending provider configuration', { email, productInterest })
 }

@@ -23,14 +23,14 @@ export async function POST(request: Request) {
   const productInterest = cleanString(payload.product_interest) || null
 
   if (!email || !emailPattern.test(email)) {
-    return NextResponse.json({ error: 'Skriv inn en gyldig e-postadresse.' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ error: 'Ventelisten er ikke konfigurert ennå.' }, { status: 500 })
+    return NextResponse.json({ error: 'The waitlist is not configured yet.' }, { status: 500 })
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error('Waitlist signup failed', error)
-    return NextResponse.json({ error: 'Kunne ikke melde deg på akkurat nå.' }, { status: 500 })
+    return NextResponse.json({ error: 'Could not join the waitlist right now.' }, { status: 500 })
   }
 
   await sendWaitlistWelcomeEmail({ email, name, productInterest })

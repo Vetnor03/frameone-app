@@ -15,7 +15,7 @@ type WaitlistFormProps = {
 
 type FormStatus = 'idle' | 'submitting' | 'success' | 'error'
 
-export default function WaitlistForm({ compact = false, productInterest = 'RE:MIND-enheten' }: WaitlistFormProps) {
+export default function WaitlistForm({ compact = false, productInterest = 'RE:MIND Display' }: WaitlistFormProps) {
   const [status, setStatus] = useState<FormStatus>('idle')
   const [message, setMessage] = useState('')
 
@@ -29,7 +29,7 @@ export default function WaitlistForm({ compact = false, productInterest = 'RE:MI
 
     if (!email) {
       setStatus('error')
-      setMessage('Skriv inn e-postadressen din.')
+      setMessage('Enter your email address.')
       return
     }
 
@@ -43,16 +43,16 @@ export default function WaitlistForm({ compact = false, productInterest = 'RE:MI
     })
 
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({ error: 'Kunne ikke melde deg på akkurat nå.' }))
+      const payload = await response.json().catch(() => ({ error: 'Could not join the waitlist right now.' }))
       setStatus('error')
-      setMessage(payload.error || 'Kunne ikke melde deg på akkurat nå.')
+      setMessage(payload.error || 'Could not join the waitlist right now.')
       return
     }
 
     window.va?.('event', 'waitlist_signup', { source: 'shop', product_interest: product || 'unknown' })
     form.reset()
     setStatus('success')
-    setMessage('Takk! Du er nå på ventelisten.')
+    setMessage("Thanks! You're now on the waitlist.")
   }
 
   return (
@@ -63,16 +63,16 @@ export default function WaitlistForm({ compact = false, productInterest = 'RE:MI
         name="email"
         required
         autoComplete="email"
-        placeholder="E-postadresse"
-        aria-label="E-postadresse"
+        placeholder="Email address"
+        aria-label="Email address"
       />
       <input
         className="min-h-11 rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-black/45"
         type="text"
         name="name"
         autoComplete="name"
-        placeholder="Navn (valgfritt)"
-        aria-label="Navn valgfritt"
+        placeholder="Name (optional)"
+        aria-label="Name optional"
       />
       <input type="hidden" name="product_interest" value={productInterest} />
       <button
@@ -80,7 +80,7 @@ export default function WaitlistForm({ compact = false, productInterest = 'RE:MI
         disabled={status === 'submitting'}
         className="shop-button min-h-11 rounded bg-black px-7 py-3 text-sm font-medium tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === 'submitting' ? 'Melder på…' : 'Bli med på ventelisten'}
+        {status === 'submitting' ? 'Joining…' : 'Join waitlist'}
       </button>
       {message ? (
         <p className={`text-sm ${status === 'success' ? 'text-emerald-700' : 'text-red-700'} ${compact ? '' : 'sm:col-span-3'}`} role="status">

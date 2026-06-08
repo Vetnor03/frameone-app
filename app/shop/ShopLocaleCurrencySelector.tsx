@@ -13,9 +13,10 @@ export default function ShopLocaleCurrencySelector({ language, currency }: Props
         window.location.href = `/shop?lang=${nextLanguage}&currency=${nextCurrency.toUpperCase()}`
       }}
     >
-      <option value="no-nok">Norsk (NOK)</option>
+      <option value="en-nok">English (NOK)</option>
       <option value="en-eur">English (EUR)</option>
       <option value="en-usd">English (USD)</option>
+      <option value="no-nok">Norwegian (NOK)</option>
     </select>
   )
 }
