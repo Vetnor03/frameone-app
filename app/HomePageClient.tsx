@@ -10,6 +10,7 @@ import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
+import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -9377,6 +9378,13 @@ type GrocerySuggestion = {
   category: GroceryCategory
 }
 
+type GroceryHistoryRow = {
+  id: string
+  name: string | null
+  usage_count?: number | string | null
+  last_used_at?: string | null
+}
+
 
 
 type DinnerPlanItem = { name: string; category: GroceryCategory; quantity: number; isChecked: boolean; checkedAt: string | null; updatedAt: string | null }
@@ -9780,7 +9788,7 @@ function GroceriesModuleSettingsTab({
       lastUsedAt: row.last_used_at ? String(row.last_used_at) : null,
       category: asGroceryCategory(row.category),
     }))
-    setSuggestions(parsed.filter((x) => x.name))
+    setSuggestions(mergeGrocerySuggestionsByExactKey(parsed.filter((x) => x.name)))
   }
 
   useEffect(() => {
@@ -10190,37 +10198,58 @@ function GroceriesModuleSettingsTab({
 
   async function rememberHistoryItem(name: string, category: GroceryCategory, nowIso = new Date().toISOString()) {
     if (!activeDeviceId) return
-    const normalizedName = name.trim()
-    if (!normalizedName) return
+    const normalizedName = name.trim().replace(/\s+/g, ' ')
+    const normalizedKey = normalizeGrocerySuggestionKey(normalizedName)
+    if (!normalizedKey) return
 
-    const { data: existingHistory } = await supabase
+    const { data: historyRows, error: lookupError } = await supabase
       .from('grocery_item_history')
-      .select('id, usage_count')
+      .select('id, name, usage_count, last_used_at')
       .eq('device_id', activeDeviceId)
-      .ilike('name', normalizedName)
-      .limit(1)
-      .maybeSingle()
+      .limit(200)
+
+    if (lookupError) {
+      alert(lookupError.message)
+      return
+    }
+
+    const matchingRows = ((historyRows || []) as GroceryHistoryRow[]).filter((row) => normalizeGrocerySuggestionKey(String(row.name ?? '')) === normalizedKey)
+    const existingHistory = matchingRows.sort((a, b) => {
+      const aTime = a.last_used_at ? new Date(a.last_used_at).getTime() : 0
+      const bTime = b.last_used_at ? new Date(b.last_used_at).getTime() : 0
+      return bTime - aTime
+    })[0]
 
     if (existingHistory?.id) {
       await supabase
         .from('grocery_item_history')
         .update({
+          name: normalizedName,
           usage_count: Math.max(1, Number(existingHistory.usage_count ?? 1) || 1) + 1,
           last_used_at: nowIso,
           category,
         })
         .eq('id', existingHistory.id)
-    } else {
-      await supabase
-        .from('grocery_item_history')
-        .insert({
-          device_id: activeDeviceId,
-          name: normalizedName,
-          usage_count: 1,
-          last_used_at: nowIso,
-          category,
-        })
+
+      const duplicateIds = matchingRows.map((row) => row.id).filter((id) => id && id !== existingHistory.id)
+      if (duplicateIds.length > 0) {
+        await supabase
+          .from('grocery_item_history')
+          .delete()
+          .in('id', duplicateIds)
+      }
+      return
     }
+
+    await supabase
+      .from('grocery_item_history')
+      .insert({
+        device_id: activeDeviceId,
+        name: normalizedName,
+        usage_count: 1,
+        last_used_at: nowIso,
+        category,
+      })
   }
 
 
@@ -10443,16 +10472,16 @@ function GroceriesModuleSettingsTab({
   }
 
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
-    const normalizedName = name.trim()
+    const normalizedName = name.trim().replace(/\s+/g, ' ')
     if (!normalizedName || !activeDeviceId) return
 
     const nowIso = new Date().toISOString()
     const nextQty = Math.max(1, Number(quantity) || 1)
-    const normalizedKey = normalizedName.toLocaleLowerCase()
+    const normalizedKey = normalizeGrocerySuggestionKey(normalizedName)
     const matchNowMs = Date.now()
     const matchingVisibleItems = items.filter((item) => (
       !isDinnerVirtualId(item.id)
-      && item.name.trim().toLocaleLowerCase() === normalizedKey
+      && normalizeGrocerySuggestionKey(item.name) === normalizedKey
       && groceryIsVisible(item, matchNowMs)
     ))
     const existingItem = matchingVisibleItems.find((item) => !item.isChecked && item.category === category)
@@ -10682,8 +10711,6 @@ function GroceriesModuleSettingsTab({
     if (!activeDeviceId) return
     const normalizedName = name.trim()
     if (!normalizedName) return
-    const previousName = items.find((item) => item.id === id)?.name.trim() ?? ''
-    const hasNameChange = previousName.toLocaleLowerCase() !== normalizedName.toLocaleLowerCase()
     const nowIso = new Date().toISOString()
     const nextQty = Math.max(1, Number(quantity) || 1)
     setItems((prev) =>
@@ -10710,79 +10737,43 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    const historyBase = {
-      device_id: activeDeviceId,
-      name: normalizedName,
-      category,
-      last_used_at: nowIso,
-    }
+    await rememberHistoryItem(normalizedName, category, nowIso)
 
-    if (!hasNameChange) {
-      await supabase
-        .from('grocery_item_history')
-        .upsert(historyBase, { onConflict: 'device_id,name' })
-    } else {
-      const { data: oldHistory } = await supabase
-        .from('grocery_item_history')
-        .select('id, usage_count')
-        .eq('device_id', activeDeviceId)
-        .ilike('name', previousName)
-        .limit(1)
-        .maybeSingle()
-
-      const { data: updatedHistory } = await supabase
-        .from('grocery_item_history')
-        .select('id, usage_count')
-        .eq('device_id', activeDeviceId)
-        .ilike('name', normalizedName)
-        .limit(1)
-        .maybeSingle()
-
-      const oldUsageCount = oldHistory?.id ? Math.max(1, Number(oldHistory.usage_count ?? 1) || 1) : 0
-
-      if (updatedHistory?.id) {
-        await supabase
-          .from('grocery_item_history')
-          .update({
-            usage_count: Math.max(1, Number(updatedHistory.usage_count ?? 1) || 1) + oldUsageCount,
-            category,
-            last_used_at: nowIso,
-          })
-          .eq('id', updatedHistory.id)
-      } else {
-        await supabase
-          .from('grocery_item_history')
-          .upsert({
-            ...historyBase,
-            usage_count: Math.max(1, oldUsageCount || 1),
-          }, { onConflict: 'device_id,name' })
-      }
-
-      if (oldHistory?.id && oldHistory.id !== updatedHistory?.id) {
-        await supabase
-          .from('grocery_item_history')
-          .delete()
-          .eq('id', oldHistory.id)
-      }
-    }
 
     await loadHistory()
   }
 
   async function deleteHistorySuggestion(name: string) {
     if (!activeDeviceId) return
-    const normalizedName = name.trim()
-    if (!normalizedName) return
+    const normalizedKey = normalizeGrocerySuggestionKey(name)
+    if (!normalizedKey) return
 
-    const { error } = await supabase
+    const { data: historyRows, error: lookupError } = await supabase
       .from('grocery_item_history')
-      .delete()
+      .select('id, name')
       .eq('device_id', activeDeviceId)
-      .ilike('name', normalizedName)
+      .limit(200)
 
-    if (error) {
-      alert(error.message)
+    if (lookupError) {
+      alert(lookupError.message)
       return
+    }
+
+    const idsToDelete = ((historyRows || []) as GroceryHistoryRow[])
+      .filter((row) => normalizeGrocerySuggestionKey(String(row.name ?? '')) === normalizedKey)
+      .map((row) => row.id)
+      .filter(Boolean)
+
+    if (idsToDelete.length > 0) {
+      const { error } = await supabase
+        .from('grocery_item_history')
+        .delete()
+        .in('id', idsToDelete)
+
+      if (error) {
+        alert(error.message)
+        return
+      }
     }
 
     await loadHistory()
@@ -11022,15 +11013,11 @@ function GroceriesDraftSheet({
 
   useEffect(() => {
     if (editingItem) return
-    const found = suggestions.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
+    const found = findGrocerySuggestionByExactKey(suggestions, name)
     setCategory(found?.category ?? 'other')
   }, [editingItem, name, suggestions])
 
-  const matchingSuggestion = useMemo(() => {
-    const normalizedName = name.trim().toLowerCase()
-    if (!normalizedName) return null
-    return suggestions.find((s) => s.name.trim().toLowerCase() === normalizedName) ?? null
-  }, [name, suggestions])
+  const matchingSuggestion = useMemo(() => findGrocerySuggestionByExactKey(suggestions, name), [name, suggestions])
 
   const canSave = !!name.trim() && !saving && (!!editingItem || !matchingSuggestion)
 
@@ -11051,7 +11038,7 @@ function GroceriesDraftSheet({
 
   async function addSuggestionInstantly(suggestion: GrocerySuggestion) {
     if (editingItem || saving) return
-    const suggestionKey = `${suggestion.category}:${suggestion.name.trim().toLowerCase()}`
+    const suggestionKey = `${suggestion.category}:${normalizeGrocerySuggestionKey(suggestion.name)}`
     if (instantAddKeyRef.current === suggestionKey) return
     instantAddKeyRef.current = suggestionKey
 
@@ -11110,7 +11097,7 @@ function GroceriesDraftSheet({
             </div>
           ) : filteredSuggestions.map((s) => (
             <GrocerySuggestionSwipeRow
-              key={s.name.toLowerCase()}
+              key={normalizeGrocerySuggestionKey(s.name)}
               language={language}
               suggestion={s}
               onSelect={() => {
