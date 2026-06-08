@@ -18,7 +18,7 @@ test('one Today’s Best spot failure is isolated from other candidate scores', 
 })
 
 test('Open-Meteo requests route through the shared cache with snapshot controls', () => {
-  assert.match(route, /fetchCachedForecastJson\(\{[\s\S]*?dataType: 'surf'/)
+  assert.match(route, /fetchCachedOpenMeteoJson\(\{[\s\S]*?dataType: 'surf'/)
   assert.match(route, /forceRefresh: opts\.forceRefresh \?\? ctx\.forceRefresh \?\? false/)
   assert.match(route, /configUpdatedAt: opts\.configUpdatedAt \?\? ctx\.configUpdatedAt \?\? null/)
   assert.doesNotMatch(route, /__openMeteoJsonCache/)

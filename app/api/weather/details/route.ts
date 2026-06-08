@@ -12,6 +12,12 @@ function numericParam(url: URL, key: string) {
   return Number.isFinite(value) ? value : null
 }
 
+function forecastDaysParam(url: URL) {
+  const value = Number(url.searchParams.get('days') || url.searchParams.get('forecast_days'))
+  if (!Number.isFinite(value)) return WEATHER_DETAILS_FORECAST_DAYS
+  return Math.max(1, Math.min(WEATHER_DETAILS_FORECAST_DAYS, Math.round(value)))
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const lat = numericParam(url, 'lat')
@@ -20,10 +26,21 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'lat and lon are required' }, { status: 400 })
   }
 
-  const [weatherResult, marineResult] = await Promise.allSettled([
-    fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays: WEATHER_DETAILS_FORECAST_DAYS, frameRequest: false }),
-    fetchWeatherMarine({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, frameRequest: false }),
-  ])
+  const forecastDays = forecastDaysParam(url)
+  const framePayload = url.searchParams.get('frame') === '1'
+
+  const weatherResult = await Promise.resolve(
+    fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays, frameRequest: framePayload })
+  ).then(
+    (value) => ({ status: 'fulfilled' as const, value }),
+    (reason) => ({ status: 'rejected' as const, reason }),
+  )
+  const marineResult = framePayload
+    ? ({ status: 'fulfilled' as const, value: null })
+    : await Promise.resolve(fetchWeatherMarine({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, frameRequest: false })).then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (reason) => ({ status: 'rejected' as const, reason }),
+    )
 
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null
   const marine = marineResult.status === 'fulfilled' ? marineResult.value : null
@@ -39,6 +56,10 @@ export async function GET(req: Request) {
   if (!weather?.payload) {
     const error = weather?.error || (weatherResult.status === 'rejected' ? String(weatherResult.reason) : 'Weather unavailable')
     return NextResponse.json({ error }, { status: 503 })
+  }
+
+  if (framePayload) {
+    return NextResponse.json(weather.payload)
   }
 
   return NextResponse.json({

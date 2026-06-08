@@ -1,4 +1,5 @@
-import { fetchCachedForecastJson, type ForecastCacheDebug } from './forecastCache'
+import { buildOpenMeteoUrl, fetchOpenMeteoJson } from './openMeteo'
+import type { ForecastCacheDebug } from './forecastCache'
 
 export type CachedWeatherForecastResult<T = unknown> = {
   payload: T | null
@@ -23,60 +24,79 @@ export type WeatherMarineFetchOptions = WeatherForecastFetchOptions
 const WEATHER_FORECAST_DAYS = 5
 const WEATHER_TIMEZONE = 'auto'
 
+const WEATHER_CURRENT_FIELDS = [
+  'temperature_2m',
+  'apparent_temperature',
+  'weather_code',
+  'relative_humidity_2m',
+  'wind_speed_10m',
+  'wind_direction_10m',
+  'precipitation',
+]
+
+const WEATHER_HOURLY_FIELDS = [
+  'temperature_2m',
+  'weather_code',
+  'wind_speed_10m',
+  'precipitation_probability',
+  'precipitation',
+]
+
+const WEATHER_DAILY_FIELDS = [
+  'temperature_2m_max',
+  'temperature_2m_min',
+  'weather_code',
+  'precipitation_sum',
+  'precipitation_probability_max',
+  'wind_speed_10m_max',
+  'sunrise',
+  'sunset',
+  'uv_index_max',
+]
+
 export function buildWeatherForecastUrl(lat: number, lon: number, forecastDays = WEATHER_FORECAST_DAYS) {
-  const url = new URL('https://api.open-meteo.com/v1/forecast')
-  url.searchParams.set('latitude', String(lat))
-  url.searchParams.set('longitude', String(lon))
-  url.searchParams.set('current', [
-    'temperature_2m',
-    'apparent_temperature',
-    'weather_code',
-    'relative_humidity_2m',
-    'wind_speed_10m',
-    'wind_direction_10m',
-    'precipitation',
-  ].join(','))
-  url.searchParams.set('hourly', [
-    'temperature_2m',
-    'weather_code',
-    'wind_speed_10m',
-    'precipitation_probability',
-    'precipitation',
-  ].join(','))
-  url.searchParams.set('daily', [
-    'temperature_2m_max',
-    'temperature_2m_min',
-    'weather_code',
-    'precipitation_sum',
-    'precipitation_probability_max',
-    'wind_speed_10m_max',
-    'sunrise',
-    'sunset',
-    'uv_index_max',
-  ].join(','))
-  url.searchParams.set('forecast_days', String(forecastDays))
-  url.searchParams.set('temperature_unit', 'celsius')
-  url.searchParams.set('wind_speed_unit', 'ms')
-  url.searchParams.set('precipitation_unit', 'mm')
-  url.searchParams.set('timezone', WEATHER_TIMEZONE)
-  return url
+  return buildOpenMeteoUrl({
+    endpoint: 'forecast',
+    lat,
+    lon,
+    current: WEATHER_CURRENT_FIELDS,
+    hourly: WEATHER_HOURLY_FIELDS,
+    daily: WEATHER_DAILY_FIELDS,
+    forecastDays,
+    timezone: WEATHER_TIMEZONE,
+    params: {
+      temperature_unit: 'celsius',
+      wind_speed_unit: 'ms',
+      precipitation_unit: 'mm',
+    },
+  })
 }
 
 export function buildWeatherMarineUrl(lat: number, lon: number) {
-  const url = new URL('https://marine-api.open-meteo.com/v1/marine')
-  url.searchParams.set('latitude', String(lat))
-  url.searchParams.set('longitude', String(lon))
-  url.searchParams.set('hourly', 'sea_surface_temperature')
-  url.searchParams.set('forecast_days', '1')
-  url.searchParams.set('timezone', WEATHER_TIMEZONE)
-  return url
+  return buildOpenMeteoUrl({
+    endpoint: 'marine',
+    lat,
+    lon,
+    hourly: ['sea_surface_temperature'],
+    forecastDays: 1,
+    timezone: WEATHER_TIMEZONE,
+  })
 }
 
 export async function fetchWeatherForecast<T = unknown>(options: WeatherForecastFetchOptions): Promise<CachedWeatherForecastResult<T>> {
-  return fetchCachedForecastJson<T>({
+  return fetchOpenMeteoJson<T>({
     dataType: 'weather',
-    provider: 'open-meteo',
-    url: buildWeatherForecastUrl(options.lat, options.lon, options.forecastDays ?? WEATHER_FORECAST_DAYS).toString(),
+    endpoint: 'forecast',
+    lat: options.lat,
+    lon: options.lon,
+    current: WEATHER_CURRENT_FIELDS,
+    hourly: WEATHER_HOURLY_FIELDS,
+    daily: WEATHER_DAILY_FIELDS,
+    params: {
+      temperature_unit: 'celsius',
+      wind_speed_unit: 'ms',
+      precipitation_unit: 'mm',
+    },
     timeoutMs: options.timeoutMs,
     forecastDays: options.forecastDays ?? WEATHER_FORECAST_DAYS,
     forecastRange: `0-${options.forecastDays ?? WEATHER_FORECAST_DAYS}d`,
@@ -89,10 +109,12 @@ export async function fetchWeatherForecast<T = unknown>(options: WeatherForecast
 }
 
 export async function fetchWeatherMarine<T = unknown>(options: WeatherMarineFetchOptions): Promise<CachedWeatherForecastResult<T>> {
-  return fetchCachedForecastJson<T>({
+  return fetchOpenMeteoJson<T>({
     dataType: 'weather',
-    provider: 'open-meteo',
-    url: buildWeatherMarineUrl(options.lat, options.lon).toString(),
+    endpoint: 'marine',
+    lat: options.lat,
+    lon: options.lon,
+    hourly: ['sea_surface_temperature'],
     timeoutMs: options.timeoutMs,
     forecastDays: 1,
     forecastRange: '0-1d-marine',

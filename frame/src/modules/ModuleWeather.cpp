@@ -1000,20 +1000,13 @@ static void buildClothingSuggestion(char* out, size_t n,
 }
 
 // -----------------------------------------------------------------------------
-// Fetch Open-Meteo
+// Fetch weather through backend cache/dedupe layer
 // -----------------------------------------------------------------------------
-static bool fetchOpenMeteo(const WeatherInstanceConfig& cfg, WeatherCache& out) {
-  String url = "https://api.open-meteo.com/v1/forecast?latitude=";
+static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& out) {
+  String url = String(BASE_URL) + "/api/weather/details?frame=1&days=5&lat=";
   url += String(cfg.lat, 6);
-  url += "&longitude=";
+  url += "&lon=";
   url += String(cfg.lon, 6);
-
-  url += "&current=temperature_2m,weather_code,relative_humidity_2m";
-  url += "&hourly=temperature_2m,weather_code,wind_speed_10m,precipitation,relative_humidity_2m";
-  url += "&daily=sunrise,sunset";
-  url += "&windspeed_unit=ms";
-  url += "&timezone=auto";
-  url += "&forecast_days=5";
 
   int httpCode = 0;
   String body;
@@ -1272,7 +1265,7 @@ static void tick(int idx) {
   if (!needs) return;
 
   WeatherCache fresh = cache;
-  if (fetchOpenMeteo(cfg, fresh)) {
+  if (fetchWeatherPayload(cfg, fresh)) {
     fresh.valid = true;
     fresh.fetchedAtMs = now;
     cache = fresh;

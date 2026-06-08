@@ -1,6 +1,6 @@
 // app/lib/surf/logExperience.ts
 import { scoreSurf } from '../surfScoring'
-import { fetchCachedForecastJson } from '../server/forecastCache'
+import { fetchOpenMeteoJson } from '../server/openMeteo'
 
 export type Sideswell = {
   present: boolean
@@ -96,28 +96,10 @@ export function getUtcHourRange(when: Date) {
 }
 
 async function fetchMarineSeriesAtTime(lat: number, lon: number, when: Date): Promise<MarineSeries> {
-  const marineUrl =
-    `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}` +
-    `&longitude=${lon}` +
-    `&hourly=` +
-    `wave_height,wave_direction,wave_period,` +
-    `secondary_swell_wave_height,secondary_swell_wave_direction,secondary_swell_wave_period` +
-    `&timezone=UTC` +
-    `&past_days=7` +
-    `&forecast_days=16`
-
-  const windUrl =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
-    `&longitude=${lon}` +
-    `&hourly=wind_speed_10m,wind_direction_10m` +
-    `&timezone=UTC` +
-    `&wind_speed_unit=ms` +
-    `&past_days=7` +
-    `&forecast_days=16`
-
+  void when
   const [marineFetched, windFetched] = await Promise.all([
-    fetchCachedForecastJson({ dataType: 'surf', provider: 'open-meteo', url: marineUrl, timeoutMs: 12000, forecastDays: 16, forecastRange: 'past7-forecast16d', timezone: 'UTC', frameRequest: false, allowStale: true }),
-    fetchCachedForecastJson({ dataType: 'surf', provider: 'open-meteo', url: windUrl, timeoutMs: 12000, forecastDays: 16, forecastRange: 'past7-forecast16d', timezone: 'UTC', frameRequest: false, allowStale: true }),
+    fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'marine', lat, lon, hourly: ['wave_height', 'wave_direction', 'wave_period', 'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'], timezone: 'UTC', pastDays: 7, forecastDays: 16, timeoutMs: 12000, forecastRange: 'past7-forecast16d', frameRequest: false, allowStale: true }),
+    fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'forecast', lat, lon, hourly: ['wind_speed_10m', 'wind_direction_10m'], timezone: 'UTC', pastDays: 7, forecastDays: 16, params: { wind_speed_unit: 'ms' }, timeoutMs: 12000, forecastRange: 'past7-forecast16d', frameRequest: false, allowStale: true }),
   ])
 
   if (!marineFetched.payload) throw new Error(`Marine fetch failed (${marineFetched.error || 'unavailable'})`)

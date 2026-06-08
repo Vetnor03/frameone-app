@@ -116,7 +116,7 @@ frame/src/
   - `/api/device/reminders` hashed signature compare.
   - `/api/device/surf-meta` signature compare per configured surf instance.
 - Module runtime data sources:
-  - Weather: `https://api.open-meteo.com/v1/forecast?...`.
+  - Weather: `/api/weather/details?frame=1&days=5&lat=...&lon=...` (server caches/dedupes Open-Meteo).
   - Surf: `/api/surf/score?...`.
   - Reminders: `/api/device/reminders?...`.
   - Countdown: `/api/device/countdowns?...`.

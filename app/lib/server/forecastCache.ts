@@ -49,6 +49,7 @@ type ForecastCacheOptions = {
   frameRequest?: boolean
   allowStale?: boolean
   staleTtlMs?: number
+  cacheTtlMs?: number
   fetcher?: typeof fetch
   forceRefresh?: boolean
   configUpdatedAt?: string | number | Date | null
@@ -57,7 +58,9 @@ type ForecastCacheOptions = {
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000
 const FORECAST_CACHE_MAX_ENTRIES = 500
-const FORECAST_CACHE_COORD_BUCKET_DEGREES = 0.05
+// About 110m at the equator: conservative enough to merge truly nearby/custom
+// duplicate points without moving weather/surf requests to a meaningfully different grid.
+const FORECAST_CACHE_COORD_BUCKET_DEGREES = 0.001
 
 type ForecastCacheGlobal = typeof globalThis & {
   __forecastResponseCache?: Map<string, ForecastCacheEntry>
@@ -81,7 +84,7 @@ function sortedParams(url: URL) {
 function roundedCoord(value: string | null) {
   const n = Number(value)
   if (!Number.isFinite(n)) return value ?? ''
-  return (Math.round(n / FORECAST_CACHE_COORD_BUCKET_DEGREES) * FORECAST_CACHE_COORD_BUCKET_DEGREES).toFixed(2)
+  return (Math.round(n / FORECAST_CACHE_COORD_BUCKET_DEGREES) * FORECAST_CACHE_COORD_BUCKET_DEGREES).toFixed(3)
 }
 
 function normalizeParamValue(key: string, value: string) {
@@ -143,11 +146,19 @@ function openMeteoUrlWithoutSecrets(url: string) {
   return u.toString()
 }
 
+function isDailyOnlyOpenMeteoRequest(url: string) {
+  const u = new URL(url)
+  return !!u.searchParams.get('daily') && !u.searchParams.get('hourly') && !u.searchParams.get('current')
+}
+
 function ttlForEntry(options: ForecastCacheOptions, entry?: ForecastCacheEntry) {
-  if (!entry) return FIFTEEN_MINUTES_MS
-  const configUpdatedAt = parseTimeMs(options.configUpdatedAt)
-  const configUnchangedSinceFetch = !!options.frameRequest && configUpdatedAt != null && configUpdatedAt <= entry.fetchedAt
-  return Math.min(forecastCacheTtlMs({ frameRequest: options.frameRequest, configUnchangedSinceFetch }), FOUR_HOURS_MS)
+  if (Number.isFinite(options.cacheTtlMs) && Number(options.cacheTtlMs) > 0) return Math.min(Number(options.cacheTtlMs), FOUR_HOURS_MS)
+  if (entry) {
+    const configUpdatedAt = parseTimeMs(options.configUpdatedAt)
+    const configUnchangedSinceFetch = !!options.frameRequest && configUpdatedAt != null && configUpdatedAt <= entry.fetchedAt
+    if (configUnchangedSinceFetch) return Math.min(forecastCacheTtlMs({ frameRequest: options.frameRequest, configUnchangedSinceFetch }), FOUR_HOURS_MS)
+  }
+  return isDailyOnlyOpenMeteoRequest(options.url) ? 2 * 60 * 60 * 1000 : FIFTEEN_MINUTES_MS
 }
 
 function makeDebug(input: {
@@ -181,11 +192,28 @@ function makeDebug(input: {
   }
 }
 
+function requestedFields(url: string) {
+  const u = new URL(url)
+  return {
+    current: u.searchParams.get('current') || null,
+    hourly: u.searchParams.get('hourly') || null,
+    daily: u.searchParams.get('daily') || null,
+  }
+}
+
+function endpointLabel(url: string) {
+  const u = new URL(url)
+  return `${u.hostname}${u.pathname}`
+}
+
 function logForecastCache(level: 'info' | 'warn', debug: ForecastCacheDebug, extra: Record<string, unknown> = {}) {
   const logPayload = {
     cacheKeyHash: debug.cacheKeyHash,
     cacheKeyPrefix: debug.cacheKeyPrefix,
     status: debug.openMeteoCacheStatus,
+    cacheKey: debug.cacheKey,
+    endpoint: endpointLabel(debug.openMeteoUrl),
+    requestedFields: requestedFields(debug.openMeteoUrl),
     ttlMs: debug.ttlMs,
     ageMs: debug.cacheAgeMs,
     inFlightDeduped: debug.inFlightDeduped,
@@ -194,7 +222,7 @@ function logForecastCache(level: 'info' | 'warn', debug: ForecastCacheDebug, ext
     ...extra,
   }
   if (level === 'warn') console.warn('[open-meteo-cache]', logPayload)
-  else console.info('[open-meteo-cache]', logPayload)
+  else if (process.env.NODE_ENV !== 'production' || process.env.OPEN_METEO_DEBUG === '1' || debug.openMeteoCacheStatus !== 'hit') console.info('[open-meteo-cache]', logPayload)
 }
 
 function pruneForecastCache(now = Date.now()) {
@@ -278,10 +306,11 @@ export async function fetchCachedForecastJson<T = unknown>(options: ForecastCach
       const status: OpenMeteoCacheStatus = options.forceRefresh ? 'bypassed' : cached ? 'stale' : 'miss'
       const payload = await fetchJsonWithTimeout(options.url, options.timeoutMs, options.fetcher) as T
       const fetchedAt = Date.now()
-      const expiresAt = fetchedAt + FIFTEEN_MINUTES_MS
+      const ttlMs = ttlForEntry(options)
+      const expiresAt = fetchedAt + ttlMs
       __forecastResponseCache.set(key, { fetchedAt, expiresAt, staleExpiresAt: fetchedAt + FOUR_HOURS_MS, payload })
       pruneForecastCache(fetchedAt)
-      const debug = makeDebug({ key, options, tier, status, cacheHit: false, cacheAgeMs: 0, ttlMs: FIFTEEN_MINUTES_MS, staleUsed: false, externalFetch: true, inFlightDeduped: false })
+      const debug = makeDebug({ key, options, tier, status, cacheHit: false, cacheAgeMs: 0, ttlMs, staleUsed: false, externalFetch: true, inFlightDeduped: false })
       logForecastCache('info', debug)
       return { payload, debug, error: null, fetchedAt: new Date(fetchedAt).toISOString(), expiresAt: new Date(expiresAt).toISOString() }
     } catch (e: unknown) {

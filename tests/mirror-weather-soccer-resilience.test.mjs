@@ -64,3 +64,12 @@ test('weather details displays dry instead of probability for zero precipitation
   assert.match(homeClient, /weatherDetailFormatPrecip\(period\.precipProbability, period\.precipMm\)/)
   assert.match(homeClient, /weatherDetailFormatPrecip\(data\.precipProbability, data\.precipMm\)/)
 })
+
+test('physical frame weather uses server-prepared cached payload instead of direct Open-Meteo', () => {
+  const moduleWeather = readFileSync(new URL('../frame/src/modules/ModuleWeather.cpp', import.meta.url), 'utf8')
+  assert.match(moduleWeather, /\/api\/weather\/details\?frame=1&days=5&lat=/)
+  assert.match(weatherDetailsRoute, /framePayload/)
+  assert.match(weatherDetailsRoute, /return NextResponse\.json\(weather\.payload\)/)
+  assert.doesNotMatch(moduleWeather, /api\.open-meteo\.com/)
+  assert.doesNotMatch(moduleWeather, /marine-api\.open-meteo\.com/)
+})
