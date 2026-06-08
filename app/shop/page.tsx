@@ -341,9 +341,10 @@ export default async function ShopPage({
             <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
               Choose the perfect matte to match
               <br />
-              your space and reduce glare. Expected price {mattePrice}.
+              your space and reduce glare.
             </p>
-            <a href="#waitlist" className="shop-button mt-7 inline-flex rounded bg-black px-7 py-3 text-sm text-white md:mt-6">JOIN WAITLIST</a>
+            <p className="mt-3 text-sm font-medium uppercase tracking-[0.08em] text-black/55">Expected price {mattePrice}</p>
+            <a href="#waitlist" className="shop-button mt-5 inline-flex rounded bg-black px-7 py-3 text-sm text-white md:mt-5">JOIN WAITLIST</a>
           </div>
         </section></ShopReveal>
 
