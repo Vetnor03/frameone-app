@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { ShopFadeImage, ShopMobileMenu, ShopReveal } from './ShopMotion'
 import ShopLocaleCurrencySelector from './ShopLocaleCurrencySelector'
+import WaitlistForm from './WaitlistForm'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -19,32 +20,32 @@ type FrameCard = {
 
 const frameCards: FrameCard[] = [
   {
-    name: 'Midnight Black',
-    price: '€69',
+    name: 'Black Frame',
+    price: '349 NOK',
     subtitle: 'Matte aluminum',
     palette: ['#111214', '#252628', '#3c3d40'],
     swatches: ['#111214', '#d5d5d5'],
     imageSrc: '/shop/frames/midnight-black.png',
   },
   {
-    name: 'Walnut Wood',
-    price: '€79',
+    name: 'Walnut Frame',
+    price: '399 NOK',
     subtitle: 'Real walnut',
     palette: ['#5a3a2a', '#7a513c', '#946550'],
     swatches: ['#6a4633', '#8a624a'],
     imageSrc: '/shop/frames/walnut-wood.png',
   },
   {
-    name: 'Natural Oak',
-    price: '€79',
+    name: 'Oak Frame',
+    price: '399 NOK',
     subtitle: 'Real oak',
     palette: ['#b5824f', '#cb9b67', '#deb57e'],
     swatches: ['#bb8d5f', '#d8be9f'],
     imageSrc: '/shop/frames/natural-oak.png',
   },
   {
-    name: 'Cloud White',
-    price: '€69',
+    name: 'White Frame',
+    price: '349 NOK',
     subtitle: 'Matte aluminum',
     palette: ['#e8e7e3', '#f2f2ee', '#dbdad5'],
     swatches: ['#f0f0ef', '#cfcfcf'],
@@ -59,10 +60,10 @@ type AccessoryCard = {
 }
 
 const accessories: AccessoryCard[] = [
-  { name: 'Desk Stand', price: '€39', imageSrc: '/shop/accessories/desk-stand.png' },
-  { name: 'Wall Mount', price: '€29', imageSrc: '/shop/accessories/wall-mount.png' },
-  { name: 'Cleaning Kit', price: '€19', imageSrc: '/shop/accessories/cleaning-kit.png' },
-  { name: 'Replacement Glass', price: '€9', imageSrc: '/shop/accessories/replacement-glass.png' },
+  { name: 'Desk Stand', price: '199 NOK', imageSrc: '/shop/accessories/desk-stand.png' },
+  { name: 'Wall Mount', price: '149 NOK', imageSrc: '/shop/accessories/wall-mount.png' },
+  { name: 'Cleaning Kit', price: '79 NOK', imageSrc: '/shop/accessories/cleaning-kit.png' },
+  { name: 'Replacement Glass', price: '99 NOK', imageSrc: '/shop/accessories/replacement-glass.png' },
 ]
 
 
@@ -89,14 +90,10 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
   )
 }
 
-const CURRENCY_SYMBOL: Record<'EUR' | 'USD' | 'NOK', string> = { EUR: '€', USD: '$', NOK: 'kr' }
-const FX_FROM_EUR: Record<'EUR' | 'USD' | 'NOK', number> = { EUR: 1, USD: 1.09, NOK: 11.7 }
-
 function pickLang(v?: string): 'en' | 'no' { return v === 'no' ? 'no' : 'en' }
-function pickCurrency(v?: string): 'EUR' | 'USD' | 'NOK' { return v === 'USD' || v === 'NOK' ? v : 'EUR' }
-function formatPrice(valueEur: number, currency: 'EUR' | 'USD' | 'NOK') {
-  const converted = Math.round(valueEur * FX_FROM_EUR[currency])
-  return `${CURRENCY_SYMBOL[currency]}${converted}`
+function pickCurrency(): 'NOK' { return 'NOK' }
+function formatNok(value: number) {
+  return `${value.toLocaleString('nb-NO').replace(/ /g, ' ')} NOK`
 }
 
 export default async function ShopPage({
@@ -106,20 +103,14 @@ export default async function ShopPage({
 }) {
   const resolvedSearchParams = await searchParams
   const language = pickLang(resolvedSearchParams?.lang)
-  const currency = pickCurrency(resolvedSearchParams?.currency)
-  const frameCardsLocalized = frameCards.map((item) => ({
-    ...item,
-    price: formatPrice(Number(item.price.replace(/[^\d]/g, '')), currency),
-  }))
-  const accessoriesLocalized = accessories.map((item) => ({
-    ...item,
-    price: formatPrice(Number(item.price.replace(/[^\d]/g, '')), currency),
-  }))
-  const topShipping = formatPrice(100, currency)
+  const currency = pickCurrency()
+  const frameCardsLocalized = frameCards
+  const accessoriesLocalized = accessories
+  const topShipping = formatNok(1000)
   const footerBenefits = [
     {
       title: 'FREE SHIPPING',
-      body: 'On orders over €100',
+      body: `On orders over ${topShipping}`,
       iconSrc: '/shop/icons/footer/free-shipping.png',
       iconAlt: 'Delivery truck icon',
     },
@@ -158,16 +149,16 @@ export default async function ShopPage({
 
       <header className="border-b border-black/10 bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px] px-6 py-6 md:px-14">
-          <div className="flex items-center justify-between">
-            <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em]">RE:MIND</a>
-            <nav className="hidden items-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
+          <div className="relative flex items-center justify-between md:justify-center">
+            <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em] md:absolute md:left-0">RE:MIND</a>
+            <nav className="hidden items-center justify-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
               <a href="#frames" className="border-b-2 border-black pb-1">Frames</a>
               <a href="#mattes" className="pb-1">Mattes</a>
               <a href="#accessories" className="pb-1">Accessories</a>
               <a href="#bundles" className="pb-1">Bundles</a>
               <a href="#about" className="pb-1">About</a>
             </nav>
-            <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3">
             <button
               type="button"
               aria-label="Open profile"
@@ -184,7 +175,7 @@ export default async function ShopPage({
             </button>
             <button
               type="button"
-              aria-label="Open cart"
+              aria-label="Open waitlist"
               className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
             >
               <Image
@@ -223,7 +214,7 @@ export default async function ShopPage({
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
                 Swap in seconds. Designed to complement your home, your style, your day.
               </p>
-              <button className="shop-button mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9">SHOP FRAMES</button>
+              <a className="shop-button mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9" href="#remind">JOIN WAITLIST</a>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"
@@ -284,6 +275,36 @@ export default async function ShopPage({
           ))}
         </div>
       </section>
+
+      <div className="bg-white">
+        <div className="mx-auto max-w-[1200px] px-6 pt-11">
+          <ShopReveal><section id="remind" className="relative grid overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] md:items-center md:gap-12 md:p-10">
+            <div className="relative z-10 max-w-[620px]">
+              <p className="text-sm uppercase tracking-[0.09em]">RE:MIND</p>
+              <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">RE:MIND</h2>
+              <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
+                Re-mind gives you what matters,
+                <br />
+                beautifully displayed. Less screen time.
+                <br />
+                More presence.
+              </p>
+              <ul className="mt-6 grid gap-2 text-sm leading-[1.45] text-black/70 sm:grid-cols-2">
+                {['Family reminders', 'Calendar events', 'Weather forecasts', 'Work updates', 'School updates', 'Grocery lists'].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="text-black" aria-hidden>✓</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-7 text-base font-medium tracking-[0.02em] text-black/80">Expected launch price: {formatNok(1990)}</p>
+            </div>
+            <div className="relative z-10 flex w-full items-center">
+              <WaitlistForm />
+            </div>
+          </section></ShopReveal>
+        </div>
+      </div>
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
@@ -348,7 +369,7 @@ export default async function ShopPage({
               <br />
               your space and reduce glare.
             </p>
-            <button className="shop-button mt-7 rounded bg-black px-7 py-3 text-sm text-white md:mt-6">SHOP MATTES</button>
+            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href="#remind">Reserve Yours</a>
           </div>
         </section></ShopReveal>
 
@@ -434,7 +455,7 @@ export default async function ShopPage({
           <div><p className="mb-3 font-medium">SHOP</p><div className="space-y-1.5 leading-[1.4]"><a href="#frames" className="shop-footer-link block">Frames</a><a href="#mattes" className="shop-footer-link block">Mattes</a><a href="#accessories" className="shop-footer-link block">Accessories</a><a href="#bundles" className="shop-footer-link block">Bundles</a></div></div>
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><a href="#" className="shop-footer-link block">FAQ</a><a href="#" className="shop-footer-link block">Shipping</a><a href="#" className="shop-footer-link block">Returns</a><a href="#" className="shop-footer-link block">Warranty</a></div></div>
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><a href="#about" className="shop-footer-link block">About</a><a href="#" className="shop-footer-link block">Sustainability</a><a href="#" className="shop-footer-link block">Contact</a><a href="#" className="shop-footer-link block">Press</a></div></div>
-          <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><div className="mt-3 flex w-full max-w-[320px] overflow-hidden rounded border border-black/15"><input className="w-full bg-white px-3 py-2 outline-none" placeholder="Your email" /><button className="bg-black px-3 text-white">→</button></div></div>
+          <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><WaitlistForm compact source="shop-footer" /></div>
         </div>
         <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
           <p>© 2026 Re-mind. All rights reserved.</p>
