@@ -109,7 +109,7 @@ This document is intentionally based on what is verifiable from `frame/src/` cod
 - Countdowns: `/api/device/countdowns`
 - Surf: `/api/surf/score`, `/api/device/surf-meta`
 - Soccer: `/api/soccer/frame`
-- Weather: `https://api.open-meteo.com/v1/forecast`
+- Weather: `/api/weather/details?frame=1&days=5&lat=...&lon=...` (server caches/dedupes Open-Meteo)
 
 ### Fonts/assets dependencies
 
