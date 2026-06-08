@@ -298,7 +298,7 @@ export default async function ShopPage({
                   </li>
                 ))}
               </ul>
-              <p className="mt-7 text-base font-medium tracking-[0.02em] text-black/80">Expected launch price: {formatNok(1990)}</p>
+              <p className="mt-7 text-lg font-medium tracking-[0.02em] text-black/85">From {formatNok(1990)}</p>
             </div>
             <div className="relative z-10 flex w-full items-center">
               <WaitlistForm />
