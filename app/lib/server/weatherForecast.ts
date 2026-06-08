@@ -22,6 +22,8 @@ export type WeatherForecastFetchOptions = {
 export type WeatherMarineFetchOptions = WeatherForecastFetchOptions
 
 const WEATHER_FORECAST_DAYS = 5
+const WEATHER_FORECAST_MIN_DAYS = 1
+const WEATHER_FORECAST_MAX_DAYS = 7
 const WEATHER_TIMEZONE = 'auto'
 
 const WEATHER_CURRENT_FIELDS = [
@@ -54,7 +56,13 @@ const WEATHER_DAILY_FIELDS = [
   'uv_index_max',
 ]
 
+function clampWeatherForecastDays(forecastDays: number | null | undefined) {
+  if (!Number.isFinite(forecastDays)) return WEATHER_FORECAST_DAYS
+  return Math.max(WEATHER_FORECAST_MIN_DAYS, Math.min(WEATHER_FORECAST_MAX_DAYS, Math.round(Number(forecastDays))))
+}
+
 export function buildWeatherForecastUrl(lat: number, lon: number, forecastDays = WEATHER_FORECAST_DAYS) {
+  const safeForecastDays = clampWeatherForecastDays(forecastDays)
   return buildOpenMeteoUrl({
     endpoint: 'forecast',
     lat,
@@ -62,7 +70,7 @@ export function buildWeatherForecastUrl(lat: number, lon: number, forecastDays =
     current: WEATHER_CURRENT_FIELDS,
     hourly: WEATHER_HOURLY_FIELDS,
     daily: WEATHER_DAILY_FIELDS,
-    forecastDays,
+    forecastDays: safeForecastDays,
     timezone: WEATHER_TIMEZONE,
     params: {
       temperature_unit: 'celsius',
@@ -84,6 +92,7 @@ export function buildWeatherMarineUrl(lat: number, lon: number) {
 }
 
 export async function fetchWeatherForecast<T = unknown>(options: WeatherForecastFetchOptions): Promise<CachedWeatherForecastResult<T>> {
+  const forecastDays = clampWeatherForecastDays(options.forecastDays)
   return fetchOpenMeteoJson<T>({
     dataType: 'weather',
     endpoint: 'forecast',
@@ -98,8 +107,8 @@ export async function fetchWeatherForecast<T = unknown>(options: WeatherForecast
       precipitation_unit: 'mm',
     },
     timeoutMs: options.timeoutMs,
-    forecastDays: options.forecastDays ?? WEATHER_FORECAST_DAYS,
-    forecastRange: `0-${options.forecastDays ?? WEATHER_FORECAST_DAYS}d`,
+    forecastDays,
+    forecastRange: `0-${forecastDays}d`,
     timezone: WEATHER_TIMEZONE,
     frameRequest: !!options.frameRequest,
     allowStale: true,

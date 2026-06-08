@@ -13,7 +13,10 @@ function numericParam(url: URL, key: string) {
 }
 
 function forecastDaysParam(url: URL) {
-  const value = Number(url.searchParams.get('days') || url.searchParams.get('forecast_days'))
+  const rawValue = url.searchParams.get('days') ?? url.searchParams.get('forecast_days')
+  if (rawValue == null || rawValue.trim() === '') return WEATHER_DETAILS_FORECAST_DAYS
+
+  const value = Number(rawValue)
   if (!Number.isFinite(value)) return WEATHER_DETAILS_FORECAST_DAYS
   return Math.max(1, Math.min(WEATHER_DETAILS_FORECAST_DAYS, Math.round(value)))
 }
