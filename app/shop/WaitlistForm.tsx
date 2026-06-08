@@ -74,27 +74,27 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-7 grid max-w-[520px] gap-3 sm:grid-cols-[1fr_1fr_auto] md:mt-6">
+    <form onSubmit={handleSubmit} className="mt-7 grid w-full gap-3 md:mt-0">
       <input
-        className="rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
+        className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
         placeholder="Name (optional)"
         type="text"
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
       <input
-        className="rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
+        className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
         placeholder="Email"
         type="email"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         required
       />
-      <button className="shop-button rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
+      <button className="shop-button w-full rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
         {status === 'submitting' ? 'Joining...' : 'Join Waitlist'}
       </button>
       {message ? (
-        <p className={`text-sm leading-[1.4] ${status === 'error' ? 'text-red-700' : 'text-black/65'} sm:col-span-3`}>
+        <p className={`text-sm leading-[1.4] ${status === 'error' ? 'text-red-700' : 'text-black/65'}`}>
           {message}
         </p>
       ) : null}

@@ -158,7 +158,7 @@ export default async function ShopPage({
               <a href="#bundles" className="pb-1">Bundles</a>
               <a href="#about" className="pb-1">About</a>
             </nav>
-            <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3">
             <button
               type="button"
               aria-label="Open profile"
@@ -278,7 +278,7 @@ export default async function ShopPage({
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pt-11">
-          <ShopReveal><section id="remind" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:p-10">
+          <ShopReveal><section id="remind" className="relative grid overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] md:items-center md:gap-12 md:p-10">
             <div className="relative z-10 max-w-[620px]">
               <p className="text-sm uppercase tracking-[0.09em]">RE:MIND</p>
               <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">RE:MIND</h2>
@@ -289,7 +289,17 @@ export default async function ShopPage({
                 <br />
                 More presence.
               </p>
-              <p className="mt-5 text-sm uppercase tracking-[0.08em] text-black/65">Expected launch price: {formatNok(1990)}</p>
+              <ul className="mt-6 grid gap-2 text-sm leading-[1.45] text-black/70 sm:grid-cols-2">
+                {['Family reminders', 'Calendar events', 'Weather forecasts', 'Surf conditions', 'School updates'].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="text-black" aria-hidden>✓</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-7 text-base font-medium tracking-[0.02em] text-black/80">Expected launch price: {formatNok(1990)}</p>
+            </div>
+            <div className="relative z-10 flex w-full items-center">
               <WaitlistForm />
             </div>
           </section></ShopReveal>
