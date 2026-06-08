@@ -18,6 +18,10 @@ function weatherDetailArrayNumberAt(value: unknown, index: number): number | nul
   return Array.isArray(value) ? weatherDetailNumber(value[index]) : null
 }
 
+function weatherDetailArrayRawAt(value: unknown, index: number): unknown {
+  return Array.isArray(value) ? value[index] : null
+}
+
 function weatherDetailDateKey(value: unknown) {
   const text = String(value || '')
   return text.includes('T') ? text.slice(0, 10) : text
@@ -57,6 +61,7 @@ function weatherPrecipDebugValues(hourlyPayload: Record<string, unknown>, indexe
   let hasPrecipMm = false
   const precipitationProbabilityValues: Array<number | null> = []
   const precipitationValues: Array<number | null> = []
+  const rawPrecipitationValues: unknown[] = []
   const rainValues: Array<number | null> = []
   const showerValues: Array<number | null> = []
 
@@ -67,7 +72,10 @@ function weatherPrecipDebugValues(hourlyPayload: Record<string, unknown>, indexe
       precipProbability = precipProbability == null ? probability : Math.max(precipProbability, probability)
     }
 
-    const precipitation = weatherDetailArrayNumberAt(hourlyPayload.precipitation, index)
+    const rawPrecipitation = weatherDetailArrayRawAt(hourlyPayload.precipitation, index)
+    rawPrecipitationValues.push(rawPrecipitation)
+
+    const precipitation = weatherDetailNumber(rawPrecipitation)
     precipitationValues.push(precipitation)
     if (precipitation != null) {
       precipMm += precipitation
@@ -81,6 +89,7 @@ function weatherPrecipDebugValues(hourlyPayload: Record<string, unknown>, indexe
   return {
     precipitationProbabilityValues,
     precipitationValues,
+    rawPrecipitationValues,
     rainValues,
     showerValues,
     rawDisplayedProbability: precipProbability,
@@ -100,10 +109,14 @@ function logWeatherPrecipDebugPeriod(args: {
   hourlyPayload: Record<string, unknown>
   indexes: number[]
   rawDisplayedPrecipitationMmOverride?: number | null
+  rawPrecipitationValuesOverride?: unknown[]
+  rawPrecipitationSumOverride?: number | null
   precipitationAggregationMethod?: string
 }) {
   const values = weatherPrecipDebugValues(args.hourlyPayload, args.indexes)
   const rawDisplayedPrecipitationMm = args.rawDisplayedPrecipitationMmOverride ?? values.rawDisplayedPrecipitationMm
+  const rawPrecipitationValues = args.rawPrecipitationValuesOverride ?? values.rawPrecipitationValues
+  const rawPrecipitationSum = args.rawPrecipitationSumOverride ?? values.rawDisplayedPrecipitationMm
 
   console.log('[weather-precip-debug]', {
     ...args.context,
@@ -115,6 +128,8 @@ function logWeatherPrecipDebugPeriod(args: {
 
     precipitationProbabilityValues: values.precipitationProbabilityValues,
     precipitationValues: values.precipitationValues,
+    rawPrecipitationValues,
+    rawPrecipitationSum,
     rainValues: values.rainValues,
     showerValues: values.showerValues,
 
@@ -140,8 +155,10 @@ function logWeatherPrecipDebug(weatherPayload: unknown, context: Record<string, 
   const firstCurrentOrFutureIndex = currentTime ? hourlyTimes.findIndex((time: unknown) => String(time) >= currentTime) : -1
   const currentIndexes = firstCurrentOrFutureIndex >= 0 ? [firstCurrentOrFutureIndex] : []
   const currentHourlyPrecip = weatherPrecipDebugValues(hourlyPayload, currentIndexes).rawDisplayedPrecipitationMm
-  const currentPrecipFallback = weatherDetailNumber(current.precipitation)
+  const currentPrecipFallbackRaw = current.precipitation ?? null
+  const currentPrecipFallback = weatherDetailNumber(currentPrecipFallbackRaw)
   const currentRawPrecipitationMm = currentHourlyPrecip ?? currentPrecipFallback
+  const currentRawPrecipitationValues = currentHourlyPrecip == null && currentPrecipFallback != null ? [currentPrecipFallbackRaw] : undefined
   const currentPrecipitationAggregationMethod = currentHourlyPrecip == null && currentPrecipFallback != null ? 'current.precipitation fallback' : 'sum'
 
   logWeatherPrecipDebugPeriod({
@@ -162,6 +179,8 @@ function logWeatherPrecipDebug(weatherPayload: unknown, context: Record<string, 
     hourlyPayload,
     indexes: currentIndexes,
     rawDisplayedPrecipitationMmOverride: currentRawPrecipitationMm,
+    rawPrecipitationValuesOverride: currentRawPrecipitationValues,
+    rawPrecipitationSumOverride: currentRawPrecipitationMm,
     precipitationAggregationMethod: currentPrecipitationAggregationMethod,
   })
 
