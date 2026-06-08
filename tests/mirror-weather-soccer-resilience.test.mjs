@@ -51,11 +51,16 @@ test('weather and soccer mirror UI do not spin forever when live details are mis
   assert.match(homeClient, /weatherLowTemp: '--°'/)
 })
 
-test('weather details precipitation debug logs raw Open-Meteo values before display rounding', () => {
-  assert.match(weatherDetailsRoute, /function weatherDetailArrayRawAt/)
-  assert.match(weatherDetailsRoute, /const rawPrecipitation = weatherDetailArrayRawAt\(hourlyPayload\.precipitation, index\)/)
-  assert.match(weatherDetailsRoute, /rawPrecipitationValues\.push\(rawPrecipitation\)/)
-  assert.match(weatherDetailsRoute, /rawPrecipitationValues,/)
-  assert.match(weatherDetailsRoute, /rawPrecipitationSum,/)
-  assert.match(weatherDetailsRoute, /displayedPrecipitationMm: weatherPrecipDisplayedMmValue\(rawDisplayedPrecipitationMm\)/)
+test('weather details precipitation debug logging has been removed', () => {
+  assert.doesNotMatch(weatherDetailsRoute, /weather-precip-debug/)
+  assert.doesNotMatch(weatherDetailsRoute, /rawPrecipitationValues/)
+  assert.doesNotMatch(weatherDetailsRoute, /rawPrecipitationSum/)
+  assert.doesNotMatch(weatherDetailsRoute, /logWeatherPrecipDebug/)
+  assert.doesNotMatch(homeClient, /weather-precip-aggregation/)
+})
+
+test('weather details displays dry instead of probability for zero precipitation', () => {
+  assert.match(homeClient, /if \(hasAmount && m === 0\) return 'Dry'/)
+  assert.match(homeClient, /weatherDetailFormatPrecip\(period\.precipProbability, period\.precipMm\)/)
+  assert.match(homeClient, /weatherDetailFormatPrecip\(data\.precipProbability, data\.precipMm\)/)
 })

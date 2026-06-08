@@ -15263,6 +15263,7 @@ function weatherDetailFormatPrecip(probability: number | null | undefined, mm: n
   const m = weatherDetailPrecipMmNumber(mm)
   const hasAmount = Number.isFinite(m)
   if (!hasProbability && !hasAmount) return '--'
+  if (hasAmount && m === 0) return 'Dry'
   if (hasProbability && hasAmount) return `${Math.round(p)}% · ${weatherDetailFormatPrecipMm(m)}`
   if (hasProbability) return `${Math.round(p)}%`
   return weatherDetailFormatPrecipMm(m)
@@ -15312,56 +15313,30 @@ function weatherDetailNearestIndexFromIndexes(hourlyTimes: unknown[], indexes: n
   return bestIndex
 }
 
-type WeatherDetailPrecipAggregationDebug = {
-  source: string
-  window: string
-  indexes: number[]
-}
-
 function weatherDetailAggregatePrecipFromHourly(
   hourlyPayload: Record<string, unknown>,
-  indexes: number[],
-  debug: WeatherDetailPrecipAggregationDebug
+  indexes: number[]
 ) {
   let precipProbability: number | null = null
   let precipMm = 0
   let hasPrecipMm = false
-  const rawPrecipProbabilities: Array<number | null> = []
-  const rawPrecipAmountsMm: Array<number | null> = []
-
   indexes.forEach((index) => {
     const probability = weatherDetailArrayNumberAt(hourlyPayload.precipitation_probability, index)
-    rawPrecipProbabilities.push(probability)
     if (probability != null) {
       precipProbability = precipProbability == null ? probability : Math.max(precipProbability, probability)
     }
 
     const amountMm = weatherDetailArrayNumberAt(hourlyPayload.precipitation, index)
-    rawPrecipAmountsMm.push(amountMm)
     if (amountMm != null) {
       precipMm += amountMm
       hasPrecipMm = true
     }
   })
 
-  const aggregated = {
+  return {
     precipProbability,
     precipMm: hasPrecipMm ? precipMm : null,
-    probabilityAggregationMethod: 'max' as const,
-    amountAggregationMethod: 'sum' as const,
   }
-
-  console.debug('[weather-precip-aggregation]', {
-    ...debug,
-    rawPrecipProbability: rawPrecipProbabilities,
-    rawPrecipAmountMmBeforeFormatting: rawPrecipAmountsMm,
-    aggregatedPrecipProbability: aggregated.precipProbability,
-    aggregatedPrecipAmountMmBeforeFormatting: aggregated.precipMm,
-    probabilityAggregationMethod: aggregated.probabilityAggregationMethod,
-    amountAggregationMethod: aggregated.amountAggregationMethod,
-  })
-
-  return aggregated
 }
 
 function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Record<string, unknown>, daily: Record<string, unknown>): WeatherForecastDay[] {
@@ -15379,11 +15354,7 @@ function buildWeatherDetailForecastDays(language: AppLanguage, hourlyPayload: Re
     const periods = periodDefs.map((period) => {
       const periodIndexes = weatherDetailPeriodIndexes(hourlyTimes, dateKey, period.start, period.end)
       const index = weatherDetailNearestIndexFromIndexes(hourlyTimes, periodIndexes, period.target)
-      const precip = weatherDetailAggregatePrecipFromHourly(hourlyPayload, periodIndexes, {
-        source: 'open-meteo hourly forecast',
-        window: `forecast-daypart:${dateKey}:${period.key}:${period.start}-${period.end}`,
-        indexes: periodIndexes,
-      })
+      const precip = weatherDetailAggregatePrecipFromHourly(hourlyPayload, periodIndexes)
       return {
         key: period.key,
         label: period.label,
@@ -15502,11 +15473,7 @@ function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknow
   const firstCurrentOrFutureIndex = currentTime ? hourlyTimes.findIndex((t: unknown) => String(t) >= currentTime) : -1
   const startIndex = Math.max(0, firstCurrentOrFutureIndex)
   const currentPrecipIndexes = firstCurrentOrFutureIndex >= 0 ? [firstCurrentOrFutureIndex] : []
-  const currentPrecip = weatherDetailAggregatePrecipFromHourly(hourlyPayload, currentPrecipIndexes, {
-    source: 'open-meteo hourly forecast',
-    window: `current-hour:${currentTime || 'unknown'}`,
-    indexes: currentPrecipIndexes,
-  })
+  const currentPrecip = weatherDetailAggregatePrecipFromHourly(hourlyPayload, currentPrecipIndexes)
   const hourly = hourlyTimes.slice(startIndex, startIndex + 6).map((time: unknown, offset: number) => {
     const index = startIndex + offset
     return {
