@@ -6,6 +6,7 @@ import { TEAM_ID_MAP } from '../app/lib/soccer/teamIdMap.ts'
 
 const soccerRoute = readFileSync(new URL('../app/api/soccer/frame/route.ts', import.meta.url), 'utf8')
 const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+const weatherDetailsRoute = readFileSync(new URL('../app/api/weather/details/route.ts', import.meta.url), 'utf8')
 const homeClient = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
 test('/api/soccer/frame supports brann with a mapped numeric football-data team id', () => {
@@ -48,4 +49,13 @@ test('weather and soccer mirror UI do not spin forever when live details are mis
   assert.match(homeClient, /module !== 'date' && module !== 'weather' && module !== 'soccer'/)
   assert.match(homeClient, /No live weather data/)
   assert.match(homeClient, /weatherLowTemp: '--°'/)
+})
+
+test('weather details precipitation debug logs raw Open-Meteo values before display rounding', () => {
+  assert.match(weatherDetailsRoute, /function weatherDetailArrayRawAt/)
+  assert.match(weatherDetailsRoute, /const rawPrecipitation = weatherDetailArrayRawAt\(hourlyPayload\.precipitation, index\)/)
+  assert.match(weatherDetailsRoute, /rawPrecipitationValues\.push\(rawPrecipitation\)/)
+  assert.match(weatherDetailsRoute, /rawPrecipitationValues,/)
+  assert.match(weatherDetailsRoute, /rawPrecipitationSum,/)
+  assert.match(weatherDetailsRoute, /displayedPrecipitationMm: weatherPrecipDisplayedMmValue\(rawDisplayedPrecipitationMm\)/)
 })
