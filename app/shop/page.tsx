@@ -390,28 +390,6 @@ export default async function ShopPage({
             ))}
           </div>
           </section></ShopReveal>
-
-          <ShopReveal delayMs={120}><section id="bundles" className="pb-14 md:pb-10">
-            <article className="shop-card rounded-lg border border-black/10 bg-[#faf9f7] p-6 shadow-[0_10px_22px_rgba(0,0,0,0.04)] md:p-8">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.09em]">Bundle</p>
-                  <h2 className="mt-3 text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">RE:MIND Bundle</h2>
-                  <p className="mt-4 max-w-[34ch] leading-[1.55] text-black/65">
-                    RE:MIND
-                    <br />
-                    Extra Frame
-                    <br />
-                    Cleaning Kit
-                  </p>
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-lg leading-[1.25]">{formatNok(2290)}</p>
-                  <a className="shop-button mt-4 inline-block rounded bg-black px-7 py-3 text-sm text-white" href="#remind">Reserve Yours</a>
-                </div>
-              </div>
-            </article>
-          </section></ShopReveal>
         </div>
         </div>
 
