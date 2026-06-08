@@ -10931,6 +10931,7 @@ function GroceriesDraftSheet({
   const [quantity, setQuantity] = useState(editingItem?.quantity ?? 1)
   const [category, setCategory] = useState<GroceryCategory>(editingItem?.category ?? 'other')
   const [saving, setSaving] = useState(false)
+  const instantAddKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     setName(editingItem?.name ?? '')
@@ -10960,7 +10961,13 @@ function GroceriesDraftSheet({
     setCategory(found?.category ?? 'other')
   }, [editingItem, name, suggestions])
 
-  const canSave = !!name.trim() && !saving
+  const matchingSuggestion = useMemo(() => {
+    const normalizedName = name.trim().toLowerCase()
+    if (!normalizedName) return null
+    return suggestions.find((s) => s.name.trim().toLowerCase() === normalizedName) ?? null
+  }, [name, suggestions])
+
+  const canSave = !!name.trim() && !saving && (!!editingItem || !matchingSuggestion)
 
   async function save() {
     if (!canSave) return
@@ -10973,6 +10980,24 @@ function GroceriesDraftSheet({
       }
       await onSaved()
     } finally {
+      setSaving(false)
+    }
+  }
+
+  async function addSuggestionInstantly(suggestion: GrocerySuggestion) {
+    if (editingItem || saving) return
+    const suggestionKey = `${suggestion.category}:${suggestion.name.trim().toLowerCase()}`
+    if (instantAddKeyRef.current === suggestionKey) return
+    instantAddKeyRef.current = suggestionKey
+    setSaving(true)
+    try {
+      await addItem(suggestion.name, 1, suggestion.category)
+      setName('')
+      setQuantity(1)
+      setCategory('other')
+      await onSaved()
+    } finally {
+      instantAddKeyRef.current = null
       setSaving(false)
     }
   }
@@ -11023,10 +11048,15 @@ function GroceriesDraftSheet({
               language={language}
               suggestion={s}
               onSelect={() => {
-                setName(s.name)
-                setCategory(s.category)
-                setQuantity(1)
+                if (editingItem) {
+                  setName(s.name)
+                  setCategory(s.category)
+                  setQuantity(1)
+                  return
+                }
+                void addSuggestionInstantly(s)
               }}
+              disabled={!editingItem && saving}
               onDelete={onDeleteSuggestion}
             />
           ))}
@@ -11247,11 +11277,13 @@ function GrocerySuggestionSwipeRow({
   suggestion,
   onSelect,
   onDelete,
+  disabled = false,
 }: {
   language: AppLanguage
   suggestion: GrocerySuggestion
   onSelect: () => void
   onDelete: (name: string) => Promise<void>
+  disabled?: boolean
 }) {
   const deleteWidth = 88
   const openThreshold = 40
@@ -11306,6 +11338,7 @@ function GrocerySuggestionSwipeRow({
       </div>
       <button
         onClick={() => {
+          if (disabled) return
           if (translateX !== 0) {
             closeSwipe()
             return
@@ -11315,7 +11348,8 @@ function GrocerySuggestionSwipeRow({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="relative w-full bg-[color:var(--sheet-bg)] text-left px-3 py-2 transition-transform duration-150 touch-pan-y"
+        disabled={disabled}
+        className="relative w-full bg-[color:var(--sheet-bg)] text-left px-3 py-2 transition-transform duration-150 touch-pan-y disabled:opacity-60"
         style={{ transform: `translateX(${translateX}px)` }}
       >
         <div className="text-sm text-[color:var(--fg-85)]">{suggestion.name}</div>
