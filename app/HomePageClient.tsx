@@ -10446,8 +10446,6 @@ function GroceriesModuleSettingsTab({
     const normalizedName = name.trim()
     if (!normalizedName || !activeDeviceId) return
 
-    const { data: authData } = await supabase.auth.getUser()
-    const createdBy = authData.user?.id ?? null
     const nowIso = new Date().toISOString()
     const optimisticId = `local-${Math.random().toString(36).slice(2)}`
     const nextQty = Math.max(1, Number(quantity) || 1)
@@ -10463,8 +10461,11 @@ function GroceriesModuleSettingsTab({
       },
       ...prev,
     ])
+
+    const { data: authData } = await supabase.auth.getUser()
+    const createdBy = authData.user?.id ?? null
     suppressRealtimeUntilRef.current = Date.now() + 1200
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('grocery_items')
       .insert({
         device_id: activeDeviceId,
@@ -10475,6 +10476,8 @@ function GroceriesModuleSettingsTab({
         is_checked: false,
         checked_at: null,
       })
+      .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+      .single()
 
     if (error) {
       setItems((prev) => prev.filter((item) => item.id !== optimisticId))
@@ -10482,7 +10485,18 @@ function GroceriesModuleSettingsTab({
       return
     }
 
-    setItems((prev) => prev.filter((item) => item.id !== optimisticId))
+    const insertedItem = groceryItemFromRow(data)
+    setItems((prev) => {
+      const withoutOptimistic = prev.filter((item) => item.id !== optimisticId)
+      if (!insertedItem) return withoutOptimistic
+
+      const existingIndex = withoutOptimistic.findIndex((item) => item.id === insertedItem.id)
+      if (existingIndex === -1) return [insertedItem, ...withoutOptimistic]
+
+      const copy = [...withoutOptimistic]
+      copy[existingIndex] = { ...copy[existingIndex], ...insertedItem }
+      return copy
+    })
     await rememberHistoryItem(normalizedName, category, nowIso)
     void markGroceryProbablyOutInsight(normalizedName)
     await loadHistory()
@@ -10989,17 +11003,18 @@ function GroceriesDraftSheet({
     const suggestionKey = `${suggestion.category}:${suggestion.name.trim().toLowerCase()}`
     if (instantAddKeyRef.current === suggestionKey) return
     instantAddKeyRef.current = suggestionKey
-    setSaving(true)
-    try {
-      await addItem(suggestion.name, 1, suggestion.category)
-      setName('')
-      setQuantity(1)
-      setCategory('other')
-      await onSaved()
-    } finally {
+
+    const addPromise = addItem(suggestion.name, 1, suggestion.category).catch((error) => {
+      console.error('Failed to add grocery suggestion', error)
+    })
+    setName('')
+    setQuantity(1)
+    setCategory('other')
+    onClose()
+
+    void addPromise.finally(() => {
       instantAddKeyRef.current = null
-      setSaving(false)
-    }
+    })
   }
 
   return (
@@ -11056,7 +11071,6 @@ function GroceriesDraftSheet({
                 }
                 void addSuggestionInstantly(s)
               }}
-              disabled={!editingItem && saving}
               onDelete={onDeleteSuggestion}
             />
           ))}
