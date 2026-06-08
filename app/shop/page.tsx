@@ -214,7 +214,8 @@ export default async function ShopPage({
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
                 Swap in seconds. Designed to complement your home, your style, your day.
               </p>
-              <a className="shop-button mt-9 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-9" href="#remind">JOIN WAITLIST</a>
+              <p className="mt-7 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50 md:mt-8">Launching Autumn 2026</p>
+              <a className="shop-button mt-3 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white" href="#remind">JOIN WAITLIST</a>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"
@@ -297,7 +298,7 @@ export default async function ShopPage({
                   </li>
                 ))}
               </ul>
-              <p className="mt-7 text-base font-medium tracking-[0.02em] text-black/80">Expected launch price: {formatNok(1990)}</p>
+              <p className="mt-7 text-lg font-medium tracking-[0.02em] text-black/85">From {formatNok(1990)}</p>
             </div>
             <div className="relative z-10 flex w-full items-center">
               <WaitlistForm />
