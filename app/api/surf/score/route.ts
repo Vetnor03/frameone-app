@@ -1635,6 +1635,10 @@ function surfDebugConditionLog(args: {
     wind_best_direction: profile?.windDir?.mainDeg ?? null,
     wind_direction_deg_from: args.condition.marine.wind_direction_deg_from,
     wind_direction_score: scoredTables?.wind_dir?.score ?? null,
+    raw_wind_direction_score: scoredTables?.wind_dir?.raw_wind_direction_score ?? null,
+    effective_wind_direction_score: scoredTables?.wind_dir?.effective_wind_direction_score ?? null,
+    wind_direction_weight_multiplier: scoredTables?.wind_dir?.wind_direction_weight_multiplier ?? null,
+    calm_wind_weighting_applied: scoredTables?.wind_dir?.calm_wind_weighting_applied ?? false,
     height_score: scoredTables?.wave_height?.score ?? null,
     period_score: scoredTables?.wave_period?.score ?? null,
     wind_speed_score: scoredTables?.wind_speed?.score ?? null,
@@ -1645,6 +1649,10 @@ function surfDebugConditionLog(args: {
       period: scoredTables.wave_period?.score ?? null,
       wind_speed: scoredTables.wind_speed?.score ?? null,
       wind_direction: scoredTables.wind_dir?.score ?? null,
+      raw_wind_direction: scoredTables.wind_dir?.raw_wind_direction_score ?? null,
+      effective_wind_direction: scoredTables.wind_dir?.effective_wind_direction_score ?? null,
+      wind_direction_weight_multiplier: scoredTables.wind_dir?.wind_direction_weight_multiplier ?? null,
+      calm_wind_weighting_applied: scoredTables.wind_dir?.calm_wind_weighting_applied ?? false,
       weighted_total: scoredTables.total ?? null,
       label: scoredTables.label ?? null,
     } : null,
@@ -2394,6 +2402,10 @@ function averageAppForecastDaypart(args: {
   const swellDirectionDeg = circularMeanDeg(hours.map((h) => h.selected.direction_deg_from))
   const windSpeedMs = avg(hours.map((h) => h.marine.wind_speed_ms))
   const windDirectionDeg = circularMeanDeg(hours.map((h) => h.marine.wind_direction_deg_from))
+  const rawWindDirectionScore = avg(hours.map((h) => h.scored?.breakdown?.tables?.wind_dir?.raw_wind_direction_score ?? NaN))
+  const effectiveWindDirectionScore = avg(hours.map((h) => h.scored?.breakdown?.tables?.wind_dir?.effective_wind_direction_score ?? NaN))
+  const windDirectionWeightMultiplier = avg(hours.map((h) => h.scored?.breakdown?.tables?.wind_dir?.wind_direction_weight_multiplier ?? NaN))
+  const calmWindWeightingApplied = hours.some((h) => h.scored?.breakdown?.tables?.wind_dir?.calm_wind_weighting_applied)
 
   return {
     hours,
@@ -2407,6 +2419,11 @@ function averageAppForecastDaypart(args: {
     swell_direction_deg: Number.isFinite(swellDirectionDeg) ? swellDirectionDeg : null,
     wind_speed_ms: Number.isFinite(windSpeedMs) ? Math.round(windSpeedMs) : null,
     wind_direction_deg: Number.isFinite(windDirectionDeg) ? windDirectionDeg : null,
+    raw_wind_direction_score: Number.isFinite(rawWindDirectionScore) ? rawWindDirectionScore : null,
+    effective_wind_direction_score: Number.isFinite(effectiveWindDirectionScore) ? effectiveWindDirectionScore : null,
+    wind_direction_weight_multiplier: Number.isFinite(windDirectionWeightMultiplier) ? windDirectionWeightMultiplier : null,
+    wind_speed_ms_for_direction_weighting: Number.isFinite(windSpeedMs) ? windSpeedMs : null,
+    calm_wind_weighting_applied: calmWindWeightingApplied,
     ratingSource: ratingFromExperience ? 'experience_blend' : 'base',
     finalRating: rating,
     modelRating: rating,
@@ -2445,6 +2462,11 @@ function buildAppSurfForecast(
           averaged_score: averaged.averageScore,
           rounded_rating: averaged.rating,
           rating_from_experience: averaged.ratingFromExperience,
+          raw_wind_direction_score: averaged.raw_wind_direction_score,
+          effective_wind_direction_score: averaged.effective_wind_direction_score,
+          wind_direction_weight_multiplier: averaged.wind_direction_weight_multiplier,
+          wind_speed_ms: averaged.wind_speed_ms_for_direction_weighting,
+          calm_wind_weighting_applied: averaged.calm_wind_weighting_applied,
           fuel_penalty: fuelDebug ?? null,
         }
 

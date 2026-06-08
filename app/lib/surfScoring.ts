@@ -9,8 +9,10 @@ import {
   type CustomSpotScoringProfile,
 } from './surf/customSpotScoring'
 import { isValidRangeBound, rangeBucketMatches, rangeBucketSortValue } from './surf/rangeBuckets'
+import { applyCalmWindDirectionWeighting } from './surf/calmWind'
 
 export { normalizeCustomDirectionSector, normalizeCustomSpotScoringProfile, scoreCustomDirectionInSector } from './surf/customSpotScoring'
+export { applyCalmWindDirectionWeighting, windDirectionWeightMultiplierForSpeed } from './surf/calmWind'
 
 export type {
   CustomDirectionSector,
@@ -133,7 +135,15 @@ type ScoreBreakdown = {
     wave_dir: { picked: string; score: number }
     wave_height: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
     wave_period: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
-    wind_dir: { picked: string; score: number }
+    wind_dir: {
+      picked: string
+      score: number
+      raw_wind_direction_score: number
+      effective_wind_direction_score: number
+      wind_direction_weight_multiplier: number
+      wind_speed_ms: number
+      calm_wind_weighting_applied: boolean
+    }
     wind_speed: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
     direction_profile_source?: 'custom_sector' | 'spot_specific_table'
     range_profile_source?: 'global_custom_generic' | 'spot_specific_table' | 'legacy_table' | 'missing_default'
@@ -668,13 +678,14 @@ function buildModelScore(args: {
     }
   }
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
+  const sWindDirEffective = applyCalmWindDirectionWeighting(sWindDir.score, args.ws)
 
   let total =
     sWaveDir.score * weights.wave_dir +
     sWaveH.score * weights.wave_height +
     sWaveP.score * weights.wave_period +
     sWindS.score * weights.wind_speed +
-    sWindDir.score * weights.wind_dir +
+    sWindDirEffective.effective_wind_direction_score * weights.wind_dir +
     weights.base
 
   let killSwitchApplied = false
@@ -693,7 +704,11 @@ function buildModelScore(args: {
       wave_dir: { picked: sWaveDir.picked, score: sWaveDir.score },
       wave_height: { bucket: sWaveH.bucket, score: sWaveH.score, source: sWaveH.source, profile_source: sWaveH.profile_source, profile_spot_used: sWaveH.profile_spot_used },
       wave_period: { bucket: sWaveP.bucket, score: sWaveP.score, source: sWaveP.source, profile_source: sWaveP.profile_source, profile_spot_used: sWaveP.profile_spot_used },
-      wind_dir: { picked: sWindDir.picked, score: sWindDir.score },
+      wind_dir: {
+        picked: sWindDir.picked,
+        score: sWindDirEffective.effective_wind_direction_score,
+        ...sWindDirEffective,
+      },
       wind_speed: { bucket: sWindS.bucket, score: sWindS.score, source: sWindS.source, profile_source: sWindS.profile_source, profile_spot_used: sWindS.profile_spot_used },
       direction_profile_source: directionProfileSource,
       range_profile_source: rangeProfileSource,
