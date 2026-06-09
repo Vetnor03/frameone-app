@@ -1,15 +1,12 @@
 'use client'
 
+import { track } from '@vercel/analytics'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 
 type Props = {
   compact?: boolean
   source?: string
-}
-
-type VercelAnalyticsWindow = Window & {
-  va?: (event: 'event', name: string, data?: Record<string, string>) => void
 }
 
 type WaitlistSignupResponse = {
@@ -52,7 +49,10 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
       return
     }
 
-    ;(window as VercelAnalyticsWindow).va?.('event', 'waitlist_signup', { source })
+    track('waitlist_signup', {
+      source: 'shop',
+      page: '/shop',
+    })
     setStatus('success')
     setMessage('Thank you! You are now on the RE:MIND waitlist.')
     setEmail('')

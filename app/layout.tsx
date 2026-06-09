@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { versionedIconPath } from "./lib/iconVersion";
 
@@ -40,7 +40,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         {children}
-        <Script src="/_vercel/insights/script.js" strategy="afterInteractive" />
+        <Analytics />
       </body>
     </html>
   );
