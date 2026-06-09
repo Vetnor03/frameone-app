@@ -54,12 +54,7 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
 
     ;(window as VercelAnalyticsWindow).va?.('event', 'waitlist_signup', { source })
     setStatus('success')
-    const waitlistNumber = result?.signup?.waitlist_number
-    setMessage(
-      typeof waitlistNumber === 'number'
-        ? `Thank you! You are now on the RE:MIND waitlist. You are #${waitlistNumber}.`
-        : 'Thank you! You are now on the RE:MIND waitlist.',
-    )
+    setMessage('Thank you! You are now on the RE:MIND waitlist.')
     setEmail('')
     setName('')
   }
