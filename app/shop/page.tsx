@@ -212,7 +212,7 @@ export default async function ShopPage({
                 <span className="block">fit your life.</span>
               </h1>
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
-                <span className="md:block">Family reminders, weather and calendar</span>{' '}
+                <span className="md:block">Reminders, weather and calendar</span>{' '}
                 <span className="md:block">updates — all at a glance,</span>{' '}
                 <span className="md:block">without checking your phone.</span>
               </p>
