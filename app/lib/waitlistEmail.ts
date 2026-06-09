@@ -55,12 +55,12 @@ function buildWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
   const html = `
     <div style="font-family:Arial,sans-serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">
       <p>Hi ${escapeHtml(firstName)},</p>
-      <p>Welcome to <strong>RE:MIND</strong>.</p>
+      <p>Welcome to RE:MIND.</p>
       <p>${escapeHtml(waitlistNumberLineText)}</p>
       <p>Thank you for joining us early.</p>
       <p>We'll keep you updated on launch progress, availability, and introductory pricing as we move towards launch.</p>
       <p>In the meantime, we'd love to hear:</p>
-      <p>What would you most like to see on your <strong>RE:MIND</strong> display?</p>
+      <p>What would you most like to see on your RE:MIND display?</p>
       <p style="margin-top:28px;">Best,<br />Vetle<br />Founder, RE:MIND</p>
     </div>
   `
