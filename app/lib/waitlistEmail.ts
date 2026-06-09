@@ -24,32 +24,44 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;')
 }
 
-function waitlistPositionText(waitlistNumber: number | null) {
-  return typeof waitlistNumber === 'number' ? `#${waitlistNumber}` : 'on the waitlist'
+function waitlistNumberLine(waitlistNumber: number | null) {
+  return typeof waitlistNumber === 'number' ? `You are #${waitlistNumber} on the waitlist.` : 'You are on the waitlist.'
 }
 
 function buildWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
-  const firstName = signup.name?.trim().split(/\s+/)[0]
-  const greeting = firstName ? `Hi ${firstName},` : 'Hi,'
-  const position = waitlistPositionText(signup.waitlist_number)
+  const firstName = signup.name?.trim().split(/\s+/)[0] || 'there'
+  const waitlistNumberLineText = waitlistNumberLine(signup.waitlist_number)
 
   const text = [
-    greeting,
+    `Hi ${firstName},`,
     '',
-    `Welcome to RE:MIND — you are ${position}.`,
+    'Welcome to RE:MIND.',
     '',
-    'Thank you for joining the waitlist. We will keep you posted on launch updates, availability, and introductory pricing.',
+    waitlistNumberLineText,
+    '',
+    'Thank you for joining us early.',
+    '',
+    "We'll keep you updated on launch progress, availability, and introductory pricing as we move towards launch.",
+    '',
+    "In the meantime, we'd love to hear:",
+    '',
+    'What would you most like to see on your RE:MIND display?',
     '',
     'Best,',
-    'The RE:MIND team',
+    'Vetle',
+    'Founder, RE:MIND',
   ].join('\n')
 
   const html = `
     <div style="font-family:Arial,sans-serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">
-      <p>${escapeHtml(greeting)}</p>
-      <p>Welcome to <strong>RE:MIND</strong> — you are <strong>${escapeHtml(position)}</strong>.</p>
-      <p>Thank you for joining the waitlist. We’ll keep you posted on launch updates, availability, and introductory pricing.</p>
-      <p style="margin-top:28px;">Best,<br />The RE:MIND team</p>
+      <p>Hi ${escapeHtml(firstName)},</p>
+      <p>Welcome to <strong>RE:MIND</strong>.</p>
+      <p>${escapeHtml(waitlistNumberLineText)}</p>
+      <p>Thank you for joining us early.</p>
+      <p>We'll keep you updated on launch progress, availability, and introductory pricing as we move towards launch.</p>
+      <p>In the meantime, we'd love to hear:</p>
+      <p>What would you most like to see on your <strong>RE:MIND</strong> display?</p>
+      <p style="margin-top:28px;">Best,<br />Vetle<br />Founder, RE:MIND</p>
     </div>
   `
 
