@@ -208,11 +208,13 @@ export default async function ShopPage({
           <section className="relative py-10 md:min-h-[585px] md:py-0">
             <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-3 md:-mt-6 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
               <h1 className="max-w-[12.4ch] text-[38px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
-                <span className="block">Frames that</span>
-                <span className="block">fit your life.</span>
+                <span className="block">What matters,</span>
+                <span className="block">beautifully displayed.</span>
               </h1>
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
-                Swap in seconds. Designed to complement your home, your style, your day.
+                <span className="md:block">Family reminders, weather, calendar</span>{' '}
+                <span className="md:block">and everyday updates — without</span>{' '}
+                <span className="md:block">checking your phone.</span>
               </p>
               <p className="mt-7 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50 md:mt-8">Launching Autumn 2026</p>
               <a className="shop-button mt-3 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white" href="#remind">JOIN WAITLIST</a>
@@ -226,8 +228,8 @@ export default async function ShopPage({
                   className="mt-0.5 h-7 w-7 shrink-0 opacity-80"
                 />
                 <div className="max-w-[30ch]">
-                  <p className="font-medium">Swap in seconds</p>
-                  <p className="text-black/60">Satisfying click. Designed for ease.</p>
+                  <p className="font-medium">Less screen time</p>
+                  <p className="text-black/60">See the day at a glance before you leave home.</p>
                 </div>
               </div>
             </div>
