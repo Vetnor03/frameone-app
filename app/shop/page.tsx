@@ -208,8 +208,8 @@ export default async function ShopPage({
           <section className="relative py-10 md:min-h-[585px] md:py-0">
             <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-3 md:-mt-6 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
               <h1 className="max-w-[12.4ch] text-[38px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
-                <span className="block">What matters,</span>
-                <span className="block">beautifully displayed.</span>
+                <span className="block">Frames that</span>
+                <span className="block">fit your life.</span>
               </h1>
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
                 <span className="md:block">Family reminders, weather, calendar</span>{' '}
