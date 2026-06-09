@@ -212,9 +212,9 @@ export default async function ShopPage({
                 <span className="block">fit your life.</span>
               </h1>
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
-                <span className="md:block">Family reminders, weather, calendar</span>{' '}
-                <span className="md:block">and everyday updates — without</span>{' '}
-                <span className="md:block">checking your phone.</span>
+                <span className="md:block">Family reminders, weather and calendar</span>{' '}
+                <span className="md:block">updates — all at a glance,</span>{' '}
+                <span className="md:block">without checking your phone.</span>
               </p>
               <p className="mt-7 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50 md:mt-8">Launching Autumn 2026</p>
               <a className="shop-button mt-3 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white" href="#remind">JOIN WAITLIST</a>
@@ -228,8 +228,8 @@ export default async function ShopPage({
                   className="mt-0.5 h-7 w-7 shrink-0 opacity-80"
                 />
                 <div className="max-w-[30ch]">
-                  <p className="font-medium">Less screen time</p>
-                  <p className="text-black/60">See the day at a glance before you leave home.</p>
+                  <p className="font-medium">Swap in seconds</p>
+                  <p className="text-black/60">Satisfying click. Designed for ease.</p>
                 </div>
               </div>
             </div>
