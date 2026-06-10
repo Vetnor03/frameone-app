@@ -344,15 +344,15 @@
       "wind_speed": [
         { "label": "0.0-2.0", "min": 0.0, "max": 2.0, "score_1_6": 6 },
         { "label": "3.0-4.0", "min": 3.0, "max": 4.0, "score_1_6": 5 },
-        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 4 },
-        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 3 },
-        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 2 },
+        { "label": "5.0-6.0", "min": 5.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "7.0-8.0", "min": 7.0, "max": 8.0, "score_1_6": 2 },
+        { "label": "9.0-10.0", "min": 9.0, "max": 10.0, "score_1_6": 1 },
         { "label": "11.0-12.0", "min": 11.0, "max": 12.0, "score_1_6": 1 },
         { "label": "13+", "min": 13.0, "max": null, "score_1_6": 1 }
       ],
       "wave_period": [
         { "label": "0.0-3.0", "min": 0.0, "max": 3.0, "score_1_6": 1 },
-        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 3 },
+        { "label": "4.0-6.0", "min": 4.0, "max": 6.0, "score_1_6": 2 },
         { "label": "7.0-9.0", "min": 7.0, "max": 9.0, "score_1_6": 4 },
         { "label": "10.0-15.0", "min": 10.0, "max": 15.0, "score_1_6": 5 },
         { "label": "16+", "min": 16.0, "max": null, "score_1_6": 6 }
