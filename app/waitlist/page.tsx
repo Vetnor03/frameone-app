@@ -26,11 +26,12 @@ const benefits = [
 const waitlistFormProps = {
   source: 'waitlist',
   page: '/waitlist',
-  heading: 'Early access waitlist open',
+  heading: 'Join the early access waitlist',
   intro: '',
   buttonText: 'Join early access',
   helperText: 'No payment. No spam. Just launch updates and early access.',
   successMessage: 'Thank you! You are now on the RE:MIND early access waitlist.',
+  formClassName: 'mt-0',
 }
 
 export default function WaitlistPage() {
@@ -56,23 +57,23 @@ export default function WaitlistPage() {
         </div>
       </header>
 
-      <section className="px-5 pb-10 pt-8 md:px-10 md:pb-16 md:pt-14">
-        <div className="mx-auto grid max-w-[1180px] gap-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:items-center lg:gap-12">
+      <section className="px-5 pb-6 pt-5 md:px-10 md:pb-14 md:pt-12">
+        <div className="mx-auto grid max-w-[1180px] gap-6 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:items-center lg:gap-12">
           <ShopReveal>
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4 md:gap-6">
               <div>
-                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-black/45">Coming soon</p>
-                <h1 className="mt-4 max-w-[690px] text-[34px] font-medium leading-[1.02] tracking-[-0.055em] text-[#15120f] sm:text-[52px] md:text-[68px]">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-black/45">Early access</p>
+                <h1 className="mt-3 max-w-[690px] text-[30px] font-medium leading-[1.03] tracking-[-0.052em] text-[#15120f] sm:text-[46px] md:text-[60px]">
                   Family reminders, weather and calendar updates — all at a glance, without checking your phone.
                 </h1>
-                <p className="mt-5 max-w-[58ch] text-[17px] leading-[1.55] text-black/62 md:text-[19px]">
+                <p className="mt-4 max-w-[58ch] text-[16px] leading-[1.5] text-black/62 md:mt-5 md:text-[18px]">
                   A calm digital frame for the hallway, kitchen or living room. Built for families who want less screen time and more presence.
                 </p>
               </div>
 
               <div
                 id="early-access"
-                className="rounded-[28px] border border-black/10 bg-[#fffdf9] p-5 shadow-[0_24px_70px_rgba(73,54,34,0.12)] sm:p-6 md:max-w-[430px]"
+                className="rounded-[28px] border border-black/10 bg-[#fffdf9] p-4 shadow-[0_24px_70px_rgba(73,54,34,0.12)] sm:p-6 md:max-w-[430px]"
               >
                 <WaitlistForm {...waitlistFormProps} />
               </div>
@@ -94,21 +95,21 @@ export default function WaitlistPage() {
               </div>
               <div className="absolute bottom-4 left-4 right-4 rounded-[22px] border border-white/45 bg-white/75 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.10)] backdrop-blur md:bottom-6 md:left-6 md:right-auto md:max-w-[310px]">
                 <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-black/45">Early access</p>
-                <p className="mt-2 text-[15px] leading-[1.45] text-black/70">A simple shared glance for the moments before everyone leaves home.</p>
+                <p className="mt-2 text-[15px] leading-[1.45] text-black/70">Reminders, weather and calendar updates — visible before everyone leaves home.</p>
               </div>
             </div>
           </ShopReveal>
         </div>
       </section>
 
-      <section className="px-5 py-8 md:px-10 md:py-12" aria-labelledby="waitlist-benefits">
+      <section className="px-5 py-5 md:px-10 md:py-12" aria-labelledby="waitlist-benefits">
         <div className="mx-auto max-w-[1180px]">
           <h2 id="waitlist-benefits" className="sr-only">RE:MIND benefits</h2>
           <div className="grid gap-4 md:grid-cols-3">
             {benefits.map((benefit, index) => (
               <ShopReveal key={benefit.title} delayMs={index * 55}>
-                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-6 shadow-[0_16px_40px_rgba(73,54,34,0.08)]">
-                  <div className="mb-8 h-10 w-10 rounded-full bg-[#e7d8c4]" aria-hidden />
+                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-5 shadow-[0_16px_40px_rgba(73,54,34,0.08)] md:p-6">
+                  <div className="mb-5 h-10 w-10 rounded-full bg-[#e7d8c4] md:mb-8" aria-hidden />
                   <h3 className="text-[20px] font-medium tracking-[-0.02em] text-black/85">{benefit.title}</h3>
                   <p className="mt-3 max-w-[28ch] text-[15px] leading-[1.55] text-black/58">{benefit.text}</p>
                 </article>
