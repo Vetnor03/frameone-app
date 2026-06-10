@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import type { Metadata } from 'next'
 import { ShopFadeImage, ShopReveal } from '../shop/ShopMotion'
 import WaitlistForm from '../shop/WaitlistForm'
@@ -37,7 +36,7 @@ const waitlistFormProps = {
 export default function WaitlistPage() {
   return (
     <main
-      className="shop-page min-h-screen overflow-x-hidden bg-[#f6f3ed] text-[#171512]"
+      className="shop-page waitlist-page min-h-screen bg-[#f6f3ed] text-[#171512]"
       style={{
         marginTop: 'calc(env(safe-area-inset-top) * -1)',
         paddingTop: 'env(safe-area-inset-top)',
@@ -119,43 +118,6 @@ export default function WaitlistPage() {
         </div>
       </section>
 
-      <section className="px-5 py-8 md:px-10 md:py-14">
-        <ShopReveal>
-          <div className="mx-auto grid max-w-[1180px] overflow-hidden rounded-[32px] border border-black/10 bg-[#171512] text-white shadow-[0_24px_70px_rgba(0,0,0,0.18)] md:grid-cols-[0.95fr_1.05fr] md:items-center">
-            <div className="p-7 md:p-10 lg:p-12">
-              <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-white/45">Coming soon</p>
-              <h2 className="mt-4 text-[34px] font-medium leading-[1.04] tracking-[-0.045em] md:text-[48px]">Currently in development</h2>
-              <p className="mt-5 max-w-[52ch] text-[16px] leading-[1.65] text-white/68 md:text-[18px]">
-                The first people on the waitlist will follow the development journey and get early access before launch.
-              </p>
-            </div>
-            <div className="relative min-h-[260px] overflow-hidden border-t border-white/10 bg-[#d8c9b3] md:min-h-[420px] md:border-l md:border-t-0">
-              <Image
-                src="/shop/mattes-hero.png"
-                alt="Warm RE:MIND material detail"
-                fill
-                sizes="(min-width: 768px) 50vw, 100vw"
-                className="object-cover opacity-90"
-              />
-              <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(23,21,18,0.34),transparent_55%)]" />
-            </div>
-          </div>
-        </ShopReveal>
-      </section>
-
-      <section className="px-5 pb-14 pt-6 md:px-10 md:pb-20 md:pt-10">
-        <ShopReveal>
-          <div className="mx-auto max-w-[720px] rounded-[32px] border border-black/10 bg-[#fffdf9] p-6 text-center shadow-[0_24px_70px_rgba(73,54,34,0.11)] md:p-9">
-            <h2 className="text-[32px] font-medium leading-[1.05] tracking-[-0.045em] md:text-[46px]">Join the early access waitlist</h2>
-            <p className="mx-auto mt-4 max-w-[46ch] text-[15px] leading-[1.55] text-black/55">
-              Be first to hear when RE:MIND is ready for homes like yours.
-            </p>
-            <div className="mx-auto mt-6 max-w-[430px] text-left">
-              <WaitlistForm {...waitlistFormProps} />
-            </div>
-          </div>
-        </ShopReveal>
-      </section>
     </main>
   )
 }

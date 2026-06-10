@@ -114,6 +114,25 @@ html[data-route-theme="shop"] body > div:first-child {
   background: #fff;
 }
 
+html[data-route-theme="waitlist"],
+html:has(.waitlist-page),
+html[data-route-theme="waitlist"] body,
+body:has(.waitlist-page),
+html[data-route-theme="waitlist"] body > div:first-child,
+body:has(.waitlist-page) > div:first-child {
+  min-height: 100%;
+  height: auto;
+  background: #f6f3ed;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+html[data-route-theme="waitlist"] .waitlist-page,
+html:has(.waitlist-page) .waitlist-page {
+  overflow: visible;
+}
+
 /* Hide scrollbars but keep horizontal swipe */
 .tab-scroll {
   -ms-overflow-style: none;

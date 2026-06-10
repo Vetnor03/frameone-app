@@ -9,7 +9,7 @@ export const viewport: Viewport = {
 export default function WaitlistLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <ShopRouteEffects />
+      <ShopRouteEffects routeTheme="waitlist" />
       {children}
     </>
   )

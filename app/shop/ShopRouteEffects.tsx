@@ -4,14 +4,18 @@ import { useEffect } from 'react'
 
 const SHOP_THEME_COLOR = '#f6f3ed'
 
-export default function ShopRouteEffects() {
+type ShopRouteEffectsProps = {
+  routeTheme?: 'shop' | 'waitlist'
+}
+
+export default function ShopRouteEffects({ routeTheme = 'shop' }: ShopRouteEffectsProps) {
   useEffect(() => {
     const html = document.documentElement
     const body = document.body
     const originalRouteTheme = html.dataset.routeTheme
     const originalBodyBackground = body.style.backgroundColor
 
-    html.dataset.routeTheme = 'shop'
+    html.dataset.routeTheme = routeTheme
     body.style.backgroundColor = SHOP_THEME_COLOR
 
     let metaTheme = document.querySelector('meta[name="theme-color"]')
@@ -38,7 +42,7 @@ export default function ShopRouteEffects() {
         metaTheme?.setAttribute('content', previousThemeContent)
       }
     }
-  }, [])
+  }, [routeTheme])
 
   return null
 }
