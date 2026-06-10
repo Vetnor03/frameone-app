@@ -62,7 +62,7 @@ const benefits = [
   },
   {
     title: 'Laget for hjemmet',
-    text: 'Rolig design som passer inn, ikke roper etter oppmerksomhet.',
+    text: 'Rolig design som passer inn. Blir en del av interiøret.',
     Icon: HomeFrameIcon,
   },
 ]
