@@ -7,6 +7,12 @@ import type { FormEvent } from 'react'
 type Props = {
   compact?: boolean
   source?: string
+  page?: string
+  heading?: string
+  intro?: string
+  buttonText?: string
+  helperText?: string
+  successMessage?: string
 }
 
 type WaitlistSignupResponse = {
@@ -16,7 +22,16 @@ type WaitlistSignupResponse = {
   error?: string
 }
 
-export default function WaitlistForm({ compact = false, source = 'shop' }: Props) {
+export default function WaitlistForm({
+  compact = false,
+  source = 'shop',
+  page = '/shop',
+  heading = 'Early access waitlist open',
+  intro = 'Be among the first to follow the RE:MIND journey, get launch updates, and access early introductory pricing.',
+  buttonText = 'Join Waitlist',
+  helperText = 'No commitment. No spam.',
+  successMessage = 'Thank you! You are now on the RE:MIND waitlist.',
+}: Props) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
@@ -50,11 +65,11 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
     }
 
     track('waitlist_signup', {
-      source: 'shop',
-      page: '/shop',
+      source,
+      page,
     })
     setStatus('success')
-    setMessage('Thank you! You are now on the RE:MIND waitlist.')
+    setMessage(successMessage)
     setEmail('')
     setName('')
   }
@@ -83,10 +98,12 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
   return (
     <form onSubmit={handleSubmit} className="mt-7 grid w-full gap-3 md:mt-0">
       <div className="mb-1">
-        <h3 className="text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-black/85">Early access waitlist open</h3>
-        <p className="mt-2 max-w-[48ch] text-[13px] leading-[1.55] text-black/55">
-          Be among the first to follow the RE:MIND journey, get launch updates, and access early introductory pricing.
-        </p>
+        <h3 className="text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-black/85">{heading}</h3>
+        {intro ? (
+          <p className="mt-2 max-w-[48ch] text-[13px] leading-[1.55] text-black/55">
+            {intro}
+          </p>
+        ) : null}
       </div>
       <input
         className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
@@ -104,9 +121,9 @@ export default function WaitlistForm({ compact = false, source = 'shop' }: Props
         required
       />
       <button className="shop-button w-full rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
-        {status === 'submitting' ? 'Joining...' : 'Join Waitlist'}
+        {status === 'submitting' ? 'Joining...' : buttonText}
       </button>
-      <p className="text-center text-xs leading-[1.4] text-black/45">No commitment. No spam.</p>
+      <p className="text-center text-xs leading-[1.4] text-black/45">{helperText}</p>
       {message ? (
         <p className={`text-sm leading-[1.4] ${status === 'error' ? 'text-red-700' : 'text-black/65'}`}>
           {message}
