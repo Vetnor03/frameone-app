@@ -8,7 +8,7 @@ import { supabase } from './lib/supabase'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
-import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
+import { normalizeSurfRating1to6, surfRatingIsExperienceBased, surfRatingText, surfRatingValue1to6 } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 
@@ -3810,15 +3810,7 @@ function MirrorXLDateView({
 }
 
 function mirrorSurfRatingWord(rating: number | undefined) {
-  switch (Math.round(Number(rating))) {
-    case 1: return 'Flat'
-    case 2: return 'Poor'
-    case 3: return 'Poor to Fair'
-    case 4: return 'Fair'
-    case 5: return 'Good'
-    case 6: return 'Legendary'
-    default: return '--'
-  }
+  return surfRatingText(rating)
 }
 
 type MirrorSurfTrend = { symbol: '↑' | '−' | '↓'; label: string }
@@ -13005,8 +12997,8 @@ function surfRatingColor(rating: number | null | undefined) {
 }
 
 function AppSurfForecastRatingBars({ rating, isExperienceBased }: { rating: number | null | undefined; isExperienceBased?: boolean }) {
-  const value = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
-  const color = surfRatingColor(rating)
+  const value = surfRatingValue1to6(rating) ?? 0
+  const color = surfRatingColor(value)
 
   if (isExperienceBased) {
     return (

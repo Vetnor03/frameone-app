@@ -24,6 +24,30 @@ function asRating1to6(value: unknown): number | undefined {
   return Math.round(n)
 }
 
+function asRoundedSurfRating1to6(value: unknown): number | undefined {
+  const n = asNumber(value)
+  if (n == null) return undefined
+  const rounded = Math.round(n)
+  if (rounded < 1 || rounded > 6) return undefined
+  return rounded
+}
+
+export function surfRatingValue1to6(value: unknown): number | undefined {
+  return asRoundedSurfRating1to6(value)
+}
+
+export function surfRatingText(value: unknown): string {
+  switch (asRoundedSurfRating1to6(value)) {
+    case 1: return 'Flat'
+    case 2: return 'Poor'
+    case 3: return 'Poor to Fair'
+    case 4: return 'Fair'
+    case 5: return 'Good'
+    case 6: return 'Epic'
+    default: return '--'
+  }
+}
+
 function truthy(value: unknown): boolean {
   if (value === true) return true
   if (typeof value === 'number') return value > 0
