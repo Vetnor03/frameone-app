@@ -106,10 +106,10 @@ export default function TestLandingPage() {
         </div>
       </header>
 
-      <section className="px-5 pb-7 pt-5 md:px-10 md:pb-14 md:pt-12">
+      <section className="px-5 pb-5 pt-5 md:px-10 md:pb-10 md:pt-12">
         <div className="mx-auto grid max-w-[1180px] gap-6 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:items-center lg:gap-12">
           <ShopReveal>
-            <div className="flex flex-col gap-5 md:gap-6">
+            <div className="flex flex-col gap-4 md:gap-5">
               <div>
                 <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-black/45">RE:MIND</p>
                 <h1 className="mt-3 max-w-[680px] text-[34px] font-medium leading-[1.03] tracking-[-0.052em] text-[#15120f] sm:text-[48px] md:text-[64px]">
@@ -117,18 +117,6 @@ export default function TestLandingPage() {
                 </h1>
                 <p className="mt-4 max-w-[46ch] text-[18px] leading-[1.45] text-black/64 md:mt-5 md:text-[22px]">
                   Påminnelser, vær og kalender — lett synlig hjemme, uten å sjekke mobilen.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <a
-                  href="#early-access"
-                  className="shop-button inline-flex w-full items-center justify-center rounded-full bg-[#171512] px-6 py-3.5 text-sm font-medium text-white shadow-[0_16px_32px_rgba(0,0,0,0.14)] sm:w-auto"
-                >
-                  Skriv deg på interesselisten
-                </a>
-                <p className="text-[13px] leading-[1.45] text-black/50 sm:max-w-[28ch]">
-                  Ingen betaling. Ingen spam. Bare ærlige oppdateringer.
                 </p>
               </div>
 
@@ -165,7 +153,7 @@ export default function TestLandingPage() {
         </div>
       </section>
 
-      <section className="px-5 py-5 md:px-10 md:py-12" aria-labelledby="test-benefits">
+      <section className="px-5 pb-5 pt-3 md:px-10 md:pb-12 md:pt-8" aria-labelledby="test-benefits">
         <div className="mx-auto max-w-[1180px]">
           <h2 id="test-benefits" className="sr-only">Fordeler med RE:MIND</h2>
           <div className="grid gap-4 md:grid-cols-3">
