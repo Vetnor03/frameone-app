@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     isLogin ||
     pathname === '/shop' ||
+    pathname === '/waitlist' ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/favicon.ico' ||
     pathname.startsWith('/_next') ||
