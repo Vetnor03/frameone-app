@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { sendWaitlistWelcomeEmail } from '@/app/lib/waitlistEmail'
+import { sendWaitlistNotificationEmail, sendWaitlistWelcomeEmail } from '@/app/lib/waitlistEmail'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -51,6 +51,18 @@ export async function POST(request: Request) {
 
   if (!error) {
     await sendWaitlistWelcomeEmail(data)
+    // Server-side internal/private notification only. This must not change the
+    // public signup response or expose notification details to the frontend.
+    try {
+      const submittedFields = body && typeof body === 'object' && !Array.isArray(body) ? body : {}
+      await sendWaitlistNotificationEmail(data, submittedFields)
+    } catch (notificationError) {
+      console.error('[waitlist] Internal notification failed after successful signup.', {
+        emailDomain: email.split('@')[1] || 'unknown',
+        waitlistNumber: data.waitlist_number,
+        error: notificationError,
+      })
+    }
     return NextResponse.json({ ok: true, signup: data })
   }
 
