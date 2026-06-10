@@ -7,18 +7,63 @@ export const metadata: Metadata = {
   description: 'Join the RE:MIND early access waitlist for a calm digital frame with family reminders, weather, and calendar updates.',
 }
 
+type BenefitIconProps = {
+  className?: string
+}
+
+const iconStroke = 'currentColor'
+
+function ChecklistIcon({ className }: BenefitIconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5.2 7.3l1.5 1.5 2.6-3" stroke={iconStroke} strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11.2 7.2h7.2" stroke={iconStroke} strokeWidth="1.35" strokeLinecap="round" />
+      <path d="M5.2 12l1.5 1.5 2.6-3" stroke={iconStroke} strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11.2 12h7.2" stroke={iconStroke} strokeWidth="1.35" strokeLinecap="round" />
+      <path d="M5.2 16.7l1.5 1.5 2.6-3" stroke={iconStroke} strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11.2 16.8h7.2" stroke={iconStroke} strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function CalendarWeatherIcon({ className }: BenefitIconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6.7 5.4h8.8a2 2 0 012 2v9.1a2 2 0 01-2 2H6.7a2 2 0 01-2-2V7.4a2 2 0 012-2z" stroke={iconStroke} strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M8.2 3.8v3M14 3.8v3M4.7 9h12.8" stroke={iconStroke} strokeWidth="1.25" strokeLinecap="round" />
+      <path d="M9.1 13.7h.1M12 13.7h.1M9.1 16h.1" stroke={iconStroke} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M17.4 13.2a2.5 2.5 0 100-5" stroke={iconStroke} strokeWidth="1.25" strokeLinecap="round" />
+      <path d="M19.9 6.2l.7-.8M21 10.7h1.1M19.8 15.2l.7.8" stroke={iconStroke} strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function HomeFrameIcon({ className }: BenefitIconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4.6 11.1L12 5l7.4 6.1" stroke={iconStroke} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.7 10.2v8.1h10.6v-8.1" stroke={iconStroke} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.2 12.1h5.6v4.1H9.2z" stroke={iconStroke} strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M10.3 14.2h3.4" stroke={iconStroke} strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const benefits = [
   {
     title: 'Family reminders',
     text: 'Keep everyday tasks visible where everyone sees them.',
+    Icon: ChecklistIcon,
   },
   {
     title: 'Weather and calendar',
     text: 'Know what matters before leaving the house.',
+    Icon: CalendarWeatherIcon,
   },
   {
     title: 'Designed for the home',
     text: 'A quiet, premium frame that blends into your space.',
+    Icon: HomeFrameIcon,
   },
 ]
 
@@ -105,12 +150,14 @@ export default function WaitlistPage() {
         <div className="mx-auto max-w-[1180px]">
           <h2 id="waitlist-benefits" className="sr-only">RE:MIND benefits</h2>
           <div className="grid gap-4 md:grid-cols-3">
-            {benefits.map((benefit, index) => (
+            {benefits.map(({ Icon, ...benefit }, index) => (
               <ShopReveal key={benefit.title} delayMs={index * 55}>
-                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-5 shadow-[0_16px_40px_rgba(73,54,34,0.08)] md:p-6">
-                  <div className="mb-5 h-10 w-10 rounded-full bg-[#e7d8c4] md:mb-8" aria-hidden />
+                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-4 shadow-[0_16px_40px_rgba(73,54,34,0.08)] sm:p-5 md:p-6">
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#e7d8c4] text-[#5f5143]/75 md:mb-6" aria-hidden="true">
+                    <Icon className="h-[22px] w-[22px]" />
+                  </div>
                   <h3 className="text-[20px] font-medium tracking-[-0.02em] text-black/85">{benefit.title}</h3>
-                  <p className="mt-3 max-w-[28ch] text-[15px] leading-[1.55] text-black/58">{benefit.text}</p>
+                  <p className="mt-2.5 max-w-[28ch] text-[15px] leading-[1.55] text-black/58 md:mt-3">{benefit.text}</p>
                 </article>
               </ShopReveal>
             ))}
