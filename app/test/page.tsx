@@ -62,7 +62,7 @@ const benefits = [
   },
   {
     title: 'Laget for hjemmet',
-    text: 'Rolig design som passer inn, ikke roper etter oppmerksomhet.',
+    text: 'Rolig design som passer inn. Blir en del av interiøret.',
     Icon: HomeFrameIcon,
   },
 ]
@@ -177,7 +177,7 @@ export default function TestLandingPage() {
           <div className="mx-auto max-w-[900px] rounded-[32px] border border-black/10 bg-[#fffdf9] p-5 shadow-[0_24px_70px_rgba(73,54,34,0.10)] sm:p-7 md:p-10">
             <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-black/42">Fra Stavanger</p>
             <h2 id="founder-note" className="mt-3 text-[28px] font-medium leading-[1.08] tracking-[-0.04em] text-[#15120f] md:text-[42px]">
-              En liten hilsen fra grunnleggeren
+              En liten hilsen
             </h2>
 
             <div className="mt-6 space-y-4 text-[16px] leading-[1.7] text-black/66 md:text-[18px]">
@@ -192,13 +192,13 @@ export default function TestLandingPage() {
               </p>
 
               <p>
-                Siden har RE:MIND vokst til en rolig digital ramme for familier. Den kan vise påminnelser, vær, kalender og kobles til tjenester som Spond, Teams og Transponder.
+                Siden har RE:MIND vokst til en rolig digital ramme for familier. Den kan vise påminnelser, vær, kalender og kobles til tjenester du allerede bruker.
               </p>
 
               <div className="rounded-[24px] bg-[#f4ecdf] p-4 text-black/70 md:p-5">
                 <p className="font-medium text-[#171512]">Tanken er enkel:</p>
                 <p className="mt-2">
-                  Få med deg det som betyr noe i hverdagen — uten støy. Fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
+                  Få med deg det som betyr noe i hverdagen helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
                 </p>
               </div>
 
