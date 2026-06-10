@@ -8,7 +8,7 @@ import { supabase } from './lib/supabase'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
-import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from './lib/surf/ratings'
+import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 
@@ -12990,18 +12990,6 @@ function ForecastDirectionArrow({ degrees }: { degrees: number | null | undefine
       ↑
     </span>
   )
-}
-
-function surfRatingColor(rating: number | null | undefined) {
-  switch (Math.round(Number(rating) || 0)) {
-    case 1: return '#dc2626'
-    case 2: return '#d97706'
-    case 3: return '#facc15'
-    case 4: return '#84cc16'
-    case 5: return '#15803d'
-    case 6: return '#a855f7'
-    default: return 'rgba(255,255,255,0.28)'
-  }
 }
 
 function AppSurfForecastRatingBars({ rating, isExperienceBased }: { rating: number | null | undefined; isExperienceBased?: boolean }) {
