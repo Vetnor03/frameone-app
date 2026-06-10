@@ -155,9 +155,9 @@ export default function TestLandingPage() {
                 />
               </div>
               <div className="absolute bottom-4 left-4 right-4 rounded-[22px] border border-white/45 bg-white/75 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.10)] backdrop-blur md:bottom-6 md:left-6 md:right-auto md:max-w-[315px]">
-                <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-black/45">Tidlig tilgang</p>
+                <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-black/45">BLI MED FRA STARTEN</p>
                 <p className="mt-2 text-[15px] leading-[1.45] text-black/70">
-                  Påminnelser, vær og kalender — synlig før alle drar hjemmefra.
+                  Påminnelser, vær og kalender — lett synlig i gangen.
                 </p>
               </div>
             </div>
