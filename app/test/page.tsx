@@ -62,7 +62,7 @@ const benefits = [
   },
   {
     title: 'Laget for hjemmet',
-    text: 'Rolig design som passer inn. Blir en del av interiøret.',
+    text: 'Rolig design som passer inn. En del av interiøret.',
     Icon: HomeFrameIcon,
   },
 ]
@@ -222,9 +222,6 @@ export default function TestLandingPage() {
         </ShopReveal>
       </section>
 
-      <footer className="px-5 pb-8 pt-2 text-center md:px-10 md:pb-10">
-        <p className="text-[13px] leading-[1.5] text-black/45">RE:MIND utvikles i Stavanger.</p>
-      </footer>
     </main>
   )
 }
