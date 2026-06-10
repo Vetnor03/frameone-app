@@ -198,7 +198,7 @@ export default function TestLandingPage() {
               <div className="rounded-[24px] bg-[#f4ecdf] p-4 text-black/70 md:p-5">
                 <p className="font-medium text-[#171512]">Tanken er enkel:</p>
                 <p className="mt-2">
-                  Få med deg det som betyr noe i hverdagen helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
+                  Få med deg det som betyr noe i hverdagen, helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
                 </p>
               </div>
 
@@ -223,7 +223,7 @@ export default function TestLandingPage() {
       </section>
 
       <footer className="px-5 pb-8 pt-2 text-center md:px-10 md:pb-10">
-        <p className="text-[13px] leading-[1.5] text-black/45">RE:MIND utvikles i Stavanger av Vetle Norstad.</p>
+        <p className="text-[13px] leading-[1.5] text-black/45">RE:MIND utvikles i Stavanger.</p>
       </footer>
     </main>
   )
