@@ -14,6 +14,11 @@ type Props = {
   helperText?: string
   successMessage?: string
   formClassName?: string
+  namePlaceholder?: string
+  emailPlaceholder?: string
+  compactEmailPlaceholder?: string
+  submittingText?: string
+  genericErrorMessage?: string
 }
 
 type WaitlistSignupResponse = {
@@ -33,6 +38,11 @@ export default function WaitlistForm({
   helperText = 'No commitment. No spam.',
   successMessage = 'Thank you! You are now on the RE:MIND waitlist.',
   formClassName = 'mt-7 md:mt-0',
+  namePlaceholder = 'Name (optional)',
+  emailPlaceholder = 'Email',
+  compactEmailPlaceholder = 'Your email',
+  submittingText = 'Joining...',
+  genericErrorMessage = 'Something went wrong. Please try again.',
 }: Props) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -54,7 +64,7 @@ export default function WaitlistForm({
 
     if (!response) {
       setStatus('error')
-      setMessage('Something went wrong. Please try again.')
+      setMessage(genericErrorMessage)
       return
     }
 
@@ -62,7 +72,7 @@ export default function WaitlistForm({
 
     if (!response.ok) {
       setStatus('error')
-      setMessage(result?.error || 'Something went wrong. Please try again.')
+      setMessage(result?.error || genericErrorMessage)
       return
     }
 
@@ -82,7 +92,7 @@ export default function WaitlistForm({
         <div className="flex overflow-hidden rounded border border-black/15">
           <input
             className="w-full bg-white px-3 py-2 outline-none"
-            placeholder="Your email"
+            placeholder={compactEmailPlaceholder}
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -109,21 +119,21 @@ export default function WaitlistForm({
       </div>
       <input
         className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
-        placeholder="Name (optional)"
+        placeholder={namePlaceholder}
         type="text"
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
       <input
         className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
-        placeholder="Email"
+        placeholder={emailPlaceholder}
         type="email"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         required
       />
       <button className="shop-button w-full rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
-        {status === 'submitting' ? 'Joining...' : buttonText}
+        {status === 'submitting' ? submittingText : buttonText}
       </button>
       <p className="text-center text-xs leading-[1.4] text-black/45">{helperText}</p>
       {message ? (
