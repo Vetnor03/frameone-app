@@ -13,6 +13,7 @@ type Props = {
   buttonText?: string
   helperText?: string
   successMessage?: string
+  formClassName?: string
 }
 
 type WaitlistSignupResponse = {
@@ -31,6 +32,7 @@ export default function WaitlistForm({
   buttonText = 'Join Waitlist',
   helperText = 'No commitment. No spam.',
   successMessage = 'Thank you! You are now on the RE:MIND waitlist.',
+  formClassName = 'mt-7 md:mt-0',
 }: Props) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -96,7 +98,7 @@ export default function WaitlistForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-7 grid w-full gap-3 md:mt-0">
+    <form onSubmit={handleSubmit} className={`${formClassName} grid w-full gap-3`}>
       <div className="mb-1">
         <h3 className="text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-black/85">{heading}</h3>
         {intro ? (
