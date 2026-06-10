@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
 import { scoreSurf, normalizeCustomSpotScoringProfile, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
-import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
+import { normalizeSurfRating1to6, surfRatingIsExperienceBased, surfRatingVisual } from '@/app/lib/surf/ratings'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
@@ -554,6 +554,8 @@ type MarineBundle = {
   secondary: Sideswell
   wind_speed_ms: number
   wind_direction_deg_from: number
+  fallback_used: boolean
+  fallback_fields: string[]
 }
 
 type ForecastPoint = {
@@ -686,24 +688,36 @@ function selectedSwellIndex(picked: { chosen: 'primary' | 'secondary' }) {
   return picked.chosen === 'secondary' ? 2 : 1
 }
 
-function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
-  const mi = clampInt(series.mi + hourOffset, 0, series.mt.length - 1)
-  const wi = clampInt(series.wi + hourOffset, 0, series.wt.length - 1)
+function makeBundleAtIndexes(series: MarineSeries, marineIndex: number, windIndex: number): MarineBundle {
+  const mi = clampInt(marineIndex, 0, series.mt.length - 1)
+  const wi = clampInt(windIndex, 0, series.wt.length - 1)
 
   const timeUtc = series.mt[mi]
   const pH = requireForecastNumber(series.pH[mi], 'wave_height', timeUtc)
   const pD = requireForecastNumber(series.pD[mi], 'wave_direction', timeUtc)
   const pP = requireForecastNumber(series.pP[mi], 'wave_period', timeUtc)
 
-  const sH = Number.isFinite(series.sH[mi]) ? series.sH[mi] : 0
-  const sD = Number.isFinite(series.sD[mi]) ? series.sD[mi] : 0
-  const sP = Number.isFinite(series.sP[mi]) ? series.sP[mi] : 0
+  const sHRaw = series.sH[mi]
+  const sDRaw = series.sD[mi]
+  const sPRaw = series.sP[mi]
+  const sH = Number.isFinite(sHRaw) ? sHRaw : 0
+  const sD = Number.isFinite(sDRaw) ? sDRaw : 0
+  const sP = Number.isFinite(sPRaw) ? sPRaw : 0
+
+  const fallbackFields: string[] = []
+  if (sH >= SECONDARY_MIN_M && (!Number.isFinite(sDRaw) || !Number.isFinite(sPRaw))) {
+    if (!Number.isFinite(sDRaw)) fallbackFields.push('secondary_swell_wave_direction')
+    if (!Number.isFinite(sPRaw)) fallbackFields.push('secondary_swell_wave_period')
+  }
 
   const windTimeUtc = series.wt[wi] ?? timeUtc
   const wind_speed = requireForecastNumber(series.windS[wi], 'wind_speed_10m', windTimeUtc)
   const wind_dir = requireForecastNumber(series.windD[wi], 'wind_direction_10m', windTimeUtc)
+  if (series.wind_unavailable) {
+    fallbackFields.push('wind_speed_10m', 'wind_direction_10m')
+  }
 
-  const secondaryPresent = sH >= SECONDARY_MIN_M
+  const secondaryPresent = sH >= SECONDARY_MIN_M && Number.isFinite(sDRaw) && Number.isFinite(sPRaw)
 
   return {
     time_utc: timeUtc,
@@ -721,7 +735,16 @@ function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
     },
     wind_speed_ms: wind_speed,
     wind_direction_deg_from: wind_dir,
+    fallback_used: fallbackFields.length > 0,
+    fallback_fields: fallbackFields,
   }
+}
+
+function makeBundleAt(series: MarineSeries, hourOffset: number): MarineBundle {
+  const mi = clampInt(series.mi + hourOffset, 0, series.mt.length - 1)
+  const targetTimeUtc = series.mt[mi] ?? series.mt[series.mi] ?? isoHourUTC()
+  const wi = nearestHourIndex(series.wt, targetTimeUtc)
+  return makeBundleAtIndexes(series, mi, wi)
 }
 
 async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfRequestContext()): Promise<MarineSeries> {
@@ -736,6 +759,7 @@ async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfReque
     lon: requestLon,
     hourly: ['wave_height', 'wave_direction', 'wave_period', 'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'],
     timezone: 'UTC',
+    forecastDays: 7,
     params: { cell_selection: 'sea' },
   }).toString()
 
@@ -745,12 +769,13 @@ async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfReque
     lon: requestLon,
     hourly: ['wind_speed_10m', 'wind_direction_10m'],
     timezone: 'UTC',
+    forecastDays: 7,
     params: { wind_speed_unit: 'ms' },
   }).toString()
 
   const [marineFetched, windFetched] = await Promise.all([
-    fetchOpenMeteoJson(ctx, marineUrl, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, horizonHours: 48, forecastRange: '0-48h' }),
-    fetchOpenMeteoJson(ctx, windUrl, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, horizonHours: 48, forecastRange: '0-48h' }),
+    fetchOpenMeteoJson(ctx, marineUrl, { timeoutMs: OPEN_METEO_MARINE_TIMEOUT_MS, forecastDays: 7, forecastRange: '0-7d' }),
+    fetchOpenMeteoJson(ctx, windUrl, { timeoutMs: OPEN_METEO_FORECAST_TIMEOUT_MS, forecastDays: 7, forecastRange: '0-7d' }),
   ])
   if (!marineFetched.data) throw new Error(`Marine fetch failed${marineFetched.error ? `: ${marineFetched.error}` : ''}`)
 
@@ -1362,6 +1387,17 @@ function getSpotTables(spotKey: string): any | null {
   return null
 }
 
+function rangeTableBucketMatches(bucket: any, value: number) {
+  const mnRaw = bucket?.min
+  const mxRaw = bucket?.max
+  const mn = mnRaw === null || mnRaw === undefined ? Number.NEGATIVE_INFINITY : Number(mnRaw)
+  const mx = mxRaw === null || mxRaw === undefined ? Number.POSITIVE_INFINITY : Number(mxRaw)
+  if (!Number.isFinite(mn) || !Number.isFinite(mx)) return false
+  const minMatches = bucket?.min_exclusive === true ? value > mn : value >= mn
+  const maxMatches = bucket?.max_inclusive === true ? value <= mx : value < mx
+  return minMatches && maxMatches
+}
+
 function bucketLabelFromRangeTable(arrRaw: any[], value: number): string | null {
   if (!Array.isArray(arrRaw) || !arrRaw.length) return null
   const v = Number.isFinite(value) ? value : 0
@@ -1866,8 +1902,12 @@ function isoHourUTCFromLocalYMDH(timeZone: string, y: number, m: number, d: numb
 
 function bundleAtIsoHour(series: MarineSeries, targetIsoHourUtc: string) {
   const targetMi = nearestHourIndex(series.mt, targetIsoHourUtc)
-  const hourOffset = targetMi - series.mi
-  return makeBundleAt(series, hourOffset)
+  const targetWi = nearestHourIndex(series.wt, targetIsoHourUtc)
+  return makeBundleAtIndexes(series, targetMi, targetWi)
+}
+
+function exactHourIndex(times: string[], targetIsoHourUtc: string) {
+  return times.indexOf(targetIsoHourUtc)
 }
 
 type WaveHeightBucket = {
@@ -1912,6 +1952,19 @@ function waveHeightBucketRawForValue(spotKeyForTables: string, waveHeight: numbe
 function waveHeightLabelForValue(spotKeyForTables: string, waveHeight: number) {
   const raw = waveHeightBucketRawForValue(spotKeyForTables, waveHeight)
   return formatBucketLabelForUi(raw) ?? fmtRange(waveHeight, waveHeight)
+}
+
+function waveHeightBucketMinMaxForValue(spotKeyForTables: string, waveHeight: number) {
+  const bucket = waveHeightTableForSpot(spotKeyForTables).find((b) => rangeTableBucketMatches(b, waveHeight))
+  if (!bucket) return { min: waveHeight, max: waveHeight, label: fmtRange(waveHeight, waveHeight) }
+  const min = Number(bucket.min)
+  const maxRaw = bucket.max
+  const max = maxRaw === null || maxRaw === undefined ? null : Number(maxRaw)
+  return {
+    min: Number.isFinite(min) ? min : waveHeight,
+    max: max === null || Number.isFinite(max) ? max : waveHeight,
+    label: waveHeightLabelForValue(spotKeyForTables, waveHeight),
+  }
 }
 
 type ScoredSurfTimeBucket = {
@@ -2342,14 +2395,7 @@ function localDateLabelForYMD(y: number, m: number, d: number) {
   return new Intl.DateTimeFormat('en-GB', { timeZone: DAILY_TZ, day: '2-digit', month: 'short' }).format(dt)
 }
 
-function appForecastDaypartCandidateIndexes(series: MarineSeries, isoTargetHour: string) {
-  const targetIdx = nearestHourIndex(series.mt, isoTargetHour)
-  return Array.from(new Set([targetIdx - 2, targetIdx - 1, targetIdx, targetIdx + 1].map((i) =>
-    clampInt(i, 0, series.mt.length - 1)
-  )))
-}
-
-function averageAppForecastDaypart(args: {
+function appForecastDaypartBucket(args: {
   series: MarineSeries
   spotKeyForTables: string
   isoTargetHour: string
@@ -2357,73 +2403,97 @@ function averageAppForecastDaypart(args: {
   customSpotProfile?: CustomSpotScoringProfile | null
   requireSameLocalDay: { timeZone: string; y: number; m: number; d: number }
 }) {
-  const hours: ScoredSurfTimeBucket[] = []
-
-  for (const idx of appForecastDaypartCandidateIndexes(args.series, args.isoTargetHour)) {
-    const iso = args.series.mt[idx]
-    if (!iso) continue
-
-    const actual = tzPartsYMD(args.requireSameLocalDay.timeZone, new Date(`${iso}:00Z`))
-    if (actual.y !== args.requireSameLocalDay.y || actual.m !== args.requireSameLocalDay.m || actual.day !== args.requireSameLocalDay.d) continue
-
-    const bucket = scoreSurfBucketAtIdx(
-      args.series,
-      args.spotKeyForTables,
-      idx,
-      args.userExperiences,
-      args.customSpotProfile,
-      args.isoTargetHour
-    )
-    if (bucket) hours.push(bucket)
+  const idx = exactHourIndex(args.series.mt, args.isoTargetHour)
+  if (idx < 0) {
+    console.warn('[surf-score:app-forecast-slot:missing-exact-hour]', {
+      spotKey: args.spotKeyForTables,
+      target_time_utc: args.isoTargetHour,
+      available_start_utc: args.series.mt[0] ?? null,
+      available_end_utc: args.series.mt[args.series.mt.length - 1] ?? null,
+    })
+    return null
   }
 
-  if (!hours.length) return null
+  const actual = tzPartsYMD(args.requireSameLocalDay.timeZone, new Date(`${args.series.mt[idx]}:00Z`))
+  if (actual.y !== args.requireSameLocalDay.y || actual.m !== args.requireSameLocalDay.m || actual.day !== args.requireSameLocalDay.d) {
+    console.warn('[surf-score:app-forecast-slot:local-day-mismatch]', {
+      spotKey: args.spotKeyForTables,
+      target_time_utc: args.isoTargetHour,
+      selected_time_utc: args.series.mt[idx],
+      expected_day: args.requireSameLocalDay,
+      actual_day: actual,
+    })
+    return null
+  }
 
-  const averageScore = avg(hours.map((h) => scoredBlendFloat(h.scored)))
-  const ratingFromExperience = hours.some((h) =>
-    surfRatingIsExperienceBased(h.scored) || scoredExperienceMatched(h.scored) || h.picked.ratingSource === 'experience_blend'
-  )
-  const normalized = normalizeSurfRating1to6(
-    {
-      rating: averageScore,
-      finalRating: averageScore,
-      ratingSource: ratingFromExperience ? 'experience_blend' : 'base',
-    },
-    averageScore
-  )
-  const rating = normalized.rating ?? null
+  const windIdx = exactHourIndex(args.series.wt, args.isoTargetHour)
+  if (windIdx < 0 && !args.series.wind_unavailable) {
+    console.warn('[surf-score:app-forecast-slot:missing-exact-wind-hour]', {
+      spotKey: args.spotKeyForTables,
+      target_time_utc: args.isoTargetHour,
+      available_wind_start_utc: args.series.wt[0] ?? null,
+      available_wind_end_utc: args.series.wt[args.series.wt.length - 1] ?? null,
+    })
+    return null
+  }
 
-  const swellHeightM = avg(hours.map((h) => h.selected.height_m))
-  const swellPeriodS = avg(hours.map((h) => h.selected.period_s))
-  const swellDirectionDeg = circularMeanDeg(hours.map((h) => h.selected.direction_deg_from))
-  const windSpeedMs = avg(hours.map((h) => h.marine.wind_speed_ms))
-  const windDirectionDeg = circularMeanDeg(hours.map((h) => h.marine.wind_direction_deg_from))
-  const rawWindDirectionScore = avg(hours.map((h) => h.scored?.breakdown?.tables?.wind_dir?.raw_wind_direction_score ?? NaN))
-  const effectiveWindDirectionScore = avg(hours.map((h) => h.scored?.breakdown?.tables?.wind_dir?.effective_wind_direction_score ?? NaN))
-  const windDirectionWeightMultiplier = avg(hours.map((h) => h.scored?.breakdown?.tables?.wind_dir?.wind_direction_weight_multiplier ?? NaN))
-  const calmWindWeightingApplied = hours.some((h) => h.scored?.breakdown?.tables?.wind_dir?.calm_wind_weighting_applied)
+  const bucket = scoreSurfBucketAtIdx(
+    args.series,
+    args.spotKeyForTables,
+    idx,
+    args.userExperiences,
+    args.customSpotProfile,
+    args.isoTargetHour
+  )
+  if (!bucket) return null
+
+  const normalized = normalizeSurfRating1to6(bucket.scored, bucket.scored?.rating)
+  const rawRating = normalized.rating ?? null
+  const conservativeFallbackCapApplied = Boolean(bucket.marine.fallback_fields.some((field) => field === 'wind_speed_10m' || field === 'wind_direction_10m'))
+  const rating = rawRating == null ? null : conservativeFallbackCapApplied ? Math.min(rawRating, 2) : rawRating
+  const visual = surfRatingVisual(rating)
+  const tables = bucket.scored?.breakdown?.tables
+  const waveHeightRange = waveHeightBucketMinMaxForValue(args.spotKeyForTables, bucket.selected.height_m)
 
   return {
-    hours,
+    bucket,
     rating,
-    averageScore,
-    ratingFromExperience,
-    experienceDiceValue: ratingFromExperience ? rating : undefined,
-    wave_height_range_label: waveHeightLabelForValue(args.spotKeyForTables, swellHeightM),
-    swell_height_m: Number.isFinite(swellHeightM) ? swellHeightM : null,
-    swell_period_s: Number.isFinite(swellPeriodS) ? Math.round(swellPeriodS) : null,
-    swell_direction_deg: Number.isFinite(swellDirectionDeg) ? swellDirectionDeg : null,
-    wind_speed_ms: Number.isFinite(windSpeedMs) ? Math.round(windSpeedMs) : null,
-    wind_direction_deg: Number.isFinite(windDirectionDeg) ? windDirectionDeg : null,
-    raw_wind_direction_score: Number.isFinite(rawWindDirectionScore) ? rawWindDirectionScore : null,
-    effective_wind_direction_score: Number.isFinite(effectiveWindDirectionScore) ? effectiveWindDirectionScore : null,
-    wind_direction_weight_multiplier: Number.isFinite(windDirectionWeightMultiplier) ? windDirectionWeightMultiplier : null,
-    wind_speed_ms_for_direction_weighting: Number.isFinite(windSpeedMs) ? windSpeedMs : null,
-    calm_wind_weighting_applied: calmWindWeightingApplied,
-    ratingSource: ratingFromExperience ? 'experience_blend' : 'base',
-    finalRating: rating,
-    modelRating: rating,
-    experienceRating: ratingFromExperience ? rating : null,
+    uncappedRating: rawRating,
+    conservativeFallbackCapApplied,
+    ratingFromExperience: normalized.ratingFromExperience,
+    experienceDiceValue: normalized.experienceDiceValue == null ? undefined : conservativeFallbackCapApplied ? Math.min(normalized.experienceDiceValue, 2) : normalized.experienceDiceValue,
+    wave_height_range_label: bucket.waveLabel,
+    displayed_wave_height_min_m: waveHeightRange.min,
+    displayed_wave_height_max_m: waveHeightRange.max,
+    swell_height_m: Number.isFinite(bucket.selected.height_m) ? bucket.selected.height_m : null,
+    swell_period_s: Number.isFinite(bucket.selected.period_s) ? Math.round(bucket.selected.period_s) : null,
+    swell_direction_deg: Number.isFinite(bucket.selected.direction_deg_from) ? bucket.selected.direction_deg_from : null,
+    wind_speed_ms: Number.isFinite(bucket.marine.wind_speed_ms) ? Math.round(bucket.marine.wind_speed_ms) : null,
+    wind_direction_deg: Number.isFinite(bucket.marine.wind_direction_deg_from) ? bucket.marine.wind_direction_deg_from : null,
+    ratingSource: normalized.ratingFromExperience ? 'experience_blend' : bucket.picked.ratingSource,
+    finalRating: conservativeFallbackCapApplied ? rating : bucket.picked.finalRating,
+    modelRating: conservativeFallbackCapApplied ? rating : bucket.picked.modelRating,
+    experienceRating: normalized.ratingFromExperience ? rating : bucket.picked.experienceRating,
+    visual,
+    debugScores: {
+      height_score: tables?.wave_height?.score ?? null,
+      period_score: tables?.wave_period?.score ?? null,
+      wave_direction_score: tables?.wave_dir?.score ?? null,
+      wind_direction_score: tables?.wind_dir?.score ?? null,
+      raw_wind_direction_score: tables?.wind_dir?.raw_wind_direction_score ?? null,
+      effective_wind_direction_score: tables?.wind_dir?.effective_wind_direction_score ?? null,
+      wind_direction_weight_multiplier: tables?.wind_dir?.wind_direction_weight_multiplier ?? null,
+      wind_speed_ms_for_direction_weighting: tables?.wind_dir?.wind_speed_ms ?? null,
+      calm_wind_weighting_applied: tables?.wind_dir?.calm_wind_weighting_applied ?? false,
+      wind_strength_score: tables?.wind_speed?.score ?? null,
+      final_score: rating,
+      uncapped_final_score: rawRating,
+      conservative_fallback_cap_applied: conservativeFallbackCapApplied,
+      table_total: tables?.total ?? null,
+      final_label: visual.label,
+      final_bars: visual.bars,
+      final_color: visual.color,
+    },
   }
 }
 
@@ -2438,7 +2508,7 @@ function buildAppSurfForecast(
     .map((ymd) => {
       const buckets = APP_FORECAST_TARGETS.map((target) => {
         const isoTarget = isoHourUTCFromLocalYMDH(DAILY_TZ, ymd.y, ymd.m, ymd.d, target.hourLocal)
-        const averaged = averageAppForecastDaypart({
+        const selected = appForecastDaypartBucket({
           series,
           spotKeyForTables,
           isoTargetHour: isoTarget,
@@ -2446,27 +2516,47 @@ function buildAppSurfForecast(
           customSpotProfile,
           requireSameLocalDay: { timeZone: DAILY_TZ, y: ymd.y, m: ymd.m, d: ymd.d },
         })
-        if (!averaged) return null
+        if (!selected) return null
 
         const debug = {
+          day: ymd.key,
+          slot: target.label.toLowerCase(),
           target_time_utc: isoTarget,
-          selected_time_utc: isoTarget,
-          selected_hour_index: null,
-          aggregation: 'average_daypart_scores',
-          averaged_hour_indexes: averaged.hours.map((h) => h.idx),
-          averaged_times_utc: averaged.hours.map((h) => h.marine.time_utc),
-          averaged_score: averaged.averageScore,
-          rounded_rating: averaged.rating,
-          rating_from_experience: averaged.ratingFromExperience,
-          raw_wind_direction_score: averaged.raw_wind_direction_score,
-          effective_wind_direction_score: averaged.effective_wind_direction_score,
-          wind_direction_weight_multiplier: averaged.wind_direction_weight_multiplier,
-          wind_speed_ms: averaged.wind_speed_ms_for_direction_weighting,
-          calm_wind_weighting_applied: averaged.calm_wind_weighting_applied,
+          selected_time_utc: selected.bucket.marine.time_utc,
+          selected_hour_index: selected.bucket.idx,
+          aggregation: 'exact_visible_slot_values',
+          displayed_wave_height_min_m: selected.displayed_wave_height_min_m,
+          displayed_wave_height_max_m: selected.displayed_wave_height_max_m,
+          displayed_wave_height_range_label: selected.wave_height_range_label,
+          selected_swell_height: selected.swell_height_m,
+          scored_wave_height: selected.swell_height_m,
+          displayed_wave_direction: selected.swell_direction_deg,
+          scored_wave_direction: selected.swell_direction_deg,
+          selected_swell_direction: selected.swell_direction_deg,
+          displayed_period: selected.swell_period_s,
+          scored_period: selected.swell_period_s,
+          selected_period: selected.swell_period_s,
+          displayed_wind_speed: selected.wind_speed_ms,
+          scored_wind_speed: selected.wind_speed_ms,
+          wind_speed: selected.wind_speed_ms,
+          displayed_wind_direction: selected.wind_direction_deg,
+          scored_wind_direction: selected.wind_direction_deg,
+          wind_direction: selected.wind_direction_deg,
+          fallback_used: selected.bucket.marine.fallback_used,
+          fallback_fields: selected.bucket.marine.fallback_fields,
+          ...selected.debugScores,
+          rating_from_experience: selected.ratingFromExperience,
+          rating_source: selected.ratingSource,
+          selected_swell_source: selected.bucket.picked.chosen,
+          selected_swell_index: selected.bucket.picked.selectedSwellIndex,
+          why_selected: selected.bucket.picked.whySelected,
+          primary_swell: selected.bucket.marine.primary,
+          secondary_swell: selected.bucket.marine.secondary,
+          swell_selection: selected.bucket.picked.selectionDebug,
           fuel_penalty: fuelDebug ?? null,
         }
 
-        console.info('[surf-score:app-forecast-bucket]', {
+        console.info('[surf-score:app-forecast-slot]', {
           spotKey: spotKeyForTables,
           label: target.label,
           date_local: ymd.key,
@@ -2476,22 +2566,24 @@ function buildAppSurfForecast(
         return {
           label: target.label,
           target_time_utc: isoTarget,
-          time_utc: isoTarget,
-          selected_hour_index: null,
-          rating: averaged.rating,
-          ratingFromExperience: averaged.ratingFromExperience || undefined,
-          experienceDiceValue: averaged.experienceDiceValue,
-          wave_height_range_label: averaged.wave_height_range_label,
-          swell_height_m: averaged.swell_height_m,
-          swell_period_s: averaged.swell_period_s,
-          swell_direction_deg: averaged.swell_direction_deg,
-          wind_speed_ms: averaged.wind_speed_ms,
-          wind_direction_deg: averaged.wind_direction_deg,
-          breakdown: null,
-          ratingSource: averaged.ratingSource,
-          finalRating: averaged.finalRating,
-          modelRating: averaged.modelRating,
-          experienceRating: averaged.experienceRating,
+          time_utc: selected.bucket.marine.time_utc,
+          selected_hour_index: selected.bucket.idx,
+          rating: selected.rating,
+          ratingFromExperience: selected.ratingFromExperience || undefined,
+          experienceDiceValue: selected.experienceDiceValue,
+          wave_height_range_label: selected.wave_height_range_label,
+          displayed_wave_height_min_m: selected.displayed_wave_height_min_m,
+          displayed_wave_height_max_m: selected.displayed_wave_height_max_m,
+          swell_height_m: selected.swell_height_m,
+          swell_period_s: selected.swell_period_s,
+          swell_direction_deg: selected.swell_direction_deg,
+          wind_speed_ms: selected.wind_speed_ms,
+          wind_direction_deg: selected.wind_direction_deg,
+          breakdown: selected.bucket.scored?.breakdown ?? null,
+          ratingSource: selected.ratingSource,
+          finalRating: selected.finalRating,
+          modelRating: selected.modelRating,
+          experienceRating: selected.experienceRating,
           debug,
         }
       }).filter(Boolean)

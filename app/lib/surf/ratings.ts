@@ -7,6 +7,47 @@ export type NormalizedSurfRating = {
   experienceDiceValue?: number
 }
 
+export type SurfRatingVisual = {
+  rating: number
+  bars: number
+  label: string
+  color: string
+}
+
+export function surfRatingLabel(rating: unknown): string {
+  switch (Math.round(Number(rating) || 0)) {
+    case 1: return 'Flat'
+    case 2: return 'Poor'
+    case 3: return 'Poor to Fair'
+    case 4: return 'Fair'
+    case 5: return 'Good'
+    case 6: return 'Epic'
+    default: return 'Unavailable'
+  }
+}
+
+export function surfRatingColor(rating: unknown): string {
+  switch (Math.round(Number(rating) || 0)) {
+    case 1: return '#dc2626'
+    case 2: return '#d97706'
+    case 3: return '#facc15'
+    case 4: return '#84cc16'
+    case 5: return '#15803d'
+    case 6: return '#a855f7'
+    default: return 'rgba(255,255,255,0.28)'
+  }
+}
+
+export function surfRatingVisual(rating: unknown): SurfRatingVisual {
+  const normalized = Math.max(0, Math.min(6, Math.round(Number(rating) || 0)))
+  return {
+    rating: normalized,
+    bars: normalized,
+    label: surfRatingLabel(normalized),
+    color: surfRatingColor(normalized),
+  }
+}
+
 type UnknownRecord = Record<string, unknown>
 
 function asRecord(value: unknown): UnknownRecord {
