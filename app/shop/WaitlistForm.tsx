@@ -88,10 +88,10 @@ export default function WaitlistForm({
 
   if (compact) {
     return (
-      <form onSubmit={handleSubmit} className="mt-3 w-full max-w-[320px]">
-        <div className="flex overflow-hidden rounded border border-black/15">
+      <form onSubmit={handleSubmit} className="mt-3 w-full max-w-[320px] min-w-0">
+        <div className="flex w-full max-w-full min-w-0 overflow-hidden rounded border border-black/15">
           <input
-            className="w-full bg-white px-3 py-2 outline-none"
+            className="w-full min-w-0 max-w-full bg-white px-3 py-2 outline-none"
             placeholder={compactEmailPlaceholder}
             type="email"
             value={email}
@@ -108,7 +108,7 @@ export default function WaitlistForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={`${formClassName} grid w-full gap-3`}>
+    <form onSubmit={handleSubmit} className={`${formClassName} grid w-full max-w-full min-w-0 gap-3`}>
       <div className="mb-1">
         <h3 className="text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-black/85">{heading}</h3>
         {intro ? (
@@ -118,21 +118,21 @@ export default function WaitlistForm({
         ) : null}
       </div>
       <input
-        className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
+        className="w-full min-w-0 max-w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
         placeholder={namePlaceholder}
         type="text"
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
       <input
-        className="w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
+        className="w-full min-w-0 max-w-full rounded border border-black/15 bg-white px-4 py-3 text-sm outline-none"
         placeholder={emailPlaceholder}
         type="email"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         required
       />
-      <button className="shop-button w-full rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
+      <button className="shop-button w-full max-w-full rounded bg-black px-7 py-3 text-sm text-white" type="submit" disabled={status === 'submitting'}>
         {status === 'submitting' ? submittingText : buttonText}
       </button>
       <p className="text-center text-xs leading-[1.4] text-black/45">{helperText}</p>

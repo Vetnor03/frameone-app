@@ -81,30 +81,30 @@ const waitlistFormProps = {
 export default function WaitlistPage() {
   return (
     <main
-      className="shop-page waitlist-page min-h-screen bg-[#f6f3ed] text-[#171512]"
+      className="shop-page waitlist-page min-h-screen w-full max-w-full overflow-x-hidden bg-[#f6f3ed] text-[#171512]"
       style={{
         marginTop: 'calc(env(safe-area-inset-top) * -1)',
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
       <header className="border-b border-black/8 bg-[#f6f3ed]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1180px] items-center justify-between px-5 py-5 md:px-10">
-          <a href="/waitlist" className="text-[24px] font-medium tracking-[0.28em] text-black/90 md:text-[29px]">
+        <div className="mx-auto flex w-full max-w-[1180px] min-w-0 items-center justify-between gap-3 px-5 py-5 md:px-10">
+          <a href="/waitlist" className="min-w-0 text-[24px] font-medium tracking-[0.28em] text-black/90 md:text-[29px]">
             RE:MIND
           </a>
           <a
             href="#early-access"
-            className="shop-button rounded-full bg-[#171512] px-4 py-2 text-[12px] font-medium tracking-[0.08em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
+            className="shop-button shrink-0 rounded-full bg-[#171512] px-4 py-2 text-[12px] font-medium tracking-[0.08em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
           >
             Join early access
           </a>
         </div>
       </header>
 
-      <section className="px-5 pb-6 pt-5 md:px-10 md:pb-14 md:pt-12">
-        <div className="mx-auto grid max-w-[1180px] gap-6 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:items-center lg:gap-12">
-          <ShopReveal>
-            <div className="flex flex-col gap-4 md:gap-6">
+      <section className="w-full max-w-full px-5 pb-6 pt-5 md:px-10 md:pb-14 md:pt-12">
+        <div className="mx-auto grid w-full max-w-[1180px] min-w-0 gap-6 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:items-center lg:gap-12">
+          <ShopReveal className="min-w-0 w-full max-w-full">
+            <div className="flex w-full max-w-full min-w-0 flex-col gap-4 md:gap-6">
               <div>
                 <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-black/45">Early access</p>
                 <h1 className="mt-3 max-w-[690px] text-[30px] font-medium leading-[1.03] tracking-[-0.052em] text-[#15120f] sm:text-[46px] md:text-[60px]">
@@ -117,27 +117,27 @@ export default function WaitlistPage() {
 
               <div
                 id="early-access"
-                className="rounded-[28px] border border-black/10 bg-[#fffdf9] p-4 shadow-[0_24px_70px_rgba(73,54,34,0.12)] sm:p-6 md:max-w-[430px]"
+                className="w-full max-w-full scroll-mt-6 rounded-[28px] border border-black/10 bg-[#fffdf9] p-4 shadow-[0_24px_70px_rgba(73,54,34,0.12)] sm:p-6 md:max-w-[430px]"
               >
                 <WaitlistForm {...waitlistFormProps} />
               </div>
             </div>
           </ShopReveal>
 
-          <ShopReveal delayMs={80}>
-            <div className="relative overflow-hidden rounded-[34px] border border-black/10 bg-[#eee7dc] shadow-[0_30px_80px_rgba(73,54,34,0.18)]">
+          <ShopReveal delayMs={80} className="min-w-0 w-full max-w-full">
+            <div className="relative w-full max-w-full overflow-hidden rounded-[34px] border border-black/10 bg-[#eee7dc] shadow-[0_30px_80px_rgba(73,54,34,0.18)]">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.72),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.38),transparent_52%)]" />
-              <div className="relative aspect-[4/3] min-h-[300px] md:min-h-[520px]">
+              <div className="relative aspect-[4/3] w-full max-w-full min-h-[300px] md:min-h-[520px]">
                 <ShopFadeImage
                   src="/shop/hero-top.png"
                   alt="RE:MIND frame displayed in a calm home setting"
                   fill
                   priority
-                  sizes="(min-width: 1024px) 48vw, 100vw"
-                  className="object-cover object-center"
+                  sizes="(min-width: 1024px) 48vw, 90vw"
+                  className="max-w-full object-cover object-center"
                 />
               </div>
-              <div className="absolute bottom-4 left-4 right-4 rounded-[22px] border border-white/45 bg-white/75 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.10)] backdrop-blur md:bottom-6 md:left-6 md:right-auto md:max-w-[310px]">
+              <div className="absolute bottom-4 left-4 right-4 max-w-[calc(100%-2rem)] rounded-[22px] border border-white/45 bg-white/75 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.10)] backdrop-blur md:bottom-6 md:left-6 md:right-auto md:max-w-[310px]">
                 <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-black/45">Early access</p>
                 <p className="mt-2 text-[15px] leading-[1.45] text-black/70">Reminders, weather and calendar updates — visible before everyone leaves home.</p>
               </div>
@@ -146,13 +146,13 @@ export default function WaitlistPage() {
         </div>
       </section>
 
-      <section className="px-5 py-5 md:px-10 md:py-12" aria-labelledby="waitlist-benefits">
-        <div className="mx-auto max-w-[1180px]">
+      <section className="w-full max-w-full px-5 py-5 md:px-10 md:py-12" aria-labelledby="waitlist-benefits">
+        <div className="mx-auto w-full max-w-[1180px]">
           <h2 id="waitlist-benefits" className="sr-only">RE:MIND benefits</h2>
           <div className="grid gap-4 md:grid-cols-3">
             {benefits.map(({ Icon, ...benefit }, index) => (
-              <ShopReveal key={benefit.title} delayMs={index * 55}>
-                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-4 shadow-[0_16px_40px_rgba(73,54,34,0.08)] sm:p-5 md:p-6">
+              <ShopReveal key={benefit.title} delayMs={index * 55} className="min-w-0 w-full max-w-full">
+                <article className="shop-card h-full w-full max-w-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-4 shadow-[0_16px_40px_rgba(73,54,34,0.08)] sm:p-5 md:p-6">
                   <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#e7d8c4] text-[#5f5143]/75 md:mb-6" aria-hidden="true">
                     <Icon className="h-[22px] w-[22px]" />
                   </div>
