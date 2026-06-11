@@ -3,6 +3,6 @@ import InterestLandingLayout from '../_campaign/InterestLandingLayout'
 
 export { viewport } from '../_campaign/InterestLandingLayout'
 
-export default function TestLandingLayout({ children }: { children: ReactNode }) {
+export default function InteresseLandingLayout({ children }: { children: ReactNode }) {
   return <InterestLandingLayout>{children}</InterestLandingLayout>
 }
