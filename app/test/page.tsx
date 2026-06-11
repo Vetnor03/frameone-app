@@ -153,26 +153,7 @@ export default function TestLandingPage() {
         </div>
       </section>
 
-      <section className="px-5 pb-5 pt-3 md:px-10 md:pb-12 md:pt-8" aria-labelledby="test-benefits">
-        <div className="mx-auto max-w-[1180px]">
-          <h2 id="test-benefits" className="sr-only">Fordeler med RE:MIND</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            {benefits.map(({ Icon, ...benefit }, index) => (
-              <ShopReveal key={benefit.title} delayMs={index * 55}>
-                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-4 shadow-[0_16px_40px_rgba(73,54,34,0.08)] sm:p-5 md:p-6">
-                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#e7d8c4] text-[#5f5143]/75 md:mb-6" aria-hidden="true">
-                    <Icon className="h-[22px] w-[22px]" />
-                  </div>
-                  <h3 className="text-[20px] font-medium tracking-[-0.02em] text-black/85">{benefit.title}</h3>
-                  <p className="mt-2.5 max-w-[30ch] text-[15px] leading-[1.55] text-black/58 md:mt-3">{benefit.text}</p>
-                </article>
-              </ShopReveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-5 py-7 md:px-10 md:py-14" aria-labelledby="founder-note">
+      <section className="px-5 pb-6 pt-3 md:px-10 md:pb-10 md:pt-4" aria-labelledby="founder-note">
         <ShopReveal>
           <div className="mx-auto max-w-[900px] rounded-[32px] border border-black/10 bg-[#fffdf9] p-5 shadow-[0_24px_70px_rgba(73,54,34,0.10)] sm:p-7 md:p-10">
             <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-black/42">Fra Stavanger</p>
@@ -220,6 +201,25 @@ export default function TestLandingPage() {
             </div>
           </div>
         </ShopReveal>
+      </section>
+
+      <section className="px-5 pb-8 pt-2 md:px-10 md:pb-12 md:pt-6" aria-labelledby="test-benefits">
+        <div className="mx-auto max-w-[1180px]">
+          <h2 id="test-benefits" className="sr-only">Fordeler med RE:MIND</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {benefits.map(({ Icon, ...benefit }, index) => (
+              <ShopReveal key={benefit.title} delayMs={index * 55}>
+                <article className="shop-card h-full rounded-[26px] border border-black/10 bg-[#fffaf2] p-4 shadow-[0_16px_40px_rgba(73,54,34,0.08)] sm:p-5 md:p-6">
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#e7d8c4] text-[#5f5143]/75 md:mb-6" aria-hidden="true">
+                    <Icon className="h-[22px] w-[22px]" />
+                  </div>
+                  <h3 className="text-[20px] font-medium tracking-[-0.02em] text-black/85">{benefit.title}</h3>
+                  <p className="mt-2.5 max-w-[30ch] text-[15px] leading-[1.55] text-black/58 md:mt-3">{benefit.text}</p>
+                </article>
+              </ShopReveal>
+            ))}
+          </div>
+        </div>
       </section>
 
     </main>
