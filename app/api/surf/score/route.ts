@@ -2682,7 +2682,6 @@ function buildAppSurfForecast(
 
         console.info('[surf-score:app-forecast-slot]', {
           spotKey: spotKeyForTables,
-          label: target.label,
           date_local: ymd.key,
           ...debug,
         })
