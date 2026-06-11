@@ -156,7 +156,7 @@ export default function TestLandingPage() {
       <section className="px-5 pb-6 pt-3 md:px-10 md:pb-10 md:pt-4" aria-labelledby="founder-note">
         <ShopReveal>
           <div className="mx-auto max-w-[1180px] rounded-[32px] border border-black/10 bg-[#fffdf9] p-5 shadow-[0_24px_70px_rgba(73,54,34,0.10)] sm:p-7 md:p-10">
-            <div className="max-w-[900px]">
+            <div className="w-full max-w-[1040px]">
               <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-black/42">Fra Stavanger</p>
               <h2 id="founder-note" className="mt-3 text-[28px] font-medium leading-[1.08] tracking-[-0.04em] text-[#15120f] md:text-[42px]">
                 En liten hilsen
