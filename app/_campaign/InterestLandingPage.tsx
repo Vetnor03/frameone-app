@@ -194,7 +194,7 @@ export default function InterestLandingPage({
                 <div className="rounded-[24px] bg-[#f4ecdf] p-4 text-black/70 md:p-5">
                   <p className="font-medium text-[#171512]">Tanken er enkel:</p>
                   <p className="mt-2">
-                    Få med deg det som betyr noe i hverdagen, helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
+                    Få med deg det som betyr noe i hverdagen, helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badetøy til gymmen i morgen.
                   </p>
                 </div>
 
