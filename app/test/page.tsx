@@ -155,49 +155,51 @@ export default function TestLandingPage() {
 
       <section className="px-5 pb-6 pt-3 md:px-10 md:pb-10 md:pt-4" aria-labelledby="founder-note">
         <ShopReveal>
-          <div className="mx-auto max-w-[900px] rounded-[32px] border border-black/10 bg-[#fffdf9] p-5 shadow-[0_24px_70px_rgba(73,54,34,0.10)] sm:p-7 md:p-10">
-            <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-black/42">Fra Stavanger</p>
-            <h2 id="founder-note" className="mt-3 text-[28px] font-medium leading-[1.08] tracking-[-0.04em] text-[#15120f] md:text-[42px]">
-              En liten hilsen
-            </h2>
+          <div className="mx-auto max-w-[1180px] rounded-[32px] border border-black/10 bg-[#fffdf9] p-5 shadow-[0_24px_70px_rgba(73,54,34,0.10)] sm:p-7 md:p-10">
+            <div className="max-w-[900px]">
+              <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-black/42">Fra Stavanger</p>
+              <h2 id="founder-note" className="mt-3 text-[28px] font-medium leading-[1.08] tracking-[-0.04em] text-[#15120f] md:text-[42px]">
+                En liten hilsen
+              </h2>
 
-            <div className="mt-6 space-y-4 text-[16px] leading-[1.7] text-black/66 md:text-[18px]">
-              <p>Hei, jeg heter Vetle, grunnlegger av RE:MIND — et lite prosjekt fra Stavanger.</p>
+              <div className="mt-6 space-y-4 text-[16px] leading-[1.7] text-black/66 md:text-[18px]">
+                <p>Hei, jeg heter Vetle, grunnlegger av RE:MIND — et lite prosjekt fra Stavanger.</p>
 
-              <p>
-                Jeg utviklet først RE:MIND for å se surfeforholdene på vei ut døren hjemme. Etter hvert oppdaget jeg at det var flere ting jeg gjerne ville få med meg i farten — uten å måtte sjekke mobilen.
-              </p>
+                <p>
+                  Jeg utviklet først RE:MIND for å se surfeforholdene på vei ut døren hjemme. Etter hvert oppdaget jeg at det var flere ting jeg gjerne ville få med meg i farten — uten å måtte sjekke mobilen.
+                </p>
 
-              <p>
-                Blir det regn i dag? Bør jeg ta med paraply? Er vi snart tomme for noe i kjøleskapet? Og ikke minst: Husk at dunken må ut i veien for tømming i dag.
-              </p>
+                <p>
+                  Blir det regn i dag? Bør jeg ta med paraply? Er vi snart tomme for noe i kjøleskapet? Og ikke minst: Husk at dunken må ut i veien for tømming i dag.
+                </p>
 
-              <p>
-                Siden har RE:MIND vokst til en rolig digital ramme for familier. Den kan vise påminnelser, vær, kalender og kobles til tjenester du allerede bruker.
-              </p>
+                <p>
+                  Siden har RE:MIND vokst til en rolig digital ramme for familier. Den kan vise påminnelser, vær, kalender og kobles til tjenester du allerede bruker.
+                </p>
 
-              <div className="rounded-[24px] bg-[#f4ecdf] p-4 text-black/70 md:p-5">
-                <p className="font-medium text-[#171512]">Tanken er enkel:</p>
-                <p className="mt-2">
-                  Få med deg det som betyr noe i hverdagen, helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
+                <div className="rounded-[24px] bg-[#f4ecdf] p-4 text-black/70 md:p-5">
+                  <p className="font-medium text-[#171512]">Tanken er enkel:</p>
+                  <p className="mt-2">
+                    Få med deg det som betyr noe i hverdagen, helt uten støy — som at fotballtreningen til Sander er flyttet til 18:00, eller at Mari må huske badedrakt til gymmen i morgen.
+                  </p>
+                </div>
+
+                <p>
+                  Hvis du synes RE:MIND virker nyttig, og har lyst til å følge reisen videre, setter jeg stor pris på om du skriver deg opp på interesselisten. Da får du oppdateringer om fremgang, lanseringsdato og et eget introduksjonstilbud som takk for at du ble med tidlig.
                 </p>
               </div>
 
-              <p>
-                Hvis du synes RE:MIND virker nyttig, og har lyst til å følge reisen videre, setter jeg stor pris på om du skriver deg opp på interesselisten. Da får du oppdateringer om fremgang, lanseringsdato og et eget introduksjonstilbud som takk for at du ble med tidlig.
-              </p>
-            </div>
-
-            <div className="mt-7 flex flex-col gap-4 rounded-[24px] border border-black/8 bg-[#f8f1e8] p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
-              <p className="text-[13px] font-medium leading-[1.5] text-black/58">
-                Ingen betaling. Ingen spam. Bare ærlige oppdateringer fra utviklingen.
-              </p>
-              <a
-                href="#early-access"
-                className="shop-button inline-flex w-full items-center justify-center rounded-full bg-[#171512] px-5 py-3 text-sm font-medium text-white shadow-[0_12px_28px_rgba(0,0,0,0.13)] sm:w-auto"
-              >
-                Skriv meg på interesselisten
-              </a>
+              <div className="mt-7 flex flex-col gap-4 rounded-[24px] border border-black/8 bg-[#f8f1e8] p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
+                <p className="text-[13px] font-medium leading-[1.5] text-black/58">
+                  Ingen betaling. Ingen spam. Bare ærlige oppdateringer fra utviklingen.
+                </p>
+                <a
+                  href="#early-access"
+                  className="shop-button inline-flex w-full items-center justify-center rounded-full bg-[#171512] px-5 py-3 text-sm font-medium text-white shadow-[0_12px_28px_rgba(0,0,0,0.13)] sm:w-auto"
+                >
+                  Skriv meg på interesselisten
+                </a>
+              </div>
             </div>
           </div>
         </ShopReveal>
