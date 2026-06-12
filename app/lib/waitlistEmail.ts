@@ -39,8 +39,20 @@ function waitlistPosition(waitlistNumber: number | null) {
   return typeof waitlistNumber === 'number' ? String(waitlistNumber) : 'confirmed'
 }
 
-function populateWaitlistTemplate(template: string, replacements: Record<'name' | 'position', string>) {
-  return template.replaceAll('{{name}}', replacements.name).replaceAll('{{position}}', replacements.position)
+function firstNameFromSubmittedName(name?: string | null) {
+  return name?.trim().split(/\s+/)[0] || null
+}
+
+function greeting(prefix: 'Hi' | 'Hei', firstName: string | null) {
+  return firstName ? `${prefix} ${firstName}!` : `${prefix}!`
+}
+
+function greetingHtml(prefix: 'Hi' | 'Hei', firstName: string | null) {
+  return firstName ? `${prefix} ${escapeHtml(firstName)}!` : `${prefix}!`
+}
+
+function populateWaitlistTemplate(template: string, replacements: Record<'position', string>) {
+  return template.replaceAll('{{position}}', replacements.position)
 }
 
 function assertWaitlistTemplatePopulated(content: string) {
@@ -59,11 +71,11 @@ function interestWaitlistPosition(waitlistNumber: number | null) {
 }
 
 function buildInterestWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
-  const name = signup.name?.trim() || 'der'
+  const firstName = firstNameFromSubmittedName(signup.name)
   const position = interestWaitlistPosition(signup.waitlist_number)
 
   const text = [
-    `Hei ${name}!`,
+    greeting('Hei', firstName),
     '',
     'Jeg ville bare sende en liten ekstra takk for at du skrev deg opp på interesselisten til RE:MIND.',
     '',
@@ -85,7 +97,7 @@ function buildInterestWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
 
   const html = `
     <div style="font-family:Arial,sans-serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">
-      <p>Hei ${escapeHtml(name)}!</p>
+      <p>${greetingHtml('Hei', firstName)}</p>
       <p>Jeg ville bare sende en liten ekstra takk for at du skrev deg opp på interesselisten til RE:MIND.</p>
       <p>Du er nummer ${escapeHtml(position)} på interesselisten.</p>
       <p>Du er faktisk blant de aller første som har meldt interesse, og det betyr mye. RE:MIND er fortsatt under utvikling, så akkurat nå handler det om å finne ut om dette er noe flere familier faktisk kunne hatt glede av hjemme.</p>
@@ -101,11 +113,11 @@ function buildInterestWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
 }
 
 function buildWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
-  const name = signup.name?.trim().split(/\s+/)[0] || 'there'
+  const firstName = firstNameFromSubmittedName(signup.name)
   const position = waitlistPosition(signup.waitlist_number)
 
   const textTemplate = [
-    'Hi {{name}}!',
+    greeting('Hi', firstName),
     '',
     'I just wanted to send a quick thank you for joining the RE:MIND waitlist.',
     '',
@@ -125,12 +137,12 @@ function buildWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
     'Founder of RE:MIND',
   ].join('\n')
 
-  const text = populateWaitlistTemplate(textTemplate, { name, position })
+  const text = populateWaitlistTemplate(textTemplate, { position })
   assertWaitlistTemplatePopulated(text)
 
   const html = `
     <div style="font-family:Arial,sans-serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">
-      <p>Hi ${escapeHtml(name)}!</p>
+      <p>${greetingHtml('Hi', firstName)}</p>
       <p>I just wanted to send a quick thank you for joining the RE:MIND waitlist.</p>
       <p>You are number ${escapeHtml(position)} on the waitlist.</p>
       <p>You're actually among the very first people to show interest, and that means a lot. RE:MIND is still under development, so right now the goal is simply to find out whether this is something more families would genuinely enjoy having in their homes.</p>
