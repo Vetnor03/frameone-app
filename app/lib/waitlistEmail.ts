@@ -4,6 +4,7 @@ type WaitlistWelcomeSignup = {
   email: string
   name: string | null
   waitlist_number: number | null
+  source?: string | null
 }
 
 type WaitlistNotificationSignup = WaitlistWelcomeSignup & {
@@ -20,6 +21,7 @@ type ResendSendResult = {
 type SubmittedWaitlistFields = Record<string, unknown>
 
 const WAITLIST_SUBJECT = 'Welcome to RE:MIND'
+const INTEREST_WAITLIST_SUBJECT = 'Tusen takk for at du meldte interesse for RE:MIND'
 const WAITLIST_NOTIFICATION_SUBJECT = 'New RE:MIND waitlist signup'
 const WAITLIST_SENDER = 'RE:MIND <login@re-mind.no>'
 const DEFAULT_REPLY_TO = 'vetlecn@live.no'
@@ -35,6 +37,57 @@ function escapeHtml(value: string) {
 
 function waitlistNumberLine(waitlistNumber: number | null) {
   return typeof waitlistNumber === 'number' ? `You are #${waitlistNumber} on the waitlist.` : 'You are on the waitlist.'
+}
+
+function isInterestSignupSource(source?: string | null) {
+  const normalizedSource = source?.trim().toLowerCase()
+  return normalizedSource === 'interesse-landing' || normalizedSource === '/interesse'
+}
+
+function interestWaitlistPosition(waitlistNumber: number | null) {
+  return typeof waitlistNumber === 'number' ? String(waitlistNumber) : 'bekreftet'
+}
+
+function buildInterestWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
+  const name = signup.name?.trim() || 'der'
+  const position = interestWaitlistPosition(signup.waitlist_number)
+
+  const text = [
+    `Hei ${name}!`,
+    '',
+    'Jeg ville bare sende en liten ekstra takk for at du skrev deg opp på interesselisten til RE:MIND.',
+    '',
+    `Du er nummer ${position} på interesselisten.`,
+    '',
+    'Du er faktisk blant de aller første som har meldt interesse, og det betyr mye. RE:MIND er fortsatt under utvikling, så akkurat nå handler det om å finne ut om dette er noe flere familier faktisk kunne hatt glede av hjemme.',
+    '',
+    'Jeg bygger dette fra Stavanger, først fordi jeg selv ville få med meg små viktige ting i hverdagen uten å måtte sjekke mobilen hele tiden — vær, påminnelser, kalender og etter hvert koble til tjenester du allerede bruker.',
+    '',
+    'Jeg kommer ikke til å spamme deg. Du får bare noen få oppdateringer om utviklingen, lansering og et tidlig introduksjonstilbud når vi nærmer oss.',
+    '',
+    'Tusen takk igjen for at du ble med så tidlig.',
+    '',
+    'Hilsen',
+    '',
+    'Vetle',
+    'Grunnlegger av RE:MIND',
+  ].join('\n')
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">
+      <p>Hei ${escapeHtml(name)}!</p>
+      <p>Jeg ville bare sende en liten ekstra takk for at du skrev deg opp på interesselisten til RE:MIND.</p>
+      <p>Du er nummer ${escapeHtml(position)} på interesselisten.</p>
+      <p>Du er faktisk blant de aller første som har meldt interesse, og det betyr mye. RE:MIND er fortsatt under utvikling, så akkurat nå handler det om å finne ut om dette er noe flere familier faktisk kunne hatt glede av hjemme.</p>
+      <p>Jeg bygger dette fra Stavanger, først fordi jeg selv ville få med meg små viktige ting i hverdagen uten å måtte sjekke mobilen hele tiden — vær, påminnelser, kalender og etter hvert koble til tjenester du allerede bruker.</p>
+      <p>Jeg kommer ikke til å spamme deg. Du får bare noen få oppdateringer om utviklingen, lansering og et tidlig introduksjonstilbud når vi nærmer oss.</p>
+      <p>Tusen takk igjen for at du ble med så tidlig.</p>
+      <p style="margin-top:28px;">Hilsen</p>
+      <p>Vetle<br />Grunnlegger av RE:MIND</p>
+    </div>
+  `
+
+  return { text, html }
 }
 
 function buildWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
@@ -153,15 +206,19 @@ export async function sendWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
   }
 
   const resend = new Resend(apiKey)
-  const { text, html } = buildWaitlistWelcomeEmail(signup)
+  const isInterestSignup = isInterestSignupSource(signup.source)
+  const { text, html } = isInterestSignup
+    ? buildInterestWaitlistWelcomeEmail(signup)
+    : buildWaitlistWelcomeEmail(signup)
   const replyTo = process.env.WAITLIST_REPLY_TO?.trim() || DEFAULT_REPLY_TO
+  const subject = isInterestSignup ? INTEREST_WAITLIST_SUBJECT : WAITLIST_SUBJECT
 
   try {
     const result = (await resend.emails.send({
       from: WAITLIST_SENDER,
       to: [signup.email],
       replyTo,
-      subject: WAITLIST_SUBJECT,
+      subject,
       text,
       html,
     })) as ResendSendResult
