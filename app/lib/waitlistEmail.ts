@@ -20,7 +20,7 @@ type ResendSendResult = {
 
 type SubmittedWaitlistFields = Record<string, unknown>
 
-const WAITLIST_SUBJECT = 'Welcome to RE:MIND'
+const WAITLIST_SUBJECT = 'Thank you for joining the RE:MIND waitlist'
 const INTEREST_WAITLIST_SUBJECT = 'Tusen takk for at du meldte interesse for RE:MIND'
 const WAITLIST_NOTIFICATION_SUBJECT = 'New RE:MIND waitlist signup'
 const WAITLIST_SENDER = 'RE:MIND <login@re-mind.no>'
@@ -35,8 +35,18 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;')
 }
 
-function waitlistNumberLine(waitlistNumber: number | null) {
-  return typeof waitlistNumber === 'number' ? `You are #${waitlistNumber} on the waitlist.` : 'You are on the waitlist.'
+function waitlistPosition(waitlistNumber: number | null) {
+  return typeof waitlistNumber === 'number' ? String(waitlistNumber) : 'confirmed'
+}
+
+function populateWaitlistTemplate(template: string, replacements: Record<'name' | 'position', string>) {
+  return template.replaceAll('{{name}}', replacements.name).replaceAll('{{position}}', replacements.position)
+}
+
+function assertWaitlistTemplatePopulated(content: string) {
+  if (content.includes('{{name}}') || content.includes('{{position}}')) {
+    throw new Error('Waitlist welcome email template placeholders were not populated before sending.')
+  }
 }
 
 function isInterestSignupSource(source?: string | null) {
@@ -91,41 +101,48 @@ function buildInterestWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
 }
 
 function buildWaitlistWelcomeEmail(signup: WaitlistWelcomeSignup) {
-  const firstName = signup.name?.trim().split(/\s+/)[0] || 'there'
-  const waitlistNumberLineText = waitlistNumberLine(signup.waitlist_number)
+  const name = signup.name?.trim().split(/\s+/)[0] || 'there'
+  const position = waitlistPosition(signup.waitlist_number)
 
-  const text = [
-    `Hi ${firstName},`,
+  const textTemplate = [
+    'Hi {{name}}!',
     '',
-    'Welcome to RE:MIND.',
+    'I just wanted to send a quick thank you for joining the RE:MIND waitlist.',
     '',
-    waitlistNumberLineText,
+    'You are number {{position}} on the waitlist.',
     '',
-    'Thank you for joining us early.',
+    "You're actually among the very first people to show interest, and that means a lot. RE:MIND is still under development, so right now the goal is simply to find out whether this is something more families would genuinely enjoy having in their homes.",
     '',
-    "We'll keep you updated on launch progress, availability, and introductory pricing as we move towards launch.",
+    "I'm building this from Stavanger, Norway, originally because I wanted an easier way to keep track of the small but important things in everyday life without constantly checking my phone — weather, reminders, calendars, and eventually connecting to services you already use.",
     '',
-    "In the meantime, we'd love to hear:",
+    "I promise I won't spam you. You'll only receive a few updates about the development process, launch plans, and an early introductory offer as we get closer to release.",
     '',
-    'What would you most like to see on your RE:MIND display?',
+    'Thank you again for joining so early.',
     '',
-    'Best,',
+    'Best regards,',
+    '',
     'Vetle',
-    'Founder, RE:MIND',
+    'Founder of RE:MIND',
   ].join('\n')
+
+  const text = populateWaitlistTemplate(textTemplate, { name, position })
+  assertWaitlistTemplatePopulated(text)
 
   const html = `
     <div style="font-family:Arial,sans-serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">
-      <p>Hi ${escapeHtml(firstName)},</p>
-      <p>Welcome to RE:MIND.</p>
-      <p>${escapeHtml(waitlistNumberLineText)}</p>
-      <p>Thank you for joining us early.</p>
-      <p>We'll keep you updated on launch progress, availability, and introductory pricing as we move towards launch.</p>
-      <p>In the meantime, we'd love to hear:</p>
-      <p>What would you most like to see on your RE:MIND display?</p>
-      <p style="margin-top:28px;">Best,<br />Vetle<br />Founder, RE:MIND</p>
+      <p>Hi ${escapeHtml(name)}!</p>
+      <p>I just wanted to send a quick thank you for joining the RE:MIND waitlist.</p>
+      <p>You are number ${escapeHtml(position)} on the waitlist.</p>
+      <p>You're actually among the very first people to show interest, and that means a lot. RE:MIND is still under development, so right now the goal is simply to find out whether this is something more families would genuinely enjoy having in their homes.</p>
+      <p>I'm building this from Stavanger, Norway, originally because I wanted an easier way to keep track of the small but important things in everyday life without constantly checking my phone — weather, reminders, calendars, and eventually connecting to services you already use.</p>
+      <p>I promise I won't spam you. You'll only receive a few updates about the development process, launch plans, and an early introductory offer as we get closer to release.</p>
+      <p>Thank you again for joining so early.</p>
+      <p style="margin-top:28px;">Best regards,</p>
+      <p>Vetle<br />Founder of RE:MIND</p>
     </div>
   `
+
+  assertWaitlistTemplatePopulated(html)
 
   return { text, html }
 }
