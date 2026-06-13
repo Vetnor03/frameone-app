@@ -32,6 +32,24 @@ function smoothedRangeScore(rows, value) {
   return Number(rows.at(-1).score_1_6)
 }
 
+function roundFinalScoreWithQuality(finalScoreFloat, periodScore, windSpeedScore) {
+  if (!Number.isFinite(finalScoreFloat)) return 1
+
+  const lower = Math.floor(finalScoreFloat)
+  const fraction = finalScoreFloat - lower
+
+  let roundUpThreshold = 0.6
+  if (periodScore <= 2 || windSpeedScore <= 2) {
+    roundUpThreshold = 0.9
+  } else if (periodScore <= 2.5) {
+    roundUpThreshold = 0.8
+  } else if (periodScore >= 4.5 && windSpeedScore >= 4.5) {
+    roundUpThreshold = 0.4
+  }
+
+  return clamp(lower + (fraction + Number.EPSILON >= roundUpThreshold ? 1 : 0), 1, 6)
+}
+
 function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpeedScore, windDirectionScore, windDirectionMultiplier }) {
   const weights = { swellDirection: 5, height: 4, period: 3, windSpeed: 2, windDirection: 2 }
   const weightedTotal =
@@ -47,8 +65,20 @@ function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpe
     6 * weights.windSpeed +
     6 * weights.windDirection
   const finalScoreFloat = (weightedTotal / maxWeightedTotal) * 6
-  return { weightedTotal, maxWeightedTotal, finalScoreFloat, finalScore: clamp(Math.round(finalScoreFloat), 1, 6) }
+  return { weightedTotal, maxWeightedTotal, finalScoreFloat, finalScore: roundFinalScoreWithQuality(finalScoreFloat, periodScore, windSpeedScore) }
 }
+
+
+test('quality-aware final score rounding protects weak period and wind scores', () => {
+  assert.equal(roundFinalScoreWithQuality(3.89, 1.75, 5), 3)
+  assert.equal(roundFinalScoreWithQuality(3.9, 1.75, 5), 4)
+  assert.equal(roundFinalScoreWithQuality(3.79, 2.25, 5), 3)
+  assert.equal(roundFinalScoreWithQuality(3.8, 2.25, 5), 4)
+  assert.equal(roundFinalScoreWithQuality(3.39, 4.5, 4.5), 3)
+  assert.equal(roundFinalScoreWithQuality(3.4, 4.5, 4.5), 4)
+  assert.equal(roundFinalScoreWithQuality(3.59, 3, 3), 3)
+  assert.equal(roundFinalScoreWithQuality(3.6, 3, 3), 4)
+})
 
 test('generic period table smoothing fades between bucket boundaries', () => {
   const genericPeriodRows = [
@@ -127,6 +157,7 @@ test('shared surf scoring source contains smoothing, weighted contributions, and
   const surfRoute = readFileSync(new URL('../app/api/surf/score/route.ts', import.meta.url), 'utf8')
 
   assert.match(scoringHelper, /function smoothedRangeScore/)
+  assert.match(scoringHelper, /function roundFinalScoreWithQuality/)
   assert.match(scoringHelper, /sWaveH\.score \* weights\.wave_height/)
   assert.match(scoringHelper, /sWaveP\.score \* weights\.wave_period/)
   assert.match(scoringHelper, /windDirectionEffectiveScore \* weights\.wind_dir/)

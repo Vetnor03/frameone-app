@@ -242,6 +242,24 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
 }
 
+function roundFinalScoreWithQuality(finalScoreFloat: number, periodScore: number, windSpeedScore: number) {
+  if (!Number.isFinite(finalScoreFloat)) return 1
+
+  const lower = Math.floor(finalScoreFloat)
+  const fraction = finalScoreFloat - lower
+
+  let roundUpThreshold = 0.6
+  if (periodScore <= 2 || windSpeedScore <= 2) {
+    roundUpThreshold = 0.9
+  } else if (periodScore <= 2.5) {
+    roundUpThreshold = 0.8
+  } else if (periodScore >= 4.5 && windSpeedScore >= 4.5) {
+    roundUpThreshold = 0.4
+  }
+
+  return clamp(lower + (fraction + Number.EPSILON >= roundUpThreshold ? 1 : 0), 1, 6)
+}
+
 function normLabel(lbl: string) {
   return String(lbl ?? '').trim().toLowerCase()
 }
@@ -836,7 +854,7 @@ function buildModelScore(args: {
 
   const normalizedScore01 = clamp(weightedTotal / Math.max(1, maxWeightedTotal), 0, 1)
   const finalScoreFloat = normalizedScore01 * 6
-  const rating = clamp(Math.round(finalScoreFloat) || 1, 1, 6)
+  const rating = roundFinalScoreWithQuality(finalScoreFloat, sWaveP.score, sWindS.score)
   const total = weightedTotal
   const label = scoreToLabelFromTables(total)
 
