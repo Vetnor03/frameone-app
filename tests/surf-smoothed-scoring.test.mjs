@@ -7,23 +7,25 @@ function clamp(n, lo, hi) {
 }
 
 function smoothedRangeScore(rows, value) {
-  const points = rows
-    .map((row) => ({
-      anchor: row.min == null ? Number(row.max) : row.max == null ? Number(row.min) : (Number(row.min) + Number(row.max)) / 2,
-      score: Number(row.score_1_6),
-    }))
-    .filter((point) => Number.isFinite(point.anchor))
-    .sort((a, b) => a.anchor - b.anchor)
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const min = row.min == null ? Number.NEGATIVE_INFINITY : Number(row.min)
+    const max = row.max == null ? Number.POSITIVE_INFINITY : Number(row.max)
+    if (!(value >= min && value < max)) continue
+    if (!Number.isFinite(min) || !rows[i - 1]) return Number(row.score_1_6)
 
-  if (value <= points[0].anchor) return points[0].score
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i]
-    const b = points[i + 1]
-    if (value <= b.anchor) {
-      return clamp(a.score + (b.score - a.score) * ((value - a.anchor) / (b.anchor - a.anchor)), 1, 6)
-    }
+    const previousScore = Number(rows[i - 1].score_1_6)
+    const bucketScore = Number(row.score_1_6)
+    const previousMin = rows[i - 1].min == null ? Number.NEGATIVE_INFINITY : Number(rows[i - 1].min)
+    const previousMax = rows[i - 1].max == null ? Number.POSITIVE_INFINITY : Number(rows[i - 1].max)
+    const rampWidth = Number.isFinite(max)
+      ? max - min
+      : Number.isFinite(previousMin) && Number.isFinite(previousMax)
+        ? previousMax - previousMin
+        : 1
+    return clamp(previousScore + (bucketScore - previousScore) * ((value - min) / rampWidth), 1, 6)
   }
-  return points.at(-1).score
+  return Number(rows.at(-1).score_1_6)
 }
 
 function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpeedScore, windDirectionScore, windDirectionMultiplier }) {
@@ -44,18 +46,27 @@ function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpe
   return { weightedTotal, maxWeightedTotal, finalScoreFloat, finalScore: clamp(Math.round(finalScoreFloat), 1, 6) }
 }
 
-test('generic period table smoothing fades across adjacent bucket anchors', () => {
+test('generic period table smoothing fades between bucket boundaries', () => {
   const genericPeriodRows = [
-    { min: 5, max: 6, score_1_6: 2 },
-    { min: 6, max: 7, score_1_6: 4 },
-    { min: 7, max: 8, score_1_6: 5 },
+    { min: null, max: 5, score_1_6: 1 },
+    { min: 5, max: 7, score_1_6: 2 },
+    { min: 7, max: 8, score_1_6: 3 },
+    { min: 8, max: 11, score_1_6: 4 },
+    { min: 11, max: 14, score_1_6: 5 },
+    { min: 14, max: null, score_1_6: 6 },
   ]
 
-  assert.equal(smoothedRangeScore(genericPeriodRows, 5.5), 2)
-  assert.equal(smoothedRangeScore(genericPeriodRows, 6.0), 3)
-  assert.equal(smoothedRangeScore(genericPeriodRows, 6.5), 4)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 5.0), 1)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 6.0), 1.5)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 7.0), 2)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 7.5), 2.5)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 8.0), 3)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 9.5), 3.5)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 11.0), 4)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 14.0), 5)
+  assert.equal(smoothedRangeScore(genericPeriodRows, 15.5), 5.5)
 
-  const aroundBoundary = [5.8, 5.95, 6.1, 6.3].map((period) => smoothedRangeScore(genericPeriodRows, period))
+  const aroundBoundary = [6.8, 6.95, 7.1, 7.3].map((period) => smoothedRangeScore(genericPeriodRows, period))
   for (let i = 1; i < aroundBoundary.length; i++) {
     assert.ok(Math.abs(aroundBoundary[i] - aroundBoundary[i - 1]) < 0.5)
   }
