@@ -603,37 +603,48 @@ function rangeRowMax(row: any): number | null {
   return max === null || max === undefined ? null : Number(max)
 }
 
-function rangeRowAnchor(row: any, index: number, rows: any[]): number | null {
-  const min = rangeRowMin(row)
-  const max = rangeRowMax(row)
-  if (Number.isFinite(Number(min)) && Number.isFinite(Number(max))) return (Number(min) + Number(max)) / 2
-  if (Number.isFinite(Number(max))) return Number(max)
-  if (Number.isFinite(Number(min))) return Number(min)
-  const prev = rows[index - 1]
-  const next = rows[index + 1]
-  const prevAnchor = prev ? rangeRowAnchor(prev, index - 1, rows) : null
-  const nextAnchor = next ? rangeRowAnchor(next, index + 1, rows) : null
-  if (Number.isFinite(Number(prevAnchor)) && Number.isFinite(Number(nextAnchor))) return (Number(prevAnchor) + Number(nextAnchor)) / 2
-  return null
-}
-
 function smoothedRangeScore(rows: any[], value: number, rawScore: number): number {
-  const points = rows
-    .map((row, index) => ({ anchor: rangeRowAnchor(row, index, rows), score: rangeRowScore(row) }))
-    .filter((point): point is { anchor: number; score: number } => Number.isFinite(Number(point.anchor)))
-    .sort((a, b) => a.anchor - b.anchor)
-
-  if (points.length < 2) return rawScore
   const v = Number.isFinite(value) ? value : 0
-  if (v <= points[0].anchor) return points[0].score
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i]
-    const b = points[i + 1]
-    if (v <= b.anchor) {
-      return clamp(lerp(a.score, b.score, (v - a.anchor) / Math.max(0.000001, b.anchor - a.anchor)), 1, 6)
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    if (!rangeBucketMatches(row, v, { upperExclusive: true })) continue
+
+    const min = rangeRowMin(row)
+    const max = rangeRowMax(row)
+
+    const prev = rows[i - 1]
+    if (!prev) return rawScore
+    if (!Number.isFinite(Number(min))) return rawScore
+
+    const startScore = rangeRowScore(prev)
+    const endScore = rangeRowScore(row)
+    if (Number.isFinite(Number(max))) {
+      return clamp(lerp(startScore, endScore, (v - Number(min)) / Math.max(0.000001, Number(max) - Number(min))), 1, 6)
+    }
+
+    const prevMin = rangeRowMin(prev)
+    const prevMax = rangeRowMax(prev)
+    const rampWidth = Number.isFinite(Number(prevMin)) && Number.isFinite(Number(prevMax))
+      ? Math.max(0.000001, Number(prevMax) - Number(prevMin))
+      : 1
+    return clamp(lerp(startScore, endScore, (v - Number(min)) / rampWidth), 1, 6)
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const min = rangeRowMin(row)
+    const max = rangeRowMax(row)
+    if (!Number.isFinite(Number(min)) || !Number.isFinite(Number(max))) continue
+
+    if (v >= Number(min) && v <= Number(max)) {
+      const prev = rows[i - 1]
+      if (!prev) return rawScore
+      return clamp(lerp(rangeRowScore(prev), rangeRowScore(row), (v - Number(min)) / Math.max(0.000001, Number(max) - Number(min))), 1, 6)
     }
   }
-  return points[points.length - 1].score
+
+  return rawScore
 }
 
 // ---------------------
