@@ -38,13 +38,15 @@ function roundFinalScoreWithQuality(finalScoreFloat, periodScore, windSpeedScore
   const lower = Math.floor(finalScoreFloat)
   const fraction = finalScoreFloat - lower
 
-  let roundUpThreshold = 0.6
-  if (periodScore <= 2 || windSpeedScore <= 2) {
-    roundUpThreshold = 0.9
-  } else if (periodScore <= 2.5) {
-    roundUpThreshold = 0.8
+  if (periodScore < 2 || windSpeedScore < 2) {
+    return clamp(lower, 1, 6)
+  }
+
+  let roundUpThreshold = 0.65
+  if (periodScore < 2.5 || windSpeedScore < 2.5) {
+    roundUpThreshold = 0.95
   } else if (periodScore >= 4.5 && windSpeedScore >= 4.5) {
-    roundUpThreshold = 0.4
+    roundUpThreshold = 0.45
   }
 
   return clamp(lower + (fraction + Number.EPSILON >= roundUpThreshold ? 1 : 0), 1, 6)
@@ -70,14 +72,16 @@ function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpe
 
 
 test('quality-aware final score rounding protects weak period and wind scores', () => {
-  assert.equal(roundFinalScoreWithQuality(3.89, 1.75, 5), 3)
-  assert.equal(roundFinalScoreWithQuality(3.9, 1.75, 5), 4)
-  assert.equal(roundFinalScoreWithQuality(3.79, 2.25, 5), 3)
-  assert.equal(roundFinalScoreWithQuality(3.8, 2.25, 5), 4)
-  assert.equal(roundFinalScoreWithQuality(3.39, 4.5, 4.5), 3)
-  assert.equal(roundFinalScoreWithQuality(3.4, 4.5, 4.5), 4)
-  assert.equal(roundFinalScoreWithQuality(3.59, 3, 3), 3)
-  assert.equal(roundFinalScoreWithQuality(3.6, 3, 3), 4)
+  assert.equal(roundFinalScoreWithQuality(3.98, 1.75, 5), 3)
+  assert.equal(roundFinalScoreWithQuality(3.98, 5, 1.75), 3)
+  assert.equal(roundFinalScoreWithQuality(3.94, 2.25, 5), 3)
+  assert.equal(roundFinalScoreWithQuality(3.95, 2.25, 5), 4)
+  assert.equal(roundFinalScoreWithQuality(3.94, 5, 2.25), 3)
+  assert.equal(roundFinalScoreWithQuality(3.95, 5, 2.25), 4)
+  assert.equal(roundFinalScoreWithQuality(3.44, 4.5, 4.5), 3)
+  assert.equal(roundFinalScoreWithQuality(3.45, 4.5, 4.5), 4)
+  assert.equal(roundFinalScoreWithQuality(3.64, 3, 3), 3)
+  assert.equal(roundFinalScoreWithQuality(3.65, 3, 3), 4)
 })
 
 test('generic period table smoothing fades between bucket boundaries', () => {
