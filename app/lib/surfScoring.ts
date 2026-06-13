@@ -248,13 +248,15 @@ function roundFinalScoreWithQuality(finalScoreFloat: number, periodScore: number
   const lower = Math.floor(finalScoreFloat)
   const fraction = finalScoreFloat - lower
 
-  let roundUpThreshold = 0.6
-  if (periodScore <= 2 || windSpeedScore <= 2) {
-    roundUpThreshold = 0.9
-  } else if (periodScore <= 2.5) {
-    roundUpThreshold = 0.8
+  if (periodScore < 2 || windSpeedScore < 2) {
+    return clamp(lower, 1, 6)
+  }
+
+  let roundUpThreshold = 0.65
+  if (periodScore < 2.5 || windSpeedScore < 2.5) {
+    roundUpThreshold = 0.95
   } else if (periodScore >= 4.5 && windSpeedScore >= 4.5) {
-    roundUpThreshold = 0.4
+    roundUpThreshold = 0.45
   }
 
   return clamp(lower + (fraction + Number.EPSILON >= roundUpThreshold ? 1 : 0), 1, 6)
