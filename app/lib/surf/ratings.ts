@@ -59,6 +59,18 @@ function asNumber(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+export function calibratedFinalSurfRating1to6(finalScoreFloat: unknown): number | undefined {
+  const n = asNumber(finalScoreFloat)
+  if (n == null) return undefined
+  if (n < 1 || n > 6) return undefined
+  if (n < 2.2) return 1
+  if (n < 3.4) return 2
+  if (n < 4.4) return 3
+  if (n < 5.2) return 4
+  if (n < 5.75) return 5
+  return 6
+}
+
 function asRating1to6(value: unknown): number | undefined {
   const n = asNumber(value)
   if (n == null || n < 1 || n > 6) return undefined
@@ -111,6 +123,25 @@ export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unkno
   const isExperienceBased = surfRatingIsExperienceBased(record)
 
   if (isExperienceBased) {
+    const blendedFloatCandidates = [
+      breakdownExperience.blended_rating_float,
+      topExperience.blended_rating_float,
+      pickedBreakdownExperience.blended_rating_float,
+      pickedExperience.blended_rating_float,
+    ]
+
+    for (const candidate of blendedFloatCandidates) {
+      const rating = calibratedFinalSurfRating1to6(candidate)
+      if (rating != null) {
+        return {
+          rating,
+          source: 'experience_blend',
+          ratingFromExperience: true,
+          experienceDiceValue: rating,
+        }
+      }
+    }
+
     const blendedCandidates = [
       breakdownExperience.blended_rating_1_6,
       topExperience.blended_rating_1_6,
@@ -129,6 +160,24 @@ export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unkno
           ratingFromExperience: true,
           experienceDiceValue: rating,
         }
+      }
+    }
+  }
+
+  const finalScoreFloatCandidates = [
+    asRecord(asRecord(record.breakdown).scoring_breakdown).finalScoreFloatAfterPenalties,
+    asRecord(record.breakdown).finalScoreFloatAfterPenalties,
+    asRecord(record.breakdown).finalScoreFloat,
+  ]
+
+  for (const candidate of finalScoreFloatCandidates) {
+    const rating = calibratedFinalSurfRating1to6(candidate)
+    if (rating != null) {
+      return {
+        rating,
+        source: isExperienceBased ? 'experience_blend' : 'base',
+        ratingFromExperience: isExperienceBased,
+        experienceDiceValue: isExperienceBased ? rating : undefined,
       }
     }
   }

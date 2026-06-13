@@ -10,6 +10,7 @@ import {
 } from './surf/customSpotScoring'
 import { isValidRangeBound, rangeBucketMatches, rangeBucketSortValue } from './surf/rangeBuckets'
 import { applyCalmWindDirectionWeighting } from './surf/calmWind'
+import { calibratedFinalSurfRating1to6 } from './surf/ratings'
 
 export { normalizeCustomDirectionSector, normalizeCustomSpotScoringProfile, scoreCustomDirectionInSector } from './surf/customSpotScoring'
 export { applyCalmWindDirectionWeighting, windDirectionWeightMultiplierForSpeed } from './surf/calmWind'
@@ -260,13 +261,7 @@ function clamp(n: number, lo: number, hi: number) {
 }
 
 function roundFinalScore(finalScoreFloat: number) {
-  if (!Number.isFinite(finalScoreFloat)) return 1
-  if (finalScoreFloat < 2.2) return 1
-  if (finalScoreFloat < 3.4) return 2
-  if (finalScoreFloat < 4.4) return 3
-  if (finalScoreFloat < 5.2) return 4
-  if (finalScoreFloat < 5.75) return 5
-  return 6
+  return calibratedFinalSurfRating1to6(finalScoreFloat) ?? 1
 }
 
 function buildQualityPenalties(args: {
@@ -1521,10 +1516,10 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
 
   confidence = clamp(confidence, 0, signatureCap)
 
-const blendedFloat =
-  args.modelRating * (1 - confidence) +
-  experienceRatingFloat * confidence
-  const blendedRounded = clamp(Math.round(blendedFloat), 1, 6)
+  const blendedFloat =
+    args.modelRating * (1 - confidence) +
+    experienceRatingFloat * confidence
+  const blendedRounded = roundFinalScore(blendedFloat)
 
   const usedUserCount = used.filter((x) => x.source_priority === 'user').length
   const usedLegacyCount = used.filter((x) => x.source_priority === 'legacy').length

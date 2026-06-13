@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '../app/lib/surf/ratings.ts'
+import { calibratedFinalSurfRating1to6, normalizeSurfRating1to6, surfRatingIsExperienceBased } from '../app/lib/surf/ratings.ts'
 
 test('normal spot rating stays on existing 1-6 scale', () => {
   const normalized = normalizeSurfRating1to6({ rating: 5, score: 5 })
@@ -29,6 +29,24 @@ test('custom spot rating uses blended 1-6 experience rating when present', () =>
   assert.equal(normalized.source, 'experience_blend')
   assert.equal(normalized.ratingFromExperience, true)
   assert.equal(normalized.experienceDiceValue, 5)
+})
+
+test('shared final surf calibration is used for raw final score floats', () => {
+  assert.equal(calibratedFinalSurfRating1to6(5.6), 5)
+  assert.equal(calibratedFinalSurfRating1to6(5.8), 6)
+
+  const normalizedBase = normalizeSurfRating1to6({
+    breakdown: { scoring_breakdown: { finalScoreFloatAfterPenalties: 5.6 } },
+  })
+  assert.equal(normalizedBase.rating, 5)
+  assert.equal(normalizedBase.source, 'base')
+
+  const normalizedExperience = normalizeSurfRating1to6({
+    breakdown: { experience: { matched: true, blended_rating_float: 5.6, blended_rating_1_6: 6 } },
+  })
+  assert.equal(normalizedExperience.rating, 5)
+  assert.equal(normalizedExperience.source, 'experience_blend')
+  assert.equal(normalizedExperience.ratingFromExperience, true)
 })
 
 test('missing or invalid rating is unavailable and does not become 1', () => {
