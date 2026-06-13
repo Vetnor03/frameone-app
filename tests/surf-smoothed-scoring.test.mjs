@@ -45,7 +45,7 @@ function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpe
     6 * weights.period +
     6 * weights.swellDirection +
     6 * weights.windSpeed +
-    6 * weights.windDirection * windDirectionMultiplier
+    6 * weights.windDirection
   const finalScoreFloat = (weightedTotal / maxWeightedTotal) * 6
   return { weightedTotal, maxWeightedTotal, finalScoreFloat, finalScore: clamp(Math.round(finalScoreFloat), 1, 6) }
 }
@@ -116,6 +116,8 @@ test('generic calm wind reduces bad wind-direction contribution without changing
   const calmBadDirection = weightedRating({ heightScore: 5, periodScore: 3, swellDirectionScore: 5, windSpeedScore: 6, windDirectionScore: 1, windDirectionMultiplier: 0.25 })
   const calmGoodDirection = weightedRating({ heightScore: 5, periodScore: 3, swellDirectionScore: 5, windSpeedScore: 6, windDirectionScore: 6, windDirectionMultiplier: 0.25 })
 
+  assert.equal(calmBadDirection.maxWeightedTotal, 96)
+  assert.equal(calmGoodDirection.maxWeightedTotal, 96)
   assert.equal(calmGoodDirection.weightedTotal - calmBadDirection.weightedTotal, 2.5)
   assert.ok(calmGoodDirection.finalScore - calmBadDirection.finalScore <= 1)
 })
@@ -127,7 +129,7 @@ test('shared surf scoring source contains smoothing, weighted contributions, and
   assert.match(scoringHelper, /function smoothedRangeScore/)
   assert.match(scoringHelper, /sWaveH\.score \* weights\.wave_height/)
   assert.match(scoringHelper, /sWaveP\.score \* weights\.wave_period/)
-  assert.match(scoringHelper, /sWindDir\.score \* windDirectionEffectiveWeight/)
+  assert.match(scoringHelper, /windDirectionEffectiveScore \* weights\.wind_dir/)
   assert.match(scoringHelper, /scoring_breakdown\?: SurfScoringBreakdown/)
   assert.match(surfRoute, /scoring_breakdown: args\.scored\?\.breakdown\?\.scoring_breakdown/)
 })
