@@ -72,6 +72,30 @@ export type UserSurfExperienceRecord = {
   updated_at?: string
 }
 
+
+type SurfScoringComponentBreakdown = {
+  value: number
+  rawBucketScore: number
+  smoothedScore: number
+  weight: number
+  multiplier?: number
+  contribution: number
+}
+
+type SurfScoringBreakdown = {
+  height: SurfScoringComponentBreakdown
+  period: SurfScoringComponentBreakdown
+  swellDirection: SurfScoringComponentBreakdown
+  windSpeed: SurfScoringComponentBreakdown
+  windDirection: SurfScoringComponentBreakdown
+  weightedTotal: number
+  maxWeightedTotal: number
+  normalizedScore01: number
+  finalScoreFloat: number
+  finalScore: number
+  ratingSource: 'tables'
+}
+
 type ScoreBreakdown = {
   spotKey: string
 
@@ -132,25 +156,31 @@ type ScoreBreakdown = {
   }
 
   tables?: {
-    wave_dir: { picked: string; score: number }
-    wave_height: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
-    wave_period: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
+    wave_dir: { picked: string; score: number; rawBucketScore?: number; smoothedScore?: number }
+    wave_height: { bucket: string; score: number; rawBucketScore?: number; smoothedScore?: number; source?: string; profile_spot_used?: string; profile_source?: string }
+    wave_period: { bucket: string; score: number; rawBucketScore?: number; smoothedScore?: number; source?: string; profile_spot_used?: string; profile_source?: string }
     wind_dir: {
       picked: string
       score: number
       raw_wind_direction_score: number
       effective_wind_direction_score: number
       wind_direction_weight_multiplier: number
+      rawBucketScore?: number
+      smoothedScore?: number
       wind_speed_ms: number
       calm_wind_weighting_applied: boolean
     }
-    wind_speed: { bucket: string; score: number; source?: string; profile_spot_used?: string; profile_source?: string }
+    wind_speed: { bucket: string; score: number; rawBucketScore?: number; smoothedScore?: number; source?: string; profile_spot_used?: string; profile_source?: string }
     direction_profile_source?: 'custom_sector' | 'spot_specific_table'
     range_profile_source?: 'global_custom_generic' | 'spot_specific_table' | 'legacy_table' | 'missing_default'
     range_profile_spot_used?: string
     fallback_default_profile_used?: boolean
     total: number
     label: string
+    weightedTotal?: number
+    maxWeightedTotal?: number
+    normalizedScore01?: number
+    finalScoreFloat?: number
     weights: {
       wave_dir: number
       wave_height: number
@@ -163,6 +193,7 @@ type ScoreBreakdown = {
     killSwitchMultiplier?: number
   }
 
+  scoring_breakdown?: SurfScoringBreakdown
   custom_spot_scoring_profile?: CustomSpotScoringProfile | null
   selectedMainSwellIndex?: number
   contributingSwellIndexes?: number[]
@@ -406,6 +437,8 @@ function fallbackRangeScore1to6(tableKey: RangeTableKey, spotKey: string, value:
   return {
     bucket: `fallback:${tableKey}`,
     score: 1,
+    rawBucketScore: 1,
+    smoothedScore: 1,
     source,
     profile_source: profileSource,
     profile_spot_used: spotKey,
@@ -485,35 +518,122 @@ function customSpotProfileForBreakdown(profile?: CustomSpotScoringProfile | null
   }
 }
 
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * clamp(t, 0, 1)
+}
+
 function dirBucketScore1to6(tableKey: 'wave_dir' | 'wind_dir', spotKey: string, degFrom: number, customSpotProfile?: CustomSpotScoringProfile | null) {
   const sector = normalizeCustomDirectionSector(tableKey === 'wave_dir' ? customSpotProfile?.waveDir ?? null : customSpotProfile?.windDir ?? null)
   // Custom-spot sectors are stored/treated as meteorological FROM directions (same as built-in waveguide tables).
-  // Build and use a normalized virtual direction table shape so malformed rows do not silently default every score to 1.
-  if (sector) return { picked: `${Math.round(normDeg(degFrom))}°`, score: scoreCustomDirectionInSector(degFrom, sector) }
+  // They already score by distance from the configured main direction, so keep their sector gate and avoid an extra bucket jump.
+  if (sector) {
+    const score = scoreCustomDirectionInSector(degFrom, sector)
+    return { picked: `${Math.round(normDeg(degFrom))}°`, score, rawBucketScore: score, smoothedScore: score }
+  }
 
   const st = getSpotTables(spotKey)
   const arr: any[] = Array.isArray(st?.[tableKey]) ? st[tableKey] : []
-  if (!arr.length) return { picked: degToDir8(degFrom), score: 1 }
+  if (!arr.length) return { picked: degToDir8(degFrom), score: 1, rawBucketScore: 1, smoothedScore: 1 }
 
   let bestD = Number.POSITIVE_INFINITY
   let bestScore = 1
   let bestLabel: string = degToDir8(degFrom)
+  let bestDeg = 0
 
-  for (const v of arr) {
-    const d0 = Number(v?.dir_from_deg ?? v?.deg)
-    const sc = Number(v?.score_1_6 ?? v?.score)
-    if (!Number.isFinite(d0)) continue
+  const points = arr
+    .map((v) => ({
+      deg: Number(v?.dir_from_deg ?? v?.deg),
+      score: clamp(Number(v?.score_1_6 ?? v?.score ?? 1), 1, 6),
+      label: v?.label,
+    }))
+    .filter((v) => Number.isFinite(v.deg))
+    .sort((a, b) => normDeg(a.deg) - normDeg(b.deg))
 
-    const dist = angDistDeg(degFrom, d0)
+  for (const v of points) {
+    const dist = angDistDeg(degFrom, v.deg)
     if (dist < bestD) {
       bestD = dist
-      bestScore = clamp(Math.round(Number.isFinite(sc) ? sc : 1), 1, 6)
-      const lbl = v?.label
-      bestLabel = lbl != null && String(lbl).trim() !== '' ? String(lbl) : `${d0}°`
+      bestScore = clamp(Math.round(v.score), 1, 6)
+      bestDeg = v.deg
+      bestLabel = v.label != null && String(v.label).trim() !== '' ? String(v.label) : `${v.deg}°`
     }
   }
 
-  return { picked: bestLabel, score: bestScore }
+  if (points.length < 2) return { picked: bestLabel, score: bestScore, rawBucketScore: bestScore, smoothedScore: bestScore }
+
+  const deg = normDeg(degFrom)
+  let prev = points[points.length - 1]
+  let next = points[0]
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]
+    const b = points[(i + 1) % points.length]
+    const aDeg = normDeg(a.deg)
+    const bDegRaw = normDeg(b.deg)
+    const bDeg = bDegRaw <= aDeg ? bDegRaw + 360 : bDegRaw
+    const d = deg < aDeg ? deg + 360 : deg
+    if (d >= aDeg && d <= bDeg) {
+      prev = a
+      next = b
+      break
+    }
+  }
+  const prevDeg = normDeg(prev.deg)
+  let nextDeg = normDeg(next.deg)
+  if (nextDeg <= prevDeg) nextDeg += 360
+  const d = deg < prevDeg ? deg + 360 : deg
+  const smoothedScore = clamp(lerp(prev.score, next.score, (d - prevDeg) / Math.max(1, nextDeg - prevDeg)), 1, 6)
+
+  return { picked: bestLabel, score: smoothedScore, rawBucketScore: bestScore, smoothedScore, rawBucketDeg: bestDeg }
+}
+
+// ---------------------
+// Range score (min/max arrays) + legacy fallback
+// ---------------------
+function rangeRowScore(row: any): number {
+  return clamp(Number(row?.score_1_6 ?? row?.score ?? 1), 1, 6)
+}
+
+function rangeRowMin(row: any): number | null {
+  const min = row?.min
+  return min === null || min === undefined ? null : Number(min)
+}
+
+function rangeRowMax(row: any): number | null {
+  const max = row?.max
+  return max === null || max === undefined ? null : Number(max)
+}
+
+function rangeRowAnchor(row: any, index: number, rows: any[]): number | null {
+  const min = rangeRowMin(row)
+  const max = rangeRowMax(row)
+  if (Number.isFinite(Number(min)) && Number.isFinite(Number(max))) return (Number(min) + Number(max)) / 2
+  if (Number.isFinite(Number(max))) return Number(max)
+  if (Number.isFinite(Number(min))) return Number(min)
+  const prev = rows[index - 1]
+  const next = rows[index + 1]
+  const prevAnchor = prev ? rangeRowAnchor(prev, index - 1, rows) : null
+  const nextAnchor = next ? rangeRowAnchor(next, index + 1, rows) : null
+  if (Number.isFinite(Number(prevAnchor)) && Number.isFinite(Number(nextAnchor))) return (Number(prevAnchor) + Number(nextAnchor)) / 2
+  return null
+}
+
+function smoothedRangeScore(rows: any[], value: number, rawScore: number): number {
+  const points = rows
+    .map((row, index) => ({ anchor: rangeRowAnchor(row, index, rows), score: rangeRowScore(row) }))
+    .filter((point): point is { anchor: number; score: number } => Number.isFinite(Number(point.anchor)))
+    .sort((a, b) => a.anchor - b.anchor)
+
+  if (points.length < 2) return rawScore
+  const v = Number.isFinite(value) ? value : 0
+  if (v <= points[0].anchor) return points[0].score
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]
+    const b = points[i + 1]
+    if (v <= b.anchor) {
+      return clamp(lerp(a.score, b.score, (v - a.anchor) / Math.max(0.000001, b.anchor - a.anchor)), 1, 6)
+    }
+  }
+  return points[points.length - 1].score
 }
 
 // ---------------------
@@ -557,7 +677,9 @@ function rangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number,
 
     for (const b of arr) {
       if (rangeBucketMatches(b, v, { upperExclusive: profileSource === 'global_custom_generic' })) {
-        return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
+        const rawBucketScore = clamp(Math.round(rangeRowScore(b)), 1, 6)
+        const smoothedScore = smoothedRangeScore(arr, v, rawBucketScore)
+        return { bucket: mkLabel(b), score: smoothedScore, rawBucketScore, smoothedScore, source, profile_source: profileSource, profile_spot_used: spotKey }
       }
     }
 
@@ -577,12 +699,16 @@ function rangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number,
       const mn = Number(b?.min)
       if (!Number.isFinite(mn)) continue
       if (v <= mn) {
-        return { bucket: mkLabel(b), score: clamp(Math.round(Number(b?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
+        const rawBucketScore = clamp(Math.round(rangeRowScore(b)), 1, 6)
+        const smoothedScore = smoothedRangeScore(arr, v, rawBucketScore)
+        return { bucket: mkLabel(b), score: smoothedScore, rawBucketScore, smoothedScore, source, profile_source: profileSource, profile_spot_used: spotKey }
       }
     }
 
     const last = arr[arr.length - 1]
-    return { bucket: mkLabel(last), score: clamp(Math.round(Number(last?.score_1_6 ?? 1)), 1, 6), source, profile_source: profileSource, profile_spot_used: spotKey }
+    const rawBucketScore = clamp(Math.round(rangeRowScore(last)), 1, 6)
+    const smoothedScore = smoothedRangeScore(arr, v, rawBucketScore)
+    return { bucket: mkLabel(last), score: smoothedScore, rawBucketScore, smoothedScore, source, profile_source: profileSource, profile_spot_used: spotKey }
   }
 
   if (profileSource === 'global_custom_generic') {
@@ -594,11 +720,11 @@ function rangeScore1to6(tableKey: RangeTableKey, spotKey: string, value: number,
   if (buckets.length) {
     const bucket = pickBucket(buckets, value)
     const row = legacyTable?.spots?.[normalizeSpotKey(spotKey)]
-    const sc = Number(row?.[bucket] ?? 1)
-    return { bucket, score: clamp(Math.round(sc), 1, 6), source: 'legacy_table', profile_source: 'legacy_table' as const, profile_spot_used: normalizeSpotKey(spotKey) }
+    const rawBucketScore = clamp(Math.round(Number(row?.[bucket] ?? 1)), 1, 6)
+    return { bucket, score: rawBucketScore, rawBucketScore, smoothedScore: rawBucketScore, source: 'legacy_table', profile_source: 'legacy_table' as const, profile_spot_used: normalizeSpotKey(spotKey) }
   }
 
-  return { bucket: '', score: 1, source: 'missing_default', profile_source: 'missing_default' as const, profile_spot_used: normalizeSpotKey(spotKey) }
+  return { bucket: '', score: 1, rawBucketScore: 1, smoothedScore: 1, source: 'missing_default', profile_source: 'missing_default' as const, profile_spot_used: normalizeSpotKey(spotKey) }
 }
 
 // ---------------------
@@ -680,46 +806,110 @@ function buildModelScore(args: {
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
   const sWindDirEffective = applyCalmWindDirectionWeighting(sWindDir.score, args.ws)
 
-  let total =
+  const windDirectionEffectiveWeight = weights.wind_dir * sWindDirEffective.wind_direction_weight_multiplier
+  let weightedTotal =
     sWaveDir.score * weights.wave_dir +
     sWaveH.score * weights.wave_height +
     sWaveP.score * weights.wave_period +
     sWindS.score * weights.wind_speed +
-    sWindDirEffective.effective_wind_direction_score * weights.wind_dir +
+    sWindDir.score * windDirectionEffectiveWeight +
+    weights.base
+
+  let maxWeightedTotal =
+    6 * weights.wave_dir +
+    6 * weights.wave_height +
+    6 * weights.wave_period +
+    6 * weights.wind_speed +
+    6 * windDirectionEffectiveWeight +
     weights.base
 
   let killSwitchApplied = false
   const killSwitchMultiplier = 0.1
-  if (sWaveDir.score <= 1) {
-    total *= killSwitchMultiplier
+  if (sWaveDir.score <= 1 || args.h < 0.05 || args.p < 1) {
+    weightedTotal *= killSwitchMultiplier
     killSwitchApplied = true
   }
 
+  const normalizedScore01 = clamp(weightedTotal / Math.max(1, maxWeightedTotal), 0, 1)
+  const finalScoreFloat = normalizedScore01 * 6
+  const rating = clamp(Math.round(finalScoreFloat) || 1, 1, 6)
+  const total = weightedTotal
   const label = scoreToLabelFromTables(total)
-  const rating = clamp(labelToRating1to6(label) || 1, 1, 6)
+
+  const scoringBreakdown: SurfScoringBreakdown = {
+    height: {
+      value: args.h,
+      rawBucketScore: sWaveH.rawBucketScore ?? sWaveH.score,
+      smoothedScore: sWaveH.smoothedScore ?? sWaveH.score,
+      weight: weights.wave_height,
+      contribution: sWaveH.score * weights.wave_height,
+    },
+    period: {
+      value: args.p,
+      rawBucketScore: sWaveP.rawBucketScore ?? sWaveP.score,
+      smoothedScore: sWaveP.smoothedScore ?? sWaveP.score,
+      weight: weights.wave_period,
+      contribution: sWaveP.score * weights.wave_period,
+    },
+    swellDirection: {
+      value: args.sd,
+      rawBucketScore: sWaveDir.rawBucketScore ?? sWaveDir.score,
+      smoothedScore: sWaveDir.smoothedScore ?? sWaveDir.score,
+      weight: weights.wave_dir,
+      contribution: sWaveDir.score * weights.wave_dir,
+    },
+    windSpeed: {
+      value: args.ws,
+      rawBucketScore: sWindS.rawBucketScore ?? sWindS.score,
+      smoothedScore: sWindS.smoothedScore ?? sWindS.score,
+      weight: weights.wind_speed,
+      contribution: sWindS.score * weights.wind_speed,
+    },
+    windDirection: {
+      value: args.wd,
+      rawBucketScore: sWindDir.rawBucketScore ?? sWindDir.score,
+      smoothedScore: sWindDir.smoothedScore ?? sWindDir.score,
+      weight: weights.wind_dir,
+      multiplier: sWindDirEffective.wind_direction_weight_multiplier,
+      contribution: sWindDir.score * windDirectionEffectiveWeight,
+    },
+    weightedTotal,
+    maxWeightedTotal,
+    normalizedScore01,
+    finalScoreFloat,
+    finalScore: rating,
+    ratingSource: 'tables',
+  }
 
   return {
     rating,
     tables: {
-      wave_dir: { picked: sWaveDir.picked, score: sWaveDir.score },
-      wave_height: { bucket: sWaveH.bucket, score: sWaveH.score, source: sWaveH.source, profile_source: sWaveH.profile_source, profile_spot_used: sWaveH.profile_spot_used },
-      wave_period: { bucket: sWaveP.bucket, score: sWaveP.score, source: sWaveP.source, profile_source: sWaveP.profile_source, profile_spot_used: sWaveP.profile_spot_used },
+      wave_dir: { picked: sWaveDir.picked, score: sWaveDir.score, rawBucketScore: sWaveDir.rawBucketScore, smoothedScore: sWaveDir.smoothedScore },
+      wave_height: { bucket: sWaveH.bucket, score: sWaveH.score, rawBucketScore: sWaveH.rawBucketScore, smoothedScore: sWaveH.smoothedScore, source: sWaveH.source, profile_source: sWaveH.profile_source, profile_spot_used: sWaveH.profile_spot_used },
+      wave_period: { bucket: sWaveP.bucket, score: sWaveP.score, rawBucketScore: sWaveP.rawBucketScore, smoothedScore: sWaveP.smoothedScore, source: sWaveP.source, profile_source: sWaveP.profile_source, profile_spot_used: sWaveP.profile_spot_used },
       wind_dir: {
         picked: sWindDir.picked,
-        score: sWindDirEffective.effective_wind_direction_score,
+        score: sWindDir.score,
+        rawBucketScore: sWindDir.rawBucketScore,
+        smoothedScore: sWindDir.smoothedScore,
         ...sWindDirEffective,
       },
-      wind_speed: { bucket: sWindS.bucket, score: sWindS.score, source: sWindS.source, profile_source: sWindS.profile_source, profile_spot_used: sWindS.profile_spot_used },
+      wind_speed: { bucket: sWindS.bucket, score: sWindS.score, rawBucketScore: sWindS.rawBucketScore, smoothedScore: sWindS.smoothedScore, source: sWindS.source, profile_source: sWindS.profile_source, profile_spot_used: sWindS.profile_spot_used },
       direction_profile_source: directionProfileSource,
       range_profile_source: rangeProfileSource,
       range_profile_spot_used: rangeSpotKey,
       fallback_default_profile_used: [sWaveH, sWaveP, sWindS].some((s) => s.source === 'missing_default'),
       total,
       label,
+      weightedTotal,
+      maxWeightedTotal,
+      normalizedScore01,
+      finalScoreFloat,
       weights,
       killSwitchApplied,
       killSwitchMultiplier,
     },
+    scoringBreakdown,
   }
 }
 
@@ -1419,6 +1609,7 @@ export function scoreSurf(params: {
         best_record: exp.best_record,
       },
       tables: model.tables,
+      scoring_breakdown: model.scoringBreakdown,
       custom_spot_scoring_profile: customSpotProfileForBreakdown(params.customSpotProfile),
       selectedMainSwellIndex,
       contributingSwellIndexes: scoreSwells.map((x) => x.index),
