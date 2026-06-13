@@ -9,21 +9,25 @@ function clamp(n, lo, hi) {
 function smoothedRangeScore(rows, value) {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
-    const min = row.min == null ? Number.NEGATIVE_INFINITY : Number(row.min)
-    const max = row.max == null ? Number.POSITIVE_INFINITY : Number(row.max)
-    if (!(value >= min && value < max)) continue
-    if (!Number.isFinite(min) || !rows[i - 1]) return Number(row.score_1_6)
+    const prev = rows[i - 1]
+    if (!prev) continue
 
-    const previousScore = Number(rows[i - 1].score_1_6)
-    const bucketScore = Number(row.score_1_6)
-    const previousMin = rows[i - 1].min == null ? Number.NEGATIVE_INFINITY : Number(rows[i - 1].min)
-    const previousMax = rows[i - 1].max == null ? Number.POSITIVE_INFINITY : Number(rows[i - 1].max)
-    const rampWidth = Number.isFinite(max)
-      ? max - min
-      : Number.isFinite(previousMin) && Number.isFinite(previousMax)
-        ? previousMax - previousMin
-        : 1
-    return clamp(previousScore + (bucketScore - previousScore) * ((value - min) / rampWidth), 1, 6)
+    const prevMax = prev.max == null ? Number.NaN : Number(prev.max)
+    const min = row.min == null ? Number.NaN : Number(row.min)
+    const max = row.max == null ? Number.NaN : Number(row.max)
+    const prevMin = prev.min == null ? Number.NaN : Number(prev.min)
+    const nextMin = rows[i + 1]?.min == null ? Number.NaN : Number(rows[i + 1].min)
+    if (!Number.isFinite(min)) continue
+
+    const rampStart = Number.isFinite(prevMax) ? prevMax : min
+    const rampEnd = Number.isFinite(nextMin)
+      ? nextMin
+      : Number.isFinite(max)
+        ? max
+        : min + (Number.isFinite(prevMin) ? Math.max(1, rampStart - prevMin) : Math.max(1, min - rampStart))
+
+    if (value < rampStart || value > rampEnd) continue
+    return clamp(Number(prev.score_1_6) + (Number(row.score_1_6) - Number(prev.score_1_6)) * ((value - rampStart) / Math.max(0.000001, rampEnd - rampStart)), 1, 6)
   }
   return Number(rows.at(-1).score_1_6)
 }
@@ -70,6 +74,20 @@ test('generic period table smoothing fades between bucket boundaries', () => {
   for (let i = 1; i < aroundBoundary.length; i++) {
     assert.ok(Math.abs(aroundBoundary[i] - aroundBoundary[i - 1]) < 0.5)
   }
+})
+
+
+test('period smoothing uses neighboring bucket boundaries when ranges have gaps', () => {
+  const hellestoLikePeriodRows = [
+    { min: 0, max: 3, score_1_6: 1 },
+    { min: 4, max: 6, score_1_6: 2 },
+    { min: 7, max: 9, score_1_6: 4 },
+  ]
+
+  assert.equal(smoothedRangeScore(hellestoLikePeriodRows, 3), 1)
+  assert.equal(smoothedRangeScore(hellestoLikePeriodRows, 5), 1.5)
+  assert.ok(smoothedRangeScore(hellestoLikePeriodRows, 5.95) < 2)
+  assert.equal(smoothedRangeScore(hellestoLikePeriodRows, 7), 2)
 })
 
 test('generic weighted scoring can justify a better calm slot despite a tiny period disadvantage', () => {
