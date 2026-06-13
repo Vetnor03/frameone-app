@@ -32,24 +32,25 @@ function smoothedRangeScore(rows, value) {
   return Number(rows.at(-1).score_1_6)
 }
 
-function roundFinalScoreWithQuality(finalScoreFloat, periodScore, windSpeedScore) {
+function roundFinalScore(finalScoreFloat) {
   if (!Number.isFinite(finalScoreFloat)) return 1
+  return clamp(Math.round(finalScoreFloat), 1, 6)
+}
 
-  const lower = Math.floor(finalScoreFloat)
-  const fraction = finalScoreFloat - lower
-
-  if (periodScore < 2 || windSpeedScore < 2) {
-    return clamp(lower, 1, 6)
+function buildQualityPenalties({ periodScore, windSpeedScore, windDirectionScore, windSpeedMs, swellDirectionScore, heightScore }) {
+  const penalties = []
+  if (periodScore <= 1.5) penalties.push({ component: 'period_score', score: periodScore, penalty: -0.75, reason: 'Very weak period score gently reduces the weighted score.' })
+  else if (periodScore <= 2.0) penalties.push({ component: 'period_score', score: periodScore, penalty: -0.4, reason: 'Weak period score gently reduces the weighted score.' })
+  if (windSpeedScore <= 2) penalties.push({ component: 'wind_speed_score', score: windSpeedScore, penalty: -0.5, reason: 'Weak wind speed score gently reduces the weighted score.' })
+  if (windDirectionScore <= 1.5 && windSpeedMs >= 4) penalties.push({ component: 'wind_direction_score', score: windDirectionScore, penalty: -0.4, reason: 'Weak wind direction score is penalized only when wind speed is material.' })
+  if (swellDirectionScore <= 2) penalties.push({ component: 'swell_direction_score', score: swellDirectionScore, penalty: -0.75, reason: 'Weak swell direction score gently reduces the weighted score.' })
+  if (heightScore <= 2) penalties.push({ component: 'height_score', score: heightScore, penalty: -0.75, reason: 'Weak height score gently reduces the weighted score.' })
+  const totalPenalty = penalties.reduce((sum, item) => sum + item.penalty, 0)
+  if (totalPenalty < -1.25) {
+    const scale = 1.25 / Math.abs(totalPenalty)
+    return penalties.map((item) => ({ ...item, penalty: item.penalty * scale }))
   }
-
-  let roundUpThreshold = 0.65
-  if (periodScore < 2.5 || windSpeedScore < 2.5) {
-    roundUpThreshold = 0.95
-  } else if (periodScore >= 4.5 && windSpeedScore >= 4.5) {
-    roundUpThreshold = 0.45
-  }
-
-  return clamp(lower + (fraction + Number.EPSILON >= roundUpThreshold ? 1 : 0), 1, 6)
+  return penalties
 }
 
 function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpeedScore, windDirectionScore, windDirectionMultiplier }) {
@@ -66,24 +67,46 @@ function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpe
     6 * weights.swellDirection +
     6 * weights.windSpeed +
     6 * weights.windDirection
-  const finalScoreFloat = (weightedTotal / maxWeightedTotal) * 6
-  return { weightedTotal, maxWeightedTotal, finalScoreFloat, finalScore: roundFinalScoreWithQuality(finalScoreFloat, periodScore, windSpeedScore) }
+  const finalScoreFloatBeforePenalties = (weightedTotal / maxWeightedTotal) * 6
+  const qualityPenalties = buildQualityPenalties({ periodScore, windSpeedScore, windDirectionScore, windSpeedMs: 5, swellDirectionScore, heightScore })
+  const finalScoreFloatAfterPenalties = clamp(finalScoreFloatBeforePenalties + qualityPenalties.reduce((sum, item) => sum + item.penalty, 0), 1, 6)
+  return { weightedTotal, maxWeightedTotal, finalScoreFloat: finalScoreFloatAfterPenalties, finalScoreFloatBeforePenalties, finalScoreFloatAfterPenalties, qualityPenalties, finalScore: roundFinalScore(finalScoreFloatAfterPenalties) }
 }
 
 
-test('quality-aware final score rounding protects weak period and wind scores', () => {
-  assert.equal(roundFinalScoreWithQuality(3.98, 1.75, 5), 3)
-  assert.equal(roundFinalScoreWithQuality(3.98, 5, 1.75), 3)
-  assert.equal(roundFinalScoreWithQuality(3.94, 2.25, 5), 3)
-  assert.equal(roundFinalScoreWithQuality(3.95, 2.25, 5), 4)
-  assert.equal(roundFinalScoreWithQuality(3.94, 5, 2.25), 3)
-  assert.equal(roundFinalScoreWithQuality(3.95, 5, 2.25), 4)
-  assert.equal(roundFinalScoreWithQuality(3.44, 4.5, 4.5), 3)
-  assert.equal(roundFinalScoreWithQuality(3.45, 4.5, 4.5), 4)
-  assert.equal(roundFinalScoreWithQuality(3.64, 3, 3), 3)
-  assert.equal(roundFinalScoreWithQuality(3.65, 3, 3), 4)
-})
+test('quality penalties softly reduce weak contributors after weighted scoring', () => {
+  assert.equal(roundFinalScore(3.49), 3)
+  assert.equal(roundFinalScore(3.5), 4)
 
+  const penalties = buildQualityPenalties({
+    periodScore: 1.4,
+    windSpeedScore: 2,
+    windDirectionScore: 1,
+    windSpeedMs: 4,
+    swellDirectionScore: 2,
+    heightScore: 2,
+  })
+
+  assert.deepEqual(penalties.map((item) => item.component), [
+    'period_score',
+    'wind_speed_score',
+    'wind_direction_score',
+    'swell_direction_score',
+    'height_score',
+  ])
+  assert.ok(Math.abs(penalties.reduce((sum, item) => sum + item.penalty, 0) + 1.25) < 0.001)
+
+  const uncapped = buildQualityPenalties({
+    periodScore: 1.75,
+    windSpeedScore: 6,
+    windDirectionScore: 6,
+    windSpeedMs: 8,
+    swellDirectionScore: 6,
+    heightScore: 6,
+  })
+  assert.equal(uncapped.length, 1)
+  assert.equal(uncapped[0].penalty, -0.4)
+})
 test('generic period table smoothing fades between bucket boundaries', () => {
   const genericPeriodRows = [
     { min: null, max: 5, score_1_6: 1 },
@@ -161,7 +184,10 @@ test('shared surf scoring source contains smoothing, weighted contributions, and
   const surfRoute = readFileSync(new URL('../app/api/surf/score/route.ts', import.meta.url), 'utf8')
 
   assert.match(scoringHelper, /function smoothedRangeScore/)
-  assert.match(scoringHelper, /function roundFinalScoreWithQuality/)
+  assert.match(scoringHelper, /function buildQualityPenalties/)
+  assert.match(scoringHelper, /qualityPenalties: QualityPenalty\[\]/)
+  assert.match(scoringHelper, /finalScoreFloatBeforePenalties/)
+  assert.match(scoringHelper, /finalScoreFloatAfterPenalties/)
   assert.match(scoringHelper, /sWaveH\.score \* weights\.wave_height/)
   assert.match(scoringHelper, /sWaveP\.score \* weights\.wave_period/)
   assert.match(scoringHelper, /windDirectionEffectiveScore \* weights\.wind_dir/)

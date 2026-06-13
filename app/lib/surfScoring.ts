@@ -73,6 +73,13 @@ export type UserSurfExperienceRecord = {
 }
 
 
+type QualityPenalty = {
+  component: string
+  score: number
+  penalty: number
+  reason: string
+}
+
 type SurfScoringComponentBreakdown = {
   value: number
   rawBucketScore: number
@@ -94,6 +101,11 @@ type SurfScoringBreakdown = {
   normalizedScore01: number
   finalScoreFloat: number
   finalScore: number
+  qualityPenalties: QualityPenalty[]
+  finalScoreFloatBeforePenalties: number
+  finalScoreFloatAfterPenalties: number
+  finalScoreBeforePenalties: number
+  finalScoreAfterPenalties: number
   ratingSource: 'tables'
 }
 
@@ -183,6 +195,11 @@ type ScoreBreakdown = {
     maxWeightedTotal?: number
     normalizedScore01?: number
     finalScoreFloat?: number
+    qualityPenalties?: QualityPenalty[]
+    finalScoreFloatBeforePenalties?: number
+    finalScoreFloatAfterPenalties?: number
+    finalScoreBeforePenalties?: number
+    finalScoreAfterPenalties?: number
     weights: {
       wave_dir: number
       wave_height: number
@@ -242,24 +259,50 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
 }
 
-function roundFinalScoreWithQuality(finalScoreFloat: number, periodScore: number, windSpeedScore: number) {
+function roundFinalScore(finalScoreFloat: number) {
   if (!Number.isFinite(finalScoreFloat)) return 1
+  return clamp(Math.round(finalScoreFloat), 1, 6)
+}
 
-  const lower = Math.floor(finalScoreFloat)
-  const fraction = finalScoreFloat - lower
+function buildQualityPenalties(args: {
+  periodScore: number
+  windSpeedScore: number
+  windDirectionScore: number
+  windSpeedMs: number
+  swellDirectionScore: number
+  heightScore: number
+}): QualityPenalty[] {
+  const penalties: QualityPenalty[] = []
 
-  if (periodScore < 2 || windSpeedScore < 2) {
-    return clamp(lower, 1, 6)
+  if (args.periodScore <= 1.5) {
+    penalties.push({ component: 'period_score', score: args.periodScore, penalty: -0.75, reason: 'Very weak period score gently reduces the weighted score.' })
+  } else if (args.periodScore <= 2.0) {
+    penalties.push({ component: 'period_score', score: args.periodScore, penalty: -0.4, reason: 'Weak period score gently reduces the weighted score.' })
   }
 
-  let roundUpThreshold = 0.65
-  if (periodScore < 2.5 || windSpeedScore < 2.5) {
-    roundUpThreshold = 0.95
-  } else if (periodScore >= 4.5 && windSpeedScore >= 4.5) {
-    roundUpThreshold = 0.45
+  if (args.windSpeedScore <= 2) {
+    penalties.push({ component: 'wind_speed_score', score: args.windSpeedScore, penalty: -0.5, reason: 'Weak wind speed score gently reduces the weighted score.' })
   }
 
-  return clamp(lower + (fraction + Number.EPSILON >= roundUpThreshold ? 1 : 0), 1, 6)
+  if (args.windDirectionScore <= 1.5 && args.windSpeedMs >= 4) {
+    penalties.push({ component: 'wind_direction_score', score: args.windDirectionScore, penalty: -0.4, reason: 'Weak wind direction score is penalized only when wind speed is material.' })
+  }
+
+  if (args.swellDirectionScore <= 2) {
+    penalties.push({ component: 'swell_direction_score', score: args.swellDirectionScore, penalty: -0.75, reason: 'Weak swell direction score gently reduces the weighted score.' })
+  }
+
+  if (args.heightScore <= 2) {
+    penalties.push({ component: 'height_score', score: args.heightScore, penalty: -0.75, reason: 'Weak height score gently reduces the weighted score.' })
+  }
+
+  const totalPenalty = penalties.reduce((sum, item) => sum + item.penalty, 0)
+  if (totalPenalty < -1.25) {
+    const scale = 1.25 / Math.abs(totalPenalty)
+    return penalties.map((item) => ({ ...item, penalty: item.penalty * scale }))
+  }
+
+  return penalties
 }
 
 function normLabel(lbl: string) {
@@ -855,8 +898,21 @@ function buildModelScore(args: {
   }
 
   const normalizedScore01 = clamp(weightedTotal / Math.max(1, maxWeightedTotal), 0, 1)
-  const finalScoreFloat = normalizedScore01 * 6
-  const rating = roundFinalScoreWithQuality(finalScoreFloat, sWaveP.score, sWindS.score)
+  const finalScoreFloatBeforePenalties = normalizedScore01 * 6
+  const qualityPenalties = buildQualityPenalties({
+    periodScore: sWaveP.score,
+    windSpeedScore: sWindS.score,
+    windDirectionScore: sWindDir.score,
+    windSpeedMs: args.ws,
+    swellDirectionScore: sWaveDir.score,
+    heightScore: sWaveH.score,
+  })
+  const totalQualityPenalty = qualityPenalties.reduce((sum, item) => sum + item.penalty, 0)
+  const finalScoreFloatAfterPenalties = clamp(finalScoreFloatBeforePenalties + totalQualityPenalty, 1, 6)
+  const finalScoreBeforePenalties = roundFinalScore(finalScoreFloatBeforePenalties)
+  const finalScoreAfterPenalties = roundFinalScore(finalScoreFloatAfterPenalties)
+  const finalScoreFloat = finalScoreFloatAfterPenalties
+  const rating = finalScoreAfterPenalties
   const total = weightedTotal
   const label = scoreToLabelFromTables(total)
 
@@ -907,6 +963,11 @@ function buildModelScore(args: {
     normalizedScore01,
     finalScoreFloat,
     finalScore: rating,
+    qualityPenalties,
+    finalScoreFloatBeforePenalties,
+    finalScoreFloatAfterPenalties,
+    finalScoreBeforePenalties,
+    finalScoreAfterPenalties,
     ratingSource: 'tables',
   }
 
@@ -935,6 +996,11 @@ function buildModelScore(args: {
       maxWeightedTotal,
       normalizedScore01,
       finalScoreFloat,
+      qualityPenalties,
+      finalScoreFloatBeforePenalties,
+      finalScoreFloatAfterPenalties,
+      finalScoreBeforePenalties,
+      finalScoreAfterPenalties,
       weights,
       killSwitchApplied,
       killSwitchMultiplier,
