@@ -34,7 +34,12 @@ function smoothedRangeScore(rows, value) {
 
 function roundFinalScore(finalScoreFloat) {
   if (!Number.isFinite(finalScoreFloat)) return 1
-  return clamp(Math.round(finalScoreFloat), 1, 6)
+  if (finalScoreFloat < 2.2) return 1
+  if (finalScoreFloat < 3.4) return 2
+  if (finalScoreFloat < 4.4) return 3
+  if (finalScoreFloat < 5.2) return 4
+  if (finalScoreFloat < 5.75) return 5
+  return 6
 }
 
 function buildQualityPenalties({ periodScore, windSpeedScore, windDirectionScore, windSpeedMs, swellDirectionScore, heightScore }) {
@@ -75,8 +80,16 @@ function weightedRating({ heightScore, periodScore, swellDirectionScore, windSpe
 
 
 test('quality penalties softly reduce weak contributors after weighted scoring', () => {
-  assert.equal(roundFinalScore(3.49), 3)
-  assert.equal(roundFinalScore(3.5), 4)
+  assert.equal(roundFinalScore(2.19), 1)
+  assert.equal(roundFinalScore(2.2), 2)
+  assert.equal(roundFinalScore(3.39), 2)
+  assert.equal(roundFinalScore(3.4), 3)
+  assert.equal(roundFinalScore(4.39), 3)
+  assert.equal(roundFinalScore(4.4), 4)
+  assert.equal(roundFinalScore(5.19), 4)
+  assert.equal(roundFinalScore(5.2), 5)
+  assert.equal(roundFinalScore(5.74), 5)
+  assert.equal(roundFinalScore(5.75), 6)
 
   const penalties = buildQualityPenalties({
     periodScore: 1.4,

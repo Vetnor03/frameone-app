@@ -261,7 +261,12 @@ function clamp(n: number, lo: number, hi: number) {
 
 function roundFinalScore(finalScoreFloat: number) {
   if (!Number.isFinite(finalScoreFloat)) return 1
-  return clamp(Math.round(finalScoreFloat), 1, 6)
+  if (finalScoreFloat < 2.2) return 1
+  if (finalScoreFloat < 3.4) return 2
+  if (finalScoreFloat < 4.4) return 3
+  if (finalScoreFloat < 5.2) return 4
+  if (finalScoreFloat < 5.75) return 5
+  return 6
 }
 
 function buildQualityPenalties(args: {
