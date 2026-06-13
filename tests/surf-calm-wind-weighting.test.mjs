@@ -47,13 +47,16 @@ test('wind speed multiplier boundaries follow the calm wind scoring rule', () =>
   assert.equal(windDirectionWeightMultiplierForSpeed(3), 1)
 })
 
+
 test('app forecast and physical frame scoring flow through the shared surf scoring helper', () => {
   const scoringHelper = readFileSync(new URL('../app/lib/surfScoring.ts', import.meta.url), 'utf8')
   const surfRoute = readFileSync(new URL('../app/api/surf/score/route.ts', import.meta.url), 'utf8')
   const mirrorSnapshotRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 
   assert.match(scoringHelper, /import \{ applyCalmWindDirectionWeighting \} from '\.\/surf\/calmWind'/)
-  assert.match(scoringHelper, /sWindDir\.score \* windDirectionEffectiveWeight/)
+  assert.match(scoringHelper, /windDirectionEffectiveScore \* weights\.wind_dir/)
+  assert.match(scoringHelper, /6 \* weights\.wind_dir/)
+  assert.doesNotMatch(scoringHelper, /6 \* windDirectionEffectiveWeight/)
   assert.match(surfRoute, /import \{ scoreSurf,/)
   assert.match(surfRoute, /function buildAppSurfForecast/)
   assert.match(surfRoute, /aggregation: 'exact_visible_slot_values'/)

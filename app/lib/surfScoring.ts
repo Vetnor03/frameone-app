@@ -810,13 +810,13 @@ function buildModelScore(args: {
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
   const sWindDirEffective = applyCalmWindDirectionWeighting(sWindDir.score, args.ws)
 
-  const windDirectionEffectiveWeight = weights.wind_dir * sWindDirEffective.wind_direction_weight_multiplier
+  const windDirectionEffectiveScore = sWindDirEffective.effective_wind_direction_score
   let weightedTotal =
     sWaveDir.score * weights.wave_dir +
     sWaveH.score * weights.wave_height +
     sWaveP.score * weights.wave_period +
     sWindS.score * weights.wind_speed +
-    sWindDir.score * windDirectionEffectiveWeight +
+    windDirectionEffectiveScore * weights.wind_dir +
     weights.base
 
   let maxWeightedTotal =
@@ -824,7 +824,7 @@ function buildModelScore(args: {
     6 * weights.wave_height +
     6 * weights.wave_period +
     6 * weights.wind_speed +
-    6 * windDirectionEffectiveWeight +
+    6 * weights.wind_dir +
     weights.base
 
   let killSwitchApplied = false
@@ -880,7 +880,7 @@ function buildModelScore(args: {
       interpolatedScore: sWindDir.score,
       weight: weights.wind_dir,
       multiplier: sWindDirEffective.wind_direction_weight_multiplier,
-      contribution: sWindDir.score * windDirectionEffectiveWeight,
+      contribution: windDirectionEffectiveScore * weights.wind_dir,
     },
     weightedTotal,
     maxWeightedTotal,
