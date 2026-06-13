@@ -18,7 +18,7 @@ export function applyCalmWindDirectionWeighting(rawWindDirectionScore: number, w
   const safeRawScore = Number.isFinite(rawWindDirectionScore) ? rawWindDirectionScore : 1
   const safeWindSpeed = Number.isFinite(windSpeedMs) ? windSpeedMs : 0
   const multiplier = windDirectionWeightMultiplierForSpeed(safeWindSpeed)
-  const effectiveScore = 6 - ((6 - safeRawScore) * multiplier)
+  const effectiveScore = safeRawScore * multiplier
 
   return {
     raw_wind_direction_score: safeRawScore,

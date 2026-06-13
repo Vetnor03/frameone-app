@@ -2066,6 +2066,9 @@ function surfScoreRawDebug(args: SurfScoreRawDebugArgs) {
     final_label: visual.label,
     final_bars: visual.bars,
     final_color: visual.color,
+    table_total: args.scored?.breakdown?.tables?.total ?? null,
+    rating_source: args.scored?.breakdown?.experience?.matched ? 'experience_blend' : 'tables',
+    scoring_breakdown: args.scored?.breakdown?.scoring_breakdown ?? null,
   }
 }
 
@@ -2589,15 +2592,25 @@ function appForecastDaypartBucket(args: {
     visual,
     debugScores: {
       height_score: tables?.wave_height?.score ?? null,
+      height_raw_bucket_score: tables?.wave_height?.rawBucketScore ?? null,
+      height_smoothed_score: tables?.wave_height?.smoothedScore ?? null,
       period_score: tables?.wave_period?.score ?? null,
+      period_raw_bucket_score: tables?.wave_period?.rawBucketScore ?? null,
+      period_smoothed_score: tables?.wave_period?.smoothedScore ?? null,
       wave_direction_score: tables?.wave_dir?.score ?? null,
+      wave_direction_raw_bucket_score: tables?.wave_dir?.rawBucketScore ?? null,
+      wave_direction_smoothed_score: tables?.wave_dir?.smoothedScore ?? null,
       wind_direction_score: tables?.wind_dir?.score ?? null,
+      wind_direction_raw_bucket_score: tables?.wind_dir?.rawBucketScore ?? null,
+      wind_direction_smoothed_score: tables?.wind_dir?.smoothedScore ?? null,
       raw_wind_direction_score: tables?.wind_dir?.raw_wind_direction_score ?? null,
       effective_wind_direction_score: tables?.wind_dir?.effective_wind_direction_score ?? null,
       wind_direction_weight_multiplier: tables?.wind_dir?.wind_direction_weight_multiplier ?? null,
       wind_speed_ms_for_direction_weighting: tables?.wind_dir?.wind_speed_ms ?? null,
       calm_wind_weighting_applied: tables?.wind_dir?.calm_wind_weighting_applied ?? false,
       wind_strength_score: tables?.wind_speed?.score ?? null,
+      wind_strength_raw_bucket_score: tables?.wind_speed?.rawBucketScore ?? null,
+      wind_strength_smoothed_score: tables?.wind_speed?.smoothedScore ?? null,
       final_score: rating,
       uncapped_final_score: rawRating,
       conservative_fallback_cap_applied: conservativeFallbackCapApplied,
@@ -2605,6 +2618,7 @@ function appForecastDaypartBucket(args: {
       final_label: visual.label,
       final_bars: visual.bars,
       final_color: visual.color,
+      scoring_breakdown: rawHour.scored?.breakdown?.scoring_breakdown ?? null,
     },
   }
 }
