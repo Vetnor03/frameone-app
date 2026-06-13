@@ -5,12 +5,12 @@ import test from 'node:test'
 import { applyCalmWindDirectionWeighting, windDirectionWeightMultiplierForSpeed } from '../app/lib/surf/calmWind.ts'
 
 const rawBadDirectionScore = 1
-test('bad wind direction at 0 m/s only contributes with the calm-wind multiplier', () => {
+test('bad wind direction at 0 m/s uses the explicit no-direction-impact multiplier', () => {
   const weighted = applyCalmWindDirectionWeighting(rawBadDirectionScore, 0)
 
-  assert.equal(weighted.wind_direction_weight_multiplier, 0.25)
+  assert.equal(weighted.wind_direction_weight_multiplier, 0)
   assert.equal(weighted.raw_wind_direction_score, rawBadDirectionScore)
-  assert.equal(weighted.effective_wind_direction_score, 0.25)
+  assert.equal(weighted.effective_wind_direction_score, 0)
   assert.equal(weighted.calm_wind_weighting_applied, true)
 })
 
@@ -39,7 +39,7 @@ test('bad wind direction at 4+ m/s behaves exactly like the raw direction table 
 })
 
 test('wind speed multiplier boundaries follow the calm wind scoring rule', () => {
-  assert.equal(windDirectionWeightMultiplierForSpeed(0.999), 0.25)
+  assert.equal(windDirectionWeightMultiplierForSpeed(0.999), 0)
   assert.equal(windDirectionWeightMultiplierForSpeed(1), 0.25)
   assert.equal(windDirectionWeightMultiplierForSpeed(1.999), 0.25)
   assert.equal(windDirectionWeightMultiplierForSpeed(2), 0.6)

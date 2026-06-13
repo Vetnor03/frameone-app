@@ -8,7 +8,7 @@ export type CalmWindDirectionWeighting = {
 
 export function windDirectionWeightMultiplierForSpeed(windSpeedMs: number): number {
   if (!Number.isFinite(windSpeedMs)) return 0
-  if (windSpeedMs < 1) return 0.25
+  if (windSpeedMs < 1) return 0
   if (windSpeedMs < 2) return 0.25
   if (windSpeedMs < 3) return 0.6
   return 1
