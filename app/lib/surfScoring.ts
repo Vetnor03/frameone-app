@@ -22,6 +22,7 @@ export type {
 } from './surf/customSpotScoring'
 
 type Dir8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW'
+type DirectionSemantic = 'from'
 type RangeTableKey = 'wave_height' | 'wave_period' | 'wind_speed'
 
 const GLOBAL_CUSTOM_SPOT_RANGE_PROFILE = 'GLOBAL_CUSTOM_SPOT'
@@ -171,6 +172,9 @@ type ScoreBreakdown = {
       interpolatedScore?: number
       wind_speed_ms: number
       calm_wind_weighting_applied: boolean
+      windDirectionSemantic?: DirectionSemantic
+      windDirectionCompass?: Dir8
+      windDirectionScoreReason?: string
     }
     wind_speed: { bucket: string; score: number; rawBucketScore?: number; smoothedScore?: number; interpolatedScore?: number; source?: string; profile_spot_used?: string; profile_source?: string }
     direction_profile_source?: 'custom_sector' | 'spot_specific_table'
@@ -277,6 +281,13 @@ function degToDir8(deg: number): Dir8 {
   if (d < 247.5) return 'SW'
   if (d < 292.5) return 'W'
   return 'NW'
+}
+
+
+function windDirectionScoreReason(spotKey: string, compass: Dir8, score: number): string {
+  const spotLabel = spotKey === 'Hellestø' ? 'Hellestø' : spotKey
+  const quality = score >= 5 ? 'offshore/good' : score <= 2 ? 'onshore/bad' : 'cross-shore/mixed'
+  return `${compass} from is ${quality} for ${spotLabel}`
 }
 
 function normDeg(d: number) {
@@ -828,6 +839,8 @@ function buildModelScore(args: {
     }
   }
   const sWindDir = dirBucketScore1to6('wind_dir', args.spotKey, args.wd, args.customSpotProfile)
+  const windDirectionCompass = degToDir8(args.wd)
+  const windDirectionReason = windDirectionScoreReason(args.spotKey, windDirectionCompass, sWindDir.score)
   const sWindDirEffective = applyCalmWindDirectionWeighting(sWindDir.score, args.ws)
 
   const windDirectionEffectiveScore = sWindDirEffective.effective_wind_direction_score
@@ -923,6 +936,9 @@ function buildModelScore(args: {
         smoothedScore: sWindDir.smoothedScore,
         interpolatedScore: sWindDir.score,
         ...sWindDirEffective,
+        windDirectionSemantic: 'from',
+        windDirectionCompass,
+        windDirectionScoreReason: windDirectionReason,
       },
       wind_speed: { bucket: sWindS.bucket, score: sWindS.score, rawBucketScore: sWindS.rawBucketScore, smoothedScore: sWindS.smoothedScore, interpolatedScore: sWindS.score, source: sWindS.source, profile_source: sWindS.profile_source, profile_spot_used: sWindS.profile_spot_used },
       direction_profile_source: directionProfileSource,
