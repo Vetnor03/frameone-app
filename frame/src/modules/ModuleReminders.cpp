@@ -298,14 +298,173 @@ static bool extractTimeHHMM(const char* raw, char* out, size_t outSize) {
   return true;
 }
 
+static int weekdayIndexYMD(int y, int m, int d);
+static const char* weekdayNameFull(int idx);
+
+static const char* weekdayNameFullNorwegian(int idx) {
+  switch (idx) {
+    case 0: return "S" "\xF8" "ndag";
+    case 1: return "Mandag";
+    case 2: return "Tirsdag";
+    case 3: return "Onsdag";
+    case 4: return "Torsdag";
+    case 5: return "Fredag";
+    case 6: return "L" "\xF8" "rdag";
+    default: return "";
+  }
+}
+
+static bool isAsciiDigit(char c) {
+  return c >= '0' && c <= '9';
+}
+
+static void trimRightInPlace(char* s) {
+  if (!s) return;
+  int len = (int)strlen(s);
+  while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t')) {
+    s[--len] = '\0';
+  }
+}
+
+static void trimDanglingDateSeparator(char* s) {
+  if (!s) return;
+  trimRightInPlace(s);
+
+  int len = (int)strlen(s);
+  while (len > 0) {
+    char c = s[len - 1];
+    if (c == '-' || c == ',' || c == ':' || c == '/' || c == '(' || c == '[') {
+      s[--len] = '\0';
+      trimRightInPlace(s);
+      continue;
+    }
+    break;
+  }
+}
+
+static bool hasLabelBoundaryBefore(const char* s, int start) {
+  if (!s || start <= 0) return false;
+  char c = s[start - 1];
+  return c == ' ' || c == '\t' || c == '-' || c == ',' || c == ':' || c == '(' || c == '[';
+}
+
+static int trailingTimeStart(const char* s, int end) {
+  if (!s) return -1;
+  while (end > 0 && (s[end - 1] == ' ' || s[end - 1] == '\t')) end--;
+
+  int tokenStart = end;
+  while (tokenStart > 0 && s[tokenStart - 1] != ' ' && s[tokenStart - 1] != '\t') tokenStart--;
+
+  int len = end - tokenStart;
+  if (len != 5) return -1;
+  if (!isAsciiDigit(s[tokenStart]) || !isAsciiDigit(s[tokenStart + 1])) return -1;
+  if (s[tokenStart + 2] != ':') return -1;
+  if (!isAsciiDigit(s[tokenStart + 3]) || !isAsciiDigit(s[tokenStart + 4])) return -1;
+
+  int hh = (s[tokenStart] - '0') * 10 + (s[tokenStart + 1] - '0');
+  int mm = (s[tokenStart + 3] - '0') * 10 + (s[tokenStart + 4] - '0');
+  if (hh > 23 || mm > 59) return -1;
+
+  return tokenStart;
+}
+
+static bool stripTrailingLabelOnce(const char* in, const char* label, char* out, size_t outSize) {
+  if (!in || !label || !label[0] || !out || outSize == 0) return false;
+
+  char work[128];
+  safeCopy(work, sizeof(work), in);
+  trimRightInPlace(work);
+
+  int len = (int)strlen(work);
+  if (len <= 0) return false;
+
+  int timeStart = trailingTimeStart(work, len);
+  int labelEnd = (timeStart >= 0) ? timeStart : len;
+  while (labelEnd > 0 && (work[labelEnd - 1] == ' ' || work[labelEnd - 1] == '\t')) labelEnd--;
+
+  int labelLen = (int)strlen(label);
+  int labelStart = labelEnd - labelLen;
+  if (labelStart <= 0) return false;
+  if (strncmp(work + labelStart, label, labelLen) != 0) return false;
+  if (!hasLabelBoundaryBefore(work, labelStart)) return false;
+
+  char prefix[128];
+  int prefixLen = labelStart;
+  if (prefixLen >= (int)sizeof(prefix)) prefixLen = (int)sizeof(prefix) - 1;
+  memcpy(prefix, work, prefixLen);
+  prefix[prefixLen] = '\0';
+  trimDanglingDateSeparator(prefix);
+  if (!prefix[0]) return false;
+
+  if (timeStart >= 0) {
+    char timePart[16];
+    safeCopy(timePart, sizeof(timePart), work + timeStart);
+    trimRightInPlace(timePart);
+    snprintf(out, outSize, "%s %s", prefix, timePart);
+  } else {
+    safeCopy(out, outSize, prefix);
+  }
+
+  return true;
+}
+
+static void addDateLabelsForReminder(const ReminderItem& r, const char** labels, int& count, int maxLabels,
+                                     char dateShort[8], char dateLong[12]) {
+  int y = 0, m = 0, d = 0;
+  if (!parseYMD10(r.occurrenceDate, y, m, d)) return;
+
+  int wd = weekdayIndexYMD(y, m, d);
+
+  if (r.daysUntil <= 0) {
+    if (count < maxLabels) labels[count++] = "Today";
+    if (count < maxLabels) labels[count++] = "I dag";
+  } else if (r.daysUntil == 1) {
+    if (count < maxLabels) labels[count++] = "Tomorrow";
+    if (count < maxLabels) labels[count++] = "I morgen";
+  } else {
+    if (count < maxLabels) labels[count++] = weekdayNameFull(wd);
+    if (count < maxLabels) labels[count++] = weekdayNameFullNorwegian(wd);
+  }
+
+  snprintf(dateShort, 8, "%02d.%02d", d, m);
+  snprintf(dateLong, 12, "%02d.%02d.%04d", d, m, y);
+  if (count < maxLabels) labels[count++] = dateLong;
+  if (count < maxLabels) labels[count++] = dateShort;
+  if (r.displayDate[0] && strcmp(r.displayDate, "Today") != 0 && strcmp(r.displayDate, "Tomorrow") != 0) {
+    if (count < maxLabels) labels[count++] = r.displayDate;
+  }
+}
+
+static void stripDuplicateReminderDateLabel(const ReminderItem& r, char* out, size_t outSize) {
+  if (!out || outSize == 0) return;
+  safeCopy(out, outSize, r.title);
+
+  const char* labels[8];
+  int labelCount = 0;
+  char dateShort[8] = {0};
+  char dateLong[12] = {0};
+  addDateLabelsForReminder(r, labels, labelCount, 8, dateShort, dateLong);
+
+  for (int i = 0; i < labelCount; i++) {
+    char stripped[128];
+    if (stripTrailingLabelOnce(out, labels[i], stripped, sizeof(stripped))) {
+      safeCopy(out, outSize, stripped);
+      return;
+    }
+  }
+}
+
 static void buildReminderTitleWithTime(const ReminderItem& r, char* out, size_t outSize) {
   if (!out || outSize == 0) return;
   out[0] = '\0';
 
+  char cleanTitle[128];
+  stripDuplicateReminderDateLabel(r, cleanTitle, sizeof(cleanTitle));
+
   if (r.time[0]) {
-    snprintf(out, outSize, "%s %s", r.time, r.title);
+    snprintf(out, outSize, "%s %s", r.time, cleanTitle);
   } else {
-    safeCopy(out, outSize, r.title);
+    safeCopy(out, outSize, cleanTitle);
   }
 }
 
