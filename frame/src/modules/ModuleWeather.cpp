@@ -1013,8 +1013,20 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   bool ok = NetClient::httpGet(url, httpCode, body);
   if (!ok || httpCode != 200) return false;
 
+  Serial.printf("[weather] body len=%d\n", body.length());
+
   StaticJsonDocument<24576> doc;
-  if (deserializeJson(doc, body)) return false;
+  uint32_t heapBeforeParse = ESP.getFreeHeap();
+  DeserializationError err = deserializeJson(doc, body);
+  uint32_t heapAfterParse = ESP.getFreeHeap();
+  Serial.printf("[weather] heap before parse=%u after parse=%u\n",
+                (unsigned)heapBeforeParse,
+                (unsigned)heapAfterParse);
+  if (err) {
+    Serial.printf("[weather] json err: %s\n", err.c_str());
+    return false;
+  }
+  Serial.printf("[weather] json err: %s\n", err.c_str());
 
   JsonObject current = doc["current"];
   if (current.isNull()) return false;

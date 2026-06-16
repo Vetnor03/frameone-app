@@ -6,6 +6,9 @@ export const dynamic = 'force-dynamic'
 
 const WEATHER_DETAILS_TIMEOUT_MS = 8000
 const WEATHER_DETAILS_FORECAST_DAYS = 7
+const FRAME_WEATHER_CURRENT_FIELDS = ['time', 'temperature_2m', 'relative_humidity_2m', 'weather_code'] as const
+const FRAME_WEATHER_HOURLY_FIELDS = ['time', 'temperature_2m', 'weather_code', 'wind_speed_10m', 'precipitation'] as const
+const FRAME_WEATHER_DAILY_FIELDS = ['sunrise', 'sunset'] as const
 
 function numericParam(url: URL, key: string) {
   const value = Number(url.searchParams.get(key))
@@ -19,6 +22,27 @@ function forecastDaysParam(url: URL) {
   const value = Number(rawValue)
   if (!Number.isFinite(value)) return WEATHER_DETAILS_FORECAST_DAYS
   return Math.max(1, Math.min(WEATHER_DETAILS_FORECAST_DAYS, Math.round(value)))
+}
+
+function pickFields(source: unknown, fields: readonly string[]) {
+  if (!source || typeof source !== 'object') return {}
+
+  const compact: Record<string, unknown> = {}
+  for (const field of fields) {
+    if (field in source) compact[field] = (source as Record<string, unknown>)[field]
+  }
+  return compact
+}
+
+function compactFrameWeatherPayload(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return payload
+
+  const weather = payload as Record<string, unknown>
+  return {
+    current: pickFields(weather.current, FRAME_WEATHER_CURRENT_FIELDS),
+    daily: pickFields(weather.daily, FRAME_WEATHER_DAILY_FIELDS),
+    hourly: pickFields(weather.hourly, FRAME_WEATHER_HOURLY_FIELDS),
+  }
 }
 
 export async function GET(req: Request) {
@@ -62,7 +86,7 @@ export async function GET(req: Request) {
   }
 
   if (framePayload) {
-    return NextResponse.json(weather.payload)
+    return NextResponse.json(compactFrameWeatherPayload(weather.payload))
   }
 
   return NextResponse.json({
