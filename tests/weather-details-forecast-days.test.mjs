@@ -89,14 +89,42 @@ test('/api/weather/details without days requests multiple daily forecast days fo
   assert.ok(body.weather.daily.time.length > 1)
 })
 
-test('frame=1 preserves explicit days=5 weather details behavior', async () => {
+test('frame=1 preserves explicit days=5 and returns compact weather details payload', async () => {
   let requestedForecastDays = null
   let marineCalls = 0
   const { GET } = loadWeatherDetailsRoute({
     fetchWeatherForecast: async (options) => {
       requestedForecastDays = options.forecastDays
       return {
-        payload: { daily: fakeDaily(options.forecastDays) },
+        payload: {
+          generationtime_ms: 1.23,
+          current_units: { temperature_2m: '°C' },
+          current: {
+            time: '2026-06-08T12:00',
+            temperature_2m: 18,
+            relative_humidity_2m: 64,
+            weather_code: 2,
+            apparent_temperature: 17,
+            wind_direction_10m: 270,
+          },
+          daily: {
+            ...fakeDaily(options.forecastDays),
+            sunrise: Array.from({ length: options.forecastDays }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T04:00`),
+            sunset: Array.from({ length: options.forecastDays }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T22:00`),
+            uv_index_max: Array.from({ length: options.forecastDays }, () => 4),
+            precipitation_sum: Array.from({ length: options.forecastDays }, () => 0),
+          },
+          hourly: {
+            time: ['2026-06-08T12:00'],
+            temperature_2m: [18],
+            weather_code: [2],
+            wind_speed_10m: [3],
+            precipitation: [0],
+            precipitation_probability: [5],
+            apparent_temperature: [17],
+          },
+          hourly_units: { temperature_2m: '°C' },
+        },
         debug: { openMeteoUrl: `forecast_days=${options.forecastDays}` },
         error: null,
         fetchedAt: '2026-06-08T00:00:00.000Z',
@@ -115,7 +143,11 @@ test('frame=1 preserves explicit days=5 weather details behavior', async () => {
   assert.equal(response.status, 200)
   assert.equal(requestedForecastDays, 5)
   assert.equal(marineCalls, 0)
-  assert.equal(body.daily.time.length, 5)
+  assert.deepEqual(Object.keys(body).sort(), ['current', 'daily', 'hourly'])
+  assert.deepEqual(Object.keys(body.current).sort(), ['relative_humidity_2m', 'temperature_2m', 'time', 'weather_code'])
+  assert.deepEqual(Object.keys(body.daily).sort(), ['sunrise', 'sunset'])
+  assert.deepEqual(Object.keys(body.hourly).sort(), ['precipitation', 'temperature_2m', 'time', 'weather_code', 'wind_speed_10m'])
+  assert.equal(body.daily.sunrise.length, 5)
 })
 
 function loadWeatherForecastModule(fetchOpenMeteoJson) {
