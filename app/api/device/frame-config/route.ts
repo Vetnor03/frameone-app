@@ -16,8 +16,17 @@ export async function GET(req: Request) {
 
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const payload = await buildFrameConfigPayload(supabase, device_id)
+    const responseBody = JSON.stringify(payload)
 
-    return NextResponse.json(payload)
+    if (device_id === 'frm_54AE37455F34') {
+      console.info(responseBody)
+    }
+
+    return new NextResponse(responseBody, {
+      headers: {
+        'content-type': 'application/json',
+      },
+    })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }

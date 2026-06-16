@@ -449,12 +449,5 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       updated_at: data?.updated_at ?? null,
     }
 
-    const bytes = Buffer.byteLength(JSON.stringify(payload), 'utf8')
-    console.info('/api/device/frame-config response size', {
-      device_id,
-      bytes,
-      active_modules: Array.from(active.bases).sort(),
-    })
-
     return payload
 }
