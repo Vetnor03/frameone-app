@@ -227,6 +227,31 @@ export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence
   return `${item.occurrence_date} ${sortTimeValue(item.display_time || item.due_time)}`
 }
 
+export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItems: number) {
+  if (!Number.isFinite(maxItems) || maxItems <= 0) return []
+
+  const cap = Math.floor(maxItems)
+  const selectedGroupKeys: string[] = []
+  const selectedItems: DeviceReminderItem[] = []
+
+  for (const item of items) {
+    const groupKey = item.occurrence_date || item.display_date
+    if (!groupKey) continue
+
+    if (!selectedGroupKeys.includes(groupKey)) {
+      if (selectedGroupKeys.length >= 2) break
+      selectedGroupKeys.push(groupKey)
+    }
+
+    if (selectedGroupKeys.includes(groupKey)) {
+      selectedItems.push(item)
+      if (selectedItems.length >= cap) break
+    }
+  }
+
+  return selectedItems
+}
+
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
   if (a.days_until !== b.days_until) return a.days_until - b.days_until
   if (a.occurrence_date < b.occurrence_date) return -1
