@@ -267,6 +267,8 @@ static void drawEmptyState(const Cell& c, const char* line1, const char* line2) 
   drawLeft(centerX - w2 / 2, cy + lh1 + 6 + lh2, line2, f2, Theme::ink());
 }
 
+static bool getLocalTmQuick(tm& outTm);
+
 static bool parseYMD10(const char* iso, int& y, int& m, int& d) {
   if (!iso) return false;
   if (strlen(iso) < 10) return false;
@@ -281,6 +283,29 @@ static bool parseYMD10(const char* iso, int& y, int& m, int& d) {
   m = (iso[5] - '0') * 10 + (iso[6] - '0');
   d = (iso[8] - '0') * 10 + (iso[9] - '0');
   return true;
+}
+
+static int daysUntilDate(int y, int m, int d) {
+  tm nowTm;
+  if (!getLocalTmQuick(nowTm)) return 0;
+
+  tm today = {};
+  today.tm_year = nowTm.tm_year;
+  today.tm_mon = nowTm.tm_mon;
+  today.tm_mday = nowTm.tm_mday;
+  today.tm_hour = 12;
+
+  tm target = {};
+  target.tm_year = y - 1900;
+  target.tm_mon = m - 1;
+  target.tm_mday = d;
+  target.tm_hour = 12;
+
+  time_t todayTime = mktime(&today);
+  time_t targetTime = mktime(&target);
+  if (todayTime == (time_t)-1 || targetTime == (time_t)-1) return 0;
+
+  return (int)lround(difftime(targetTime, todayTime) / 86400.0);
 }
 
 static bool extractTimeHHMM(const char* raw, char* out, size_t outSize) {
@@ -640,15 +665,22 @@ static bool fetchReminders() {
   String url = String(BASE_URL)
              + "/api/device/reminders?device_id="
              + DeviceIdentity::getDeviceId()
-             + "&limit=20&tz=Europe/Oslo";
+             + "&limit=10&tz=Europe/Oslo";
 
   int code = 0;
   String body;
+  uint32_t heapBeforeFetch = ESP.getFreeHeap();
   bool ok = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
+  int contentLength = NetClient::lastContentLength();
 
   REM_LOG("reminders HTTP: ");
   REM_LOGLN(code);
-  REM_LOGLN(body);
+  REM_LOG("reminders content-length: ");
+  REM_LOGLN(contentLength);
+  REM_LOG("reminders response length: ");
+  REM_LOGLN(body.length());
+  REM_LOG("reminders heap before parse: ");
+  REM_LOGLN(heapBeforeFetch);
 
   if (!ok || code != 200 || body.length() == 0) {
     g_cache.loaded = true;
@@ -656,21 +688,27 @@ static bool fetchReminders() {
     return false;
   }
 
-  StaticJsonDocument<16384> doc;
+  StaticJsonDocument<8192> doc;
   DeserializationError err = deserializeJson(doc, body);
+  uint32_t heapAfterParse = ESP.getFreeHeap();
+  REM_LOG("reminders heap after parse: ");
+  REM_LOGLN(heapAfterParse);
   if (err) {
-    REM_LOGLN("reminders JSON parse failed");
+    REM_LOG("reminders JSON parse failed: ");
+    REM_LOGLN(err.c_str());
     g_cache.loaded = true;
     g_cache.ok = false;
     return false;
   }
 
   JsonArray items = doc["items"].as<JsonArray>();
+  REM_LOG("reminders items exists: ");
+  REM_LOGLN(items.isNull() ? "false" : "true");
   if (items.isNull()) {
     g_cache.loaded = true;
-    g_cache.ok = true;
+    g_cache.ok = false;
     g_cache.count = 0;
-    return true;
+    return false;
   }
 
   int idx = 0;
@@ -686,22 +724,31 @@ static bool fetchReminders() {
     utf8ToLatin1(r.title, sizeof(r.title), rawTitle);
 
     char rawTime[24] = {0};
-    safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
+    safeCopy(rawTime, sizeof(rawTime), it["time"] | "");
+    if (!rawTime[0]) safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
     if (!rawTime[0]) safeCopy(rawTime, sizeof(rawTime), it["due_time"] | "");
     if (!rawTime[0]) safeCopy(rawTime, sizeof(rawTime), it["time"] | "");
     extractTimeHHMM(rawTime, r.time, sizeof(r.time));
 
-    const char* rawOccurrenceDate = it["occurrence_date"] | "";
+    const char* rawOccurrenceDate = it["date"] | "";
+    if (!rawOccurrenceDate[0]) rawOccurrenceDate = it["occurrence_date"] | "";
     safeCopy(r.occurrenceDate, sizeof(r.occurrenceDate), rawOccurrenceDate);
 
-    const char* rawDisplayDate = it["display_date"] | "";
+    const char* rawDisplayDate = it["day"] | "";
+    if (!rawDisplayDate[0]) rawDisplayDate = it["display_date"] | "";
     utf8ToLatin1(r.displayDate, sizeof(r.displayDate), rawDisplayDate);
 
     const char* rawRepeat = it["repeat"] | "";
     safeCopy(r.repeat, sizeof(r.repeat), rawRepeat);
 
-    r.daysUntil = it["days_until"] | 0;
-    r.isOverdue = it["is_overdue"] | false;
+    int y = 0, m = 0, d = 0;
+    if (parseYMD10(r.occurrenceDate, y, m, d)) {
+      r.daysUntil = daysUntilDate(y, m, d);
+      r.isOverdue = r.daysUntil < 0;
+    } else {
+      r.daysUntil = it["days_until"] | 0;
+      r.isOverdue = it["is_overdue"] | false;
+    }
 
     idx++;
   }
@@ -709,6 +756,8 @@ static bool fetchReminders() {
   g_cache.loaded = true;
   g_cache.ok = true;
   g_cache.count = idx;
+  REM_LOG("reminders parsed item count: ");
+  REM_LOGLN(g_cache.count);
   return true;
 }
 
@@ -1551,7 +1600,7 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   const uint16_t ink = Theme::ink();
 
   if (!g_cache.ok) {
-    drawEmptyState(c, "No reminders", "Fetch failed");
+    drawEmptyState(c, "Reminders unavailable", "Fetch/parsing failed");
     return;
   }
   if (primaryIdx < 0) {
@@ -1698,7 +1747,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   const uint16_t ink = Theme::ink();
 
   if (!g_cache.ok) {
-    drawEmptyState(c, "No reminders", "Fetch failed");
+    drawEmptyState(c, "Reminders unavailable", "Fetch/parsing failed");
     return;
   }
   if (primaryIdx < 0) {
@@ -1834,7 +1883,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 // =========================================================
 static void renderLarge(const Cell& c, const ReminderBucket* buckets, int bucketCount, int primaryIdx) {
   if (!g_cache.ok) {
-    drawEmptyState(c, "No reminders", "Fetch failed");
+    drawEmptyState(c, "Reminders unavailable", "Fetch/parsing failed");
     return;
   }
 
@@ -1899,7 +1948,7 @@ static void renderLarge(const Cell& c, const ReminderBucket* buckets, int bucket
 // =========================================================
 static void renderXL(const Cell& c, const ReminderBucket* buckets, int bucketCount, int primaryIdx) {
   if (!g_cache.ok) {
-    drawEmptyState(c, "No reminders", "Fetch failed");
+    drawEmptyState(c, "Reminders unavailable", "Fetch/parsing failed");
     return;
   }
 

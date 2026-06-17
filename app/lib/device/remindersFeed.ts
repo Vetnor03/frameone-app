@@ -41,6 +41,19 @@ export type DeviceReminderItem = {
   external_id?: string
 }
 
+export type CompactFrameReminderItem = {
+  title: string
+  date: string
+  day: string
+  time?: string
+  source?: DeviceReminderSource
+  type?: 'meeting' | 'spond' | 'reminder'
+}
+
+export type CompactFrameRemindersPayload = {
+  items: CompactFrameReminderItem[]
+}
+
 export type IntegrationItemRow = {
   id: string
   user_id: string
@@ -225,6 +238,26 @@ function sortTimeValue(value: string | null) {
 
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
   return `${item.occurrence_date} ${sortTimeValue(item.display_time || item.due_time)}`
+}
+
+export function buildCompactFrameRemindersPayload(items: DeviceReminderItem[]): CompactFrameRemindersPayload {
+  return {
+    items: items.map((item) => {
+      const source = item.source || 'remind'
+      const compact: CompactFrameReminderItem = {
+        title: item.title,
+        date: item.occurrence_date,
+        day: item.display_date,
+      }
+
+      if (item.display_time || item.due_time) compact.time = item.display_time || item.due_time || undefined
+      if (source !== 'remind') compact.source = source
+      if (source === 'teams') compact.type = 'meeting'
+      else if (source === 'spond') compact.type = 'spond'
+
+      return compact
+    }),
+  }
 }
 
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {

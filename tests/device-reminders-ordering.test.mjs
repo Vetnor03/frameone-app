@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems } from '../app/lib/device/remindersFeed.ts'
+import { buildCompactFrameRemindersPayload, buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems } from '../app/lib/device/remindersFeed.ts'
 
 test('frame reminder feed orders tomorrow Microsoft meeting before later trash reminder', () => {
   const todayYmd = '2026-06-01'
@@ -85,4 +85,62 @@ test('Spond reminder feed only includes event arrangements', () => {
   assert.equal(items.length, 1)
   assert.equal(items[0].external_id, 'event:arrangement-1')
   assert.equal(items[0].title, 'Practice')
+})
+
+test('frame reminder payload is compact and excludes debug candidate data', () => {
+  const payload = buildCompactFrameRemindersPayload([
+    {
+      reminder_id: 'manual-1',
+      title: 'Take out trash',
+      occurrence_date: '2026-06-02',
+      display_date: 'Tomorrow',
+      days_until: 1,
+      is_overdue: false,
+      repeat: 'weekly',
+      due_time: '08:30',
+      display_time: '08:30',
+      source: 'remind',
+      external_id: 'should-not-leak',
+    },
+    {
+      reminder_id: 'teams:abc',
+      title: 'Standup',
+      occurrence_date: '2026-06-02',
+      display_date: 'Tomorrow',
+      days_until: 1,
+      is_overdue: false,
+      repeat: 'none',
+      due_time: '09:00',
+      display_time: '09:00',
+      source: 'teams',
+      external_id: 'meeting-debug-id',
+    },
+  ])
+
+  assert.deepEqual(payload, {
+    items: [
+      {
+        title: 'Take out trash',
+        date: '2026-06-02',
+        day: 'Tomorrow',
+        time: '08:30',
+      },
+      {
+        title: 'Standup',
+        date: '2026-06-02',
+        day: 'Tomorrow',
+        time: '09:00',
+        source: 'teams',
+        type: 'meeting',
+      },
+    ],
+  })
+
+  const serialized = JSON.stringify(payload)
+  assert.equal(serialized.includes('candidates'), false)
+  assert.equal(serialized.includes('reason'), false)
+  assert.equal(serialized.includes('external_id'), false)
+  assert.equal(serialized.includes('reminder_id'), false)
+  assert.equal(serialized.includes('days_until'), false)
+  assert.equal(serialized.includes('repeat'), false)
 })
