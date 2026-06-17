@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, reminderSortTimestamp, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
+import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -32,8 +32,8 @@ type ReminderRow = {
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
-const DEFAULT_LIMIT = 20
-const MAX_LIMIT = 200
+const DEFAULT_LIMIT = 12
+const MAX_LIMIT = 12
 
 const DEFAULT_HORIZON_DAYS = 120
 const MAX_HORIZON_DAYS = 366
@@ -443,34 +443,9 @@ export async function GET(req: Request) {
     }
 
     const sortedCandidates = [...teamsItems, ...spondItems, ...manualItems].sort(compareReminderItems)
-    const items = sortedCandidates.slice(0, limit)
+    const items = selectReminderDisplayGroups(sortedCandidates, limit)
 
-    console.info('[device/reminders] final frame reminder candidates', {
-      device_id,
-      timezone: timeZone,
-      today_ymd: todayYmd,
-      now_hm: nowHm,
-      horizon_end_ymd: horizonEndYmd,
-      limit,
-      candidates: sortedCandidates.map((item, index) => ({
-        title: item.title,
-        source: item.source || 'remind',
-        provider: item.source || 'remind',
-        type: item.source === 'teams' ? 'meeting' : item.source === 'spond' ? 'spond' : 'reminder',
-        sort_timestamp: reminderSortTimestamp(item),
-        reason: index < limit ? 'keep: within limit and visible/upcoming filters' : 'drop: beyond response limit',
-      })),
-    })
-
-    return NextResponse.json({
-      device_id,
-      generated_at: new Date().toISOString(),
-      timezone: timeZone,
-      today_ymd: todayYmd,
-      now_hm: nowHm,
-      horizon_end_ymd: horizonEndYmd,
-      items,
-    })
+    return NextResponse.json({ items })
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Unknown error' },
