@@ -894,8 +894,6 @@ static const char* insightDayPart(int hour) {
 static bool isThunderWmo(int wmo) { return wmo >= 95 && wmo <= 99; }
 static bool isFogWmo(int wmo) { return wmo == 45 || wmo == 48; }
 static bool isSleetWmo(int wmo) { return wmo == 56 || wmo == 57 || wmo == 66 || wmo == 67; }
-static bool isSunnyWmo(int wmo) { return wmo >= 0 && wmo <= 1; }
-
 static bool findEventRange(const WeatherCache& data, bool (*pred)(float, float, int), int& first, int& last, int& count) {
   first = 99; last = -1; count = 0;
   for (int i = 0; i < data.todayHourCount; i++) {
@@ -921,7 +919,7 @@ static void buildFallbackClothingAdvice(char* out, size_t n, float nowC, float h
   else if (hasLightRainSignal(precipMm, wmo)) strlcpy(out, "Bring a rain jacket.", n);
   else if (!isnan(refTemp) && refTemp <= 13.0f) strlcpy(out, "Light jacket recommended.", n);
   else if (!isnan(windMaxMs) && windMaxMs >= 7.0f) strlcpy(out, "Light layer for wind.", n);
-  else strlcpy(out, "Comfortable weather today.", n);
+  else out[0] = 0;
 }
 
 static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, float nowC, float hiC, float loC, float windMaxMs, float precipMm, int wmo) {
@@ -934,12 +932,6 @@ static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, f
   if (findEventRange(data, strongWindPred, first, last, count) || (!isnan(windMaxMs) && windMaxMs >= 10.0f)) { snprintf(out, n, "Strong winds %s.", count > 0 ? insightDayPart(first) : "today"); return; }
   if (findEventRange(data, rainPred, first, last, count)) { if (first >= 10) { snprintf(out, n, "Dry morning, rain %s.\nPlan around it.", first < 17 ? "afternoon" : "evening"); return; } if (last < 13) { strlcpy(out, "Rain clears by midday.\nDrier later on.", n); return; } }
   if (!isnan(hiC) && !isnan(loC) && hiC - loC >= 12.0f) { snprintf(out, n, "Big temperature swing today.\n%d° to %d°C.", (int)lroundf(loC), (int)lroundf(hiC)); return; }
-  int sunny = 0;
-  for (int i = 0; i < data.todayHourCount; i++) if (isSunnyWmo(data.todayWmo[i])) sunny++;
-  bool dry = isnan(precipMm) || precipMm <= PRECIP_LIGHT_MM;
-  bool calm = isnan(windMaxMs) || windMaxMs < 5.0f;
-  if (data.todayHourCount >= 6 && sunny * 10 >= data.todayHourCount * 7 && dry && calm) { strlcpy(out, "Sunny and calm all day.\nGreat weather outdoors.", n); return; }
-  if (dry && calm) { strlcpy(out, "Dry conditions throughout the day.", n); return; }
   buildFallbackClothingAdvice(out, n, nowC, hiC, loC, windMaxMs, precipMm, wmo);
 }
 
@@ -1535,29 +1527,34 @@ static void renderMedium(const Cell& c,
 
   int clothingTop = tempTop + (int)b12H + gapTempToClothing;
   int iconBottomLimit = windTop - gapIconToWind;
+  const bool hasInsight = insightStr[0] != 0;
 
   int availableMidH = iconBottomLimit - clothingTop;
   if (availableMidH < 30) availableMidH = 30;
 
-  int clothingBlockH = (int)lroundf((float)availableMidH * 0.34f);
-  if (clothingBlockH < 18) clothingBlockH = 18;
-  if (clothingBlockH > 34) clothingBlockH = 34;
+  int clothingBlockH = 0;
+  int iconRegionTop = clothingTop;
+  if (hasInsight) {
+    clothingBlockH = (int)lroundf((float)availableMidH * 0.34f);
+    if (clothingBlockH < 18) clothingBlockH = 18;
+    if (clothingBlockH > 34) clothingBlockH = 34;
 
-  int clothingY = clothingTop;
-  int iconRegionTop = clothingY + clothingBlockH + gapClothingToIcon;
+    drawWrappedTextBox(
+      c.x + 12,
+      clothingTop,
+      c.w - 24,
+      clothingBlockH,
+      insightStr,
+      FONT_B9,
+      ink,
+      0
+    );
+
+    iconRegionTop = clothingTop + clothingBlockH + gapClothingToIcon;
+  }
+
   int iconRegionH = iconBottomLimit - iconRegionTop;
   if (iconRegionH < 22) iconRegionH = 22;
-
-  drawWrappedTextBox(
-    c.x + 12,
-    clothingY,
-    c.w - 24,
-    clothingBlockH,
-    insightStr,
-    FONT_B9,
-    ink,
-    0
-  );
 
   int iconSize = iconRegionH;
   int maxByW = c.w - 24;
