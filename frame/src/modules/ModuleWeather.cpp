@@ -76,6 +76,14 @@ struct WeatherCache {
   static const int MAX_DAYS = 5;
   int dayCount = 0;
   DayForecast days[MAX_DAYS];
+
+  static const int MAX_TODAY_HOURS = 24;
+  int todayHourCount = 0;
+  int todayHour[MAX_TODAY_HOURS];
+  float todayTempC[MAX_TODAY_HOURS];
+  float todayPrecipMm[MAX_TODAY_HOURS];
+  float todayWindMs[MAX_TODAY_HOURS];
+  int todayWmo[MAX_TODAY_HOURS];
 };
 
 static const int MAX_INSTANCES = 4;
@@ -874,129 +882,65 @@ static void buildPrecipStr(char* out, size_t n,
 }
 
 // -----------------------------------------------------------------------------
-// Clothing suggestion helper
+// Weather insight helper
 // -----------------------------------------------------------------------------
-static void buildClothingSuggestion(char* out, size_t n,
-                                    float nowC,
-                                    float hiC,
-                                    float loC,
-                                    float windMaxMs,
-                                    float precipMm,
-                                    int wmo,
-                                    const char* sunriseHHMM,
-                                    const char* sunsetHHMM) {
+static const char* insightDayPart(int hour) {
+  if (hour < 12) return "this morning";
+  if (hour < 17) return "this afternoon";
+  if (hour < 21) return "this evening";
+  return "tonight";
+}
+
+static bool isThunderWmo(int wmo) { return wmo >= 95 && wmo <= 99; }
+static bool isFogWmo(int wmo) { return wmo == 45 || wmo == 48; }
+static bool isSleetWmo(int wmo) { return wmo == 56 || wmo == 57 || wmo == 66 || wmo == 67; }
+static bool isSunnyWmo(int wmo) { return wmo >= 0 && wmo <= 1; }
+
+static bool findEventRange(const WeatherCache& data, bool (*pred)(float, float, int), int& first, int& last, int& count) {
+  first = 99; last = -1; count = 0;
+  for (int i = 0; i < data.todayHourCount; i++) {
+    if (!pred(data.todayPrecipMm[i], data.todayWindMs[i], data.todayWmo[i])) continue;
+    int h = data.todayHour[i];
+    if (h < first) first = h;
+    if (h > last) last = h;
+    count++;
+  }
+  return count > 0;
+}
+
+static bool thunderPred(float, float, int wmo) { return isThunderWmo(wmo); }
+static bool snowPred(float, float, int wmo) { return isSnowWmo(wmo) || isSleetWmo(wmo); }
+static bool heavyRainPred(float pr, float, int wmo) { return (!isnan(pr) && pr >= 2.0f) || wmo == 65 || wmo == 82; }
+static bool fogPred(float, float, int wmo) { return isFogWmo(wmo); }
+static bool strongWindPred(float, float wind, int) { return !isnan(wind) && wind >= 10.0f; }
+static bool rainPred(float pr, float, int wmo) { return hasLightRainSignal(pr, wmo); }
+
+static void buildFallbackClothingAdvice(char* out, size_t n, float nowC, float hiC, float loC, float windMaxMs, float precipMm, int wmo) {
+  float refTemp = !isnan(nowC) ? nowC : (!isnan(hiC) && !isnan(loC) ? hiC * 0.6f + loC * 0.4f : (!isnan(hiC) ? hiC : loC));
+  if (isSnowWmo(wmo) || shouldLabelSnowByTemp(loC, hiC) || (!isnan(refTemp) && refTemp <= 0.0f)) strlcpy(out, "Dress warmly today.", n);
+  else if (hasLightRainSignal(precipMm, wmo)) strlcpy(out, "Bring a rain jacket.", n);
+  else if (!isnan(refTemp) && refTemp <= 13.0f) strlcpy(out, "Light jacket recommended.", n);
+  else if (!isnan(windMaxMs) && windMaxMs >= 7.0f) strlcpy(out, "Light layer for wind.", n);
+  else strlcpy(out, "Comfortable weather today.", n);
+}
+
+static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, float nowC, float hiC, float loC, float windMaxMs, float precipMm, int wmo) {
   if (!out || n == 0) return;
-  out[0] = 0;
-
-  float refTemp = NAN;
-
-  if (!isnan(nowC)) {
-    refTemp = nowC;
-  } else if (!isnan(hiC) && !isnan(loC)) {
-    refTemp = hiC * 0.60f + loC * 0.40f;
-  } else if (!isnan(hiC)) {
-    refTemp = hiC;
-  } else if (!isnan(loC)) {
-    refTemp = loC;
-  }
-
-  bool sunDown = isSunDownNow(sunriseHHMM, sunsetHHMM);
-
-  if (!isnan(refTemp) && sunDown) {
-    refTemp -= 2.0f;
-  }
-
-  const char* when = clothingTimePhrase();
-
-  bool snowy        = isSnowWmo(wmo) || shouldLabelSnowByTemp(loC, hiC);
-  bool lightRain    = hasLightRainSignal(precipMm, wmo);
-  bool rainy        = hasMeaningfulRainSignal(precipMm, wmo);
-  bool heavyRain    = (!isnan(precipMm) && precipMm >= PRECIP_HEAVY_MM);
-  bool breezy       = (!isnan(windMaxMs) && windMaxMs >= 5.0f);
-  bool windy        = (!isnan(windMaxMs) && windMaxMs >= 7.0f);
-  bool veryWindy    = (!isnan(windMaxMs) && windMaxMs >= 10.0f);
-
-  bool umbrellaFriendly = !breezy;
-  bool freezing = (!isnan(refTemp) && refTemp <= 0.0f);
-  bool cold     = (!isnan(refTemp) && refTemp <= 7.0f);
-  bool cool     = (!isnan(refTemp) && refTemp <= 13.0f);
-  bool mild     = (!isnan(refTemp) && refTemp <= 18.0f);
-  bool warm     = (!isnan(refTemp) && refTemp <= 24.0f);
-
-  bool needsJacketFromWind     = windy && refTemp <= 15.0f;
-  bool needsWarmJacketFromWind = veryWindy && refTemp <= 10.0f;
-
-  if (snowy || freezing) {
-    if (veryWindy) snprintf(out, n, "A warm jacket and boots will feel best %s.", when);
-    else           snprintf(out, n, "A warm jacket and boots are recommended %s.", when);
-    return;
-  }
-
-  if (heavyRain) {
-    if (umbrellaFriendly) snprintf(out, n, "A rain jacket and umbrella would be wise %s.", when);
-    else                  snprintf(out, n, "A raincoat with a hood and good shoes would be wise %s.", when);
-    return;
-  }
-
-  if (rainy) {
-    if (!umbrellaFriendly) {
-      if (cold || needsWarmJacketFromWind) snprintf(out, n, "A proper rain jacket will be the better choice %s.", when);
-      else                                 snprintf(out, n, "A rain jacket will come in handy %s.", when);
-    } else {
-      if (cold || needsWarmJacketFromWind) snprintf(out, n, "A proper jacket and umbrella would be wise %s.", when);
-      else                                 snprintf(out, n, "A light jacket and umbrella would be smart %s.", when);
-    }
-    return;
-  }
-
-  if (lightRain) {
-    if (!umbrellaFriendly) {
-      if (cold || needsJacketFromWind) snprintf(out, n, "A light rain jacket would be smart %s.", when);
-      else                             snprintf(out, n, "A light outer layer may come in handy %s.", when);
-    } else {
-      if (cold || needsJacketFromWind) snprintf(out, n, "A light jacket or umbrella may be useful %s.", when);
-      else                             snprintf(out, n, "You may want to bring an umbrella %s.", when);
-    }
-    return;
-  }
-
-  if (needsWarmJacketFromWind) {
-    snprintf(out, n, "A warm jacket will feel best in the wind %s.", when);
-    return;
-  }
-
-  if (cold) {
-    if (windy) snprintf(out, n, "A warm jacket will likely feel best %s.", when);
-    else       snprintf(out, n, "A warm jacket should be perfect %s.", when);
-    return;
-  }
-
-  if (cool) {
-    if (needsJacketFromWind) snprintf(out, n, "A light jacket will be the better choice %s.", when);
-    else                     snprintf(out, n, "A sweater or light jacket should do just fine %s.", when);
-    return;
-  }
-
-  if (mild) {
-    if (windy) snprintf(out, n, "A light jacket is a good idea in the wind %s.", when);
-    else       snprintf(out, n, "A sweater or light layer should be enough %s.", when);
-    return;
-  }
-
-  if (warm) {
-    if (veryWindy)      snprintf(out, n, "A T-shirt with a light extra layer may feel best %s.", when);
-    else if (windy)     snprintf(out, n, "A T-shirt should be fine, but bring a light layer for the wind %s.", when);
-    else if (sunDown)   snprintf(out, n, "A T-shirt is fine, but a light layer may feel nice later %s.", when);
-    else                snprintf(out, n, "A T-shirt should be perfect %s.", when);
-    return;
-  }
-
-  if (windy) {
-    snprintf(out, n, "Light clothes should work, but the wind may bite %s.", when);
-    return;
-  }
-
-  snprintf(out, n, "Shorts and a T-shirt should be perfect %s.", when);
+  int first, last, count;
+  if (findEventRange(data, thunderPred, first, last, count)) { snprintf(out, n, "Thunderstorms possible %s.\n%s", insightDayPart(first), first >= 12 ? "Dry before then." : ""); return; }
+  if (findEventRange(data, snowPred, first, last, count)) { snprintf(out, n, "Snow arriving %s.\nWatch roads later.", insightDayPart(first)); return; }
+  if (findEventRange(data, heavyRainPred, first, last, count)) { if (count > 1) snprintf(out, n, "Heavy rain expected %02d:00-%02d:00.\nOtherwise mostly dry.", first, last); else snprintf(out, n, "Heavy rain expected around %02d:00.\nOtherwise mostly dry.", first); return; }
+  if (findEventRange(data, fogPred, first, last, count)) { snprintf(out, n, "Dense %s fog.\nClears later today.", first < 12 ? "morning" : "late"); return; }
+  if (findEventRange(data, strongWindPred, first, last, count) || (!isnan(windMaxMs) && windMaxMs >= 10.0f)) { snprintf(out, n, "Strong winds %s.", count > 0 ? insightDayPart(first) : "today"); return; }
+  if (findEventRange(data, rainPred, first, last, count)) { if (first >= 10) { snprintf(out, n, "Dry morning, rain %s.\nPlan around it.", first < 17 ? "afternoon" : "evening"); return; } if (last < 13) { strlcpy(out, "Rain clears by midday.\nDrier later on.", n); return; } }
+  if (!isnan(hiC) && !isnan(loC) && hiC - loC >= 12.0f) { snprintf(out, n, "Big temperature swing today.\n%d° to %d°C.", (int)lroundf(loC), (int)lroundf(hiC)); return; }
+  int sunny = 0;
+  for (int i = 0; i < data.todayHourCount; i++) if (isSunnyWmo(data.todayWmo[i])) sunny++;
+  bool dry = isnan(precipMm) || precipMm <= PRECIP_LIGHT_MM;
+  bool calm = isnan(windMaxMs) || windMaxMs < 5.0f;
+  if (data.todayHourCount >= 6 && sunny * 10 >= data.todayHourCount * 7 && dry && calm) { strlcpy(out, "Sunny and calm all day.\nGreat weather outdoors.", n); return; }
+  if (dry && calm) { strlcpy(out, "Dry conditions throughout the day.", n); return; }
+  buildFallbackClothingAdvice(out, n, nowC, hiC, loC, windMaxMs, precipMm, wmo);
 }
 
 // -----------------------------------------------------------------------------
@@ -1046,6 +990,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   out.restWmo = out.currentWmo;
 
   out.dayCount = 0;
+  out.todayHourCount = 0;
   for (int i = 0; i < WeatherCache::MAX_DAYS; i++) out.days[i] = DayForecast();
 
   out.sunriseHHMM[0] = 0;
@@ -1199,6 +1144,14 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       anyDay[di] = true;
 
       bool sameDateAsCurrent = (currentYMD[0] && strlen(ts) >= 10 && strncmp(ts, currentYMD, 10) == 0);
+      if (sameDateAsCurrent && out.todayHourCount < WeatherCache::MAX_TODAY_HOURS) {
+        int j = out.todayHourCount++;
+        out.todayHour[j] = hour;
+        out.todayTempC[j] = temp;
+        out.todayPrecipMm[j] = pr;
+        out.todayWindMs[j] = wind;
+        out.todayWmo[j] = wmo;
+      }
       bool isRestOfToday = sameDateAsCurrent && currentHour >= 0 && hour >= currentHour;
 
       if (isRestOfToday) {
@@ -1535,11 +1488,9 @@ static void renderMedium(const Cell& c,
   char precipStr[24] = {0};
   buildPrecipStr(precipStr, sizeof(precipStr), medPrecip, medWmo, medLoC, medHiC);
 
-  char clothingStr[96] = {0};
-  buildClothingSuggestion(clothingStr, sizeof(clothingStr),
-                          data.tempC, medHiC, medLoC,
-                          medWindMax, medPrecip, medWmo,
-                          data.sunriseHHMM, data.sunsetHHMM);
+  char insightStr[96] = {0};
+  buildWeatherInsight(insightStr, sizeof(insightStr), data,
+                      data.tempC, medHiC, medLoC, medWindMax, medPrecip, medWmo);
 
   int16_t b12Y1; uint16_t b12H;
   int16_t b9Y1;  uint16_t b9H;
@@ -1602,7 +1553,7 @@ static void renderMedium(const Cell& c,
     clothingY,
     c.w - 24,
     clothingBlockH,
-    clothingStr,
+    insightStr,
     FONT_B9,
     ink,
     0
@@ -1973,11 +1924,9 @@ static void renderLargeXL(const Cell& c,
   buildWindStr(windStr, sizeof(windStr), today.windMaxMs);
   buildPrecipStr(precipStr, sizeof(precipStr), today.precipMm, today.wmo, today.loC, today.hiC);
 
-  char clothingStr[96] = {0};
-  buildClothingSuggestion(clothingStr, sizeof(clothingStr),
-                          data.tempC, today.hiC, today.loC,
-                          today.windMaxMs, today.precipMm, today.wmo,
-                          data.sunriseHHMM, data.sunsetHHMM);
+  char insightStr[96] = {0};
+  buildWeatherInsight(insightStr, sizeof(insightStr), data,
+                      data.tempC, today.hiC, today.loC, today.windMaxMs, today.precipMm, today.wmo);
 
   char locationName[48] = {0};
   getDisplayLocationName(cfg, locationName, sizeof(locationName));
@@ -2125,7 +2074,7 @@ static void renderLargeXL(const Cell& c,
       contentTop,
       rightW,
       contentH,
-      clothingStr,
+      insightStr,
       FONT_B9,
       ink,
       5

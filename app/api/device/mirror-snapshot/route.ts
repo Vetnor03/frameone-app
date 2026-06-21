@@ -1234,6 +1234,27 @@ function computeSelectedWeatherPeriods(data: UnknownRecord, fallbackFullDay: {
   }
 }
 
+function buildTodayWeatherInsightHours(data: UnknownRecord) {
+  const current = asRecord(data.current)
+  const hourly = asRecord(data.hourly)
+  const currentDate = asString(current.time).slice(0, 10)
+  const times = Array.isArray(hourly.time) ? hourly.time : []
+  if (currentDate.length < 10 || times.length === 0) return []
+  return times.flatMap((rawTime, index) => {
+    const time = asString(rawTime)
+    if (!time.startsWith(currentDate)) return []
+    const hour = localHourFromIso(time)
+    if (hour == null || hour < 0 || hour >= 24) return []
+    return [{
+      hour,
+      tempC: arrayNumberAt(hourly.temperature_2m, index),
+      precipMm: arrayNumberAt(hourly.precipitation, index),
+      windMs: arrayNumberAt(hourly.wind_speed_10m, index),
+      wmo: arrayNumberAt(hourly.weather_code, index),
+    }]
+  })
+}
+
 async function weatherDetail(cfg: UnknownRecord, language: string, configUpdatedAt?: string | null): Promise<Detail> {
   const lat = asNumber(cfg.lat)
   const lon = asNumber(cfg.lon)
@@ -1294,6 +1315,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     sunriseHHMM,
     sunsetHHMM,
     localHour: localHourFromIso(currentTime),
+    todayHours: buildTodayWeatherInsightHours(data),
   })
   const dailyTime = Array.isArray(daily.time) ? daily.time : []
   const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(5, Math.max(1, dailyTime.length)) }, (_, index) => {
