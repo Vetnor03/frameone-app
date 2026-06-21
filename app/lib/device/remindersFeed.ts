@@ -25,7 +25,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'remind'
+export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'remind'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -51,6 +51,7 @@ export type IntegrationItemRow = {
   starts_at: string | null
   due_at: string | null
   priority: number | null
+  raw?: Record<string, unknown> | null
 }
 
 function pad2(n: number) {
@@ -219,6 +220,52 @@ export function buildTeamsMeetingItems(
   })
 }
 
+export function buildWasteCollectionItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string,
+  includeOverdue: boolean
+): DeviceReminderItem[] {
+  const seen = new Set<string>()
+  return rows.flatMap((row) => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    if (!title || !externalId) return []
+
+    const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
+    if (raw.source !== 'waste' || raw.type !== 'waste_collection') return []
+
+    const dateFromRaw = typeof raw.date === 'string' ? raw.date.slice(0, 10) : ''
+    const occurrenceDate = /^\d{4}-\d{2}-\d{2}$/.test(dateFromRaw)
+      ? dateFromRaw
+      : row.starts_at ? isoToYmdInTimeZone(row.starts_at, timeZone) : null
+    if (!occurrenceDate) return []
+    if (occurrenceDate > horizonEndYmd) return []
+
+    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
+    if (!includeOverdue && daysUntil < 0) return []
+
+    const duplicateKey = `${occurrenceDate}__${String(raw.waste_fraction || title).toLowerCase()}`
+    if (seen.has(duplicateKey)) return []
+    seen.add(duplicateKey)
+
+    return [{
+      reminder_id: `waste:${externalId}`,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: formatDisplayDate(occurrenceDate, todayYmd),
+      days_until: daysUntil,
+      is_overdue: daysUntil < 0,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: null,
+      display_time: null,
+      source: 'waste' as const,
+      external_id: externalId,
+    }]
+  })
+}
+
 function sortTimeValue(value: string | null) {
   return value || '99:99'
 }
@@ -262,7 +309,7 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (at < bt) return -1
   if (at > bt) return 1
 
-  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : 2
+  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : 3
   const as = sourceRank(a.source)
   const bs = sourceRank(b.source)
   if (as !== bs) return as - bs

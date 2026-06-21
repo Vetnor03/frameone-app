@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from './spond/server'
 
-export const DISCONNECTABLE_INTEGRATION_PROVIDERS = ['spond', 'teams', 'transponder'] as const
+export const DISCONNECTABLE_INTEGRATION_PROVIDERS = ['spond', 'teams', 'transponder', 'waste'] as const
 
 export type DisconnectableIntegrationProvider = (typeof DISCONNECTABLE_INTEGRATION_PROVIDERS)[number]
 

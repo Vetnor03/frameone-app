@@ -2217,7 +2217,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type ConnectAppKey = 'spond' | 'transponder' | 'teams'
+type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste'
 type DisconnectableConnectAppKey = ConnectAppKey
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
@@ -2260,6 +2260,11 @@ function ConnectAppsScreen({
   const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [wasteConnected, setWasteConnected] = useState(connectAppIsConnected(modulesJson, 'waste'))
+  const [wasteAccount, setWasteAccount] = useState<string | null>(null)
+  const [wasteModalOpen, setWasteModalOpen] = useState(false)
+  const [wasteAddress, setWasteAddress] = useState('')
+  const [wasteLoading, setWasteLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
@@ -2330,6 +2335,57 @@ function ConnectAppsScreen({
     }
   }
 
+  async function fetchWasteStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) return
+    const resp = await fetch('/api/integrations/waste/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+    if (!resp.ok) return
+    const json = await resp.json()
+    setLocallyDisconnectedApps((current) => ({ ...current, waste: json?.connected === true ? false : current.waste }))
+    setWasteConnected(json?.connected === true)
+    setWasteAccount(typeof json?.account === 'string' && json.account ? json.account : null)
+    if (typeof json?.message === 'string' && json.message) {
+      setStatusTone(json?.connected ? 'info' : 'error')
+      setStatus(json.message)
+    }
+  }
+
+  async function connectWaste() {
+    const address = wasteAddress.trim()
+    if (!address || wasteLoading) return
+    setWasteLoading(true)
+    setStatus(null)
+    setStatusTone('info')
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      const resp = await fetch('/api/integrations/waste/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ address }),
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok && resp.status !== 202) throw new Error(json?.error || 'Failed to connect waste collection')
+      if (json?.status === 'unsupported') {
+        setStatusTone('error')
+        setStatus(json?.message || 'Denne kommunen støttes ikke enda. Send oss gjerne kommunenavn, så legger vi den til.')
+        setWasteConnected(false)
+        return
+      }
+      setLocallyDisconnectedApps((current) => ({ ...current, waste: false }))
+      setWasteConnected(true)
+      setWasteAccount(json?.resolvedAddress?.label || address)
+      setWasteModalOpen(false)
+      setStatusTone('success')
+      setStatus(language === 'no' ? 'Renovasjon er tilkoblet' : 'Waste collection connected')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      setStatusTone('error')
+      setStatus(message || (language === 'no' ? 'Kunne ikke koble til renovasjon' : 'Could not connect waste collection'))
+    } finally {
+      setWasteLoading(false)
+    }
+  }
+
   async function connectSpond() {
     const username = spondUsername.trim()
     if (!username || !spondPassword || spondLoading) return
@@ -2368,8 +2424,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'spond' ? 'Spond' : 'Transponder'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'spond' ? setSpondLoading : null
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'spond' ? 'Spond' : provider === 'waste' ? 'Waste collection' : 'Transponder'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'spond' ? setSpondLoading : provider === 'waste' ? setWasteLoading : null
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -2390,6 +2446,9 @@ function ConnectAppsScreen({
       } else if (provider === 'spond') {
         setSpondConnected(false)
         setSpondAccount(null)
+      } else if (provider === 'waste') {
+        setWasteConnected(false)
+        setWasteAccount(null)
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
       setDisconnectConfirmApp(null)
@@ -2408,6 +2467,7 @@ function ConnectAppsScreen({
   useEffect(() => {
     fetchSpondStatus()
     fetchTeamsStatus()
+    fetchWasteStatus()
 
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
@@ -2428,6 +2488,12 @@ function ConnectAppsScreen({
         language === 'no'
           ? 'Vis Transponder-meldinger på framen din'
           : 'Show Transponder messages on your frame',
+    },
+    {
+      key: 'waste',
+      name: language === 'no' ? 'Renovasjon' : 'Waste collection',
+      description:
+        language === 'no' ? 'Vis tømmedager som påminnelser uten klokkeslett' : 'Show collection dates as all-day reminders',
     },
     {
       key: 'teams',
@@ -2455,7 +2521,7 @@ function ConnectAppsScreen({
 
         <div className="mt-4 space-y-2.5">
           {apps.map((app) => {
-            const connected = locallyDisconnectedApps[app.key] ? false : app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : connectAppIsConnected(modulesJson, app.key)
+            const connected = locallyDisconnectedApps[app.key] ? false : app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : app.key === 'waste' ? wasteConnected : connectAppIsConnected(modulesJson, app.key)
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
             return (
               <div
@@ -2475,7 +2541,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={app.key === 'teams' && teamsLoading}
+                      disabled={(app.key === 'teams' && teamsLoading) || (app.key === 'waste' && wasteLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (setupError) {
@@ -2484,6 +2550,8 @@ function ConnectAppsScreen({
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
                           connectTeams()
+                        } else if (app.key === 'waste') {
+                          setWasteModalOpen(true)
                         } else {
                           setStatusTone('info')
                           setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
@@ -2491,12 +2559,20 @@ function ConnectAppsScreen({
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {app.key === 'teams' && teamsLoading
+                      {((app.key === 'teams' && teamsLoading) || (app.key === 'waste' && wasteLoading))
                         ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
                         : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
+                {app.key === 'waste' && wasteConnected && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">{wasteAccount ? `${language === 'no' ? 'Adresse' : 'Address'}: ${wasteAccount}` : (language === 'no' ? 'Tilkoblet' : 'Connected')}</span>
+                    <button type="button" onClick={() => setDisconnectConfirmApp('waste')} disabled={wasteLoading} className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60">
+                      {language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}
+                    </button>
+                  </div>
+                )}
                 {app.key === 'spond' && spondConnected && (
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     <span className="min-w-0 truncate">
@@ -2527,7 +2603,7 @@ function ConnectAppsScreen({
                     </button>
                   </div>
                 )}
-                {app.key !== 'spond' && app.key !== 'teams' && connected && (
+                {app.key !== 'spond' && app.key !== 'teams' && app.key !== 'waste' && connected && (
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     <span className="min-w-0 truncate">
                       {language === 'no' ? 'Tilkoblet sikkert på serveren' : 'Connected securely on the server'}
@@ -2567,8 +2643,8 @@ function ConnectAppsScreen({
           <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'spond' ? 'Spond' : 'Transponder'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'spond' ? 'Spond' : 'Transponder'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'spond' ? 'Spond' : disconnectConfirmApp === 'waste' ? 'Waste collection' : 'Transponder'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'spond' ? 'Spond' : disconnectConfirmApp === 'waste' ? 'Waste collection' : 'Transponder'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {language === 'no'
@@ -2600,6 +2676,25 @@ function ConnectAppsScreen({
         </div>
       )}
 
+
+      {wasteModalOpen && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/30 px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel)] p-5 shadow-2xl">
+            <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Koble til renovasjon' : 'Connect waste collection'}</div>
+            <p className="mt-2 text-sm leading-snug text-[color:var(--fg-55)]">{language === 'no' ? 'Skriv inn adressen din. Vi finner kommunen via Kartverket og bruker riktig leverandør hvis kommunen er støttet.' : 'Enter your address. We resolve the municipality with Kartverket and use the configured provider if supported.'}</p>
+            <input
+              value={wasteAddress}
+              onChange={(e) => setWasteAddress(e.target.value)}
+              placeholder={language === 'no' ? 'Gateadresse' : 'Street address'}
+              className="mt-4 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-4 py-3 text-sm outline-none"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setWasteModalOpen(false)} className="h-10 rounded-2xl px-4 text-xs tracking-widest text-[color:var(--fg-55)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
+              <button type="button" onClick={connectWaste} disabled={wasteLoading || !wasteAddress.trim()} className="h-10 rounded-2xl border border-[color:var(--bd-20)] px-4 text-xs tracking-widest text-[color:var(--fg-80)] disabled:opacity-50">{wasteLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {spondModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
