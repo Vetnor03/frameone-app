@@ -8,6 +8,7 @@ const soccerRoute = readFileSync(new URL('../app/api/soccer/frame/route.ts', imp
 const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 const weatherDetailsRoute = readFileSync(new URL('../app/api/weather/details/route.ts', import.meta.url), 'utf8')
 const weatherMirror = readFileSync(new URL('../app/lib/weatherMirror.ts', import.meta.url), 'utf8')
+const weatherForecast = readFileSync(new URL('../app/lib/server/weatherForecast.ts', import.meta.url), 'utf8')
 const homeClient = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
 test('/api/soccer/frame supports brann with a mapped numeric football-data team id', () => {
@@ -74,6 +75,16 @@ test('weather details displays dry instead of probability for zero precipitation
   assert.match(homeClient, /if \(hasAmount && m === 0\) return 'Dry'/)
   assert.match(homeClient, /weatherDetailFormatPrecip\(period\.precipProbability, period\.precipMm\)/)
   assert.match(homeClient, /weatherDetailFormatPrecip\(data\.precipProbability, data\.precipMm\)/)
+})
+
+test('weather details metric bars scale against daily min and max ranges', () => {
+  assert.match(weatherForecast, /'uv_index'/)
+  assert.match(homeClient, /currentUvIndex: startIndex >= 0 \? weatherDetailArrayNumberAt\(hourlyPayload\.uv_index, startIndex\) : null/)
+  assert.match(homeClient, /waterTempMinC = waterValues\.length \? Math\.min\(\.\.\.waterValues\) : null/)
+  assert.match(homeClient, /waterTempMaxC = waterValues\.length \? Math\.max\(\.\.\.waterValues\) : null/)
+  assert.match(homeClient, /\(\(n - minN\) \/ \(maxN - minN\)\) \* 100/)
+  assert.match(homeClient, /WeatherDetailMetricBar value=\{data\.currentUvIndex\} min=\{0\} max=\{data\.uvIndex\}/)
+  assert.match(homeClient, /WeatherDetailMetricBar value=\{data\.waterTempC\} min=\{data\.waterTempMinC\} max=\{data\.waterTempMaxC\}/)
 })
 
 test('physical frame weather uses server-prepared cached payload instead of direct Open-Meteo', () => {

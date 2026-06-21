@@ -42,6 +42,7 @@ const WEATHER_HOURLY_FIELDS = [
   'wind_speed_10m',
   'precipitation_probability',
   'precipitation',
+  'uv_index',
 ]
 
 const WEATHER_DAILY_FIELDS = [

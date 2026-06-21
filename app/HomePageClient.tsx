@@ -15273,11 +15273,14 @@ type WeatherDetailsData = {
   sunrise: string | null
   sunset: string | null
   uvIndex: number | null
+  currentUvIndex: number | null
   windSpeedMs: number | null
   windDirectionDeg: number | null
   precipProbability: number | null
   precipMm: number | null
   waterTempC: number | null
+  waterTempMinC: number | null
+  waterTempMaxC: number | null
   hourly: Array<{ time: string; tempC: number | null; wmo: number | null }>
   forecastDays: WeatherForecastDay[]
 }
@@ -15572,6 +15575,8 @@ function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknow
   const marineTemps = Array.isArray(marineHourly.sea_surface_temperature) ? marineHourly.sea_surface_temperature : []
   const waterValues = marineTemps.map(weatherDetailNumber).filter((n: number | null): n is number => n != null)
   const waterTempC = waterValues.length ? waterValues[Math.min(Math.max(startIndex, 0), waterValues.length - 1)] : null
+  const waterTempMinC = waterValues.length ? Math.min(...waterValues) : null
+  const waterTempMaxC = waterValues.length ? Math.max(...waterValues) : null
 
   return {
     currentTempC: weatherDetailNumber(current.temperature_2m),
@@ -15582,11 +15587,14 @@ function weatherDetailsFromPayload(language: AppLanguage, weatherPayload: unknow
     sunrise: weatherDetailArrayStringAt(daily.sunrise, 0),
     sunset: weatherDetailArrayStringAt(daily.sunset, 0),
     uvIndex: weatherDetailArrayNumberAt(daily.uv_index_max, 0),
+    currentUvIndex: startIndex >= 0 ? weatherDetailArrayNumberAt(hourlyPayload.uv_index, startIndex) : null,
     windSpeedMs: weatherDetailNumber(current.wind_speed_10m),
     windDirectionDeg: weatherDetailNumber(current.wind_direction_10m),
     precipProbability: currentPrecip.precipProbability,
     precipMm: currentPrecip.precipMm ?? weatherDetailNumber(current.precipitation),
     waterTempC,
+    waterTempMinC,
+    waterTempMaxC,
     hourly,
     forecastDays: buildWeatherDetailForecastDays(language, hourlyPayload, daily),
   }
@@ -15694,9 +15702,18 @@ function WeatherForecastCard({ language, loading, days }: { language: AppLanguag
   )
 }
 
-function WeatherDetailMetricBar({ value, max, color }: { value: number | null | undefined; max: number; color: string }) {
+function WeatherDetailMetricBar({ value, max, color, min = 0 }: { value: number | null | undefined; max: number | null | undefined; color: string; min?: number | null | undefined }) {
   const n = Number(value)
-  const pct = Number.isFinite(n) ? Math.max(8, Math.min(100, (n / max) * 100)) : 0
+  const minN = Number(min)
+  const maxN = Number(max)
+  const hasRange = Number.isFinite(minN) && Number.isFinite(maxN) && maxN > minN
+  const pct = Number.isFinite(n)
+    ? hasRange
+      ? Math.max(0, Math.min(100, ((n - minN) / (maxN - minN)) * 100))
+      : Number.isFinite(maxN) && n >= maxN
+        ? 100
+        : 0
+    : 0
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--panel-10)]">
       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color, opacity: Number.isFinite(n) ? 0.95 : 0.25 }} />
@@ -15801,8 +15818,8 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
 
             <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3">
               <div className="min-w-0">
-                <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">UV Index</span><span className="font-semibold text-[color:var(--fg-90)]">{data.uvIndex != null ? Math.round(data.uvIndex) : '--'}</span></div>
-                <div className="mt-2"><WeatherDetailMetricBar value={data.uvIndex} max={11} color="#9be66d" /></div>
+                <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">{no ? 'Dagens UV-topp' : "Today’s UV Peak"}</span><span className="font-semibold text-[color:var(--fg-90)]">{data.uvIndex != null ? Math.round(data.uvIndex) : '--'}</span></div>
+                <div className="mt-2"><WeatherDetailMetricBar value={data.currentUvIndex} min={0} max={data.uvIndex} color="#9be66d" /></div>
               </div>
               <div className="w-20 text-right text-sm font-medium text-[color:var(--fg-75)]">{weatherDetailUvLabel(language, data.uvIndex)}</div>
             </div>
@@ -15810,7 +15827,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
             <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3">
               <div className="min-w-0">
                 <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">{no ? 'Vanntemperatur' : 'Water temperature'}</span><span className="font-semibold text-[color:var(--fg-90)]">{data.waterTempC != null ? weatherDetailFormatTemp(data.waterTempC) : '--'}</span></div>
-                <div className="mt-2"><WeatherDetailMetricBar value={data.waterTempC} max={24} color="#63c8ff" /></div>
+                <div className="mt-2"><WeatherDetailMetricBar value={data.waterTempC} min={data.waterTempMinC} max={data.waterTempMaxC} color="#63c8ff" /></div>
               </div>
               <div className="w-24 text-right text-sm font-medium text-[color:var(--fg-75)]">{weatherDetailWaterLabel(language, data.waterTempC)}</div>
             </div>
