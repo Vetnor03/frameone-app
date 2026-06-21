@@ -15801,7 +15801,7 @@ function WeatherDetailsCard({ language, cfg }: { language: AppLanguage; cfg: Wea
 
             <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3">
               <div className="min-w-0">
-                <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">UV Index</span><span className="font-semibold text-[color:var(--fg-90)]">{data.uvIndex != null ? Math.round(data.uvIndex) : '--'}</span></div>
+                <div className="flex items-center justify-between gap-3 text-sm"><span className="text-[color:var(--fg-70)]">{no ? 'Dagens UV-topp' : "Today’s UV Peak"}</span><span className="font-semibold text-[color:var(--fg-90)]">{data.uvIndex != null ? Math.round(data.uvIndex) : '--'}</span></div>
                 <div className="mt-2"><WeatherDetailMetricBar value={data.uvIndex} max={11} color="#9be66d" /></div>
               </div>
               <div className="w-20 text-right text-sm font-medium text-[color:var(--fg-75)]">{weatherDetailUvLabel(language, data.uvIndex)}</div>
