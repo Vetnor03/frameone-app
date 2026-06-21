@@ -84,7 +84,9 @@ test('weather details metric bars scale against daily min and max ranges', () =>
   assert.match(homeClient, /waterTempMaxC = waterValues\.length \? Math\.max\(\.\.\.waterValues\) : null/)
   assert.match(homeClient, /\(\(n - minN\) \/ \(maxN - minN\)\) \* 100/)
   assert.match(homeClient, /WeatherDetailMetricBar value=\{data\.currentUvIndex\} min=\{0\} max=\{data\.uvIndex\}/)
+  assert.match(homeClient, /weatherDetailUvLabel\(language, data\.currentUvIndex\)/)
   assert.match(homeClient, /WeatherDetailMetricBar value=\{data\.waterTempC\} min=\{data\.waterTempMinC\} max=\{data\.waterTempMaxC\}/)
+  assert.match(homeClient, /weatherDetailWaterLabel\(language, data\.waterTempC\)/)
 })
 
 test('physical frame weather uses server-prepared cached payload instead of direct Open-Meteo', () => {
