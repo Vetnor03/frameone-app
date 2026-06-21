@@ -893,12 +893,15 @@ static void drawBulletWrappedItem(int bulletX,
                                   int lineCount,
                                   const GFXfont* font,
                                   int lineStep,
-                                  uint16_t ink) {
+                                  uint16_t ink,
+                                  bool drawBullet) {
   if (lineCount <= 0) return;
 
   auto& d = DisplayCore::get();
   const int dotR = 3;
-  d.fillCircle(bulletX, firstBaselineY - lineStep / 2 + 2, dotR, ink);
+  if (drawBullet) {
+    d.fillCircle(bulletX, firstBaselineY - lineStep / 2 + 2, dotR, ink);
+  }
 
   d.setFont(font);
   d.setTextColor(ink);
@@ -1137,24 +1140,37 @@ static void drawBucketLinesCentered(const Cell& c,
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
-  const int maxTextW = c.w - sidePad * 2 - dotR * 2 - gap;
-  if (maxTextW <= 20) return;
+  const int multiItemMaxTextW = c.w - sidePad * 2 - dotR * 2 - gap;
+  const int singleItemMaxTextW = c.w - sidePad * 2;
+  if (multiItemMaxTextW <= 20 || singleItemMaxTextW <= 20) return;
 
   char label[32];
   buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, label, sizeof(label));
 
   SmartReminderLayout layout;
-  if (!findSmartReminderLayout(bucket, min(visibleCount, 4), maxTextW, totalH, label, layout)) {
-    if (!buildEmergencyReminderLayout(bucket, getRotationStep4h(), maxTextW, totalH, layout)) {
+  const int desiredCount = min(visibleCount, 4);
+  const int initialMaxTextW = (desiredCount == 1) ? singleItemMaxTextW : multiItemMaxTextW;
+  if (!findSmartReminderLayout(bucket, desiredCount, initialMaxTextW, totalH, label, layout)) {
+    if (!buildEmergencyReminderLayout(bucket, getRotationStep4h(), singleItemMaxTextW, totalH, layout)) {
       return;
     }
   }
 
-  const int rowW = dotR * 2 + gap + layout.maxLineW;
-  int textX = c.x + (c.w - rowW) / 2 + dotR * 2 + gap;
-  int minTextX = c.x + sidePad + dotR * 2 + gap;
+  if (layout.count == 1 && initialMaxTextW != singleItemMaxTextW) {
+    SmartReminderLayout singleLayout;
+    if (findSmartReminderLayout(bucket, 1, singleItemMaxTextW, totalH, label, singleLayout)) {
+      layout = singleLayout;
+    } else if (buildEmergencyReminderLayout(bucket, getRotationStep4h(), singleItemMaxTextW, totalH, singleLayout)) {
+      layout = singleLayout;
+    }
+  }
+
+  const bool drawBullets = layout.count > 1;
+  const int rowW = (drawBullets ? dotR * 2 + gap : 0) + layout.maxLineW;
+  int textX = c.x + (c.w - rowW) / 2 + (drawBullets ? dotR * 2 + gap : 0);
+  int minTextX = c.x + sidePad + (drawBullets ? dotR * 2 + gap : 0);
   if (textX < minTextX) textX = minTextX;
-  int bulletX = textX - gap - dotR;
+  int bulletX = drawBullets ? textX - gap - dotR : textX;
 
   int y = yTop + (totalH - layout.blockH) / 2;
   if (y < yTop) y = yTop;
@@ -1177,7 +1193,7 @@ static void drawBucketLinesCentered(const Cell& c,
 
     drawBulletWrappedItem(bulletX, textX, firstBaselineY,
                           item.lines, item.lineCount, layout.font,
-                          layout.lineStep, ink);
+                          layout.lineStep, ink, drawBullets);
 
     int itemH = layout.wrapped ? item.lineCount * layout.lineStep
                                : measuredTextHeight(item.lines[0], layout.font);

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 
 import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems } from '../app/lib/device/remindersFeed.ts'
 
@@ -135,4 +136,12 @@ test('compact reminder feed caps oversized first display group', async () => {
   assert.equal(selected.length, 12)
   assert.equal(selected[0].title, 'today 0')
   assert.equal(selected.at(-1).title, 'today 11')
+})
+
+test('physical frame omits reminder bullet when only one item is displayed', () => {
+  const source = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
+
+  assert.match(source, /const bool drawBullets = layout\.count > 1/)
+  assert.match(source, /singleItemMaxTextW = c\.w - sidePad \* 2/)
+  assert.match(source, /drawBulletWrappedItem\([\s\S]*ink, drawBullets\)/)
 })
