@@ -6349,7 +6349,7 @@ function LandscapeFrameMirror({
 
     const liveDetail = snapshot.detailsBySlot[String(slot)]
     const detail = liveDetail ?? frameModuleDetail(module, slot, snapshot.modulesJson, language, snapshot.cells)
-    if (!liveDetail && module !== 'date' && module !== 'weather' && module !== 'soccer') {
+    if (!liveDetail && module !== 'date' && module !== 'soccer') {
       return <div className="text-sm text-[color:var(--fg-50)]">{moduleLoadingText(language, module)}</div>
     }
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)

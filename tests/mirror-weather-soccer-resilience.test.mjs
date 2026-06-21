@@ -43,10 +43,11 @@ test('weather mirror endpoint times out Open-Meteo and returns safe JSON on fail
   assert.match(mirrorRoute, /weatherDays: \[\]/)
 })
 
-test('weather and soccer mirror UI do not spin forever when live details are missing', () => {
+test('weather mirror UI uses the shared loading label while waiting for live details', () => {
   assert.match(homeClient, /window\.setTimeout\(\(\) => controller\.abort\(\), 9000\)/)
   assert.match(homeClient, /\[mirror-snapshot:client-load-failed\]/)
-  assert.match(homeClient, /module !== 'date' && module !== 'weather' && module !== 'soccer'/)
+  assert.match(homeClient, /module !== 'date' && module !== 'soccer'/)
+  assert.match(homeClient, /moduleLoadingText\(language, module\)/)
   assert.match(homeClient, /No live weather data/)
   assert.match(homeClient, /weatherLowTemp: '--°'/)
 })
@@ -69,7 +70,7 @@ test('physical frame weather uses server-prepared cached payload instead of dire
   const moduleWeather = readFileSync(new URL('../frame/src/modules/ModuleWeather.cpp', import.meta.url), 'utf8')
   assert.match(moduleWeather, /\/api\/weather\/details\?frame=1&days=5&lat=/)
   assert.match(weatherDetailsRoute, /framePayload/)
-  assert.match(weatherDetailsRoute, /return NextResponse\.json\(weather\.payload\)/)
+  assert.match(weatherDetailsRoute, /return NextResponse\.json\(compactFrameWeatherPayload\(weather\.payload\)\)/)
   assert.doesNotMatch(moduleWeather, /api\.open-meteo\.com/)
   assert.doesNotMatch(moduleWeather, /marine-api\.open-meteo\.com/)
 })
