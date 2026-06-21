@@ -17,6 +17,9 @@ type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'socc
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
+type SetupPurpose = 'family' | 'sport' | 'custom'
+type SetupSport = 'surf' | 'soccer'
+type FrameSetupSelection = { purpose: SetupPurpose; sport?: SetupSport; modules: Record<string, any> }
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -652,20 +655,26 @@ async function claimPairCodeAndLoadFrames(code: string, currentFrames: MemberRow
   const cleaned = code.trim().toUpperCase()
   const existingDeviceIds = new Set(currentFrames.map((f) => f.device_id))
 
-  const { data, error } = await supabase.rpc('claim_pair_code', { p_code: cleaned })
-  if (error) throw error
-  if (data !== true) throw new Error('INVALID_PAIR_CODE')
+  const resp = await fetch('/api/frame/claim-pair-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pairCode: cleaned, existingDeviceIds: Array.from(existingDeviceIds) }),
+  })
+  const payload = await resp.json().catch(() => null)
+  if (!resp.ok || payload?.ok !== true) throw new Error(payload?.error || 'INVALID_PAIR_CODE')
 
   const { data: sessionData } = await supabase.auth.getSession()
   const session = sessionData.session
-  if (!session) return { frames: [] as MemberRow[], newlyAddedDeviceId: null as string | null }
+  if (!session) return { frames: [] as MemberRow[], newlyAddedDeviceId: null as string | null, isFreshFrame: false }
 
   const frames = await fetchCurrentUserFrames(session.user.id)
   const newlyAddedFrame = frames.find((f) => !existingDeviceIds.has(f.device_id))
+  const newlyAddedDeviceId = newlyAddedFrame?.device_id ?? (typeof payload?.deviceId === 'string' ? payload.deviceId : null)
 
   return {
     frames,
-    newlyAddedDeviceId: newlyAddedFrame?.device_id ?? null,
+    newlyAddedDeviceId,
+    isFreshFrame: payload?.isFreshFrame === true,
   }
 }
 
@@ -1018,6 +1027,7 @@ export default function HomePage() {
   const [booting, setBooting] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
+  const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -1726,7 +1736,7 @@ export default function HomePage() {
     if (nextFrames.length > 0) setIsFirstFramePairingComplete(true)
   }
 
-  async function handleFirstFramePairingComplete(nextFrames: MemberRow[], preferredDeviceId?: string | null) {
+  async function handleFirstFramePairingComplete(nextFrames: MemberRow[], preferredDeviceId?: string | null, isFreshFrame?: boolean) {
     if (nextFrames.length === 0) return
 
     handleFramesChanged(nextFrames)
@@ -1737,6 +1747,57 @@ export default function HomePage() {
       : nextFrames[0].device_id
 
     await selectDevice(nextDeviceId)
+    setSetupDeviceId(isFreshFrame ? nextDeviceId : null)
+  }
+
+  async function completeFrameSetup(selection: FrameSetupSelection) {
+    if (!activeDeviceId) return
+
+    let nextLayout: LayoutKey = layoutKey
+    let nextCellsByLayout = cellsByLayout
+    let nextModules = { ...modulesJson, ...selection.modules }
+    let nextPinnedTabs = pinnedModuleTabs
+
+    if (selection.purpose !== 'custom') {
+      nextLayout = 'pyramid'
+      const sportModule: ModuleKey | null = selection.purpose === 'sport' ? (selection.sport === 'soccer' ? 'soccer' : 'surf') : 'countdown'
+      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: sportModule, 3: 'weather' }
+      nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
+      nextPinnedTabs = Array.from(new Set((Object.values(presetCells).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date')))
+      layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, presetCells)
+    }
+
+    nextModules = normalizeModulesForSave(nextModules)
+    const currentCellsForLayout = nextCellsByLayout[nextLayout] || emptyCellsFor(nextLayout)
+    const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(layoutModuleMemoryRef.current, nextLayout, currentCellsForLayout)
+    const settingsJson: SettingsJson = {
+      theme,
+      language,
+      fontSize,
+      layout: nextLayout,
+      cells: cellsMapToArray(currentCellsForLayout),
+      modules: nextModules,
+      pinned_tabs: nextPinnedTabs,
+      layout_module_memory: nextLayoutModuleMemory,
+    }
+
+    const { data, error } = await supabase.rpc('upsert_device_settings', {
+      p_device_id: activeDeviceId,
+      p_settings: settingsJson,
+    })
+    if (error) throw error
+    if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
+
+    layoutModuleMemoryRef.current = nextLayoutModuleMemory
+    setLayoutKey(nextLayout)
+    setCellsByLayout(nextCellsByLayout)
+    setModulesJson(nextModules)
+    setPinnedModuleTabs(nextPinnedTabs)
+    savedStateRef.current = serializeComparableState({ theme, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
+    setDirty(false)
+    setSetupDeviceId(null)
+    setActiveTab('frame')
+    await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
   }
 
   function prevLayout() {
@@ -1952,9 +2013,16 @@ async function handleSelectTab(k: TabKey) {
           />
         )}
 
+        {setupDeviceId && activeDeviceId === setupDeviceId && (
+          <FrameSetupFlow
+            language={language}
+            onComplete={completeFrameSetup}
+          />
+        )}
+
         <div
-          className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
-          aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding}
+          className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding || setupDeviceId ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
+          aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding || !!setupDeviceId}
         >
           <>
             <TabBar
@@ -7125,7 +7193,7 @@ function PairFrameForm({
 }: {
   language: AppLanguage
   frames: MemberRow[]
-  onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null) => void | Promise<void>
+  onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null, isFreshFrame?: boolean) => void | Promise<void>
   compact?: boolean
 }) {
   const [code, setCode] = useState('')
@@ -7148,7 +7216,7 @@ function PairFrameForm({
       const result = await claimPairCodeAndLoadFrames(cleaned, frames)
       if (result.frames.length === 0) throw new Error(t.invalidPairCode)
 
-      await onPairingComplete(result.frames, result.newlyAddedDeviceId)
+      await onPairingComplete(result.frames, result.newlyAddedDeviceId, result.isFreshFrame)
       setCode('')
       setMessageKind('ok')
       setMessage(t.frameAdded)
@@ -7197,6 +7265,135 @@ function PairFrameForm({
   )
 }
 
+
+function FrameSetupFlow({
+  language,
+  onComplete,
+}: {
+  language: AppLanguage
+  onComplete: (selection: FrameSetupSelection) => Promise<void>
+}) {
+  const [step, setStep] = useState<'purpose' | 'sport' | 'modules' | 'manual'>('purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose | null>(null)
+  const [sport, setSport] = useState<SetupSport | null>(null)
+  const [modules, setModules] = useState<Record<string, any>>({})
+  const [moduleIndex, setModuleIndex] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const isNo = language === 'no'
+
+  const requiredModules = useMemo(() => {
+    if (purpose === 'family') return ['reminders', 'weather']
+    if (purpose === 'sport') return ['reminders', sport, 'weather'].filter(Boolean) as string[]
+    return []
+  }, [purpose, sport])
+
+  function goManual() {
+    setStep('manual')
+  }
+
+  function continueFromPurpose(nextPurpose: SetupPurpose) {
+    setPurpose(nextPurpose)
+    if (nextPurpose === 'custom') goManual()
+    else if (nextPurpose === 'sport') setStep('sport')
+    else {
+      setModuleIndex(0)
+      setStep('modules')
+    }
+  }
+
+  function continueFromSport(nextSport: SetupSport) {
+    setSport(nextSport)
+    setModuleIndex(0)
+    setStep('modules')
+  }
+
+  function nextModule() {
+    if (moduleIndex + 1 >= requiredModules.length) goManual()
+    else setModuleIndex((idx) => idx + 1)
+  }
+
+  async function finish() {
+    if (saving) return
+    try {
+      setSaving(true)
+      setError(null)
+      await onComplete({ purpose: purpose || 'custom', sport: sport || undefined, modules })
+    } catch (e) {
+      setError(errorMessage(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const shell = (children: React.ReactNode) => (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[color:var(--app-bg)] px-5 text-[color:var(--fg)]">
+      <div className="flex max-h-[88vh] w-full max-w-[380px] flex-col rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur">
+        <div className="mb-3 flex justify-end">
+          <button onClick={goManual} className="rounded-full border border-[color:var(--bd-10)] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-40)] hover:text-[color:var(--fg-70)]">
+            {isNo ? 'Hopp over' : 'Skip'}
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+
+  if (step === 'purpose') return shell(<>
+    <div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div>
+    <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Hva skal framen brukes til?' : 'Choose frame purpose'}</h1>
+    <div className="mt-6 space-y-3">
+      {(['family', 'sport', 'custom'] as SetupPurpose[]).map((key) => (
+        <button key={key} onClick={() => continueFromPurpose(key)} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] px-4 py-4 text-left text-sm uppercase tracking-[0.18em] hover:border-[#2aa3ff]">
+          {key === 'family' ? (isNo ? 'Familie' : 'Family') : key === 'sport' ? 'Sport' : 'Custom'}
+        </button>
+      ))}
+    </div>
+  </>)
+
+  if (step === 'sport') return shell(<>
+    <h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg sport' : 'Choose sport'}</h1>
+    <div className="mt-6 grid grid-cols-2 gap-3">
+      <button onClick={() => continueFromSport('surf')} className="h-24 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] uppercase tracking-[0.18em] hover:border-[#2aa3ff]">Surf</button>
+      <button onClick={() => continueFromSport('soccer')} className="h-24 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] uppercase tracking-[0.18em] hover:border-[#2aa3ff]">Soccer</button>
+    </div>
+  </>)
+
+  if (step === 'modules') {
+    const current = requiredModules[moduleIndex]
+    return shell(<>
+      <div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div>
+      <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : current === 'soccer' ? (isNo ? 'Velg lag' : 'Choose a team') : current === 'surf' ? (isNo ? 'Velg surfspot' : 'Choose surf spot') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1>
+      <div className="mt-6 space-y-3 overflow-auto pr-1">
+        {current === 'reminders' && (
+          <div className="h-[360px]">
+            <ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} />
+          </div>
+        )}
+        {current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || 'Not set'} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((m) => ({ ...m, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}
+        {current === 'soccer' && <SoccerTeamRow language={language} id={1} title={tx(language).soccerTeam} teamName={modules.soccer?.[0]?.teamName || 'Not set'} teamId={modules.soccer?.[0]?.teamId || ''} competitionName={modules.soccer?.[0]?.competitionName || ''} onPicked={(picked) => setModules((m) => ({ ...m, soccer: [{ id: 1, ...picked }] }))} />}
+        {current === 'surf' && <>
+          <SurfSpotRow language={language} id={1} title="Spot" spotLabel={modules.surf?.[0]?.spot || 'Not set'} spotId={modules.surf?.[0]?.spotId || ''} fuelPenalty={modules.surf?.[0]?.fuelPenalty} onPicked={(picked) => setModules((m) => ({ ...m, surf: [{ id: 1, ...picked, fuelPenalty: m.surf?.[0]?.fuelPenalty }] }))} />
+          <input placeholder={isNo ? 'Hjemmeadresse (valgfritt)' : 'Home address (optional)'} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] px-4 py-3 outline-none" onChange={(e) => setModules((m) => ({ ...m, surf: [{ id: 1, ...(m.surf?.[0] || {}), fuelPenalty: { enabled: true, homeAddress: e.target.value } }] }))} />
+        </>}
+      </div>
+      <button onClick={nextModule} className="mt-6 h-12 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white text-sm uppercase tracking-[0.2em]">{isNo ? 'Neste' : 'Next'}</button>
+    </>)
+  }
+
+  return shell(<>
+    <h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Slik fungerer appen' : 'How the app works'}</h1>
+    <div className="mt-5 max-h-[52vh] space-y-4 overflow-auto pr-1 text-sm leading-6 text-[color:var(--fg-70)]">
+      <p>• {isNo ? 'Faner åpnes eller lukkes basert på modulene du har valgt.' : 'Tabs open or close depending on the modules selected for your frame.'}</p>
+      <p>• {isNo ? 'Velg layout og endre moduler ved å trykke på cellen du vil redigere.' : 'Select a layout and change modules by clicking the cell you want to edit.'}</p>
+      <p>• {isNo ? 'Snu telefonen sidelengs for å se et speil av den fysiske framen.' : 'Turn your phone sideways to see a mirror of what is displayed on the physical frame.'}</p>
+      <p>• {isNo ? 'I Innstillinger kan du dele enheten med familie ved å dele den genererte paringskoden.' : 'In Settings, you can share the device with family members by sharing the generated pair code.'}</p>
+    </div>
+    {error && <div className="mt-4 text-sm text-[color:var(--danger)]">{error}</div>}
+    <button onClick={finish} disabled={saving} className="mt-6 h-14 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white text-sm uppercase tracking-[0.2em] disabled:opacity-50">{saving ? tx(language).saving : (isNo ? 'Fullfør oppsett' : 'Complete setup')}</button>
+  </>)
+}
+
 function FirstFrameOnboarding({
   language,
   frames,
@@ -7204,7 +7401,7 @@ function FirstFrameOnboarding({
 }: {
   language: AppLanguage
   frames: MemberRow[]
-  onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null) => void | Promise<void>
+  onPairingComplete: (frames: MemberRow[], preferredDeviceId?: string | null, isFreshFrame?: boolean) => void | Promise<void>
 }) {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-[color:var(--app-bg)] px-5 text-[color:var(--fg)]">
