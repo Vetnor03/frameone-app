@@ -7,6 +7,7 @@ import { TEAM_ID_MAP } from '../app/lib/soccer/teamIdMap.ts'
 const soccerRoute = readFileSync(new URL('../app/api/soccer/frame/route.ts', import.meta.url), 'utf8')
 const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 const weatherDetailsRoute = readFileSync(new URL('../app/api/weather/details/route.ts', import.meta.url), 'utf8')
+const weatherMirror = readFileSync(new URL('../app/lib/weatherMirror.ts', import.meta.url), 'utf8')
 const homeClient = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
 test('/api/soccer/frame supports brann with a mapped numeric football-data team id', () => {
@@ -50,6 +51,15 @@ test('weather mirror UI uses the shared loading label while waiting for live det
   assert.match(homeClient, /moduleLoadingText\(language, module\)/)
   assert.match(homeClient, /No live weather data/)
   assert.match(homeClient, /weatherLowTemp: '--°'/)
+})
+
+test('weather mirror omits insignificant advice and reclaims advice layout space', () => {
+  assert.doesNotMatch(weatherMirror, /Comfortable weather today\./)
+  assert.doesNotMatch(weatherMirror, /Sunny and calm all day\./)
+  assert.doesNotMatch(weatherMirror, /Dry conditions throughout the day\./)
+  assert.match(weatherMirror, /return ''/)
+  assert.match(homeClient, /const hasAdvice = advice\.trim\(\)\.length > 0/)
+  assert.match(homeClient, /hasAdvice \? 'max-w-\[34%\]' : 'max-w-\[48%\]'/)
 })
 
 test('weather details precipitation debug logging has been removed', () => {

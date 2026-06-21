@@ -6153,6 +6153,7 @@ function MirrorXLWeatherCard({
   const sunLine = detail.weatherSunLine || 'Sun --:-- / --:--'
   const humidityLine = detail.weatherHumidityLine || 'Humidity --%'
   const advice = detail.weatherAdvice || ''
+  const hasAdvice = advice.trim().length > 0
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-center leading-none">
@@ -6191,9 +6192,15 @@ function MirrorXLWeatherCard({
         </div>
 
         <div className="flex min-w-0 items-center justify-center overflow-hidden pl-[clamp(0.32rem,0.95vw,0.72rem)] pr-[clamp(0.1rem,0.35vw,0.25rem)]">
-          <div className="line-clamp-5 max-w-full text-[clamp(0.5rem,1.08vw,0.74rem)] font-medium leading-snug tracking-[0.035em]" title={advice}>
-            {advice}
-          </div>
+          {hasAdvice ? (
+            <div className="line-clamp-5 max-w-full text-[clamp(0.5rem,1.08vw,0.74rem)] font-medium leading-snug tracking-[0.035em]" title={advice}>
+              {advice}
+            </div>
+          ) : (
+            <div className="aspect-square h-[clamp(2.65rem,7.6vw,5.15rem)] max-h-[72%] max-w-[58%] overflow-hidden" aria-hidden="true">
+              <MirrorWeatherIcon wmo={detail.weatherWmo} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -6384,6 +6391,9 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'weather' && size === 'medium' && detail.weatherLowTemp && detail.weatherHighTemp) {
+      const advice = detail.weatherAdvice || ''
+      const hasAdvice = advice.trim().length > 0
+
       return (
         <div className="flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.55rem,1.7vw,1.2rem)] pt-[clamp(0.55rem,1.45vw,0.95rem)] pb-[clamp(0.55rem,1.45vw,0.95rem)] text-center leading-tight">
           <div className="flex shrink-0 items-center justify-center border-b border-current pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.88rem,2.05vw,1.35rem)] font-semibold tracking-[0.08em]">
@@ -6392,12 +6402,14 @@ function LandscapeFrameMirror({
             <span className="min-w-0 truncate px-[clamp(0.32rem,0.8vw,0.62rem)]">{detail.weatherHighTemp}</span>
           </div>
 
-          <div className="mt-[clamp(0.28rem,0.75vw,0.5rem)] flex min-h-[clamp(1.7rem,4.2vw,2.55rem)] w-full shrink-0 items-center justify-center px-[clamp(0.25rem,0.8vw,0.55rem)] text-[clamp(0.66rem,1.55vw,1rem)] font-medium tracking-[0.035em]">
-            <div className="line-clamp-2 max-w-full">{detail.weatherAdvice}</div>
-          </div>
+          {hasAdvice ? (
+            <div className="mt-[clamp(0.28rem,0.75vw,0.5rem)] flex min-h-[clamp(1.7rem,4.2vw,2.55rem)] w-full shrink-0 items-center justify-center px-[clamp(0.25rem,0.8vw,0.55rem)] text-[clamp(0.66rem,1.55vw,1rem)] font-medium tracking-[0.035em]">
+              <div className="line-clamp-2 max-w-full">{advice}</div>
+            </div>
+          ) : null}
 
           <div className="flex min-h-0 w-full flex-1 items-center justify-center py-[clamp(0.14rem,0.45vw,0.35rem)]">
-            <div className="aspect-square h-[clamp(2.4rem,7vw,4.8rem)] max-h-full max-w-[34%] overflow-hidden">
+            <div className={`aspect-square h-[clamp(2.4rem,7vw,4.8rem)] max-h-full overflow-hidden ${hasAdvice ? 'max-w-[34%]' : 'max-w-[48%]'}`}>
               <MirrorWeatherIcon wmo={detail.weatherWmo} />
             </div>
           </div>

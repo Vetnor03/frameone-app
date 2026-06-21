@@ -174,10 +174,6 @@ function isSleetWmo(wmo: number | null | undefined) {
   return wmo === 56 || wmo === 57 || wmo === 66 || wmo === 67
 }
 
-function isSunnyWmo(wmo: number | null | undefined) {
-  return wmo != null && wmo >= 0 && wmo <= 1
-}
-
 function fallbackClothingAdvice(input: MediumWeatherInput) {
   const currentTempC = finiteNumber(input.currentTempC)
   const hiC = finiteNumber(input.hiC)
@@ -197,7 +193,7 @@ function fallbackClothingAdvice(input: MediumWeatherInput) {
   if (rainy) return 'Bring a rain jacket.'
   if (refTemp != null && refTemp <= 13) return 'Light jacket recommended.'
   if (windy) return 'Light layer for wind.'
-  return 'Comfortable weather today.'
+  return ''
 }
 
 function eventRange(hours: WeatherInsightHour[], predicate: (h: WeatherInsightHour) => boolean) {
@@ -239,11 +235,6 @@ export function buildWeatherInsight(input: MediumWeatherInput) {
   if (rain && rain.last < 13) return lineJoin('Rain clears by midday.', 'Drier later on.')
 
   if (hiC != null && loC != null && hiC - loC >= 12) return lineJoin('Big temperature swing today.', `${Math.round(loC)}° to ${Math.round(hiC)}°C.`)
-
-  const sunnyHours = hours.filter((h) => isSunnyWmo(finiteNumber(h.wmo))).length
-  const calm = windMaxMs == null || windMaxMs < 5
-  if (hours.length >= 6 && sunnyHours / hours.length >= 0.7 && calm && (precipMm == null || precipMm <= PRECIP_LIGHT_MM)) return lineJoin('Sunny and calm all day.', 'Great weather outdoors.')
-  if ((precipMm == null || precipMm <= PRECIP_LIGHT_MM) && calm) return 'Dry conditions throughout the day.'
 
   return fallbackClothingAdvice(input)
 }
