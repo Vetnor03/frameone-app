@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 function jsonError(error: string, status = 400) {
@@ -16,6 +17,9 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null)
   const pairCode = typeof body?.pairCode === 'string' ? body.pairCode.trim().toUpperCase() : ''
+  const existingDeviceIds = Array.isArray(body?.existingDeviceIds)
+    ? new Set(body.existingDeviceIds.filter((id: unknown): id is string => typeof id === 'string'))
+    : new Set<string>()
 
   console.info('[frame.claimPairCode] request', {
     pairCodeLength: pairCode.length,
@@ -74,7 +78,31 @@ export async function POST(request: Request) {
     return response
   }
 
-  const response = NextResponse.json({ ok: true }, { status: 200 })
+  let deviceId: string | null = null
+  let isFreshFrame = false
+
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (serviceRoleKey && userData.user?.id) {
+    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    const { data: memberships } = await admin
+      .from('device_members')
+      .select('device_id')
+      .eq('user_id', userData.user.id)
+
+    const memberRows = Array.isArray(memberships) ? memberships : []
+    deviceId = memberRows.find((row) => typeof row?.device_id === 'string' && !existingDeviceIds.has(row.device_id))?.device_id ?? null
+
+    if (deviceId) {
+      const { count } = await admin
+        .from('device_members')
+        .select('device_id', { count: 'exact', head: true })
+        .eq('device_id', deviceId)
+
+      isFreshFrame = count === 1
+    }
+  }
+
+  const response = NextResponse.json({ ok: true, deviceId, isFreshFrame }, { status: 200 })
   console.info('[frame.claimPairCode] response', { status: response.status })
   return response
 }
