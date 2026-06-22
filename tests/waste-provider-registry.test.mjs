@@ -226,3 +226,73 @@ test('Norconsult address resolution merges Kartverket matrikkel with provider UU
     globalThis.fetch = originalFetch
   }
 })
+
+test('Norconsult calendar parser maps row icons through the legend and supports multiple fractions per date', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(`
+    <table>
+      <thead><tr><th>Dato og dag</th><th>Avfallstype</th></tr></thead>
+      <tbody>
+        <tr><td>23.06 - tirsdag</td><td><img class="bin apple green" src="/icons/apple-core.svg"></td><td><svg class="garden"><use href="#hage-icon"></use></svg></td></tr>
+        <tr><td>30.06 - tirsdag</td><td><img src="/icons/plast-purple.svg" alt=""><img src="/icons/rest-black.svg"></td></tr>
+      </tbody>
+    </table>
+    <section aria-label="Forklaring">
+      <div><img src="/icons/apple-core.svg" alt="">Matavfall</div>
+      <div><svg><use href="#hage-icon"></use></svg>Hageavfall</div>
+      <div><img src="/icons/plast-purple.svg" title="plast">Plastemballasje</div>
+      <div><img src="/icons/rest-black.svg" aria-label="sort sekk">Restavfall</div>
+    </section>
+  `, { status: 200, headers: { 'content-type': 'text/html' } })
+
+  try {
+    const raw = await providerFor('stavanger').fetchCollections({
+      addressId: '6fa154fe-bbaa-42d6-9a24-a2e310ecd16b',
+      propertyId: '6fa154fe-bbaa-42d6-9a24-a2e310ecd16b',
+      label: 'Boganesstraen 36B',
+      municipalityNumber: '1103',
+      municipalityName: 'Stavanger',
+      gnr: '16',
+      bnr: '489',
+      snr: '0',
+    })
+    const rows = providerFor('stavanger').normalizeCollections(raw)
+    assert.deepEqual(rows.map((row) => ({ date: row.date, title: row.title })), [
+      { date: '2026-06-23', title: 'Tøm hageavfall' },
+      { date: '2026-06-23', title: 'Tøm matavfall' },
+      { date: '2026-06-30', title: 'Tøm plast' },
+      { date: '2026-06-30', title: 'Tøm restavfall' },
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('Norconsult calendar parser uses accessible icon attributes when legend entries are implicit', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(`
+    <table><tr><th>Dato og dag</th><th>Avfallstype</th></tr>
+      <tr><td>25.06 - torsdag</td><td><img src="/apple.svg" alt="Green apple-core icon"></td></tr>
+    </table>
+    <div><img src="/apple.svg" alt="Green apple-core icon">Matavfall</div>
+  `, { status: 200, headers: { 'content-type': 'text/html' } })
+
+  try {
+    const raw = await providerFor('hentavfall').fetchCollections({
+      addressId: '6ddae2f0-9f6a-4e17-90dc-ba5a01e18ed7',
+      propertyId: '6ddae2f0-9f6a-4e17-90dc-ba5a01e18ed7',
+      label: 'Professor Dahls gate 17C',
+      municipalityNumber: '1108',
+      municipalityName: 'Sandnes',
+      gnr: '70',
+      bnr: '152',
+      snr: '0',
+    })
+    const rows = providerFor('hentavfall').normalizeCollections(raw)
+    assert.deepEqual(rows.map((row) => ({ date: row.date, title: row.title })), [
+      { date: '2026-06-25', title: 'Tøm matavfall' },
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
