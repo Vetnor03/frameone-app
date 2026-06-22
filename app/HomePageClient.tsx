@@ -3305,7 +3305,7 @@ function formatMirrorCountdownDaysNumber(days: number) {
 }
 
 function formatMirrorCountdownDaysUnit(days: number) {
-  return days === 1 ? 'DAG' : 'DAGER'
+  return 'DAYS'
 }
 
 
