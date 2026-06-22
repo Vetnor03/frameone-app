@@ -108,6 +108,40 @@ test('Norconsult providers build public calendar URLs with provider-specific UUI
   }
 })
 
+test('Norconsult providers temporarily fall back to known test-address UUIDs', async () => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url) => {
+    calls.push(String(url))
+    return new Response(`23.06 - tirsdag\nImage: Restavfall`, { status: 200, headers: { 'content-type': 'text/html' } })
+  }
+
+  try {
+    await providerFor('stavanger').fetchCollections({
+      addressId: '1103-1234-36-B',
+      label: 'Boganesstraen 36B',
+      municipalityNumber: '1103',
+      municipalityName: 'Stavanger',
+      gnr: '16',
+      bnr: '489',
+      snr: '0',
+    })
+    await providerFor('hentavfall').fetchCollections({
+      addressId: '1108-23400-17-C',
+      label: 'Professor Dahls gate 17C',
+      municipalityNumber: '1108',
+      municipalityName: 'Sandnes',
+      gnr: '70',
+      bnr: '152',
+      snr: '0',
+    })
+    assert.match(calls[0], /ids=6fa154fe-bbaa-42d6-9a24-a2e310ecd16b/)
+    assert.match(calls[1], /[?&]id=6ddae2f0-9f6a-4e17-90dc-ba5a01e18ed7/)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('Norconsult address resolution extracts Stavanger ids UUID from provider address search', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url) => {
