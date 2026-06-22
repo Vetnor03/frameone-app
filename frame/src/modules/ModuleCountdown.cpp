@@ -396,8 +396,7 @@ static void formatDaysNumber(int days, char* out, size_t outSize) {
 
 static void formatDaysUnit(int days, char* out, size_t outSize) {
   if (!out || outSize == 0) return;
-  if (days == 1) snprintf(out, outSize, "DAG");
-  else snprintf(out, outSize, "DAGER");
+  snprintf(out, outSize, "DAYS");
 }
 
 static void formatShortStatus(const CountdownItem& item, char* out, size_t outSize) {
