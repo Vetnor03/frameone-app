@@ -30,7 +30,7 @@ typedef void (*DrawCb)(void* ctx);
 
 static void renderPage(DrawCb cb, void* ctx) {
   ThemeKey previousTheme = Theme::get();
-  Theme::set(THEME_LIGHT);
+  Theme::set(THEME_DARK);
 
   auto& d = DisplayCore::get();
   d.setFullWindow();
@@ -85,14 +85,14 @@ static void drawPairCode(void* vctx) {
 
   auto& d = DisplayCore::get();
 
-  drawCenteredInFrame("Pair your frame", FRAME_Y + 46, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Pair your frame", FRAME_Y + 44, &FreeMonoBold12pt7b);
 
   const int qrX = FRAME_X + (FRAME_W - PairingQrBitmap::WIDTH) / 2;
-  const int qrY = FRAME_Y + 76;
+  const int qrY = FRAME_Y + 70;
   d.drawBitmap(qrX, qrY, PairingQrBitmap::DATA, PairingQrBitmap::WIDTH, PairingQrBitmap::HEIGHT, Theme::ink());
 
-  drawCenteredInFrame("re-mind.no", qrY + PairingQrBitmap::HEIGHT + 36, &FreeMonoBold12pt7b);
-  drawCenteredInFrame(ctx->code, qrY + PairingQrBitmap::HEIGHT + 92, &FreeMonoBold18pt7b);
+  drawCenteredInFrame("re-mind.no", qrY + PairingQrBitmap::HEIGHT + 28, &FreeMonoBold12pt7b);
+  drawCenteredInFrame(ctx->code, qrY + PairingQrBitmap::HEIGHT + 74, &FreeMonoBold18pt7b);
   drawCenteredInFrame("Scan QR, login and enter code in app", FRAME_Y + 386, &FreeMonoBold9pt7b);
   drawCenteredInFrame("Reconnect charger to restart pairing", FRAME_Y + 414, &FreeMonoBold9pt7b);
 }
