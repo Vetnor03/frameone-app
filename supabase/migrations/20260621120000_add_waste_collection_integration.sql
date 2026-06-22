@@ -28,3 +28,6 @@ values
   ('1103', 'Stavanger', 'stavanger', '{}'::jsonb, 'unsupported'),
   ('1108', 'Sandnes', 'sandnes', '{}'::jsonb, 'unsupported')
 on conflict (municipality_number) do nothing;
+
+-- Make the table visible to PostgREST immediately after applying this migration.
+notify pgrst, 'reload schema';
