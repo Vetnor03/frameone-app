@@ -2238,10 +2238,12 @@ function ConnectAppsScreen({
   language,
   modulesJson,
   onBack,
+  startup = false,
 }: {
   language: AppLanguage
   modulesJson: Record<string, unknown>
   onBack: () => void
+  startup?: boolean
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
@@ -2448,17 +2450,31 @@ function ConnectAppsScreen({
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
       <div className="pt-5 pb-6">
         <div className="flex items-center justify-between gap-3 px-1">
-          <button
-            type="button"
-            onClick={onBack}
-            className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
-          >
-            {language === 'no' ? 'TILBAKE' : 'BACK'}
-          </button>
+          {startup ? (
+            <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">
+              {language === 'no' ? 'Valgfritt' : 'Optional'}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onBack}
+              className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
+            >
+              {language === 'no' ? 'TILBAKE' : 'BACK'}
+            </button>
+          )}
           <div className="text-[color:var(--fg-90)] text-sm font-semibold">
             {language === 'no' ? 'Koble til apper' : 'Connect apps'}
           </div>
         </div>
+
+        {startup && (
+          <p className="mt-3 px-1 text-xs leading-5 text-[color:var(--fg-50)]">
+            {language === 'no'
+              ? 'Koble til appene du bruker nå, eller se hvilke integrasjoner som kommer snart – inkludert renovasjonsvarsler.'
+              : 'Connect the apps you use now, or preview coming-soon integrations — including waste collection reminders.'}
+          </p>
+        )}
 
         <div className="mt-4 space-y-2.5">
           {apps.map((app) => {
@@ -7365,8 +7381,8 @@ function FrameSetupFlow({
       <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : current === 'soccer' ? (isNo ? 'Velg lag' : 'Choose a team') : current === 'surf' ? (isNo ? 'Velg surfspot' : 'Choose surf spot') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1>
       <div className="mt-6 space-y-3 overflow-auto pr-1">
         {current === 'reminders' && (
-          <div className="h-[360px]">
-            <ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} />
+          <div className="h-[430px]">
+            <ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup />
           </div>
         )}
         {current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || 'Not set'} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((m) => ({ ...m, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}
