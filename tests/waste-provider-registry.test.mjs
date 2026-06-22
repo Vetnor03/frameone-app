@@ -20,6 +20,37 @@ test('Stavanger and Sandnes waste providers return detailed configuration errors
   )
 })
 
+test('Kartverket numeric property fields are preserved for waste provider lookup', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    adresser: [{
+      adressetekst: 'Boganesstraen 36B',
+      kommunenummer: '1103',
+      kommunenavn: 'Stavanger',
+      adressekode: 1234,
+      nummer: 36,
+      bokstav: 'B',
+      gardsnummer: 17,
+      bruksnummer: 235,
+      seksjonsnummer: 0,
+      adressenavn: 'Boganesstraen',
+      postnummer: '4020',
+      representasjonspunkt: { lat: 58.9, lon: 5.7 },
+    }],
+  }), { status: 200, headers: { 'content-type': 'application/json' } })
+
+  try {
+    const resolved = await providerFor('stavanger').resolveAddress('Boganesstraen 36B')
+    assert.equal(resolved.addressId, '1103-1234-36-B')
+    assert.equal(resolved.houseNumber, '36B')
+    assert.equal(resolved.gnr, '17')
+    assert.equal(resolved.bnr, '235')
+    assert.equal(resolved.snr, '0')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('Stavanger provider normalizes configured public calendar rows', () => {
   const rows = providerFor('stavanger').normalizeCollections({
     collections: [

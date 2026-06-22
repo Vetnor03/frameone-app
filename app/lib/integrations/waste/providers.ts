@@ -76,7 +76,9 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function asString(value: unknown) {
-  return typeof value === 'string' ? value.trim() : ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return ''
 }
 
 function stripTags(value: string) {
