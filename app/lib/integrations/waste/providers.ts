@@ -200,17 +200,131 @@ function stavangerShowUrl(resolvedAddress: ResolvedWasteAddress, config: Record<
   return url.toString()
 }
 
-function parseNorconsultCalendarHtml(html: string, sourceUrl: string): NorconsultRawCollection[] {
-  const year = new Date().getFullYear()
-  const rows: NorconsultRawCollection[] = []
-  const rowPattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[^\n<]*([\s\S]{0,700}?)(?=\d{2}\.\d{2}(?:\.\d{4})?\s*-|Ofte stilte|Fant du|$)/g
-  let match: RegExpExecArray | null
-  while ((match = rowPattern.exec(html)) !== null) {
-    const fractions = Array.from(new Set(Array.from(match[4].matchAll(/Image:\s*([^<\n]+)/g)).map((m) => stripTags(m[1])).filter(Boolean)))
-    if (!fractions.length) continue
-    const yyyy = match[3] || String(year)
-    rows.push({ date: `${yyyy}-${match[2]}-${match[1]}`, fractions, source_url: sourceUrl, raw: stripTags(match[0]) })
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&aring;/gi, 'å')
+    .replace(/&aelig;/gi, 'æ')
+    .replace(/&oslash;/gi, 'ø')
+    .replace(/&Aring;/g, 'Å')
+    .replace(/&AElig;/g, 'Æ')
+    .replace(/&Oslash;/g, 'Ø')
+}
+
+function normalizeFingerprintText(value: string) {
+  return decodeHtmlEntities(value).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9/_.:-]+/g, ' ').trim()
+}
+
+function parseHtmlAttrs(tag: string) {
+  const attrs: Record<string, string> = {}
+  for (const match of tag.matchAll(/([:\w-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
+    attrs[match[1].toLowerCase()] = decodeHtmlEntities(match[3] ?? match[4] ?? match[5] ?? '')
   }
+  return attrs
+}
+
+function iconFingerprintsFromHtml(html: string) {
+  const fingerprints = new Set<string>()
+  const add = (kind: string, value: string) => {
+    const normalized = normalizeFingerprintText(value)
+    if (normalized) fingerprints.add(`${kind}:${normalized}`)
+  }
+  for (const match of html.matchAll(/<(img|svg|use)\b[^>]*>(?:[\s\S]*?<\/\1>)?/gi)) {
+    const tagHtml = match[0]
+    const attrs = parseHtmlAttrs(tagHtml)
+    for (const name of ['src', 'data-src', 'href', 'xlink:href', 'alt', 'title', 'aria-label', 'class']) add(name, attrs[name] || '')
+    if (attrs.src || attrs['data-src'] || attrs.href || attrs['xlink:href']) {
+      const url = attrs.src || attrs['data-src'] || attrs.href || attrs['xlink:href']
+      add('file', url.split(/[?#]/)[0].split('/').pop() || url)
+    }
+    add('html', tagHtml.replace(/\s+/g, ' '))
+  }
+  return Array.from(fingerprints)
+}
+
+function wasteLabelFromText(value: string) {
+  const text = normalizeFingerprintText(stripTags(value))
+  if (!text) return ''
+  if (text.includes('matavfall') || /\bmat\b/.test(text)) return 'Matavfall'
+  if (text.includes('hageavfall') || /\bhage\b/.test(text)) return 'Hageavfall'
+  if (text.includes('plastemballasje') || /\bplast\b/.test(text)) return 'Plastemballasje'
+  if (text.includes('papiravfall') || text.includes('papp og papir') || text.includes('papp/papir') || /\bpapir\b/.test(text) || /\bpapp\b/.test(text)) return 'Papiravfall'
+  if (text.includes('restavfall') || /\brest\b/.test(text)) return 'Restavfall'
+  if (text.includes('glass') || text.includes('metall')) return 'Glass og metall'
+  return ''
+}
+
+function parseNorconsultLegend(html: string) {
+  const legend = new Map<string, string>()
+  const blocks = Array.from(html.matchAll(/<(?:li|tr|div|p|span|dd|dt)\b[^>]*>[\s\S]{0,1200}?(?:<\/(?:li|tr|div|p|span|dd|dt)>)/gi), (m) => m[0])
+  for (const block of blocks) {
+    const label = wasteLabelFromText(block)
+    if (!label) continue
+    const fps = iconFingerprintsFromHtml(block)
+    for (const fp of fps) legend.set(fp, label)
+  }
+  return legend
+}
+
+function yearForNorconsultDate(day: string, month: string, explicitYear?: string) {
+  if (explicitYear) return explicitYear
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const candidate = new Date(Date.UTC(currentYear, Number(month) - 1, Number(day)))
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  // Calendars may cross New Year; a date more than two months behind today belongs to next year.
+  if (candidate.getTime() < today.getTime() - 62 * 24 * 60 * 60 * 1000) return String(currentYear + 1)
+  return String(currentYear)
+}
+
+function parseNorconsultCalendarHtml(html: string, sourceUrl: string): NorconsultRawCollection[] {
+  const rows: NorconsultRawCollection[] = []
+  const legend = parseNorconsultLegend(html)
+  const datePattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[^\n<]*/
+  let rowBlocks = Array.from(html.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi), (m) => m[0]).filter((block) => datePattern.test(stripTags(block)))
+  if (!rowBlocks.length) rowBlocks = Array.from(html.matchAll(/<(?:li|div)\b[^>]*>[\s\S]{0,1800}?<\/(?:li|div)>/gi), (m) => m[0]).filter((block) => datePattern.test(stripTags(block)))
+  if (!rowBlocks.length) {
+    const rowPattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[^\n<]*(?:<[^>]+>)*([\s\S]{0,1400}?)(?=\d{2}\.\d{2}(?:\.\d{4})?\s*-|Ofte stilte|Fant du|$)/g
+    rowBlocks = Array.from(html.matchAll(rowPattern), (m) => m[0])
+  }
+  let dateRowsFound = 0
+  const debugRowFingerprints: string[][] = []
+  const debugMatches: string[][] = []
+  for (const chunk of rowBlocks) {
+    const match = stripTags(chunk).match(datePattern)
+    if (!match) continue
+    dateRowsFound += 1
+    const fallbackFractions = Array.from(new Set(Array.from(chunk.matchAll(/Image:\s*([^<\n]+)/g)).map((m) => stripTags(m[1])).filter(Boolean)))
+    const rowFingerprints = iconFingerprintsFromHtml(chunk)
+    debugRowFingerprints.push(rowFingerprints.slice(0, 12))
+    const matched = new Set<string>(fallbackFractions)
+    for (const fp of rowFingerprints) {
+      const wasteType = legend.get(fp)
+      if (wasteType) matched.add(wasteType)
+    }
+    if (!matched.size) {
+      const label = wasteLabelFromText(chunk)
+      if (label) matched.add(label)
+    }
+    const fractions = Array.from(matched)
+    debugMatches.push(fractions)
+    if (!fractions.length) continue
+    const yyyy = yearForNorconsultDate(match[1], match[2], match[3])
+    rows.push({ date: `${yyyy}-${match[2]}-${match[1]}`, fractions, source_url: sourceUrl, raw: stripTags(chunk) })
+  }
+  console.log('[waste] calendar parser debug', {
+    sourceUrl,
+    htmlLength: html.length,
+    dateRowsFound,
+    legendEntriesFound: legend.size,
+    legendFingerprints: Array.from(legend.keys()).slice(0, 25),
+    rowIconFingerprints: debugRowFingerprints.slice(0, 10),
+    wasteTypesMatched: debugMatches.slice(0, 10),
+    finalReminderCount: rows.reduce((sum, row) => sum + row.fractions.length, 0),
+  })
   return rows
 }
 
