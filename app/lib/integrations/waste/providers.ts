@@ -1,5 +1,5 @@
 export type WasteProviderKey = 'min_renovasjon' | 'stavanger' | 'sandnes' | 'generic_ics' | 'manual'
-export type WasteFraction = 'restavfall' | 'plast' | 'papir' | 'matavfall' | 'glass_metall' | string
+export type WasteFraction = 'restavfall' | 'plast' | 'papir' | 'matavfall' | 'glass_metall' | 'hageavfall' | string
 
 export type ResolvedWasteAddress = {
   addressId: string
@@ -11,6 +11,10 @@ export type ResolvedWasteAddress = {
   postalCode?: string
   lat?: number
   lon?: number
+  gnr?: string
+  bnr?: string
+  snr?: string
+  propertyId?: string
 }
 
 export type NormalizedWasteCollection = {
@@ -36,6 +40,27 @@ export interface WasteProvider {
   normalizeCollections(rawData: unknown, config?: Record<string, unknown>): NormalizedWasteCollection[]
 }
 
+type ProviderFetchLog = {
+  url: string
+  status?: number
+  payloadSize?: number
+}
+
+type NorconsultRawCollection = {
+  date: string
+  fractions: string[]
+  source_url: string
+  raw: unknown
+}
+
+type NorconsultRawResult = {
+  provider: 'norconsult_public_calendar'
+  municipality: string
+  source_url: string
+  fetch_log: ProviderFetchLog[]
+  collections: NorconsultRawCollection[]
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -44,12 +69,17 @@ function asString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function stripTags(value: string) {
+  return value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
+}
+
 function normalizeFraction(raw: unknown) {
   const value = asString(raw).toLowerCase()
   if (value.includes('plast')) return 'plast'
   if (value.includes('papir') || value.includes('papp')) return 'papir'
   if (value.includes('mat')) return 'matavfall'
   if (value.includes('glass') || value.includes('metall')) return 'glass_metall'
+  if (value.includes('hage')) return 'hageavfall'
   return 'restavfall'
 }
 
@@ -58,6 +88,7 @@ export function wasteCollectionTitle(fraction: WasteFraction) {
   if (fraction === 'papir') return 'Tøm papir'
   if (fraction === 'matavfall') return 'Tøm matavfall'
   if (fraction === 'glass_metall') return 'Tøm glass og metall'
+  if (fraction === 'hageavfall') return 'Tøm hageavfall'
   return 'Tøm restavfall'
 }
 
@@ -69,11 +100,14 @@ function normalizeCollectionRows(rawData: unknown): NormalizedWasteCollection[] 
     const r = asRecord(row)
     const date = asString(r.date) || asString(r.collection_date) || asString(r.tommedato).slice(0, 10)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
-    const waste_fraction = normalizeFraction(r.waste_fraction ?? r.fraction ?? r.type ?? r.fractionName)
-    const key = `${date}__${waste_fraction}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({ date, waste_fraction, title: wasteCollectionTitle(waste_fraction), raw: row })
+    const fractions = Array.isArray(r.fractions) ? r.fractions : [r.waste_fraction ?? r.fraction ?? r.type ?? r.fractionName]
+    for (const fractionRaw of fractions) {
+      const waste_fraction = normalizeFraction(fractionRaw)
+      const key = `${date}__${waste_fraction}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ date, waste_fraction, title: wasteCollectionTitle(waste_fraction), source_url: asString(r.source_url) || null, raw: row })
+    }
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title))
 }
@@ -86,7 +120,7 @@ export async function resolveKartverketAddress(address: string): Promise<Resolve
   url.searchParams.set('treffPerSide', '1')
   url.searchParams.set('asciiKompatibel', 'true')
   const resp = await fetch(url, { headers: { Accept: 'application/json' } })
-  if (!resp.ok) throw new Error('Kartverket address lookup failed')
+  if (!resp.ok) throw new Error(`Kartverket address lookup failed (${resp.status})`)
   const json = await resp.json()
   const hit = Array.isArray(json?.adresser) ? json.adresser[0] : null
   if (!hit) throw new Error('Address not found')
@@ -118,29 +152,85 @@ async function fetchJsonOrConfiguredCollections(resolvedAddress: ResolvedWasteAd
   if (resolvedAddress.streetName) url.searchParams.set('street_name', resolvedAddress.streetName)
   if (resolvedAddress.houseNumber) url.searchParams.set('house_number', resolvedAddress.houseNumber)
   const resp = await fetch(url, { headers: { Accept: 'application/json' } })
-  if (!resp.ok) throw new Error('Waste provider request failed')
+  if (!resp.ok) throw new Error(`Waste provider request failed (${resp.status})`)
   return resp.json()
+}
+
+function stavangerShowUrl(resolvedAddress: ResolvedWasteAddress, config: Record<string, unknown>, municipality: string) {
+  const explicit = asString(config.show_url) || asString(config.calendar_url)
+  if (explicit) return explicit
+  const gnr = asString(config.gnr) || resolvedAddress.gnr
+  const bnr = asString(config.bnr) || resolvedAddress.bnr
+  const snr = asString(config.snr) || resolvedAddress.snr || '0'
+  const id = asString(config.id) || asString(config.property_id) || resolvedAddress.propertyId
+  if (!gnr || !bnr || !id) return ''
+  const url = new URL('https://www.stavanger.kommune.no/renovasjon-og-miljo/tommekalender/finn-kalender/show')
+  url.searchParams.set('bnumber', bnr)
+  url.searchParams.set('gnumber', gnr)
+  url.searchParams.set('id', id)
+  url.searchParams.set('municipality', municipality)
+  url.searchParams.set('snumber', snr)
+  return url.toString()
+}
+
+function parseNorconsultCalendarHtml(html: string, sourceUrl: string): NorconsultRawCollection[] {
+  const year = new Date().getFullYear()
+  const rows: NorconsultRawCollection[] = []
+  const rowPattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[^\n<]*([\s\S]{0,700}?)(?=\d{2}\.\d{2}(?:\.\d{4})?\s*-|Ofte stilte|Fant du|$)/g
+  let match: RegExpExecArray | null
+  while ((match = rowPattern.exec(html)) !== null) {
+    const fractions = Array.from(new Set(Array.from(match[4].matchAll(/Image:\s*([^<\n]+)/g)).map((m) => stripTags(m[1])).filter(Boolean)))
+    if (!fractions.length) continue
+    const yyyy = match[3] || String(year)
+    rows.push({ date: `${yyyy}-${match[2]}-${match[1]}`, fractions, source_url: sourceUrl, raw: stripTags(match[0]) })
+  }
+  return rows
+}
+
+async function fetchNorconsultPublicCalendar(resolvedAddress: ResolvedWasteAddress, config: Record<string, unknown>, municipality: 'Stavanger' | 'Sandnes'): Promise<NorconsultRawResult> {
+  if (Array.isArray(config.collections)) {
+    return { provider: 'norconsult_public_calendar', municipality, source_url: 'configured collections', fetch_log: [], collections: config.collections as NorconsultRawCollection[] }
+  }
+  const sourceUrl = stavangerShowUrl(resolvedAddress, config, municipality)
+  if (!sourceUrl) {
+    throw new Error(`${municipality} waste provider needs a public calendar URL or gnr/bnr/id in provider_config; address ${resolvedAddress.label} resolved as ${resolvedAddress.addressId}`)
+  }
+  const log: ProviderFetchLog[] = [{ url: sourceUrl }]
+  let resp: Response
+  let text = ''
+  try {
+    resp = await fetch(sourceUrl, { headers: { Accept: 'text/html,application/xhtml+xml' } })
+    text = await resp.text()
+  } catch (error: unknown) {
+    throw new Error(`${municipality} waste provider request failed for ${sourceUrl}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  log[0].status = resp.status
+  log[0].payloadSize = text.length
+  console.log('[waste] provider request', log[0])
+  if (!resp.ok) throw new Error(`${municipality} waste provider returned ${resp.status} for ${sourceUrl} (${text.length} bytes)`)
+  const collections = parseNorconsultCalendarHtml(text, sourceUrl)
+  console.log('[waste] provider parse result', { provider: municipality.toLowerCase(), parsedCollectionCount: collections.length, first5: collections.slice(0, 5) })
+  if (!collections.length) throw new Error(`${municipality} waste provider returned no parseable collection dates from ${sourceUrl} (${text.length} bytes)`)
+  return { provider: 'norconsult_public_calendar', municipality, source_url: sourceUrl, fetch_log: log, collections }
 }
 
 function jsonProvider(key: WasteProviderKey): WasteProvider {
   return { key, resolveAddress: resolveKartverketAddress, fetchCollections: (a, c = {}) => fetchJsonOrConfiguredCollections(a, c), normalizeCollections: normalizeCollectionRows }
 }
 
-function notImplementedProvider(key: 'stavanger' | 'sandnes'): WasteProvider {
+function norconsultProvider(key: 'stavanger' | 'sandnes', municipality: 'Stavanger' | 'Sandnes'): WasteProvider {
   return {
     key,
     resolveAddress: resolveKartverketAddress,
-    async fetchCollections() {
-      throw new Error('Provider supported but fetch not implemented yet')
-    },
+    fetchCollections: (a, c = {}) => fetchNorconsultPublicCalendar(a, c, municipality),
     normalizeCollections: normalizeCollectionRows,
   }
 }
 
 export const wasteProviders: Record<WasteProviderKey, WasteProvider> = {
   min_renovasjon: jsonProvider('min_renovasjon'),
-  stavanger: notImplementedProvider('stavanger'),
-  sandnes: notImplementedProvider('sandnes'),
+  stavanger: norconsultProvider('stavanger', 'Stavanger'),
+  sandnes: norconsultProvider('sandnes', 'Sandnes'),
   generic_ics: jsonProvider('generic_ics'),
   manual: jsonProvider('manual'),
 }

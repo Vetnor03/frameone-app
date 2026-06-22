@@ -74,6 +74,11 @@ export async function connectWasteForUser(userId: string, address: string): Prom
     throw error
   }
   const collections = provider.normalizeCollections(raw, registryEntry.provider_config || {})
+  console.log('[waste] normalized collections', {
+    provider: registryEntry.provider,
+    parsed_collection_count: collections.length,
+    first5: collections.slice(0, 5),
+  })
   const now = new Date().toISOString()
   const rows = collections.map((item) => ({
     user_id: userId,
