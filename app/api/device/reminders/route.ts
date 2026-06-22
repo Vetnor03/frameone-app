@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
+import { buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -398,12 +398,13 @@ export async function GET(req: Request) {
 
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
+    let wasteItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
       await syncSpondIfStaleForUsers(memberUserIds)
 
       const { data: integrationItemsData, error: integrationItemsError } = await supabase
         .from('integration_items')
-        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority')
+        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
         .eq('provider', 'spond')
         .in('user_id', memberUserIds)
         .order('priority', { ascending: true })
@@ -425,7 +426,7 @@ export async function GET(req: Request) {
 
       const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
         .from('integration_items')
-        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority')
+        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
         .eq('provider', 'teams')
         .in('user_id', memberUserIds)
         .order('starts_at', { ascending: true, nullsFirst: false })
@@ -440,9 +441,28 @@ export async function GET(req: Request) {
         horizonEndYmd,
         timeZone
       )
+
+      const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
+        .from('integration_items')
+        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+        .eq('provider', 'waste')
+        .in('user_id', memberUserIds)
+        .order('starts_at', { ascending: true, nullsFirst: false })
+
+      if (wasteIntegrationItemsError) {
+        return NextResponse.json({ error: wasteIntegrationItemsError.message }, { status: 500 })
+      }
+
+      wasteItems = buildWasteCollectionItems(
+        Array.isArray(wasteIntegrationItemsData) ? (wasteIntegrationItemsData as IntegrationItemRow[]) : [],
+        todayYmd,
+        horizonEndYmd,
+        timeZone,
+        includeOverdue
+      )
     }
 
-    const sortedCandidates = [...teamsItems, ...spondItems, ...manualItems].sort(compareReminderItems)
+    const sortedCandidates = [...teamsItems, ...spondItems, ...wasteItems, ...manualItems].sort(compareReminderItems)
     const items = selectReminderDisplayGroups(sortedCandidates, limit)
 
     return NextResponse.json({ items })
