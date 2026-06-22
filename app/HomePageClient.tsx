@@ -19,7 +19,7 @@ type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
 type SetupPurpose = 'family' | 'sport' | 'custom'
 type SetupSport = 'surf' | 'soccer'
-type FrameSetupSelection = { purpose: SetupPurpose; sport?: SetupSport; modules: Record<string, any> }
+type FrameSetupSelection = { purpose: SetupPurpose; sport?: SetupSport; modules: Record<string, any>; countdownEvent?: { title: string; date: string } | null }
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -1787,6 +1787,25 @@ export default function HomePage() {
     })
     if (error) throw error
     if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
+
+    if (selection.countdownEvent?.title && selection.countdownEvent.date) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = sessionData.session?.user?.id
+      if (!userId) throw new Error(language === 'no' ? 'Ikke logget inn' : 'Not logged in')
+
+      const { error: countdownError } = await supabase
+        .from('countdown_events')
+        .insert({
+          device_id: activeDeviceId,
+          title: selection.countdownEvent.title,
+          target_date: selection.countdownEvent.date,
+          pinned: true,
+          created_by_user_id: userId,
+          updated_by_user_id: userId,
+        })
+
+      if (countdownError) throw countdownError
+    }
 
     layoutModuleMemoryRef.current = nextLayoutModuleMemory
     setLayoutKey(nextLayout)
@@ -7288,18 +7307,20 @@ function FrameSetupFlow({
   language: AppLanguage
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const [step, setStep] = useState<'purpose' | 'sport' | 'modules' | 'manual'>('purpose')
+  const [step, setStep] = useState<'purpose' | 'sport' | 'modules' | 'countdown' | 'manual'>('purpose')
   const [purpose, setPurpose] = useState<SetupPurpose | null>(null)
   const [sport, setSport] = useState<SetupSport | null>(null)
   const [modules, setModules] = useState<Record<string, any>>({})
   const [moduleIndex, setModuleIndex] = useState(0)
+  const [countdownTitle, setCountdownTitle] = useState('')
+  const [countdownDate, setCountdownDate] = useState(toLocalYmd(new Date()))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isNo = language === 'no'
 
   const requiredModules = useMemo(() => {
-    if (purpose === 'family') return ['reminders', 'weather']
-    if (purpose === 'sport') return ['reminders', sport, 'weather'].filter(Boolean) as string[]
+    if (purpose === 'family') return ['reminders', 'countdown', 'weather']
+    if (purpose === 'sport') return ['reminders', 'countdown', sport, 'weather'].filter(Boolean) as string[]
     return []
   }, [purpose, sport])
 
@@ -7328,12 +7349,39 @@ function FrameSetupFlow({
     else setModuleIndex((idx) => idx + 1)
   }
 
+  function goBack() {
+    setError(null)
+    if (step === 'sport') {
+      setSport(null)
+      setStep('purpose')
+      return
+    }
+    if (step === 'modules') {
+      if (moduleIndex > 0) setModuleIndex((idx) => idx - 1)
+      else setStep(purpose === 'sport' ? 'sport' : 'purpose')
+      return
+    }
+    if (step === 'manual') {
+      if (requiredModules.length > 0) {
+        setModuleIndex(requiredModules.length - 1)
+        setStep('modules')
+      } else {
+        setStep('purpose')
+      }
+    }
+  }
+
   async function finish() {
     if (saving) return
     try {
       setSaving(true)
       setError(null)
-      await onComplete({ purpose: purpose || 'custom', sport: sport || undefined, modules })
+      await onComplete({
+        purpose: purpose || 'custom',
+        sport: sport || undefined,
+        modules,
+        countdownEvent: countdownTitle.trim() && countdownDate ? { title: countdownTitle.trim(), date: countdownDate } : null,
+      })
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -7341,15 +7389,29 @@ function FrameSetupFlow({
     }
   }
 
+  const setupStepIndex = step === 'purpose' ? 0 : step === 'sport' ? 1 : step === 'modules' ? 2 + moduleIndex : 2 + requiredModules.length
+  const setupStepTotal = Math.max(3, 3 + requiredModules.length)
+  const canGoBack = step !== 'purpose' && !saving
+
   const shell = (children: React.ReactNode) => (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[color:var(--app-bg)] px-5 text-[color:var(--fg)]">
-      <div className="flex max-h-[88vh] w-full max-w-[380px] flex-col rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur">
-        <div className="mb-3 flex justify-end">
-          <button onClick={goManual} className="rounded-full border border-[color:var(--bd-10)] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-40)] hover:text-[color:var(--fg-70)]">
-            {isNo ? 'Hopp over' : 'Skip'}
-          </button>
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(42,163,255,0.12),_transparent_34%),color:var(--app-bg)] px-5 text-[color:var(--fg)]">
+      <div className="flex max-h-[90vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+        <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <button onClick={goBack} disabled={!canGoBack} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-60)] disabled:opacity-0">
+              ← {isNo ? 'Tilbake' : 'Back'}
+            </button>
+            <button onClick={goManual} disabled={saving} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)] hover:text-[color:var(--fg-80)] disabled:opacity-50">
+              {isNo ? 'Hopp over' : 'Skip'}
+            </button>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]">
+            <div className="h-full rounded-full bg-[#2aa3ff] transition-all" style={{ width: `${Math.min(100, ((setupStepIndex + 1) / setupStepTotal) * 100)}%` }} />
+          </div>
         </div>
-        {children}
+        <div className="overflow-auto p-6">
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -7378,11 +7440,26 @@ function FrameSetupFlow({
     const current = requiredModules[moduleIndex]
     return shell(<>
       <div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div>
-      <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : current === 'soccer' ? (isNo ? 'Velg lag' : 'Choose a team') : current === 'surf' ? (isNo ? 'Velg surfspot' : 'Choose surf spot') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1>
+      <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : current === 'soccer' ? (isNo ? 'Velg lag' : 'Choose a team') : current === 'surf' ? (isNo ? 'Velg surfspot' : 'Choose surf spot') : current === 'countdown' ? (isNo ? 'Legg til nedtelling' : 'Add a countdown') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1>
       <div className="mt-6 space-y-3 overflow-auto pr-1">
         {current === 'reminders' && (
           <div className="h-[430px]">
             <ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup />
+          </div>
+        )}
+        {current === 'countdown' && (
+          <div className="space-y-4 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--app-bg)] p-4">
+            <p className="text-sm leading-6 text-[color:var(--fg-60)]">
+              {isNo ? 'Start med én viktig dato. Du kan legge til flere senere fra nedtelling-fanen.' : 'Start with one important date. You can add more later from the countdown tab.'}
+            </p>
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.22em] text-[color:var(--fg-50)]">{isNo ? 'Hendelse' : 'Event'}</span>
+              <input value={countdownTitle} onChange={(e) => setCountdownTitle(e.target.value)} placeholder={isNo ? 'Sommerferie' : 'Summer vacation'} className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 outline-none focus:border-[#2aa3ff]" />
+            </label>
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.22em] text-[color:var(--fg-50)]">{isNo ? 'Dato' : 'Date'}</span>
+              <input type="date" value={countdownDate} onChange={(e) => setCountdownDate(e.target.value)} className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 outline-none focus:border-[#2aa3ff]" />
+            </label>
           </div>
         )}
         {current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || 'Not set'} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((m) => ({ ...m, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}
@@ -7402,6 +7479,7 @@ function FrameSetupFlow({
       <p>• {isNo ? 'Faner åpnes eller lukkes basert på modulene du har valgt.' : 'Tabs open or close depending on the modules selected for your frame.'}</p>
       <p>• {isNo ? 'Velg layout og endre moduler ved å trykke på cellen du vil redigere.' : 'Select a layout and change modules by clicking the cell you want to edit.'}</p>
       <p>• {isNo ? 'Snu telefonen sidelengs for å se et speil av den fysiske framen.' : 'Turn your phone sideways to see a mirror of what is displayed on the physical frame.'}</p>
+      <p>• {isNo ? 'Framen oppdateres automatisk når noe endres: omtrent hvert 15. minutt på batteri og hvert 5. minutt når den står til lading.' : 'Your frame refreshes automatically when changes are detected: about every 15 minutes on battery and every 5 minutes while plugged in.'}</p>
       <p>• {isNo ? 'I Innstillinger kan du dele enheten med familie ved å dele den genererte paringskoden.' : 'In Settings, you can share the device with family members by sharing the generated pair code.'}</p>
     </div>
     {error && <div className="mt-4 text-sm text-[color:var(--danger)]">{error}</div>}
