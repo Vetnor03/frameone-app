@@ -7344,7 +7344,41 @@ function FrameSetupFlow({
     setStep('modules')
   }
 
+  function setupModuleComplete(moduleKey: string) {
+    if (moduleKey === 'surf') {
+      const cfg = modules.surf?.[0]
+      return !!String(cfg?.spot || cfg?.spotId || '').trim()
+    }
+
+    if (moduleKey === 'weather') {
+      const cfg = modules.weather?.[0]
+      return Number.isFinite(Number(cfg?.lat)) && Number.isFinite(Number(cfg?.lon))
+    }
+
+    if (moduleKey === 'soccer') {
+      const cfg = modules.soccer?.[0]
+      return !!String(cfg?.teamName || cfg?.teamId || '').trim()
+    }
+
+    return true
+  }
+
   function nextModule() {
+    const current = requiredModules[moduleIndex]
+    if (!setupModuleComplete(current)) {
+      setError(
+        current === 'surf'
+          ? (isNo ? 'Velg et surfspot før du fortsetter.' : 'Choose a surf spot before continuing.')
+          : current === 'weather'
+            ? (isNo ? 'Velg et værsted før du fortsetter.' : 'Choose a weather location before continuing.')
+            : current === 'soccer'
+              ? (isNo ? 'Velg et lag før du fortsetter.' : 'Choose a team before continuing.')
+              : null
+      )
+      return
+    }
+
+    setError(null)
     if (moduleIndex + 1 >= requiredModules.length) goManual()
     else setModuleIndex((idx) => idx + 1)
   }
@@ -7469,7 +7503,8 @@ function FrameSetupFlow({
           <input placeholder={isNo ? 'Hjemmeadresse (valgfritt)' : 'Home address (optional)'} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] px-4 py-3 outline-none" onChange={(e) => setModules((m) => ({ ...m, surf: [{ id: 1, ...(m.surf?.[0] || {}), fuelPenalty: { enabled: true, homeAddress: e.target.value } }] }))} />
         </>}
       </div>
-      <button onClick={nextModule} className="mt-6 h-12 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white text-sm uppercase tracking-[0.2em]">{isNo ? 'Neste' : 'Next'}</button>
+      {error && <div className="mt-4 rounded-2xl border border-[color:var(--danger)] bg-[color:var(--panel-05)] px-4 py-3 text-sm text-[color:var(--danger)]">{error}</div>}
+      <button onClick={nextModule} disabled={!setupModuleComplete(current)} className="mt-6 h-12 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white text-sm uppercase tracking-[0.2em] disabled:cursor-not-allowed disabled:opacity-50">{isNo ? 'Neste' : 'Next'}</button>
     </>)
   }
 
