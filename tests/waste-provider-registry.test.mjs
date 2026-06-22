@@ -108,6 +108,48 @@ test('Norconsult providers build public calendar URLs with provider-specific UUI
   }
 })
 
+test('Norconsult address resolution extracts Stavanger ids UUID from provider address search', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    const textUrl = String(url)
+    if (textUrl.startsWith('https://ws.geonorge.no/adresser/v1/sok')) {
+      return new Response(JSON.stringify({
+        adresser: [{
+          adressetekst: 'Boganesstraen 36B',
+          kommunenummer: '1103',
+          kommunenavn: 'Stavanger',
+          adressekode: 1234,
+          nummer: 36,
+          bokstav: 'B',
+          gardsnummer: 16,
+          bruksnummer: 489,
+          seksjonsnummer: 0,
+        }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    return new Response(JSON.stringify({
+      suggestions: [{
+        ids: '6fa154fe-bbaa-42d6-9a24-a2e310ecd16b',
+        address: 'Boganesstraen 36B',
+        gnumber: 16,
+        bnumber: 489,
+        snumber: 0,
+      }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+
+  try {
+    const resolved = await providerFor('stavanger').resolveAddress('Boganesstraen 36B')
+    assert.equal(resolved.addressId, '6fa154fe-bbaa-42d6-9a24-a2e310ecd16b')
+    assert.equal(resolved.propertyId, '6fa154fe-bbaa-42d6-9a24-a2e310ecd16b')
+    assert.equal(resolved.gnr, '16')
+    assert.equal(resolved.bnr, '489')
+    assert.equal(resolved.snr, '0')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('Norconsult address resolution merges Kartverket matrikkel with provider UUID lookup results', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url) => {
