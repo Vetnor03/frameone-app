@@ -2713,8 +2713,8 @@ function ConnectAppsScreen({
 
 
       {wasteModalOpen && (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/30 px-4 pb-4 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel)] p-5 shadow-2xl">
+        <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-10 sm:py-16">
+          <div className="mt-8 w-full max-w-sm rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel)] p-5 shadow-2xl sm:mt-12">
             <div className="text-base font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Koble til renovasjon' : 'Connect waste collection'}</div>
             <p className="mt-2 text-sm leading-snug text-[color:var(--fg-55)]">{language === 'no' ? 'Skriv inn adressen din. Vi finner kommunen via Kartverket og bruker riktig leverandør hvis kommunen er støttet.' : 'Enter your address. We resolve the municipality with Kartverket and use the configured provider if supported.'}</p>
             <input

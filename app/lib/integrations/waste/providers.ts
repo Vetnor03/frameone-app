@@ -280,37 +280,75 @@ function yearForNorconsultDate(day: string, month: string, explicitYear?: string
   return String(currentYear)
 }
 
+function htmlCells(rowHtml: string) {
+  return Array.from(rowHtml.matchAll(/<t[dh]\b[^>]*>[\s\S]*?<\/t[dh]>/gi), (m) => m[0])
+}
+
+function iconHtmlForCalendarRow(rowHtml: string, datePattern: RegExp) {
+  const cells = htmlCells(rowHtml)
+  if (!cells.length) return rowHtml
+  const dateIndex = cells.findIndex((cell) => datePattern.test(stripTags(cell)))
+  if (dateIndex < 0) return rowHtml
+  const afterDateCells = cells.slice(dateIndex + 1)
+  const iconCells = afterDateCells.filter((cell) => /<(?:img|svg|use)\b/i.test(cell))
+  return (iconCells.length ? iconCells : afterDateCells).join(' ')
+}
+
+function containersAroundDates(html: string, datePattern: RegExp) {
+  const blocks: string[] = []
+  const seen = new Set<string>()
+  const add = (block: string) => {
+    const key = block.slice(0, 80) + block.length + block.slice(-80)
+    if (!seen.has(key) && datePattern.test(stripTags(block))) {
+      seen.add(key)
+      blocks.push(block)
+    }
+  }
+
+  for (const match of html.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)) add(match[0])
+  for (const match of html.matchAll(/<(?:li|article|section)\b[^>]*>[\s\S]{0,3000}?<\/(?:li|article|section)>/gi)) add(match[0])
+  if (blocks.length) return blocks
+  const dateMatches = Array.from(html.matchAll(/\d{2}\.\d{2}(?:\.\d{4})?\s*-\s*[a-zæøå]+/gi))
+  for (let i = 0; i < dateMatches.length; i += 1) {
+    const match = dateMatches[i]
+    const index = match.index ?? 0
+    const before = html.lastIndexOf('<div', index)
+    const after = html.indexOf('</div>', index)
+    if (before >= 0 && after > index && after - before < 3000) add(html.slice(before, after + 6))
+    else {
+      const nextIndex = dateMatches[i + 1]?.index ?? html.length
+      add(html.slice(index, Math.min(html.length, nextIndex)))
+    }
+  }
+  return blocks
+}
+
 function parseNorconsultCalendarHtml(html: string, sourceUrl: string): NorconsultRawCollection[] {
   const rows: NorconsultRawCollection[] = []
   const legend = parseNorconsultLegend(html)
-  const datePattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[^\n<]*/
-  let rowBlocks = Array.from(html.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi), (m) => m[0]).filter((block) => datePattern.test(stripTags(block)))
-  if (!rowBlocks.length) rowBlocks = Array.from(html.matchAll(/<(?:li|div)\b[^>]*>[\s\S]{0,1800}?<\/(?:li|div)>/gi), (m) => m[0]).filter((block) => datePattern.test(stripTags(block)))
-  if (!rowBlocks.length) {
-    const rowPattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[^\n<]*(?:<[^>]+>)*([\s\S]{0,1400}?)(?=\d{2}\.\d{2}(?:\.\d{4})?\s*-|Ofte stilte|Fant du|$)/g
-    rowBlocks = Array.from(html.matchAll(rowPattern), (m) => m[0])
-  }
+  const datePattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[a-zæøå]+/i
+  const rowBlocks = containersAroundDates(html, datePattern)
   let dateRowsFound = 0
-  const debugRowFingerprints: string[][] = []
-  const debugMatches: string[][] = []
+  const debugRows: Array<{ dateText: string; rowHtml: string; rowIconFingerprints: string[]; matchedWasteTypes: string[] }> = []
   for (const chunk of rowBlocks) {
-    const match = stripTags(chunk).match(datePattern)
+    const text = stripTags(chunk)
+    const match = text.match(datePattern)
     if (!match) continue
     dateRowsFound += 1
-    const fallbackFractions = Array.from(new Set(Array.from(chunk.matchAll(/Image:\s*([^<\n]+)/g)).map((m) => stripTags(m[1])).filter(Boolean)))
-    const rowFingerprints = iconFingerprintsFromHtml(chunk)
-    debugRowFingerprints.push(rowFingerprints.slice(0, 12))
+    const iconHtml = iconHtmlForCalendarRow(chunk, datePattern)
+    const fallbackFractions = Array.from(new Set(Array.from(iconHtml.matchAll(/Image:\s*([^<\n]+)/g)).map((m) => stripTags(m[1])).filter(Boolean)))
+    const rowFingerprints = iconFingerprintsFromHtml(iconHtml)
     const matched = new Set<string>(fallbackFractions)
     for (const fp of rowFingerprints) {
       const wasteType = legend.get(fp)
       if (wasteType) matched.add(wasteType)
     }
     if (!matched.size) {
-      const label = wasteLabelFromText(chunk)
+      const label = wasteLabelFromText(iconHtml)
       if (label) matched.add(label)
     }
     const fractions = Array.from(matched)
-    debugMatches.push(fractions)
+    debugRows.push({ dateText: match[0], rowHtml: chunk.slice(0, 1500), rowIconFingerprints: rowFingerprints.slice(0, 25), matchedWasteTypes: fractions })
     if (!fractions.length) continue
     const yyyy = yearForNorconsultDate(match[1], match[2], match[3])
     rows.push({ date: `${yyyy}-${match[2]}-${match[1]}`, fractions, source_url: sourceUrl, raw: stripTags(chunk) })
@@ -321,8 +359,7 @@ function parseNorconsultCalendarHtml(html: string, sourceUrl: string): Norconsul
     dateRowsFound,
     legendEntriesFound: legend.size,
     legendFingerprints: Array.from(legend.keys()).slice(0, 25),
-    rowIconFingerprints: debugRowFingerprints.slice(0, 10),
-    wasteTypesMatched: debugMatches.slice(0, 10),
+    rows: debugRows.slice(0, 10),
     finalReminderCount: rows.reduce((sum, row) => sum + row.fractions.length, 0),
   })
   return rows
@@ -368,62 +405,14 @@ function jsonProvider(key: WasteProviderKey): WasteProvider {
 
 async function resolveNorconsultAddress(address: string, municipality: 'Stavanger' | 'Sandnes'): Promise<ResolvedWasteAddress> {
   const kartverket = await resolveKartverketAddress(address)
-  console.log(`[waste] starting ${municipality} provider UUID lookup`, {
+  console.log(`[waste] provider UUID lookup limited to known temporary fallbacks`, {
+    provider: municipality.toLowerCase(),
     searchQuery: address.trim(),
     label: kartverket.label,
     gnr: kartverket.gnr || null,
     bnr: kartverket.bnr || null,
     snr: kartverket.snr || '0',
   })
-  const endpointBases = municipality === 'Sandnes'
-    ? ['https://www.hentavfall.no/rogaland/sandnes/tommekalender']
-    : ['https://www.stavanger.kommune.no/renovasjon-og-miljo/tommekalender/finn-kalender']
-  const urls = providerLookupUrls(endpointBases, address, kartverket, municipality)
-  for (const url of urls) {
-    let rawText = ''
-    let status: number | undefined
-    try {
-      console.log('[waste] exact provider search URL', { provider: municipality.toLowerCase(), url: String(url) })
-      const resp = await fetch(url, { headers: { Accept: 'application/json, text/javascript, */*', 'X-Requested-With': 'XMLHttpRequest' } })
-      status = resp.status
-      const contentType = resp.headers.get('content-type') || ''
-      rawText = await resp.text().catch(() => '')
-      const body = contentType.includes('json') ? safeJsonParse(rawText) : (safeJsonParse(rawText) ?? rawText)
-      const candidates = pickProviderAddressCandidates(body, address, kartverket, municipality)
-      const parsedCandidateLogs = providerCandidateDebugLogs(body)
-      const candidate = candidates[0]
-      console.log('[waste] provider address search', {
-        provider: municipality.toLowerCase(),
-        searchQuery: address.trim(),
-        url: String(url),
-        httpStatus: status,
-        first1000CharsOfResponse: rawText.slice(0, 1000),
-        parsedCandidatesCount: parsedCandidateLogs.length,
-        parsedCandidates: parsedCandidateLogs,
-        matchingCandidatesCount: candidates.length,
-        matchingCandidates: candidates.map(providerCandidateLog),
-        selectedUuid: candidate?.propertyId || null,
-      })
-      if (!resp.ok) continue
-      if (candidate) {
-        const { matchScore: _matchScore, raw: _raw, ...resolvedCandidate } = candidate
-        return { ...kartverket, ...resolvedCandidate, source: 'provider_search' }
-      }
-    } catch (error: unknown) {
-      console.log('[waste] provider address search', {
-        provider: municipality.toLowerCase(),
-        searchQuery: address.trim(),
-        url: String(url),
-        httpStatus: status ?? null,
-        first1000CharsOfResponse: rawText.slice(0, 1000),
-        parsedCandidatesCount: 0,
-        parsedCandidates: [],
-        selectedUuid: null,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      // Try the next known endpoint shape.
-    }
-  }
   const fallbackId = temporaryProviderUuidFallback(kartverket, municipality)
   if (fallbackId) {
     console.log('[waste] temporary provider UUID fallback matched', {
