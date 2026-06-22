@@ -57,6 +57,11 @@ type ProviderFetchLog = {
   payloadSize?: number
 }
 
+type ProviderAddressCandidate = Partial<ResolvedWasteAddress> & {
+  matchScore: number
+  raw?: unknown
+}
+
 type NorconsultRawCollection = {
   date: string
   fractions: string[]
@@ -251,10 +256,25 @@ async function resolveNorconsultAddress(address: string, municipality: 'Stavange
       const resp = await fetch(url, { headers: { Accept: 'application/json, text/javascript, */*', 'X-Requested-With': 'XMLHttpRequest' } })
       if (!resp.ok) continue
       const contentType = resp.headers.get('content-type') || ''
-      const body = contentType.includes('json') ? await resp.json().catch(() => null) : await resp.text().catch(() => '')
-      const candidate = pickProviderAddress(body, address)
-      if (candidate) return { ...kartverket, ...candidate, source: 'provider_search' }
-    } catch {
+      const rawText = await resp.text().catch(() => '')
+      const body = contentType.includes('json') ? safeJsonParse(rawText) : (safeJsonParse(rawText) ?? rawText)
+      const candidates = pickProviderAddressCandidates(body, address, kartverket, municipality)
+      const candidate = candidates[0]
+      console.log('[waste] provider address search', {
+        provider: municipality.toLowerCase(),
+        searchQuery: address.trim(),
+        url: String(url),
+        status: resp.status,
+        responsePreview: rawText.slice(0, 500),
+        parsedCandidates: candidates.map(providerCandidateLog),
+        selectedUuid: candidate?.propertyId || null,
+      })
+      if (candidate) {
+        const { matchScore: _matchScore, raw: _raw, ...resolvedCandidate } = candidate
+        return { ...kartverket, ...resolvedCandidate, source: 'provider_search' }
+      }
+    } catch (error: unknown) {
+      console.log('[waste] provider address search', { provider: municipality.toLowerCase(), searchQuery: address.trim(), url: String(url), error: error instanceof Error ? error.message : String(error), parsedCandidates: [], selectedUuid: null })
       // Try the next known endpoint shape.
     }
   }
@@ -267,9 +287,10 @@ function providerLookupUrls(endpointBases: string[], address: string, kartverket
   const paths = [
     '/search', '/address-search', '/autocomplete', '/find', '/lookup', '/suggest',
     '/Search', '/GetAddresses', '/getaddresses', '/GetAddress', '/AddressSearch',
+    '/FindAddress', '/findaddress', '/FindAddresses', '/findaddresses', '/SearchAddresses',
     '/api/search', '/api/address-search', '/api/addresses', '/api/tommekalender/addresses',
   ]
-  const textParams = ['term', 'query', 'q', 'address', 'search', 'searchText', 'adresse']
+  const textParams = ['term', 'query', 'q', 'address', 'search', 'searchText', 'adresse', 'text', 'filter']
   const add = (raw: string, params: Record<string, string | undefined>) => {
     const url = new URL(raw)
     for (const [key, value] of Object.entries(params)) if (value) url.searchParams.set(key, value)
@@ -303,21 +324,55 @@ function flattenProviderCandidates(value: unknown, depth = 0): unknown[] {
   const record = asRecord(value)
   return [record, ...Object.values(record).flatMap((item) => flattenProviderCandidates(item, depth + 1))]
 }
-function pickProviderAddress(json: unknown, address: string): Partial<ResolvedWasteAddress> | null {
-  for (const item of flattenProviderCandidates(json)) {
-    const r = asRecord(item)
-    const gnr = asString(r.gnumber) || asString(r.gnr) || asString(r.gardsnummer)
-    const bnr = asString(r.bnumber) || asString(r.bnr) || asString(r.bruksnummer)
-    const snr = asString(r.snumber) || asString(r.snr) || asString(r.seksjonsnummer) || '0'
-    const propertyId = asString(r.id) || asString(r.ids) || asString(r.uuid) || asString(r.propertyId) || asString(r.property_id) || asString(r.guid) || asString(r.Guid)
-    if (!gnr || !bnr || !propertyId) continue
-    return {
-      addressId: propertyId,
-      label: asString(r.label) || asString(r.text) || asString(r.address) || address,
-      gnr, bnr, snr, propertyId,
+function safeJsonParse(value: string): unknown | null {
+  if (!value) return null
+  try { return JSON.parse(value) } catch { return null }
+}
+
+function normalizeAddressText(value: string) {
+  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function field(record: Record<string, unknown>, ...names: string[]) {
+  for (const name of names) {
+    const exact = asString(record[name])
+    if (exact) return exact
+    const found = Object.keys(record).find((key) => key.toLowerCase() === name.toLowerCase())
+    if (found) {
+      const value = asString(record[found])
+      if (value) return value
     }
   }
-  return null
+  return ''
+}
+
+function pickProviderAddressCandidates(json: unknown, address: string, kartverket: ResolvedWasteAddress, municipality: 'Stavanger' | 'Sandnes'): ProviderAddressCandidate[] {
+  const query = normalizeAddressText(address)
+  const seen = new Set<string>()
+  return flattenProviderCandidates(json).map((item): ProviderAddressCandidate | null => {
+    const r = asRecord(item)
+    const gnr = field(r, 'gnumber', 'gnr', 'gardsnummer', 'gårdsnummer')
+    const bnr = field(r, 'bnumber', 'bnr', 'bruksnummer')
+    const snr = field(r, 'snumber', 'snr', 'seksjonsnummer') || '0'
+    const propertyId = municipality === 'Stavanger'
+      ? (field(r, 'ids') || field(r, 'id', 'uuid', 'propertyId', 'property_id', 'guid'))
+      : (field(r, 'id') || field(r, 'ids', 'uuid', 'propertyId', 'property_id', 'guid'))
+    if (!gnr || !bnr || !propertyId) return null
+    const dedupeKey = `${propertyId}:${gnr}:${bnr}:${snr}`
+    if (seen.has(dedupeKey)) return null
+    seen.add(dedupeKey)
+    const label = field(r, 'label', 'text', 'address', 'adresse', 'name', 'adressetekst') || address
+    const candidateAddress = normalizeAddressText(label)
+    const matrikkelMatch = gnr === kartverket.gnr && bnr === kartverket.bnr && (!kartverket.snr || snr === kartverket.snr)
+    const addressMatch = candidateAddress.includes(query) || query.includes(candidateAddress)
+    const matchScore = (matrikkelMatch ? 100 : 0) + (addressMatch ? 50 : 0)
+    if (!matrikkelMatch && !addressMatch) return null
+    return { addressId: propertyId, label, gnr, bnr, snr, propertyId, municipalityName: municipality, matchScore, raw: item }
+  }).filter((x): x is ProviderAddressCandidate => Boolean(x)).sort((a, b) => b.matchScore - a.matchScore)
+}
+
+function providerCandidateLog(candidate: ProviderAddressCandidate) {
+  return { label: candidate.label, propertyId: candidate.propertyId, gnr: candidate.gnr, bnr: candidate.bnr, snr: candidate.snr, matchScore: candidate.matchScore }
 }
 
 function norconsultProvider(key: 'stavanger' | 'sandnes' | 'hentavfall', municipality: 'Stavanger' | 'Sandnes'): WasteProvider {
