@@ -7394,7 +7394,7 @@ function FrameSetupFlow({
   const canGoBack = step !== 'purpose' && !saving
 
   const shell = (children: React.ReactNode) => (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(42,163,255,0.12),_transparent_34%),color:var(--app-bg)] px-5 text-[color:var(--fg)]">
+    <div className="absolute inset-0 z-40 flex items-center justify-center px-5 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
       <div className="flex max-h-[90vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
           <div className="mb-3 flex items-center justify-between gap-3">
