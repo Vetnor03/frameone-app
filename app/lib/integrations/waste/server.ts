@@ -18,7 +18,13 @@ function externalId(provider: string, municipalityNumber: string, addressId: str
 
 export async function connectWasteForUser(userId: string, address: string): Promise<WasteConnectResult> {
   const supabase = getSupabaseAdmin()
+  console.log('[waste] raw address input', { address })
   const resolvedAddress = await resolveKartverketAddress(address)
+  console.log('[waste] resolved address result', {
+    resolvedAddress,
+    municipality_number: resolvedAddress.municipalityNumber,
+    municipality_name: resolvedAddress.municipalityName,
+  })
 
   const { data: registryData, error: registryError } = await supabase
     .from('waste_provider_registry')
@@ -28,6 +34,10 @@ export async function connectWasteForUser(userId: string, address: string): Prom
 
   if (registryError) throw new Error(registryError.message)
   const registryEntry = registryData as WasteProviderRegistryEntry | null
+  console.log('[waste] registry lookup result', {
+    municipality_number: resolvedAddress.municipalityNumber,
+    registryEntry,
+  })
   if (!registryEntry || registryEntry.status !== 'supported') {
     await supabase.from('user_integrations').upsert({
       user_id: userId,
@@ -42,7 +52,27 @@ export async function connectWasteForUser(userId: string, address: string): Prom
 
   const provider = providerFor(registryEntry.provider)
   if (!provider) throw new Error(`Unsupported waste provider: ${registryEntry.provider}`)
-  const raw = await provider.fetchCollections(resolvedAddress, registryEntry.provider_config || {})
+  console.log('[waste] selected provider', { provider: registryEntry.provider })
+  let raw: unknown
+  try {
+    raw = await provider.fetchCollections(resolvedAddress, registryEntry.provider_config || {})
+    console.log('[waste] provider fetch result', { provider: registryEntry.provider, raw })
+  } catch (error: unknown) {
+    console.error('[waste] provider fetch error', {
+      provider: registryEntry.provider,
+      error: error instanceof Error ? error.message : error,
+    })
+    await supabase.from('user_integrations').upsert({
+      user_id: userId,
+      provider: WASTE_PROVIDER,
+      status: 'disconnected',
+      external_account_id: resolvedAddress.addressId,
+      external_account_label: `${resolvedAddress.label}, ${resolvedAddress.municipalityName}`,
+      last_error: error instanceof Error ? error.message : 'Waste provider fetch failed',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,provider' })
+    throw error
+  }
   const collections = provider.normalizeCollections(raw, registryEntry.provider_config || {})
   const now = new Date().toISOString()
   const rows = collections.map((item) => ({

@@ -25,9 +25,15 @@ using (true);
 
 insert into public.waste_provider_registry (municipality_number, municipality_name, provider, provider_config, status)
 values
-  ('1103', 'Stavanger', 'stavanger', '{}'::jsonb, 'unsupported'),
-  ('1108', 'Sandnes', 'sandnes', '{}'::jsonb, 'unsupported')
-on conflict (municipality_number) do nothing;
+  ('1103', 'Stavanger kommune', 'stavanger', '{}'::jsonb, 'supported'),
+  ('1108', 'Sandnes kommune', 'sandnes', '{}'::jsonb, 'supported')
+on conflict (municipality_number) do update
+set
+  municipality_name = excluded.municipality_name,
+  provider = excluded.provider,
+  provider_config = excluded.provider_config,
+  status = excluded.status,
+  updated_at = now();
 
 -- Make the table visible to PostgREST immediately after applying this migration.
 notify pgrst, 'reload schema';

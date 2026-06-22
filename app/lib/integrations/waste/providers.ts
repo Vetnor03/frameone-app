@@ -126,10 +126,21 @@ function jsonProvider(key: WasteProviderKey): WasteProvider {
   return { key, resolveAddress: resolveKartverketAddress, fetchCollections: (a, c = {}) => fetchJsonOrConfiguredCollections(a, c), normalizeCollections: normalizeCollectionRows }
 }
 
+function notImplementedProvider(key: 'stavanger' | 'sandnes'): WasteProvider {
+  return {
+    key,
+    resolveAddress: resolveKartverketAddress,
+    async fetchCollections() {
+      throw new Error('Provider supported but fetch not implemented yet')
+    },
+    normalizeCollections: normalizeCollectionRows,
+  }
+}
+
 export const wasteProviders: Record<WasteProviderKey, WasteProvider> = {
   min_renovasjon: jsonProvider('min_renovasjon'),
-  stavanger: jsonProvider('stavanger'),
-  sandnes: jsonProvider('sandnes'),
+  stavanger: notImplementedProvider('stavanger'),
+  sandnes: notImplementedProvider('sandnes'),
   generic_ics: jsonProvider('generic_ics'),
   manual: jsonProvider('manual'),
 }
