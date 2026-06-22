@@ -2265,6 +2265,7 @@ function ConnectAppsScreen({
   const [wasteModalOpen, setWasteModalOpen] = useState(false)
   const [wasteAddress, setWasteAddress] = useState('')
   const [wasteLoading, setWasteLoading] = useState(false)
+  const [wastePreview, setWastePreview] = useState<Array<{ date: string; title: string; municipality?: string; address?: string }> | null>(null)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
@@ -2350,6 +2351,39 @@ function ConnectAppsScreen({
     }
   }
 
+  async function previewWaste() {
+    const address = wasteAddress.trim()
+    if (!address || wasteLoading) return
+    setWasteLoading(true)
+    setStatus(null)
+    setStatusTone('info')
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      const resp = await fetch('/api/integrations/waste/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ address, preview: true }),
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok && resp.status !== 202) throw new Error(json?.error || 'Failed to connect waste collection')
+      if (json?.status === 'unsupported') {
+        setStatusTone('error')
+        setStatus(json?.message || 'Denne kommunen støttes ikke enda. Send oss gjerne kommunenavn, så legger vi den til.')
+        setWasteConnected(false)
+        return
+      }
+      setWastePreview(Array.isArray(json?.previewItems) ? json.previewItems : [])
+      setStatusTone('info')
+      setStatus(null)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      setStatusTone('error')
+      setStatus(message || (language === 'no' ? 'Kunne ikke koble til renovasjon' : 'Could not connect waste collection'))
+    } finally {
+      setWasteLoading(false)
+    }
+  }
+
   async function connectWaste() {
     const address = wasteAddress.trim()
     if (!address || wasteLoading) return
@@ -2367,7 +2401,7 @@ function ConnectAppsScreen({
       if (!resp.ok && resp.status !== 202) throw new Error(json?.error || 'Failed to connect waste collection')
       if (json?.status === 'unsupported') {
         setStatusTone('error')
-        setStatus(json?.message || 'Denne kommunen støttes ikke enda. Send oss gjerne kommunenavn, så legger vi den til.')
+        setStatus(json?.message || 'Denne kommunen støttes ikke enda. Foreløpig støtter vi Stavanger og Sandnes.')
         setWasteConnected(false)
         return
       }
@@ -2375,6 +2409,7 @@ function ConnectAppsScreen({
       setWasteConnected(true)
       setWasteAccount(json?.resolvedAddress?.label || address)
       setWasteModalOpen(false)
+      setWastePreview(null)
       setStatusTone('success')
       setStatus(language === 'no' ? 'Renovasjon er tilkoblet' : 'Waste collection connected')
     } catch (error: unknown) {
@@ -2684,13 +2719,30 @@ function ConnectAppsScreen({
             <p className="mt-2 text-sm leading-snug text-[color:var(--fg-55)]">{language === 'no' ? 'Skriv inn adressen din. Vi finner kommunen via Kartverket og bruker riktig leverandør hvis kommunen er støttet.' : 'Enter your address. We resolve the municipality with Kartverket and use the configured provider if supported.'}</p>
             <input
               value={wasteAddress}
-              onChange={(e) => setWasteAddress(e.target.value)}
+              onChange={(e) => { setWasteAddress(e.target.value); setWastePreview(null) }}
               placeholder={language === 'no' ? 'Gateadresse' : 'Street address'}
               className="mt-4 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-4 py-3 text-sm outline-none"
             />
+            {wastePreview && (
+              <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)] p-3">
+                <div className="mb-2 text-xs font-semibold text-[color:var(--fg-80)]">{language === 'no' ? 'Forhåndsvisning' : 'Preview'}</div>
+                <div className="space-y-2">
+                  {wastePreview.slice(0, 12).map((item, index) => (
+                    <div key={`${item.date}-${item.title}-${index}`} className="flex justify-between gap-3 text-xs">
+                      <span className="text-[color:var(--fg-80)]">{item.title}</span>
+                      <span className="shrink-0 text-[color:var(--fg-45)]">{item.date}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setWasteModalOpen(false)} className="h-10 rounded-2xl px-4 text-xs tracking-widest text-[color:var(--fg-55)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-              <button type="button" onClick={connectWaste} disabled={wasteLoading || !wasteAddress.trim()} className="h-10 rounded-2xl border border-[color:var(--bd-20)] px-4 text-xs tracking-widest text-[color:var(--fg-80)] disabled:opacity-50">{wasteLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
+              <button type="button" onClick={() => { setWasteModalOpen(false); setWastePreview(null) }} className="h-10 rounded-2xl px-4 text-xs tracking-widest text-[color:var(--fg-55)]">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
+              {wastePreview ? (
+                <button type="button" onClick={connectWaste} disabled={wasteLoading || !wasteAddress.trim()} className="h-10 rounded-2xl border border-[color:var(--bd-20)] px-4 text-xs tracking-widest text-[color:var(--fg-80)] disabled:opacity-50">{wasteLoading ? (language === 'no' ? 'LAGRER…' : 'SAVING…') : (language === 'no' ? 'LAGRE' : 'SAVE')}</button>
+              ) : (
+                <button type="button" onClick={previewWaste} disabled={wasteLoading || !wasteAddress.trim()} className="h-10 rounded-2xl border border-[color:var(--bd-20)] px-4 text-xs tracking-widest text-[color:var(--fg-80)] disabled:opacity-50">{wasteLoading ? (language === 'no' ? 'SØKER…' : 'LOOKING…') : (language === 'no' ? 'FORHÅNDSVIS' : 'PREVIEW')}</button>
+              )}
             </div>
           </div>
         </div>
