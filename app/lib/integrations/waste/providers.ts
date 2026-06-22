@@ -13,6 +13,7 @@ export type ResolvedWasteAddress = {
   lon?: number
   gnr?: string
   bnr?: string
+  fnr?: string
   snr?: string
   propertyId?: string
   source?: 'kartverket' | 'provider_search'
@@ -140,7 +141,8 @@ export async function resolveKartverketAddress(address: string): Promise<Resolve
   const municipalityName = asString(hit.kommunenavn)
   const gnr = asString(hit.gardsnummer)
   const bnr = asString(hit.bruksnummer)
-  const snr = asString(hit.seksjonsnummer) || asString(hit.festenummer) || '0'
+  const fnr = asString(hit.festenummer)
+  const snr = asString(hit.seksjonsnummer) || '0'
   const addressId = asString(hit.adressekode) && asString(hit.nummer)
     ? `${municipalityNumber}-${hit.adressekode}-${hit.nummer}-${asString(hit.bokstav)}`
     : `${municipalityNumber}-${query.toLowerCase()}`
@@ -156,7 +158,8 @@ export async function resolveKartverketAddress(address: string): Promise<Resolve
     lon: Number.isFinite(Number(hit.representasjonspunkt?.lon)) ? Number(hit.representasjonspunkt.lon) : undefined,
     gnr: gnr || undefined,
     bnr: bnr || undefined,
-    snr: snr || undefined,
+    fnr: fnr || undefined,
+    snr,
     source: 'kartverket',
   }
 }
@@ -187,7 +190,7 @@ function stavangerShowUrl(resolvedAddress: ResolvedWasteAddress, config: Record<
   url.searchParams.set('bnumber', bnr)
   url.searchParams.set('gnumber', gnr)
   url.searchParams.set(municipality === 'Stavanger' ? 'ids' : 'id', id)
-  url.searchParams.set('municipality', municipality)
+  url.searchParams.set('municipality', municipality === 'Sandnes' ? 'Sandnes kommune' : municipality)
   url.searchParams.set('snumber', snr)
   return url.toString()
 }
@@ -212,7 +215,7 @@ async function fetchNorconsultPublicCalendar(resolvedAddress: ResolvedWasteAddre
   }
   const sourceUrl = stavangerShowUrl(resolvedAddress, config, municipality)
   if (!sourceUrl) {
-    throw new Error(`${municipality} waste provider needs a public calendar URL or gnr/bnr/id in provider_config; address ${resolvedAddress.label} resolved as ${resolvedAddress.addressId}`)
+    throw new Error(`${municipality} waste provider could not resolve provider UUID for ${resolvedAddress.label}; resolved matrikkel ${resolvedAddress.gnr || '?'} / ${resolvedAddress.bnr || '?'} / ${resolvedAddress.snr || '0'}`)
   }
   const log: ProviderFetchLog[] = [{ url: sourceUrl }]
   let resp: Response
@@ -242,36 +245,71 @@ async function resolveNorconsultAddress(address: string, municipality: 'Stavange
   const endpointBases = municipality === 'Sandnes'
     ? ['https://www.hentavfall.no/rogaland/sandnes/tommekalender']
     : ['https://www.stavanger.kommune.no/renovasjon-og-miljo/tommekalender/finn-kalender']
-  const params = ['term', 'query', 'q', 'address', 'search']
-  const paths = ['/search', '/address-search', '/autocomplete', '/find', '/lookup', '/suggest']
-  for (const base of endpointBases) {
-    for (const path of paths) {
-      for (const param of params) {
-        const url = new URL(`${base}${path}`)
-        url.searchParams.set(param, address.trim())
-        try {
-          const resp = await fetch(url, { headers: { Accept: 'application/json, text/javascript, */*' } })
-          if (!resp.ok) continue
-          const json = await resp.json().catch(() => null)
-          const candidate = pickProviderAddress(json, address)
-          if (candidate) return { ...kartverket, ...candidate, source: 'provider_search' }
-        } catch {
-          // Try the next known endpoint shape.
-        }
-      }
+  const urls = providerLookupUrls(endpointBases, address, kartverket, municipality)
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, { headers: { Accept: 'application/json, text/javascript, */*', 'X-Requested-With': 'XMLHttpRequest' } })
+      if (!resp.ok) continue
+      const contentType = resp.headers.get('content-type') || ''
+      const body = contentType.includes('json') ? await resp.json().catch(() => null) : await resp.text().catch(() => '')
+      const candidate = pickProviderAddress(body, address)
+      if (candidate) return { ...kartverket, ...candidate, source: 'provider_search' }
+    } catch {
+      // Try the next known endpoint shape.
     }
   }
   return kartverket
 }
 
+
+function providerLookupUrls(endpointBases: string[], address: string, kartverket: ResolvedWasteAddress, municipality: 'Stavanger' | 'Sandnes') {
+  const urls: string[] = []
+  const paths = [
+    '/search', '/address-search', '/autocomplete', '/find', '/lookup', '/suggest',
+    '/Search', '/GetAddresses', '/getaddresses', '/GetAddress', '/AddressSearch',
+    '/api/search', '/api/address-search', '/api/addresses', '/api/tommekalender/addresses',
+  ]
+  const textParams = ['term', 'query', 'q', 'address', 'search', 'searchText', 'adresse']
+  const add = (raw: string, params: Record<string, string | undefined>) => {
+    const url = new URL(raw)
+    for (const [key, value] of Object.entries(params)) if (value) url.searchParams.set(key, value)
+    urls.push(url.toString())
+  }
+  for (const base of endpointBases) {
+    for (const path of paths) for (const param of textParams) add(`${base}${path}`, { [param]: address.trim() })
+    for (const path of paths) add(`${base}${path}`, {
+      municipality,
+      municipalityNumber: kartverket.municipalityNumber,
+      kommunenummer: kartverket.municipalityNumber,
+      gnumber: kartverket.gnr,
+      bnumber: kartverket.bnr,
+      snumber: kartverket.snr || '0',
+      festenumber: kartverket.fnr || '0',
+    })
+  }
+  return Array.from(new Set(urls))
+}
+
+function flattenProviderCandidates(value: unknown, depth = 0): unknown[] {
+  if (depth > 5 || value == null) return []
+  if (typeof value === 'string') {
+    const rows: unknown[] = []
+    for (const match of value.matchAll(/\{[^{}]*(?:id|ids|uuid|propertyId|gnumber|gardsnummer|bnumber|bruksnummer)[^{}]*\}/gi)) {
+      try { rows.push(JSON.parse(match[0])) } catch {}
+    }
+    return rows
+  }
+  if (Array.isArray(value)) return value.flatMap((item) => [item, ...flattenProviderCandidates(item, depth + 1)])
+  const record = asRecord(value)
+  return [record, ...Object.values(record).flatMap((item) => flattenProviderCandidates(item, depth + 1))]
+}
 function pickProviderAddress(json: unknown, address: string): Partial<ResolvedWasteAddress> | null {
-  const roots = Array.isArray(json) ? json : [json, asRecord(json).results, asRecord(json).items, asRecord(json).addresses, asRecord(json).data].flatMap((v) => Array.isArray(v) ? v : v ? [v] : [])
-  for (const item of roots) {
+  for (const item of flattenProviderCandidates(json)) {
     const r = asRecord(item)
     const gnr = asString(r.gnumber) || asString(r.gnr) || asString(r.gardsnummer)
     const bnr = asString(r.bnumber) || asString(r.bnr) || asString(r.bruksnummer)
     const snr = asString(r.snumber) || asString(r.snr) || asString(r.seksjonsnummer) || '0'
-    const propertyId = asString(r.id) || asString(r.ids) || asString(r.uuid) || asString(r.propertyId) || asString(r.Guid)
+    const propertyId = asString(r.id) || asString(r.ids) || asString(r.uuid) || asString(r.propertyId) || asString(r.property_id) || asString(r.guid) || asString(r.Guid)
     if (!gnr || !bnr || !propertyId) continue
     return {
       addressId: propertyId,
