@@ -1559,10 +1559,22 @@ static void renderMedium(const Cell& c,
   int iconSize = iconRegionH;
   int maxByW = c.w - 24;
   if (iconSize > maxByW) iconSize = maxByW;
+
+  // The partly-cloudy icon draws the sun high/right, with its top ray extending
+  // slightly above the nominal icon square. When the insight text is omitted the
+  // medium weather tile lets the icon use the whole middle band, so reserve a
+  // little headroom on physical frames to keep that ray clear of the temp row.
+  const bool partlyCloudyIcon = (medWmo == 1 || medWmo == 2);
+  int iconTopHeadroom = (!hasInsight && partlyCloudyIcon)
+    ? (int)ceilf((float)iconSize * 0.16f)
+    : 0;
+  if (iconSize + iconTopHeadroom > iconRegionH) {
+    iconSize = iconRegionH - iconTopHeadroom;
+  }
   if (iconSize < 36) iconSize = 36;
 
-  int iconCy = iconRegionTop + iconRegionH / 2;
-  int minIconTop = iconRegionTop;
+  int iconCy = iconRegionTop + iconTopHeadroom + iconSize / 2;
+  int minIconTop = iconRegionTop + iconTopHeadroom;
   int iconTop = iconCy - iconSize / 2;
   if (iconTop < minIconTop) {
     iconTop = minIconTop;
