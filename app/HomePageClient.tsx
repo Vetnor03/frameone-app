@@ -1019,6 +1019,7 @@ export default function HomePage() {
   const physicalFrameRenderAtRef = useRef<string | null>(null)
   const physicalFrameSnapshotSignatureRef = useRef<string | null>(null)
   const nextUpdateRefreshInFlightRef = useRef(false)
+  const pendingFrameConfigUpdatedAtRef = useRef<string | null>(null)
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
@@ -1343,6 +1344,26 @@ export default function HomePage() {
     return next
   }
 
+  function getTimeMs(value: string | null | undefined) {
+    if (!value) return null
+    const time = new Date(value).getTime()
+    return Number.isFinite(time) ? time : null
+  }
+
+  function isFrameUpdatePending(configUpdatedAt: string | null, renderAt: string | null) {
+    const configTime = getTimeMs(configUpdatedAt)
+    if (configTime == null) return false
+
+    const renderTime = getTimeMs(renderAt)
+    return renderTime == null || configTime > renderTime
+  }
+
+  function rememberPendingFrameUpdate(configUpdatedAt: string | null, renderAt: string | null) {
+    const isPending = isFrameUpdatePending(configUpdatedAt, renderAt)
+    pendingFrameConfigUpdatedAtRef.current = isPending ? configUpdatedAt : null
+    setShowNextUpdateAfterSave(isPending)
+  }
+
   function formatRelative(iso: string) {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return null
@@ -1466,6 +1487,13 @@ export default function HomePage() {
         current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
       )
       setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+      if (
+        pendingFrameConfigUpdatedAtRef.current &&
+        !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
+      ) {
+        pendingFrameConfigUpdatedAtRef.current = null
+        setShowNextUpdateAfterSave(false)
+      }
       return renderIso || null
     } catch {
       setLastUpdatedAt(null)
@@ -1490,6 +1518,13 @@ export default function HomePage() {
       current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
     )
     setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+    if (
+      pendingFrameConfigUpdatedAtRef.current &&
+      !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
+    ) {
+      pendingFrameConfigUpdatedAtRef.current = null
+      setShowNextUpdateAfterSave(false)
+    }
     return renderIso || null
   }
 
@@ -1590,7 +1625,7 @@ export default function HomePage() {
   async function loadDeviceSettings(deviceId: string) {
     const { data, error } = await supabase
       .from('device_settings')
-      .select('settings_json')
+      .select('settings_json, updated_at')
       .eq('device_id', deviceId)
       .maybeSingle()
 
@@ -1654,7 +1689,11 @@ export default function HomePage() {
     }
 
     setDirty(false)
-    await loadDeviceStatus(deviceId)
+    const renderAt = await loadDeviceStatus(deviceId)
+    rememberPendingFrameUpdate(
+      hasSavedSettings && data?.updated_at ? String(data.updated_at) : null,
+      renderAt
+    )
 
     if (!stickySettingsRef.current) setActiveTab('frame')
 
@@ -2055,6 +2094,7 @@ export default function HomePage() {
       }
 
       setDirty(false)
+      pendingFrameConfigUpdatedAtRef.current = new Date().toISOString()
       setShowNextUpdateAfterSave(true)
       await refreshPhysicalFrameState(activeDeviceId, { forceSnapshot: true })
 
