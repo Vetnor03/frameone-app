@@ -8,7 +8,7 @@
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
-#include "../assets/images/PairingQrBitmap.h"
+#include "PairingQrBitmap.h"
 
 // =======================================================
 // Helpers
