@@ -6249,7 +6249,7 @@ function MirrorXLWeatherCard({
   }
 
   const currentTemp = String(detail.primary || detail.weatherHighTemp || '--').trim()
-  const locationName = String(detail.secondary || 'Weather').trim()
+  const locationName = String(detail.secondary || 'Weather unavailable').trim()
   const windLine = detail.weatherWindLine || fallbackDay.windLine || 'Calm winds'
   const precipLine = detail.weatherPrecipLine || fallbackDay.precipLine || 'Mostly dry'
   const sunLine = detail.weatherSunLine || 'Sun --:-- / --:--'
@@ -6327,7 +6327,7 @@ function MirrorLargeWeatherCard({
   detail: MirrorModuleDetail
   textColor: string
 }) {
-  const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
+  const locationName = String(detail.secondary || detail.primary || 'Weather unavailable').trim()
   const fallbackDay: MirrorWeatherDay = {
     label: 'Today',
     lowTemp: detail.weatherLowTemp || detail.tertiary?.split('/')[0]?.trim() || '--',
@@ -6464,7 +6464,7 @@ function LandscapeFrameMirror({
     const cfg = moduleConfigForSlot(module, slot, snapshot.cells, snapshot.modulesJson)
 
     if (module === 'weather' && size === 'small' && detail.weatherLowTemp && detail.weatherHighTemp) {
-      const locationName = String(detail.secondary || detail.primary || 'Weather').trim()
+      const locationName = String(detail.secondary || detail.primary || 'Weather unavailable').trim()
       const tempRange = formatMirrorSmallWeatherTempRange(detail.weatherLowTemp, detail.weatherHighTemp)
       const windLine = detail.weatherWindLine || 'Calm winds'
       const precipLine = detail.weatherPrecipLine || 'Mostly dry'
@@ -15938,8 +15938,29 @@ async function refreshWeatherDetailsData(language: AppLanguage, cfg: WeatherLoca
     console.info('[weather-details-client-cache]', { key, status: 'fresh-fetch' })
     const resp = await fetch(`/api/weather/details?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`, { cache: 'no-store' })
     if (!resp.ok) throw new Error('Weather unavailable')
-    const payload = recordFromUnknown(await resp.json())
+    let json: unknown
+    try {
+      json = await resp.json()
+    } catch (err) {
+      console.error('[weather-details-client]', { stage: 'json-parse-failed', reason: err instanceof Error ? err.message : String(err) })
+      throw new Error('Weather unavailable')
+    }
+    const payload = recordFromUnknown(json)
+    if (!payload.weather || typeof payload.weather !== 'object') {
+      console.error('[weather-details-client]', { stage: 'invalid-response-shape', reason: 'missing weather object', keys: Object.keys(payload) })
+      throw new Error('Weather unavailable')
+    }
     const data = weatherDetailsFromPayload(language, payload.weather, payload.marine)
+    if (data.currentTempC == null || !data.forecastDays.length) {
+      console.error('[weather-details-client]', {
+        stage: 'missing-render-fields',
+        missingFields: [
+          data.currentTempC == null ? 'weather.current.temperature_2m' : '',
+          !data.forecastDays.length ? 'weather.daily.time/weather.hourly.time' : '',
+        ].filter(Boolean),
+      })
+      throw new Error('Weather unavailable')
+    }
     const fetchedAtPayload = recordFromUnknown(payload.fetched_at)
     const fetchedAtMs = Date.parse(String(fetchedAtPayload.weather || ''))
     weatherDetailsCache.set(key, { fetchedAt: Number.isFinite(fetchedAtMs) ? fetchedAtMs : Date.now(), data })

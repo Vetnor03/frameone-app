@@ -89,7 +89,7 @@ test('/api/weather/details without days requests multiple daily forecast days fo
   assert.ok(body.weather.daily.time.length > 1)
 })
 
-test('frame=1 preserves explicit days=5 and returns compact weather details payload', async () => {
+test('frame=1 compact=2 preserves explicit days=5 and returns compact weather details payload', async () => {
   let requestedForecastDays = null
   let marineCalls = 0
   const { GET } = loadWeatherDetailsRoute({
@@ -113,15 +113,16 @@ test('frame=1 preserves explicit days=5 and returns compact weather details payl
             sunset: Array.from({ length: options.forecastDays }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T22:00`),
             uv_index_max: Array.from({ length: options.forecastDays }, () => 4),
             precipitation_sum: Array.from({ length: options.forecastDays }, () => 0),
+            wind_speed_10m_max: Array.from({ length: options.forecastDays }, () => 5),
           },
           hourly: {
-            time: ['2026-06-08T12:00'],
-            temperature_2m: [18],
-            weather_code: [2],
-            wind_speed_10m: [3],
-            precipitation: [0],
-            precipitation_probability: [5],
-            apparent_temperature: [17],
+            time: Array.from({ length: 30 }, (_, index) => `2026-06-${index < 24 ? '08' : '09'}T${String(index % 24).padStart(2, '0')}:00`),
+            temperature_2m: Array.from({ length: 30 }, () => 18),
+            weather_code: Array.from({ length: 30 }, () => 2),
+            wind_speed_10m: Array.from({ length: 30 }, () => 3),
+            precipitation: Array.from({ length: 30 }, () => 0),
+            precipitation_probability: Array.from({ length: 30 }, () => 5),
+            apparent_temperature: Array.from({ length: 30 }, () => 17),
           },
           hourly_units: { temperature_2m: '°C' },
         },
@@ -137,7 +138,7 @@ test('frame=1 preserves explicit days=5 and returns compact weather details payl
     },
   })
 
-  const response = await GET(new Request('https://example.test/api/weather/details?frame=1&days=5&lat=60.3929&lon=5.3221'))
+  const response = await GET(new Request('https://example.test/api/weather/details?frame=1&compact=2&days=5&lat=60.3929&lon=5.3221'))
   const body = await response.json()
 
   assert.equal(response.status, 200)
@@ -145,9 +146,46 @@ test('frame=1 preserves explicit days=5 and returns compact weather details payl
   assert.equal(marineCalls, 0)
   assert.deepEqual(Object.keys(body).sort(), ['current', 'daily', 'hourly'])
   assert.deepEqual(Object.keys(body.current).sort(), ['relative_humidity_2m', 'temperature_2m', 'time', 'weather_code'])
-  assert.deepEqual(Object.keys(body.daily).sort(), ['sunrise', 'sunset'])
+  assert.deepEqual(Object.keys(body.daily).sort(), ['precipitation_sum', 'sunrise', 'sunset', 'temperature_2m_max', 'temperature_2m_min', 'time', 'weather_code', 'wind_speed_10m_max'])
   assert.deepEqual(Object.keys(body.hourly).sort(), ['precipitation', 'temperature_2m', 'time', 'weather_code', 'wind_speed_10m'])
   assert.equal(body.daily.sunrise.length, 5)
+  assert.equal(body.hourly.time.length, 24)
+})
+
+
+test('legacy frame=1 payload keeps full hourly arrays for existing firmware compatibility', async () => {
+  const { GET } = loadWeatherDetailsRoute({
+    fetchWeatherForecast: async () => ({
+      payload: {
+        current: { time: '2026-06-08T12:00', temperature_2m: 18, relative_humidity_2m: 64, weather_code: 2 },
+        daily: {
+          ...fakeDaily(5),
+          sunrise: Array.from({ length: 5 }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T04:00`),
+          sunset: Array.from({ length: 5 }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T22:00`),
+          precipitation_sum: Array.from({ length: 5 }, () => 0),
+          wind_speed_10m_max: Array.from({ length: 5 }, () => 5),
+        },
+        hourly: {
+          time: Array.from({ length: 30 }, (_, index) => `2026-06-${index < 24 ? '08' : '09'}T${String(index % 24).padStart(2, '0')}:00`),
+          temperature_2m: Array.from({ length: 30 }, () => 18),
+          weather_code: Array.from({ length: 30 }, () => 2),
+          wind_speed_10m: Array.from({ length: 30 }, () => 3),
+          precipitation: Array.from({ length: 30 }, () => 0),
+        },
+      },
+      debug: {},
+      error: null,
+      fetchedAt: null,
+      expiresAt: null,
+    }),
+    fetchWeatherMarine: async () => ({ payload: null, debug: {}, error: null, fetchedAt: null, expiresAt: null }),
+  })
+
+  const response = await GET(new Request('https://example.test/api/weather/details?frame=1&days=5&lat=60.3929&lon=5.3221'))
+  const body = await response.json()
+
+  assert.equal(response.status, 200)
+  assert.equal(body.hourly.time.length, 30)
 })
 
 function loadWeatherForecastModule(fetchOpenMeteoJson) {
@@ -227,4 +265,73 @@ test('requesting days=5 produces forecast_days=5 in Open-Meteo URL and cache key
   assert.equal(openMeteoOptions.forecastRange, '0-5d')
   assert.equal(new URL(result.debug.openMeteoUrl).searchParams.get('forecast_days'), '5')
   assert.match(forecastCacheKey(cacheKeyInput), /forecast_days=5/)
+})
+
+test('weather details app payload retains fields required by mirror weather renderer', async () => {
+  const { GET } = loadWeatherDetailsRoute({
+    fetchWeatherForecast: async (options) => ({
+      payload: {
+        current: {
+          time: '2026-06-08T12:00',
+          temperature_2m: 18,
+          apparent_temperature: 17,
+          weather_code: 2,
+          relative_humidity_2m: 64,
+          wind_speed_10m: 3,
+          wind_direction_10m: 270,
+          precipitation: 0,
+        },
+        daily: {
+          ...fakeDaily(options.forecastDays),
+          precipitation_sum: Array.from({ length: options.forecastDays }, () => 0),
+          wind_speed_10m_max: Array.from({ length: options.forecastDays }, () => 4),
+          sunrise: Array.from({ length: options.forecastDays }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T04:00`),
+          sunset: Array.from({ length: options.forecastDays }, (_, index) => `2026-06-${String(8 + index).padStart(2, '0')}T22:00`),
+          uv_index_max: Array.from({ length: options.forecastDays }, () => 4),
+        },
+        hourly: {
+          time: ['2026-06-08T12:00', '2026-06-08T13:00'],
+          temperature_2m: [18, 19],
+          weather_code: [2, 2],
+          wind_speed_10m: [3, 4],
+          precipitation_probability: [5, 10],
+          precipitation: [0, 0],
+          uv_index: [3, 4],
+        },
+      },
+      debug: {},
+      error: null,
+      fetchedAt: '2026-06-08T00:00:00.000Z',
+      expiresAt: '2026-06-08T00:15:00.000Z',
+    }),
+    fetchWeatherMarine: async () => ({ payload: { hourly: { sea_surface_temperature: [12, 13] } }, debug: {}, error: null, fetchedAt: null, expiresAt: null }),
+  })
+
+  const response = await GET(new Request('https://example.test/api/weather/details?lat=60.3929&lon=5.3221'))
+  const body = await response.json()
+
+  assert.equal(response.status, 200)
+  assert.equal(body.weather.current.temperature_2m, 18)
+  assert.equal(body.weather.daily.temperature_2m_max[0], 20)
+  assert.equal(body.weather.daily.temperature_2m_min[0], 10)
+  assert.equal(body.weather.daily.time.length, 7)
+  assert.equal(body.weather.hourly.temperature_2m[0], 18)
+  assert.equal(body.weather.hourly.precipitation_probability[1], 10)
+})
+
+test('weather renderers log invalid shapes and never use weather module key as only fallback', () => {
+  const homeClient = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const mirrorSnapshot = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+  const moduleWeather = readFileSync(new URL('../frame/src/modules/ModuleWeather.cpp', import.meta.url), 'utf8')
+
+  assert.match(homeClient, /missing-render-fields/)
+  assert.match(homeClient, /invalid-response-shape/)
+  assert.match(homeClient, /json-parse-failed/)
+  assert.doesNotMatch(homeClient, /\|\| 'Weather'\)/)
+  assert.doesNotMatch(mirrorSnapshot, /primary: 'WEATHER'/)
+  assert.match(moduleWeather, /Weather unavailable/)
+  assert.match(moduleWeather, /DynamicJsonDocument doc\(24576\)/)
+  assert.match(moduleWeather, /json alloc failed/)
+  assert.match(moduleWeather, /missing %s\.%s\\n/)
+  assert.doesNotMatch(moduleWeather, /drawCenteredBox\([^;]+"Weather"/s)
 })
