@@ -449,6 +449,8 @@ type MemberRow = {
   battery_voltage?: number | null
   is_charging?: boolean | null
   is_usb_present?: boolean | null
+  last_seen_at?: string | null
+  last_render_at?: string | null
 }
 
 type DeviceStatusMeta = {
@@ -648,6 +650,8 @@ async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
     battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
     is_charging: statusMap.get(m.device_id)?.is_charging ?? null,
     is_usb_present: statusMap.get(m.device_id)?.is_usb_present ?? null,
+    last_seen_at: statusMap.get(m.device_id)?.last_seen_at ?? null,
+    last_render_at: statusMap.get(m.device_id)?.last_render_at ?? null,
   }))
 }
 
@@ -1008,10 +1012,13 @@ export default function HomePage() {
   const searchParams = useSearchParams()
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
+  const [showNextUpdateAfterSave, setShowNextUpdateAfterSave] = useState(false)
+  const [, setNextUpdateTick] = useState(0)
   const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
   const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
   const physicalFrameRenderAtRef = useRef<string | null>(null)
   const physicalFrameSnapshotSignatureRef = useRef<string | null>(null)
+  const nextUpdateRefreshInFlightRef = useRef(false)
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
@@ -1254,7 +1261,9 @@ export default function HomePage() {
       pinnedModuleTabs: next?.pinnedModuleTabs ?? pinnedModuleTabs,
     })
 
-    setDirty(serialized !== savedStateRef.current)
+    const nextDirty = serialized !== savedStateRef.current
+    setDirty(nextDirty)
+    if (nextDirty) setShowNextUpdateAfterSave(false)
   }
 
   function markDirty(next?: {
@@ -1372,6 +1381,67 @@ export default function HomePage() {
     return `${prefix} ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
+  function frameCheckIntervalMs(frame: MemberRow | null) {
+    const isPluggedIn = frame?.is_usb_present === true || frame?.is_charging === true
+    return isPluggedIn ? 5 * 60 * 1000 : 15 * 60 * 1000
+  }
+
+  function formatNextUpdate(frame: MemberRow | null) {
+    const lastCheckIso = frame?.last_seen_at || frame?.last_render_at || physicalFrameRenderAtRef.current
+    if (!lastCheckIso) return null
+
+    const lastCheckAt = new Date(lastCheckIso).getTime()
+    if (!Number.isFinite(lastCheckAt)) return null
+
+    const nextCheckAt = lastCheckAt + frameCheckIntervalMs(frame)
+    const remainingMs = nextCheckAt - Date.now()
+
+    if (remainingMs <= 0) {
+      return language === 'no' ? 'Oppdaterer nå' : 'Updating now'
+    }
+
+    const remainingSec = Math.ceil(remainingMs / 1000)
+    if (remainingSec < 60) {
+      return language === 'no'
+        ? `Oppdatering om ${remainingSec} sekund${remainingSec === 1 ? '' : 'er'}`
+        : `Update in ${remainingSec} second${remainingSec === 1 ? '' : 's'}`
+    }
+
+    const remainingMin = Math.ceil(remainingSec / 60)
+    return language === 'no'
+      ? `Oppdatering om ${remainingMin} minutt${remainingMin === 1 ? '' : 'er'}`
+      : `Update in ${remainingMin} minute${remainingMin === 1 ? '' : 's'}`
+  }
+
+  const nextUpdateText = showNextUpdateAfterSave ? formatNextUpdate(activeFrameStatus) : null
+
+  useEffect(() => {
+    if (!showNextUpdateAfterSave || !activeDeviceId) return
+
+    const timer = window.setInterval(() => {
+      setNextUpdateTick((value) => value + 1)
+
+      const frame = frames.find((item) => item.device_id === activeDeviceId) ?? null
+      const lastCheckIso = frame?.last_seen_at || frame?.last_render_at || physicalFrameRenderAtRef.current
+      const lastCheckAt = lastCheckIso ? new Date(lastCheckIso).getTime() : NaN
+      if (
+        Number.isFinite(lastCheckAt) &&
+        Date.now() >= lastCheckAt + frameCheckIntervalMs(frame) &&
+        !nextUpdateRefreshInFlightRef.current
+      ) {
+        nextUpdateRefreshInFlightRef.current = true
+        refreshPhysicalFrameState(activeDeviceId, { forceSnapshot: true })
+          .finally(() => {
+            nextUpdateRefreshInFlightRef.current = false
+          })
+      }
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+    // refreshPhysicalFrameState is intentionally omitted so this countdown follows the selected frame/status.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeviceId, frames, showNextUpdateAfterSave])
+
   async function loadDeviceStatus(deviceId: string): Promise<string | null> {
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
@@ -1388,6 +1458,8 @@ export default function HomePage() {
         battery_voltage: normalizeBatteryVoltage(data?.battery_voltage),
         is_charging: normalizeBoolean(data?.is_charging),
         is_usb_present: normalizeBoolean(data?.is_usb_present),
+        last_seen_at: data?.last_seen_at ? String(data.last_seen_at) : null,
+        last_render_at: renderIso || null,
       }
 
       setFrames((current) =>
@@ -1410,6 +1482,8 @@ export default function HomePage() {
       battery_voltage: normalizeBatteryVoltage(data?.battery_voltage as number | string | null | undefined),
       is_charging: normalizeBoolean(data?.is_charging as boolean | string | number | null | undefined),
       is_usb_present: normalizeBoolean(data?.is_usb_present as boolean | string | number | null | undefined),
+      last_seen_at: data?.last_seen_at ? String(data.last_seen_at) : null,
+      last_render_at: renderIso || null,
     }
 
     setFrames((current) =>
@@ -1981,7 +2055,8 @@ export default function HomePage() {
       }
 
       setDirty(false)
-      await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
+      setShowNextUpdateAfterSave(true)
+      await refreshPhysicalFrameState(activeDeviceId, { forceSnapshot: true })
 
       return true
     } catch (e: any) {
@@ -2165,7 +2240,7 @@ async function handleSelectTab(k: TabKey) {
                 </button>
 
                 <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
+                  {nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
               </div>
             )}
