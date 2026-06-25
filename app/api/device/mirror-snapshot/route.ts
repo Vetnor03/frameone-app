@@ -1261,7 +1261,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
   const label = asString(cfg.label).trim()
   const units = asString(cfg.units, 'metric').toLowerCase() === 'imperial' ? 'imperial' : 'metric'
   const showHiLo = cfg.hiLo == null ? true : truthy(cfg.hiLo)
-  if (lat == null || lon == null) return { primary: 'WEATHER', secondary: label || (language === 'no' ? 'Lagret sted' : 'Saved location') }
+  if (lat == null || lon == null) return { module: 'weather', primary: '--°', secondary: label || (language === 'no' ? 'Vær utilgjengelig' : 'Weather unavailable'), tertiary: language === 'no' ? 'Mangler sted' : 'Missing location' }
 
   let data: UnknownRecord
   try {
@@ -1296,6 +1296,15 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
   }
   const current = asRecord(data.current)
   const daily = asRecord(data.daily)
+  const missingRenderFields = [
+    asNumber(current.temperature_2m) == null ? 'weather.current.temperature_2m' : '',
+    !Array.isArray(daily.time) ? 'weather.daily.time' : '',
+    !Array.isArray(daily.temperature_2m_max) ? 'weather.daily.temperature_2m_max' : '',
+    !Array.isArray(daily.temperature_2m_min) ? 'weather.daily.temperature_2m_min' : '',
+  ].filter(Boolean)
+  if (missingRenderFields.length) {
+    console.error('[mirror-snapshot:weather]', { stage: 'missing-render-fields', label, lat, lon, missingFields: missingRenderFields })
+  }
   const currentTempC = asNumber(current.temperature_2m)
   const humidity = asNumber(current.relative_humidity_2m)
   const hiC = arrayNumberAt(daily.temperature_2m_max, 0)

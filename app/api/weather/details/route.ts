@@ -8,7 +8,7 @@ const WEATHER_DETAILS_TIMEOUT_MS = 8000
 const WEATHER_DETAILS_FORECAST_DAYS = 7
 const FRAME_WEATHER_CURRENT_FIELDS = ['time', 'temperature_2m', 'relative_humidity_2m', 'weather_code'] as const
 const FRAME_WEATHER_HOURLY_FIELDS = ['time', 'temperature_2m', 'weather_code', 'wind_speed_10m', 'precipitation'] as const
-const FRAME_WEATHER_DAILY_FIELDS = ['sunrise', 'sunset'] as const
+const FRAME_WEATHER_DAILY_FIELDS = ['time', 'temperature_2m_max', 'temperature_2m_min', 'weather_code', 'precipitation_sum', 'wind_speed_10m_max', 'sunrise', 'sunset'] as const
 
 function numericParam(url: URL, key: string) {
   const value = Number(url.searchParams.get(key))
@@ -24,6 +24,37 @@ function forecastDaysParam(url: URL) {
   return Math.max(1, Math.min(WEATHER_DETAILS_FORECAST_DAYS, Math.round(value)))
 }
 
+
+function hasValue(source: unknown, field: string) {
+  if (!source || typeof source !== 'object') return false
+  const value = (source as Record<string, unknown>)[field]
+  return value != null
+}
+
+function validateFields(source: unknown, fields: readonly string[], prefix: string) {
+  return fields.filter((field) => !hasValue(source, field)).map((field) => `${prefix}.${field}`)
+}
+
+function validateFrameWeatherPayload(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return ['payload']
+  const weather = payload as Record<string, unknown>
+  return [
+    ...validateFields(weather.current, FRAME_WEATHER_CURRENT_FIELDS, 'current'),
+    ...validateFields(weather.daily, FRAME_WEATHER_DAILY_FIELDS, 'daily'),
+    ...validateFields(weather.hourly, FRAME_WEATHER_HOURLY_FIELDS, 'hourly'),
+  ]
+}
+
+function validateAppWeatherPayload(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return ['weather']
+  const weather = payload as Record<string, unknown>
+  return [
+    ...validateFields(weather.current, ['time', 'temperature_2m', 'weather_code', 'relative_humidity_2m', 'wind_speed_10m', 'wind_direction_10m', 'precipitation'], 'weather.current'),
+    ...validateFields(weather.daily, ['time', 'temperature_2m_max', 'temperature_2m_min', 'weather_code', 'precipitation_sum', 'wind_speed_10m_max', 'sunrise', 'sunset', 'uv_index_max'], 'weather.daily'),
+    ...validateFields(weather.hourly, ['time', 'temperature_2m', 'weather_code', 'wind_speed_10m', 'precipitation_probability', 'precipitation', 'uv_index'], 'weather.hourly'),
+  ]
+}
+
 function pickFields(source: unknown, fields: readonly string[]) {
   if (!source || typeof source !== 'object') return {}
 
@@ -34,14 +65,25 @@ function pickFields(source: unknown, fields: readonly string[]) {
   return compact
 }
 
-function compactFrameWeatherPayload(payload: unknown) {
+function compactFrameWeatherPayload(payload: unknown, compactVersion = 1) {
   if (!payload || typeof payload !== 'object') return payload
 
   const weather = payload as Record<string, unknown>
+  const hourly = pickFields(weather.hourly, FRAME_WEATHER_HOURLY_FIELDS)
+  // Legacy frame firmware derives all forecast days from hourly arrays. Only
+  // compact v2 firmware advertises daily-summary parsing and can safely receive
+  // today's 24 hourly entries instead of the full 5-day hourly payload.
+  if (compactVersion >= 2) {
+    for (const field of FRAME_WEATHER_HOURLY_FIELDS) {
+      const value = hourly[field]
+      if (Array.isArray(value)) hourly[field] = value.slice(0, 24)
+    }
+  }
+
   return {
     current: pickFields(weather.current, FRAME_WEATHER_CURRENT_FIELDS),
     daily: pickFields(weather.daily, FRAME_WEATHER_DAILY_FIELDS),
-    hourly: pickFields(weather.hourly, FRAME_WEATHER_HOURLY_FIELDS),
+    hourly,
   }
 }
 
@@ -55,6 +97,7 @@ export async function GET(req: Request) {
 
   const forecastDays = forecastDaysParam(url)
   const framePayload = url.searchParams.get('frame') === '1'
+  const frameCompactVersion = framePayload ? Number(url.searchParams.get('compact') || '1') : 0
 
   const weatherResult = await Promise.resolve(
     fetchWeatherForecast({ lat, lon, timeoutMs: WEATHER_DETAILS_TIMEOUT_MS, forecastDays, frameRequest: framePayload })
@@ -86,7 +129,16 @@ export async function GET(req: Request) {
   }
 
   if (framePayload) {
-    return NextResponse.json(compactFrameWeatherPayload(weather.payload))
+    const missingFields = validateFrameWeatherPayload(weather.payload)
+    if (missingFields.length) {
+      console.error('[weather-details]', { stage: 'invalid-frame-payload-shape', lat, lon, missingFields })
+    }
+    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion))
+  }
+
+  const missingFields = validateAppWeatherPayload(weather.payload)
+  if (missingFields.length) {
+    console.error('[weather-details]', { stage: 'invalid-app-payload-shape', lat, lon, missingFields })
   }
 
   return NextResponse.json({

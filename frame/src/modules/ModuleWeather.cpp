@@ -939,7 +939,7 @@ static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, f
 // Fetch weather through backend cache/dedupe layer
 // -----------------------------------------------------------------------------
 static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& out) {
-  String url = String(BASE_URL) + "/api/weather/details?frame=1&days=5&lat=";
+  String url = String(BASE_URL) + "/api/weather/details?frame=1&compact=2&days=5&lat=";
   url += String(cfg.lat, 6);
   url += "&lon=";
   url += String(cfg.lon, 6);
@@ -947,25 +947,66 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   int httpCode = 0;
   String body;
   bool ok = NetClient::httpGet(url, httpCode, body);
-  if (!ok || httpCode != 200) return false;
+  if (!ok || httpCode != 200) {
+    Serial.printf("[weather] fetch failed: ok=%d http=%d\n", ok ? 1 : 0, httpCode);
+    return false;
+  }
 
   Serial.printf("[weather] body len=%d\n", body.length());
 
-  StaticJsonDocument<24576> doc;
+  // Keep the JSON document off the task stack. The compact frame payload is
+  // still several KB for 5 days of hourly data, and a 24 KB StaticJsonDocument
+  // here can overflow/fragment the render task enough that weather only loads
+  // on alternate refreshes. Allocate the parser buffer from heap and log both
+  // the payload size and available heap so RAM failures are explicit.
   uint32_t heapBeforeParse = ESP.getFreeHeap();
-  DeserializationError err = deserializeJson(doc, body);
-  uint32_t heapAfterParse = ESP.getFreeHeap();
-  Serial.printf("[weather] heap before parse=%u after parse=%u\n",
-                (unsigned)heapBeforeParse,
-                (unsigned)heapAfterParse);
-  if (err) {
-    Serial.printf("[weather] json err: %s\n", err.c_str());
+  DynamicJsonDocument doc(24576);
+  if (doc.capacity() == 0) {
+    Serial.printf("[weather] json alloc failed: capacity=24576 heap=%u body=%d\n",
+                  (unsigned)heapBeforeParse,
+                  body.length());
     return false;
   }
-  Serial.printf("[weather] json err: %s\n", err.c_str());
+
+  DeserializationError err = deserializeJson(doc, body);
+  uint32_t heapAfterParse = ESP.getFreeHeap();
+  Serial.printf("[weather] heap before parse=%u after parse=%u docCap=%u\n",
+                (unsigned)heapBeforeParse,
+                (unsigned)heapAfterParse,
+                (unsigned)doc.capacity());
+  if (err) {
+    Serial.printf("[weather] json err: %s body=%d heap=%u\n",
+                  err.c_str(),
+                  body.length(),
+                  (unsigned)heapAfterParse);
+    return false;
+  }
 
   JsonObject current = doc["current"];
-  if (current.isNull()) return false;
+  if (current.isNull()) {
+    Serial.println("[weather] invalid response shape: missing current object");
+    return false;
+  }
+  JsonObject hourlyForValidation = doc["hourly"];
+  JsonObject dailyForValidation = doc["daily"];
+  bool missingRequired = false;
+  auto requireField = [&](JsonObject obj, const char* objName, const char* field) {
+    if (obj.isNull() || obj[field].isNull()) {
+      Serial.printf("[weather] invalid response shape: missing %s.%s\n", objName, field);
+      missingRequired = true;
+    }
+  };
+  requireField(current, "current", "time");
+  requireField(current, "current", "temperature_2m");
+  requireField(current, "current", "weather_code");
+  requireField(hourlyForValidation, "hourly", "time");
+  requireField(hourlyForValidation, "hourly", "temperature_2m");
+  requireField(hourlyForValidation, "hourly", "weather_code");
+  requireField(hourlyForValidation, "hourly", "wind_speed_10m");
+  requireField(hourlyForValidation, "hourly", "precipitation");
+  requireField(dailyForValidation, "daily", "sunrise");
+  requireField(dailyForValidation, "daily", "sunset");
+  if (missingRequired) return false;
 
   out.tempC = current["temperature_2m"] | NAN;
   out.humidity = current["relative_humidity_2m"] | NAN;
@@ -994,6 +1035,31 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
     JsonArray ss = daily["sunset"].as<JsonArray>();
     if (!sr.isNull() && sr.size() > 0) extractHHMM(out.sunriseHHMM, sr[0] | "");
     if (!ss.isNull() && ss.size() > 0) extractHHMM(out.sunsetHHMM,  ss[0] | "");
+
+    JsonArray dTime = daily["time"].as<JsonArray>();
+    JsonArray dHi   = daily["temperature_2m_max"].as<JsonArray>();
+    JsonArray dLo   = daily["temperature_2m_min"].as<JsonArray>();
+    JsonArray dWmo  = daily["weather_code"].as<JsonArray>();
+    JsonArray dWind = daily["wind_speed_10m_max"].as<JsonArray>();
+    JsonArray dPr   = daily["precipitation_sum"].as<JsonArray>();
+
+    int dailyN = (int)dTime.size();
+    if (dailyN > WeatherCache::MAX_DAYS) dailyN = WeatherCache::MAX_DAYS;
+    for (int di = 0; di < dailyN; di++) {
+      DayForecast& day = out.days[di];
+      const char* ymd = dTime[di] | "";
+      if (ymd && strlen(ymd) >= 10) {
+        copyYMD10(day.dateYMD, ymd);
+      }
+      day.hiC = (di < (int)dHi.size()) ? (dHi[di] | NAN) : NAN;
+      day.loC = (di < (int)dLo.size()) ? (dLo[di] | NAN) : NAN;
+      day.windMaxMs = (di < (int)dWind.size()) ? (dWind[di] | NAN) : NAN;
+      day.precipMm = (di < (int)dPr.size()) ? (dPr[di] | 0.0f) : 0.0f;
+      day.wmo = (di < (int)dWmo.size()) ? (dWmo[di] | out.currentWmo) : out.currentWmo;
+      day.wmo = normalizeDisplayWmoForTemps(day.wmo, day.loC, day.hiC);
+      day.valid = true;
+    }
+    out.dayCount = dailyN;
   }
 
   JsonObject hourly = doc["hourly"];
@@ -1171,9 +1237,10 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       }
     }
 
-    out.dayCount = dateCount;
+    int hourlyDayCount = dateCount;
+    if (hourlyDayCount > out.dayCount) out.dayCount = hourlyDayCount;
 
-    for (int di = 0; di < out.dayCount; di++) {
+    for (int di = 0; di < hourlyDayCount; di++) {
       DayForecast& day = out.days[di];
       if (!anyDay[di]) continue;
 
@@ -1345,7 +1412,7 @@ static void renderSmall(const Cell& c,
   auto& d = DisplayCore::get();
 
   if (!data.valid) {
-    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather", FONT_B12, ink);
+    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather unavailable", FONT_B12, ink);
     return;
   }
 
@@ -1452,7 +1519,7 @@ static void renderMedium(const Cell& c,
   auto& d = DisplayCore::get();
 
   if (!data.valid) {
-    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather", FONT_B12, ink);
+    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather unavailable", FONT_B12, ink);
     return;
   }
 
@@ -1691,7 +1758,7 @@ static void renderLargeXL(const Cell& c,
   auto& d = DisplayCore::get();
 
   if (!data.valid) {
-    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather", FONT_B12, ink);
+    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather unavailable", FONT_B12, ink);
     return;
   }
 
