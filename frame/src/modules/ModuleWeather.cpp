@@ -158,15 +158,6 @@ static bool isSnowWmo(int code) {
   }
 }
 
-static bool isPrecipWmo(int code) {
-  if (isSnowWmo(code)) return true;
-  if (code == 66 || code == 67) return true;
-  if ((code >= 51 && code <= 65)) return true;
-  if (code >= 80 && code <= 82) return true;
-  if (code == 95 || code == 96 || code == 99) return true;
-  return false;
-}
-
 static bool isLiquidPrecipWmo(int code) {
   if (code == 66 || code == 67) return true;
   if ((code >= 51 && code <= 65)) return true;
@@ -1138,7 +1129,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       }
     };
 
-    auto chooseDominantWmo = [&](WmoCount* arr, int arrN, int fallbackWmo, float precipMm) -> int {
+    auto chooseDominantWmo = [&](WmoCount* arr, int arrN, int fallbackWmo) -> int {
       int chosen = fallbackWmo;
 
       if (arrN > 0) {
@@ -1157,27 +1148,6 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
           }
         }
         chosen = bestWmo;
-
-        if (!isnan(precipMm) && precipMm > PRECIP_MEANINGFUL_MM) {
-          int pWmo = -1;
-          int pCnt = -1;
-          int pRank = -1;
-
-          for (int i = 0; i < arrN; i++) {
-            int w = arr[i].wmo;
-            int c = arr[i].count;
-            if (!isPrecipWmo(w)) continue;
-
-            int r = wmoSeverityRank(w);
-            if (c > pCnt || (c == pCnt && r > pRank)) {
-              pWmo = w;
-              pCnt = c;
-              pRank = r;
-            }
-          }
-
-          if (pWmo >= 0) chosen = pWmo;
-        }
       }
 
       return chosen;
@@ -1274,7 +1244,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       day.valid = true;
       if (isnan(day.precipMm)) day.precipMm = 0.0f;
 
-      day.wmo = chooseDominantWmo(counts[di], countsN[di], out.currentWmo, day.precipMm);
+      day.wmo = chooseDominantWmo(counts[di], countsN[di], out.currentWmo);
       day.wmo = normalizeDisplayWmoForTemps(day.wmo, day.loC, day.hiC);
     }
 
@@ -1289,7 +1259,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
     if (anyRestToday) {
       out.restValid = true;
       if (isnan(out.restPrecipMm)) out.restPrecipMm = 0.0f;
-      out.restWmo = chooseDominantWmo(restCounts, restCountsN, out.currentWmo, out.restPrecipMm);
+      out.restWmo = chooseDominantWmo(restCounts, restCountsN, out.currentWmo);
       out.restWmo = normalizeDisplayWmoForTemps(out.restWmo, out.restLoC, out.restHiC);
     } else {
       out.restValid = false;
