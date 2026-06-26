@@ -1049,9 +1049,23 @@ function wmoSeverityRank(wmo: number) {
   return 20
 }
 
+function isPrecipWmo(wmo: number) {
+  return (
+    (wmo >= 51 && wmo <= 67) ||
+    (wmo >= 71 && wmo <= 77) ||
+    (wmo >= 80 && wmo <= 82) ||
+    wmo === 85 ||
+    wmo === 86 ||
+    wmo === 95 ||
+    wmo === 96 ||
+    wmo === 99
+  )
+}
+
 type WmoCount = { wmo: number; count: number }
 
-function chooseDominantWmo(counts: WmoCount[], fallbackWmo: number | null) {
+function chooseDominantWmo(counts: WmoCount[], fallbackWmo: number | null, precipMm: number | null) {
+  const totalCount = counts.reduce((sum, item) => sum + item.count, 0)
   let chosen = fallbackWmo
 
   if (counts.length > 0) {
@@ -1066,6 +1080,26 @@ function chooseDominantWmo(counts: WmoCount[], fallbackWmo: number | null) {
       }
     }
     chosen = best.wmo
+
+    if (precipMm != null && precipMm > 2.0) {
+      let precipBest: WmoCount | null = null
+      let precipBestRank = -1
+
+      for (const item of counts) {
+        if (!isPrecipWmo(item.wmo)) continue
+        const rank = wmoSeverityRank(item.wmo)
+        if (precipBest == null || item.count > precipBest.count || (item.count === precipBest.count && rank > precipBestRank)) {
+          precipBest = item
+          precipBestRank = rank
+        }
+      }
+
+      // Only let precipitation override the icon when it covers a meaningful
+      // share of the selected period. A short late shower should still be
+      // mentioned in the text, but the icon should represent the mostly-dry day.
+      const precipCoverageThreshold = Math.max(3, Math.ceil(totalCount * 0.35))
+      if (precipBest && precipBest.count >= precipCoverageThreshold) chosen = precipBest.wmo
+    }
   }
 
   return chosen
@@ -1175,7 +1209,7 @@ function computeSelectedWeatherPeriods(data: UnknownRecord, fallbackFullDay: {
   const selectedWindMaxMs = sawFullDay && windMaxMs != null ? windMaxMs : fallbackFullDay.windMaxMs
   const selectedPrecipMm = sawFullDay && sawPrecip ? precipMm : fallbackFullDay.precipMm
   const selectedWmo = normalizeDisplayWmoForTemps(
-    chooseDominantWmo(wmoCounts, fallbackFullDay.wmo),
+    chooseDominantWmo(wmoCounts, fallbackFullDay.wmo, selectedPrecipMm),
     selectedLoC,
     selectedHiC,
   )
@@ -1185,7 +1219,7 @@ function computeSelectedWeatherPeriods(data: UnknownRecord, fallbackFullDay: {
   const restSelectedWindMaxMs = sawRestToday && restWindMaxMs != null ? restWindMaxMs : selectedWindMaxMs
   const restSelectedPrecipMm = sawRestToday && sawRestPrecip ? restPrecipMm : selectedPrecipMm
   const restSelectedWmo = normalizeDisplayWmoForTemps(
-    chooseDominantWmo(restWmoCounts, selectedWmo),
+    chooseDominantWmo(restWmoCounts, selectedWmo, restSelectedPrecipMm),
     restSelectedLoC,
     restSelectedHiC,
   )
