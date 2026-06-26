@@ -1065,7 +1065,6 @@ function isPrecipWmo(wmo: number) {
 type WmoCount = { wmo: number; count: number }
 
 function chooseDominantWmo(counts: WmoCount[], fallbackWmo: number | null, precipMm: number | null) {
-  const totalCount = counts.reduce((sum, item) => sum + item.count, 0)
   let chosen = fallbackWmo
 
   if (counts.length > 0) {
@@ -1094,11 +1093,7 @@ function chooseDominantWmo(counts: WmoCount[], fallbackWmo: number | null, preci
         }
       }
 
-      // Only let precipitation override the icon when it covers a meaningful
-      // share of the selected period. A short late shower should still be
-      // mentioned in the text, but the icon should represent the mostly-dry day.
-      const precipCoverageThreshold = Math.max(3, Math.ceil(totalCount * 0.35))
-      if (precipBest && precipBest.count >= precipCoverageThreshold) chosen = precipBest.wmo
+      if (precipBest) chosen = precipBest.wmo
     }
   }
 
