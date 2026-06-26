@@ -54,6 +54,13 @@ test('weather mirror UI uses the shared loading label while waiting for live det
   assert.match(homeClient, /weatherLowTemp: '--°'/)
 })
 
+
+test('weather mirror keeps mostly-dry icons for short precipitation windows', () => {
+  assert.match(mirrorRoute, /const totalCount = counts\.reduce/)
+  assert.match(mirrorRoute, /const precipCoverageThreshold = Math\.max\(3, Math\.ceil\(totalCount \* 0\.35\)\)/)
+  assert.match(mirrorRoute, /short late shower should still be\s*\/\/ mentioned in the text, but the icon should represent the mostly-dry day/s)
+})
+
 test('weather mirror omits insignificant advice and reclaims advice layout space', () => {
   assert.doesNotMatch(weatherMirror, /Comfortable weather today\./)
   assert.doesNotMatch(weatherMirror, /Sunny and calm all day\./)
