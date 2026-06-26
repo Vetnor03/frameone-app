@@ -387,7 +387,7 @@ static int wrapTextToLines(const char* text,
   strlcpy(buf, text, sizeof(buf));
 
   char* saveptr = nullptr;
-  char* word = strtok_r(buf, " ", &saveptr);
+  char* word = strtok_r(buf, " \n\r\t", &saveptr);
 
   while (word) {
     if (lineCount >= maxLines) break;
@@ -408,7 +408,7 @@ static int wrapTextToLines(const char* text,
       strlcpy(lines[lineCount], word, sizeof(lines[lineCount]));
     }
 
-    word = strtok_r(nullptr, " ", &saveptr);
+    word = strtok_r(nullptr, " \n\r\t", &saveptr);
   }
 
   if (lines[0][0] == 0) return 0;
@@ -433,15 +433,42 @@ static int wrapTextTwoLinesEllipsized(const char* text,
   int wordCount = 0;
 
   char* saveptr = nullptr;
-  char* w = strtok_r(buf, " ", &saveptr);
+  char* w = strtok_r(buf, " \n\r\t", &saveptr);
   while (w && wordCount < MAX_WORDS) {
     words[wordCount++] = w;
-    w = strtok_r(nullptr, " ", &saveptr);
+    w = strtok_r(nullptr, " \n\r\t", &saveptr);
   }
 
   if (wordCount == 0) return 0;
+
+  char fullLine[64] = {0};
+  for (int i = 0; i < wordCount; i++) {
+    if (i > 0) strlcat(fullLine, " ", sizeof(fullLine));
+    strlcat(fullLine, words[i], sizeof(fullLine));
+  }
+
+  int16_t fx1, fy1;
+  uint16_t fw, fh;
+  measureText(fullLine, font, fx1, fy1, fw, fh);
+  if ((int)fw <= maxWidth) {
+    strlcpy(line1, fullLine, 64);
+    return 1;
+  }
+
   if (wordCount == 1) {
     strlcpy(line1, words[0], 64);
+    const char* ell = "...";
+    while (true) {
+      char candidate[64];
+      snprintf(candidate, sizeof(candidate), "%s%s", line1, ell);
+      int16_t x1, y1; uint16_t tw, th;
+      measureText(candidate, font, x1, y1, tw, th);
+      if ((int)tw <= maxWidth || strlen(line1) == 0) {
+        strlcpy(line1, candidate, 64);
+        break;
+      }
+      line1[strlen(line1) - 1] = 0;
+    }
     return 1;
   }
 
