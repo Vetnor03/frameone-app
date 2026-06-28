@@ -921,11 +921,12 @@ static const char* insightDayPart(int hour) {
 static bool isThunderWmo(int wmo) { return wmo >= 95 && wmo <= 99; }
 static bool isFogWmo(int wmo) { return wmo == 45 || wmo == 48; }
 static bool isSleetWmo(int wmo) { return wmo == 56 || wmo == 57 || wmo == 66 || wmo == 67; }
-static bool findEventRange(const WeatherCache& data, bool (*pred)(float, float, int), int& first, int& last, int& count) {
+static bool findEventRange(const WeatherCache& data, bool (*pred)(float, float, int), int minHour, int& first, int& last, int& count) {
   first = 99; last = -1; count = 0;
   for (int i = 0; i < data.todayHourCount; i++) {
-    if (!pred(data.todayPrecipMm[i], data.todayWindMs[i], data.todayWmo[i])) continue;
     int h = data.todayHour[i];
+    if (minHour >= 0 && h < minHour) continue;
+    if (!pred(data.todayPrecipMm[i], data.todayWindMs[i], data.todayWmo[i])) continue;
     if (h < first) first = h;
     if (h > last) last = h;
     count++;
@@ -952,12 +953,15 @@ static void buildFallbackClothingAdvice(char* out, size_t n, float nowC, float h
 static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, float nowC, float hiC, float loC, float windMaxMs, float precipMm, int wmo) {
   if (!out || n == 0) return;
   int first, last, count;
-  if (findEventRange(data, thunderPred, first, last, count)) { snprintf(out, n, "Thunderstorms possible %s.\n%s", insightDayPart(first), first >= 12 ? "Dry before then." : ""); return; }
-  if (findEventRange(data, snowPred, first, last, count)) { snprintf(out, n, "Snow arriving %s.\nWatch roads later.", insightDayPart(first)); return; }
-  if (findEventRange(data, heavyRainPred, first, last, count)) { if (count > 1) snprintf(out, n, "Heavy rain expected %02d:00-%02d:00.\nOtherwise mostly dry.", first, last); else snprintf(out, n, "Heavy rain expected around %02d:00.\nOtherwise mostly dry.", first); return; }
-  if (findEventRange(data, fogPred, first, last, count)) { snprintf(out, n, "Dense %s fog.\nClears later today.", first < 12 ? "morning" : "late"); return; }
-  if (findEventRange(data, strongWindPred, first, last, count) || (!isnan(windMaxMs) && windMaxMs >= 10.0f)) { snprintf(out, n, "Strong winds %s.", count > 0 ? insightDayPart(first) : "today"); return; }
-  if (findEventRange(data, rainPred, first, last, count)) { if (first >= 10) { snprintf(out, n, "Dry morning, rain %s.\nPlan around it.", first < 17 ? "afternoon" : "evening"); return; } if (last < 13) { strlcpy(out, "Rain clears by midday.\nDrier later on.", n); return; } }
+  int currentHour = -1;
+  getLocalHourNow(currentHour);
+
+  if (findEventRange(data, thunderPred, currentHour, first, last, count)) { snprintf(out, n, "Thunderstorms possible %s.\n%s", insightDayPart(first), first >= 12 ? "Dry before then." : ""); return; }
+  if (findEventRange(data, snowPred, currentHour, first, last, count)) { snprintf(out, n, "Snow arriving %s.\nWatch roads later.", insightDayPart(first)); return; }
+  if (findEventRange(data, heavyRainPred, currentHour, first, last, count)) { if (count > 1) snprintf(out, n, "Heavy rain expected %02d:00-%02d:00.\nOtherwise mostly dry.", first, last); else snprintf(out, n, "Heavy rain expected around %02d:00.\nOtherwise mostly dry.", first); return; }
+  if (findEventRange(data, fogPred, currentHour, first, last, count)) { snprintf(out, n, "Dense %s fog.\nClears later today.", first < 12 ? "morning" : "late"); return; }
+  if (findEventRange(data, strongWindPred, currentHour, first, last, count) || (!isnan(windMaxMs) && windMaxMs >= 10.0f)) { snprintf(out, n, "Strong winds %s.", count > 0 ? insightDayPart(first) : "today"); return; }
+  if (findEventRange(data, rainPred, currentHour, first, last, count)) { snprintf(out, n, "Rain %s.\nPlan around it.", insightDayPart(first)); return; }
   if (!isnan(hiC) && !isnan(loC) && hiC - loC >= 12.0f) { snprintf(out, n, "Big temperature swing today.\n%d° to %d°C.", (int)lroundf(loC), (int)lroundf(hiC)); return; }
   buildFallbackClothingAdvice(out, n, nowC, hiC, loC, windMaxMs, precipMm, wmo);
 }
