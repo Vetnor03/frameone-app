@@ -932,7 +932,7 @@ static bool fogPred(float, float, int wmo) { return isFogWmo(wmo); }
 static bool strongWindPred(float, float wind, int) { return !isnan(wind) && wind >= 10.0f; }
 static bool rainPred(float pr, float, int wmo) { return hasLightRainSignal(pr, wmo); }
 
-static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, float hiC, float loC, float windMaxMs) {
+static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data) {
   if (!out || n == 0) return;
   int first, last, count;
   int currentHour = -1;
@@ -942,9 +942,8 @@ static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data, f
   if (findEventRange(data, snowPred, currentHour, first, last, count)) { snprintf(out, n, "Snow %s.", insightDayPart(first)); return; }
   if (findEventRange(data, heavyRainPred, currentHour, first, last, count)) { if (count > 1) snprintf(out, n, "Heavy rain %02d:00-%02d:00.", first, last); else snprintf(out, n, "Heavy rain around %02d:00.", first); return; }
   if (findEventRange(data, fogPred, currentHour, first, last, count)) { snprintf(out, n, "Dense fog %s.", insightDayPart(first)); return; }
-  if (findEventRange(data, strongWindPred, currentHour, first, last, count) || (!isnan(windMaxMs) && windMaxMs >= 10.0f)) { snprintf(out, n, "Strong winds %s.", count > 0 ? insightDayPart(first) : "today"); return; }
+  if (findEventRange(data, strongWindPred, currentHour, first, last, count)) { snprintf(out, n, "Strong winds %s.", insightDayPart(first)); return; }
   if (findEventRange(data, rainPred, currentHour, first, last, count)) { snprintf(out, n, "Rain %s.", insightDayPart(first)); return; }
-  if (!isnan(hiC) && !isnan(loC) && hiC - loC >= 12.0f) { snprintf(out, n, "Big temperature swing today.\n%d° to %d°C.", (int)lroundf(loC), (int)lroundf(hiC)); return; }
   out[0] = 0;
 }
 
@@ -1561,8 +1560,7 @@ static void renderMedium(const Cell& c,
   buildPrecipStr(precipStr, sizeof(precipStr), medPrecip, medWmo, medLoC, medHiC);
 
   char insightStr[96] = {0};
-  buildWeatherInsight(insightStr, sizeof(insightStr), data,
-                      medHiC, medLoC, medWindMax);
+  buildWeatherInsight(insightStr, sizeof(insightStr), data);
 
   int16_t b12Y1; uint16_t b12H;
   int16_t b9Y1;  uint16_t b9H;
@@ -2014,8 +2012,7 @@ static void renderLargeXL(const Cell& c,
   buildPrecipStr(precipStr, sizeof(precipStr), today.precipMm, today.wmo, today.loC, today.hiC);
 
   char insightStr[96] = {0};
-  buildWeatherInsight(insightStr, sizeof(insightStr), data,
-                      today.hiC, today.loC, today.windMaxMs);
+  buildWeatherInsight(insightStr, sizeof(insightStr), data);
 
   char locationName[48] = {0};
   getDisplayLocationName(cfg, locationName, sizeof(locationName));
