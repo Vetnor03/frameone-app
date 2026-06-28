@@ -128,25 +128,6 @@ export function buildWeatherPrecipLine(precipMm: unknown, wmoValue: unknown, loC
   return 'Mostly dry'
 }
 
-function hhmmToMinutes(value: string | null | undefined) {
-  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(value ?? ''))
-  if (!match) return -1
-  return Number(match[1]) * 60 + Number(match[2])
-}
-
-function currentLocalMinutes() {
-  const now = new Date()
-  return now.getHours() * 60 + now.getMinutes()
-}
-
-function isSunDownNow(sunriseHHMM: string | null | undefined, sunsetHHMM: string | null | undefined) {
-  const sunrise = hhmmToMinutes(sunriseHHMM)
-  const sunset = hhmmToMinutes(sunsetHHMM)
-  const now = currentLocalMinutes()
-  if (sunrise < 0 || sunset < 0) return false
-  return now < sunrise || now >= sunset
-}
-
 function dayPart(hour: number) {
   if (hour < 12) return 'this morning'
   if (hour < 17) return 'this afternoon'
@@ -156,10 +137,6 @@ function dayPart(hour: number) {
 
 function aroundHour(hour: number) {
   return `around ${String(Math.max(0, Math.min(23, Math.round(hour)))).padStart(2, '0')}:00`
-}
-
-function lineJoin(...lines: string[]) {
-  return lines.filter(Boolean).slice(0, 2).join('\n')
 }
 
 function isThunderWmo(wmo: number | null | undefined) {
@@ -172,28 +149,6 @@ function isFogWmo(wmo: number | null | undefined) {
 
 function isSleetWmo(wmo: number | null | undefined) {
   return wmo === 56 || wmo === 57 || wmo === 66 || wmo === 67
-}
-
-function fallbackClothingAdvice(input: MediumWeatherInput) {
-  const currentTempC = finiteNumber(input.currentTempC)
-  const hiC = finiteNumber(input.hiC)
-  const loC = finiteNumber(input.loC)
-  const windMaxMs = finiteNumber(input.windMaxMs)
-  const precipMm = finiteNumber(input.precipMm)
-  const wmo = finiteNumber(input.wmo)
-
-  let refTemp: number | null = currentTempC ?? (hiC != null && loC != null ? hiC * 0.6 + loC * 0.4 : hiC ?? loC)
-  const sunDown = input.sunDown ?? isSunDownNow(input.sunriseHHMM, input.sunsetHHMM)
-  if (refTemp != null && sunDown) refTemp -= 2
-
-  const snowy = isSnowWmo(wmo) || shouldLabelSnowByTemp(loC, hiC)
-  const rainy = hasLightRainSignal(precipMm, wmo)
-  const windy = windMaxMs != null && windMaxMs >= 7
-  if (snowy || (refTemp != null && refTemp <= 0)) return 'Dress warmly today.'
-  if (rainy) return 'Bring a rain jacket.'
-  if (refTemp != null && refTemp <= 13) return 'Light jacket recommended.'
-  if (windy) return 'Light layer for wind.'
-  return ''
 }
 
 function eventRange(hours: WeatherInsightHour[], predicate: (h: WeatherInsightHour) => boolean) {
@@ -209,34 +164,29 @@ export function buildWeatherInsight(input: MediumWeatherInput) {
     .map((h) => ({ ...h, hour: Math.round(Number(h.hour)) }))
     .filter((h) => Number.isFinite(h.hour) && h.hour >= 0 && h.hour < 24)
     .sort((a, b) => a.hour - b.hour)
-  const hiC = finiteNumber(input.hiC)
-  const loC = finiteNumber(input.loC)
-  const windMaxMs = finiteNumber(input.windMaxMs)
-  const precipMm = finiteNumber(input.precipMm)
-  const wmo = finiteNumber(input.wmo)
+  const localHour = finiteNumber(input.localHour)
+  const minHour = localHour == null ? -1 : Math.max(0, Math.min(23, Math.floor(localHour)))
+  const upcomingHours = minHour >= 0 ? hours.filter((h) => h.hour >= minHour) : hours
 
-  const thunder = eventRange(hours, (h) => isThunderWmo(finiteNumber(h.wmo)))
-  if (thunder) return lineJoin(`Thunderstorms possible ${dayPart(thunder.first)}.`, thunder.first >= 12 ? 'Dry before then.' : '')
+  const thunder = eventRange(upcomingHours, (h) => isThunderWmo(finiteNumber(h.wmo)))
+  if (thunder) return `Thunderstorms possible ${dayPart(thunder.first)}.`
 
-  const snow = eventRange(hours, (h) => isSnowWmo(finiteNumber(h.wmo)) || isSleetWmo(finiteNumber(h.wmo)))
-  if (snow) return lineJoin(`${isSleetWmo(finiteNumber(hours.find((h) => h.hour === snow.first)?.wmo)) ? 'Sleet' : 'Snow'} arriving ${dayPart(snow.first)}.`, snow.first >= 12 ? 'Watch roads later.' : '')
+  const snow = eventRange(upcomingHours, (h) => isSnowWmo(finiteNumber(h.wmo)) || isSleetWmo(finiteNumber(h.wmo)))
+  if (snow) return `${isSleetWmo(finiteNumber(upcomingHours.find((h) => h.hour === snow.first)?.wmo)) ? 'Sleet' : 'Snow'} ${dayPart(snow.first)}.`
 
-  const heavyRain = eventRange(hours, (h) => (finiteNumber(h.precipMm) ?? 0) >= 2 || finiteNumber(h.wmo) === 65 || finiteNumber(h.wmo) === 82)
-  if (heavyRain) return lineJoin(`Heavy rain expected ${heavyRain.count > 1 ? `${aroundHour(heavyRain.first)}–${String(heavyRain.last).padStart(2, '0')}:00` : aroundHour(heavyRain.first)}.`, 'Otherwise mostly dry.')
+  const heavyRain = eventRange(upcomingHours, (h) => (finiteNumber(h.precipMm) ?? 0) >= 2 || finiteNumber(h.wmo) === 65 || finiteNumber(h.wmo) === 82)
+  if (heavyRain) return heavyRain.count > 1 ? `Heavy rain ${String(heavyRain.first).padStart(2, '0')}:00-${String(heavyRain.last).padStart(2, '0')}:00.` : `Heavy rain ${aroundHour(heavyRain.first)}.`
 
-  const fog = eventRange(hours, (h) => isFogWmo(finiteNumber(h.wmo)))
-  if (fog) return lineJoin(`Dense ${dayPart(fog.first).replace('this ', '')} fog.`, 'Clears later today.')
+  const fog = eventRange(upcomingHours, (h) => isFogWmo(finiteNumber(h.wmo)))
+  if (fog) return `Dense fog ${dayPart(fog.first)}.`
 
-  const strongWind = eventRange(hours, (h) => (finiteNumber(h.windMs) ?? 0) >= 10)
-  if (strongWind || (windMaxMs != null && windMaxMs >= 10)) return `Strong winds ${strongWind ? dayPart(strongWind.first) : 'today'}.`
+  const strongWind = eventRange(upcomingHours, (h) => (finiteNumber(h.windMs) ?? 0) >= 10)
+  if (strongWind) return `Strong winds ${dayPart(strongWind.first)}.`
 
-  const rain = eventRange(hours, (h) => hasLightRainSignal(finiteNumber(h.precipMm), finiteNumber(h.wmo)))
-  if (rain && rain.first >= 10) return lineJoin(`Dry morning, rain ${dayPart(rain.first).replace('this ', '')}.`, 'Plan around it.')
-  if (rain && rain.last < 13) return lineJoin('Rain clears by midday.', 'Drier later on.')
+  const rain = eventRange(upcomingHours, (h) => hasLightRainSignal(finiteNumber(h.precipMm), finiteNumber(h.wmo)))
+  if (rain) return `Rain ${dayPart(rain.first)}.`
 
-  if (hiC != null && loC != null && hiC - loC >= 12) return lineJoin('Big temperature swing today.', `${Math.round(loC)}° to ${Math.round(hiC)}°C.`)
-
-  return fallbackClothingAdvice(input)
+  return ''
 }
 
 export const buildWeatherClothingAdvice = buildWeatherInsight
