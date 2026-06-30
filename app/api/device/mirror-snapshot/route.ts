@@ -9,6 +9,10 @@ import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const EVENING_START_HOUR = 17
+const EVENING_END_HOUR = 24
+const FRAME_TIME_ZONE = 'Europe/Oslo'
+
 type SurfMirrorDaypart = {
   label?: string
   rating?: number
@@ -429,6 +433,22 @@ function diffDaysYmd(fromYmd: string, toYmd: string) {
 
 function pad2(n: number) {
   return String(n).padStart(2, '0')
+}
+
+function hourInTimeZone(timeZone: string, date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value)
+  return Number.isFinite(hour) ? hour : date.getHours()
+}
+
+function isEveningInTimeZone(timeZone: string, date = new Date()) {
+  const hour = hourInTimeZone(timeZone, date)
+  return hour >= EVENING_START_HOUR && hour < EVENING_END_HOUR
 }
 
 function todayYmdInTimeZone(timeZone: string) {
@@ -1718,7 +1738,9 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
   url.searchParams.set('limit', '20')
+  url.searchParams.set('tz', FRAME_TIME_ZONE)
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
+  const showTomorrowCounter = isEveningInTimeZone(FRAME_TIME_ZONE)
   const items = Array.isArray(data.items) ? data.items.map(asRecord) : []
   const first = items[0]
   const firstOccurrenceDate = first ? asString(first.occurrence_date).trim() : ''
@@ -1748,7 +1770,7 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
     reminderOverflowCount: Math.max(0, primaryBucketItems.length - visibleItems.length),
     reminderMediumOverflowCount: Math.max(0, primaryBucketItems.length - visibleMediumItems.length),
     reminderDateBadge: formatReminderMirrorDateBadge(first, language),
-    reminderTomorrowCount: firstDaysUntil === 0
+    reminderTomorrowCount: showTomorrowCounter && firstDaysUntil === 0
       ? items.filter((item) => asNumber(item.days_until) === 1).length
       : 0,
   }
