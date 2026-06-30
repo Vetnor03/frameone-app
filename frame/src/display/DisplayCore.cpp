@@ -26,6 +26,14 @@ FrameDisplay& get() {
   return display;
 }
 
+void fillThemeBackground() {
+  // fillScreen() follows the current Adafruit_GFX dimensions, while the
+  // explicit full-panel rectangle makes the intended edge-to-edge paint clear
+  // and protects against stale border pixels between theme changes.
+  display.fillScreen(Theme::paper());
+  display.fillRect(0, 0, display.width(), display.height(), Theme::paper());
+}
+
 void begin() {
   display.init(115200);
   display.setRotation(0);
@@ -34,7 +42,7 @@ void begin() {
   display.setFullWindow();
   display.firstPage();
   do {
-    display.fillScreen(Theme::paper());
+    fillThemeBackground();
   } while (display.nextPage());
 }
 
@@ -207,7 +215,7 @@ void drawRechargeScreen() {
   display.setFullWindow();
   display.firstPage();
   do {
-    display.fillScreen(Theme::paper());
+    fillThemeBackground();
     display.setTextColor(Theme::ink());
 
     const char* line1 = "Re-Mind";
@@ -244,7 +252,7 @@ void drawShelfScreen(const String& deviceId) {
   display.setFullWindow();
   display.firstPage();
   do {
-    display.fillScreen(Theme::paper());
+    fillThemeBackground();
     display.setTextColor(Theme::ink());
 
     const char* line1 = "RE:MIND";
