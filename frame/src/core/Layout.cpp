@@ -57,7 +57,7 @@ void draw(LayoutKey key) {
   DisplayCore::beginFrameUpdate();
   do {
     // FULL SCREEN fill so outside matte area uses theme color too
-    d.fillScreen(Theme::paper());
+    DisplayCore::fillThemeBackground();
 
     if (key == LAYOUT_FULL) {
       // no dividers
@@ -164,7 +164,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   DisplayCore::beginFrameUpdate();
   do {
     // FULL SCREEN fill so outside matte area matches theme
-    d.fillScreen(Theme::paper());
+    DisplayCore::fillThemeBackground();
 
     if (key == LAYOUT_FULL) {
       // none

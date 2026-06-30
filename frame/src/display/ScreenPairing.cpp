@@ -36,7 +36,7 @@ static void renderPage(DrawCb cb, void* ctx) {
   d.setFullWindow();
   d.firstPage();
   do {
-    d.fillScreen(Theme::paper());
+    DisplayCore::fillThemeBackground();
     d.setTextColor(Theme::ink());
     cb(ctx);
   } while (d.nextPage());

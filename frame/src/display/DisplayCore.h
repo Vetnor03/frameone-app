@@ -9,6 +9,11 @@ namespace DisplayCore {
   // Return the real type (no casts needed)
   FrameDisplay& get();
 
+  // Paint every addressable pixel with the active theme background.
+  // Use this instead of a bare fillScreen() for frame-sized screens so
+  // edge pixels cannot retain the opposite theme after refreshes.
+  void fillThemeBackground();
+
   void drawSmallTextTopLeftInFrame(const char* text);
   void drawCenteredTextInFrame(const char* text, int big);
 
