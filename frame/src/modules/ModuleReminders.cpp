@@ -86,6 +86,15 @@ static void safeCopy(char* dst, size_t dstSize, const char* src) {
   strlcpy(dst, src, dstSize);
 }
 
+static bool isEveningHour() {
+  time_t now = time(nullptr);
+  if (now <= 0) return false;
+
+  struct tm localNow;
+  localtime_r(&now, &localNow);
+  return localNow.tm_hour >= 17 && localNow.tm_hour < 24;
+}
+
 static void utf8ToLatin1(char* out, size_t n, const char* in) {
   if (!out || n == 0) return;
   size_t oi = 0;
@@ -1639,7 +1648,7 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
     drawTopRightSmallNote(c, moreBuf, c.y + 12);
   }
 
-  const bool showTomorrowNote = headerIsToday;
+  const bool showTomorrowNote = headerIsToday && isEveningHour();
   if (showTomorrowNote) {
     int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
     if (tomorrowIdx >= 0 && buckets[tomorrowIdx].count > 0) {
@@ -1785,7 +1794,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     drawTopRightSmallNote(c, moreBuf, c.y + 14);
   }
 
-  const bool showTomorrowNote = headerIsToday;
+  const bool showTomorrowNote = headerIsToday && isEveningHour();
 
   if (showTomorrowNote) {
     int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
