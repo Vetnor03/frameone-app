@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
@@ -64,6 +64,33 @@ function getTodayYmdInTimeZone(timeZone: string) {
   return `${year}-${pad2(month)}-${pad2(day)}`
 }
 
+
+async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: string) {
+  const { data: members, error: membersError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', deviceId)
+
+  if (membersError) throw membersError
+
+  const userIds = Array.from(new Set((Array.isArray(members) ? members : [])
+    .map((row: { user_id?: unknown }) => String(row.user_id || '').trim())
+    .filter(Boolean)))
+
+  if (userIds.length === 0) return [deviceId]
+
+  const { data: shared, error: sharedError } = await supabase
+    .from('device_members')
+    .select('device_id')
+    .in('user_id', userIds)
+
+  if (sharedError) throw sharedError
+
+  return Array.from(new Set([deviceId, ...(Array.isArray(shared) ? shared : [])
+    .map((row: { device_id?: unknown }) => String(row.device_id || '').trim())
+    .filter(Boolean)]))
+}
+
 function formatDisplayDate(targetYmd: string, todayYmd: string) {
   if (targetYmd === todayYmd) return 'Today'
 
@@ -95,7 +122,7 @@ export async function GET(req: Request) {
     const { data: events, error: eventsError } = await supabase
       .from('countdown_events')
       .select('id, device_id, title, target_date, pinned')
-      .eq('device_id', device_id)
+      .in('device_id', await sharedDeviceIdsForFrame(supabase, device_id))
       .order('target_date', { ascending: true })
       .order('title', { ascending: true })
 

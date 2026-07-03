@@ -1,7 +1,7 @@
 // app/api/device/reminders/route.ts
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
 import { buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
@@ -202,6 +202,33 @@ function diffDaysFromYmd(fromYmd: string, toYmd: string) {
   return Math.round((toUtc - fromUtc) / 86400000)
 }
 
+
+async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: string) {
+  const { data: members, error: membersError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', deviceId)
+
+  if (membersError) throw membersError
+
+  const userIds = Array.from(new Set((Array.isArray(members) ? members : [])
+    .map((row: { user_id?: unknown }) => String(row.user_id || '').trim())
+    .filter(Boolean)))
+
+  if (userIds.length === 0) return [deviceId]
+
+  const { data: shared, error: sharedError } = await supabase
+    .from('device_members')
+    .select('device_id')
+    .in('user_id', userIds)
+
+  if (sharedError) throw sharedError
+
+  return Array.from(new Set([deviceId, ...(Array.isArray(shared) ? shared : [])
+    .map((row: { device_id?: unknown }) => String(row.device_id || '').trim())
+    .filter(Boolean)]))
+}
+
 function normalizeLimit(raw: string | null) {
   const n = Number(raw)
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_LIMIT
@@ -339,10 +366,12 @@ export async function GET(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
+    const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
+
     const { data, error } = await supabase
       .from('reminders')
       .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
-      .eq('device_id', device_id)
+      .in('device_id', sharedDeviceIds)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
       .order('title', { ascending: true })
@@ -353,7 +382,7 @@ export async function GET(req: Request) {
     const { data: completionsData, error: completionsError } = await supabase
       .from('reminder_completions')
       .select('reminder_id, occurrence_date')
-      .eq('device_id', device_id)
+      .in('device_id', sharedDeviceIds)
 
     if (completionsError) {
       return NextResponse.json({ error: completionsError.message }, { status: 500 })

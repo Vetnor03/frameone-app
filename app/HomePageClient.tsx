@@ -707,6 +707,44 @@ function modulesRecordFromUnknown(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
+
+const SHARED_USER_MODULE_KEYS: ModuleKey[] = ['reminders', 'countdown', 'groceries', 'surf']
+
+function mergeReusableUserModules(current: Record<string, any>, reusable: Record<string, any>) {
+  const next = { ...current }
+  for (const key of SHARED_USER_MODULE_KEYS) {
+    if (next[key] == null && reusable[key] != null) next[key] = reusable[key]
+  }
+  if (next.surf_settings == null && reusable.surf_settings != null) next.surf_settings = reusable.surf_settings
+  if (next.surf_forecast == null && reusable.surf_forecast != null) next.surf_forecast = reusable.surf_forecast
+  return next
+}
+
+async function loadReusableUserModules(deviceIds: string[], currentDeviceId: string) {
+  const sourceDeviceIds = deviceIds.filter((id) => id && id !== currentDeviceId)
+  if (sourceDeviceIds.length === 0) return {}
+
+  const { data, error } = await supabase
+    .from('device_settings')
+    .select('settings_json, updated_at')
+    .in('device_id', sourceDeviceIds)
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+
+  const reusable: Record<string, any> = {}
+  for (const row of data || []) {
+    const settings = modulesRecordFromUnknown((row as { settings_json?: unknown }).settings_json)
+    const modules = modulesRecordFromUnknown(settings.modules)
+    for (const key of SHARED_USER_MODULE_KEYS) {
+      if (reusable[key] == null && modules[key] != null) reusable[key] = modules[key]
+    }
+    if (reusable.surf_settings == null && modules.surf_settings != null) reusable.surf_settings = modules.surf_settings
+    if (reusable.surf_forecast == null && modules.surf_forecast != null) reusable.surf_forecast = modules.surf_forecast
+  }
+  return reusable
+}
+
 function normalizePhysicalFrameSnapshot(settings: unknown, updatedAt: string | null, renderAt: string | null): PhysicalFrameSnapshot {
   const json = modulesRecordFromUnknown(settings)
   const layoutKey = isLayoutKey(json.layout) ? json.layout : 'default'
@@ -1658,7 +1696,8 @@ export default function HomePage() {
         ? (json.modules as Record<string, any>)
         : ({} as Record<string, any>)
 
-    const normalizedModules = normalizeModulesForSave(rawModules)
+    const reusableModules = await loadReusableUserModules(frames.map((frame) => frame.device_id), deviceId).catch(() => ({}))
+    const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
       ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
       : []
@@ -1868,7 +1907,7 @@ export default function HomePage() {
 
     let nextLayout: LayoutKey = layoutKey
     let nextCellsByLayout = cellsByLayout
-    let nextModules = { ...modulesJson, ...selection.modules }
+    let nextModules = mergeReusableUserModules({ ...modulesJson }, selection.modules)
     let nextPinnedTabs = pinnedModuleTabs
 
     if (selection.purpose !== 'custom') {

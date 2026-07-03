@@ -657,6 +657,33 @@ function jsonErrorResponse(payload: { error: string }, init: { status: number })
   })
 }
 
+
+async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: string) {
+  const { data: members, error: membersError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', deviceId)
+
+  if (membersError) throw membersError
+
+  const userIds = Array.from(new Set((Array.isArray(members) ? members : [])
+    .map((row: { user_id?: unknown }) => asString(row.user_id, '').trim())
+    .filter(Boolean)))
+
+  if (userIds.length === 0) return [deviceId]
+
+  const { data: shared, error: sharedError } = await supabase
+    .from('device_members')
+    .select('device_id')
+    .in('user_id', userIds)
+
+  if (sharedError) throw sharedError
+
+  return Array.from(new Set([deviceId, ...(Array.isArray(shared) ? shared : [])
+    .map((row: { device_id?: unknown }) => asString(row.device_id, '').trim())
+    .filter(Boolean)]))
+}
+
 function jsonResponse(payload: GroceryPayload) {
   const json = JSON.stringify(payload)
   return new NextResponse(json, {
@@ -697,7 +724,8 @@ export async function GET(req: Request) {
     }
 
     const appStorageDeviceId = String((device as Record<string, unknown>).id ?? '').trim()
-    const storageDeviceIds = Array.from(new Set([appStorageDeviceId, device_id].filter(Boolean)))
+    const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
+    const storageDeviceIds = Array.from(new Set([appStorageDeviceId, ...sharedDeviceIds].filter(Boolean)))
     const todayIso = isoDateOnly(new Date())
 
     const { error: cleanupError } = await supabase
