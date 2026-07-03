@@ -332,7 +332,22 @@ function maybeParseJson(value: string): unknown {
 }
 
 function recipeNameFromRow(row: UnknownRecord) {
-  return compactGroceryInsightName(row.name, 32) || compactGroceryInsightName(row.title, 32) || compactGroceryInsightName(row.recipe_name, 32)
+  return compactGroceryInsightName(row.name, 32)
+    || compactGroceryInsightName(row.title, 32)
+    || compactGroceryInsightName(row.recipe_name, 32)
+    || compactGroceryInsightName(row.suggestion, 32)
+}
+
+function isOptionalRecipeSchemaError(error: unknown) {
+  const row = asRecord(error)
+  const code = asString(row.code).trim()
+  const message = asString(row.message).toLocaleLowerCase()
+  return code === '42P01'
+    || code === '42703'
+    || code === 'PGRST200'
+    || code === 'PGRST204'
+    || message.includes('does not exist')
+    || message.includes('could not find')
 }
 
 function addUniqueRecipeIngredient(target: Map<string, string>, value: unknown) {
@@ -513,45 +528,52 @@ function builtInMirrorRecipeRows() {
   ]
 }
 
-async function loadLegacyMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
-  const { data, error } = await supabase
-    .from('recipes')
-    .select('*')
-    .limit(MIRROR_RECIPE_SOURCE_MAX)
+async function loadGroceryMirrorRecipeRows(supabase: SupabaseClient, userId: string) {
+  const recipeScopes = [
+    { column: 'user_id', select: 'id, user_id, name' },
+    { column: 'user_id', select: 'id, user_id, title' },
+    { column: 'user_id', select: 'id, user_id, recipe_name' },
+    { column: 'owner_id', select: 'id, owner_id, name' },
+    { column: 'owner_id', select: 'id, owner_id, title' },
+    { column: 'owner_id', select: 'id, owner_id, recipe_name' },
+  ]
 
-  if (error) {
-    console.error('/api/device/mirror-snapshot legacy recipes query failed', { error })
+  let recipeData: unknown[] = []
+  let lastError: unknown = null
+  for (const scope of recipeScopes) {
+    const { data, error } = await supabase
+      .from('grocery_recipes')
+      .select(scope.select)
+      .eq(scope.column, userId)
+      .limit(MIRROR_RECIPE_SOURCE_MAX)
+
+    if (!error) {
+      recipeData = Array.isArray(data) ? data : []
+      lastError = null
+      break
+    }
+
+    lastError = error
+    if (!isOptionalRecipeSchemaError(error)) break
+  }
+
+  if (lastError) {
+    if (!isOptionalRecipeSchemaError(lastError)) console.error('/api/device/mirror-snapshot grocery_recipes query failed', { error: lastError })
     return []
   }
 
-  return (Array.isArray(data) ? data.map(asRecord) : [])
-    .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
-}
-
-async function loadGroceryMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
-  const { data: recipeData, error: recipeError } = await supabase
-    .from('grocery_recipes')
-    .select('id, device_id, name, locale, is_active, created_at, updated_at')
-    .limit(MIRROR_RECIPE_SOURCE_MAX)
-
-  if (recipeError) {
-    console.error('/api/device/mirror-snapshot grocery_recipes query failed', { error: recipeError })
-    return []
-  }
-
-  const recipes = (Array.isArray(recipeData) ? recipeData.map(asRecord) : [])
-    .filter((row) => recipeAppliesToDevice(row, storageDeviceIds) && recipeIsActive(row))
+  const recipes = recipeData.map(asRecord).filter(recipeIsActive)
   const recipeIds = recipes.map((row) => asString(row.id).trim()).filter(Boolean)
   if (recipeIds.length <= 0) return recipes
 
   const { data: ingredientData, error: ingredientError } = await supabase
     .from('grocery_recipe_ingredients')
-    .select('recipe_id, name, ingredient, item')
+    .select('recipe_id, name')
     .in('recipe_id', recipeIds)
     .limit(MIRROR_RECIPE_SOURCE_MAX * 8)
 
   if (ingredientError) {
-    console.error('/api/device/mirror-snapshot grocery_recipe_ingredients query failed', { error: ingredientError })
+    if (!isOptionalRecipeSchemaError(ingredientError)) console.error('/api/device/mirror-snapshot grocery_recipe_ingredients query failed', { error: ingredientError })
     return recipes
   }
 
@@ -570,13 +592,9 @@ async function loadGroceryMirrorRecipeRows(supabase: SupabaseClient, storageDevi
   }))
 }
 
-async function loadMirrorRecipeRows(supabase: SupabaseClient, storageDeviceIds: string[]) {
-  const [groceryRows, legacyRows] = await Promise.all([
-    loadGroceryMirrorRecipeRows(supabase, storageDeviceIds),
-    loadLegacyMirrorRecipeRows(supabase, storageDeviceIds),
-  ])
-  const combined = [...groceryRows, ...legacyRows]
-  return combined.length > 0 ? combined : builtInMirrorRecipeRows()
+async function loadMirrorRecipeRows(supabase: SupabaseClient, userId: string) {
+  const groceryRows = await loadGroceryMirrorRecipeRows(supabase, userId)
+  return groceryRows.length > 0 ? groceryRows : builtInMirrorRecipeRows()
 }
 
 function parseMirrorMissingList(value: unknown) {
@@ -589,17 +607,41 @@ function parseMirrorMissingList(value: unknown) {
   return []
 }
 
-async function loadMirrorStoredRecipeSuggestions(supabase: SupabaseClient, storageDeviceIds: string[]) {
-  const { data, error } = await supabase
-    .from('grocery_recipe_suggestions')
-    .select('name, missing, score, updated_at, created_at, expires_at')
-    .in('device_id', storageDeviceIds)
-    .order('score', { ascending: false })
-    .order('updated_at', { ascending: false })
-    .limit(MIRROR_STORED_SUGGESTION_MAX)
+async function loadMirrorStoredRecipeSuggestions(supabase: SupabaseClient, userId: string) {
+  const suggestionScopes = [
+    { column: 'user_id', select: 'title, missing, score, updated_at, created_at, expires_at' },
+    { column: 'user_id', select: 'recipe_name, missing, score, updated_at, created_at, expires_at' },
+    { column: 'user_id', select: 'suggestion, missing, score, updated_at, created_at, expires_at' },
+    { column: 'user_id', select: 'name, missing, score, updated_at, created_at, expires_at' },
+    { column: 'owner_id', select: 'title, missing, score, updated_at, created_at, expires_at' },
+    { column: 'owner_id', select: 'recipe_name, missing, score, updated_at, created_at, expires_at' },
+    { column: 'owner_id', select: 'suggestion, missing, score, updated_at, created_at, expires_at' },
+    { column: 'owner_id', select: 'name, missing, score, updated_at, created_at, expires_at' },
+  ]
 
-  if (error) {
-    console.error('/api/device/mirror-snapshot grocery_recipe_suggestions query failed', { error })
+  let data: unknown[] = []
+  let lastError: unknown = null
+  for (const scope of suggestionScopes) {
+    const result = await supabase
+      .from('grocery_recipe_suggestions')
+      .select(scope.select)
+      .eq(scope.column, userId)
+      .order('score', { ascending: false })
+      .order('updated_at', { ascending: false })
+      .limit(MIRROR_STORED_SUGGESTION_MAX)
+
+    if (!result.error) {
+      data = Array.isArray(result.data) ? result.data : []
+      lastError = null
+      break
+    }
+
+    lastError = result.error
+    if (!isOptionalRecipeSchemaError(result.error)) break
+  }
+
+  if (lastError) {
+    if (!isOptionalRecipeSchemaError(lastError)) console.error('/api/device/mirror-snapshot grocery_recipe_suggestions query failed', { error: lastError })
     return []
   }
 
@@ -1754,7 +1796,7 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   }
 }
 
-async function groceriesDetail(supabase: SupabaseClient, deviceId: string, language: string): Promise<Detail> {
+async function groceriesDetail(supabase: SupabaseClient, deviceId: string, userId: string, language: string): Promise<Detail> {
   const { data: device } = await supabase
     .from('devices')
     .select('id')
@@ -1800,8 +1842,8 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, langu
       .gte('checked_at', sinceCheckedIso)
       .order('checked_at', { ascending: false })
       .limit(80),
-    loadMirrorRecipeRows(supabase, storageDeviceIds),
-    loadMirrorStoredRecipeSuggestions(supabase, storageDeviceIds),
+    loadMirrorRecipeRows(supabase, userId),
+    loadMirrorStoredRecipeSuggestions(supabase, userId),
   ])
 
   if (itemsResult.error) throw new Error(itemsResult.error.message)
@@ -1920,7 +1962,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
-        else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, language)
+        else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, authData.user.id, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, deviceId, language)
       } catch (e: unknown) {
         console.error('[mirror-snapshot:slot-detail-failed]', { slot, module: parsed.base, id: parsed.id, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })
