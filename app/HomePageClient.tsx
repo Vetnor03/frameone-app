@@ -648,7 +648,7 @@ async function fetchDeviceOwnerMap(deviceIds: string[]): Promise<Map<string, str
 
     if (!error) {
       for (const row of data || []) {
-        const record = row as Record<string, unknown>
+        const record = row as unknown as Record<string, unknown>
         const deviceId = String(record.device_id ?? '').trim()
         const ownerId = String(record.owner_id ?? record.user_id ?? '').trim()
         if (deviceId && ownerId) out.set(deviceId, ownerId)
@@ -665,7 +665,7 @@ async function fetchDeviceOwnerMap(deviceIds: string[]): Promise<Map<string, str
       .in('device_id', missing)
       .eq('role', 'owner')
     for (const row of data || []) {
-      const record = row as Record<string, unknown>
+      const record = row as unknown as Record<string, unknown>
       const deviceId = String(record.device_id ?? '').trim()
       const ownerId = String(record.user_id ?? '').trim()
       if (deviceId && ownerId) out.set(deviceId, ownerId)
