@@ -78,6 +78,12 @@ const UI = {
 
     myFrames: 'MY FRAMES',
     addFrame: '+ ADD FRAME',
+    editFrames: 'EDIT',
+    doneEditingFrames: 'DONE',
+    deleteFrame: 'DELETE',
+    deleteFrameTitle: 'DELETE FRAME',
+    deleteFrameConfirm: 'This removes the frame from your app. This action cannot be undone.',
+    deleteFrameConfirmButton: 'DELETE FRAME',
     noFramesYet: 'No frames yet',
     loading: 'Loading…',
     addFramePrompt: 'Enter 4-character pair code (example: K7D4)',
@@ -192,6 +198,12 @@ const UI = {
 
     myFrames: 'MINE FRAMES',
     addFrame: '+ LEGG TIL FRAME',
+    editFrames: 'REDIGER',
+    doneEditingFrames: 'FERDIG',
+    deleteFrame: 'SLETT',
+    deleteFrameTitle: 'SLETT FRAME',
+    deleteFrameConfirm: 'Dette fjerner framen fra appen din. Denne handlingen kan ikke angres.',
+    deleteFrameConfirmButton: 'SLETT FRAME',
     noFramesYet: 'Ingen frames ennå',
     loading: 'Laster…',
     addFramePrompt: 'Skriv inn 4-tegns paringskode (eksempel: K7D4)',
@@ -7725,6 +7737,10 @@ function MyFramesSection({
   const [shareCode, setShareCode] = useState('')
   const [shareError, setShareError] = useState<string | null>(null)
   const [copyDone, setCopyDone] = useState(false)
+  const [editingFrames, setEditingFrames] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<MemberRow | null>(null)
+  const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
@@ -7767,6 +7783,41 @@ function MyFramesSection({
     } catch (e: unknown) {
       const message = errorMessage(e)
       alert(message === 'INVALID_PAIR_CODE' ? t.invalidPairCode : message)
+    }
+  }
+
+  async function deleteFrame(frame: MemberRow) {
+    if (deletingDeviceId) return
+
+    try {
+      setDeletingDeviceId(frame.device_id)
+      setDeleteError(null)
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('missing_auth_token')
+
+      const resp = await fetch('/api/frame/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ device_id: frame.device_id }),
+      })
+      const payload = await resp.json().catch(() => null)
+      if (!resp.ok || payload?.ok !== true) throw new Error(payload?.error || 'delete_failed')
+
+      const nextFrames = frames.filter((item) => item.device_id !== frame.device_id)
+      onFramesChanged(nextFrames)
+      if (activeDeviceId === frame.device_id && nextFrames.length > 0) onSelectDevice(nextFrames[0].device_id)
+      if (nextFrames.length === 0) setEditingFrames(false)
+      setDeleteTarget(null)
+    } catch (e: unknown) {
+      setDeleteError(errorMessage(e))
+    } finally {
+      setDeletingDeviceId(null)
     }
   }
 
@@ -7855,6 +7906,21 @@ function MyFramesSection({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => {
+                setEditingFrames((value) => !value)
+                setDeleteError(null)
+              }}
+              disabled={frames.length === 0}
+              className={`px-3 py-1 border rounded-lg text-xs tracking-widest ${
+                frames.length > 0
+                  ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
+                  : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
+              }`}
+            >
+              {editingFrames ? t.doneEditingFrames : t.editFrames}
+            </button>
+
+            <button
               onClick={addFrame}
               className="px-3 py-1 border border-[color:var(--bd-20)] rounded-lg text-xs tracking-widest text-[color:var(--fg-70)]"
             >
@@ -7878,6 +7944,7 @@ function MyFramesSection({
         <div className="mt-3 space-y-2">
           {loading && <div className="text-[color:var(--fg-50)] text-sm">{t.loading}</div>}
           {!loading && frames.length === 0 && <div className="text-[color:var(--fg-40)] text-sm">{t.noFramesYet}</div>}
+          {deleteError && <div className="text-[color:var(--danger)] text-sm">{deleteError}</div>}
 
           {frames.map((f) => {
             const selected = f.device_id === activeDeviceId
@@ -7885,33 +7952,45 @@ function MyFramesSection({
             const hasBattery = batteryPercent !== null
             const isCharging = f.is_usb_present === true || f.is_charging === true
             return (
-              <button
+              <div
                 key={f.device_id}
-                onClick={() => onSelectDevice(f.device_id)}
                 className={`w-full flex items-center justify-between px-3 py-3 rounded-xl border text-left ${
                   selected ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
                 }`}
               >
-                <div className="min-w-0">
+                <button onClick={() => onSelectDevice(f.device_id)} className="min-w-0 flex-1 text-left">
                   <div className="tracking-widest text-sm">{f.device_id}</div>
                   {!!f.current_version && (
                     <div className="text-xs opacity-60 mt-1 normal-case tracking-normal">
                       {f.current_version}
                     </div>
                   )}
-                </div>
+                </button>
 
-                <div
+                {!editingFrames && <div
                   className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-normal"
                   aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}` : `${batteryLabel} unavailable`}
                 >
                   {isCharging && <ChargingBoltIcon />}
                   <BatteryIcon percent={batteryPercent ?? 0} />
                   <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
-                </div>
+                </div>}
 
-                <div className="shrink-0 text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>
-              </button>
+                {!editingFrames && <div className="shrink-0 text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>}
+
+                {editingFrames && (
+                  <button
+                    onClick={() => {
+                      setDeleteTarget(f)
+                      setDeleteError(null)
+                    }}
+                    disabled={deletingDeviceId === f.device_id}
+                    className="shrink-0 rounded-lg border border-[color:var(--danger-bd)] px-3 py-1 text-xs tracking-widest text-[color:var(--danger)] disabled:opacity-50"
+                  >
+                    {deletingDeviceId === f.device_id ? t.deleting : t.deleteFrame}
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
@@ -7933,7 +8012,77 @@ function MyFramesSection({
           onCopy={copyCode}
         />
       )}
+
+      {deleteTarget && (
+        <DeleteFrameConfirmSheet
+          language={language}
+          frame={deleteTarget}
+          deleting={deletingDeviceId === deleteTarget.device_id}
+          error={deleteError}
+          onClose={() => {
+            if (deletingDeviceId) return
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }}
+          onConfirm={() => deleteFrame(deleteTarget)}
+        />
+      )}
     </>
+  )
+}
+
+function DeleteFrameConfirmSheet({
+  language,
+  frame,
+  deleting,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  language: AppLanguage
+  frame: MemberRow
+  deleting: boolean
+  error: string | null
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  const t = tx(language)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+      <div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--danger-bd)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5">
+        <div className="flex items-center justify-between">
+          <div className="tracking-widest text-sm text-[color:var(--danger)]">{t.deleteFrameTitle}</div>
+          <button onClick={onClose} disabled={deleting} className="text-[color:var(--fg-60)] text-xl disabled:opacity-40">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
+          <div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">Frame</div>
+          <div className="mt-2 break-all text-lg tracking-widest text-[color:var(--fg-95)]">{frame.device_id}</div>
+        </div>
+
+        <p className="mt-4 text-sm leading-6 text-[color:var(--fg-70)]">{t.deleteFrameConfirm}</p>
+        {error && <div className="mt-4 rounded-2xl border border-[color:var(--danger-bd)] px-4 py-3 text-sm text-[color:var(--danger)]">{error}</div>}
+
+        <button
+          onClick={onConfirm}
+          disabled={deleting}
+          className="mt-6 h-12 w-full rounded-2xl border border-[color:var(--danger-bd)] bg-[color:var(--danger-bg)] text-sm tracking-widest text-[color:var(--danger)] disabled:opacity-50"
+        >
+          {deleting ? t.deleting : t.deleteFrameConfirmButton}
+        </button>
+
+        <button
+          onClick={onClose}
+          disabled={deleting}
+          className="mt-3 h-12 w-full rounded-2xl border border-[color:var(--bd-15)] text-sm tracking-widest text-[color:var(--fg-60)] disabled:opacity-40"
+        >
+          {t.cancel}
+        </button>
+      </div>
+    </div>
   )
 }
 
