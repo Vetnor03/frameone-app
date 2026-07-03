@@ -204,6 +204,34 @@ function diffDaysFromYmd(fromYmd: string, toYmd: string) {
 
 
 async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: string) {
+  for (const select of ['id, device_id, owner_id', 'id, device_id, user_id']) {
+    const { data: device, error: deviceError } = await supabase
+      .from('devices')
+      .select(select)
+      .eq('device_id', deviceId)
+      .maybeSingle()
+
+    if (deviceError) continue
+
+    const row = (device ?? {}) as { owner_id?: unknown; user_id?: unknown }
+    const ownerId = String(row.owner_id || row.user_id || '').trim()
+    if (!ownerId) break
+
+    for (const column of ['owner_id', 'user_id']) {
+      const { data: ownedDevices, error: ownedError } = await supabase
+        .from('devices')
+        .select('device_id')
+        .eq(column, ownerId)
+
+      if (!ownedError) {
+        const ownedDeviceIds = (Array.isArray(ownedDevices) ? ownedDevices : [])
+          .map((owned: { device_id?: unknown }) => String(owned.device_id || '').trim())
+          .filter(Boolean)
+        return Array.from(new Set([deviceId, ...ownedDeviceIds]))
+      }
+    }
+  }
+
   const { data: members, error: membersError } = await supabase
     .from('device_members')
     .select('user_id')
