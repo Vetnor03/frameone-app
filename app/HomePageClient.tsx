@@ -444,6 +444,7 @@ type SettingsJson = {
 type MemberRow = {
   device_id: string
   role: string | null
+  owner_id?: string | null
   current_version?: string | null
   battery_percent?: number | null
   battery_voltage?: number | null
@@ -451,6 +452,11 @@ type MemberRow = {
   is_usb_present?: boolean | null
   last_seen_at?: string | null
   last_render_at?: string | null
+}
+
+type DeviceScope = {
+  ownerId: string
+  deviceIds: string[]
 }
 
 type DeviceStatusMeta = {
@@ -629,6 +635,85 @@ async function fetchDeviceStatusMap(deviceIds: string[]): Promise<Map<string, De
   return directMap
 }
 
+
+async function fetchDeviceOwnerMap(deviceIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (deviceIds.length === 0) return out
+
+  for (const select of ['device_id, owner_id', 'device_id, user_id']) {
+    const { data, error } = await supabase
+      .from('devices')
+      .select(select)
+      .in('device_id', deviceIds)
+
+    if (!error) {
+      for (const row of data || []) {
+        const record = row as Record<string, unknown>
+        const deviceId = String(record.device_id ?? '').trim()
+        const ownerId = String(record.owner_id ?? record.user_id ?? '').trim()
+        if (deviceId && ownerId) out.set(deviceId, ownerId)
+      }
+      break
+    }
+  }
+
+  const missing = deviceIds.filter((id) => !out.has(id))
+  if (missing.length > 0) {
+    const { data } = await supabase
+      .from('device_members')
+      .select('device_id, user_id')
+      .in('device_id', missing)
+      .eq('role', 'owner')
+    for (const row of data || []) {
+      const record = row as Record<string, unknown>
+      const deviceId = String(record.device_id ?? '').trim()
+      const ownerId = String(record.user_id ?? '').trim()
+      if (deviceId && ownerId) out.set(deviceId, ownerId)
+    }
+  }
+
+  return out
+}
+
+async function resolveDeviceScope(deviceId: string | null, fallbackUserId: string | null, frames: MemberRow[]): Promise<DeviceScope> {
+  if (!deviceId) return { ownerId: fallbackUserId || '', deviceIds: [] }
+
+  const frame = frames.find((item) => item.device_id === deviceId) ?? null
+  let ownerId = String(frame?.owner_id || '').trim()
+
+  if (!ownerId) {
+    const ownerMap = await fetchDeviceOwnerMap([deviceId])
+    ownerId = ownerMap.get(deviceId) ?? ''
+  }
+
+  if (!ownerId) ownerId = fallbackUserId || ''
+
+  const frameOwnedIds = frames
+    .filter((item) => String(item.owner_id || '').trim() === ownerId)
+    .map((item) => item.device_id)
+    .filter(Boolean)
+
+  let ownedDeviceIds = frameOwnedIds
+  if (ownerId) {
+    for (const column of ['owner_id', 'user_id']) {
+      const { data, error } = await supabase
+        .from('devices')
+        .select('device_id')
+        .eq(column, ownerId)
+
+      if (!error) {
+        ownedDeviceIds = (data || []).map((row: any) => String(row.device_id || '').trim()).filter(Boolean)
+        break
+      }
+    }
+  }
+
+  return {
+    ownerId,
+    deviceIds: Array.from(new Set([deviceId, ...ownedDeviceIds, ...frameOwnedIds].filter(Boolean))),
+  }
+}
+
 async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
   const { data: members, error } = await supabase
     .from('device_members')
@@ -641,10 +726,12 @@ async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
   const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
   const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
   const statusMap = await fetchDeviceStatusMap(deviceIds)
+  const ownerMap = await fetchDeviceOwnerMap(deviceIds)
 
   return memberRows.map((m) => ({
     device_id: m.device_id,
     role: m.role,
+    owner_id: ownerMap.get(m.device_id) ?? (m.role === 'owner' ? userId : null),
     current_version: statusMap.get(m.device_id)?.current_version ?? null,
     battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
     battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
@@ -1066,6 +1153,7 @@ export default function HomePage() {
 
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
   const [frames, setFrames] = useState<MemberRow[]>([])
+  const [activeDeviceScope, setActiveDeviceScope] = useState<DeviceScope>({ ownerId: '', deviceIds: [] })
   const [authReady, setAuthReady] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [framesLoaded, setFramesLoaded] = useState(false)
@@ -1661,6 +1749,8 @@ export default function HomePage() {
   }
 
   async function loadDeviceSettings(deviceId: string) {
+    const scope = await resolveDeviceScope(deviceId, userId, frames)
+    setActiveDeviceScope(scope)
     const { data, error } = await supabase
       .from('device_settings')
       .select('settings_json, updated_at')
@@ -1696,7 +1786,7 @@ export default function HomePage() {
         ? (json.modules as Record<string, any>)
         : ({} as Record<string, any>)
 
-    const reusableModules = await loadReusableUserModules(frames.map((frame) => frame.device_id), deviceId).catch(() => ({}))
+    const reusableModules = await loadReusableUserModules(scope.deviceIds, deviceId).catch(() => ({}))
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
       ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
@@ -2297,6 +2387,7 @@ async function handleSelectTab(k: TabKey) {
                       setModulesJson={setModulesJson}
                       markDirty={markDirty}
                       activeDeviceId={activeDeviceId}
+                      activeDeviceScope={activeDeviceScope}
                     />
                   )}
                 </div>
@@ -8654,6 +8745,7 @@ function ModuleSettingsTab({
   setModulesJson,
   markDirty,
   activeDeviceId,
+  activeDeviceScope,
 }: {
   language: AppLanguage
   module: ModuleKey
@@ -8663,6 +8755,7 @@ function ModuleSettingsTab({
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
   activeDeviceId: string | null
+  activeDeviceScope: DeviceScope
 }) {
   if (module === 'surf') {
     return (
@@ -8673,6 +8766,7 @@ function ModuleSettingsTab({
         modulesJson={modulesJson}
         setModulesJson={setModulesJson}
         markDirty={markDirty}
+        activeDeviceScope={activeDeviceScope}
       />
     )
   }
@@ -8691,7 +8785,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'reminders') {
-    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+    return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} activeDeviceScope={activeDeviceScope} />
   }
 
   if (module === 'countdown') {
@@ -8699,6 +8793,7 @@ function ModuleSettingsTab({
       <CountdownModuleSettingsTab
         language={language}
         activeDeviceId={activeDeviceId}
+        activeDeviceScope={activeDeviceScope}
       />
     )
   }
@@ -8730,7 +8825,7 @@ function ModuleSettingsTab({
   }
 
   if (module === 'groceries') {
-    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+    return <GroceriesModuleSettingsTab language={language} activeDeviceId={activeDeviceId} activeDeviceScope={activeDeviceScope} />
   }
 
   return (
@@ -8751,9 +8846,11 @@ type CountdownItem = {
 function CountdownModuleSettingsTab({
   language,
   activeDeviceId,
+  activeDeviceScope,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  activeDeviceScope: DeviceScope
 }) {
   const [items, setItems] = useState<CountdownItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -8778,7 +8875,7 @@ function CountdownModuleSettingsTab({
       const { data, error } = await supabase
         .from('countdown_events')
         .select('id, title, target_date, pinned')
-        .eq('device_id', activeDeviceId)
+        .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
         .order('target_date', { ascending: true })
         .order('title', { ascending: true })
 
@@ -8835,7 +8932,7 @@ function CountdownModuleSettingsTab({
 
   useEffect(() => {
     loadItems()
-  }, [activeDeviceId])
+  }, [activeDeviceId, activeDeviceScope.deviceIds])
 
   function updateFadeState() {
     const el = listRef.current
@@ -10092,9 +10189,11 @@ function groceryUndoHint(language: AppLanguage, checkedAt: string | null, nowMs:
 function GroceriesModuleSettingsTab({
   language,
   activeDeviceId,
+  activeDeviceScope,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  activeDeviceScope: DeviceScope
 }) {
   const t = tx(language)
   const [items, setItems] = useState<GroceryItem[]>([])
@@ -10226,7 +10325,7 @@ function GroceriesModuleSettingsTab({
       const { error: cleanupError } = await supabase
         .from('grocery_items')
         .delete()
-        .eq('device_id', activeDeviceId)
+        .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
         .eq('is_checked', true)
         .lte('checked_at', cleanupCutoffIso)
 
@@ -10237,7 +10336,7 @@ function GroceriesModuleSettingsTab({
       const { data, error } = await supabase
         .from('grocery_items')
         .select('id, name, quantity, category, is_checked, checked_at, updated_at')
-        .eq('device_id', activeDeviceId)
+        .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
         .order('updated_at', { ascending: false })
 
       if (error) {
@@ -10263,7 +10362,7 @@ function GroceriesModuleSettingsTab({
     const { data, error } = await supabase
       .from('grocery_item_history')
       .select('name, usage_count, last_used_at, category')
-      .eq('device_id', activeDeviceId)
+      .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
       .order('usage_count', { ascending: false })
       .order('last_used_at', { ascending: false })
       .limit(50)
@@ -10285,7 +10384,7 @@ function GroceriesModuleSettingsTab({
   useEffect(() => {
     loadGroceries()
     loadHistory()
-  }, [activeDeviceId])
+  }, [activeDeviceId, activeDeviceScope.deviceIds])
 
   useEffect(() => {
     if (!activeDeviceId) return
@@ -10526,8 +10625,8 @@ function GroceriesModuleSettingsTab({
     if (!activeDeviceId) return defaultDinnerPlanDays()
     const { data, error } = await supabase
       .from('dinner_plan_days')
-      .select('date,title,note')
-      .eq('device_id', activeDeviceId)
+      .select('device_id,date,title,note')
+      .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
       .in('date', DINNER_PLAN_DAY_ORDER.map((day) => isoDateForDinnerDay(day, weekOffset)))
     if (error) return defaultDinnerPlanDays()
     const byDay = new Map<DinnerPlanDay['day'], { title: string; items: DinnerPlanDay['items'] }>()
@@ -10541,7 +10640,7 @@ function GroceriesModuleSettingsTab({
     }
     const loadedDays = DINNER_PLAN_DAY_ORDER.map((day) => ({ day, title: byDay.get(day)?.title ?? '', items: byDay.get(day)?.items ?? [] }))
     return stripExpiredDinnerPlanItems(sanitizeDinnerPlanDays(loadedDays))
-  }, [activeDeviceId])
+  }, [activeDeviceId, activeDeviceScope.deviceIds])
 
   const loadDinnerPlan = useCallback(async (weekOffset: DinnerPlanWeekOffset = dinnerPlanWeekOffset): Promise<DinnerPlanDay[]> => {
     const normalizedDays = await fetchDinnerPlanDays(weekOffset)
@@ -11905,9 +12004,11 @@ function GrocerySuggestionSwipeRow({
 function RemindersModuleSettingsTab({
   language,
   activeDeviceId,
+  activeDeviceScope,
 }: {
   language: AppLanguage
   activeDeviceId: string | null
+  activeDeviceScope: DeviceScope
 }) {
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
@@ -11941,7 +12042,7 @@ function RemindersModuleSettingsTab({
       const { data, error } = await supabase
         .from('reminders')
         .select('id, title, due_date, due_time, tag, repeat_type, custom_repeat_days, is_done')
-        .eq('device_id', activeDeviceId)
+        .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
         .eq('is_done', false)
         .order('due_date', { ascending: true })
         .order('due_time', { ascending: true, nullsFirst: false })
@@ -11956,7 +12057,7 @@ function RemindersModuleSettingsTab({
       const { data: completionsData, error: completionsError } = await supabase
         .from('reminder_completions')
         .select('reminder_id, occurrence_date')
-        .eq('device_id', activeDeviceId)
+        .in('device_id', activeDeviceScope.deviceIds.length > 0 ? activeDeviceScope.deviceIds : [activeDeviceId])
 
       if (completionsError) {
         alert(completionsError.message)
@@ -11995,7 +12096,7 @@ const items: ReminderUiItem[] = (data || [])
 
   useEffect(() => {
     loadReminders()
-  }, [activeDeviceId])
+  }, [activeDeviceId, activeDeviceScope.deviceIds])
 
   useEffect(() => {
     return () => {
@@ -13160,6 +13261,7 @@ function SurfModuleSettingsTab({
   modulesJson,
   setModulesJson,
   markDirty,
+  activeDeviceScope,
 }: {
   language: AppLanguage
   layoutKey: LayoutKey
@@ -13167,6 +13269,7 @@ function SurfModuleSettingsTab({
   modulesJson: Record<string, any>
   setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
   markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+  activeDeviceScope: DeviceScope
 }) {
   const [surfView, setSurfView] = useState<'main' | 'log'>('main')
   const [, setSurfViewTitle] = useState('SURF')
@@ -13371,6 +13474,7 @@ function SurfModuleSettingsTab({
               <SurfExperienceCard
                 language={language}
                 refreshKey={experienceListVersion}
+                ownerId={activeDeviceScope.ownerId}
                 onOpenLog={() => {
                   setEditingExperienceId(null)
                   setSurfView('log')
@@ -14006,12 +14110,14 @@ function SurfSpotRow({
 function SurfExperienceCard({
   language,
   refreshKey,
+  ownerId,
   onOpenLog,
   onEditExperience,
   onExpandedLatest,
 }: {
   language: AppLanguage
   refreshKey: number
+  ownerId: string
   onOpenLog: () => void
   onEditExperience: (experienceId: string) => void
   onExpandedLatest: () => void
@@ -14027,7 +14133,7 @@ function SurfExperienceCard({
       setLoading(true)
 
       const { data: sessionData } = await supabase.auth.getSession()
-      const userId = sessionData.session?.user?.id
+      const userId = ownerId || sessionData.session?.user?.id
       if (!userId) {
         setItems([])
         return
@@ -14052,7 +14158,7 @@ function SurfExperienceCard({
 
   useEffect(() => {
     loadRecent()
-  }, [refreshKey])
+  }, [ownerId, refreshKey])
 
   useEffect(() => {
     if (!latestOpen) {
