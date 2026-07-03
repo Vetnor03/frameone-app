@@ -655,6 +655,33 @@ async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
   }))
 }
 
+
+async function fetchDeviceIdsSharedWithActiveFrameUsers(activeDeviceId: string): Promise<string[]> {
+  const { data: activeMembers, error: activeMembersError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', activeDeviceId)
+
+  if (activeMembersError) throw activeMembersError
+
+  const userIds = Array.from(new Set((activeMembers || []).map((row: any) => String(row.user_id ?? '')).filter(Boolean)))
+  if (userIds.length === 0) return [activeDeviceId]
+
+  const { data: sharedMembers, error: sharedMembersError } = await supabase
+    .from('device_members')
+    .select('device_id')
+    .in('user_id', userIds)
+
+  if (sharedMembersError) throw sharedMembersError
+
+  const sharedDeviceIds = Array.from(new Set([
+    activeDeviceId,
+    ...(sharedMembers || []).map((row: any) => String(row.device_id ?? '')).filter(Boolean),
+  ]))
+
+  return sharedDeviceIds
+}
+
 async function claimPairCodeAndLoadFrames(code: string, currentFrames: MemberRow[]) {
   const cleaned = code.trim().toUpperCase()
   const existingDeviceIds = new Set(currentFrames.map((f) => f.device_id))
@@ -8704,6 +8731,7 @@ function ModuleSettingsTab({
 
 type CountdownItem = {
   id: string
+  sourceDeviceId: string
   title: string
   date: string
   pinned: boolean
@@ -8738,8 +8766,8 @@ function CountdownModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('countdown_events')
-        .select('id, title, target_date, pinned')
-        .eq('device_id', activeDeviceId)
+        .select('id, device_id, title, target_date, pinned')
+        .in('device_id', await fetchDeviceIdsSharedWithActiveFrameUsers(activeDeviceId))
         .order('target_date', { ascending: true })
         .order('title', { ascending: true })
 
@@ -8752,6 +8780,7 @@ function CountdownModuleSettingsTab({
       const parsed: CountdownItem[] = (data || [])
         .map((x: any) => ({
           id: String(x.id),
+          sourceDeviceId: String(x.device_id ?? activeDeviceId),
           title: String(x.title ?? '').trim(),
           date: String(x.target_date ?? '').trim(),
           pinned: !!x.pinned,
@@ -8782,7 +8811,7 @@ function CountdownModuleSettingsTab({
         updated_at: new Date().toISOString(),
       })
       .eq('id', item.id)
-      .eq('device_id', activeDeviceId)
+      .eq('device_id', item.sourceDeviceId)
 
     if (error) {
       setItems((prev) =>
@@ -8927,6 +8956,7 @@ function CountdownModuleSettingsTab({
               onClick={() => {
                 setEditingItem({
                   id: '',
+                  sourceDeviceId: activeDeviceId,
                   title: '',
                   date: toLocalYmd(new Date()),
                   pinned: false,
@@ -9042,7 +9072,7 @@ function CountdownDraftSheet({
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingItem.id)
-          .eq('device_id', activeDeviceId)
+          .eq('device_id', editingItem.sourceDeviceId)
 
         if (error) throw error
       } else {
@@ -9082,7 +9112,7 @@ function CountdownDraftSheet({
         .from('countdown_events')
         .delete()
         .eq('id', editingItem.id)
-        .eq('device_id', activeDeviceId)
+        .eq('device_id', editingItem.sourceDeviceId)
 
       if (error) throw error
 
