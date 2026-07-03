@@ -459,11 +459,11 @@ function todayYmdInTimeZone(timeZone: string) {
   return `${year}-${pad2(month)}-${pad2(day)}`
 }
 
-async function countdownDetail(supabase: SupabaseClient, deviceId: string, language: string): Promise<Detail> {
+async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: string[], language: string): Promise<Detail> {
   const { data, error } = await supabase
     .from('countdown_events')
     .select('id, title, target_date, pinned')
-    .eq('device_id', deviceId)
+    .in('device_id', storageDeviceIds)
     .order('target_date', { ascending: true })
     .order('title', { ascending: true })
 
@@ -512,6 +512,93 @@ async function countdownDetail(supabase: SupabaseClient, deviceId: string, langu
         targetDate: item.targetDate,
         daysLeft: item.daysLeft,
       })),
+  }
+}
+
+
+type MirrorDeviceScope = {
+  ownerId: string
+  deviceIds: string[]
+  storageDeviceIds: string[]
+}
+
+function uniqueNonEmpty(values: unknown[]) {
+  return Array.from(new Set(values.map((value) => asString(value).trim()).filter(Boolean)))
+}
+
+async function resolveMirrorDeviceScope(supabase: SupabaseClient, deviceId: string, fallbackUserId: string): Promise<MirrorDeviceScope> {
+  let currentDevice: UnknownRecord | null = null
+
+  for (const select of ['id, device_id, owner_id', 'id, device_id, user_id', 'id, device_id']) {
+    const { data, error } = await supabase
+      .from('devices')
+      .select(select)
+      .eq('device_id', deviceId)
+      .maybeSingle()
+
+    if (!error) {
+      currentDevice = asRecord(data)
+      break
+    }
+  }
+
+  const ownerIdFromDevice = asString(currentDevice?.owner_id || currentDevice?.user_id).trim()
+  let ownerId = ownerIdFromDevice
+
+  if (!ownerId) {
+    const { data: ownerMember } = await supabase
+      .from('device_members')
+      .select('user_id')
+      .eq('device_id', deviceId)
+      .eq('role', 'owner')
+      .maybeSingle()
+    ownerId = asString((ownerMember as UnknownRecord | null)?.user_id).trim()
+  }
+
+  if (!ownerId) ownerId = fallbackUserId
+
+  let ownedDeviceRows: UnknownRecord[] = []
+  if (ownerId) {
+    for (const column of ['owner_id', 'user_id']) {
+      const { data, error } = await supabase
+        .from('devices')
+        .select('id, device_id')
+        .eq(column, ownerId)
+
+      if (!error) {
+        ownedDeviceRows = Array.isArray(data) ? data.map(asRecord) : []
+        break
+      }
+    }
+  }
+
+  if (ownedDeviceRows.length <= 0 && ownerId) {
+    const { data: memberRows } = await supabase
+      .from('device_members')
+      .select('device_id')
+      .eq('user_id', ownerId)
+    const memberDeviceIds = uniqueNonEmpty(Array.isArray(memberRows) ? memberRows.map((row: { device_id?: unknown }) => row.device_id) : [])
+    if (memberDeviceIds.length > 0) {
+      const { data: devicesByMember } = await supabase
+        .from('devices')
+        .select('id, device_id')
+        .in('device_id', memberDeviceIds)
+      ownedDeviceRows = Array.isArray(devicesByMember) ? devicesByMember.map(asRecord) : memberDeviceIds.map((id) => ({ device_id: id }))
+    }
+  }
+
+  const deviceIds = uniqueNonEmpty([deviceId, ...ownedDeviceRows.map((row) => row.device_id)])
+  const storageDeviceIds = uniqueNonEmpty([
+    deviceId,
+    currentDevice?.id,
+    currentDevice?.device_id,
+    ...ownedDeviceRows.flatMap((row) => [row.device_id, row.id]),
+  ])
+
+  return {
+    ownerId,
+    deviceIds: deviceIds.length > 0 ? deviceIds : [deviceId],
+    storageDeviceIds: storageDeviceIds.length > 0 ? storageDeviceIds : [deviceId],
   }
 }
 
@@ -1796,15 +1883,7 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   }
 }
 
-async function groceriesDetail(supabase: SupabaseClient, deviceId: string, userId: string, language: string): Promise<Detail> {
-  const { data: device } = await supabase
-    .from('devices')
-    .select('id')
-    .eq('device_id', deviceId)
-    .maybeSingle()
-
-  const appStorageDeviceId = String((device as Record<string, unknown> | null)?.id ?? '').trim()
-  const storageDeviceIds = Array.from(new Set([appStorageDeviceId, deviceId].filter(Boolean)))
+async function groceriesDetail(supabase: SupabaseClient, storageDeviceIds: string[], ownerId: string, language: string): Promise<Detail> {
 
   const todayIso = isoDateOnly(new Date())
 
@@ -1842,8 +1921,8 @@ async function groceriesDetail(supabase: SupabaseClient, deviceId: string, userI
       .gte('checked_at', sinceCheckedIso)
       .order('checked_at', { ascending: false })
       .limit(80),
-    loadMirrorRecipeRows(supabase, userId),
-    loadMirrorStoredRecipeSuggestions(supabase, userId),
+    loadMirrorRecipeRows(supabase, ownerId),
+    loadMirrorStoredRecipeSuggestions(supabase, ownerId),
   ])
 
   if (itemsResult.error) throw new Error(itemsResult.error.message)
@@ -1939,6 +2018,8 @@ export async function GET(req: Request) {
     if (!deviceRow) return NextResponse.json({ error: 'Device record not found' }, { status: 404 })
     if (statusError) return NextResponse.json({ error: statusError.message }, { status: 500 })
 
+    const mirrorScope = await resolveMirrorDeviceScope(supabase, deviceId, authData.user.id)
+
     const origin = appOrigin(req)
     const frameConfig = asRecord(await buildFrameConfigPayload(supabase, deviceId))
     const settings = asRecord(frameConfig.settings_json)
@@ -1958,12 +2039,12 @@ export async function GET(req: Request) {
       try {
         if (parsed.base === 'date') detailsBySlot[String(slot)] = { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
         else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language, asString(frameConfig.updated_at) || null)
-        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, deviceToken || bearer, language, asRecord(modules.surf_settings), asString(frameConfig.updated_at) || null)
+        else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, bearer, language, asRecord(modules.surf_settings), asString(frameConfig.updated_at) || null)
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
-        else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, deviceId, authData.user.id, language)
-        else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, deviceId, language)
+        else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, mirrorScope.storageDeviceIds, mirrorScope.ownerId, language)
+        else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, mirrorScope.storageDeviceIds, language)
       } catch (e: unknown) {
         console.error('[mirror-snapshot:slot-detail-failed]', { slot, module: parsed.base, id: parsed.id, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })
         detailsBySlot[String(slot)] = {
