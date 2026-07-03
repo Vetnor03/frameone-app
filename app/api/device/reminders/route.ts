@@ -1,7 +1,7 @@
 // app/api/device/reminders/route.ts
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
 import { buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
@@ -203,7 +203,7 @@ function diffDaysFromYmd(fromYmd: string, toYmd: string) {
 }
 
 
-async function sharedDeviceIdsForFrame(supabase: ReturnType<typeof createClient>, deviceId: string) {
+async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: string) {
   const { data: members, error: membersError } = await supabase
     .from('device_members')
     .select('user_id')
