@@ -44,11 +44,12 @@ This document is intentionally based on what is verifiable from `frame/src/` cod
 
 - Display typedef: `GxEPD2_BW<GxEPD2_750_T7, GxEPD2_750_T7::HEIGHT>`.
 - Display object is created once globally in `DisplayCore.cpp`.
-- Visible frame area constants:
-  - `FRAME_X = 58`
-  - `FRAME_Y = 39`
-  - `FRAME_W = 680`
-  - `FRAME_H = 436`
+- Logical safe/visible viewport constants (calibrated matte opening on the unchanged 800x480 panel):
+  - `VIEWPORT_X = 9` / `FRAME_X = 9`
+  - `VIEWPORT_Y = 22` / `FRAME_Y = 22`
+  - `VIEWPORT_W = 785` / `FRAME_W = 785`
+  - `VIEWPORT_H = 458` / `FRAME_H = 458`
+  - Inclusive bounds: `VIEW_LEFT = 9`, `VIEW_TOP = 22`, `VIEW_RIGHT = 793`, `VIEW_BOTTOM = 479`
 
 ### Pin mapping used in code
 
