@@ -112,6 +112,89 @@ function cloneObject(v: unknown): UnknownRecord {
   return v && typeof v === 'object' && !Array.isArray(v) ? { ...(v as UnknownRecord) } : {}
 }
 
+const REUSABLE_USER_MODULE_KEYS = ['reminders', 'countdown', 'groceries', 'surf'] as const
+
+function mergeReusableUserModules(current: UnknownRecord, reusable: UnknownRecord): UnknownRecord {
+  const next: UnknownRecord = { ...current }
+
+  for (const key of REUSABLE_USER_MODULE_KEYS) {
+    if (next[key] == null && reusable[key] != null) next[key] = reusable[key]
+  }
+
+  if (next.surf_settings == null && reusable.surf_settings != null) {
+    next.surf_settings = reusable.surf_settings
+  }
+  if (next.surf_forecast == null && reusable.surf_forecast != null) {
+    next.surf_forecast = reusable.surf_forecast
+  }
+
+  return next
+}
+
+async function loadReusableUserModules(supabase: SupabaseClient, device_id: string): Promise<UnknownRecord> {
+  const { data: targetMembers, error: targetMembersError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', device_id)
+
+  if (targetMembersError) throw new Error(targetMembersError.message)
+
+  const userIds = Array.from(
+    new Set(
+      (targetMembers ?? [])
+        .map((row: { user_id?: unknown }) => asString(row.user_id, '').trim())
+        .filter(Boolean)
+    )
+  )
+
+  if (userIds.length === 0) return {}
+
+  const { data: sharedMembers, error: sharedMembersError } = await supabase
+    .from('device_members')
+    .select('device_id')
+    .in('user_id', userIds)
+    .neq('device_id', device_id)
+
+  if (sharedMembersError) throw new Error(sharedMembersError.message)
+
+  const sourceDeviceIds = Array.from(
+    new Set(
+      (sharedMembers ?? [])
+        .map((row: { device_id?: unknown }) => asString(row.device_id, '').trim())
+        .filter(Boolean)
+    )
+  )
+
+  if (sourceDeviceIds.length === 0) return {}
+
+  const { data: settingsRows, error: settingsError } = await supabase
+    .from('device_settings')
+    .select('settings_json, updated_at')
+    .in('device_id', sourceDeviceIds)
+    .order('updated_at', { ascending: false })
+
+  if (settingsError) throw new Error(settingsError.message)
+
+  const reusable: UnknownRecord = {}
+  for (const row of settingsRows ?? []) {
+    const settings = cloneObject((row as { settings_json?: unknown }).settings_json)
+    const modules = cloneObject(settings.modules)
+
+    for (const key of REUSABLE_USER_MODULE_KEYS) {
+      if (reusable[key] == null && modules[key] != null) reusable[key] = modules[key]
+    }
+
+    if (reusable.surf_settings == null && modules.surf_settings != null) {
+      reusable.surf_settings = modules.surf_settings
+    }
+    if (reusable.surf_forecast == null && modules.surf_forecast != null) {
+      reusable.surf_forecast = modules.surf_forecast
+    }
+  }
+
+  return reusable
+}
+
 
 
 
@@ -144,7 +227,7 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
         modules: {},
       }
 
-    const sourceModules: UnknownRecord =
+    const ownModules: UnknownRecord =
       settings_json.modules && typeof settings_json.modules === 'object' && !Array.isArray(settings_json.modules)
         ? (settings_json.modules as UnknownRecord)
         : {}
@@ -152,6 +235,8 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
     // Read cells first and keep them unchanged for firmware layout parsing.
     const cells = Array.isArray(settings_json.cells) ? settings_json.cells : []
     const active = activeModulesFromCells(cells)
+    const reusableModules = await loadReusableUserModules(supabase, device_id)
+    const sourceModules = mergeReusableUserModules(ownModules, reusableModules)
     const responseModules: UnknownRecord = {}
 
     // -------------------------------
