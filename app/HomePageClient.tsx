@@ -7900,20 +7900,24 @@ function MyFramesSection({
 
   return (
     <>
-      <div className="border border-[color:var(--bd-10)] rounded-2xl p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{t.myFrames}</div>
+      <div className="rounded-[28px] border border-[color:var(--bd-15)] px-4 py-5 sm:px-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="whitespace-pre-line text-lg uppercase tracking-[0.28em] text-[color:var(--fg-80)]">
+            {t.myFrames.replace(' ', '\n')}
+          </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
             <button
               onClick={() => {
                 setEditingFrames((value) => !value)
                 setDeleteError(null)
               }}
               disabled={frames.length === 0}
-              className={`px-3 py-1 border rounded-lg text-xs tracking-widest ${
+              className={`min-h-12 rounded-2xl border px-3 text-xs uppercase tracking-[0.24em] transition ${
                 frames.length > 0
-                  ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
+                  ? editingFrames
+                    ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                    : 'border-[color:var(--bd-20)] text-[color:var(--fg-70)] hover:border-[#2aa3ff] hover:text-[#2aa3ff]'
                   : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
               }`}
             >
@@ -7922,26 +7926,28 @@ function MyFramesSection({
 
             <button
               onClick={addFrame}
-              className="px-3 py-1 border border-[color:var(--bd-20)] rounded-lg text-xs tracking-widest text-[color:var(--fg-70)]"
+              className="min-h-12 rounded-2xl border border-[color:var(--bd-20)] px-3 text-xs uppercase tracking-[0.24em] text-[color:var(--fg-70)] transition hover:border-[#2aa3ff] hover:text-[#2aa3ff]"
             >
-              {t.addFrame}
+              <span className="block leading-5">{language === 'no' ? '+ LEGG TIL' : '+ ADD'}</span>
+              <span className="block leading-5">FRAME</span>
             </button>
 
             <button
               onClick={openShare}
               disabled={!activeDeviceId}
-              className={`px-3 py-1 border rounded-lg text-xs tracking-widest ${
+              className={`min-h-12 rounded-2xl border px-3 text-xs uppercase tracking-[0.24em] transition ${
                 activeDeviceId
-                  ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)]'
+                  ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)] hover:border-[#2aa3ff] hover:text-[#2aa3ff]'
                   : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
               }`}
             >
-              {language === 'no' ? '+ DEL FRAME' : '+ SHARE FRAME'}
+              <span className="block leading-5">{language === 'no' ? '+ DEL' : '+ SHARE'}</span>
+              <span className="block leading-5">FRAME</span>
             </button>
           </div>
         </div>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-5 space-y-3">
           {loading && <div className="text-[color:var(--fg-50)] text-sm">{t.loading}</div>}
           {!loading && frames.length === 0 && <div className="text-[color:var(--fg-40)] text-sm">{t.noFramesYet}</div>}
           {deleteError && <div className="text-[color:var(--danger)] text-sm">{deleteError}</div>}
@@ -7954,21 +7960,21 @@ function MyFramesSection({
             return (
               <div
                 key={f.device_id}
-                className={`w-full flex items-center justify-between px-3 py-3 rounded-xl border text-left ${
+                className={`w-full flex items-center justify-between gap-3 rounded-[24px] border px-4 py-4 text-left transition ${
                   selected ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
                 }`}
               >
                 <button onClick={() => onSelectDevice(f.device_id)} className="min-w-0 flex-1 text-left">
-                  <div className="tracking-widest text-sm">{f.device_id}</div>
+                  <div className="truncate text-lg tracking-[0.16em]">{f.device_id}</div>
                   {!!f.current_version && (
-                    <div className="text-xs opacity-60 mt-1 normal-case tracking-normal">
+                    <div className="mt-2 text-sm opacity-60 normal-case tracking-[0.08em]">
                       {f.current_version}
                     </div>
                   )}
                 </button>
 
                 {!editingFrames && <div
-                  className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-normal"
+                  className="shrink-0 inline-flex items-center gap-2 text-sm opacity-70 normal-case tracking-[0.08em]"
                   aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}` : `${batteryLabel} unavailable`}
                 >
                   {isCharging && <ChargingBoltIcon />}
@@ -7976,7 +7982,7 @@ function MyFramesSection({
                   <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
                 </div>}
 
-                {!editingFrames && <div className="shrink-0 text-xs opacity-70">{(f.role || 'member').toUpperCase()}</div>}
+                {!editingFrames && <div className="shrink-0 text-sm uppercase tracking-[0.08em] opacity-70">{(f.role || 'member').toUpperCase()}</div>}
 
                 {editingFrames && (
                   <button
@@ -7985,7 +7991,7 @@ function MyFramesSection({
                       setDeleteError(null)
                     }}
                     disabled={deletingDeviceId === f.device_id}
-                    className="shrink-0 rounded-lg border border-[color:var(--danger-bd)] px-3 py-1 text-xs tracking-widest text-[color:var(--danger)] disabled:opacity-50"
+                    className="shrink-0 rounded-2xl border border-[color:var(--danger-bd)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--danger)] disabled:opacity-50"
                   >
                     {deletingDeviceId === f.device_id ? t.deleting : t.deleteFrame}
                   </button>
