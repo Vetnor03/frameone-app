@@ -8954,6 +8954,7 @@ function CountdownModuleSettingsTab({
           <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
             <button
               onClick={() => {
+                if (!activeDeviceId) return
                 setEditingItem({
                   id: '',
                   sourceDeviceId: activeDeviceId,
