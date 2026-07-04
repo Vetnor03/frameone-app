@@ -98,7 +98,7 @@ static void resetStocks(FrameConfig& out) {
 
 namespace FrameConfigApi {
 
-bool fetch(FrameConfig& out, const String& deviceToken) {
+FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // reset core
   out.layout = LAYOUT_DEFAULT;
   out.theme = THEME_DARK;
@@ -137,13 +137,13 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
   if (code == 401 || code == 403) {
     Serial.println("frame-config auth failed -> clearing token");
     DeviceIdentity::clearToken();
-    return false;
+    return FETCH_ERROR;
   }
 
   if (!ok || code != 200) {
     Serial.print("frame-config HTTP: ");
     Serial.println(code);
-    return false;
+    return FETCH_ERROR;
   }
 
   StaticJsonDocument<8192> doc;
@@ -151,13 +151,20 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
     Serial.println("frame-config JSON parse failed");
-    return false;
+    return FETCH_ERROR;
+  }
+
+  const bool pairRequired = doc["pair_required"] == true || doc["unpaired"] == true || String((const char*)(doc["status"] | "")) == "unpaired";
+  if (pairRequired) {
+    Serial.println("frame-config reports device unpaired -> clearing token");
+    DeviceIdentity::clearToken();
+    return FETCH_UNPAIRED;
   }
 
   JsonObject settings = doc["settings_json"];
   if (settings.isNull()) {
     Serial.println("frame-config missing settings_json");
-    return false;
+    return FETCH_ERROR;
   }
 
   // theme
@@ -380,7 +387,11 @@ bool fetch(FrameConfig& out, const String& deviceToken) {
     }
   }
 
-  return true;
+  return FETCH_OK;
+}
+
+bool fetch(FrameConfig& out, const String& deviceToken) {
+  return fetchWithStatus(out, deviceToken) == FETCH_OK;
 }
 
 } // namespace FrameConfigApi

@@ -122,5 +122,12 @@ struct FrameConfig {
 };
 
 namespace FrameConfigApi {
+  enum FetchResult {
+    FETCH_OK,
+    FETCH_ERROR,
+    FETCH_UNPAIRED
+  };
+
+  FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken);
   bool fetch(FrameConfig& out, const String& deviceToken);
 }

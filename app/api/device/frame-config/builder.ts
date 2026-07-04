@@ -128,11 +128,14 @@ export type PairRequiredPayload = {
   status: 'unpaired'
   settings_json: null
   updated_at: null
+  pairing_code?: string
+  expires_in?: number
+  expires_in_sec?: number
 }
 
 export type DeviceFrameConfigPayload = FrameConfigPayload | PairRequiredPayload
 
-export function pairRequiredPayload(device_id: string): PairRequiredPayload {
+export function pairRequiredPayload(device_id: string, pairing?: { pairing_code?: string; expires_in?: number; expires_in_sec?: number }): PairRequiredPayload {
   return {
     device_id,
     pair_required: true,
@@ -140,6 +143,9 @@ export function pairRequiredPayload(device_id: string): PairRequiredPayload {
     status: 'unpaired',
     settings_json: null,
     updated_at: null,
+    ...(pairing?.pairing_code ? { pairing_code: pairing.pairing_code } : {}),
+    ...(typeof pairing?.expires_in === 'number' ? { expires_in: pairing.expires_in } : {}),
+    ...(typeof pairing?.expires_in_sec === 'number' ? { expires_in_sec: pairing.expires_in_sec } : {}),
   }
 }
 
