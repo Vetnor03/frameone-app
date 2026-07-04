@@ -645,11 +645,17 @@ void setup() {
 
   if (recoverPairingIfTokenLost("config-meta check", pwr.usbPresent)) return;
 
-  bool cfgOk =
-    FrameConfigApi::fetch(
+  FrameConfigApi::FetchResult cfgResult =
+    FrameConfigApi::fetchWithStatus(
       g_cfg,
       DeviceIdentity::getToken()
     );
+
+  bool cfgOk = cfgResult == FrameConfigApi::FETCH_OK;
+
+  if (cfgResult == FrameConfigApi::FETCH_UNPAIRED) {
+    if (recoverPairingIfTokenLost("frame-config unpaired", pwr.usbPresent)) return;
+  }
 
   if (!cfgOk) {
     if (recoverPairingIfTokenLost("frame-config precheck", pwr.usbPresent)) return;
@@ -717,7 +723,11 @@ void setup() {
 
   // ---------------- Redraw ----------------
   if (!cfgOk) {
-    if (!FrameConfigApi::fetch(g_cfg, DeviceIdentity::getToken())) {
+    FrameConfigApi::FetchResult retryResult = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+    if (retryResult != FrameConfigApi::FETCH_OK) {
+      if (retryResult == FrameConfigApi::FETCH_UNPAIRED) {
+        if (recoverPairingIfTokenLost("frame-config unpaired retry", pwr.usbPresent)) return;
+      }
       if (recoverPairingIfTokenLost("frame-config fetch", pwr.usbPresent)) return;
 
       ensureDisplay();
