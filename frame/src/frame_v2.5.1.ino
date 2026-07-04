@@ -59,6 +59,12 @@ enum SetupStep {
   SETUP_STEP_PAIRING = 2
 };
 
+enum PairingResult {
+  PAIRING_PAIRED = 0,
+  PAIRING_EXPIRED = 1,
+  PAIRING_FAILED = 2
+};
+
 struct PowerSenseDebug {
   int raw;
   int highCount;
@@ -392,10 +398,10 @@ static void markOtaCheckedToday() {
 // --------------------------------------
 // Pairing
 // --------------------------------------
-static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
+static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
   if (DeviceIdentity::hasToken()) {
     Serial.println("✅ Token in flash -> paired");
-    return true;
+    return PAIRING_PAIRED;
   }
 
   Serial.print("device_id: ");
@@ -411,7 +417,7 @@ static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
       }
 
       if (DeviceIdentity::hasToken()) {
-        return true;
+        return PAIRING_PAIRED;
       }
     }
 
@@ -424,7 +430,7 @@ static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
 
   PairStartResponse startResp;
   if (!BackendApi::pairStart(startResp)) {
-    return false;
+    return PAIRING_FAILED;
   }
 
   ensureDisplay();
@@ -453,12 +459,25 @@ static bool ensurePairedNoReboot(bool forceFreshPairCode = false) {
       }
 
       if (DeviceIdentity::hasToken()) {
-        return true;
+        return PAIRING_PAIRED;
       }
     }
   }
 
-  return false;
+  Serial.println("⌛ Pairing window expired without a claim; entering passive pairing shelf");
+  return PAIRING_EXPIRED;
+}
+
+static void showPairingShelfAndSleep(bool usbPresent) {
+  ensureDisplay();
+  ScreenPairing::showPairingShelf();
+
+  Preferences prefs;
+  prefs.begin("frame", false);
+  prefs.putBool("pair_shelf", true);
+  prefs.end();
+
+  goToShelfSleep(usbPresent);
 }
 
 static bool recoverPairingIfTokenLost(const char* reason, bool usbPresent) {
@@ -467,9 +486,15 @@ static bool recoverPairingIfTokenLost(const char* reason, bool usbPresent) {
   Serial.print("🔐 Token lost: ");
   Serial.println(reason);
 
-  if (ensurePairedNoReboot()) {
+  PairingResult pairing = ensurePairedNoReboot();
+  if (pairing == PAIRING_PAIRED) {
     delay(400);
     ESP.restart();
+    return true;
+  }
+
+  if (pairing == PAIRING_EXPIRED) {
+    showPairingShelfAndSleep(usbPresent);
     return true;
   }
 
@@ -580,6 +605,20 @@ void setup() {
     prefs.end();
   }
 
+  {
+    Preferences prefs;
+    prefs.begin("frame", false);
+    bool pairingShelf = prefs.getBool("pair_shelf", false);
+    if (pairingShelf && !DeviceIdentity::hasToken() && isDeepSleepWake() && !pwrEarly.usbPresent) {
+      Serial.println("Pairing shelf wake without charger reconnect -> stay passive");
+      prefs.end();
+      showPairingShelfAndSleep(pwrEarly.usbPresent);
+      return;
+    }
+    if (pairingShelf) prefs.putBool("pair_shelf", false);
+    prefs.end();
+  }
+
   UpdateChecker::noteWake();
 
   bool reconnectedViaProvisioning = false;
@@ -599,7 +638,13 @@ void setup() {
   TimeSync::ensure(8000);
 
   activeSetupStep = SETUP_STEP_PAIRING;
-  if (!ensurePairedNoReboot(chargerStateChanged)) {
+  PairingResult pairing = ensurePairedNoReboot(chargerStateChanged);
+  if (pairing != PAIRING_PAIRED) {
+    if (pairing == PAIRING_EXPIRED) {
+      showPairingShelfAndSleep(pwrEarly.usbPresent);
+      return;
+    }
+
     ensureDisplay();
     ScreenPairing::showError("Could not pair frame");
     goToSleep(pwrEarly.usbPresent);

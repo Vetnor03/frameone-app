@@ -105,6 +105,18 @@ void showPairCode(const char* code, int expiresInSec, const char* appUrl) {
   renderPage(drawPairCode, &ctx);
 }
 
+// ---- PAIRING SHELF ----
+static void drawPairingShelf(void* vctx) {
+  (void)vctx;
+  drawCenteredInFrame("Ready to pair", FRAME_Y + 150, &FreeMonoBold18pt7b);
+  drawCenteredInFrame("Plug in / restart to generate", FRAME_Y + 230, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("a new pairing code", FRAME_Y + 282, &FreeMonoBold12pt7b);
+}
+
+void showPairingShelf() {
+  renderPage(drawPairingShelf, nullptr);
+}
+
 // ---- ERROR ----
 struct ErrCtx {
   const char* msg;
