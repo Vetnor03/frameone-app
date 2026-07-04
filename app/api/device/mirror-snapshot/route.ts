@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SURF_SPOTS, spotIdFromLabel } from '@/app/lib/surf/spots'
 import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine, formatWeatherTemp, normalizeDisplayWmoForTemps } from '@/app/lib/weatherMirror'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
-import { buildFrameConfigPayload } from '@/app/api/device/frame-config/builder'
+import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 
 export const runtime = 'nodejs'
@@ -1987,12 +1987,16 @@ export async function GET(req: Request) {
     const deviceId = url.searchParams.get('device_id')?.trim()
     if (!deviceId) return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
 
-    const bearer = getBearerToken(req)
-    if (!bearer) return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+
+    if (!(await deviceHasOwnerAccessLink(supabase, deviceId))) {
+      return NextResponse.json(pairRequiredPayload(deviceId))
+    }
+
+    const bearer = getBearerToken(req)
+    if (!bearer) return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
 
     const { data: authData, error: authError } = await supabase.auth.getUser(bearer)
     if (authError || !authData.user) return NextResponse.json({ error: 'Invalid or expired user token' }, { status: 401 })
@@ -2022,6 +2026,10 @@ export async function GET(req: Request) {
 
     const origin = appOrigin(req)
     const frameConfig = asRecord(await buildFrameConfigPayload(supabase, deviceId))
+    if (frameConfig.pair_required === true || frameConfig.unpaired === true) {
+      return NextResponse.json(frameConfig)
+    }
+
     const settings = asRecord(frameConfig.settings_json)
     const modules = asRecord(settings.modules)
     const cells = Array.isArray(settings.cells) ? settings.cells.map(asRecord) : []

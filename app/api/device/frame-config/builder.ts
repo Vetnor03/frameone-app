@@ -121,7 +121,61 @@ export type FrameConfigPayload = {
   updated_at: unknown
 }
 
-export async function buildFrameConfigPayload(supabase: SupabaseClient, device_id: string): Promise<FrameConfigPayload> {
+export type PairRequiredPayload = {
+  device_id: string
+  pair_required: true
+  unpaired: true
+  status: 'unpaired'
+  settings_json: null
+  updated_at: null
+}
+
+export type DeviceFrameConfigPayload = FrameConfigPayload | PairRequiredPayload
+
+export function pairRequiredPayload(device_id: string): PairRequiredPayload {
+  return {
+    device_id,
+    pair_required: true,
+    unpaired: true,
+    status: 'unpaired',
+    settings_json: null,
+    updated_at: null,
+  }
+}
+
+export async function deviceHasOwnerAccessLink(supabase: SupabaseClient, device_id: string): Promise<boolean> {
+  const { data: deviceRow, error: deviceError } = await supabase
+    .from('devices')
+    .select('*')
+    .eq('device_id', device_id)
+    .maybeSingle()
+
+  if (deviceError) {
+    throw new Error(deviceError.message)
+  }
+
+  const device = deviceRow && typeof deviceRow === 'object' ? (deviceRow as UnknownRecord) : null
+  const ownerId = asString(device?.owner_id, '').trim()
+  const userId = asString(device?.user_id, '').trim()
+  if (ownerId || userId) return true
+
+  const { data: memberRows, error: memberError } = await supabase
+    .from('device_members')
+    .select('user_id')
+    .eq('device_id', device_id)
+    .limit(1)
+
+  if (memberError) {
+    throw new Error(memberError.message)
+  }
+
+  return Array.isArray(memberRows) && memberRows.length > 0
+}
+
+export async function buildFrameConfigPayload(supabase: SupabaseClient, device_id: string): Promise<DeviceFrameConfigPayload> {
+    const hasOwnerAccessLink = await deviceHasOwnerAccessLink(supabase, device_id)
+    if (!hasOwnerAccessLink) return pairRequiredPayload(device_id)
+
     const { data, error } = await supabase
       .from('device_settings')
       .select('settings_json, updated_at')
