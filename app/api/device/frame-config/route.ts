@@ -13,8 +13,7 @@ type PairingRpcClient = {
   rpc: (fn: 'start_pairing', args: { p_device_id: string }) => Promise<{ data: unknown; error: { message: string } | null }>
 }
 
-async function startPairingPayload(supabase: ReturnType<typeof createClient>, deviceId: string) {
-  const rpcClient = supabase as unknown as PairingRpcClient
+async function startPairingPayload(rpcClient: PairingRpcClient, deviceId: string) {
   const { data, error } = await rpcClient.rpc('start_pairing', { p_device_id: deviceId })
   if (error) throw new Error(error.message)
 
@@ -40,7 +39,7 @@ export async function GET(req: Request) {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const builtPayload = await buildFrameConfigPayload(supabase, device_id)
     const isUnpaired = 'pair_required' in builtPayload && builtPayload.pair_required === true
-    const payload = isUnpaired ? await startPairingPayload(supabase, device_id) : builtPayload
+    const payload = isUnpaired ? await startPairingPayload(supabase as unknown as PairingRpcClient, device_id) : builtPayload
     const responseBody = JSON.stringify(payload)
 
     if (device_id === 'frm_54AE37455F34') {
