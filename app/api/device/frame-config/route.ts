@@ -9,8 +9,13 @@ function asPairingCode(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : ''
 }
 
+type PairingRpcClient = {
+  rpc: (fn: 'start_pairing', args: { p_device_id: string }) => Promise<{ data: unknown; error: { message: string } | null }>
+}
+
 async function startPairingPayload(supabase: ReturnType<typeof createClient>, deviceId: string) {
-  const { data, error } = await supabase.rpc('start_pairing', { p_device_id: deviceId })
+  const rpcClient = supabase as unknown as PairingRpcClient
+  const { data, error } = await rpcClient.rpc('start_pairing', { p_device_id: deviceId })
   if (error) throw new Error(error.message)
 
   const row = Array.isArray(data) ? data[0] : data
