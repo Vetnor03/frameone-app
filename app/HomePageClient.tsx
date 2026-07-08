@@ -7900,9 +7900,9 @@ function MyFramesSection({
 
   return (
     <>
-      <div className="rounded-[28px] border border-[color:var(--bd-15)] px-4 py-5 sm:px-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="whitespace-pre-line text-lg uppercase tracking-[0.28em] text-[color:var(--fg-80)]">
+      <div className="rounded-[24px] border border-[color:var(--bd-15)] px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="whitespace-pre-line text-sm uppercase leading-6 tracking-[0.28em] text-[color:var(--fg-80)]">
             {t.myFrames.replace(' ', '\n')}
           </div>
 
@@ -7913,7 +7913,7 @@ function MyFramesSection({
                 setDeleteError(null)
               }}
               disabled={frames.length === 0}
-              className={`min-h-12 rounded-2xl border px-3 text-xs uppercase tracking-[0.24em] transition ${
+              className={`min-h-10 rounded-xl border px-3 text-[11px] uppercase tracking-[0.22em] transition ${
                 frames.length > 0
                   ? editingFrames
                     ? 'border-[#2aa3ff] text-[#2aa3ff]'
@@ -7926,28 +7926,28 @@ function MyFramesSection({
 
             <button
               onClick={addFrame}
-              className="min-h-12 rounded-2xl border border-[color:var(--bd-20)] px-3 text-xs uppercase tracking-[0.24em] text-[color:var(--fg-70)] transition hover:border-[#2aa3ff] hover:text-[#2aa3ff]"
+              className="min-h-10 rounded-xl border border-[color:var(--bd-20)] px-3 text-[11px] uppercase tracking-[0.22em] text-[color:var(--fg-70)] transition hover:border-[#2aa3ff] hover:text-[#2aa3ff]"
             >
-              <span className="block leading-5">{language === 'no' ? '+ LEGG TIL' : '+ ADD'}</span>
-              <span className="block leading-5">FRAME</span>
+              <span className="block leading-4">{language === 'no' ? '+ LEGG TIL' : '+ ADD'}</span>
+              <span className="block leading-4">FRAME</span>
             </button>
 
             <button
               onClick={openShare}
               disabled={!activeDeviceId}
-              className={`min-h-12 rounded-2xl border px-3 text-xs uppercase tracking-[0.24em] transition ${
+              className={`min-h-10 rounded-xl border px-3 text-[11px] uppercase tracking-[0.22em] transition ${
                 activeDeviceId
                   ? 'border-[color:var(--bd-20)] text-[color:var(--fg-70)] hover:border-[#2aa3ff] hover:text-[#2aa3ff]'
                   : 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]'
               }`}
             >
-              <span className="block leading-5">{language === 'no' ? '+ DEL' : '+ SHARE'}</span>
-              <span className="block leading-5">FRAME</span>
+              <span className="block leading-4">{language === 'no' ? '+ DEL' : '+ SHARE'}</span>
+              <span className="block leading-4">FRAME</span>
             </button>
           </div>
         </div>
 
-        <div className="mt-5 space-y-3">
+        <div className="mt-4 space-y-2">
           {loading && <div className="text-[color:var(--fg-50)] text-sm">{t.loading}</div>}
           {!loading && frames.length === 0 && <div className="text-[color:var(--fg-40)] text-sm">{t.noFramesYet}</div>}
           {deleteError && <div className="text-[color:var(--danger)] text-sm">{deleteError}</div>}
@@ -7960,21 +7960,21 @@ function MyFramesSection({
             return (
               <div
                 key={f.device_id}
-                className={`w-full flex items-center justify-between gap-3 rounded-[24px] border px-4 py-4 text-left transition ${
+                className={`w-full flex items-center justify-between gap-2 rounded-[20px] border px-4 py-3 text-left transition ${
                   selected ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
                 }`}
               >
                 <button onClick={() => onSelectDevice(f.device_id)} className="min-w-0 flex-1 text-left">
-                  <div className="truncate text-lg tracking-[0.16em]">{f.device_id}</div>
+                  <div className="truncate text-base tracking-[0.14em]">{f.device_id}</div>
                   {!!f.current_version && (
-                    <div className="mt-2 text-sm opacity-60 normal-case tracking-[0.08em]">
+                    <div className="mt-1 text-xs opacity-60 normal-case tracking-[0.06em]">
                       {f.current_version}
                     </div>
                   )}
                 </button>
 
                 {!editingFrames && <div
-                  className="shrink-0 inline-flex items-center gap-2 text-sm opacity-70 normal-case tracking-[0.08em]"
+                  className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-[0.06em]"
                   aria-label={hasBattery ? `${batteryLabel} ${batteryPercent}%${isCharging ? ' charging' : ''}` : `${batteryLabel} unavailable`}
                 >
                   {isCharging && <ChargingBoltIcon />}
@@ -7982,7 +7982,7 @@ function MyFramesSection({
                   <span>{hasBattery ? `${batteryPercent}%` : '--%'}</span>
                 </div>}
 
-                {!editingFrames && <div className="shrink-0 text-sm uppercase tracking-[0.08em] opacity-70">{(f.role || 'member').toUpperCase()}</div>}
+                {!editingFrames && <div className="shrink-0 text-xs uppercase tracking-[0.06em] opacity-70">{(f.role || 'member').toUpperCase()}</div>}
 
                 {editingFrames && (
                   <button
