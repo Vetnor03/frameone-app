@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { versionedIconPath } from './lib/iconVersion'
+import { APP_ICON_PATH, versionedIconPath } from './lib/iconVersion'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -12,13 +12,13 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#061b24',
     icons: [
       {
-        src: versionedIconPath('/icon.png'),
+        src: versionedIconPath(APP_ICON_PATH),
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: versionedIconPath('/icon.png'),
+        src: versionedIconPath(APP_ICON_PATH),
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
