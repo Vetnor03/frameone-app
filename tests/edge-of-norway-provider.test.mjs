@@ -131,9 +131,10 @@ test('Sandnes, Sola and Egersund cards receive compact card dates without headin
 
 test('detail page showings override false daily list repetition for Every Friday in July', () => {
   const cards = ['11. Jul.', '12. Jul.', '13. Jul.', '18. Jul.'].flatMap((date) => parseEdgeOfNorwayListPage(`<li class="event-card"><div>${date}</div><a href="https://www.fjordnorway.com/en/events/every-friday-in-july">Every Friday in July at Melkebaren</a><p class="description">Every Friday in July. Show 7-9 pm.</p></li>`, 'sandnes', new Date('2026-07-11T00:00:00Z')))
-  const { occurrences } = mergeRegionalEvents(cards, { 'https://www.fjordnorway.com/en/events/every-friday-in-july': '<main><p>Every Friday in July.</p><p>11 July 19:00</p><p>18 July 19:00</p></main>' })
-  assert.deepEqual(occurrences.map(o => o.date), ['2026-07-11', '2026-07-18'])
-  assert.equal(occurrences.length, 2)
+  const { occurrences } = mergeRegionalEvents(cards, { 'https://www.fjordnorway.com/en/events/every-friday-in-july': '<main><p>Every Friday in July.</p><p>Show 7:00 pm–9:00 pm</p></main>' })
+  assert.deepEqual(occurrences.map(o => o.date), ['2026-07-17', '2026-07-24', '2026-07-31'])
+  assert.equal(occurrences.length, 3)
+  assert.ok(occurrences.every(o => o.startTime === '19:00' && o.endTime === '21:00'))
 })
 
 test('time extraction supports common formats', () => {
@@ -143,9 +144,9 @@ test('time extraction supports common formats', () => {
   assert.deepEqual(extractTime('Show 7–9 pm'), { startTime: '19:00', endTime: '21:00' })
 })
 
-test('detail page parser can provide missing start time from public detail HTML', () => {
+test('detail page parser does not fabricate detail dates from generic visible times', () => {
   const detail = parseEdgeOfNorwayDetailPage(fixture('detail-time.html'), 'https://www.fjordnorway.com/en/events/no-time', '2026-07-14')
-  assert.equal(detail.showings[0].startTime, '18:30')
+  assert.equal(detail.showings.length, 0)
   assert.equal(detail.canonicalUrl, 'https://www.fjordnorway.com/en/events/no-time')
 })
 
@@ -174,6 +175,23 @@ test('stable IDs are deterministic and occurrence IDs include date/time', () => 
 test('selected city is stored preference only and does not alter regional source list', () => {
   assert.ok(EDGE_OF_NORWAY_SOURCE_PAGES.some(p => p.slug === 'egersund'))
   assert.equal(EDGE_OF_NORWAY_SOURCE_PAGES.length, 4)
+})
+
+
+
+test('detail parser ignores unrelated embedded app dates and calendar controls outside Showings', () => {
+  const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england"><script id="__NEXT_DATA__" type="application/json">{"buildDate":"2026-06-29","calendar":{"selected":"2026-06-29"}}</script></head><body><h1>Football festival in Vågen on 11 July – Norway v England</h1><button>June 2026</button><button>29</button><h2>Showings</h2><div class="calendar-grid">1 2 3 4 5 6 7 8 9 10 11 12</div><article><h3>July 11</h3><p>17:00</p></article><h2>Contact</h2><p>info</p></body></html>`
+  const detail = parseEdgeOfNorwayDetailPage(html, 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england', '2026-07-11')
+  assert.deepEqual(detail.showings.map(s => [s.date, s.startTime, s.source]), [['2026-07-11', '17:00', 'showings_html']])
+})
+
+test('merge rejects non-continuous detail occurrences outside import window', () => {
+  const cards = parseEdgeOfNorwayListPage(`<h2>11 July</h2><article><a href="https://www.fjordnorway.com/en/events/window-test">Window test</a><a href="https://www.fjordnorway.com/en/events/window-test">Read more</a></article>`, 'stavanger', new Date('2026-07-11T00:00:00Z'))
+  const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/window-test"><script type="application/ld+json">{"@type":"Event","name":"Window test","url":"https://www.fjordnorway.com/en/events/window-test","startDate":"2026-06-29T12:00:00+02:00"}</script></head><body><h1>Window test</h1></body></html>`
+  const { occurrences, stats } = mergeRegionalEvents(cards, { 'https://www.fjordnorway.com/en/events/window-test': html })
+  assert.deepEqual(occurrences.map(o => o.date), ['2026-07-11'])
+  assert.equal(stats.datesFromJsonLd, 0)
+  assert.equal(stats.datesFromEmbeddedData, 0)
 })
 
 test('known Fjord Norway detail fixtures produce valid dates or occurrences', () => {
