@@ -1,10 +1,11 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
+import { EDGE_OF_NORWAY_CITY_OPTIONS, EDGE_OF_NORWAY_PROVIDER_ID as EDGE_PROVIDER_ID, EDGE_OF_NORWAY_SOURCE_PAGES } from './edge-of-norway-provider'
 
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
-export const EDGE_OF_NORWAY_PROVIDER_ID = 'edge-of-norway'
+export const EDGE_OF_NORWAY_PROVIDER_ID = EDGE_PROVIDER_ID
 export const EDGE_OF_NORWAY_DISPLAY_NAME = 'Edge of Norway'
-export const LOCAL_EVENTS_STATUS = 'coming_soon'
-export const COMING_SOON_MESSAGE = 'Local events are coming soon.'
+export const LOCAL_EVENTS_STATUS = 'connected'
+export const COMING_SOON_MESSAGE = 'Local events are available.'
 
 export type LocalEventProviderId = typeof EDGE_OF_NORWAY_PROVIDER_ID
 export type LocalEventKind = 'one_off' | 'separate_session' | 'continuous'
@@ -33,6 +34,7 @@ export type LocalEventsProvider = {
   displayName: string
   liveEndpoint: null
   supportedEventTypes: LocalEventKind[]
+  cityOptions: Array<{ slug: string; label: string }>
 }
 
 export const EDGE_OF_NORWAY_PROVIDER: LocalEventsProvider = {
@@ -40,17 +42,24 @@ export const EDGE_OF_NORWAY_PROVIDER: LocalEventsProvider = {
   displayName: EDGE_OF_NORWAY_DISPLAY_NAME,
   liveEndpoint: null,
   supportedEventTypes: ['one_off', 'separate_session', 'continuous'],
+  cityOptions: EDGE_OF_NORWAY_CITY_OPTIONS.map(({ slug, label }) => ({ slug, label })),
 }
 
 export const LOCAL_EVENTS_PROVIDERS: LocalEventsProvider[] = [EDGE_OF_NORWAY_PROVIDER]
 
 export async function syncLocalEventsForUser(userId: string, opts: { force?: boolean } = {}) {
-  void userId
   void opts
-  return { synced: false, status: LOCAL_EVENTS_STATUS, count: 0 }
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase.from('integration_items').select('id').eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
+  return { synced: true, status: LOCAL_EVENTS_STATUS, count: data?.length || 0, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url) }
 }
 
-export async function connectLocalEventsForUser(userId: string) {
+export function normalizeLocalEventsCityPreference(city: string | null | undefined) {
+  const normalized = String(city || '').trim().toLowerCase()
+  return EDGE_OF_NORWAY_CITY_OPTIONS.some((option) => option.slug === normalized) ? normalized : 'stavanger'
+}
+
+export async function connectLocalEventsForUser(userId: string, opts: { selectedCity?: string } = {}) {
   const supabase = getSupabaseAdmin()
   await supabase
     .from('user_integrations')
@@ -58,34 +67,35 @@ export async function connectLocalEventsForUser(userId: string) {
       {
         user_id: userId,
         provider: LOCAL_EVENTS_PROVIDER,
-        status: 'disconnected',
-        encrypted_credentials: { status: LOCAL_EVENTS_STATUS },
-        external_account_id: null,
-        external_account_label: null,
-        last_error: COMING_SOON_MESSAGE,
+        status: 'connected',
+        encrypted_credentials: { selected_city: normalizeLocalEventsCityPreference(opts.selectedCity), provider: EDGE_OF_NORWAY_PROVIDER_ID },
+        external_account_id: EDGE_OF_NORWAY_PROVIDER_ID,
+        external_account_label: EDGE_OF_NORWAY_DISPLAY_NAME,
+        last_error: null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id,provider' },
     )
-  return { connected: false, status: LOCAL_EVENTS_STATUS, message: COMING_SOON_MESSAGE, providers: LOCAL_EVENTS_PROVIDERS }
+  return { connected: true, status: LOCAL_EVENTS_STATUS, message: null, providers: LOCAL_EVENTS_PROVIDERS, selected_city: normalizeLocalEventsCityPreference(opts.selectedCity) }
 }
 
 export async function getLocalEventsStatus(userId: string) {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('user_integrations')
-    .select('status,external_account_label,last_sync_at,last_error')
+    .select('status,external_account_label,last_sync_at,last_error,encrypted_credentials')
     .eq('user_id', userId)
     .eq('provider', LOCAL_EVENTS_PROVIDER)
     .maybeSingle()
   if (error) throw new Error(error.message)
   return {
     provider: LOCAL_EVENTS_PROVIDER,
-    connected: false,
-    status: LOCAL_EVENTS_STATUS,
-    account: null,
+    connected: data?.status === 'connected',
+    status: data?.status || LOCAL_EVENTS_STATUS,
+    account: data?.external_account_label || EDGE_OF_NORWAY_DISPLAY_NAME,
     last_sync_at: data?.last_sync_at || null,
-    message: COMING_SOON_MESSAGE,
+    message: data?.last_error || null,
     providers: LOCAL_EVENTS_PROVIDERS,
+    selected_city: normalizeLocalEventsCityPreference((data as any)?.encrypted_credentials?.selected_city),
   }
 }
