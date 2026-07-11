@@ -269,6 +269,12 @@ function normalizeIncludeOverdue(raw: string | null) {
   return false
 }
 
+function normalizeSkipSync(raw: string | null) {
+  if (raw == null) return false
+  const v = raw.trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
 function normalizeTimeZone(raw: string | null) {
   const tz = String(raw || '').trim()
   if (!tz) return DEFAULT_TZ
@@ -383,6 +389,7 @@ export async function GET(req: Request) {
     const includeOverdue = normalizeIncludeOverdue(url.searchParams.get('include_overdue'))
     const timeZone = normalizeTimeZone(url.searchParams.get('tz'))
     const horizonDays = normalizeHorizonDays(url.searchParams.get('horizon_days'))
+    const skipSync = normalizeSkipSync(url.searchParams.get('skip_sync'))
 
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
@@ -458,7 +465,7 @@ export async function GET(req: Request) {
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
-      await syncSpondIfStaleForUsers(memberUserIds)
+      if (!skipSync) await syncSpondIfStaleForUsers(memberUserIds)
 
       const { data: integrationItemsData, error: integrationItemsError } = await supabase
         .from('integration_items')
@@ -480,7 +487,7 @@ export async function GET(req: Request) {
         includeOverdue
       )
 
-      await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays })))
+      if (!skipSync) await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays })))
 
       const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
         .from('integration_items')
@@ -519,7 +526,7 @@ export async function GET(req: Request) {
         includeOverdue
       )
 
-      await Promise.allSettled(memberUserIds.map((userId) => syncLocalEventsForUser(userId)))
+      if (!skipSync) await Promise.allSettled(memberUserIds.map((userId) => syncLocalEventsForUser(userId)))
       const { data: localEventsData, error: localEventsError } = await supabase
         .from('integration_items')
         .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
