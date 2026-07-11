@@ -1,0 +1,28 @@
+{
+  "data": {
+    "events": [
+      {
+        "id": "stavanger-1",
+        "title": "Fotoworkshop",
+        "starts_at": "2026-07-12T17:00:00+02:00",
+        "ends_at": "2026-07-12T20:00:00+02:00",
+        "location": { "name": "Sølvberget bibliotek og kulturhus" },
+        "description": "Recurring public workshop",
+        "category": "Learn"
+      },
+      {
+        "id": "started-yesterday",
+        "title": "Sommerutstilling",
+        "starts_at": "2026-07-10T10:00:00+02:00",
+        "ends_at": "2026-07-12T16:00:00+02:00",
+        "location": "Galleri"
+      },
+      {
+        "id": "past",
+        "title": "Past event",
+        "starts_at": "2026-07-01T10:00:00+02:00",
+        "ends_at": "2026-07-01T11:00:00+02:00"
+      }
+    ]
+  }
+}

@@ -64,8 +64,8 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
     return { synced: true, count }
   } catch (error) {
     console.error('[local-events] provider sync failed', error)
-    await supabase.from('user_integrations').update({ last_error: 'Provider refresh failed; using cached events.', updated_at: new Date().toISOString() }).eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
-    return { synced: false, stale: true }
+    await supabase.from('user_integrations').update({ last_error: 'Could not load local events', updated_at: new Date().toISOString() }).eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
+    return { synced: false, failed: true, error: 'Could not load local events' }
   }
 }
 
