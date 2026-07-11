@@ -24,7 +24,7 @@ export type ParsedEdgeCard = { title: string; date: string; startTime: string | 
 export type NormalizedEdgeOccurrence = { baseEventId: string; occurrenceId: string; provider: typeof EDGE_OF_NORWAY_PROVIDER_ID; title: string; date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; canonicalUrl: string; classification: EdgeEventClassification; sourcePlaces: EdgeOfNorwayCity[] }
 export type EdgeDetailDateSource = 'json_ld' | 'embedded_data' | 'showings_html' | 'visible_html' | 'none'
 export type ParsedEdgeDetailShowing = { date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; source: Exclude<EdgeDetailDateSource, 'none'> }
-type ParsedShowing = { dateText: string; startTimeText?: string | null; endTimeText?: string | null; source: 'showings-html' }
+type ParsedShowing = { date: string; startTime?: string | null; endTime?: string | null }
 export type ParsedEdgeDetailPage = { canonicalUrl: string; showings: ParsedEdgeDetailShowing[]; classificationHint: EdgeEventClassification; dateSource: EdgeDetailDateSource; title: string | null }
 export type MergeStats = { cardsParsedBySource: Record<string, number>; duplicatesRemoved: number; uniqueEventsAfterGrouping: number; oneOffCount: number; separateSessionCount: number; continuousCount: number; allDayCount: number; normalizedOccurrenceCount: number; datesFromJsonLd: number; datesFromEmbeddedData: number; datesFromShowingsHtml: number; datesFromListFallback: number }
 export type EdgeRejectedCandidateDebug = { canonicalUrl: string; titleLinkText: string; ancestorTagClassChain: string[]; nearbyTextPreview: string; containerOuterHtmlPreview: string; dateLikeTextNearby: string[]; structuredOrDataDate: boolean }
@@ -154,12 +154,14 @@ function sectionAfterHeading(html: string, headingLabel: string, stopLabels: str
   return html.slice(startIndex, stopHeading?.index ?? html.length)
 }
 
-function parsedShowingFromContainer(containerHtml: string): ParsedShowing | null {
+function parsedShowingFromContainer(containerHtml: string, reference: Date): ParsedShowing | null {
   const containerText = text(containerHtml)
   const dateMatch = containerText.match(/\b((?:\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+\.?|[A-Za-zæøåÆØÅ]+\.?\s+\d{1,2})(?:\s+20\d{2})?)\b/i)
   if (!dateMatch) return null
+  const date = parseAnyDateHeading(dateMatch[1], reference)
+  if (!date) return null
   const { startTime, endTime } = extractTime(containerText)
-  return { dateText: dateMatch[1], startTimeText: startTime, endTimeText: endTime, source: 'showings-html' }
+  return { date, startTime, endTime }
 }
 
 function parseVisibleShowings(html: string, fallbackDate: string) {
@@ -174,7 +176,7 @@ function parseVisibleShowings(html: string, fallbackDate: string) {
   // another row's time. Match order preserves DOM order.
   const rowMatches = [...section.matchAll(/<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi)]
   for (const row of rowMatches) {
-    const parsed = parsedShowingFromContainer(row[0])
+    const parsed = parsedShowingFromContainer(row[0], reference)
     if (parsed) parsedShowings.push(parsed)
   }
 
@@ -186,7 +188,7 @@ function parseVisibleShowings(html: string, fallbackDate: string) {
       const container = balancedContainerAround(section, heading.index || 0)
       if (seenContainers.has(container)) continue
       seenContainers.add(container)
-      const parsed = parsedShowingFromContainer(container)
+      const parsed = parsedShowingFromContainer(container, reference)
       if (parsed) parsedShowings.push(parsed)
     }
   }
@@ -196,14 +198,13 @@ function parseVisibleShowings(html: string, fallbackDate: string) {
     // the date and time for one showing; it does not collect dates and times into
     // separate arrays.
     for (const line of text(section).split(/(?<=\d{2})\s+(?=(?:\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+|[A-Za-zæøåÆØÅ]+\.?\s+\d{1,2}))/)) {
-      const parsed = parsedShowingFromContainer(line)
+      const parsed = parsedShowingFromContainer(line, reference)
       if (parsed) parsedShowings.push(parsed)
     }
   }
 
   for (const parsed of parsedShowings) {
-    const date = parseAnyDateHeading(parsed.dateText, reference)
-    if (date) pushShowing(showings, date, parsed.startTimeText || null, 'showings_html', null, parsed.endTimeText || null)
+    pushShowing(showings, parsed.date, parsed.startTime || null, 'showings_html', null, parsed.endTime || null)
   }
   return showings
 }
@@ -251,10 +252,12 @@ function pushShowing(out: ParsedEdgeDetailShowing[], date: string | null, startT
   if (!date) return
   out.push({ date, endDate, startTime, endTime, startsAt: osloIso(date, startTime), endsAt: endDate || endTime ? osloIso(endDate || date, endTime || '23:59') : null, allDay: !startTime, source })
 }
-function classify(cards: ParsedEdgeCard[], detailHtml?: string): EdgeEventClassification {
-  const dates = new Set(cards.map(c => c.date)); const body = text(detailHtml || cards.map(c => `${c.category || ''} ${c.shortDescription || ''}`).join(' ')).toLowerCase()
-  if (/showings|performances|bookable|guided tour|workshop|session|omvisning|forestilling/.test(body) && dates.size <= 10) return 'separate_session'
-  if (dates.size >= 4 || /exhibition|museum|installation|seasonal|display|utstilling|museum|åpent hver dag|open daily/.test(body)) return 'continuous'
+function classify(cards: ParsedEdgeCard[], detailHtml?: string, detailShowings: ParsedEdgeDetailShowing[] = []): EdgeEventClassification {
+  const eventDates = detailShowings.length ? new Set(detailShowings.map(s => s.date)) : new Set(cards.map(c => c.date))
+  const hasRange = detailShowings.some(s => s.endDate && s.endDate !== s.date)
+  const body = text(detailHtml || cards.map(c => `${c.category || ''} ${c.shortDescription || ''}`).join(' ')).toLowerCase()
+  if (hasRange || (!detailShowings.length && eventDates.size >= 4) || /exhibition|museum|installation|seasonal|display|utstilling|museum|åpent hver dag|open daily/.test(body)) return 'continuous'
+  if (eventDates.size > 1 && eventDates.size <= 10 && (detailShowings.length || /showings|performances|bookable|guided tour|workshop|session|omvisning|forestilling/.test(body))) return 'separate_session'
   return 'one_off'
 }
 
@@ -429,7 +432,7 @@ export function mergeRegionalEvents(cards: ParsedEdgeCard[], details: Record<str
   for (const [url, group] of byUrl) {
     const range = importWindowFromCards(group)
     const detail = details[url] ? parseEdgeOfNorwayDetailPage(details[url], url, group[0].date) : null
-    const classification = detail?.classificationHint || classify(group, details[url]); const baseEventId = stableBaseEventId(url); const listDates = group.map(g => g.date).sort(); const places = [...new Set(group.map(g => g.sourcePlace))]
+    const classification = detail?.showings.length ? detail.classificationHint : classify(group, details[url]); const baseEventId = stableBaseEventId(url); const listDates = group.map(g => g.date).sort(); const places = [...new Set(group.map(g => g.sourcePlace))]
     const detailShowings = filterValidShowings(detail?.showings || [], classification, range.start, range.end)
     datesFromJsonLd += detailShowings.filter((s) => s.source === 'json_ld').length
     datesFromEmbeddedData += detailShowings.filter((s) => s.source === 'embedded_data').length
@@ -496,7 +499,7 @@ export function parseEdgeOfNorwayDetailPage(html: string, canonicalUrl: string, 
   }
 
   const deduped = [...new Map(showings.map((x) => [`${x.date}:${x.startTime || 'all-day'}:${x.endDate || ''}:${x.endTime || ''}`, x])).values()]
-  return { canonicalUrl: resolvedCanonical, showings: deduped, classificationHint: classify([], html), dateSource: deduped[0]?.source || 'none', title }
+  return { canonicalUrl: resolvedCanonical, showings: deduped, classificationHint: classify([], html, deduped), dateSource: deduped[0]?.source || 'none', title }
 }
 
 export async function fetchEdgeOfNorwaySourcePage(url: string, fetchImpl = fetch) {
