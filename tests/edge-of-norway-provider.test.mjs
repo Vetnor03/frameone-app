@@ -185,6 +185,13 @@ test('detail parser ignores unrelated embedded app dates and calendar controls o
   assert.deepEqual(detail.showings.map(s => [s.date, s.startTime, s.source]), [['2026-07-11', '17:00', 'showings_html']])
 })
 
+
+test('detail showings parser ignores active calendar date inside Showings and uses the showing row', () => {
+  const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england"></head><body><h1>Football festival in Vågen on 11 July – Norway v England</h1><h2>Showings</h2><div class="calendar"><button aria-selected="true">July 19</button></div><div class="showing-row"><span>July 11</span><span>17:00</span></div><h2>Contact</h2></body></html>`
+  const detail = parseEdgeOfNorwayDetailPage(html, 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england', '2026-07-11')
+  assert.deepEqual(detail.showings.map(s => [s.date, s.startTime, s.source]), [['2026-07-11', '17:00', 'showings_html']])
+})
+
 test('detail showings parser keeps date and time within the same displayed row', () => {
   const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england"></head><body><h1>Football festival in Vågen on 11 July – Norway v England</h1><h2>Showings</h2><article><h3>July 11</h3><p>17:00</p></article><article><h3>July 19</h3><p>19:00</p></article><h2>Contact</h2></body></html>`
   const detail = parseEdgeOfNorwayDetailPage(html, 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england', '2026-07-11')
