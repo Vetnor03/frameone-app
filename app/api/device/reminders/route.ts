@@ -5,7 +5,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncLocalEventsForUser } from '@/app/lib/integrations/local-events/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { buildLocalEventItems, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventItems, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, limitLocalEventsToNext, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -540,7 +540,7 @@ export async function GET(req: Request) {
       )
     }
 
-    const sortedCandidates = [...teamsItems, ...spondItems, ...wasteItems, ...manualItems, ...localEventItems].sort(compareReminderItems)
+    const sortedCandidates = limitLocalEventsToNext([...teamsItems, ...spondItems, ...wasteItems, ...manualItems, ...localEventItems], now).sort(compareReminderItems)
     const items = selectReminderDisplayGroups(sortedCandidates, limit)
 
     return NextResponse.json({ items })
