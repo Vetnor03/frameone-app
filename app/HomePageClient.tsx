@@ -2492,7 +2492,7 @@ function ConnectAppsScreen({
   }
 
   function fetchLocalEventsStatus() {
-    // Local events has no active provider while Edge of Norway access is pending.
+    // Local events uses the Edge of Norway server-side public-page provider.
   }
 
   async function connectTeams() {
@@ -2620,9 +2620,8 @@ function ConnectAppsScreen({
     },
     {
       key: 'local_events',
-      name: language === 'no' ? 'Lokale arrangementer' : 'Local events',
-      description: language === 'no' ? 'Oppdag utvalgte arrangementer i nærheten av deg.' : 'Discover selected events happening near you.',
-      comingSoon: true,
+      name: 'Local events',
+      description: 'Discover selected events happening near you.',
     },
     {
       key: 'vigilo',
