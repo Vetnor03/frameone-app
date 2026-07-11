@@ -8535,6 +8535,7 @@ type ReminderRepeatKey =
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
 type ReminderTagFilter = 'all' | ReminderTag
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local_events'
 
 type ReminderUiItem = {
   id: string
@@ -8544,6 +8545,8 @@ type ReminderUiItem = {
   tag: ReminderTag | null
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
+  source?: ReminderSource
+  editable?: boolean
 }
 
 type ReminderCompletionItem = {
@@ -8616,6 +8619,50 @@ function isReminderTag(v: any): v is ReminderTag {
   return v === 'work' || v === 'personal' || v === 'sports' || v === 'chores' || v === 'event'
 }
 
+
+function integrationProviderToReminderSource(provider: any): ReminderSource | null {
+  const value = String(provider ?? '').trim().toLowerCase()
+  if (value === 'spond' || value === 'teams' || value === 'waste' || value === 'local_events') return value
+  return null
+}
+
+function integrationItemDateTime(row: any) {
+  const raw = row?.raw && typeof row.raw === 'object' ? row.raw : {}
+  const rawDate = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.date) ? raw.date.slice(0, 10) : ''
+  const timestamp = String(row?.starts_at || row?.due_at || '').trim()
+  if (timestamp) {
+    const dt = new Date(timestamp)
+    if (!Number.isNaN(dt.getTime())) return { date: toLocalYmd(dt), time: `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}` }
+  }
+  return { date: rawDate, time: null }
+}
+
+function integrationReminderTitle(row: any, source: ReminderSource) {
+  const title = String(row?.title ?? '').trim()
+  if (!title) return ''
+  if (source === 'teams') return title
+  if (source === 'spond') return title
+  if (source === 'waste') return title
+  if (source === 'local_events') return title
+  return title
+}
+
+function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
+  if (source === 'teams') return 'work'
+  if (source === 'spond') return 'sports'
+  if (source === 'waste') return 'chores'
+  if (source === 'local_events') return 'event'
+  return null
+}
+
+function integrationReminderSourceLabel(language: AppLanguage, source?: ReminderSource) {
+  if (source === 'teams') return 'Teams'
+  if (source === 'spond') return 'Spond'
+  if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
+  if (source === 'local_events') return language === 'no' ? 'Lokale arrangementer' : 'Local events'
+  return language === 'no' ? 'Påminnelse' : 'Reminder'
+}
+
 function normalizeReminderItems(raw: any): ReminderUiItem[] {
   const arr = Array.isArray(raw) ? raw : []
 
@@ -8641,6 +8688,8 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
           Number.isFinite(customRepeatDaysRaw) && customRepeatDaysRaw > 0
             ? customRepeatDaysRaw
             : null,
+        source: 'remind',
+        editable: true,
       }
     })
     .filter((x) => x.title && x.date)
@@ -12194,7 +12243,7 @@ function RemindersModuleSettingsTab({
         )
       }
 
-const items: ReminderUiItem[] = (data || [])
+const manualItems: ReminderUiItem[] = (data || [])
   .map((row: any) => ({
     id: String(row.id),
     title: String(row.title ?? '').trim(),
@@ -12206,10 +12255,50 @@ const items: ReminderUiItem[] = (data || [])
       Number.isFinite(Number(row.custom_repeat_days)) && Number(row.custom_repeat_days) > 0
         ? Number(row.custom_repeat_days)
         : null,
+    source: 'remind' as const,
+    editable: true,
   }))
   .filter((x) => x.title && x.date)
 
-      setReminders(items)
+      let integrationItems: ReminderUiItem[] = []
+      const userId = (await supabase.auth.getUser())?.data?.user?.id
+      if (userId) {
+        const nowIso = new Date().toISOString()
+        const { data: integrationData, error: integrationError } = await supabase
+          .from('integration_items')
+          .select('id, provider, external_id, title, starts_at, due_at, raw')
+          .eq('user_id', userId)
+          .in('provider', ['spond', 'teams', 'waste', 'local_events'])
+          .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+
+        if (integrationError) {
+          alert(integrationError.message)
+        } else {
+          integrationItems = (integrationData || [])
+            .map((row: any) => {
+              const source = integrationProviderToReminderSource(row.provider)
+              if (!source) return null
+              const { date, time } = integrationItemDateTime(row)
+              const title = integrationReminderTitle(row, source)
+              if (!title || !date) return null
+              return {
+                id: `${source}:${String(row.external_id || row.id)}`,
+                title,
+                date,
+                time,
+                tag: integrationReminderTag(source),
+                repeat: 'none' as const,
+                customRepeatDays: null,
+                source,
+                editable: false,
+              }
+            })
+            .filter(Boolean) as ReminderUiItem[]
+        }
+      }
+
+      setReminders([...manualItems, ...integrationItems])
     } finally {
       setLoading(false)
     }
@@ -12651,11 +12740,15 @@ const sortedReminders = useMemo(() => {
                         <div className="mt-0.5 text-[11px] text-[color:var(--fg-35)] opacity-60">
                           {`${formatReminderFullDateLabel(language, item.displayDate)}${
                             normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
-                          } • ${reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
+                          } • ${item.editable === false ? integrationReminderSourceLabel(language, item.source) : reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
                         </div>
                       </div>
                       <div className="shrink-0 self-center">
-                        {completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
+                        {item.editable === false ? (
+                          <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[10px] tracking-widest text-[#2aa3ff]">
+                            {integrationReminderSourceLabel(language, item.source).toUpperCase()}
+                          </span>
+                        ) : completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
                           <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
                             {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
                           </span>
