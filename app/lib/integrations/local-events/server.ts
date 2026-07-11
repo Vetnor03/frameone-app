@@ -4,7 +4,7 @@ import { FRISKUS_MUNICIPALITIES, LocalEventsProviderError, getLocalEvents, seria
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
 export const UNSUPPORTED_MESSAGE = 'Local events are not supported for this municipality yet.'
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000
-const HORIZON_DAYS = 14
+const HORIZON_DAYS = 90
 
 export const MUNICIPALITIES = Object.values(FRISKUS_MUNICIPALITIES).map((m) => ({
   municipality_number: m.municipalityNumber,

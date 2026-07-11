@@ -334,6 +334,21 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   return selectedItems
 }
 
+export function selectNextLocalEventItem(items: DeviceReminderItem[], now = new Date()) {
+  const nowYmd = isoToYmdInTimeZone(now.toISOString(), 'Europe/Oslo')
+  const nowHm = isoToHmInTimeZone(now.toISOString(), 'Europe/Oslo')
+  const nowSort = `${nowYmd} ${nowHm}`
+  return items
+    .filter((event) => !(event as DeviceReminderItem & { skippedOnFrame?: boolean }).skippedOnFrame)
+    .filter((event) => reminderSortTimestamp(event) > nowSort)
+    .sort((a, b) => reminderSortTimestamp(a).localeCompare(reminderSortTimestamp(b)))[0] ?? null
+}
+
+export function limitLocalEventsToNext(items: DeviceReminderItem[], now = new Date()) {
+  const nextLocalEvent = selectNextLocalEventItem(items.filter((item) => item.source === 'local_events'), now)
+  return items.filter((item) => item.source !== 'local_events' || item === nextLocalEvent)
+}
+
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
   if (a.days_until !== b.days_until) return a.days_until - b.days_until
   if (a.occurrence_date < b.occurrence_date) return -1
