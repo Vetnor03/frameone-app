@@ -24,6 +24,7 @@ export type ParsedEdgeCard = { title: string; date: string; startTime: string | 
 export type NormalizedEdgeOccurrence = { baseEventId: string; occurrenceId: string; provider: typeof EDGE_OF_NORWAY_PROVIDER_ID; title: string; date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; canonicalUrl: string; classification: EdgeEventClassification; sourcePlaces: EdgeOfNorwayCity[] }
 export type EdgeDetailDateSource = 'json_ld' | 'embedded_data' | 'showings_html' | 'visible_html' | 'none'
 export type ParsedEdgeDetailShowing = { date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; source: Exclude<EdgeDetailDateSource, 'none'> }
+type ParsedShowing = { dateText: string; startTimeText?: string | null; endTimeText?: string | null; source: 'showings-html' }
 export type ParsedEdgeDetailPage = { canonicalUrl: string; showings: ParsedEdgeDetailShowing[]; classificationHint: EdgeEventClassification; dateSource: EdgeDetailDateSource; title: string | null }
 export type MergeStats = { cardsParsedBySource: Record<string, number>; duplicatesRemoved: number; uniqueEventsAfterGrouping: number; oneOffCount: number; separateSessionCount: number; continuousCount: number; allDayCount: number; normalizedOccurrenceCount: number; datesFromJsonLd: number; datesFromEmbeddedData: number; datesFromShowingsHtml: number; datesFromListFallback: number }
 export type EdgeRejectedCandidateDebug = { canonicalUrl: string; titleLinkText: string; ancestorTagClassChain: string[]; nearbyTextPreview: string; containerOuterHtmlPreview: string; dateLikeTextNearby: string[]; structuredOrDataDate: boolean }
@@ -153,26 +154,56 @@ function sectionAfterHeading(html: string, headingLabel: string, stopLabels: str
   return html.slice(startIndex, stopHeading?.index ?? html.length)
 }
 
+function parsedShowingFromContainer(containerHtml: string): ParsedShowing | null {
+  const containerText = text(containerHtml)
+  const dateMatch = containerText.match(/\b((?:\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+\.?|[A-Za-zæøåÆØÅ]+\.?\s+\d{1,2})(?:\s+20\d{2})?)\b/i)
+  if (!dateMatch) return null
+  const { startTime, endTime } = extractTime(containerText)
+  return { dateText: dateMatch[1], startTimeText: startTime, endTimeText: endTime, source: 'showings-html' }
+}
+
 function parseVisibleShowings(html: string, fallbackDate: string) {
   const section = sectionAfterHeading(html, 'Showings', ['Contact', 'About', 'Practical information', 'Facilities', 'Map'])
   const showings: ParsedEdgeDetailShowing[] = []
   if (!section) return showings
   const reference = new Date(`${fallbackDate}T00:00:00Z`)
-  const headingMatches = [...section.matchAll(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/gi)]
-  for (let i = 0; i < headingMatches.length; i++) {
-    const heading = headingMatches[i]
-    const date = parseAnyDateHeading(heading[0], reference)
-    if (!date) continue
-    const afterHeading = section.slice((heading.index || 0) + heading[0].length, headingMatches[i + 1]?.index ?? section.length)
-    const { startTime, endTime } = extractTime(text(afterHeading).slice(0, 120))
-    pushShowing(showings, date, startTime, 'showings_html', null, endTime)
+  const parsedShowings: ParsedShowing[] = []
+
+  // First parse repeated showing cards/rows as atomic containers. Dates and times
+  // are extracted from the same container to avoid pairing one row's date with
+  // another row's time. Match order preserves DOM order.
+  const rowMatches = [...section.matchAll(/<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi)]
+  for (const row of rowMatches) {
+    const parsed = parsedShowingFromContainer(row[0])
+    if (parsed) parsedShowings.push(parsed)
   }
-  if (showings.length) return showings
-  const plain = text(section)
-  for (const m of plain.matchAll(/\b((?:\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+\.?|[A-Za-zæøåÆØÅ]+\.?\s+\d{1,2})(?:\s+20\d{2})?)\b([\s\S]{0,100}?(?:\d{1,2}(?::|\.)\d{2}|\b(?:kl\.?|klokken|show)\s*\d{1,2}))/gi)) {
-    const date = parseAnyDateHeading(m[1], reference)
-    const { startTime, endTime } = extractTime(m[2])
-    if (date) pushShowing(showings, date, startTime, 'showings_html', null, endTime)
+
+  if (!parsedShowings.length) {
+    const headingMatches = [...section.matchAll(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/gi)]
+    const seenContainers = new Set<string>()
+    for (const heading of headingMatches) {
+      if (!parseAnyDateHeading(heading[0], reference)) continue
+      const container = balancedContainerAround(section, heading.index || 0)
+      if (seenContainers.has(container)) continue
+      seenContainers.add(container)
+      const parsed = parsedShowingFromContainer(container)
+      if (parsed) parsedShowings.push(parsed)
+    }
+  }
+
+  if (!parsedShowings.length) {
+    // Last-resort text fallback only accepts a single text run that contains both
+    // the date and time for one showing; it does not collect dates and times into
+    // separate arrays.
+    for (const line of text(section).split(/(?<=\d{2})\s+(?=(?:\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+|[A-Za-zæøåÆØÅ]+\.?\s+\d{1,2}))/)) {
+      const parsed = parsedShowingFromContainer(line)
+      if (parsed) parsedShowings.push(parsed)
+    }
+  }
+
+  for (const parsed of parsedShowings) {
+    const date = parseAnyDateHeading(parsed.dateText, reference)
+    if (date) pushShowing(showings, date, parsed.startTimeText || null, 'showings_html', null, parsed.endTimeText || null)
   }
   return showings
 }

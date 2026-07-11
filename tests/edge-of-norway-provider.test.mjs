@@ -185,6 +185,24 @@ test('detail parser ignores unrelated embedded app dates and calendar controls o
   assert.deepEqual(detail.showings.map(s => [s.date, s.startTime, s.source]), [['2026-07-11', '17:00', 'showings_html']])
 })
 
+test('detail showings parser keeps date and time within the same displayed row', () => {
+  const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england"></head><body><h1>Football festival in Vågen on 11 July – Norway v England</h1><h2>Showings</h2><article><h3>July 11</h3><p>17:00</p></article><article><h3>July 19</h3><p>19:00</p></article><h2>Contact</h2></body></html>`
+  const detail = parseEdgeOfNorwayDetailPage(html, 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england', '2026-07-11')
+  assert.deepEqual(detail.showings.map(s => [s.date, s.startTime, s.source]), [
+    ['2026-07-11', '17:00', 'showings_html'],
+    ['2026-07-19', '19:00', 'showings_html'],
+  ])
+})
+
+test('detail showings parser does not borrow a time from another row', () => {
+  const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/row-boundary-test"></head><body><h1>Row boundary test</h1><h2>Showings</h2><article><h3>July 11</h3></article><article><h3>July 19</h3><p>17:00</p></article><h2>Contact</h2></body></html>`
+  const detail = parseEdgeOfNorwayDetailPage(html, 'https://www.fjordnorway.com/en/events/row-boundary-test', '2026-07-11')
+  assert.deepEqual(detail.showings.map(s => [s.date, s.startTime, s.source]), [
+    ['2026-07-11', null, 'showings_html'],
+    ['2026-07-19', '17:00', 'showings_html'],
+  ])
+})
+
 test('merge rejects non-continuous detail occurrences outside import window', () => {
   const cards = parseEdgeOfNorwayListPage(`<h2>11 July</h2><article><a href="https://www.fjordnorway.com/en/events/window-test">Window test</a><a href="https://www.fjordnorway.com/en/events/window-test">Read more</a></article>`, 'stavanger', new Date('2026-07-11T00:00:00Z'))
   const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/window-test"><script type="application/ld+json">{"@type":"Event","name":"Window test","url":"https://www.fjordnorway.com/en/events/window-test","startDate":"2026-06-29T12:00:00+02:00"}</script></head><body><h1>Window test</h1></body></html>`
