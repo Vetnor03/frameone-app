@@ -20,11 +20,11 @@ export const EDGE_OF_NORWAY_SOURCE_PAGES = EDGE_OF_NORWAY_CITY_OPTIONS.map((city
 }))
 
 type TimeSource = 'card' | 'description' | 'detail' | 'all_day'
-export type ParsedEdgeCard = { title: string; date: string; startTime: string | null; endTime: string | null; allDay: boolean; canonicalUrl: string; sourcePlace: EdgeOfNorwayCity; category: string | null; shortDescription: string | null; timeSource: TimeSource }
+export type ParsedEdgeCard = { title: string; date: string; startTime: string | null; endTime: string | null; allDay: boolean; canonicalUrl: string; sourcePlace: EdgeOfNorwayCity; category: string | null; shortDescription: string | null; timeSource: TimeSource; dateSource: 'compact_card' | 'group_marker' | 'detail' }
 export type NormalizedEdgeOccurrence = { baseEventId: string; occurrenceId: string; provider: typeof EDGE_OF_NORWAY_PROVIDER_ID; title: string; date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; canonicalUrl: string; classification: EdgeEventClassification; sourcePlaces: EdgeOfNorwayCity[] }
 export type MergeStats = { cardsParsedBySource: Record<string, number>; duplicatesRemoved: number; uniqueEventsAfterGrouping: number; oneOffCount: number; separateSessionCount: number; continuousCount: number; allDayCount: number; normalizedOccurrenceCount: number }
 export type EdgeRejectedCandidateDebug = { canonicalUrl: string; titleLinkText: string; ancestorTagClassChain: string[]; nearbyTextPreview: string; containerOuterHtmlPreview: string; dateLikeTextNearby: string[]; structuredOrDataDate: boolean }
-export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlLength: number; dateHeadingCount: number; fjordNorwayEventLinkCount: number; candidateCardCount: number; parsedCardCount: number; rejectedMissingTitle: number; rejectedMissingDate: number; rejectedMissingSourceUrl: number; rejectedMissingDateSamples: EdgeRejectedCandidateDebug[] }
+export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlLength: number; dateHeadingCount: number; fjordNorwayEventLinkCount: number; candidateCardCount: number; parsedCardCount: number; rejectedMissingTitle: number; rejectedMissingDate: number; rejectedMissingSourceUrl: number; dateFromCompactCard: number; dateFromGroupMarker: number; dateFromDetailPage: number; rejectedActualEventMissingDate: number; rejectedMissingDateSamples: EdgeRejectedCandidateDebug[] }
 
 
 const CTA_LABELS = new Set(['book', 'read more', 'buy tickets', 'tickets', 'les mer', 'mehr erfahren'])
@@ -78,26 +78,43 @@ export function isFjordNorwayEventDetailUrl(href: string, pageUrl: string): bool
 export function stableBaseEventId(canonicalUrl: string) { return crypto.createHash('sha256').update(canonicalUrl.trim().toLowerCase()).digest('hex').slice(0, 16) }
 export function stableOccurrenceId(canonicalUrl: string, date: string, startTime: string | null) { return `${stableBaseEventId(canonicalUrl)}:${date}:${startTime || 'all-day'}` }
 
-export function parseDateHeading(heading: string, referenceDate = new Date()) {
-  const m = text(heading).toLowerCase().match(/\b(\d{1,2})\.?\s+([a-zæøå]+)(?:\s+(\d{4}))?\b/i)
+function addDays(date: Date, days: number) { const d = new Date(date); d.setUTCDate(d.getUTCDate() + days); return d }
+function sourceRange(referenceDate: Date) { const start = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate())); return { start, end: addDays(start, 29) } }
+function normalizeMonth(value: string) { return value.trim().toLowerCase().replace(/\.+$/g, '') }
+function resolveDateInRange(day: number, month: number, referenceDate: Date, explicitYear?: number) {
+  if (day < 1 || day > 31) return null
+  const { start, end } = sourceRange(referenceDate)
+  const years = explicitYear ? [explicitYear] : [start.getUTCFullYear(), end.getUTCFullYear(), start.getUTCFullYear() + 1, start.getUTCFullYear() - 1]
+  for (const year of [...new Set(years)]) {
+    const candidate = new Date(Date.UTC(year, month - 1, day))
+    if (candidate.getUTCFullYear() === year && candidate.getUTCMonth() + 1 === month && candidate >= start && candidate <= end) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+  if (explicitYear) return `${explicitYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return null
+}
+function parseDateOnlyLabel(label: string, referenceDate = new Date()) {
+  const m = text(label).match(/^\s*(\d{1,2})\.?\s+([A-Za-zæøåÆØÅ]+)\.?\s*(?:(\d{4}))?\s*$/i)
   if (!m) return null
-  const month = MONTHS[m[2]]
+  const month = MONTHS[normalizeMonth(m[2])]
   if (!month) return null
-  const refYear = referenceDate.getUTCFullYear(); const refMonth = referenceDate.getUTCMonth() + 1
-  let year = m[3] ? Number(m[3]) : refYear
-  if (!m[3] && refMonth === 12 && month === 1) year += 1
-  return `${year}-${String(month).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}`
+  return resolveDateInRange(Number(m[1]), month, referenceDate, m[3] ? Number(m[3]) : undefined)
+}
+export function parseDateHeading(heading: string, referenceDate = new Date()) {
+  return parseDateOnlyLabel(heading, referenceDate)
 }
 
 export function extractTime(input: string | null) {
   const s = text(input || '')
-  const re = /(?:\bkl\.?\s*|\bklokken\s+|\bfrom\s+)?(\d{1,2})(?::|\.)(\d{2})(?:\s*[–—-]\s*(\d{1,2})(?::|\.)(\d{2}))?|(?:\bkl\.?\s*|\bklokken\s+)(\d{1,2})(?!\d)/i
+  const re = /(?:\bkl\.?\s*|\bklokken\s+|\bfrom\s+|\bshow\s+)?(\d{1,2})(?::|\.)(\d{2})(?:\s*(?:[–—-]|to)\s*(\d{1,2})(?::|\.)(\d{2}))?|(?:\bkl\.?\s*|\bklokken\s+|\bshow\s+)(\d{1,2})(?:\s*(?:[–—-]|to)\s*(\d{1,2}))?\s*(am|pm)?(?!\d)/i
   const m = s.match(re)
   if (!m) return { startTime: null, endTime: null }
-  const h = Number(m[1] ?? m[5]); const min = Number(m[2] ?? 0)
+  let h = Number(m[1] ?? m[5]); const min = Number(m[2] ?? 0); const suffix = (m[7] || '').toLowerCase()
+  if (suffix === 'pm' && h < 12) h += 12
+  if (suffix === 'am' && h === 12) h = 0
   if (h > 23 || min > 59) return { startTime: null, endTime: null }
   const startTime = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
-  const endTime = m[3] ? `${String(Number(m[3])).padStart(2, '0')}:${String(Number(m[4])).padStart(2, '0')}` : null
+  let endTime = m[3] ? `${String(Number(m[3])).padStart(2, '0')}:${String(Number(m[4])).padStart(2, '0')}` : null
+  if (m[6]) { let eh = Number(m[6]); if (suffix === 'pm' && eh < 12) eh += 12; endTime = `${String(eh).padStart(2, '0')}:00` }
   return { startTime, endTime }
 }
 
@@ -142,6 +159,24 @@ function balancedContainerAround(html: string, index: number) {
   return html.slice(Math.max(0, index - 1200), Math.min(html.length, index + 1800))
 }
 
+
+function textNodes(html: string) { return html.split(/<[^>]+>/g).map((part) => decode(part).replace(/\s+/g, ' ').trim()).filter(Boolean) }
+function compactDateFromCard(card: string, referenceDate: Date) {
+  for (const node of textNodes(card)) {
+    const date = parseDateOnlyLabel(node, referenceDate)
+    if (date) return date
+  }
+  return null
+}
+function dateMarkers(html: string, referenceDate: Date) {
+  const markers: Array<{ index: number; date: string }> = []
+  for (const m of html.matchAll(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>|<([a-z0-9-]+)\b[^>]*>\s*[^<>]{1,80}\s*<\/\1>/gi)) {
+    const date = parseDateOnlyLabel(m[0], referenceDate)
+    if (date) markers.push({ index: m.index ?? 0, date })
+  }
+  return markers.sort((a, b) => a.index - b.index)
+}
+
 function explicitDateFromCard(card: string, referenceDate: Date) {
   for (const m of card.matchAll(/<[^>]+(?:class|itemprop|property|data-testid|aria-label)=["'][^"']*(?:date|time|when|calendar|day|startDate)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/gi)) {
     const date = parseDateHeading(m[0], referenceDate)
@@ -160,17 +195,20 @@ function explicitDateFromCard(card: string, referenceDate: Date) {
 }
 
 function nearestDateGroupBefore(html: string, linkIndex: number, referenceDate: Date) {
-  const before = html.slice(0, linkIndex)
-  const headings = [...before.matchAll(/<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>|<[^>]+class=["'][^"']*(?:date|day|heading|group)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/gi)]
-  for (const match of headings.reverse()) {
-    const date = parseDateHeading(match[0], referenceDate)
-    if (date) return date
+  let found: string | null = null
+  for (const marker of dateMarkers(html, referenceDate)) {
+    if (marker.index >= linkIndex) break
+    found = marker.date
   }
-  return null
+  return found
 }
 
 function nearestDateForLink(html: string, container: string, linkIndex: number, referenceDate: Date) {
-  return explicitDateFromCard(container, referenceDate) || nearestDateGroupBefore(html, linkIndex, referenceDate)
+  const compact = compactDateFromCard(container, referenceDate) || explicitDateFromCard(container, referenceDate)
+  if (compact) return { date: compact, source: 'compact_card' as const }
+  const group = nearestDateGroupBefore(html, linkIndex, referenceDate)
+  if (group) return { date: group, source: 'group_marker' as const }
+  return null
 }
 
 function ancestorTagClassChain(html: string, index: number) {
@@ -215,9 +253,8 @@ export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: Ed
     const href = attr(m[0], 'href')
     return href ? isFjordNorwayEventDetailUrl(href, pageUrl) : false
   }).length
-  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0, rejectedMissingDateSamples: [] }
-  const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)].filter((m) => isDateGroupHeading(m[0], referenceDate))
-  stats.dateHeadingCount = dateHeadings.length
+  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0, dateFromCompactCard: 0, dateFromGroupMarker: 0, dateFromDetailPage: 0, rejectedActualEventMissingDate: 0, rejectedMissingDateSamples: [] }
+  stats.dateHeadingCount = dateMarkers(html, referenceDate).length
 
   const links = eventTitleLinks(html, pageUrl)
   stats.candidateCardCount = links.length
@@ -228,6 +265,7 @@ export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: Ed
     const currentDate = nearestDateForLink(html, container, link.index, referenceDate)
     if (!currentDate) {
       stats.rejectedMissingDate += 1
+      stats.rejectedActualEventMissingDate += 1
       if (stats.rejectedMissingDateSamples.length < 3) stats.rejectedMissingDateSamples.push(rejectedCandidateDebug(html, link, container))
       continue
     }
@@ -237,7 +275,9 @@ export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: Ed
     const shortDescription = text(descriptionHtml(container).slice(0, 500)) || null
     if (!startTime) { const t = extractTime(shortDescription || container); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = shortDescription ? 'description' : 'card' }
     const category = text(categoryHtml(container)) || null
-    cards.push({ title, date: currentDate, startTime, endTime, allDay: !startTime, canonicalUrl, sourcePlace, category, shortDescription, timeSource })
+    if (currentDate.source === 'compact_card') stats.dateFromCompactCard += 1
+    else stats.dateFromGroupMarker += 1
+    cards.push({ title, date: currentDate.date, startTime, endTime, allDay: !startTime, canonicalUrl, sourcePlace, category, shortDescription, timeSource, dateSource: currentDate.source })
   }
   const dedupedCards = [...new Map(cards.map(c => [`${c.canonicalUrl}:${c.date}:${c.startTime || 'all-day'}`, c])).values()]
   stats.parsedCardCount = dedupedCards.length
@@ -253,10 +293,14 @@ export function mergeRegionalEvents(cards: ParsedEdgeCard[], details: Record<str
   const byUrl = new Map<string, ParsedEdgeCard[]>(); for (const c of cards) byUrl.set(c.canonicalUrl, [...(byUrl.get(c.canonicalUrl) || []), c])
   const occurrences: NormalizedEdgeOccurrence[] = []
   for (const [url, group] of byUrl) {
-    const classification = classify(group, details[url]); const baseEventId = stableBaseEventId(url); const dates = group.map(g => g.date).sort(); const places = [...new Set(group.map(g => g.sourcePlace))]
+    const detail = details[url] ? parseEdgeOfNorwayDetailPage(details[url], url, group[0].date) : null
+    const classification = detail?.classificationHint || classify(group, details[url]); const baseEventId = stableBaseEventId(url); const dates = group.map(g => g.date).sort(); const places = [...new Set(group.map(g => g.sourcePlace))]
     if (classification === 'continuous') {
       const first = group.find(g => g.startTime) || group[0]
       occurrences.push({ baseEventId, occurrenceId: `${baseEventId}:${dates[0]}:${dates.at(-1)}:continuous`, provider: EDGE_OF_NORWAY_PROVIDER_ID, title: first.title, date: dates[0], endDate: dates.at(-1) || dates[0], startTime: null, endTime: null, startsAt: osloIso(dates[0], null), endsAt: osloIso(dates.at(-1) || dates[0], '23:59'), allDay: true, canonicalUrl: url, classification, sourcePlaces: places })
+    } else if (detail?.showings.length) {
+      const first = group[0]
+      for (const showing of new Map(detail.showings.map(x => [`${x.date}:${x.startTime}`, x])).values()) occurrences.push({ baseEventId, occurrenceId: stableOccurrenceId(url, showing.date, showing.startTime), provider: EDGE_OF_NORWAY_PROVIDER_ID, title: first.title, date: showing.date, endDate: null, startTime: showing.startTime, endTime: null, startsAt: showing.startsAt, endsAt: null, allDay: false, canonicalUrl: url, classification, sourcePlaces: places })
     } else {
       for (const g of new Map(group.map(x => [`${x.date}:${x.startTime || 'all-day'}`, x])).values()) occurrences.push({ baseEventId, occurrenceId: stableOccurrenceId(url, g.date, g.startTime), provider: EDGE_OF_NORWAY_PROVIDER_ID, title: g.title, date: g.date, endDate: null, startTime: g.startTime, endTime: g.endTime, startsAt: osloIso(g.date, g.startTime), endsAt: g.endTime ? osloIso(g.date, g.endTime) : null, allDay: !g.startTime, canonicalUrl: url, classification, sourcePlaces: places })
     }

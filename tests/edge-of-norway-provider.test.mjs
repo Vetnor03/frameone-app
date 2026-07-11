@@ -102,10 +102,45 @@ test('year transitions assign January headings to upcoming year when discovered 
   assert.equal(parseDateHeading('<h2>2 January</h2>', new Date('2026-12-15T00:00:00Z')), '2027-01-02')
 })
 
+
+
+test('compact card date labels parse with abbreviations, full months and optional trailing periods', () => {
+  assert.equal(parseDateHeading('11. Jul.', new Date('2026-07-11T00:00:00Z')), '2026-07-11')
+  assert.equal(parseDateHeading('11 Jul', new Date('2026-07-11T00:00:00Z')), '2026-07-11')
+  assert.equal(parseDateHeading('11. July', new Date('2026-07-11T00:00:00Z')), '2026-07-11')
+  assert.equal(parseDateHeading('04. Aug.', new Date('2026-07-11T00:00:00Z')), '2026-08-04')
+  assert.equal(parseDateHeading('4 Aug', new Date('2026-07-11T00:00:00Z')), '2026-08-04')
+  assert.equal(parseDateHeading('4. August', new Date('2026-07-11T00:00:00Z')), '2026-08-04')
+})
+
+test('year resolution uses the 30 day source page range including December/January rollover', () => {
+  assert.equal(parseDateHeading('09. Aug.', new Date('2026-07-11T00:00:00Z')), '2026-08-09')
+  assert.equal(parseDateHeading('2 January', new Date('2026-12-20T00:00:00Z')), '2027-01-02')
+  assert.equal(parseDateHeading('27 December', new Date('2026-12-20T00:00:00Z')), '2026-12-27')
+})
+
+test('Sandnes, Sola and Egersund cards receive compact card dates without heading tags', () => {
+  const html = (place, day, title) => `<section><div>not a heading</div><li class="event-card"><div class="event-card__date">${day}</div><a href="https://www.fjordnorway.com/en/events/${place}-compact">${title}</a><a href="https://www.fjordnorway.com/en/events/${place}-compact">Read more</a></li></section>`
+  for (const [place, day, title] of [['sandnes', '11. Jul.', 'Sandnes compact'], ['sola', '04. Aug.', 'Sola compact'], ['egersund', '4 August', 'Egersund compact']]) {
+    const { cards, stats } = parseEdgeOfNorwayListPageWithStats(html(place, day, title), place, { referenceDate: new Date('2026-07-11T00:00:00Z') })
+    assert.equal(cards.length, 1)
+    assert.equal(stats.dateFromCompactCard, 1)
+    assert.equal(stats.rejectedActualEventMissingDate, 0)
+  }
+})
+
+test('detail page showings override false daily list repetition for Every Friday in July', () => {
+  const cards = ['11. Jul.', '12. Jul.', '13. Jul.', '18. Jul.'].flatMap((date) => parseEdgeOfNorwayListPage(`<li class="event-card"><div>${date}</div><a href="https://www.fjordnorway.com/en/events/every-friday-in-july">Every Friday in July at Melkebaren</a><p class="description">Every Friday in July. Show 7-9 pm.</p></li>`, 'sandnes', new Date('2026-07-11T00:00:00Z')))
+  const { occurrences } = mergeRegionalEvents(cards, { 'https://www.fjordnorway.com/en/events/every-friday-in-july': '<main><p>Every Friday in July.</p><p>11 July 19:00</p><p>18 July 19:00</p></main>' })
+  assert.deepEqual(occurrences.map(o => o.date), ['2026-07-11', '2026-07-18'])
+  assert.equal(occurrences.length, 2)
+})
+
 test('time extraction supports common formats', () => {
   assert.deepEqual(extractTime('kl. 18.30'), { startTime: '18:30', endTime: null })
   assert.deepEqual(extractTime('18:30–20:00'), { startTime: '18:30', endTime: '20:00' })
   assert.deepEqual(extractTime('klokken 11'), { startTime: '11:00', endTime: null })
+  assert.deepEqual(extractTime('Show 7–9 pm'), { startTime: '19:00', endTime: '21:00' })
 })
 
 test('detail page parser can provide missing start time from public detail HTML', () => {

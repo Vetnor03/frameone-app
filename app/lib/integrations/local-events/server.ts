@@ -64,7 +64,17 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
     const pageParseStats = parsedPages.map((parsed) => parsed.stats)
     for (const pageStats of pageParseStats) console.info('Edge of Norway local events parse stats', pageStats)
     const cards = parsedPages.flatMap((parsed) => parsed.cards)
-    const { occurrences, stats } = mergeRegionalEvents(cards)
+    const uniqueCanonicalUrls = [...new Set(cards.map((card) => card.canonicalUrl))]
+    const detailResults = await Promise.all(uniqueCanonicalUrls.map(async (url) => {
+      try {
+        const result = await fetchEdgeOfNorwaySourcePage(url)
+        return result.status >= 200 && result.status < 300 ? [url, result.html] as const : [url, ''] as const
+      } catch {
+        return [url, ''] as const
+      }
+    }))
+    const details = Object.fromEntries(detailResults.filter(([, html]) => html))
+    const { occurrences, stats } = mergeRegionalEvents(cards, details)
     if (cards.length < 20 || occurrences.length < 10) throw new Error(`Edge of Norway parsed an implausibly low event set (${cards.length} cards/${occurrences.length} occurrences); refusing to delete existing local events. Page stats: ${JSON.stringify(pageParseStats)}`)
     const rows = occurrences.map((event) => ({
       user_id: userId,
@@ -106,7 +116,7 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
       .not('external_id', 'in', `(${externalIdList})`)
     if (deleteError) throw new Error(deleteError.message)
 
-    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats: { ...stats, pageParseStats } }
+    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats: { ...stats, detailPagesFetched: Object.keys(details).length, rowsUpserted: rows.length, sqlRequired: false, pageParseStats } }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to sync local events'
     await supabase
