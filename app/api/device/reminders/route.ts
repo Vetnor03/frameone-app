@@ -151,14 +151,12 @@ function getClockPartsInTimeZone(date: Date, timeZone: string) {
   return { hour, minute }
 }
 
-function getTodayYmdInTimeZone(timeZone: string) {
-  const now = new Date()
+function getTodayYmdInTimeZone(timeZone: string, now = new Date()) {
   const { year, month, day } = getDatePartsInTimeZone(now, timeZone)
   return `${year}-${pad2(month)}-${pad2(day)}`
 }
 
-function getNowHmInTimeZone(timeZone: string) {
-  const now = new Date()
+function getNowHmInTimeZone(timeZone: string, now = new Date()) {
   const { hour, minute } = getClockPartsInTimeZone(now, timeZone)
   return `${pad2(hour)}:${pad2(minute)}`
 }
@@ -417,8 +415,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: completionsError.message }, { status: 500 })
     }
 
-    const todayYmd = getTodayYmdInTimeZone(timeZone)
-    const nowHm = getNowHmInTimeZone(timeZone)
+    const now = new Date()
+    const todayYmd = getTodayYmdInTimeZone(timeZone, now)
+    const nowHm = getNowHmInTimeZone(timeZone, now)
 
     const today = parseYmdToLocalDate(todayYmd)
     if (!today) {
