@@ -14,27 +14,29 @@ export type NormalizedLocalEvent = {
   source_url: string
   municipality_number: string
   source: 'friskus'
-  provider: 'stavanger-friskus'
+  provider: 'friskus'
   last_fetched_at: string
   raw?: Record<string, unknown>
 }
 
+export type FriskusMunicipalityConfig = { municipalityNumber: string; municipalityName: string; friskusIdentifier?: string; baseUrl: string }
 export type GetLocalEventsOptions = { municipalityNumber: string; from: Date; to: Date }
 
-const STAVANGER_MUNICIPALITY_NUMBER = '1103'
-const STAVANGER_MUNICIPALITY_UUID = 'f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd'
-const BASE_URL = 'https://stavanger.friskus.com'
+export const FRISKUS_MUNICIPALITIES: Record<string, FriskusMunicipalityConfig> = {
+  '1103': { municipalityNumber: '1103', municipalityName: 'Stavanger', friskusIdentifier: 'f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd', baseUrl: 'https://stavanger.friskus.com' },
+  '1108': { municipalityNumber: '1108', municipalityName: 'Sandnes', baseUrl: 'https://sandnes.friskus.com' },
+}
 
 function text(value: unknown, max = 500) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
-function url(value: unknown, fallbackId?: string) {
+function url(value: unknown, baseUrl: string, fallbackId?: string) {
   const raw = String(value || '').trim()
   try {
-    if (raw) return new URL(raw, BASE_URL).toString()
+    if (raw) return new URL(raw, baseUrl).toString()
   } catch {}
-  return fallbackId ? `${BASE_URL}/events/${encodeURIComponent(fallbackId)}` : `${BASE_URL}/events`
+  return fallbackId ? `${baseUrl}/events/${encodeURIComponent(fallbackId)}` : `${baseUrl}/events`
 }
 
 function stableId(title: string, location: string | null, startsAt: string) {
@@ -71,7 +73,7 @@ function pickArray(json: any): any[] {
   return []
 }
 
-function normalize(rows: any[], fetchedAt: string, from: Date, to: Date) {
+function normalize(rows: any[], fetchedAt: string, from: Date, to: Date, config: FriskusMunicipalityConfig) {
   return rows.flatMap((raw) => {
     const title = text(raw?.title ?? raw?.name ?? raw?.summary, 160)
     const startsAt = dateValue(raw?.starts_at, raw?.start_at, raw?.startTime, raw?.start_time, raw?.startDate, raw?.start_date, raw?.date)
@@ -89,19 +91,20 @@ function normalize(rows: any[], fetchedAt: string, from: Date, to: Date) {
       location,
       short_description: text(raw?.short_description ?? raw?.description ?? raw?.body, 280) || null,
       category: category(raw),
-      source_url: url(raw?.url ?? raw?.canonical_url ?? raw?.path, String(raw?.id ?? raw?.uuid ?? '').trim() || undefined),
-      municipality_number: STAVANGER_MUNICIPALITY_NUMBER,
+      source_url: url(raw?.url ?? raw?.canonical_url ?? raw?.path, config.baseUrl, String(raw?.id ?? raw?.uuid ?? '').trim() || undefined),
+      municipality_number: config.municipalityNumber,
       source: 'friskus' as const,
-      provider: 'stavanger-friskus' as const,
+      provider: 'friskus' as const,
       last_fetched_at: fetchedAt,
       raw,
     }]
   })
 }
 
-async function fetchJsonEndpoint(from: Date, to: Date) {
-  const params = new URLSearchParams({ municipality_id: STAVANGER_MUNICIPALITY_UUID, from: from.toISOString(), to: to.toISOString() })
-  const candidates = [`${BASE_URL}/api/events?${params}`, `${BASE_URL}/api/v1/events?${params}`, `${BASE_URL}/events.json?${params}`]
+async function fetchJsonEndpoint(config: FriskusMunicipalityConfig, from: Date, to: Date) {
+  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })
+  if (config.friskusIdentifier) params.set('municipality_id', config.friskusIdentifier)
+  const candidates = [`${config.baseUrl}/api/events?${params}`, `${config.baseUrl}/api/v1/events?${params}`, `${config.baseUrl}/events.json?${params}`]
   for (const endpoint of candidates) {
     try {
       const resp = await fetch(endpoint, { headers: { accept: 'application/json' }, next: { revalidate: 60 * 60 } })
@@ -114,8 +117,8 @@ async function fetchJsonEndpoint(from: Date, to: Date) {
   return []
 }
 
-async function fetchHtmlJsonLd() {
-  const page = `${BASE_URL}/events?filters=global_filters_municipalities%28EQ%29${STAVANGER_MUNICIPALITY_UUID}%24%24true`
+async function fetchHtmlJsonLd(config: FriskusMunicipalityConfig) {
+  const page = config.friskusIdentifier ? `${config.baseUrl}/events?filters=global_filters_municipalities%28EQ%29${config.friskusIdentifier}%24%24true` : `${config.baseUrl}/events`
   const resp = await fetch(page, { headers: { accept: 'text/html' }, next: { revalidate: 60 * 60 } })
   if (!resp.ok) throw new Error(`Friskus returned ${resp.status}`)
   const html = await resp.text()
@@ -131,9 +134,10 @@ async function fetchHtmlJsonLd() {
 }
 
 export async function getLocalEvents({ municipalityNumber, from, to }: GetLocalEventsOptions): Promise<NormalizedLocalEvent[]> {
-  if (municipalityNumber !== STAVANGER_MUNICIPALITY_NUMBER) return []
+  const config = FRISKUS_MUNICIPALITIES[municipalityNumber]
+  if (!config) return []
   const fetchedAt = new Date().toISOString()
-  let rows = await fetchJsonEndpoint(from, to)
-  if (!rows.length) rows = await fetchHtmlJsonLd()
-  return normalize(rows, fetchedAt, from, to).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+  let rows = await fetchJsonEndpoint(config, from, to)
+  if (!rows.length) rows = await fetchHtmlJsonLd(config)
+  return normalize(rows, fetchedAt, from, to, config).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
 }

@@ -1,19 +1,16 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
-import { getLocalEvents, type LocalEventFilter, type NormalizedLocalEvent } from './providers/stavanger-friskus'
+import { FRISKUS_MUNICIPALITIES, getLocalEvents, type LocalEventFilter, type NormalizedLocalEvent } from './providers/friskus'
 
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
-export const STAVANGER_NUMBER = '1103'
 export const UNSUPPORTED_MESSAGE = 'Local events are not supported for this municipality yet.'
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000
 const HORIZON_DAYS = 14
 
-export const MUNICIPALITIES = [
-  { municipality_number: '1103', municipality_name: 'Stavanger', supported: true },
-  { municipality_number: '1108', municipality_name: 'Sandnes', supported: false },
-  { municipality_number: '0301', municipality_name: 'Oslo', supported: false },
-  { municipality_number: '4601', municipality_name: 'Bergen', supported: false },
-  { municipality_number: '5001', municipality_name: 'Trondheim', supported: false },
-]
+export const MUNICIPALITIES = Object.values(FRISKUS_MUNICIPALITIES).map((m) => ({
+  municipality_number: m.municipalityNumber,
+  municipality_name: m.municipalityName,
+  supported: true,
+}))
 
 function filters(value: unknown): LocalEventFilter[] {
   const allowed = new Set(['all', 'children_family', 'culture', 'sport_outdoor', 'other'])
@@ -58,7 +55,7 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
   if (!opts.force && data.last_sync_at && Date.now() - new Date(data.last_sync_at).getTime() < SYNC_INTERVAL_MS) return { synced: false }
   const creds = data.encrypted_credentials && typeof data.encrypted_credentials === 'object' ? data.encrypted_credentials as any : {}
   const municipalityNumber = String(creds.municipality_number || '')
-  if (municipalityNumber !== STAVANGER_NUMBER) return { synced: false }
+  if (!FRISKUS_MUNICIPALITIES[municipalityNumber]) return { synced: false }
   const selectedFilters = filters(creds.filters)
   try {
     const events = await getLocalEvents({ municipalityNumber, from: new Date(), to: addDays(HORIZON_DAYS) })
