@@ -40,7 +40,7 @@ async function upsertEvents(userId: string, events: NormalizedLocalEvent[], sele
     starts_at: event.starts_at,
     due_at: event.ends_at,
     priority: 8,
-    raw: { source: LOCAL_EVENTS_PROVIDER, type: 'local_event', ...event },
+    raw: { ...event, source: LOCAL_EVENTS_PROVIDER, friskus_source: event.source, type: 'local_event' },
     updated_at: now,
   }))
   await supabase.from('integration_items').delete().eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
