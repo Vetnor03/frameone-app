@@ -65,7 +65,7 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
     for (const pageStats of pageParseStats) console.info('Edge of Norway local events parse stats', pageStats)
     const cards = parsedPages.flatMap((parsed) => parsed.cards)
     const { occurrences, stats } = mergeRegionalEvents(cards)
-    if (cards.length === 0 || occurrences.length === 0) throw new Error(`Edge of Norway parsed zero events; refusing to delete existing local events. Page stats: ${JSON.stringify(pageParseStats)}`)
+    if (cards.length < 20 || occurrences.length < 10) throw new Error(`Edge of Norway parsed an implausibly low event set (${cards.length} cards/${occurrences.length} occurrences); refusing to delete existing local events. Page stats: ${JSON.stringify(pageParseStats)}`)
     const rows = occurrences.map((event) => ({
       user_id: userId,
       provider: LOCAL_EVENTS_PROVIDER,

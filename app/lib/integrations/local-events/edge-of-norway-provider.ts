@@ -23,7 +23,8 @@ type TimeSource = 'card' | 'description' | 'detail' | 'all_day'
 export type ParsedEdgeCard = { title: string; date: string; startTime: string | null; endTime: string | null; allDay: boolean; canonicalUrl: string; sourcePlace: EdgeOfNorwayCity; category: string | null; shortDescription: string | null; timeSource: TimeSource }
 export type NormalizedEdgeOccurrence = { baseEventId: string; occurrenceId: string; provider: typeof EDGE_OF_NORWAY_PROVIDER_ID; title: string; date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; canonicalUrl: string; classification: EdgeEventClassification; sourcePlaces: EdgeOfNorwayCity[] }
 export type MergeStats = { cardsParsedBySource: Record<string, number>; duplicatesRemoved: number; uniqueEventsAfterGrouping: number; oneOffCount: number; separateSessionCount: number; continuousCount: number; allDayCount: number; normalizedOccurrenceCount: number }
-export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlLength: number; dateHeadingCount: number; fjordNorwayEventLinkCount: number; candidateCardCount: number; parsedCardCount: number; rejectedMissingTitle: number; rejectedMissingDate: number; rejectedMissingSourceUrl: number }
+export type EdgeRejectedCandidateDebug = { canonicalUrl: string; titleLinkText: string; ancestorTagClassChain: string[]; nearbyTextPreview: string; containerOuterHtmlPreview: string; dateLikeTextNearby: string[]; structuredOrDataDate: boolean }
+export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlLength: number; dateHeadingCount: number; fjordNorwayEventLinkCount: number; candidateCardCount: number; parsedCardCount: number; rejectedMissingTitle: number; rejectedMissingDate: number; rejectedMissingSourceUrl: number; rejectedMissingDateSamples: EdgeRejectedCandidateDebug[] }
 
 
 const CTA_LABELS = new Set(['book', 'read more', 'buy tickets', 'tickets', 'les mer', 'mehr erfahren'])
@@ -116,7 +117,7 @@ function balancedContainerAround(html: string, index: number) {
     const close = html.indexOf(`</${tag}>`, index)
     if (close > index) return html.slice(best.index, close + tag.length + 3)
   }
-  const eventDivRe = /<div\b[^>]*class=["'][^"']*(?:event-list-item|event-card|product-list-item|card)[^"']*["'][^>]*>/gi
+  const eventDivRe = /<div\b[^>]*class=["'][^"']*(?:event-list-item|event-card|product-list-item|search-result-card|(?:^|\s)card(?:\s|$))[^"']*["'][^>]*>/gi
   let eventDiv: RegExpExecArray | null
   let bestEventDiv: RegExpExecArray | null = null
   while ((eventDiv = eventDivRe.exec(html)) && eventDiv.index <= index) bestEventDiv = eventDiv
@@ -139,18 +140,57 @@ function balancedContainerAround(html: string, index: number) {
   return html.slice(Math.max(0, index - 1200), Math.min(html.length, index + 1800))
 }
 
-function nearestDateForLink(html: string, container: string, linkIndex: number, referenceDate: Date) {
-  const inContainer = parseDateHeading(container, referenceDate)
-  if (inContainer) return inContainer
-  const before = html.slice(Math.max(0, linkIndex - 2500), linkIndex)
-  const beforeMatches = [...before.matchAll(/\b\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+(?:\s+\d{4})?\.?\b/g)]
-  for (const match of beforeMatches.reverse()) {
+function explicitDateFromCard(card: string, referenceDate: Date) {
+  for (const m of card.matchAll(/<[^>]+(?:class|itemprop|property|data-testid|aria-label)=["'][^"']*(?:date|time|when|calendar|day|startDate)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/gi)) {
+    const date = parseDateHeading(m[0], referenceDate)
+    if (date) return date
+    const datetime = attr(m[0], 'datetime') || attr(m[0], 'content') || attr(m[0], 'data-date') || attr(m[0], 'data-start-date')
+    const isoDate = datetime?.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1]
+    if (isoDate) return isoDate
+  }
+  for (const m of card.matchAll(/\b(?:datetime|content|data-date|data-start-date|startDate)=["']([^"']+)["']/gi)) {
+    const isoDate = m[1].match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1]
+    if (isoDate) return isoDate
+    const date = parseDateHeading(m[1], referenceDate)
+    if (date) return date
+  }
+  return null
+}
+
+function nearestDateGroupBefore(html: string, linkIndex: number, referenceDate: Date) {
+  const before = html.slice(0, linkIndex)
+  const headings = [...before.matchAll(/<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>|<[^>]+class=["'][^"']*(?:date|day|heading|group)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/gi)]
+  for (const match of headings.reverse()) {
     const date = parseDateHeading(match[0], referenceDate)
     if (date) return date
   }
-  const around = html.slice(linkIndex, Math.min(html.length, linkIndex + 1200))
-  const after = around.match(/\b\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+(?:\s+\d{4})?\.?\b/)
-  return after ? parseDateHeading(after[0], referenceDate) : null
+  return null
+}
+
+function nearestDateForLink(html: string, container: string, linkIndex: number, referenceDate: Date) {
+  return explicitDateFromCard(container, referenceDate) || nearestDateGroupBefore(html, linkIndex, referenceDate)
+}
+
+function ancestorTagClassChain(html: string, index: number) {
+  const chain: string[] = []
+  for (const m of html.slice(0, index).matchAll(/<\/?([a-z0-9-]+)\b([^>]*)>/gi)) {
+    if (m[0].startsWith('</')) chain.pop()
+    else chain.push(`${m[1].toLowerCase()}${attr(m[0], 'class') ? `.${attr(m[0], 'class')}` : ''}`)
+  }
+  return chain.slice(-8)
+}
+
+function rejectedCandidateDebug(html: string, link: { tag: string; href: string; index: number }, container: string): EdgeRejectedCandidateDebug {
+  const nearby = html.slice(Math.max(0, link.index - 900), Math.min(html.length, link.index + 1400))
+  return {
+    canonicalUrl: absUrl(link.href),
+    titleLinkText: stripCtas(link.tag),
+    ancestorTagClassChain: ancestorTagClassChain(html, link.index),
+    nearbyTextPreview: text(nearby).slice(0, 600),
+    containerOuterHtmlPreview: container.replace(/\s+/g, ' ').trim().slice(0, 900),
+    dateLikeTextNearby: [...new Set([...nearby.matchAll(/\b(?:20\d{2}-\d{2}-\d{2}|\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+(?:\s+\d{4})?)\b/g)].map((m) => m[0]))].slice(0, 8),
+    structuredOrDataDate: /\b(?:datetime|content|data-date|data-start-date|startDate)=["'][^"']*(?:20\d{2}-\d{2}-\d{2}|\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+)/i.test(container),
+  }
 }
 
 function eventTitleLinks(html: string) {
@@ -168,7 +208,7 @@ function eventTitleLinks(html: string) {
 export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: EdgeOfNorwayCity, opts: { referenceDate?: Date; requestUrl?: string; status?: number } = {}) {
   const referenceDate = opts.referenceDate || new Date()
   const cards: ParsedEdgeCard[] = []
-  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount: [...html.matchAll(FJORD_EVENT_LINK_RE)].length, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0 }
+  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount: [...html.matchAll(FJORD_EVENT_LINK_RE)].length, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0, rejectedMissingDateSamples: [] }
   const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)].filter((m) => isDateGroupHeading(m[0], referenceDate))
   stats.dateHeadingCount = dateHeadings.length
 
@@ -179,7 +219,11 @@ export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: Ed
     if (!canonicalUrl) { stats.rejectedMissingSourceUrl += 1; continue }
     const container = balancedContainerAround(html, link.index)
     const currentDate = nearestDateForLink(html, container, link.index, referenceDate)
-    if (!currentDate) { stats.rejectedMissingDate += 1; continue }
+    if (!currentDate) {
+      stats.rejectedMissingDate += 1
+      if (stats.rejectedMissingDateSamples.length < 3) stats.rejectedMissingDateSamples.push(rejectedCandidateDebug(html, link, container))
+      continue
+    }
     const title = stripCtas(link.tag) || titleFromCard(container, canonicalUrl)
     if (!title || title.length < 2 || isCtaLabel(title)) { stats.rejectedMissingTitle += 1; continue }
     let { startTime, endTime } = extractTime(cardTimeHtml(container)); let timeSource: TimeSource = startTime ? 'card' : 'all_day'

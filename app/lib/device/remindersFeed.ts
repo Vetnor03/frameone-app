@@ -39,6 +39,7 @@ export type DeviceReminderItem = {
   display_time: string | null
   source?: DeviceReminderSource
   external_id?: string
+  raw?: Record<string, unknown>
 }
 
 export type IntegrationItemRow = {
@@ -287,7 +288,7 @@ export function buildLocalEventItems(
 
     return [{
       reminder_id: `local_events:${externalId}`,
-      title,
+      title: cleanLocalEventDisplayTitle(title, occurrenceDate),
       occurrence_date: occurrenceDate,
       display_date: formatDisplayDate(occurrenceDate, todayYmd),
       days_until: daysUntil,
@@ -297,12 +298,36 @@ export function buildLocalEventItems(
       display_time: displayTime,
       source: 'local_events' as const,
       external_id: externalId,
+      raw,
     }]
   })
 }
 
 function sortTimeValue(value: string | null) {
   return value || '99:99'
+}
+
+function cleanLocalEventDisplayTitle(title: string, occurrenceDate: string) {
+  const [, monthValue, dayValue] = occurrenceDate.split('-').map(Number)
+  if (!Number.isFinite(monthValue) || !Number.isFinite(dayValue)) return title
+  const monthForName: Record<string, number> = {
+    january: 1, jan: 1,
+    february: 2, februar: 2, feb: 2,
+    march: 3, mars: 3, mar: 3,
+    april: 4, apr: 4,
+    may: 5, mai: 5,
+    june: 6, juni: 6, jun: 6,
+    july: 7, juli: 7, jul: 7,
+    august: 8, aug: 8,
+    september: 9, sep: 9,
+    october: 10, oktober: 10, oct: 10, okt: 10,
+    november: 11, nov: 11,
+    december: 12, desember: 12, dec: 12, des: 12,
+  }
+  return title.replace(/(?:,\s*|\s+[–-]\s+|\s+)(\d{1,2})\.?\s+([A-Za-zæøåÆØÅ]+)\.?\s*$/i, (match, day, monthName) => {
+    const month = monthForName[String(monthName).toLowerCase()]
+    return Number(day) === dayValue && month === monthValue ? '' : match
+  }).replace(/\s+/g, ' ').trim()
 }
 
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
@@ -338,10 +363,34 @@ export function selectNextLocalEventItem(items: DeviceReminderItem[], now = new 
   const nowYmd = isoToYmdInTimeZone(now.toISOString(), 'Europe/Oslo')
   const nowHm = isoToHmInTimeZone(now.toISOString(), 'Europe/Oslo')
   const nowSort = `${nowYmd} ${nowHm}`
-  return items
+  const importedLocalEvents = items.length
+  const removedAlreadyStarted = items.filter((event) => reminderSortTimestamp(event) <= nowSort && event.raw?.all_day !== true).length
+  const removedExpiredAllDay = items.filter((event) => reminderSortTimestamp(event) <= nowSort && event.raw?.all_day === true).length
+  const removedSkipped = items.filter((event) => (event as DeviceReminderItem & { skippedOnFrame?: boolean }).skippedOnFrame).length
+  const eligible = items
     .filter((event) => !(event as DeviceReminderItem & { skippedOnFrame?: boolean }).skippedOnFrame)
     .filter((event) => reminderSortTimestamp(event) > nowSort)
-    .sort((a, b) => reminderSortTimestamp(a).localeCompare(reminderSortTimestamp(b)))[0] ?? null
+  const rank = (event: DeviceReminderItem) => {
+    const classification = String(event.raw?.event_kind || '')
+    if (classification === 'one_off') return { priority: 1, reason: 'timely one-off event' }
+    if (classification === 'separate_session') return { priority: 3, reason: 'meaningful separate session' }
+    if (classification === 'continuous') return event.days_until <= 1 ? { priority: 4, reason: 'newly opened continuous event' } : { priority: 5, reason: 'continuous event ending soon' }
+    return { priority: 2, reason: 'festival or limited event' }
+  }
+  const ranked = eligible.map((event) => ({ event, ...rank(event) })).sort((a, b) => a.priority - b.priority || reminderSortTimestamp(a.event).localeCompare(reminderSortTimestamp(b.event)))
+  const selected = ranked[0] ?? null
+  console.info('frame/mirror local event selector diagnostics', {
+    importedLocalEvents,
+    upcomingEligibleEvents: eligible.length,
+    removedAlreadyStarted,
+    removedExpiredAllDay,
+    removedSkipped,
+    removedHiddenSeries: 0,
+    removedByContinuousCooldown: 0,
+    rankedCandidates: ranked.slice(0, 10).map(({ event, priority, reason }) => ({ title: event.title, classification: event.raw?.event_kind || null, startAt: `${event.occurrence_date} ${event.display_time || 'all-day'}`, priority, reason })),
+    selectedEvent: selected ? { title: selected.event.title, startAt: `${selected.event.occurrence_date} ${selected.event.display_time || 'all-day'}`, classification: selected.event.raw?.event_kind || null, reason: selected.reason } : null,
+  })
+  return selected?.event ?? null
 }
 
 export function limitLocalEventsToNext(items: DeviceReminderItem[], now = new Date()) {
