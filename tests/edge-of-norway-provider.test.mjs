@@ -203,6 +203,18 @@ test('detail showings parser does not borrow a time from another row', () => {
   ])
 })
 
+
+test('football festival detail showing stays one-off on 11 July at 17:00', () => {
+  const url = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
+  const cards = parseEdgeOfNorwayListPage(`<li class="event-card"><div>11. Jul.</div><a href="${url}">Football festival in Vågen on 11 July – Norway v England</a><p>17:00</p></li>`, 'stavanger', new Date('2026-07-11T00:00:00Z'))
+  const detailHtml = `<main><h1>Football festival in Vågen on 11 July – Norway v England</h1><h2>Showings</h2><article><h3>July 11</h3><p>17:00</p></article><h2>Contact</h2></main>`
+  const { occurrences } = mergeRegionalEvents(cards, { [url]: detailHtml })
+  assert.equal(occurrences.length, 1)
+  assert.equal(occurrences[0].date, '2026-07-11')
+  assert.equal(occurrences[0].startTime, '17:00')
+  assert.equal(occurrences[0].classification, 'one_off')
+})
+
 test('merge rejects non-continuous detail occurrences outside import window', () => {
   const cards = parseEdgeOfNorwayListPage(`<h2>11 July</h2><article><a href="https://www.fjordnorway.com/en/events/window-test">Window test</a><a href="https://www.fjordnorway.com/en/events/window-test">Read more</a></article>`, 'stavanger', new Date('2026-07-11T00:00:00Z'))
   const html = `<html><head><link rel="canonical" href="https://www.fjordnorway.com/en/events/window-test"><script type="application/ld+json">{"@type":"Event","name":"Window test","url":"https://www.fjordnorway.com/en/events/window-test","startDate":"2026-06-29T12:00:00+02:00"}</script></head><body><h1>Window test</h1></body></html>`
