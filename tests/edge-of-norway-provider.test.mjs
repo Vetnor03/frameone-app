@@ -32,7 +32,7 @@ test('list parser handles server-returned Edge of Norway div cards and reports p
   assert.equal(stats.requestUrl.includes('place=stavanger'), true)
   assert.equal(stats.status, 200)
   assert.equal(stats.dateHeadingCount, 2)
-  assert.equal(stats.fjordNorwayEventLinkCount, 5)
+  assert.equal(stats.fjordNorwayEventLinkCount, 6)
   assert.equal(stats.candidateCardCount, 3)
   assert.equal(stats.parsedCardCount, 3)
   assert.equal(stats.rejectedMissingTitle, 0)
