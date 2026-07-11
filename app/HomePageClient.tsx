@@ -2684,6 +2684,19 @@ function ConnectAppsScreen({
     },
   ]
 
+  function getAppConnected(app: { key: ConnectAppKey; comingSoon?: boolean }) {
+    if (app.comingSoon) return false
+    if (locallyDisconnectedApps[app.key]) return false
+    if (app.key === 'spond') return spondConnected
+    if (app.key === 'teams') return teamsConnected
+    if (app.key === 'local_events') return localEventsConnected
+    return connectAppIsConnected(modulesJson, app.key)
+  }
+
+  const sortedApps = apps
+    .map((app, index) => ({ app, index, connected: getAppConnected(app) }))
+    .sort((a, b) => Number(b.connected) - Number(a.connected) || a.index - b.index)
+
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
       <div className="pt-5 pb-6">
@@ -2715,8 +2728,7 @@ function ConnectAppsScreen({
         )}
 
         <div className="mt-4 space-y-2.5">
-          {apps.map((app) => {
-            const connected = app.comingSoon ? false : locallyDisconnectedApps[app.key] ? false : app.key === 'spond' ? spondConnected : app.key === 'teams' ? teamsConnected : app.key === 'local_events' ? localEventsConnected : connectAppIsConnected(modulesJson, app.key)
+          {sortedApps.map(({ app, connected }) => {
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
             return (
               <div
