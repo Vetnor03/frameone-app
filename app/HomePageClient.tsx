@@ -2402,7 +2402,7 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'local_events'
+type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'local_events' | 'vigilo'
 type DisconnectableConnectAppKey = 'spond' | 'teams' | 'local_events'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
@@ -2655,6 +2655,11 @@ function ConnectAppsScreen({
         language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
     },
     {
+      key: 'local_events',
+      name: language === 'no' ? 'Lokale arrangementer' : 'Local events',
+      description: language === 'no' ? 'Se kommende aktiviteter og arrangementer fra kommunen din.' : 'See upcoming activities and events from your municipality.',
+    },
+    {
       key: 'transponder',
       name: 'Transponder',
       description:
@@ -2664,15 +2669,17 @@ function ConnectAppsScreen({
       comingSoon: true,
     },
     {
-      key: 'local_events',
-      name: language === 'no' ? 'Lokale arrangementer' : 'Local events',
-      description: language === 'no' ? 'Se kommende aktiviteter og arrangementer fra kommunen din.' : 'See upcoming activities and events from your municipality.',
-    },
-    {
       key: 'waste',
       name: language === 'no' ? 'Renovasjon' : 'Waste collection',
       description:
         language === 'no' ? 'Renovasjonsvarsler kommer snart' : 'Waste collection reminders coming soon',
+      comingSoon: true,
+    },
+    {
+      key: 'vigilo',
+      name: 'Vigilo',
+      description:
+        language === 'no' ? 'Vigilo-tilkobling kommer snart' : 'Vigilo connection coming soon',
       comingSoon: true,
     },
   ]
@@ -2695,15 +2702,15 @@ function ConnectAppsScreen({
             </button>
           )}
           <div className="text-[color:var(--fg-90)] text-sm font-semibold">
-            {language === 'no' ? 'Koble til apper' : 'Connect apps'}
+            {language === 'no' ? 'Koble til' : 'Connect'}
           </div>
         </div>
 
         {startup && (
           <p className="mt-3 px-1 text-xs leading-5 text-[color:var(--fg-50)]">
             {language === 'no'
-              ? 'Koble til appene du bruker nå, eller se hvilke integrasjoner som kommer snart – inkludert renovasjonsvarsler.'
-              : 'Connect the apps you use now, or preview coming-soon integrations — including waste collection reminders.'}
+              ? 'Koble til tjenestene du bruker nå, eller se hvilke integrasjoner som kommer snart – inkludert renovasjonsvarsler.'
+              : 'Connect the services you use now, or preview coming-soon integrations — including waste collection reminders.'}
           </p>
         )}
 
