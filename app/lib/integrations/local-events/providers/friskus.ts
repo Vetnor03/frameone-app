@@ -19,24 +19,44 @@ export type NormalizedLocalEvent = {
   raw?: Record<string, unknown>
 }
 
-export type FriskusMunicipalityConfig = { municipalityNumber: string; municipalityName: string; friskusIdentifier?: string; baseUrl: string }
-export type GetLocalEventsOptions = { municipalityNumber: string; from: Date; to: Date }
-
-export const FRISKUS_MUNICIPALITIES: Record<string, FriskusMunicipalityConfig> = {
-  '1103': { municipalityNumber: '1103', municipalityName: 'Stavanger', friskusIdentifier: 'f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd', baseUrl: 'https://stavanger.friskus.com' },
-  '1108': { municipalityNumber: '1108', municipalityName: 'Sandnes', baseUrl: 'https://sandnes.friskus.com' },
+export type FriskusMunicipalityConfig = {
+  municipalityNumber: string
+  municipalityName: string
+  providerMunicipality: string
+  publicBaseUrl: string
 }
+export type GetLocalEventsOptions = { municipalityNumber: string; from: Date; to: Date }
+export type LocalEventsDebugResult = {
+  municipality: string
+  providerMunicipality: string
+  requestSucceeded: boolean
+  status: number | null
+  contentType: string | null
+  requestUrl: string
+  rawCount: number
+  filteredCount: number
+  normalizedCount: number
+  sampleRawEvent: unknown | null
+  sampleNormalizedEvent: NormalizedLocalEvent | null
+  diagnostics: Record<string, unknown>
+}
+
+export const LOCAL_EVENT_MUNICIPALITIES: Record<string, FriskusMunicipalityConfig> = {
+  '1103': { municipalityNumber: '1103', municipalityName: 'Stavanger', providerMunicipality: 'stavanger', publicBaseUrl: 'https://stavanger.friskus.com' },
+  '1108': { municipalityNumber: '1108', municipalityName: 'Sandnes', providerMunicipality: 'sandnes', publicBaseUrl: 'https://sandnes.friskus.com' },
+}
+
+export const FRISKUS_MUNICIPALITIES = LOCAL_EVENT_MUNICIPALITIES
 
 function text(value: unknown, max = 500) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
-function url(value: unknown, baseUrl: string, fallbackId?: string) {
-  const raw = String(value || '').trim()
-  try {
-    if (raw) return new URL(raw, baseUrl).toString()
-  } catch {}
-  return fallbackId ? `${baseUrl}/events/${encodeURIComponent(fallbackId)}` : `${baseUrl}/events`
+function publicUrl(raw: any, config: FriskusMunicipalityConfig, fallbackId?: string) {
+  const rawUrl = String(raw?.url ?? raw?.canonical_url ?? raw?.path ?? '').trim()
+  try { if (rawUrl) return new URL(rawUrl, config.publicBaseUrl).toString() } catch {}
+  const id = String(raw?.id ?? raw?.uuid ?? fallbackId ?? '').trim()
+  return id ? `${config.publicBaseUrl}/events/${encodeURIComponent(id)}` : `${config.publicBaseUrl}/events`
 }
 
 function stableId(title: string, location: string | null, startsAt: string) {
@@ -58,86 +78,108 @@ function dateValue(...values: unknown[]) {
   return null
 }
 
+function startOfTodayOslo(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || ''
+  return new Date(`${get('year')}-${get('month')}-${get('day')}T00:00:00+02:00`)
+}
+
 function category(raw: any): LocalEventCategory | null {
-  const hay = text([raw?.category, raw?.category_name, raw?.activity_category, raw?.tags, raw?.title].flat().join(' '), 1000).toLowerCase()
+  const hay = text([raw?.category, raw?.category_name, raw?.activity_category, raw?.tags, raw?.title, raw?.name].flat().join(' '), 1000).toLowerCase()
   if (/barn|famil|ungdom|kids|children/.test(hay)) return 'children_family'
   if (/kultur|konsert|teater|kunst|museum|film|litteratur|culture/.test(hay)) return 'culture'
   if (/sport|idrett|tur|friluft|outdoor|trim|trening/.test(hay)) return 'sport_outdoor'
   return hay ? 'other' : null
 }
 
-function pickArray(json: any): any[] {
-  if (Array.isArray(json)) return json
-  const candidates = [json?.events, json?.data?.events, json?.data?.activities, json?.activities, json?.items, json?.data?.items]
-  for (const c of candidates) if (Array.isArray(c)) return c
-  return []
+function extractRows(json: any): any[] {
+  const rows = json?.data?.events
+  if (Array.isArray(rows)) return rows
+  throw new Error(`Unexpected Friskus response shape; expected data.events array, got keys: ${Object.keys(json || {}).join(', ')}`)
 }
 
-function normalize(rows: any[], fetchedAt: string, from: Date, to: Date, config: FriskusMunicipalityConfig) {
-  return rows.flatMap((raw) => {
-    const title = text(raw?.title ?? raw?.name ?? raw?.summary, 160)
-    const startsAt = dateValue(raw?.starts_at, raw?.start_at, raw?.startTime, raw?.start_time, raw?.startDate, raw?.start_date, raw?.date)
-    if (!title || !startsAt) return []
-    const start = new Date(startsAt)
-    if (start < from || start > to) return []
-    const venue = raw?.venue ?? raw?.location ?? raw?.place ?? raw?.address
-    const location = text(typeof venue === 'object' ? (venue?.name ?? venue?.title ?? venue?.address) : venue, 140) || null
-    const id = eventId(raw, title, location, startsAt)
-    return [{
-      external_id: id,
-      title,
-      starts_at: startsAt,
-      ends_at: dateValue(raw?.ends_at, raw?.end_at, raw?.endTime, raw?.end_time, raw?.endDate, raw?.end_date),
-      location,
-      short_description: text(raw?.short_description ?? raw?.description ?? raw?.body, 280) || null,
-      category: category(raw),
-      source_url: url(raw?.url ?? raw?.canonical_url ?? raw?.path, config.baseUrl, String(raw?.id ?? raw?.uuid ?? '').trim() || undefined),
-      municipality_number: config.municipalityNumber,
-      source: 'friskus' as const,
-      provider: 'friskus' as const,
-      last_fetched_at: fetchedAt,
-      raw,
-    }]
-  })
-}
-
-async function fetchJsonEndpoint(config: FriskusMunicipalityConfig, from: Date, to: Date) {
-  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })
-  if (config.friskusIdentifier) params.set('municipality_id', config.friskusIdentifier)
-  const candidates = [`${config.baseUrl}/api/events?${params}`, `${config.baseUrl}/api/v1/events?${params}`, `${config.baseUrl}/events.json?${params}`]
-  for (const endpoint of candidates) {
-    try {
-      const resp = await fetch(endpoint, { headers: { accept: 'application/json' }, next: { revalidate: 60 * 60 } })
-      if (!resp.ok) continue
-      const json = await resp.json()
-      const rows = pickArray(json)
-      if (rows.length) return rows
-    } catch {}
+function normalizeRaw(raw: any, fetchedAt: string, config: FriskusMunicipalityConfig): NormalizedLocalEvent | null {
+  const title = text(raw?.title ?? raw?.name ?? raw?.summary, 160)
+  const startsAt = dateValue(raw?.starts_at, raw?.start_at, raw?.startTime, raw?.start_time, raw?.startDate, raw?.start_date, raw?.date, raw?.next_occurrence_at)
+  if (!title || !startsAt) return null
+  const venue = raw?.venue ?? raw?.location ?? raw?.place ?? raw?.address
+  const location = text(typeof venue === 'object' ? (venue?.name ?? venue?.title ?? venue?.address ?? venue?.formatted_address) : venue, 140) || null
+  return {
+    external_id: eventId(raw, title, location, startsAt),
+    title,
+    starts_at: startsAt,
+    ends_at: dateValue(raw?.ends_at, raw?.end_at, raw?.endTime, raw?.end_time, raw?.endDate, raw?.end_date),
+    location,
+    short_description: text(raw?.short_description ?? raw?.description ?? raw?.body, 280) || null,
+    category: category(raw),
+    source_url: publicUrl(raw, config),
+    municipality_number: config.municipalityNumber,
+    source: 'friskus',
+    provider: 'friskus',
+    last_fetched_at: fetchedAt,
+    raw,
   }
-  return []
 }
 
-async function fetchHtmlJsonLd(config: FriskusMunicipalityConfig) {
-  const page = config.friskusIdentifier ? `${config.baseUrl}/events?filters=global_filters_municipalities%28EQ%29${config.friskusIdentifier}%24%24true` : `${config.baseUrl}/events`
-  const resp = await fetch(page, { headers: { accept: 'text/html' }, next: { revalidate: 60 * 60 } })
-  if (!resp.ok) throw new Error(`Friskus returned ${resp.status}`)
-  const html = await resp.text()
-  const out: any[] = []
-  for (const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
-    try {
-      const parsed = JSON.parse(match[1] || '{}')
-      const arr = Array.isArray(parsed) ? parsed : parsed?.['@graph'] || [parsed]
-      out.push(...arr.filter((x: any) => String(x?.['@type'] || '').toLowerCase().includes('event')))
-    } catch {}
+function passesDateFilter(raw: any, from: Date, to: Date) {
+  const start = dateValue(raw?.starts_at, raw?.start_at, raw?.startTime, raw?.start_time, raw?.startDate, raw?.start_date, raw?.date, raw?.next_occurrence_at)
+  const end = dateValue(raw?.ends_at, raw?.end_at, raw?.endTime, raw?.end_time, raw?.endDate, raw?.end_date) || start
+  if (!start || !end) return false
+  const eventEnd = new Date(end)
+  const eventStart = new Date(start)
+  return eventEnd >= from && eventStart <= to
+}
+
+export function normalizeFriskusEvents(rows: any[], fetchedAt: string, from: Date, to: Date, config: FriskusMunicipalityConfig) {
+  const dateFiltered = rows.filter((row) => passesDateFilter(row, from, to))
+  const normalized = dateFiltered.flatMap((row) => {
+    const event = normalizeRaw(row, fetchedAt, config)
+    return event ? [event] : []
+  }).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+  return { dateFiltered, normalized }
+}
+
+function endpoint(config: FriskusMunicipalityConfig, from: Date, to: Date) {
+  const params = new URLSearchParams({ municipality: config.providerMunicipality, from: from.toISOString(), to: to.toISOString() })
+  return `https://api.friskus.com/api/v1/events?${params.toString()}`
+}
+
+async function fetchFriskusRows(config: FriskusMunicipalityConfig, from: Date, to: Date) {
+  const requestUrl = endpoint(config, from, to)
+  const resp = await fetch(requestUrl, { headers: { accept: 'application/json' }, next: { revalidate: 60 * 30 } })
+  const contentType = resp.headers.get('content-type')
+  const body = await resp.text()
+  const baseDiagnostics = { requestUrl, municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality, status: resp.status, contentType, bodyPreview: body.slice(0, 500) }
+  if (!resp.ok) {
+    console.error('[local-events] Friskus request failed', baseDiagnostics)
+    throw new Error('Could not load local events')
   }
-  return out
+  let json: unknown
+  try { json = JSON.parse(body) } catch (error) {
+    console.error('[local-events] Friskus JSON parse failed', { ...baseDiagnostics, error })
+    throw new Error('Could not load local events')
+  }
+  const rows = extractRows(json)
+  console.log('[local-events] Friskus request diagnostics', { ...baseDiagnostics, rawCount: rows.length })
+  return { rows, status: resp.status, contentType, requestUrl, bodyPreview: body.slice(0, 500) }
 }
 
 export async function getLocalEvents({ municipalityNumber, from, to }: GetLocalEventsOptions): Promise<NormalizedLocalEvent[]> {
   const config = FRISKUS_MUNICIPALITIES[municipalityNumber]
-  if (!config) return []
+  if (!config) throw new Error('Unsupported municipality')
+  const osloToday = startOfTodayOslo(from)
+  const { rows } = await fetchFriskusRows(config, osloToday, to)
+  const { dateFiltered, normalized } = normalizeFriskusEvents(rows, new Date().toISOString(), osloToday, to, config)
+  console.log('[local-events] Friskus normalization diagnostics', { municipalityNumber, providerMunicipality: config.providerMunicipality, rawCount: rows.length, afterDateFiltering: dateFiltered.length, afterNormalization: normalized.length })
+  return normalized
+}
+
+export async function debugLocalEvents(municipalityNumber: string, from = new Date(), to = new Date(Date.now() + 14 * 86400000)): Promise<LocalEventsDebugResult> {
+  const config = FRISKUS_MUNICIPALITIES[municipalityNumber]
+  if (!config) throw new Error('Unsupported municipality')
+  const osloToday = startOfTodayOslo(from)
   const fetchedAt = new Date().toISOString()
-  let rows = await fetchJsonEndpoint(config, from, to)
-  if (!rows.length) rows = await fetchHtmlJsonLd(config)
-  return normalize(rows, fetchedAt, from, to, config).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+  const result = await fetchFriskusRows(config, osloToday, to)
+  const { dateFiltered, normalized } = normalizeFriskusEvents(result.rows, fetchedAt, osloToday, to, config)
+  return { municipality: config.municipalityName, providerMunicipality: config.providerMunicipality, requestSucceeded: true, status: result.status, contentType: result.contentType, requestUrl: result.requestUrl, rawCount: result.rows.length, filteredCount: dateFiltered.length, normalizedCount: normalized.length, sampleRawEvent: result.rows[0] || null, sampleNormalizedEvent: normalized[0] || null, diagnostics: { bodyPreview: result.bodyPreview, municipalityNumber, removedByDate: result.rows.length - dateFiltered.length, removedByNormalization: dateFiltered.length - normalized.length } }
 }
