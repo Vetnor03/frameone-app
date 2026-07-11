@@ -175,3 +175,17 @@ test('selected city is stored preference only and does not alter regional source
   assert.ok(EDGE_OF_NORWAY_SOURCE_PAGES.some(p => p.slug === 'egersund'))
   assert.equal(EDGE_OF_NORWAY_SOURCE_PAGES.length, 4)
 })
+
+test('known Fjord Norway detail fixtures produce valid dates or occurrences', () => {
+  const examples = [
+    ['detail-cathedral-jsonld.html', 'https://www.fjordnorway.com/en/events/uncovering-the-secrets-of-stavanger-cathedral-by-the-museum-of-archaeology', '2026-07-11'],
+    ['detail-melkebaren-embedded.html', 'https://www.fjordnorway.com/en/events/every-friday-in-july-at-melkebaren', '2026-07-17'],
+    ['detail-sola-showings.html', 'https://www.fjordnorway.com/en/events/master-and-commander-sola-ruinkyrkje', '2026-07-18'],
+    ['detail-egersund-jsonld.html', 'https://www.fjordnorway.com/en/events/world-cup-at-easy', '2026-07-12'],
+  ]
+  for (const [file, url, expectedDate] of examples) {
+    const detail = parseEdgeOfNorwayDetailPage(fixture(file), url, expectedDate)
+    assert.ok(detail.showings.length >= 1)
+    assert.ok(detail.showings.every((showing) => /^2026-\d{2}-\d{2}$/.test(showing.date)))
+  }
+})
