@@ -6,6 +6,22 @@ export const EDGE_OF_NORWAY_PROVIDER_ID = EDGE_PROVIDER_ID
 export const EDGE_OF_NORWAY_DISPLAY_NAME = 'Edge of Norway'
 export const LOCAL_EVENTS_STATUS = 'connected'
 
+const detailPageCache = new Map<string, { html: string; fetchedAt: number }>()
+const DETAIL_CACHE_TTL_MS = 30 * 60 * 1000
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await worker(items[index])
+    }
+  })
+  await Promise.all(runners)
+  return results
+}
+
 export type LocalEventProviderId = typeof EDGE_OF_NORWAY_PROVIDER_ID
 export type LocalEventKind = 'one_off' | 'separate_session' | 'continuous'
 
@@ -65,16 +81,50 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
     for (const pageStats of pageParseStats) console.info('Edge of Norway local events parse stats', pageStats)
     const cards = parsedPages.flatMap((parsed) => parsed.cards)
     const uniqueCanonicalUrls = [...new Set(cards.map((card) => card.canonicalUrl))]
-    const detailResults = await Promise.all(uniqueCanonicalUrls.map(async (url) => {
+    let detailPagesRequested = 0
+    let detailPagesSucceeded = 0
+    let detailPagesFailed = 0
+    const detailResults = await mapWithConcurrency(uniqueCanonicalUrls, 3, async (url) => {
+      const cached = detailPageCache.get(url)
+      if (cached && Date.now() - cached.fetchedAt < DETAIL_CACHE_TTL_MS) return [url, cached.html] as const
+      detailPagesRequested += 1
       try {
         const result = await fetchEdgeOfNorwaySourcePage(url)
-        return result.status >= 200 && result.status < 300 ? [url, result.html] as const : [url, ''] as const
+        if (result.status >= 200 && result.status < 300 && result.html) {
+          detailPagesSucceeded += 1
+          detailPageCache.set(url, { html: result.html, fetchedAt: Date.now() })
+          return [url, result.html] as const
+        }
+        detailPagesFailed += 1
+        return [url, ''] as const
       } catch {
+        detailPagesFailed += 1
         return [url, ''] as const
       }
-    }))
+    })
     const details = Object.fromEntries(detailResults.filter(([, html]) => html))
     const { occurrences, stats } = mergeRegionalEvents(cards, details)
+    const diagnostics = {
+      listCardsDiscovered: cards.length,
+      uniqueCanonicalEvents: uniqueCanonicalUrls.length,
+      detailPagesRequested,
+      detailPagesSucceeded,
+      detailPagesFailed,
+      datesFromJsonLd: stats.datesFromJsonLd,
+      datesFromEmbeddedData: stats.datesFromEmbeddedData,
+      datesFromShowingsHtml: stats.datesFromShowingsHtml,
+      datesFromListFallback: stats.datesFromListFallback,
+      oneOffCount: stats.oneOffCount,
+      sessionCount: stats.separateSessionCount,
+      continuousCount: stats.continuousCount,
+      normalizedItems: occurrences.length,
+      upsertedItems: 0,
+    }
+    console.info('Edge of Norway local events sync diagnostics', diagnostics)
+    for (const place of EDGE_OF_NORWAY_CITY_OPTIONS.map((city) => city.slug)) {
+      const example = occurrences.find((event) => event.sourcePlaces.includes(place))
+      if (example) console.info('Edge of Norway sanitized normalized example', { place, title: example.title, date: example.date, endDate: example.endDate, startTime: example.startTime, classification: example.classification, sourceUrl: example.canonicalUrl })
+    }
     if (cards.length < 20 || occurrences.length < 10) throw new Error(`Edge of Norway parsed an implausibly low event set (${cards.length} cards/${occurrences.length} occurrences); refusing to delete existing local events. Page stats: ${JSON.stringify(pageParseStats)}`)
     const rows = occurrences.map((event) => ({
       user_id: userId,
@@ -116,7 +166,9 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
       .not('external_id', 'in', `(${externalIdList})`)
     if (deleteError) throw new Error(deleteError.message)
 
-    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats: { ...stats, detailPagesFetched: Object.keys(details).length, rowsUpserted: rows.length, sqlRequired: false, pageParseStats } }
+    diagnostics.upsertedItems = rows.length
+    console.info('Edge of Norway local events upsert diagnostics', diagnostics)
+    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats: { ...stats, ...diagnostics, detailPagesFetched: Object.keys(details).length, rowsUpserted: rows.length, sqlRequired: false, pageParseStats } }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to sync local events'
     await supabase
