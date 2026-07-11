@@ -2701,14 +2701,7 @@ function ConnectAppsScreen({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-medium text-[color:var(--fg-90)]">{app.name}</div>
-                      {app.comingSoon && (
-                        <span className="rounded-full border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 px-2 py-0.5 text-[9px] font-semibold tracking-widest text-[#2aa3ff]">
-                          {language === 'no' ? 'KOMMER SNART' : 'COMING SOON'}
-                        </span>
-                      )}
-                    </div>
+                    <div className="text-sm font-medium text-[color:var(--fg-90)]">{app.name}</div>
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
                   </div>
 
