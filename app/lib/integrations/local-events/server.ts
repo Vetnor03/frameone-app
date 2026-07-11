@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
-import { FRISKUS_MUNICIPALITIES, LocalEventsProviderError, getLocalEvents, serializeError, type LocalEventFilter, type NormalizedLocalEvent } from './providers/friskus'
+import { FRISKUS_MUNICIPALITIES, LocalEventsProviderError, getLocalEvents, serializeError, type LocalEventFilter, type NormalizedLocalEvent } from './providers/friskus-rss'
 
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
 export const UNSUPPORTED_MESSAGE = 'Local events are not supported for this municipality yet.'
@@ -13,7 +13,7 @@ export const MUNICIPALITIES = Object.values(FRISKUS_MUNICIPALITIES).map((m) => (
 }))
 
 function filters(value: unknown): LocalEventFilter[] {
-  const allowed = new Set(['all', 'children_family', 'culture', 'sport_outdoor', 'other'])
+  const allowed = new Set(['all'])
   const arr = Array.isArray(value) ? value : ['all']
   const clean = arr.map((x) => String(x)).filter((x): x is LocalEventFilter => allowed.has(x))
   return clean.length ? clean : ['all']
@@ -37,7 +37,7 @@ async function upsertEvents(userId: string, events: NormalizedLocalEvent[], sele
     starts_at: event.starts_at,
     due_at: event.ends_at,
     priority: 8,
-    raw: { ...event, source: LOCAL_EVENTS_PROVIDER, friskus_source: event.source, type: 'local_event' },
+    raw: { ...event, source: LOCAL_EVENTS_PROVIDER, friskus_rss_source: event.source, type: 'local_event' },
     updated_at: now,
   }))
   await supabase.from('integration_items').delete().eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
