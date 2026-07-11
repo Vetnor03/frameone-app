@@ -56,6 +56,7 @@ export type FriskusMunicipalityConfig = {
   municipalityName: string
   providerMunicipality: string
   publicBaseUrl: string
+  municipalityUuid?: string
 }
 export type GetLocalEventsOptions = { municipalityNumber: string; from: Date; to: Date }
 export type LocalEventsDebugResult = {
@@ -80,7 +81,7 @@ export type LocalEventsDebugResult = {
 }
 
 export const LOCAL_EVENT_MUNICIPALITIES: Record<string, FriskusMunicipalityConfig> = {
-  '1103': { municipalityNumber: '1103', municipalityName: 'Stavanger', providerMunicipality: 'stavanger', publicBaseUrl: 'https://stavanger.friskus.com' },
+  '1103': { municipalityNumber: '1103', municipalityName: 'Stavanger', providerMunicipality: 'stavanger', publicBaseUrl: 'https://stavanger.friskus.com', municipalityUuid: 'f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd' },
   '1108': { municipalityNumber: '1108', municipalityName: 'Sandnes', providerMunicipality: 'sandnes', publicBaseUrl: 'https://sandnes.friskus.com' },
 }
 
@@ -190,14 +191,21 @@ export function normalizeFriskusEvents(rows: FriskusEventRecord[], fetchedAt: st
   return { dateFiltered, normalized, diagnostics: { removedMissingTitle: missingTitle, removedInvalidDate: invalidDate, removedByDate: rows.length - dateFiltered.length } }
 }
 
+function friskusMunicipalityFilter(config: FriskusMunicipalityConfig) {
+  if (!config.municipalityUuid) throw new LocalEventsProviderError('Friskus municipality UUID has not been observed for this municipality', { provider: 'friskus', municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality })
+  return `global_filters_municipalities(EQ)${config.municipalityUuid}$$true`
+}
+
 export function friskusEventsEndpoint(config: FriskusMunicipalityConfig) {
-  const params = new URLSearchParams({ municipality: config.providerMunicipality })
+  const params = new URLSearchParams({ municipality: config.providerMunicipality, filters: friskusMunicipalityFilter(config) })
   return `https://api.friskus.com/api/v1/events?${params.toString()}`
 }
 
 async function fetchFriskusRows(config: FriskusMunicipalityConfig) {
   const requestUrl = friskusEventsEndpoint(config)
-  const fetchOptions: RequestInit = { method: 'GET', headers: { Accept: 'application/json', 'User-Agent': 'RE-MIND/1.0 local-events integration' }, cache: 'no-store', signal: AbortSignal.timeout(15_000) }
+  const requestMethod = 'GET'
+  const sanitizedRequestBody = null
+  const fetchOptions: RequestInit = { method: requestMethod, headers: { Accept: 'application/json', 'Accept-Language': 'en', Origin: config.publicBaseUrl, Referer: `${config.publicBaseUrl}/events?filters=${encodeURIComponent(friskusMunicipalityFilter(config))}`, 'User-Agent': 'RE-MIND/1.0 local-events integration' }, cache: 'no-store', signal: AbortSignal.timeout(15_000) }
   let resp: Response
   try { resp = await fetch(requestUrl, fetchOptions) } catch (error) {
     console.error('[local-events] Friskus network request failed', { municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality, requestUrl, error: serializeError(error) })
@@ -205,13 +213,13 @@ async function fetchFriskusRows(config: FriskusMunicipalityConfig) {
   }
   const contentType = resp.headers.get('content-type')
   const body = await resp.text()
-  const baseDiagnostics = { municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality, requestUrl, status: resp.status, statusText: resp.statusText, redirected: resp.redirected, finalUrl: resp.url, contentType, bodyPreview: body.slice(0, 1000) }
+  const baseDiagnostics = { municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality, municipalityUuid: config.municipalityUuid, requestUrl, requestMethod, sanitizedRequestBody, status: resp.status, statusText: resp.statusText, redirected: resp.redirected, finalUrl: resp.url, contentType, bodyPreview: body.slice(0, 1000) }
   console.info('[local-events] Friskus response', baseDiagnostics)
   if (!resp.ok) throw new LocalEventsProviderError(`Friskus returned ${resp.status} ${resp.statusText}`, { provider: 'friskus', municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality, requestUrl, status: resp.status, statusText: resp.statusText, contentType, responseBody: body.slice(0, 1000) })
   let json: unknown
   try { json = JSON.parse(body) } catch (error) { throw new LocalEventsProviderError('Friskus returned invalid JSON', { provider: 'friskus', municipalityNumber: config.municipalityNumber, providerMunicipality: config.providerMunicipality, requestUrl, status: resp.status, statusText: resp.statusText, contentType, responseBody: body.slice(0, 1000), cause: error }) }
   const rows = extractRows(json)
-  console.info('[local-events] Friskus raw events', { ...baseDiagnostics, rawCount: rows.length, sampleRawEvent: rows[0] || null })
+  console.info('[local-events] Friskus raw events', { ...baseDiagnostics, rawCount: rows.length, sanitizedSampleRawEvent: rows[0] || null })
   return { rows, status: resp.status, statusText: resp.statusText, contentType, requestUrl, finalUrl: resp.url, redirected: resp.redirected, bodyPreview: body.slice(0, 1000) }
 }
 
