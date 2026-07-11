@@ -25,7 +25,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'remind'
+export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'local_events' | 'remind'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -266,6 +266,41 @@ export function buildWasteCollectionItems(
   })
 }
 
+export function buildLocalEventItems(
+  rows: IntegrationItemRow[],
+  todayYmd: string,
+  horizonEndYmd: string,
+  timeZone: string
+): DeviceReminderItem[] {
+  return rows.flatMap((row) => {
+    const title = String(row.title || '').trim()
+    const externalId = String(row.external_id || '').trim()
+    const startsAt = row.starts_at
+    const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
+    if (!title || !externalId || !startsAt || raw.source !== 'local_events') return []
+
+    const occurrenceDate = isoToYmdInTimeZone(startsAt, timeZone)
+    if (!occurrenceDate || occurrenceDate > horizonEndYmd) return []
+    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
+    if (daysUntil < 0) return []
+    const displayTime = isoToHmInTimeZone(startsAt, timeZone)
+
+    return [{
+      reminder_id: `local_events:${externalId}`,
+      title,
+      occurrence_date: occurrenceDate,
+      display_date: formatDisplayDate(occurrenceDate, todayYmd),
+      days_until: daysUntil,
+      is_overdue: false,
+      repeat: 'none' as ReminderRepeatKey,
+      due_time: displayTime,
+      display_time: displayTime,
+      source: 'local_events' as const,
+      external_id: externalId,
+    }]
+  })
+}
+
 function sortTimeValue(value: string | null) {
   return value || '99:99'
 }
@@ -309,7 +344,7 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (at < bt) return -1
   if (at > bt) return 1
 
-  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : 3
+  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : source === 'local_events' ? 3 : 4
   const as = sourceRank(a.source)
   const bs = sourceRank(b.source)
   if (as !== bs) return as - bs

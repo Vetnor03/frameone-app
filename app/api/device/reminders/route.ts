@@ -3,8 +3,9 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
+import { syncLocalEventsForUser } from '@/app/lib/integrations/local-events/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventItems, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -456,6 +457,7 @@ export async function GET(req: Request) {
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
+    let localEventItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
       await syncSpondIfStaleForUsers(memberUserIds)
 
@@ -517,9 +519,28 @@ export async function GET(req: Request) {
         timeZone,
         includeOverdue
       )
+
+      await Promise.allSettled(memberUserIds.map((userId) => syncLocalEventsForUser(userId)))
+      const { data: localEventsData, error: localEventsError } = await supabase
+        .from('integration_items')
+        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+        .eq('provider', 'local_events')
+        .in('user_id', memberUserIds)
+        .order('starts_at', { ascending: true, nullsFirst: false })
+
+      if (localEventsError) {
+        return NextResponse.json({ error: localEventsError.message }, { status: 500 })
+      }
+
+      localEventItems = buildLocalEventItems(
+        Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [],
+        todayYmd,
+        horizonEndYmd,
+        timeZone
+      )
     }
 
-    const sortedCandidates = [...teamsItems, ...spondItems, ...wasteItems, ...manualItems].sort(compareReminderItems)
+    const sortedCandidates = [...teamsItems, ...spondItems, ...wasteItems, ...manualItems, ...localEventItems].sort(compareReminderItems)
     const items = selectReminderDisplayGroups(sortedCandidates, limit)
 
     return NextResponse.json({ items })
