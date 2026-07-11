@@ -20,9 +20,11 @@ test('date filter keeps current multi-day events and removes ended events', () =
   assert.deepEqual(remaining.map((event) => event.id), ['stavanger-1', 'started-yesterday'])
 })
 
-test('provider request uses Friskus municipality slug, not Norwegian municipality number', () => {
+test('provider request uses Friskus municipality slug and observed municipality UUID filter', () => {
   const url = new URL('https://api.friskus.com/api/v1/events')
   url.searchParams.set('municipality', 'stavanger')
+  url.searchParams.set('filters', 'global_filters_municipalities(EQ)f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd$$true')
   assert.equal(url.searchParams.get('municipality'), 'stavanger')
+  assert.equal(url.searchParams.get('filters'), 'global_filters_municipalities(EQ)f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd$$true')
   assert.notEqual(url.searchParams.get('municipality'), '1103')
 })

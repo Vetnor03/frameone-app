@@ -6,12 +6,23 @@ const providerSource = readFileSync(new URL('../app/lib/integrations/local-event
 const serverSource = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
 const connectRouteSource = readFileSync(new URL('../app/api/integrations/local-events/connect/route.ts', import.meta.url), 'utf8')
 
-test('Friskus request removes guessed date filters and sends diagnostics headers', () => {
-  assert.match(providerSource, /new URLSearchParams\(\{ municipality: config\.providerMunicipality \}\)/)
+test('Friskus request uses observed municipality UUID filter and sends diagnostics headers', () => {
+  assert.match(providerSource, /global_filters_municipalities\(EQ\)\$\{config\.municipalityUuid\}\$\$true/)
+  assert.match(providerSource, /new URLSearchParams\(\{ municipality: config\.providerMunicipality, filters: friskusMunicipalityFilter\(config\) \}\)/)
   assert.doesNotMatch(providerSource, /from: from\.toISOString\(\)/)
   assert.doesNotMatch(providerSource, /to: to\.toISOString\(\)/)
+  assert.match(providerSource, /'Accept-Language': 'en'/)
   assert.match(providerSource, /'User-Agent': 'RE-MIND\/1\.0 local-events integration'/)
   assert.match(providerSource, /AbortSignal\.timeout\(15_000\)/)
+})
+
+test('Friskus diagnostics log exact request and response inspection fields', () => {
+  assert.match(providerSource, /requestMethod = 'GET'/)
+  assert.match(providerSource, /sanitizedRequestBody = null/)
+  assert.match(providerSource, /contentType/)
+  assert.match(providerSource, /bodyPreview: body\.slice\(0, 1000\)/)
+  assert.match(providerSource, /rawCount: rows\.length/)
+  assert.match(providerSource, /sanitizedSampleRawEvent/)
 })
 
 test('HTTP errors throw LocalEventsProviderError before response parsing', () => {
