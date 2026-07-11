@@ -1,6 +1,5 @@
--- Local events integration uses the existing user_integrations/integration_items tables.
--- This migration records the first supported municipality/provider pair and allows
--- cached/stale provider metadata to be extended without changing reminder storage.
+-- Local events provider registry. The tables are reusable for future supported
+-- local discovery providers; no live provider endpoint is configured here.
 create table if not exists public.local_events_provider_registry (
   municipality_number text primary key,
   municipality_name text not null,
@@ -11,7 +10,7 @@ create table if not exists public.local_events_provider_registry (
   updated_at timestamptz not null default now(),
   constraint local_events_provider_registry_number_not_empty check (char_length(btrim(municipality_number)) > 0),
   constraint local_events_provider_registry_name_not_empty check (char_length(btrim(municipality_name)) > 0),
-  constraint local_events_provider_registry_provider_valid check (provider in ('stavanger-friskus', 'manual')),
+  constraint local_events_provider_registry_provider_valid check (provider in ('edge-of-norway', 'manual')),
   constraint local_events_provider_registry_status_valid check (status in ('supported', 'unsupported', 'disabled'))
 );
 
@@ -24,21 +23,5 @@ drop policy if exists "Anyone can read local events provider registry" on public
 create policy "Anyone can read local events provider registry"
 on public.local_events_provider_registry
 for select
+to authenticated
 using (true);
-
-insert into public.local_events_provider_registry (municipality_number, municipality_name, provider, provider_config, status)
-values (
-  '1103',
-  'Stavanger',
-  'stavanger-friskus',
-  '{"base_url":"https://stavanger.friskus.com","municipality_uuid":"f76ec1ae-dc3b-4291-bfb9-a4fec0c129fd","initial_horizon_days":14}'::jsonb,
-  'supported'
-)
-on conflict (municipality_number) do update
-set municipality_name = excluded.municipality_name,
-    provider = excluded.provider,
-    provider_config = excluded.provider_config,
-    status = excluded.status,
-    updated_at = now();
-
-notify pgrst, 'reload schema';

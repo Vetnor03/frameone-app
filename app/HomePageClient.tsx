@@ -2403,7 +2403,7 @@ async function handleSelectTab(k: TabKey) {
 }
 
 type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'local_events' | 'vigilo'
-type DisconnectableConnectAppKey = 'spond' | 'teams' | 'local_events'
+type DisconnectableConnectAppKey = 'spond' | 'teams'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -2447,13 +2447,6 @@ function ConnectAppsScreen({
   const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsLoading, setTeamsLoading] = useState(false)
-  const [localEventsConnected, setLocalEventsConnected] = useState(connectAppIsConnected(modulesJson, 'local_events'))
-  const [localEventsAccount, setLocalEventsAccount] = useState<string | null>(null)
-  const [localEventsLoading, setLocalEventsLoading] = useState(false)
-  const [localEventsMunicipality, setLocalEventsMunicipality] = useState('1103')
-  const [localEventsFilter, setLocalEventsFilter] = useState('all')
-  const [localEventsPanelOpen, setLocalEventsPanelOpen] = useState(false)
-  const [localEventsError, setLocalEventsError] = useState<string | null>(null)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
@@ -2498,34 +2491,8 @@ function ConnectAppsScreen({
     }
   }
 
-  async function fetchLocalEventsStatus() {
-    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) return
-    const resp = await fetch('/api/integrations/local-events/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
-    if (!resp.ok) return
-    const json = await resp.json()
-    setLocallyDisconnectedApps((current) => ({ ...current, local_events: json?.connected === true ? false : current.local_events }))
-    setLocalEventsConnected(json?.connected === true)
-    setLocalEventsAccount(typeof json?.account === 'string' ? json.account : null)
-  }
-
-  async function connectLocalEvents() {
-    if (localEventsLoading) return
-    setLocalEventsLoading(true); setLocalEventsError(null); setStatus(null); setStatusTone('info')
-    try {
-      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å aktivere lokale arrangementer' : 'Sign in to activate local events')
-      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ municipality_number: localEventsMunicipality, filters: [localEventsFilter] }) })
-      const json = await resp.json().catch(() => ({}))
-      if (!resp.ok && resp.status !== 202) throw new Error(json?.message || 'Could not connect to local events. Please try again.')
-      if (json?.connected) {
-        setLocalEventsConnected(true); setLocalEventsError(null); setLocalEventsAccount(json?.account || (localEventsMunicipality === '1108' ? 'Sandnes' : 'Stavanger')); setLocalEventsPanelOpen(false); setLocallyDisconnectedApps((c) => ({ ...c, local_events: false })); setStatusTone('success'); setStatus(language === 'no' ? 'Lokale arrangementer er aktivert' : 'Local events activated')
-      } else {
-        setLocalEventsConnected(false); setStatusTone('info'); setStatus(json?.message || 'Local events are not supported for this municipality yet.')
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : (language === 'no' ? 'Kunne ikke aktivere lokale arrangementer' : 'Could not connect to local events. Please try again.'); setLocalEventsError(message); setStatusTone('error'); setStatus(message)
-    } finally { setLocalEventsLoading(false) }
+  function fetchLocalEventsStatus() {
+    // Local events has no active provider while Edge of Norway access is pending.
   }
 
   async function connectTeams() {
@@ -2592,8 +2559,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'local_events' ? 'Local events' : 'Spond'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'local_events' ? setLocalEventsLoading : setSpondLoading
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : 'Spond'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : setSpondLoading
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -2602,7 +2569,7 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble fra appen' : 'Sign in to disconnect this app')
-      const resp = await fetch(`/api/integrations/${provider === 'local_events' ? 'local-events' : provider}/disconnect`, {
+      const resp = await fetch(`/api/integrations/${provider}/disconnect`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       })
@@ -2614,10 +2581,6 @@ function ConnectAppsScreen({
       } else if (provider === 'spond') {
         setSpondConnected(false)
         setSpondAccount(null)
-      } else if (provider === 'local_events') {
-        setLocalEventsConnected(false)
-        setLocalEventsAccount(null)
-        setLocalEventsPanelOpen(false)
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
       setDisconnectConfirmApp(null)
@@ -2658,7 +2621,8 @@ function ConnectAppsScreen({
     {
       key: 'local_events',
       name: language === 'no' ? 'Lokale arrangementer' : 'Local events',
-      description: language === 'no' ? 'Se kommende aktiviteter og arrangementer fra kommunen din.' : 'See upcoming activities and events from your municipality.',
+      description: language === 'no' ? 'Oppdag utvalgte arrangementer i nærheten av deg.' : 'Discover selected events happening near you.',
+      comingSoon: true,
     },
     {
       key: 'vigilo',
@@ -2690,7 +2654,6 @@ function ConnectAppsScreen({
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
-    if (app.key === 'local_events') return localEventsConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -2749,14 +2712,18 @@ function ConnectAppsScreen({
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{app.description}</div>
                   </div>
 
-                  {connected ? (
+                  {app.comingSoon ? (
+                    <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
+                      {language === 'no' ? 'KOMMER SNART' : 'COMING SOON'}
+                    </span>
+                  ) : connected ? (
                     <span className="shrink-0 h-8 px-3 rounded-xl border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[11px] tracking-widest text-[#1f9d4a] inline-flex items-center">
                       {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
                     </span>
                   ) : (
                     <button
                       type="button"
-                      disabled={(app.key === 'teams' && teamsLoading) || (app.key === 'local_events' && localEventsLoading)}
+                      disabled={app.key === 'teams' && teamsLoading}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (setupError) {
@@ -2765,8 +2732,6 @@ function ConnectAppsScreen({
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
                           connectTeams()
-                        } else if (app.key === 'local_events') {
-                          setLocalEventsPanelOpen(true)
                         } else {
                           setStatusTone('info')
                           setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
@@ -2774,9 +2739,7 @@ function ConnectAppsScreen({
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {((app.key === 'teams' && teamsLoading) || (app.key === 'local_events' && localEventsLoading))
-                        ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…')
-                        : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                      {(app.key === 'teams' && teamsLoading) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
@@ -2793,29 +2756,6 @@ function ConnectAppsScreen({
                     >
                       {spondLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
                     </button>
-                  </div>
-                )}
-                {app.key === 'local_events' && localEventsConnected && (
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <span className="min-w-0 truncate">{localEventsAccount || 'Stavanger'}</span>
-                    <button type="button" onClick={() => setDisconnectConfirmApp('local_events')} disabled={localEventsLoading} className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}</button>
-                  </div>
-                )}
-                {app.key === 'local_events' && !localEventsConnected && localEventsPanelOpen && (
-                  <div className="mt-3 space-y-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <label className="block space-y-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--fg-35)]">{language === 'no' ? 'Kommune' : 'Municipality'}</span>
-                      <select value={localEventsMunicipality} onChange={(e) => setLocalEventsMunicipality(e.target.value)} className="h-10 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]">
-                        <option value="1103">Stavanger</option>
-                        <option value="1108">Sandnes</option>
-                      </select>
-                    </label>
-                    <input type="hidden" value={localEventsFilter} readOnly aria-hidden="true" />
-                    {localEventsError && <div className="rounded-2xl border border-[#d94b4b]/30 bg-[#d94b4b]/10 px-3 py-2 text-xs text-[#ff8d8d]">{localEventsError}</div>}
-                    <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setLocalEventsPanelOpen(false)} disabled={localEventsLoading} className="h-9 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-45)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-                      <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading} className="h-9 rounded-xl border border-[#2aa3ff] px-3 text-[10px] tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'AKTIVERER…' : 'ACTIVATING…') : (localEventsError ? (language === 'no' ? 'PRØV IGJEN' : 'RETRY') : (language === 'no' ? 'AKTIVER' : 'ACTIVATE'))}</button>
-                    </div>
                   </div>
                 )}
                 {app.key === 'teams' && teamsConnected && (
@@ -2858,8 +2798,8 @@ function ConnectAppsScreen({
           <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'local_events' ? 'Local events' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'local_events' ? 'Local events' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {language === 'no'
