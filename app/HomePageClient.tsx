@@ -8688,7 +8688,7 @@ function normalizeReminderItems(raw: any): ReminderUiItem[] {
           Number.isFinite(customRepeatDaysRaw) && customRepeatDaysRaw > 0
             ? customRepeatDaysRaw
             : null,
-        source: 'remind',
+        source: 'remind' as const,
         editable: true,
       }
     })
