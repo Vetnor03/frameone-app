@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { parseEdgeOfNorwayListPage, mergeRegionalEvents, stableBaseEventId, stableOccurrenceId, parseDateHeading, extractTime, parseEdgeOfNorwayDetailPage, EDGE_OF_NORWAY_SOURCE_PAGES } from '../app/lib/integrations/local-events/edge-of-norway-provider.ts'
+import { parseEdgeOfNorwayListPage, parseEdgeOfNorwayListPageWithStats, mergeRegionalEvents, stableBaseEventId, stableOccurrenceId, parseDateHeading, extractTime, parseEdgeOfNorwayDetailPage, EDGE_OF_NORWAY_SOURCE_PAGES } from '../app/lib/integrations/local-events/edge-of-norway-provider.ts'
 
 const fixture = (name) => fs.readFileSync(new URL(`./fixtures/edge-of-norway/${name}`, import.meta.url), 'utf8')
 
@@ -25,6 +25,24 @@ test('list parser extracts date groups, canonical URLs, card time, description t
   assert.ok(cards.every(c => c.canonicalUrl.startsWith('https://')))
 })
 
+
+
+test('list parser handles server-returned Edge of Norway div cards and reports parse diagnostics', () => {
+  const { cards, stats } = parseEdgeOfNorwayListPageWithStats(fixture('server-returned-list-shape.html'), 'stavanger', { referenceDate: new Date('2026-07-01T00:00:00Z'), requestUrl: 'https://www.edgeofnorway.com/en/events?date=next_30&filtertype=place&place=stavanger', status: 200 })
+  assert.equal(stats.requestUrl.includes('place=stavanger'), true)
+  assert.equal(stats.status, 200)
+  assert.equal(stats.dateHeadingCount, 2)
+  assert.equal(stats.fjordNorwayEventLinkCount, 5)
+  assert.equal(stats.candidateCardCount, 3)
+  assert.equal(stats.parsedCardCount, 3)
+  assert.equal(stats.rejectedMissingTitle, 0)
+  assert.equal(stats.rejectedMissingDate, 0)
+  assert.equal(stats.rejectedMissingSourceUrl, 0)
+  assert.equal(cards[0].title, 'Uncovering the Secrets of Stavanger Cathedral by the Museum of Archaeology')
+  assert.equal(cards[0].date, '2026-07-11')
+  assert.equal(cards[0].startTime, '11:00')
+  assert.equal(cards[1].canonicalUrl, 'https://www.fjordnorway.com/en/see-and-do/viking-summer')
+})
 
 test('current sanitized Edge of Norway card uses heading, Read more URL, visible time and ignores Book CTA', () => {
   const cards = parseEdgeOfNorwayListPage('<h2>11. July</h2>' + fixture('current-event-card-sanitized.html'), 'stavanger', new Date('2026-07-01T00:00:00Z'))

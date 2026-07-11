@@ -23,23 +23,27 @@ type TimeSource = 'card' | 'description' | 'detail' | 'all_day'
 export type ParsedEdgeCard = { title: string; date: string; startTime: string | null; endTime: string | null; allDay: boolean; canonicalUrl: string; sourcePlace: EdgeOfNorwayCity; category: string | null; shortDescription: string | null; timeSource: TimeSource }
 export type NormalizedEdgeOccurrence = { baseEventId: string; occurrenceId: string; provider: typeof EDGE_OF_NORWAY_PROVIDER_ID; title: string; date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; canonicalUrl: string; classification: EdgeEventClassification; sourcePlaces: EdgeOfNorwayCity[] }
 export type MergeStats = { cardsParsedBySource: Record<string, number>; duplicatesRemoved: number; uniqueEventsAfterGrouping: number; oneOffCount: number; separateSessionCount: number; continuousCount: number; allDayCount: number; normalizedOccurrenceCount: number }
+export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlLength: number; dateHeadingCount: number; fjordNorwayEventLinkCount: number; candidateCardCount: number; parsedCardCount: number; rejectedMissingTitle: number; rejectedMissingDate: number; rejectedMissingSourceUrl: number }
 
 
 const CTA_LABELS = new Set(['book', 'read more', 'buy tickets', 'tickets', 'les mer', 'mehr erfahren'])
 const EVENT_CARD_RE = /<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi
+const FJORD_EVENT_LINK_RE = /<a\b[^>]+href=["'][^"']*fjordnorway\.com\/[^"']*(?:see-and-do|event|hva-skjer)[^"']*["'][^>]*>[\s\S]*?<\/a>/gi
 
 function isCtaLabel(value: string) { return CTA_LABELS.has(text(value).toLowerCase().trim()) }
 function stripCtas(value: string) { return text(value).replace(/\b(Read more|Les mer|Mehr erfahren|Book|Buy tickets|Tickets)\b/ig, ' ').replace(/\s+/g, ' ').trim() }
 function firstMatch(input: string, patterns: RegExp[]) { for (const re of patterns) { const m = input.match(re); if (m?.[0]) return m[0] } return '' }
 function readMoreLink(card: string) {
+  let firstEventLink: { tag: string; href: string } | null = null
   for (const m of card.matchAll(/<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi)) {
+    const href = attr(m[0], 'href')
+    if (href && /(fjordnorway|edgeofnorway|\/en\/|event|hva-skjer|what|see-and-do)/i.test(href) && !firstEventLink) firstEventLink = { tag: m[0], href }
     const label = text(m[0]).toLowerCase().trim()
     if (/^(read more|les mer|mehr erfahren)\s*$/.test(label) || /\b(read more|les mer|mehr erfahren)\b/.test(label)) {
-      const href = attr(m[0], 'href')
       if (href && /(fjordnorway|edgeofnorway|\/en\/|event|hva-skjer|what|see-and-do)/i.test(href)) return { tag: m[0], href }
     }
   }
-  return null
+  return firstEventLink
 }
 function titleFromCard(card: string, canonicalHref: string) {
   const heading = firstMatch(card, [/<h[2-4]\b[^>]*class=["'][^"']*(?:title|heading|name)[^"']*["'][^>]*>[\s\S]*?<\/h[2-4]>/i, /<h[2-4]\b[^>]*>[\s\S]*?<\/h[2-4]>/i])
@@ -103,30 +107,57 @@ function classify(cards: ParsedEdgeCard[], detailHtml?: string): EdgeEventClassi
   return 'one_off'
 }
 
-export function parseEdgeOfNorwayListPage(html: string, sourcePlace: EdgeOfNorwayCity, referenceDate = new Date()): ParsedEdgeCard[] {
+function containersFromDateChunk(chunk: string) {
+  const eventCards = [...chunk.matchAll(EVENT_CARD_RE)].map((m) => m[0]).filter((card) => {
+    FJORD_EVENT_LINK_RE.lastIndex = 0
+    return FJORD_EVENT_LINK_RE.test(card) || /read more|les mer|mehr erfahren/i.test(card)
+  })
+  if (eventCards.length) return eventCards
+  const links = [...chunk.matchAll(FJORD_EVENT_LINK_RE)].filter((link) => !isCtaLabel(text(link[0])))
+  FJORD_EVENT_LINK_RE.lastIndex = 0
+  return links.map((link, index) => {
+    const possibleStart = Math.max(chunk.lastIndexOf('<article', link.index), chunk.lastIndexOf('<li', link.index), chunk.lastIndexOf('<div', link.index), chunk.lastIndexOf('<a', link.index))
+    const nextLinkIndex = links[index + 1]?.index ?? chunk.length
+    const articleEnd = chunk.indexOf('</article>', link.index)
+    const liEnd = chunk.indexOf('</li>', link.index)
+    const possibleEnd = Math.min(nextLinkIndex, articleEnd > -1 ? articleEnd + 10 : chunk.length, liEnd > -1 ? liEnd + 5 : chunk.length)
+    return chunk.slice(possibleStart >= 0 ? possibleStart : link.index, possibleEnd)
+  })
+}
+
+export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: EdgeOfNorwayCity, opts: { referenceDate?: Date; requestUrl?: string; status?: number } = {}) {
+  const referenceDate = opts.referenceDate || new Date()
   const cards: ParsedEdgeCard[] = []
-  const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)]
+  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount: [...html.matchAll(FJORD_EVENT_LINK_RE)].length, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0 }
+  FJORD_EVENT_LINK_RE.lastIndex = 0
+  const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)].filter((m) => isDateGroupHeading(m[0], referenceDate))
+  stats.dateHeadingCount = dateHeadings.length
   for (let i = 0; i < dateHeadings.length; i += 1) {
     const heading = dateHeadings[i]
-    if (!isDateGroupHeading(heading[0], referenceDate)) continue
     const currentDate = parseDateHeading(heading[0], referenceDate)
-    if (!currentDate) continue
-    const nextHeadingIndex = dateHeadings.slice(i + 1).find((m) => isDateGroupHeading(m[0], referenceDate))?.index ?? html.length
+    if (!currentDate) { stats.rejectedMissingDate += 1; continue }
+    const nextHeadingIndex = dateHeadings[i + 1]?.index ?? html.length
     const chunk = html.slice((heading.index ?? 0) + heading[0].length, nextHeadingIndex)
-    const eventCards = [...chunk.matchAll(EVENT_CARD_RE)].map((m) => m[0])
-    const containers = eventCards.length ? eventCards : chunk.split(/(?=<(?:article|li)\b)/i).filter((part) => /read more|les mer|mehr erfahren/i.test(part))
+    const containers = containersFromDateChunk(chunk)
+    stats.candidateCardCount += containers.length
     for (const card of containers) {
-      const detailLink = readMoreLink(card); if (!detailLink) continue
+      const detailLink = readMoreLink(card); if (!detailLink) { stats.rejectedMissingSourceUrl += 1; continue }
       const canonicalUrl = absUrl(detailLink.href)
-      const title = titleFromCard(card, canonicalUrl); if (!title || title.length < 2 || isCtaLabel(title)) continue
+      const title = titleFromCard(card, canonicalUrl); if (!title || title.length < 2 || isCtaLabel(title)) { stats.rejectedMissingTitle += 1; continue }
       let { startTime, endTime } = extractTime(cardTimeHtml(card)); let timeSource: TimeSource = startTime ? 'card' : 'all_day'
       const shortDescription = text(descriptionHtml(card).slice(0, 500)) || null
-      if (!startTime) { const t = extractTime(shortDescription); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = 'description' }
+      if (!startTime) { const t = extractTime(shortDescription || card); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = shortDescription ? 'description' : 'card' }
       const category = text(categoryHtml(card)) || null
       cards.push({ title, date: currentDate, startTime, endTime, allDay: !startTime, canonicalUrl, sourcePlace, category, shortDescription, timeSource })
     }
   }
-  return [...new Map(cards.map(c => [`${c.canonicalUrl}:${c.date}:${c.startTime || 'all-day'}`, c])).values()]
+  const dedupedCards = [...new Map(cards.map(c => [`${c.canonicalUrl}:${c.date}:${c.startTime || 'all-day'}`, c])).values()]
+  stats.parsedCardCount = dedupedCards.length
+  return { cards: dedupedCards, stats }
+}
+
+export function parseEdgeOfNorwayListPage(html: string, sourcePlace: EdgeOfNorwayCity, referenceDate = new Date()): ParsedEdgeCard[] {
+  return parseEdgeOfNorwayListPageWithStats(html, sourcePlace, { referenceDate }).cards
 }
 
 export function mergeRegionalEvents(cards: ParsedEdgeCard[], details: Record<string, string> = {}): { occurrences: NormalizedEdgeOccurrence[]; stats: MergeStats } {
