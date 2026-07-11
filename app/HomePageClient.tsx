@@ -52,7 +52,7 @@ const UI = {
     update: 'UPDATE',
     loadingFrame: 'LOADING FRAME…',
 
-    selectWidget: 'ADD TILE',
+    selectWidget: 'CHOOSE MODULE',
     clearCell: 'CLEAR CELL',
 
     themeTitle: 'THEME',
@@ -172,7 +172,7 @@ const UI = {
     update: 'OPPDATER',
     loadingFrame: 'LASTER FRAME…',
 
-    selectWidget: 'ADD TILE',
+    selectWidget: 'CHOOSE MODULE',
     clearCell: 'TØM FELT',
 
     themeTitle: 'TEMA',
@@ -7046,15 +7046,16 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
-  const options: ModuleKey[] = ['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries']
-  const sortedOptions = [...options].sort((a, b) =>
-    moduleLabel(language, a).localeCompare(moduleLabel(language, b), language === 'no' ? 'nb' : 'en')
-  )
+  const moduleGroups: { title: string; modules: ModuleKey[] }[] = [
+    { title: 'Family', modules: ['reminders', 'groceries', 'countdown', 'date'] },
+    { title: 'Everyday', modules: ['weather', 'stocks'] },
+    { title: 'Sports', modules: ['surf', 'soccer'] },
+  ]
   const t = tx(language)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
-      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
+      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-6">
         <div className="flex items-center justify-between">
           <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{t.selectWidget}</div>
           <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
@@ -7062,22 +7063,34 @@ function PickerModal({
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          {sortedOptions.map((m) => (
-            <button
-              key={m}
-              onClick={() => onPick(m)}
-              className="h-12 rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-80)] tracking-widest"
-            >
-              {moduleLabel(language, m)}
-            </button>
+        <div className="mt-4 space-y-4">
+          {moduleGroups.map((group) => (
+            <section key={group.title} aria-labelledby={`module-group-${group.title.toLowerCase()}`}>
+              <div
+                id={`module-group-${group.title.toLowerCase()}`}
+                className="mb-2 text-[10px] uppercase tracking-[0.26em] text-[color:var(--fg-40)]"
+              >
+                {group.title}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {group.modules.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => onPick(m)}
+                    className="h-11 rounded-2xl border border-[color:var(--bd-10)] text-sm text-[color:var(--fg-80)] tracking-widest transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
+                  >
+                    {moduleLabel(language, m)}
+                  </button>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
 
         <div className="mt-5 flex justify-center">
           <button
             onClick={onClear}
-            className="h-12 w-full rounded-2xl border border-[color:var(--bd-15)] text-[color:var(--fg-50)] tracking-widest"
+            className="px-3 py-2 text-[11px] tracking-[0.24em] text-red-500/70 transition hover:text-red-500"
           >
             {t.clearCell}
           </button>
