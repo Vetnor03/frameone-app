@@ -101,3 +101,15 @@ test('provider parses Norwegian event date and time from RSS title before pubDat
   assert.equal(timeMatch[1], '11:00')
   assert.equal(timeMatch[2], '12:15')
 })
+
+
+test('provider filters clearly religious local events with per-occurrence Christmas Eve exception', () => {
+  assert.match(providerSource, /isReligiousLocalEvent/)
+  assert.match(providerSource, /isChristmasEveService/)
+  assert.match(providerSource, /removedReligious/)
+  assert.match(providerSource, /raw\.description|raw\.summary/)
+  assert.match(providerSource, /raw\.category \|\| raw\['friskus:category'\]/)
+  assert.match(providerSource, /monthDay\?\.month !== 12 \|\| monthDay\.day !== 24/)
+  assert.match(providerSource, /isReligiousLocalEvent\(religiousEvent\) && !isChristmasEveService\(religiousEvent, occ\)/)
+  assert.doesNotMatch(providerSource, /raw\['friskus:location'\][\s\S]{0,220}isReligiousLocalEvent/)
+})
