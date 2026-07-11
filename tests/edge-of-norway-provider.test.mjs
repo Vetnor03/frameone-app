@@ -55,6 +55,21 @@ test('current sanitized Edge of Norway card uses heading, Read more URL, visible
   assert.equal(cards[0].category, 'Sport')
 })
 
+test('list parser uses explicit card date when no broad date heading is present', () => {
+  const html = `
+    <div class="search-result-card">
+      <a href="https://www.fjordnorway.com/en/see-and-do/no-heading-date">No heading date event</a>
+      <div class="card-date">12. juli</div>
+      <time datetime="2026-07-12T14:00:00+02:00">14:00</time>
+      <a href="https://www.fjordnorway.com/en/see-and-do/no-heading-date">Read more</a>
+    </div>
+  `
+  const { cards, stats } = parseEdgeOfNorwayListPageWithStats(html, 'stavanger', { referenceDate: new Date('2026-07-01T00:00:00Z') })
+  assert.equal(stats.rejectedMissingDate, 0)
+  assert.equal(cards.length, 1)
+  assert.equal(cards[0].date, '2026-07-12')
+})
+
 test('year transitions assign January headings to upcoming year when discovered in December', () => {
   assert.equal(parseDateHeading('<h2>2 January</h2>', new Date('2026-12-15T00:00:00Z')), '2027-01-02')
 })
