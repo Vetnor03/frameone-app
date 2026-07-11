@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 import { connectLocalEventsForUser } from '@/app/lib/integrations/local-events/server'
-import { LocalEventsProviderError } from '@/app/lib/integrations/local-events/providers/friskus'
+import { LocalEventsProviderError } from '@/app/lib/integrations/local-events/providers/friskus-rss'
 
 export const runtime = 'nodejs'
 
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     return NextResponse.json(result, { status: result.status === 'unsupported' ? 202 : 200 })
   } catch (error: unknown) {
     if (error instanceof LocalEventsProviderError) {
-      return NextResponse.json({ error: 'LOCAL_EVENTS_INITIAL_SYNC_FAILED', message: 'Could not connect to the local events provider.', provider: 'friskus', providerStatus: error.details.status }, { status: 502 })
+      return NextResponse.json({ error: 'LOCAL_EVENTS_INITIAL_SYNC_FAILED', message: 'Could not connect to local events. Please try again.', provider: 'friskus-rss', providerStatus: error.details.status }, { status: 502 })
     }
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to connect local events' }, { status: 500 })
   }

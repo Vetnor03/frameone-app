@@ -2453,6 +2453,7 @@ function ConnectAppsScreen({
   const [localEventsMunicipality, setLocalEventsMunicipality] = useState('1103')
   const [localEventsFilter, setLocalEventsFilter] = useState('all')
   const [localEventsPanelOpen, setLocalEventsPanelOpen] = useState(false)
+  const [localEventsError, setLocalEventsError] = useState<string | null>(null)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
@@ -2510,20 +2511,20 @@ function ConnectAppsScreen({
 
   async function connectLocalEvents() {
     if (localEventsLoading) return
-    setLocalEventsLoading(true); setStatus(null); setStatusTone('info')
+    setLocalEventsLoading(true); setLocalEventsError(null); setStatus(null); setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å aktivere lokale arrangementer' : 'Sign in to activate local events')
       const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ municipality_number: localEventsMunicipality, filters: [localEventsFilter] }) })
       const json = await resp.json().catch(() => ({}))
-      if (!resp.ok && resp.status !== 202) throw new Error(json?.error || 'Failed to activate local events')
+      if (!resp.ok && resp.status !== 202) throw new Error(json?.message || 'Could not connect to local events. Please try again.')
       if (json?.connected) {
-        setLocalEventsConnected(true); setLocalEventsAccount(json?.account || (localEventsMunicipality === '1108' ? 'Sandnes' : 'Stavanger')); setLocalEventsPanelOpen(false); setLocallyDisconnectedApps((c) => ({ ...c, local_events: false })); setStatusTone('success'); setStatus(language === 'no' ? 'Lokale arrangementer er aktivert' : 'Local events activated')
+        setLocalEventsConnected(true); setLocalEventsError(null); setLocalEventsAccount(json?.account || (localEventsMunicipality === '1108' ? 'Sandnes' : 'Stavanger')); setLocalEventsPanelOpen(false); setLocallyDisconnectedApps((c) => ({ ...c, local_events: false })); setStatusTone('success'); setStatus(language === 'no' ? 'Lokale arrangementer er aktivert' : 'Local events activated')
       } else {
         setLocalEventsConnected(false); setStatusTone('info'); setStatus(json?.message || 'Local events are not supported for this municipality yet.')
       }
     } catch (error: unknown) {
-      setStatusTone('error'); setStatus(error instanceof Error ? error.message : (language === 'no' ? 'Kunne ikke aktivere lokale arrangementer' : 'Could not activate local events'))
+      const message = error instanceof Error ? error.message : (language === 'no' ? 'Kunne ikke aktivere lokale arrangementer' : 'Could not connect to local events. Please try again.'); setLocalEventsError(message); setStatusTone('error'); setStatus(message)
     } finally { setLocalEventsLoading(false) }
   }
 
@@ -2809,10 +2810,11 @@ function ConnectAppsScreen({
                         <option value="1108">Sandnes</option>
                       </select>
                     </label>
-                    <select value={localEventsFilter} onChange={(e) => setLocalEventsFilter(e.target.value)} className="h-10 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)]"><option value="all">All events</option><option value="children_family">Children and family</option><option value="culture">Culture</option><option value="sport_outdoor">Sport and outdoor activities</option><option value="other">Other</option></select>
+                    <input type="hidden" value={localEventsFilter} readOnly aria-hidden="true" />
+                    {localEventsError && <div className="rounded-2xl border border-[#d94b4b]/30 bg-[#d94b4b]/10 px-3 py-2 text-xs text-[#ff8d8d]">{localEventsError}</div>}
                     <div className="flex justify-end gap-2">
                       <button type="button" onClick={() => setLocalEventsPanelOpen(false)} disabled={localEventsLoading} className="h-9 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-45)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-                      <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading} className="h-9 rounded-xl border border-[#2aa3ff] px-3 text-[10px] tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'AKTIVERER…' : 'ACTIVATING…') : (language === 'no' ? 'AKTIVER' : 'ACTIVATE')}</button>
+                      <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading} className="h-9 rounded-xl border border-[#2aa3ff] px-3 text-[10px] tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'AKTIVERER…' : 'ACTIVATING…') : (localEventsError ? (language === 'no' ? 'PRØV IGJEN' : 'RETRY') : (language === 'no' ? 'AKTIVER' : 'ACTIVATE'))}</button>
                     </div>
                   </div>
                 )}

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:friskus="https://rss.friskus.com/ns/friskus">
+  <channel>
+    <title>Friskus Stavanger aktiviteter</title>
+    <item>
+      <guid isPermaLink="false">activity-1</guid>
+      <title>Sommerkafe</title>
+      <link>https://stavanger.friskus.com/events/activity-1</link>
+      <description><![CDATA[Velkommen til sommerkafe.]]></description>
+      <friskus:start>2026-07-12T10:00:00+02:00</friskus:start>
+      <friskus:end>2026-07-12T12:00:00+02:00</friskus:end>
+      <friskus:location>Stavanger sentrum</friskus:location>
+    </item>
+    <item>
+      <guid isPermaLink="false">activity-2</guid>
+      <title>Pågående festival</title>
+      <link>https://stavanger.friskus.com/events/activity-2</link>
+      <description>Flerdagersarrangement</description>
+      <friskus:start>2026-07-09T10:00:00+02:00</friskus:start>
+      <friskus:end>2026-07-13T18:00:00+02:00</friskus:end>
+      <friskus:location>Vågen</friskus:location>
+    </item>
+    <item><guid>missing-title</guid><friskus:start>2026-07-12T10:00:00+02:00</friskus:start><link>https://stavanger.friskus.com/events/missing-title</link></item>
+    <item><guid>missing-date</guid><title>Uten dato</title><link>https://stavanger.friskus.com/events/missing-date</link></item>
+    <item><guid isPermaLink="false">activity-1</guid><title>Duplikat</title><link>https://stavanger.friskus.com/events/activity-1-duplicate</link><friskus:start>2026-07-12T11:00:00+02:00</friskus:start></item>
+  </channel>
+</rss>

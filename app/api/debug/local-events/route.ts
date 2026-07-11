@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { debugLocalEvents, LocalEventsProviderError, serializeError } from '@/app/lib/integrations/local-events/providers/friskus'
+import { debugLocalEvents, LocalEventsProviderError, serializeError } from '@/app/lib/integrations/local-events/providers/friskus-rss'
 
 export async function GET(req: Request) {
   if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'Not found' }, { status: 404 })
