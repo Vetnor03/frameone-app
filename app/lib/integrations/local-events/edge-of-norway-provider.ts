@@ -28,31 +28,19 @@ export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlL
 
 
 const CTA_LABELS = new Set(['book', 'read more', 'buy tickets', 'tickets', 'les mer', 'mehr erfahren'])
-const FJORD_EVENT_LINK_RE = /<a\b[^>]+href=["'](?:[^"']*fjordnorway\.com\/[^"']*(?:events?|see-and-do|hva-skjer)|\/[^"']*(?:events?|see-and-do|hva-skjer))[^"']*["'][^>]*>[\s\S]*?<\/a>/gi
+const LINK_RE = /<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi
 
 function isCtaLabel(value: string) { return CTA_LABELS.has(text(value).toLowerCase().trim()) }
 function stripCtas(value: string) { return text(value).replace(/\b(Read more|Les mer|Mehr erfahren|Book|Buy tickets|Tickets)\b/ig, ' ').replace(/\s+/g, ' ').trim() }
 function firstMatch(input: string, patterns: RegExp[]) { for (const re of patterns) { const m = input.match(re); if (m?.[0]) return m[0] } return '' }
-function readMoreLink(card: string) {
-  let firstEventLink: { tag: string; href: string } | null = null
-  for (const m of card.matchAll(/<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi)) {
-    const href = attr(m[0], 'href')
-    if (href && /(fjordnorway|edgeofnorway|\/en\/|event|hva-skjer|what|see-and-do)/i.test(href) && !firstEventLink) firstEventLink = { tag: m[0], href }
-    const label = text(m[0]).toLowerCase().trim()
-    if (/^(read more|les mer|mehr erfahren)\s*$/.test(label) || /\b(read more|les mer|mehr erfahren)\b/.test(label)) {
-      if (href && /(fjordnorway|edgeofnorway|\/en\/|event|hva-skjer|what|see-and-do)/i.test(href)) return { tag: m[0], href }
-    }
-  }
-  return firstEventLink
-}
 function titleFromCard(card: string, canonicalHref: string) {
   const heading = firstMatch(card, [/<h[2-4]\b[^>]*class=["'][^"']*(?:title|heading|name)[^"']*["'][^>]*>[\s\S]*?<\/h[2-4]>/i, /<h[2-4]\b[^>]*>[\s\S]*?<\/h[2-4]>/i])
   const headingTitle = stripCtas(heading)
   if (headingTitle && !parseDateHeading(headingTitle) && !isCtaLabel(headingTitle)) return headingTitle
-  for (const m of card.matchAll(/<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi)) {
+  for (const m of card.matchAll(LINK_RE)) {
     const href = attr(m[0], 'href')
     if (!href) continue
-    const resolved = absUrl(href)
+    const resolved = absUrl(href, canonicalHref)
     if (resolved !== canonicalHref) continue
     const candidate = stripCtas(m[0])
     if (candidate && !isCtaLabel(candidate)) return candidate
@@ -72,7 +60,21 @@ const MONTHS: Record<string, number> = { january: 1, jan: 1, februar: 2, februar
 function text(html: string) { return decode(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) }
 function decode(s: string) { return s.replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&ndash;|&#8211;/g, '–').replace(/&mdash;|&#8212;/g, '—').replace(/&quot;/g, '"').replace(/&#39;/g, "'") }
 function attr(tag: string, name: string) { return new RegExp(`${name}=["']([^"']+)["']`, 'i').exec(tag)?.[1] || null }
-function absUrl(href: string) { return new URL(decode(href), 'https://www.edgeofnorway.com').toString().split('#')[0] }
+function absUrl(href: string, pageUrl = 'https://www.edgeofnorway.com') { return new URL(decode(href), pageUrl).toString().split('#')[0] }
+export function isFjordNorwayEventDetailUrl(href: string, pageUrl: string): boolean {
+  try {
+    const url = new URL(decode(href), pageUrl)
+    const hostname = url.hostname.replace(/^www\./, '')
+
+    return (
+      hostname === 'fjordnorway.com' &&
+      url.pathname.includes('/events/') &&
+      !url.pathname.endsWith('/events/')
+    )
+  } catch {
+    return false
+  }
+}
 export function stableBaseEventId(canonicalUrl: string) { return crypto.createHash('sha256').update(canonicalUrl.trim().toLowerCase()).digest('hex').slice(0, 16) }
 export function stableOccurrenceId(canonicalUrl: string, date: string, startTime: string | null) { return `${stableBaseEventId(canonicalUrl)}:${date}:${startTime || 'all-day'}` }
 
@@ -183,7 +185,7 @@ function ancestorTagClassChain(html: string, index: number) {
 function rejectedCandidateDebug(html: string, link: { tag: string; href: string; index: number }, container: string): EdgeRejectedCandidateDebug {
   const nearby = html.slice(Math.max(0, link.index - 900), Math.min(html.length, link.index + 1400))
   return {
-    canonicalUrl: absUrl(link.href),
+    canonicalUrl: absUrl(link.href, 'https://www.edgeofnorway.com'),
     titleLinkText: stripCtas(link.tag),
     ancestorTagClassChain: ancestorTagClassChain(html, link.index),
     nearbyTextPreview: text(nearby).slice(0, 600),
@@ -193,11 +195,11 @@ function rejectedCandidateDebug(html: string, link: { tag: string; href: string;
   }
 }
 
-function eventTitleLinks(html: string) {
+function eventTitleLinks(html: string, pageUrl: string) {
   const links: Array<{ tag: string; href: string; index: number }> = []
-  for (const m of html.matchAll(FJORD_EVENT_LINK_RE)) {
+  for (const m of html.matchAll(LINK_RE)) {
     const href = attr(m[0], 'href')
-    if (!href) continue
+    if (!href || !isFjordNorwayEventDetailUrl(href, pageUrl)) continue
     const label = stripCtas(m[0])
     if (!label || isCtaLabel(label)) continue
     links.push({ tag: m[0], href, index: m.index ?? 0 })
@@ -208,14 +210,19 @@ function eventTitleLinks(html: string) {
 export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: EdgeOfNorwayCity, opts: { referenceDate?: Date; requestUrl?: string; status?: number } = {}) {
   const referenceDate = opts.referenceDate || new Date()
   const cards: ParsedEdgeCard[] = []
-  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount: [...html.matchAll(FJORD_EVENT_LINK_RE)].length, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0, rejectedMissingDateSamples: [] }
+  const pageUrl = opts.requestUrl || 'https://www.edgeofnorway.com/en/events'
+  const fjordNorwayEventLinkCount = [...html.matchAll(LINK_RE)].filter((m) => {
+    const href = attr(m[0], 'href')
+    return href ? isFjordNorwayEventDetailUrl(href, pageUrl) : false
+  }).length
+  const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0, rejectedMissingDateSamples: [] }
   const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)].filter((m) => isDateGroupHeading(m[0], referenceDate))
   stats.dateHeadingCount = dateHeadings.length
 
-  const links = eventTitleLinks(html)
+  const links = eventTitleLinks(html, pageUrl)
   stats.candidateCardCount = links.length
   for (const link of links) {
-    const canonicalUrl = absUrl(link.href)
+    const canonicalUrl = absUrl(link.href, pageUrl)
     if (!canonicalUrl) { stats.rejectedMissingSourceUrl += 1; continue }
     const container = balancedContainerAround(html, link.index)
     const currentDate = nearestDateForLink(html, container, link.index, referenceDate)
@@ -274,7 +281,7 @@ export function parseEdgeOfNorwayDetailPage(html: string, canonicalUrl: string, 
     const time = extractTime(body)
     if (time.startTime) showings.push({ date: fallbackDate, startTime: time.startTime, startsAt: osloIso(fallbackDate, time.startTime) })
   }
-  return { canonicalUrl: absUrl(canonical), showings, classificationHint: classify([], html) }
+  return { canonicalUrl: absUrl(canonical, canonicalUrl), showings, classificationHint: classify([], html) }
 }
 
 export async function fetchEdgeOfNorwaySourcePage(url: string, fetchImpl = fetch) {
