@@ -7046,11 +7046,7 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
-  const moduleGroups: { title: string; modules: ModuleKey[] }[] = [
-    { title: 'Family', modules: ['reminders', 'groceries', 'countdown', 'date'] },
-    { title: 'Everyday', modules: ['weather', 'stocks'] },
-    { title: 'Sports', modules: ['surf', 'soccer'] },
-  ]
+  const options: ModuleKey[] = ['reminders', 'date', 'weather', 'countdown', 'surf', 'soccer', 'groceries', 'stocks']
   const t = tx(language)
 
   return (
@@ -7063,27 +7059,15 @@ function PickerModal({
           </button>
         </div>
 
-        <div className="mt-4 space-y-4">
-          {moduleGroups.map((group) => (
-            <section key={group.title} aria-labelledby={`module-group-${group.title.toLowerCase()}`}>
-              <div
-                id={`module-group-${group.title.toLowerCase()}`}
-                className="mb-2 text-[10px] uppercase tracking-[0.26em] text-[color:var(--fg-40)]"
-              >
-                {group.title}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {group.modules.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => onPick(m)}
-                    className="h-11 rounded-2xl border border-[color:var(--bd-10)] text-sm text-[color:var(--fg-80)] tracking-widest transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
-                  >
-                    {moduleLabel(language, m)}
-                  </button>
-                ))}
-              </div>
-            </section>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {options.map((m) => (
+            <button
+              key={m}
+              onClick={() => onPick(m)}
+              className="h-11 rounded-2xl border border-[color:var(--bd-10)] text-sm text-[color:var(--fg-80)] tracking-widest transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
+            >
+              {moduleLabel(language, m)}
+            </button>
           ))}
         </div>
 
