@@ -24,6 +24,45 @@ export type ParsedEdgeCard = { title: string; date: string; startTime: string | 
 export type NormalizedEdgeOccurrence = { baseEventId: string; occurrenceId: string; provider: typeof EDGE_OF_NORWAY_PROVIDER_ID; title: string; date: string; endDate: string | null; startTime: string | null; endTime: string | null; startsAt: string; endsAt: string | null; allDay: boolean; canonicalUrl: string; classification: EdgeEventClassification; sourcePlaces: EdgeOfNorwayCity[] }
 export type MergeStats = { cardsParsedBySource: Record<string, number>; duplicatesRemoved: number; uniqueEventsAfterGrouping: number; oneOffCount: number; separateSessionCount: number; continuousCount: number; allDayCount: number; normalizedOccurrenceCount: number }
 
+
+const CTA_LABELS = new Set(['book', 'read more', 'buy tickets', 'tickets', 'les mer', 'mehr erfahren'])
+const EVENT_CARD_RE = /<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi
+
+function isCtaLabel(value: string) { return CTA_LABELS.has(text(value).toLowerCase().trim()) }
+function stripCtas(value: string) { return text(value).replace(/\b(Read more|Les mer|Mehr erfahren|Book|Buy tickets|Tickets)\b/ig, ' ').replace(/\s+/g, ' ').trim() }
+function firstMatch(input: string, patterns: RegExp[]) { for (const re of patterns) { const m = input.match(re); if (m?.[0]) return m[0] } return '' }
+function readMoreLink(card: string) {
+  for (const m of card.matchAll(/<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi)) {
+    const label = text(m[0]).toLowerCase().trim()
+    if (/^(read more|les mer|mehr erfahren)\s*$/.test(label) || /\b(read more|les mer|mehr erfahren)\b/.test(label)) {
+      const href = attr(m[0], 'href')
+      if (href && /(fjordnorway|edgeofnorway|\/en\/|event|hva-skjer|what|see-and-do)/i.test(href)) return { tag: m[0], href }
+    }
+  }
+  return null
+}
+function titleFromCard(card: string, canonicalHref: string) {
+  const heading = firstMatch(card, [/<h[2-4]\b[^>]*class=["'][^"']*(?:title|heading|name)[^"']*["'][^>]*>[\s\S]*?<\/h[2-4]>/i, /<h[2-4]\b[^>]*>[\s\S]*?<\/h[2-4]>/i])
+  const headingTitle = stripCtas(heading)
+  if (headingTitle && !parseDateHeading(headingTitle) && !isCtaLabel(headingTitle)) return headingTitle
+  for (const m of card.matchAll(/<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi)) {
+    const href = attr(m[0], 'href')
+    if (!href) continue
+    const resolved = absUrl(href)
+    if (resolved !== canonicalHref) continue
+    const candidate = stripCtas(m[0])
+    if (candidate && !isCtaLabel(candidate)) return candidate
+  }
+  return null
+}
+function cardTimeHtml(card: string) { return firstMatch(card, [/<time\b[^>]*>[\s\S]*?<\/time>/i, /<(?:span|div)\b[^>]*class=["'][^"']*(?:time|hour|date-time)[^"']*["'][^>]*>[\s\S]*?<\/(?:span|div)>/i]) }
+function descriptionHtml(card: string) { return firstMatch(card, [/<(?:p|div)\b[^>]*class=["'][^"']*(?:description|summary|ingress|intro|teaser)[^"']*["'][^>]*>[\s\S]*?<\/(?:p|div)>/i]) }
+function categoryHtml(card: string) { return firstMatch(card, [/<(?:span|div)\b[^>]*class=["'][^"']*(?:category|tag)[^"']*["'][^>]*>[\s\S]*?<\/(?:span|div)>/i]) }
+function isDateGroupHeading(heading: string, referenceDate: Date) {
+  const label = text(heading)
+  return !!parseDateHeading(label, referenceDate) && /^\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+(?:\s+\d{4})?\.?$/.test(label)
+}
+
 const MONTHS: Record<string, number> = { january: 1, jan: 1, februar: 2, february: 2, feb: 2, march: 3, mars: 3, mar: 3, april: 4, apr: 4, may: 5, mai: 5, june: 6, juni: 6, jun: 6, july: 7, juli: 7, jul: 7, august: 8, aug: 8, september: 9, sep: 9, october: 10, oktober: 10, oct: 10, okt: 10, november: 11, nov: 11, december: 12, desember: 12, dec: 12, des: 12 }
 
 function text(html: string) { return decode(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) }
@@ -34,7 +73,7 @@ export function stableBaseEventId(canonicalUrl: string) { return crypto.createHa
 export function stableOccurrenceId(canonicalUrl: string, date: string, startTime: string | null) { return `${stableBaseEventId(canonicalUrl)}:${date}:${startTime || 'all-day'}` }
 
 export function parseDateHeading(heading: string, referenceDate = new Date()) {
-  const m = text(heading).toLowerCase().match(/\b(\d{1,2})\s+([a-zæøå]+)(?:\s+(\d{4}))?\b/i)
+  const m = text(heading).toLowerCase().match(/\b(\d{1,2})\.?\s+([a-zæøå]+)(?:\s+(\d{4}))?\b/i)
   if (!m) return null
   const month = MONTHS[m[2]]
   if (!month) return null
@@ -65,20 +104,25 @@ function classify(cards: ParsedEdgeCard[], detailHtml?: string): EdgeEventClassi
 }
 
 export function parseEdgeOfNorwayListPage(html: string, sourcePlace: EdgeOfNorwayCity, referenceDate = new Date()): ParsedEdgeCard[] {
-  const chunks = html.split(/(<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>)/i)
-  const cards: ParsedEdgeCard[] = []; let currentDate: string | null = null
-  for (const chunk of chunks) {
-    const headingDate = parseDateHeading(chunk, referenceDate); if (headingDate) { currentDate = headingDate; continue }
+  const cards: ParsedEdgeCard[] = []
+  const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)]
+  for (let i = 0; i < dateHeadings.length; i += 1) {
+    const heading = dateHeadings[i]
+    if (!isDateGroupHeading(heading[0], referenceDate)) continue
+    const currentDate = parseDateHeading(heading[0], referenceDate)
     if (!currentDate) continue
-    for (const m of chunk.matchAll(/<a\b[^>]+href=["'][^"']+["'][^>]*>[\s\S]*?(?:Read more|Les mer|Mehr erfahren|<\/a>)/gi)) {
-      const a = m[0]; const href = attr(a, 'href'); if (!href || !/(event|hva-skjer|what|fjordnorway|edgeofnorway)/i.test(href)) continue
-      const canonicalUrl = absUrl(href); const title = text(a).replace(/\b(Read more|Les mer|Mehr erfahren)\b/ig, '').trim(); if (!title || title.length < 2) continue
-      const nearby = chunk.slice(Math.max(0, m.index! - 1500), Math.min(chunk.length, m.index! + a.length + 1500))
-      const timeTag = nearby.match(/<time\b[\s\S]*?<\/time>/i)?.[0] || ''
-      let { startTime, endTime } = extractTime(timeTag); let timeSource: TimeSource = startTime ? 'card' : 'all_day'
-      const shortDescription = text((nearby.match(/<(?:p|div)[^>]*(?:description|summary|ingress)[^>]*>[\s\S]*?<\/(?:p|div)>/i)?.[0] || '').slice(0, 500)) || null
+    const nextHeadingIndex = dateHeadings.slice(i + 1).find((m) => isDateGroupHeading(m[0], referenceDate))?.index ?? html.length
+    const chunk = html.slice((heading.index ?? 0) + heading[0].length, nextHeadingIndex)
+    const eventCards = [...chunk.matchAll(EVENT_CARD_RE)].map((m) => m[0])
+    const containers = eventCards.length ? eventCards : chunk.split(/(?=<(?:article|li)\b)/i).filter((part) => /read more|les mer|mehr erfahren/i.test(part))
+    for (const card of containers) {
+      const detailLink = readMoreLink(card); if (!detailLink) continue
+      const canonicalUrl = absUrl(detailLink.href)
+      const title = titleFromCard(card, canonicalUrl); if (!title || title.length < 2 || isCtaLabel(title)) continue
+      let { startTime, endTime } = extractTime(cardTimeHtml(card)); let timeSource: TimeSource = startTime ? 'card' : 'all_day'
+      const shortDescription = text(descriptionHtml(card).slice(0, 500)) || null
       if (!startTime) { const t = extractTime(shortDescription); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = 'description' }
-      const category = text(nearby.match(/<(?:span|div)[^>]*(?:category|tag)[^>]*>[\s\S]*?<\/(?:span|div)>/i)?.[0] || '') || null
+      const category = text(categoryHtml(card)) || null
       cards.push({ title, date: currentDate, startTime, endTime, allDay: !startTime, canonicalUrl, sourcePlace, category, shortDescription, timeSource })
     }
   }

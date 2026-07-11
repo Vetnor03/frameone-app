@@ -18,9 +18,23 @@ test('list parser extracts date groups, canonical URLs, card time, description t
   ]
   assert.equal(cards.find(c => c.title.includes('Gladmat')).date, '2026-07-11')
   assert.equal(cards.find(c => c.title.includes('Gladmat')).startTime, '18:30')
+  assert.equal(cards.find(c => c.title.includes('Gladmat')).canonicalUrl, 'https://www.fjordnorway.com/en/see-and-do/gladmat-concert')
+  assert.ok(cards.every(c => !['Book', 'Read more', 'Buy tickets', 'Tickets'].includes(c.title)))
   assert.equal(cards.find(c => c.title.includes('Sola')).startTime, '19:00')
   assert.equal(cards.find(c => c.title.includes('Egersund')).allDay, true)
   assert.ok(cards.every(c => c.canonicalUrl.startsWith('https://')))
+})
+
+
+test('current sanitized Edge of Norway card uses heading, Read more URL, visible time and ignores Book CTA', () => {
+  const cards = parseEdgeOfNorwayListPage('<h2>11. July</h2>' + fixture('current-event-card-sanitized.html'), 'stavanger', new Date('2026-07-01T00:00:00Z'))
+  assert.equal(cards.length, 1)
+  assert.equal(cards[0].title, 'Football festival in Vågen on 11 July – Norway v England')
+  assert.equal(cards[0].canonicalUrl, 'https://www.fjordnorway.com/en/see-and-do/football-festival-in-vagen-on-11-july-norway-v-england')
+  assert.equal(cards[0].startTime, '17:00')
+  assert.equal(cards[0].timeSource, 'card')
+  assert.equal(cards[0].shortDescription.includes('Doors open'), true)
+  assert.equal(cards[0].category, 'Sport')
 })
 
 test('year transitions assign January headings to upcoming year when discovered in December', () => {
