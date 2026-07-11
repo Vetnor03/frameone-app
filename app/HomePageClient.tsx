@@ -2660,6 +2660,13 @@ function ConnectAppsScreen({
       description: language === 'no' ? 'Se kommende aktiviteter og arrangementer fra kommunen din.' : 'See upcoming activities and events from your municipality.',
     },
     {
+      key: 'vigilo',
+      name: 'Vigilo',
+      description:
+        language === 'no' ? 'Vigilo-tilkobling kommer snart' : 'Vigilo connection coming soon',
+      comingSoon: true,
+    },
+    {
       key: 'transponder',
       name: 'Transponder',
       description:
@@ -2673,13 +2680,6 @@ function ConnectAppsScreen({
       name: language === 'no' ? 'Renovasjon' : 'Waste collection',
       description:
         language === 'no' ? 'Renovasjonsvarsler kommer snart' : 'Waste collection reminders coming soon',
-      comingSoon: true,
-    },
-    {
-      key: 'vigilo',
-      name: 'Vigilo',
-      description:
-        language === 'no' ? 'Vigilo-tilkobling kommer snart' : 'Vigilo connection coming soon',
       comingSoon: true,
     },
   ]
