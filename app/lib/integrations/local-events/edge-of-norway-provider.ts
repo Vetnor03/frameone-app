@@ -27,8 +27,7 @@ export type EdgeListPageParseStats = { requestUrl: string; status: number; htmlL
 
 
 const CTA_LABELS = new Set(['book', 'read more', 'buy tickets', 'tickets', 'les mer', 'mehr erfahren'])
-const EVENT_CARD_RE = /<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi
-const FJORD_EVENT_LINK_RE = /<a\b[^>]+href=["'][^"']*fjordnorway\.com\/[^"']*(?:see-and-do|event|hva-skjer)[^"']*["'][^>]*>[\s\S]*?<\/a>/gi
+const FJORD_EVENT_LINK_RE = /<a\b[^>]+href=["'](?:[^"']*fjordnorway\.com\/[^"']*(?:events?|see-and-do|hva-skjer)|\/[^"']*(?:events?|see-and-do|hva-skjer))[^"']*["'][^>]*>[\s\S]*?<\/a>/gi
 
 function isCtaLabel(value: string) { return CTA_LABELS.has(text(value).toLowerCase().trim()) }
 function stripCtas(value: string) { return text(value).replace(/\b(Read more|Les mer|Mehr erfahren|Book|Buy tickets|Tickets)\b/ig, ' ').replace(/\s+/g, ' ').trim() }
@@ -107,54 +106,93 @@ function classify(cards: ParsedEdgeCard[], detailHtml?: string): EdgeEventClassi
   return 'one_off'
 }
 
-function containersFromDateChunk(chunk: string) {
-  const eventCards = [...chunk.matchAll(EVENT_CARD_RE)].map((m) => m[0]).filter((card) => {
-    FJORD_EVENT_LINK_RE.lastIndex = 0
-    return FJORD_EVENT_LINK_RE.test(card) || /read more|les mer|mehr erfahren/i.test(card)
-  })
-  if (eventCards.length) return eventCards
-  const links = [...chunk.matchAll(FJORD_EVENT_LINK_RE)].filter((link) => !isCtaLabel(text(link[0])))
-  FJORD_EVENT_LINK_RE.lastIndex = 0
-  return links.map((link, index) => {
-    const possibleStart = Math.max(chunk.lastIndexOf('<article', link.index), chunk.lastIndexOf('<li', link.index), chunk.lastIndexOf('<div', link.index), chunk.lastIndexOf('<a', link.index))
-    const nextLinkIndex = links[index + 1]?.index ?? chunk.length
-    const articleEnd = chunk.indexOf('</article>', link.index)
-    const liEnd = chunk.indexOf('</li>', link.index)
-    const possibleEnd = Math.min(nextLinkIndex, articleEnd > -1 ? articleEnd + 10 : chunk.length, liEnd > -1 ? liEnd + 5 : chunk.length)
-    return chunk.slice(possibleStart >= 0 ? possibleStart : link.index, possibleEnd)
-  })
+function balancedContainerAround(html: string, index: number) {
+  for (const tag of ['article', 'li']) {
+    const openRe = new RegExp(`<${tag}\\b[^>]*>`, 'gi')
+    let open: RegExpExecArray | null
+    let best: RegExpExecArray | null = null
+    while ((open = openRe.exec(html)) && open.index <= index) best = open
+    if (!best) continue
+    const close = html.indexOf(`</${tag}>`, index)
+    if (close > index) return html.slice(best.index, close + tag.length + 3)
+  }
+  const eventDivRe = /<div\b[^>]*class=["'][^"']*(?:event-list-item|event-card|product-list-item|card)[^"']*["'][^>]*>/gi
+  let eventDiv: RegExpExecArray | null
+  let bestEventDiv: RegExpExecArray | null = null
+  while ((eventDiv = eventDivRe.exec(html)) && eventDiv.index <= index) bestEventDiv = eventDiv
+  if (bestEventDiv) {
+    eventDivRe.lastIndex = index + 1
+    const nextEventDiv = eventDivRe.exec(html)?.index ?? html.length
+    const nextHeading = html.slice(index).search(/<h[1-4]\b/i)
+    const end = Math.min(nextEventDiv, nextHeading >= 0 ? index + nextHeading : html.length)
+    return html.slice(bestEventDiv.index, end)
+  }
+  for (const tag of ['div', 'section']) {
+    const openRe = new RegExp(`<${tag}\\b[^>]*>`, 'gi')
+    let open: RegExpExecArray | null
+    let best: RegExpExecArray | null = null
+    while ((open = openRe.exec(html)) && open.index <= index) best = open
+    if (!best) continue
+    const close = html.indexOf(`</${tag}>`, index)
+    if (close > index) return html.slice(best.index, close + tag.length + 3)
+  }
+  return html.slice(Math.max(0, index - 1200), Math.min(html.length, index + 1800))
+}
+
+function nearestDateForLink(html: string, container: string, linkIndex: number, referenceDate: Date) {
+  const inContainer = parseDateHeading(container, referenceDate)
+  if (inContainer) return inContainer
+  const before = html.slice(Math.max(0, linkIndex - 2500), linkIndex)
+  const beforeMatches = [...before.matchAll(/\b\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+(?:\s+\d{4})?\.?\b/g)]
+  for (const match of beforeMatches.reverse()) {
+    const date = parseDateHeading(match[0], referenceDate)
+    if (date) return date
+  }
+  const around = html.slice(linkIndex, Math.min(html.length, linkIndex + 1200))
+  const after = around.match(/\b\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+(?:\s+\d{4})?\.?\b/)
+  return after ? parseDateHeading(after[0], referenceDate) : null
+}
+
+function eventTitleLinks(html: string) {
+  const links: Array<{ tag: string; href: string; index: number }> = []
+  for (const m of html.matchAll(FJORD_EVENT_LINK_RE)) {
+    const href = attr(m[0], 'href')
+    if (!href) continue
+    const label = stripCtas(m[0])
+    if (!label || isCtaLabel(label)) continue
+    links.push({ tag: m[0], href, index: m.index ?? 0 })
+  }
+  return links
 }
 
 export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: EdgeOfNorwayCity, opts: { referenceDate?: Date; requestUrl?: string; status?: number } = {}) {
   const referenceDate = opts.referenceDate || new Date()
   const cards: ParsedEdgeCard[] = []
   const stats: EdgeListPageParseStats = { requestUrl: opts.requestUrl || '', status: opts.status || 0, htmlLength: html.length, dateHeadingCount: 0, fjordNorwayEventLinkCount: [...html.matchAll(FJORD_EVENT_LINK_RE)].length, candidateCardCount: 0, parsedCardCount: 0, rejectedMissingTitle: 0, rejectedMissingDate: 0, rejectedMissingSourceUrl: 0 }
-  FJORD_EVENT_LINK_RE.lastIndex = 0
   const dateHeadings = [...html.matchAll(/<h[1-4][^>]*>[\s\S]*?<\/h[1-4]>/gi)].filter((m) => isDateGroupHeading(m[0], referenceDate))
   stats.dateHeadingCount = dateHeadings.length
-  for (let i = 0; i < dateHeadings.length; i += 1) {
-    const heading = dateHeadings[i]
-    const currentDate = parseDateHeading(heading[0], referenceDate)
+
+  const links = eventTitleLinks(html)
+  stats.candidateCardCount = links.length
+  for (const link of links) {
+    const canonicalUrl = absUrl(link.href)
+    if (!canonicalUrl) { stats.rejectedMissingSourceUrl += 1; continue }
+    const container = balancedContainerAround(html, link.index)
+    const currentDate = nearestDateForLink(html, container, link.index, referenceDate)
     if (!currentDate) { stats.rejectedMissingDate += 1; continue }
-    const nextHeadingIndex = dateHeadings[i + 1]?.index ?? html.length
-    const chunk = html.slice((heading.index ?? 0) + heading[0].length, nextHeadingIndex)
-    const containers = containersFromDateChunk(chunk)
-    stats.candidateCardCount += containers.length
-    for (const card of containers) {
-      const detailLink = readMoreLink(card); if (!detailLink) { stats.rejectedMissingSourceUrl += 1; continue }
-      const canonicalUrl = absUrl(detailLink.href)
-      const title = titleFromCard(card, canonicalUrl); if (!title || title.length < 2 || isCtaLabel(title)) { stats.rejectedMissingTitle += 1; continue }
-      let { startTime, endTime } = extractTime(cardTimeHtml(card)); let timeSource: TimeSource = startTime ? 'card' : 'all_day'
-      const shortDescription = text(descriptionHtml(card).slice(0, 500)) || null
-      if (!startTime) { const t = extractTime(shortDescription || card); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = shortDescription ? 'description' : 'card' }
-      const category = text(categoryHtml(card)) || null
-      cards.push({ title, date: currentDate, startTime, endTime, allDay: !startTime, canonicalUrl, sourcePlace, category, shortDescription, timeSource })
-    }
+    const title = stripCtas(link.tag) || titleFromCard(container, canonicalUrl)
+    if (!title || title.length < 2 || isCtaLabel(title)) { stats.rejectedMissingTitle += 1; continue }
+    let { startTime, endTime } = extractTime(cardTimeHtml(container)); let timeSource: TimeSource = startTime ? 'card' : 'all_day'
+    const shortDescription = text(descriptionHtml(container).slice(0, 500)) || null
+    if (!startTime) { const t = extractTime(shortDescription || container); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = shortDescription ? 'description' : 'card' }
+    const category = text(categoryHtml(container)) || null
+    cards.push({ title, date: currentDate, startTime, endTime, allDay: !startTime, canonicalUrl, sourcePlace, category, shortDescription, timeSource })
   }
   const dedupedCards = [...new Map(cards.map(c => [`${c.canonicalUrl}:${c.date}:${c.startTime || 'all-day'}`, c])).values()]
   stats.parsedCardCount = dedupedCards.length
   return { cards: dedupedCards, stats }
 }
+
 
 export function parseEdgeOfNorwayListPage(html: string, sourcePlace: EdgeOfNorwayCity, referenceDate = new Date()): ParsedEdgeCard[] {
   return parseEdgeOfNorwayListPageWithStats(html, sourcePlace, { referenceDate }).cards

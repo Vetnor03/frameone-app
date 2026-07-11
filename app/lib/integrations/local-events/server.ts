@@ -92,19 +92,19 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
       updated_at: now,
     }))
 
+    const { error: upsertError } = await supabase
+      .from('integration_items')
+      .upsert(rows, { onConflict: 'user_id,provider,external_id' })
+    if (upsertError) throw new Error(upsertError.message)
+
+    const externalIdList = rows.map((row) => `"${String(row.external_id).replace(/"/g, '\\"')}"`).join(',')
     const { error: deleteError } = await supabase
       .from('integration_items')
       .delete()
       .eq('user_id', userId)
       .eq('provider', LOCAL_EVENTS_PROVIDER)
+      .not('external_id', 'in', `(${externalIdList})`)
     if (deleteError) throw new Error(deleteError.message)
-
-    if (rows.length > 0) {
-      const { error: upsertError } = await supabase
-        .from('integration_items')
-        .upsert(rows, { onConflict: 'user_id,provider,external_id' })
-      if (upsertError) throw new Error(upsertError.message)
-    }
 
     return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats: { ...stats, pageParseStats } }
   } catch (error) {
