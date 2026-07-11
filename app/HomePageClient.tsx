@@ -2261,7 +2261,7 @@ async function handleSelectTab(k: TabKey) {
                         onClick={() => setRemindersConnectScreenOpen(true)}
                         className="inline-flex h-7 items-center justify-center rounded-full border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-70)] bg-[color:var(--app-bg)]/80"
                       >
-                        {language === 'no' ? 'KOBLE APPER' : 'CONNECT APPS'}
+                        {language === 'no' ? 'KOBLE TIL' : 'CONNECT'}
                       </button>
                     )}
 
