@@ -2,6 +2,25 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
+
+function isDesktopUserAgent(userAgent: string | null) {
+  if (!userAgent) return false
+
+  const normalized = userAgent.toLowerCase()
+  const isMobileOrTablet = /android|iphone|ipad|ipod|mobile|tablet|blackberry|iemobile|opera mini/.test(normalized)
+  if (isMobileOrTablet) return false
+
+  return /windows nt|macintosh|x11|linux x86_64|cros/.test(normalized)
+}
+
+function shouldRedirectDesktopRootToShop(request: NextRequest) {
+  return (
+    request.nextUrl.hostname === 're-mind.no' &&
+    request.nextUrl.pathname === '/' &&
+    isDesktopUserAgent(request.headers.get('user-agent'))
+  )
+}
+
 function createSupabaseServerClient(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -32,6 +51,13 @@ function createSupabaseServerClient(request: NextRequest) {
 
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
+
+  if (shouldRedirectDesktopRootToShop(request)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/shop'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
 
   const isLogin = pathname === '/login'
   const isPublic =
