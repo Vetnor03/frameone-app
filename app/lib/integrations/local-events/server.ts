@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
-import { FRISKUS_MUNICIPALITIES, getLocalEvents, type LocalEventFilter, type NormalizedLocalEvent } from './providers/friskus'
+import { FRISKUS_MUNICIPALITIES, LocalEventsProviderError, getLocalEvents, serializeError, type LocalEventFilter, type NormalizedLocalEvent } from './providers/friskus'
 
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
 export const UNSUPPORTED_MESSAGE = 'Local events are not supported for this municipality yet.'
@@ -63,9 +63,14 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
     await supabase.from('user_integrations').upsert({ user_id: userId, provider: LOCAL_EVENTS_PROVIDER, status: 'connected', last_sync_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() }, { onConflict: 'user_id,provider' })
     return { synced: true, count }
   } catch (error) {
-    console.error('[local-events] provider sync failed', error)
-    await supabase.from('user_integrations').update({ last_error: 'Could not load local events', updated_at: new Date().toISOString() }).eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
-    return { synced: false, failed: true, error: 'Could not load local events' }
+    if (error instanceof LocalEventsProviderError) {
+      console.error('[local-events] provider sync failed', { message: error.message, ...error.details })
+    } else {
+      console.error('[local-events] provider sync failed', { error: serializeError(error) })
+    }
+    const message = error instanceof Error ? error.message : 'Could not load local events'
+    await supabase.from('user_integrations').update({ last_error: message, updated_at: new Date().toISOString() }).eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
+    throw error
   }
 }
 
@@ -76,9 +81,21 @@ export async function connectLocalEventsForUser(userId: string, municipalityNumb
     await supabase.from('user_integrations').upsert({ user_id: userId, provider: LOCAL_EVENTS_PROVIDER, status: 'disconnected', encrypted_credentials: { municipality_number: municipalityNumber }, external_account_label: municipality?.municipality_name || municipalityNumber, last_error: UNSUPPORTED_MESSAGE, updated_at: new Date().toISOString() }, { onConflict: 'user_id,provider' })
     return { connected: false, status: 'unsupported', message: UNSUPPORTED_MESSAGE, municipalities: MUNICIPALITIES }
   }
-  await supabase.from('user_integrations').upsert({ user_id: userId, provider: LOCAL_EVENTS_PROVIDER, status: 'connected', encrypted_credentials: { municipality_number: municipalityNumber, filters: filters(selected) }, external_account_id: municipalityNumber, external_account_label: municipality.municipality_name, updated_at: new Date().toISOString() }, { onConflict: 'user_id,provider' })
-  const sync = await syncLocalEventsForUser(userId, { force: true })
-  return { connected: true, status: 'connected', account: municipality.municipality_name, ...sync }
+  const selectedFilters = filters(selected)
+  try {
+    const events = await getLocalEvents({ municipalityNumber, from: new Date(), to: addDays(HORIZON_DAYS) })
+    const count = await upsertEvents(userId, events, selectedFilters)
+    await supabase.from('user_integrations').upsert({ user_id: userId, provider: LOCAL_EVENTS_PROVIDER, status: 'connected', encrypted_credentials: { municipality_number: municipalityNumber, filters: selectedFilters }, external_account_id: municipalityNumber, external_account_label: municipality.municipality_name, last_sync_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() }, { onConflict: 'user_id,provider' })
+    return { connected: true, status: 'connected', account: municipality.municipality_name, synced: true, count }
+  } catch (error) {
+    if (error instanceof LocalEventsProviderError) {
+      console.error('[local-events] initial provider sync failed', { message: error.message, ...error.details })
+    } else {
+      console.error('[local-events] initial provider sync failed', { error: serializeError(error) })
+    }
+    await supabase.from('user_integrations').upsert({ user_id: userId, provider: LOCAL_EVENTS_PROVIDER, status: 'disconnected', encrypted_credentials: { municipality_number: municipalityNumber, filters: selectedFilters }, external_account_id: municipalityNumber, external_account_label: municipality.municipality_name, last_error: error instanceof Error ? error.message : 'Could not load local events', updated_at: new Date().toISOString() }, { onConflict: 'user_id,provider' })
+    throw error
+  }
 }
 
 export async function getLocalEventsStatus(userId: string) {

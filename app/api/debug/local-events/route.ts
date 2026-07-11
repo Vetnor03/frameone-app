@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { debugLocalEvents } from '@/app/lib/integrations/local-events/providers/friskus'
+import { debugLocalEvents, LocalEventsProviderError, serializeError } from '@/app/lib/integrations/local-events/providers/friskus'
 
 export async function GET(req: Request) {
   if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -8,6 +8,9 @@ export async function GET(req: Request) {
   try {
     return NextResponse.json(await debugLocalEvents(municipality))
   } catch (error) {
-    return NextResponse.json({ error: 'Could not load local events', details: error instanceof Error ? error.message : String(error) }, { status: 502 })
+    if (error instanceof LocalEventsProviderError) {
+      return NextResponse.json({ requestSucceeded: false, status: error.details.status, bodyPreview: error.details.responseBody, error: serializeError(error) }, { status: 502 })
+    }
+    return NextResponse.json({ requestSucceeded: false, error: serializeError(error) }, { status: 502 })
   }
 }
