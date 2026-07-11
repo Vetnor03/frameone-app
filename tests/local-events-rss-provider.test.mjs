@@ -81,7 +81,23 @@ test('HTTP 400, HTTP 500, timeout, and stale-cache behavior are covered in provi
 })
 
 test('internal error code is not displayed in UI', () => {
-  assert.match(connectRouteSource, /LOCAL_EVENTS_INITIAL_SYNC_FAILED/)
-  assert.match(connectRouteSource, /Could not connect to local events\. Please try again\./)
+  assert.doesNotMatch(connectRouteSource, /LOCAL_EVENTS_INITIAL_SYNC_FAILED/)
+  assert.match(connectRouteSource, /Could not load local events\. Please try again\./)
   assert.match(uiSource, /json\?\.message \|\| 'Could not connect to local events\. Please try again\.'/)
+})
+
+test('provider parses Norwegian event date and time from RSS title before pubDate', () => {
+  assert.match(providerSource, /parseFriskusTitleOccurrence/)
+  assert.match(providerSource, /NORWEGIAN_MONTHS/)
+  assert.match(providerSource, /jan: 1, januar: 1/)
+  assert.match(providerSource, /des: 12, desember: 12/)
+  assert.doesNotMatch(providerSource, /pubDate/)
+  const title = 'Gudstjeneste i Vardeneset kirke, søndag 12. jul 2026 - søndag 27. des 2026, 11:00 - 12:15'
+  const dateMatch = title.match(/(?:søndag\s+)?(\d{1,2})\.\s*(jul)\s+(\d{4})/i)
+  const timeMatch = title.slice(dateMatch.index + dateMatch[0].length).match(/(\d{1,2}:\d{2})(?:\s*-\s*(\d{1,2}:\d{2}))?/)
+  const cleanTitle = title.slice(0, dateMatch.index).replace(/[\s,–—-]+$/g, '').trim()
+  assert.equal(cleanTitle, 'Gudstjeneste i Vardeneset kirke')
+  assert.equal(`${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3]}`, '12 jul 2026')
+  assert.equal(timeMatch[1], '11:00')
+  assert.equal(timeMatch[2], '12:15')
 })

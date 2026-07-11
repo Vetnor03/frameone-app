@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 
 export type LocalEventFilter = 'all'
 export type NormalizedLocalEvent = {
-  external_id: string; title: string; starts_at: string; ends_at: string | null; location: string | null; short_description: string | null; category: null; source_url: string; municipality_number: string; source: 'friskus-rss'; provider: 'friskus-rss'; last_fetched_at: string; raw?: Record<string, unknown>
+  external_id: string; title: string; starts_at: string; ends_at: string | null; location: string | null; short_description: string | null; organizer: string | null; category: null; source_url: string; municipality_number: string; source: 'friskus-rss'; provider: 'friskus-rss'; last_fetched_at: string; raw?: Record<string, unknown>
 }
 export type FriskusMunicipalityConfig = { municipalityNumber: string; municipalityName: string; name: string; provider: 'friskus-rss'; municipalityUuid: string; publicBaseUrl: string }
 export type GetLocalEventsOptions = { municipalityNumber: string; from: Date; to?: Date }
@@ -29,14 +29,66 @@ function value(node: XmlNode | undefined) { return (node?.text || '').replace(/\
 function itemToObject(node: XmlNode): FeedItem { const out: FeedItem = { _attrs: node.attrs }; for (const c of node.children) { const val = c.children.length ? { _text: value(c), _attrs: c.attrs, _children: c.children.map(itemToObject) } : value(c); if (out[c.name] === undefined) out[c.name] = val; else out[c.name] = Array.isArray(out[c.name]) ? [...out[c.name], val] : [out[c.name], val] } return out }
 export function extractRssItems(xml: string) { const doc = parseXml(xml); const rss = child(doc, 'rss') || child(doc, 'feed'); const channel = rss ? (child(rss, 'channel') || rss) : doc; const items = [...children(channel, 'item'), ...children(channel, 'entry')].map(itemToObject); return { channelTitle: value(child(channel, 'title')) || null, rows: items } }
 function text(v: unknown, max = 500) { const s = typeof v === 'object' && v && '_text' in v ? String((v as any)._text) : String(v ?? ''); return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) }
-function dateValue(...vals: unknown[]) { for (const v of vals) { const d = new Date(text(v, 120)); if (Number.isFinite(d.getTime())) return d.toISOString() } return null }
+function dateValue(...vals: unknown[]) { for (const v of vals) { const raw = text(v, 120); if (!raw) continue; const d = new Date(raw); if (Number.isFinite(d.getTime())) return raw } return null }
+
+const NORWEGIAN_MONTHS: Record<string, number> = {
+  jan: 1, januar: 1,
+  feb: 2, februar: 2,
+  mar: 3, mars: 3,
+  apr: 4, april: 4,
+  mai: 5,
+  jun: 6, juni: 6,
+  jul: 7, juli: 7,
+  aug: 8, august: 8,
+  sep: 9, september: 9,
+  okt: 10, oktober: 10,
+  nov: 11, november: 11,
+  des: 12, desember: 12,
+}
+const NORWEGIAN_WEEKDAYS = '(?:mandag|tirsdag|onsdag|torsdag|fredag|lørdag|lordag|søndag|sondag)'
+const TITLE_DATE_RE = new RegExp(`(?:${NORWEGIAN_WEEKDAYS}\\s+)?(\\d{1,2})\\.\\s*([a-zæøå]+)\\s+(\\d{4})`, 'iu')
+const TITLE_TIME_RE = /(\d{1,2}:\d{2})(?:\s*-\s*(\d{1,2}:\d{2}))?/
+
+function osloOffsetForDate(year: number, month: number, day: number, hour: number, minute: number) {
+  const probe = new Date(Date.UTC(year, month - 1, day, hour, minute))
+  const tz = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Oslo', timeZoneName: 'shortOffset' }).formatToParts(probe).find((p) => p.type === 'timeZoneName')?.value || 'GMT+1'
+  const m = tz.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/)
+  if (!m) return '+01:00'
+  return `${m[1]}${m[2].padStart(2, '0')}:${(m[3] || '00').padStart(2, '0')}`
+}
+
+function osloIso(year: number, month: number, day: number, time: string) {
+  const [hour, minute] = time.split(':').map(Number)
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${osloOffsetForDate(year, month, day, hour, minute)}`
+}
+
+export function parseFriskusTitleOccurrence(title: string) {
+  const match = TITLE_DATE_RE.exec(title)
+  if (!match) return null
+  const day = Number(match[1])
+  const month = NORWEGIAN_MONTHS[match[2].toLowerCase()]
+  const year = Number(match[3])
+  if (!month || !Number.isFinite(day) || !Number.isFinite(year)) return null
+  const afterDate = title.slice((match.index || 0) + match[0].length)
+  const timeMatch = TITLE_TIME_RE.exec(afterDate)
+  if (!timeMatch) return null
+  const startTime = timeMatch[1]
+  const endTime = timeMatch[2] || null
+  const cleanTitle = title.slice(0, match.index).replace(/[\s,–—-]+$/g, '').trim() || title
+  return {
+    title: cleanTitle || title,
+    startsAt: osloIso(year, month, day, startTime),
+    endsAt: endTime ? osloIso(year, month, day, endTime) : null,
+  }
+}
+
 function stableId(m: string, url: string, title: string, start: string) { return `friskus-rss:${crypto.createHash('sha256').update(`friskus-rss|${m}|${url}|${title}|${start}`).digest('hex').slice(0, 24)}` }
 export function startOfTodayInOslo(now = new Date()) { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now); const g=(t:string)=>p.find(x=>x.type===t)?.value; return new Date(`${g('year')}-${g('month')}-${g('day')}T00:00:00+02:00`) }
 export function addDays(date: Date, days: number) { const d = new Date(date); d.setDate(d.getDate() + days); return d }
 export function endOfDayInOslo(date: Date) { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date); const g=(t:string)=>p.find(x=>x.type===t)?.value; return new Date(`${g('year')}-${g('month')}-${g('day')}T23:59:59.999+02:00`) }
-function occurrence(raw:any) { return { startsAt: dateValue(raw['friskus:start'], raw['friskus:startDate'], raw['friskus:start_at'], raw.start, raw.startDate, raw['dc:date']), endsAt: dateValue(raw['friskus:end'], raw['friskus:endDate'], raw['friskus:end_at'], raw.end, raw.endDate) } }
-export function normalizeFriskusEvents(rows: FeedItem[], fetchedAt: string, from: Date, to: Date, config: FriskusMunicipalityConfig) { let removedMissingTitle=0, removedInvalidDate=0, duplicateGuid=0; const seen = new Set<string>(); const normalized: NormalizedLocalEvent[] = []; for (const raw of rows) { const title = text(raw.title, 160); if (!title) { removedMissingTitle++; continue } const occ = occurrence(raw); if (!occ.startsAt) { removedInvalidDate++; continue } const eventStart = new Date(occ.startsAt); const effectiveEnd = new Date(occ.endsAt || occ.startsAt); if (effectiveEnd < from || eventStart > to) continue; const sourceUrl = text(raw.link, 500) || config.publicBaseUrl; const guid = text(raw.guid || raw.id, 200); const external_id = guid ? `friskus-rss:${guid}` : stableId(config.municipalityNumber, sourceUrl, title, occ.startsAt); if (seen.has(external_id)) { duplicateGuid++; continue } seen.add(external_id); normalized.push({ external_id, title, starts_at: occ.startsAt, ends_at: occ.endsAt, location: text(raw['friskus:location'] || raw.location || raw['friskus:venue'], 140) || null, short_description: text(raw.description || raw.summary, 280) || null, category: null, source_url: sourceUrl, municipality_number: config.municipalityNumber, source: 'friskus-rss', provider: 'friskus-rss', last_fetched_at: fetchedAt, raw }) } normalized.sort((a,b)=>a.starts_at.localeCompare(b.starts_at)); return { dateFiltered: normalized, normalized, diagnostics: { removedMissingTitle, removedInvalidDate, duplicateGuid, removedByDate: rows.length - normalized.length - removedMissingTitle - removedInvalidDate - duplicateGuid } } }
+function occurrence(raw:any, title: string) { const fromTitle = parseFriskusTitleOccurrence(title); if (fromTitle) return fromTitle; return { title, startsAt: dateValue(raw['friskus:start'], raw['friskus:startDate'], raw['friskus:start_at'], raw.start, raw.startDate, raw['dc:date']), endsAt: dateValue(raw['friskus:end'], raw['friskus:endDate'], raw['friskus:end_at'], raw.end, raw.endDate) } }
+export function normalizeFriskusEvents(rows: FeedItem[], fetchedAt: string, from: Date, to: Date, config: FriskusMunicipalityConfig) { let removedMissingTitle=0, removedInvalidDate=0, duplicateGuid=0; const seen = new Set<string>(); const normalized: NormalizedLocalEvent[] = []; for (const raw of rows) { const rawTitle = text(raw.title, 220); if (!rawTitle) { removedMissingTitle++; continue } const occ = occurrence(raw, rawTitle); const title = text(occ.title, 160); if (!occ.startsAt) { removedInvalidDate++; continue } const eventStart = new Date(occ.startsAt); const effectiveEnd = new Date(occ.endsAt || occ.startsAt); if (effectiveEnd < from || eventStart > to) continue; const sourceUrl = text(raw.link, 500) || config.publicBaseUrl; const guid = text(raw.guid || raw.id, 200); const external_id = guid ? `friskus-rss:${guid}` : stableId(config.municipalityNumber, sourceUrl, title, occ.startsAt); if (seen.has(external_id)) { duplicateGuid++; continue } seen.add(external_id); normalized.push({ external_id, title, starts_at: occ.startsAt, ends_at: occ.endsAt, location: text(raw['friskus:location'] || raw.location || raw['friskus:venue'], 140) || null, short_description: text(raw.description || raw.summary, 280) || null, organizer: text(raw.author || raw['dc:creator'], 160) || null, category: null, source_url: sourceUrl, municipality_number: config.municipalityNumber, source: 'friskus-rss', provider: 'friskus-rss', last_fetched_at: fetchedAt, raw }) } normalized.sort((a,b)=>a.starts_at.localeCompare(b.starts_at)); return { dateFiltered: normalized, normalized, diagnostics: { removedMissingTitle, removedInvalidDate, duplicateGuid, removedByDate: rows.length - normalized.length - removedMissingTitle - removedInvalidDate - duplicateGuid } } }
 export function friskusRssEndpoint(config: FriskusMunicipalityConfig) { const url = new URL('https://rss.friskus.com/feed/events'); url.searchParams.append('municipalities[]', config.municipalityUuid); return url.toString() }
 async function fetchFriskusRows(config: FriskusMunicipalityConfig): Promise<FetchResult> { const requestUrl = friskusRssEndpoint(config); const cached = responseCache.get(requestUrl); if (cached && Date.now() - cached.at < CACHE_MS) return cached.result; let resp: Response; try { resp = await fetch(requestUrl, { method: 'GET', headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': 'RE-MIND/1.0 local-events integration' }, signal: AbortSignal.timeout(15_000), next: { revalidate: 1800 } as any }) } catch (error) { throw new LocalEventsProviderError('Friskus RSS network request failed', { provider: 'friskus-rss', municipalityNumber: config.municipalityNumber, municipalityUuid: config.municipalityUuid, requestUrl, cause: error }) } const contentType = resp.headers.get('content-type'); const xml = await resp.text(); const base = { municipalityNumber: config.municipalityNumber, municipalityUuid: config.municipalityUuid, requestUrl, status: resp.status, statusText: resp.statusText, contentType, xmlPreview: xml.slice(0,1000) }; console.info('[local-events] Friskus RSS response', base); if (!resp.ok) throw new LocalEventsProviderError(`Friskus RSS returned ${resp.status} ${resp.statusText}`, { provider: 'friskus-rss', municipalityNumber: config.municipalityNumber, municipalityUuid: config.municipalityUuid, requestUrl, status: resp.status, statusText: resp.statusText, contentType, responseBody: xml.slice(0,1000) }); try { const { rows, channelTitle } = extractRssItems(xml); console.info('[local-events] Friskus RSS raw items', { ...base, channelTitle, rawItemCount: rows.length, sanitizedSampleRssItem: rows[0] || null }); const result = { rows, channelTitle, status: resp.status, statusText: resp.statusText, contentType, requestUrl, finalUrl: resp.url, redirected: resp.redirected, bodyPreview: xml.slice(0,1000) }; responseCache.set(requestUrl, { at: Date.now(), result }); return result } catch (error) { throw new LocalEventsProviderError('Friskus RSS XML parsing failed', { provider: 'friskus-rss', municipalityNumber: config.municipalityNumber, municipalityUuid: config.municipalityUuid, requestUrl, status: resp.status, statusText: resp.statusText, contentType, responseBody: xml.slice(0,1000), cause: error }) } }
-export async function getLocalEvents({ municipalityNumber, from }: GetLocalEventsOptions) { const config = FRISKUS_MUNICIPALITIES[municipalityNumber]; if (!config) throw new Error('Unsupported municipality'); const rangeStart = startOfTodayInOslo(from); const rangeEnd = endOfDayInOslo(addDays(rangeStart, 14)); const result = await fetchFriskusRows(config); const out = normalizeFriskusEvents(result.rows, new Date().toISOString(), rangeStart, rangeEnd, config); console.info('[local-events] Friskus RSS normalization diagnostics', { municipalityNumber, municipalityUuid: config.municipalityUuid, requestUrl: result.requestUrl, status: result.status, contentType: result.contentType, xmlPreview: result.bodyPreview, feedItemCount: result.rows.length, normalizedRecordCount: out.normalized.length, ...out.diagnostics }); return out.normalized }
+export async function getLocalEvents({ municipalityNumber, from }: GetLocalEventsOptions) { const config = FRISKUS_MUNICIPALITIES[municipalityNumber]; if (!config) throw new Error('Unsupported municipality'); const rangeStart = startOfTodayInOslo(from); const rangeEnd = endOfDayInOslo(addDays(rangeStart, 14)); const result = await fetchFriskusRows(config); const out = normalizeFriskusEvents(result.rows, new Date().toISOString(), rangeStart, rangeEnd, config); console.info('[local-events] Friskus RSS normalization diagnostics', { municipalityNumber, municipalityUuid: config.municipalityUuid, requestUrl: result.requestUrl, status: result.status, contentType: result.contentType, xmlPreview: result.bodyPreview, feedItemCount: result.rows.length, normalizedRecordCount: out.normalized.length, ...out.diagnostics, sampleNormalizedEvent: out.normalized[0] ? { title: out.normalized[0].title, startAt: out.normalized[0].starts_at, endAt: out.normalized[0].ends_at, sourceUrl: out.normalized[0].source_url } : null }); return out.normalized }
 export async function debugLocalEvents(municipalityNumber: string, from = new Date()) { const config = FRISKUS_MUNICIPALITIES[municipalityNumber]; if (!config) throw new Error('Unsupported municipality'); const result = await fetchFriskusRows(config); const rangeStart = startOfTodayInOslo(from); const rangeEnd = endOfDayInOslo(addDays(rangeStart, 14)); const out = normalizeFriskusEvents(result.rows, new Date().toISOString(), rangeStart, rangeEnd, config); return { municipalityNumber: config.municipalityNumber, municipalityName: config.municipalityName, provider: 'friskus-rss' as const, requestUrl: result.requestUrl, requestSucceeded: true, status: result.status, statusText: result.statusText, contentType: result.contentType, redirected: result.redirected, finalUrl: result.finalUrl, bodyPreview: result.bodyPreview, channelTitle: result.channelTitle, rawCount: result.rows.length, filteredCount: out.dateFiltered.length, normalizedCount: out.normalized.length, sampleRawEvent: result.rows[0] || null, sampleNormalizedEvent: out.normalized[0] || null, diagnostics: out.diagnostics } }
