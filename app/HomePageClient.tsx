@@ -2518,7 +2518,7 @@ function ConnectAppsScreen({
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok && resp.status !== 202) throw new Error(json?.error || 'Failed to activate local events')
       if (json?.connected) {
-        setLocalEventsConnected(true); setLocalEventsAccount(json?.account || 'Stavanger'); setLocalEventsPanelOpen(false); setLocallyDisconnectedApps((c) => ({ ...c, local_events: false })); setStatusTone('success'); setStatus(language === 'no' ? 'Lokale arrangementer er aktivert' : 'Local events activated')
+        setLocalEventsConnected(true); setLocalEventsAccount(json?.account || (localEventsMunicipality === '1108' ? 'Sandnes' : 'Stavanger')); setLocalEventsPanelOpen(false); setLocallyDisconnectedApps((c) => ({ ...c, local_events: false })); setStatusTone('success'); setStatus(language === 'no' ? 'Lokale arrangementer er aktivert' : 'Local events activated')
       } else {
         setLocalEventsConnected(false); setStatusTone('info'); setStatus(json?.message || 'Local events are not supported for this municipality yet.')
       }
@@ -2783,13 +2783,17 @@ function ConnectAppsScreen({
                 )}
                 {app.key === 'local_events' && !localEventsConnected && localEventsPanelOpen && (
                   <div className="mt-3 space-y-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <input value={localEventsMunicipality === '1103' ? 'Stavanger' : localEventsMunicipality} onChange={(e) => setLocalEventsMunicipality(e.target.value.toLowerCase().includes('stavanger') ? '1103' : e.target.value)} list="local-events-municipalities" className="h-10 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" placeholder={language === 'no' ? 'Søk kommune' : 'Search municipality'} />
-                    <datalist id="local-events-municipalities"><option value="Stavanger" /><option value="Sandnes" /><option value="Oslo" /><option value="Bergen" /><option value="Trondheim" /></datalist>
-                    {localEventsMunicipality !== '1103' && <div>Local events are not supported for this municipality yet.</div>}
+                    <label className="block space-y-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--fg-35)]">{language === 'no' ? 'Kommune' : 'Municipality'}</span>
+                      <select value={localEventsMunicipality} onChange={(e) => setLocalEventsMunicipality(e.target.value)} className="h-10 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]">
+                        <option value="1103">Stavanger</option>
+                        <option value="1108">Sandnes</option>
+                      </select>
+                    </label>
                     <select value={localEventsFilter} onChange={(e) => setLocalEventsFilter(e.target.value)} className="h-10 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm text-[color:var(--fg-90)]"><option value="all">All events</option><option value="children_family">Children and family</option><option value="culture">Culture</option><option value="sport_outdoor">Sport and outdoor activities</option><option value="other">Other</option></select>
                     <div className="flex justify-end gap-2">
                       <button type="button" onClick={() => setLocalEventsPanelOpen(false)} disabled={localEventsLoading} className="h-9 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-45)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-                      <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || localEventsMunicipality !== '1103'} className="h-9 rounded-xl border border-[#2aa3ff] px-3 text-[10px] tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'AKTIVERER…' : 'ACTIVATING…') : (language === 'no' ? 'AKTIVER' : 'ACTIVATE')}</button>
+                      <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading} className="h-9 rounded-xl border border-[#2aa3ff] px-3 text-[10px] tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'AKTIVERER…' : 'ACTIVATING…') : (language === 'no' ? 'AKTIVER' : 'ACTIVATE')}</button>
                     </div>
                   </div>
                 )}
