@@ -8701,6 +8701,7 @@ function integrationProviderToReminderSource(provider: any): ReminderSource | nu
 function integrationItemDateTime(row: any) {
   const raw = row?.raw && typeof row.raw === 'object' ? row.raw : {}
   const rawDate = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.date) ? raw.date.slice(0, 10) : ''
+  if (raw.all_day === true) return { date: rawDate, time: null }
   const timestamp = String(row?.starts_at || row?.due_at || '').trim()
   if (timestamp) {
     const dt = new Date(timestamp)
