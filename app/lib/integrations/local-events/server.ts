@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
-import { EDGE_OF_NORWAY_CITY_OPTIONS, EDGE_OF_NORWAY_PROVIDER_ID as EDGE_PROVIDER_ID, EDGE_OF_NORWAY_SOURCE_PAGES, fetchEdgeOfNorwaySourcePage, mergeRegionalEvents, parseEdgeOfNorwayListPage } from './edge-of-norway-provider'
+import { EDGE_OF_NORWAY_CITY_OPTIONS, EDGE_OF_NORWAY_PROVIDER_ID as EDGE_PROVIDER_ID, EDGE_OF_NORWAY_SOURCE_PAGES, fetchEdgeOfNorwaySourcePage, mergeRegionalEvents, parseEdgeOfNorwayListPageWithStats } from './edge-of-norway-provider'
 
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
 export const EDGE_OF_NORWAY_PROVIDER_ID = EDGE_PROVIDER_ID
@@ -60,8 +60,12 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
       }),
     )
 
-    const cards = pageResults.flatMap(({ page, result }) => parseEdgeOfNorwayListPage(result.html, page.slug))
+    const parsedPages = pageResults.map(({ page, result }) => parseEdgeOfNorwayListPageWithStats(result.html, page.slug, { requestUrl: page.url, status: result.status }))
+    const pageParseStats = parsedPages.map((parsed) => parsed.stats)
+    for (const pageStats of pageParseStats) console.info('Edge of Norway local events parse stats', pageStats)
+    const cards = parsedPages.flatMap((parsed) => parsed.cards)
     const { occurrences, stats } = mergeRegionalEvents(cards)
+    if (cards.length === 0 || occurrences.length === 0) throw new Error(`Edge of Norway parsed zero events; refusing to delete existing local events. Page stats: ${JSON.stringify(pageParseStats)}`)
     const rows = occurrences.map((event) => ({
       user_id: userId,
       provider: LOCAL_EVENTS_PROVIDER,
@@ -102,7 +106,7 @@ export async function syncLocalEventsForUser(userId: string, opts: { force?: boo
       if (upsertError) throw new Error(upsertError.message)
     }
 
-    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats }
+    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats: { ...stats, pageParseStats } }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to sync local events'
     await supabase
