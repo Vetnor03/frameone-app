@@ -1,11 +1,10 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
-import { EDGE_OF_NORWAY_CITY_OPTIONS, EDGE_OF_NORWAY_PROVIDER_ID as EDGE_PROVIDER_ID, EDGE_OF_NORWAY_SOURCE_PAGES } from './edge-of-norway-provider'
+import { EDGE_OF_NORWAY_CITY_OPTIONS, EDGE_OF_NORWAY_PROVIDER_ID as EDGE_PROVIDER_ID, EDGE_OF_NORWAY_SOURCE_PAGES, fetchEdgeOfNorwaySourcePage, mergeRegionalEvents, parseEdgeOfNorwayListPage } from './edge-of-norway-provider'
 
 export const LOCAL_EVENTS_PROVIDER = 'local_events'
 export const EDGE_OF_NORWAY_PROVIDER_ID = EDGE_PROVIDER_ID
 export const EDGE_OF_NORWAY_DISPLAY_NAME = 'Edge of Norway'
 export const LOCAL_EVENTS_STATUS = 'connected'
-export const COMING_SOON_MESSAGE = 'Local events are available.'
 
 export type LocalEventProviderId = typeof EDGE_OF_NORWAY_PROVIDER_ID
 export type LocalEventKind = 'one_off' | 'separate_session' | 'continuous'
@@ -50,8 +49,73 @@ export const LOCAL_EVENTS_PROVIDERS: LocalEventsProvider[] = [EDGE_OF_NORWAY_PRO
 export async function syncLocalEventsForUser(userId: string, opts: { force?: boolean } = {}) {
   void opts
   const supabase = getSupabaseAdmin()
-  const { data } = await supabase.from('integration_items').select('id').eq('user_id', userId).eq('provider', LOCAL_EVENTS_PROVIDER)
-  return { synced: true, status: LOCAL_EVENTS_STATUS, count: data?.length || 0, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url) }
+  const now = new Date().toISOString()
+
+  try {
+    const pageResults = await Promise.all(
+      EDGE_OF_NORWAY_SOURCE_PAGES.map(async (page) => {
+        const result = await fetchEdgeOfNorwaySourcePage(page.url)
+        if (result.status < 200 || result.status >= 300) throw new Error(`Edge of Norway returned ${result.status}`)
+        return { page, result }
+      }),
+    )
+
+    const cards = pageResults.flatMap(({ page, result }) => parseEdgeOfNorwayListPage(result.html, page.slug))
+    const { occurrences, stats } = mergeRegionalEvents(cards)
+    const rows = occurrences.map((event) => ({
+      user_id: userId,
+      provider: LOCAL_EVENTS_PROVIDER,
+      external_id: event.occurrenceId,
+      title: event.title,
+      body: null,
+      starts_at: event.startsAt,
+      due_at: event.endsAt,
+      priority: 0,
+      raw: {
+        source: LOCAL_EVENTS_PROVIDER,
+        provider: EDGE_OF_NORWAY_PROVIDER_ID,
+        external_provider: event.provider,
+        base_event_id: event.baseEventId,
+        event_kind: event.classification,
+        all_day: event.allDay,
+        source_url: event.canonicalUrl,
+        source_places: event.sourcePlaces,
+        date: event.date,
+        end_date: event.endDate,
+        start_time: event.startTime,
+        end_time: event.endTime,
+      },
+      updated_at: now,
+    }))
+
+    const { error: deleteError } = await supabase
+      .from('integration_items')
+      .delete()
+      .eq('user_id', userId)
+      .eq('provider', LOCAL_EVENTS_PROVIDER)
+    if (deleteError) throw new Error(deleteError.message)
+
+    if (rows.length > 0) {
+      const { error: upsertError } = await supabase
+        .from('integration_items')
+        .upsert(rows, { onConflict: 'user_id,provider,external_id' })
+      if (upsertError) throw new Error(upsertError.message)
+    }
+
+    return { synced: true, status: LOCAL_EVENTS_STATUS, count: rows.length, source_pages: EDGE_OF_NORWAY_SOURCE_PAGES.map((p) => p.url), stats }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to sync local events'
+    await supabase
+      .from('user_integrations')
+      .upsert({
+        user_id: userId,
+        provider: LOCAL_EVENTS_PROVIDER,
+        status: 'error',
+        last_error: message,
+        updated_at: now,
+      }, { onConflict: 'user_id,provider' })
+    throw error
+  }
 }
 
 export function normalizeLocalEventsCityPreference(city: string | null | undefined) {
@@ -61,22 +125,44 @@ export function normalizeLocalEventsCityPreference(city: string | null | undefin
 
 export async function connectLocalEventsForUser(userId: string, opts: { selectedCity?: string } = {}) {
   const supabase = getSupabaseAdmin()
-  await supabase
+  const selectedCity = normalizeLocalEventsCityPreference(opts.selectedCity)
+  const initialNow = new Date().toISOString()
+  const { error: preferenceError } = await supabase
+    .from('user_integrations')
+    .upsert(
+      {
+        user_id: userId,
+        provider: LOCAL_EVENTS_PROVIDER,
+        status: 'disconnected',
+        encrypted_credentials: { selected_city: selectedCity, provider: EDGE_OF_NORWAY_PROVIDER_ID },
+        external_account_id: EDGE_OF_NORWAY_PROVIDER_ID,
+        external_account_label: EDGE_OF_NORWAY_DISPLAY_NAME,
+        updated_at: initialNow,
+      },
+      { onConflict: 'user_id,provider' },
+    )
+  if (preferenceError) throw new Error(preferenceError.message)
+
+  const sync = await syncLocalEventsForUser(userId, { force: true })
+  const now = new Date().toISOString()
+  const { error } = await supabase
     .from('user_integrations')
     .upsert(
       {
         user_id: userId,
         provider: LOCAL_EVENTS_PROVIDER,
         status: 'connected',
-        encrypted_credentials: { selected_city: normalizeLocalEventsCityPreference(opts.selectedCity), provider: EDGE_OF_NORWAY_PROVIDER_ID },
+        encrypted_credentials: { selected_city: selectedCity, provider: EDGE_OF_NORWAY_PROVIDER_ID },
         external_account_id: EDGE_OF_NORWAY_PROVIDER_ID,
         external_account_label: EDGE_OF_NORWAY_DISPLAY_NAME,
+        last_sync_at: now,
         last_error: null,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       },
       { onConflict: 'user_id,provider' },
     )
-  return { connected: true, status: LOCAL_EVENTS_STATUS, message: null, providers: LOCAL_EVENTS_PROVIDERS, selected_city: normalizeLocalEventsCityPreference(opts.selectedCity) }
+  if (error) throw new Error(error.message)
+  return { connected: true, status: LOCAL_EVENTS_STATUS, message: null, providers: LOCAL_EVENTS_PROVIDERS, selected_city: selectedCity, count: sync.count }
 }
 
 export async function getLocalEventsStatus(userId: string) {
@@ -97,5 +183,18 @@ export async function getLocalEventsStatus(userId: string) {
     message: data?.last_error || null,
     providers: LOCAL_EVENTS_PROVIDERS,
     selected_city: normalizeLocalEventsCityPreference((data as any)?.encrypted_credentials?.selected_city),
+    upcoming_count: await getUpcomingLocalEventsCount(userId),
   }
+}
+
+async function getUpcomingLocalEventsCount(userId: string) {
+  const supabase = getSupabaseAdmin()
+  const { count, error } = await supabase
+    .from('integration_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('provider', LOCAL_EVENTS_PROVIDER)
+    .gte('starts_at', new Date().toISOString())
+  if (error) return null
+  return count
 }
