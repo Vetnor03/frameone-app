@@ -2403,7 +2403,7 @@ async function handleSelectTab(k: TabKey) {
 }
 
 type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'local_events' | 'vigilo'
-type DisconnectableConnectAppKey = 'spond' | 'teams'
+type DisconnectableConnectAppKey = 'spond' | 'teams' | 'local_events'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
   const integrations = modulesJson?.integrations
@@ -2447,6 +2447,12 @@ function ConnectAppsScreen({
   const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsLoading, setTeamsLoading] = useState(false)
+  const [localEventsConnected, setLocalEventsConnected] = useState(connectAppIsConnected(modulesJson, 'local_events'))
+  const [localEventsExpanded, setLocalEventsExpanded] = useState(false)
+  const [localEventsSelectedCity, setLocalEventsSelectedCity] = useState('stavanger')
+  const [localEventsLoading, setLocalEventsLoading] = useState(false)
+  const [localEventsError, setLocalEventsError] = useState<string | null>(null)
+  const [localEventsUpcomingCount, setLocalEventsUpcomingCount] = useState<number | null>(null)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
@@ -2491,8 +2497,49 @@ function ConnectAppsScreen({
     }
   }
 
-  function fetchLocalEventsStatus() {
-    // Local events uses the Edge of Norway server-side public-page provider.
+  async function fetchLocalEventsStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) return
+    const resp = await fetch('/api/integrations/local-events/status', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!resp.ok) return
+    const json = await resp.json()
+    setLocallyDisconnectedApps((current) => ({ ...current, local_events: json?.connected === true ? false : current.local_events }))
+    setLocalEventsConnected(json?.connected === true)
+    if (typeof json?.selected_city === 'string') setLocalEventsSelectedCity(json.selected_city)
+    setLocalEventsUpcomingCount(typeof json?.upcoming_count === 'number' ? json.upcoming_count : null)
+    setLocalEventsError(null)
+  }
+
+  async function connectLocalEvents() {
+    if (localEventsLoading) return
+    setLocalEventsLoading(true)
+    setLocalEventsError(null)
+    setStatus(null)
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error('Unauthorized')
+      const resp = await fetch('/api/integrations/local-events/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ selected_city: localEventsSelectedCity }),
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok || json?.connected !== true) throw new Error('Could not load local events. Please try again.')
+      setLocallyDisconnectedApps((current) => ({ ...current, local_events: false }))
+      setLocalEventsConnected(true)
+      setLocalEventsExpanded(false)
+      setLocalEventsUpcomingCount(typeof json?.count === 'number' ? json.count : null)
+      setStatusTone('success')
+      setStatus(language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local events connected')
+    } catch {
+      setLocalEventsConnected(false)
+      setLocalEventsError('Could not load local events. Please try again.')
+    } finally {
+      setLocalEventsLoading(false)
+    }
   }
 
   async function connectTeams() {
@@ -2559,8 +2606,8 @@ function ConnectAppsScreen({
   }
 
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
-    const appName = provider === 'teams' ? 'Microsoft Calendar' : 'Spond'
-    const setProviderLoading = provider === 'teams' ? setTeamsLoading : setSpondLoading
+    const appName = provider === 'teams' ? 'Microsoft Calendar' : provider === 'local_events' ? 'Local events' : 'Spond'
+    const setProviderLoading = provider === 'teams' ? setTeamsLoading : provider === 'local_events' ? setLocalEventsLoading : setSpondLoading
     if (disconnectingApp === provider) return
     setProviderLoading?.(true)
     setDisconnectingApp(provider)
@@ -2581,6 +2628,9 @@ function ConnectAppsScreen({
       } else if (provider === 'spond') {
         setSpondConnected(false)
         setSpondAccount(null)
+      } else if (provider === 'local_events') {
+        setLocalEventsConnected(false)
+        setLocalEventsUpcomingCount(null)
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
       setDisconnectConfirmApp(null)
@@ -2653,6 +2703,7 @@ function ConnectAppsScreen({
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
+    if (app.key === 'local_events') return localEventsConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -2715,7 +2766,7 @@ function ConnectAppsScreen({
                   ) : (
                     <button
                       type="button"
-                      disabled={app.key === 'teams' && teamsLoading}
+                      disabled={(app.key === 'teams' && teamsLoading) || (app.key === 'local_events' && localEventsLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (setupError) {
@@ -2724,17 +2775,85 @@ function ConnectAppsScreen({
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
                           connectTeams()
-                        } else {
-                          setStatusTone('info')
-                          setStatus(`${app.name} ${language === 'no' ? 'kommer snart' : 'coming soon'}`)
+                        } else if (app.key === 'local_events') {
+                          setLocalEventsExpanded(true)
+                          setLocalEventsError(null)
+                          setStatus(null)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {(app.key === 'teams' && teamsLoading) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                      {((app.key === 'teams' && teamsLoading) || (app.key === 'local_events' && localEventsLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
+
+                {app.key === 'local_events' && localEventsExpanded && (
+                  <div className="mt-3 space-y-3 border-t border-[color:var(--bd-10)] pt-3">
+                    <label className="block">
+                      <span className="text-[10px] tracking-widest text-[color:var(--fg-45)]">Municipality</span>
+                      <select
+                        value={localEventsSelectedCity}
+                        onChange={(e) => setLocalEventsSelectedCity(e.target.value)}
+                        disabled={localEventsLoading}
+                        className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-3 text-sm text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff] disabled:opacity-60"
+                      >
+                        <option value="stavanger">Stavanger</option>
+                        <option value="sandnes">Sandnes</option>
+                        <option value="sola">Sola</option>
+                        <option value="egersund">Egersund</option>
+                      </select>
+                    </label>
+                    {localEventsError && (
+                      <div className="rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 px-3 py-2 text-xs text-[#ff7a7a]">
+                        {localEventsError}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setLocalEventsExpanded(false); setLocalEventsError(null) }}
+                        disabled={localEventsLoading}
+                        className="h-10 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={connectLocalEvents}
+                        disabled={localEventsLoading}
+                        className="h-10 flex-1 rounded-2xl border border-[#1f9d4a]/35 bg-[#1f9d4a]/10 text-xs tracking-widest text-[#35c76a] disabled:opacity-60"
+                      >
+                        {localEventsLoading ? 'Activating…' : 'Activate'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {app.key === 'local_events' && localEventsConnected && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">
+                      Connected · {localEventsSelectedCity.charAt(0).toUpperCase() + localEventsSelectedCity.slice(1)}{typeof localEventsUpcomingCount === 'number' ? ` · ${localEventsUpcomingCount} upcoming events` : ''}
+                    </span>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLocalEventsExpanded(true)}
+                        disabled={localEventsLoading}
+                        className="rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] disabled:opacity-60"
+                      >
+                        MANAGE
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDisconnectConfirmApp('local_events')}
+                        disabled={localEventsLoading}
+                        className="rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
+                      >
+                        {localEventsLoading ? 'DISCONNECTING…' : 'DISCONNECT'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {app.key === 'spond' && spondConnected && (
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     <span className="min-w-0 truncate">
@@ -2790,8 +2909,8 @@ function ConnectAppsScreen({
           <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
             <div className="text-base font-semibold text-[color:var(--fg-90)]">
               {language === 'no'
-                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : 'Spond'}?`
-                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : 'Spond'}?`}
+                ? `Koble fra ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'local_events' ? 'Local events' : 'Spond'}?`
+                : `Disconnect ${disconnectConfirmApp === 'teams' ? 'Microsoft Calendar' : disconnectConfirmApp === 'local_events' ? 'Local events' : 'Spond'}?`}
             </div>
             <div className="mt-2 text-xs leading-snug text-[color:var(--fg-45)]">
               {language === 'no'
