@@ -1847,6 +1847,7 @@ async function remindersDetail(origin: string, deviceId: string, deviceToken: st
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
   url.searchParams.set('limit', '20')
+  url.searchParams.set('skip_sync', '1')
   const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
   const items = Array.isArray(data.items) ? data.items.map(asRecord) : []
   const first = items[0]
