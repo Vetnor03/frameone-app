@@ -421,7 +421,18 @@ export function parseEdgeOfNorwayListPageWithStats(html: string, sourcePlace: Ed
     if (!title || title.length < 2 || isCtaLabel(title)) { stats.rejectedMissingTitle += 1; continue }
     let { startTime, endTime } = extractTime(cardTimeHtml(container)); let timeSource: TimeSource = startTime ? 'card' : 'all_day'
     const shortDescription = text(descriptionHtml(container).slice(0, 500)) || null
-    if (!startTime) { const t = extractTime(shortDescription || container); startTime = t.startTime; endTime = t.endTime; if (startTime) timeSource = shortDescription ? 'description' : 'card' }
+    if (!startTime && shortDescription) {
+      const t = extractTime(shortDescription)
+      startTime = t.startTime
+      endTime = t.endTime
+      if (startTime) timeSource = 'description'
+    }
+    if (!startTime) {
+      const t = extractTime(container)
+      startTime = t.startTime
+      endTime = t.endTime
+      if (startTime) timeSource = 'card'
+    }
     const category = text(categoryHtml(container)) || null
     if (currentDate.source === 'compact_card') stats.dateFromCompactCard += 1
     else stats.dateFromGroupMarker += 1
