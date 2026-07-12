@@ -63,9 +63,19 @@ export const EDGE_OF_NORWAY_PROVIDER: LocalEventsProvider = {
 export const LOCAL_EVENTS_PROVIDERS: LocalEventsProvider[] = [EDGE_OF_NORWAY_PROVIDER]
 
 export async function syncLocalEventsForUser(userId: string, opts: { force?: boolean } = {}) {
-  void opts
   const supabase = getSupabaseAdmin()
   const now = new Date().toISOString()
+
+  if (!opts.force) {
+    const { data: integration, error: integrationError } = await supabase
+      .from('user_integrations')
+      .select('status')
+      .eq('user_id', userId)
+      .eq('provider', LOCAL_EVENTS_PROVIDER)
+      .maybeSingle()
+    if (integrationError) throw new Error(integrationError.message)
+    if (!integration || integration.status !== 'connected') return { synced: false, status: 'disconnected' as const, count: 0 }
+  }
 
   try {
     const pageResults = await Promise.all(
