@@ -42,3 +42,14 @@ test('shadow diagnostic parses list page only and reports list-card metrics', as
   assert.equal(result.acceptedEvents[0].date, '2026-07-11')
   assert.notEqual(result.acceptedEvents[0].date, '2026-07-19')
 })
+
+test('live card boundary starts from Read more and resolves one root per physical card', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('live-card-boundary.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.cardsDiscovered, 2)
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['article', 'article'])
+  assert.equal(result.results.length, 2)
+  assert.equal(result.results[0].accepted, true)
+  assert.equal(result.results[1].accepted, true)
+  assert.deepEqual(result.results[0].event, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
+  assert.notEqual(result.results[0].event.date, '2026-07-19')
+})

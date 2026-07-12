@@ -2414,6 +2414,7 @@ type LocalEventsDiagnosticResult = {
   skippedCounts?: Record<string, number>
   acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
   parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
+  cardRoots?: Array<{ tagName: string; className?: string }>
   error?: string
 }
 type DisconnectableConnectAppKey = 'spond' | 'teams'
@@ -2730,7 +2731,8 @@ function ConnectAppsScreen({
               </div>
               <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
                 <div className="font-medium text-[color:var(--fg-90)]">Parsing errors</div>
-                {localEventsDiagnostic.parsingErrors?.length ? localEventsDiagnostic.parsingErrors.map((error, index) => <div key={`${index}-${error.reason}`} className="mt-1 break-words text-[#ff7a7a]">{error.title ? `${error.title}: ` : ''}{error.reason}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+                {localEventsDiagnostic.parsingErrors?.length ? localEventsDiagnostic.parsingErrors.slice(0, 10).map((error, index) => <div key={`${index}-${error.reason}`} className="mt-1 break-words text-[#ff7a7a]">{error.title || error.sourceUrl ? `${error.title || error.sourceUrl}: ` : ''}{error.reason}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+                {(localEventsDiagnostic.parsingErrors?.length || 0) > 10 && <div className="mt-1 text-[color:var(--fg-45)]">Showing first 10 parsing-error examples only.</div>}
               </div>
             </div>
           )}
