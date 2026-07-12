@@ -269,9 +269,10 @@ function normalizeIncludeOverdue(raw: string | null) {
 }
 
 function normalizeSkipSync(raw: string | null) {
-  if (raw == null) return false
+  if (raw == null) return true
   const v = raw.trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
+  if (v === '0' || v === 'false' || v === 'no') return false
+  return true
 }
 
 function normalizeTimeZone(raw: string | null) {

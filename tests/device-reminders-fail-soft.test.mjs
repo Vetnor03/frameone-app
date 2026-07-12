@@ -12,6 +12,13 @@ test('device reminders route keeps manual reminder query independent and returns
   assert.match(route, /return NextResponse\.json\(\{\s*items: selectedItems,\s*all_items: allItems,\s*count: selectedItems\.length,\s*today: todayYmd,\s*timezone: timeZone,\s*\}\)/)
 })
 
+
+test('device reminders default to cached integration rows unless sync is explicitly requested', () => {
+  assert.match(route, /function normalizeSkipSync\(raw: string \| null\) \{\s*if \(raw == null\) return true/)
+  assert.match(route, /if \(v === '0' \|\| v === 'false' \|\| v === 'no'\) return false/)
+  assert.match(route, /const skipSync = normalizeSkipSync\(url\.searchParams\.get\('skip_sync'\)\)/)
+})
+
 test('optional reminder providers are isolated with provider-level try/catch blocks', () => {
   for (const provider of ['spond', 'teams', 'waste']) {
     assert.match(route, new RegExp(`try \\{[\\s\\S]*?\\.eq\\('provider', '${provider}'\\)[\\s\\S]*?\\} catch \\(error\\) \\{\\s*logOptionalReminderProviderFailure\\('${provider}'`))

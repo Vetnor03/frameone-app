@@ -68,7 +68,7 @@ namespace {
     String url = String(BASE_URL)
                + "/api/device/reminders?device_id="
                + DeviceIdentity::getDeviceId()
-               + "&limit=20&tz=Europe/Oslo&skip_sync=1";
+               + "&limit=20&tz=Europe/Oslo";
     return url;
   }
 
