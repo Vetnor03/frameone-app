@@ -88,7 +88,8 @@ export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY
 function parseIsoDate(value: string) {
   const m = value.match(/(20\d{2})-(\d{2})-(\d{2})(?=\D|$)/)
   if (!m) return null
-  const month = Number(m[2]); const day = Number(m[3])
+  const month = Number(m[2])
+  const day = Number(m[3])
   if (month < 1 || month > 12 || day < 1 || day > 31) return null
   return `${m[1]}-${m[2]}-${m[3]}`
 }
@@ -98,10 +99,60 @@ function parseTime(value: string) {
   return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
 }
 
+function tagNameFromOpeningTag(tag: string) {
+  return tag.match(/^<\s*([a-z0-9-]+)/i)?.[1]?.toLowerCase() || null
+}
+
+function isVoidTag(tagName: string) {
+  return ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'].includes(tagName)
+}
+
+function tagContainsShowingMarker(tag: string) {
+  return /\bdata-(?:event-showing|showing-container|edge-showing)\b/i.test(tag) || /\bclass=["'][^"']*\b(?:event-showing|showing-container|showing-card|showing-item)\b/i.test(tag)
+}
+
+function extractElementAt(html: string, openStart: number) {
+  const openEnd = html.indexOf('>', openStart)
+  if (openEnd < 0) return null
+  const openingTag = html.slice(openStart, openEnd + 1)
+  const rootName = tagNameFromOpeningTag(openingTag)
+  if (!rootName) return null
+  if (isVoidTag(rootName) || /\/\s*>$/.test(openingTag)) return openingTag
+
+  let depth = 1
+  const tagRe = /<\/?\s*([a-z0-9-]+)\b[^>]*>/gi
+  tagRe.lastIndex = openEnd + 1
+  for (const match of html.matchAll(tagRe)) {
+    const raw = match[0]
+    const name = match[1].toLowerCase()
+    if (name !== rootName) continue
+    if (/^<\s*\//.test(raw)) {
+      depth -= 1
+      if (depth === 0) return html.slice(openStart, Number(match.index) + raw.length)
+    } else if (!isVoidTag(name) && !/\/\s*>$/.test(raw)) {
+      depth += 1
+    }
+  }
+  return null
+}
+
 function getShowingContainers(html: string) {
   const containers: string[] = []
-  for (const m of html.matchAll(/<([a-z0-9-]+)\b[^>]*(?:data-event-showing|data-showing-container)[^>]*>[\s\S]*?<\/\1>/gi)) containers.push(m[0])
+  for (const match of html.matchAll(/<([a-z0-9-]+)\b[^>]*>/gi)) {
+    const tag = match[0]
+    if (!tagContainsShowingMarker(tag)) continue
+    const element = extractElementAt(html, Number(match.index))
+    if (element) containers.push(element)
+  }
   return containers
+}
+
+function removeForbiddenDateSources(html: string) {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<button\b[\s\S]*?<\/button>/gi, ' ')
+    .replace(/<[^>]+\b(?:aria-selected=["']true["']|data-selected=["']true["']|class=["'][^"']*\b(?:active|selected)\b)[^>]*>[\s\S]*?<\/[^>]+>/gi, ' ')
 }
 
 function titleFromHtml(html: string) {
@@ -120,20 +171,21 @@ function hasClassifiedSkip(text: string): EdgeOfNorwaySkipReason | null {
 
 export function parseEdgeOfNorwayDetailPage(html: string, sourceUrl: string, fallbackTitle?: string): EdgeOfNorwayDetailResult {
   const title = titleFromHtml(html) || fallbackTitle || null
-  const pageSkip = hasClassifiedSkip(stripTags(html))
-  if (pageSkip) return { accepted: false, reason: pageSkip, title, sourceUrl }
-
   const containers = getShowingContainers(html)
   if (containers.length !== 1) return { accepted: false, reason: containers.length > 1 ? 'multiple_dates' : 'missing_showing_container', title, sourceUrl }
 
-  const container = containers[0]
+  const container = removeForbiddenDateSources(containers[0])
   const containerText = stripTags(container)
   const containerSkip = hasClassifiedSkip(containerText)
   if (containerSkip) return { accepted: false, reason: containerSkip, title, sourceUrl }
   const explicitDates = Array.from(container.matchAll(/data-event-date=["']([^"']+)["']/gi)).map((m) => parseIsoDate(m[1])).filter(Boolean) as string[]
   const timeDates = Array.from(container.matchAll(/<time\b[^>]*datetime=["']([^"']+)["'][^>]*>/gi)).map((m) => parseIsoDate(m[1])).filter(Boolean) as string[]
   const textDates = Array.from(containerText.matchAll(/\b20\d{2}-\d{2}-\d{2}\b/g)).map((m) => parseIsoDate(m[0])).filter(Boolean) as string[]
-  const uniqueDates = Array.from(new Set([...explicitDates, ...timeDates, ...textDates]))
+  const explicitUnique = Array.from(new Set(explicitDates))
+  const timeUnique = Array.from(new Set(timeDates))
+  const textUnique = Array.from(new Set(textDates))
+  if (explicitUnique.length > 1 || timeUnique.length > 1 || textUnique.length > 1) return { accepted: false, reason: 'multiple_dates', title, sourceUrl }
+  const uniqueDates = Array.from(new Set([...explicitUnique, ...timeUnique, ...textUnique]))
   if (uniqueDates.length > 1) return { accepted: false, reason: 'conflicting_showing_data', title, sourceUrl }
   if (uniqueDates.length !== 1) return { accepted: false, reason: 'unclear_date', title, sourceUrl }
   const timeValues = Array.from(new Set([...Array.from(container.matchAll(/data-start-time=["']([^"']+)["']/gi)).map((m) => parseTime(m[1])), parseTime(containerText)].filter(Boolean) as string[]))

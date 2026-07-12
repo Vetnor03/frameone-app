@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { parseEdgeOfNorwayDetailPage, parseEdgeOfNorwayListPage } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
+import { EDGE_OF_NORWAY_STAVANGER_LIST_URL, parseEdgeOfNorwayDetailPage, parseEdgeOfNorwayListPage, runEdgeOfNorwayShadowDiagnostic } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/edge-of-norway/${name}`, import.meta.url), 'utf8')
 const url = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
@@ -57,7 +57,6 @@ test('unrelated embedded dates and active calendar buttons are ignored', () => {
   }
 })
 
-import { runEdgeOfNorwayShadowDiagnostic, EDGE_OF_NORWAY_STAVANGER_LIST_URL } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
 
 test('shadow diagnostic fetches each deduplicated detail URL once and groups skips', async () => {
   const detailHtml = new Map([
