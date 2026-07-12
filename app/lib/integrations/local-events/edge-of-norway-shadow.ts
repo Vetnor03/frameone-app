@@ -1,7 +1,7 @@
 export const EDGE_OF_NORWAY_PROVIDER = 'edge-of-norway' as const
 export const EDGE_OF_NORWAY_MODE = 'shadow' as const
 export const EDGE_OF_NORWAY_STAVANGER_LIST_URL = 'https://www.fjordnorway.com/en/events?date=next_30&filtertype=place&place=stavanger'
-export const EDGE_OF_NORWAY_USER_AGENT = 'RE:MIND local-events shadow diagnostics (no persistence; contact hello@remind.no)'
+export const EDGE_OF_NORWAY_USER_AGENT = 'Mozilla/5.0 (compatible; REMIND-LocalEvents/1.0; +https://www.edgeofnorway.com/)'
 
 export type EdgeOfNorwaySkipReason =
   | 'multiple_dates'
@@ -13,6 +13,7 @@ export type EdgeOfNorwaySkipReason =
   | 'fetch_failed'
   | 'timeout'
   | 'parser_failed'
+  | 'inspect_input'
   | 'unclear_time'
   | 'multiple_times'
 
@@ -27,6 +28,9 @@ export type EdgeOfNorwayAcceptedEvent = {
 type EventParseResult =
   | { accepted: true; event: EdgeOfNorwayAcceptedEvent }
   | { accepted: false; reason: EdgeOfNorwaySkipReason; title?: string; sourceUrl?: string }
+
+type EdgeOfNorwayDiagnosticError = { stage: 'authentication' | 'fetch' | 'read_response' | 'inspect_input' | 'decode_flight' | 'extract_events'; message: string; name?: string; code?: string }
+type EdgeOfNorwayFetchDiagnostic = { requestedUrl: string; finalUrl: string; status: number; ok: boolean; redirected: boolean; contentType: string | null; contentLengthHeader: string | null; htmlLength: number; startsWithDoctype: boolean; documentTitle: string | null; containsLoadingPlaceholder: boolean; containsKnownEventText: boolean; rawFlightMarkerCount: number; escapedEventMarkerCount: number; htmlPreview?: string }
 
 export type EdgeOfNorwayDiagnosticResult = {
   provider: typeof EDGE_OF_NORWAY_PROVIDER
@@ -43,6 +47,8 @@ export type EdgeOfNorwayDiagnosticResult = {
   parsingErrors: Array<{ title?: string; sourceUrl?: string; reason: string }>
   networkError?: string
   error?: string
+  diagnosticError?: EdgeOfNorwayDiagnosticError
+  fetch?: EdgeOfNorwayFetchDiagnostic
 }
 
 type FlightDecodeResult = { flightText: string; flightScriptsFound: number; flightChunksDecoded: number; malformedChunks: number; parsingErrors: Array<{ reason: string }> }
@@ -63,29 +69,80 @@ type StructuredEvent = {
 const eventObjectMarker = '"data"'
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/
 
-function scriptTexts(html: string) {
-  return Array.from(html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)).map((match) => match[1])
+export function inspectEdgeOfNorwayHtmlInput(html: string, requestedUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL, response?: Response) {
+  const titleMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)
+  const rawFlightMarkerCount = html.match(/self\.__next_f\.push\(/g)?.length ?? 0
+  return {
+    requestedUrl,
+    finalUrl: response?.url || requestedUrl,
+    status: response?.status ?? 0,
+    ok: response?.ok ?? true,
+    redirected: response?.redirected ?? false,
+    contentType: response?.headers?.get('content-type') ?? null,
+    contentLengthHeader: response?.headers?.get('content-length') ?? null,
+    htmlLength: html.length,
+    startsWithDoctype: /^\s*<!doctype/i.test(html),
+    documentTitle: titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() || null : null,
+    containsLoadingPlaceholder: />\s*Loading\s*</i.test(html) || html.includes('Loading...'),
+    containsKnownEventText: html.includes('Viking - Sandefjord') || html.includes('Stavanger Football Festival in Vågen | FINAL'),
+    rawFlightMarkerCount,
+    escapedEventMarkerCount: html.match(/\\"_type\\":\\"Event\\"/g)?.length ?? 0,
+    ...(rawFlightMarkerCount === 0 ? { htmlPreview: html.slice(0, 200).replace(/\s+/g, ' ') } : {}),
+  }
 }
 
-function decodeFlightPayload(html: string): FlightDecodeResult {
-  const result: FlightDecodeResult = { flightText: '', flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, parsingErrors: [] }
-  for (const text of scriptTexts(html)) {
-    if (!text.includes('self.__next_f.push(')) continue
-    result.flightScriptsFound += 1
-    for (const match of text.matchAll(/self\.__next_f\.push\(([\s\S]*?)\)\s*;?/g)) {
-      try {
-        const parsed = JSON.parse(match[1])
-        if (Array.isArray(parsed) && parsed[0] === 1 && typeof parsed[1] === 'string') {
-          result.flightText += parsed[1]
-          result.flightChunksDecoded += 1
-        } else {
-          result.malformedChunks += 1
-        }
-      } catch (error) {
-        result.malformedChunks += 1
-        if (result.parsingErrors.length < 10) result.parsingErrors.push({ reason: error instanceof Error ? `malformed_flight_chunk: ${error.message}` : 'malformed_flight_chunk' })
-      }
+function extractPushArgument(text: string, openParenIndex: number) {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = openParenIndex; index < text.length; index += 1) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
     }
+    if (char === '"') inString = true
+    else if (char === '(' || char === '[' || char === '{') depth += 1
+    else if (char === ')' || char === ']' || char === '}') {
+      depth -= 1
+      if (depth === 0 && char === ')') return text.slice(openParenIndex + 1, index)
+      if (depth < 0) return null
+    }
+  }
+  return null
+}
+
+export function decodeFlightPayload(html: string): FlightDecodeResult {
+  const result: FlightDecodeResult = { flightText: '', flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, parsingErrors: [] }
+  const marker = 'self.__next_f.push('
+  let cursor = 0
+  while (cursor < html.length) {
+    const markerIndex = html.indexOf(marker, cursor)
+    if (markerIndex < 0) break
+    result.flightScriptsFound += 1
+    const openParenIndex = markerIndex + marker.length - 1
+    const argument = extractPushArgument(html, openParenIndex)
+    if (!argument) {
+      result.malformedChunks += 1
+      if (result.parsingErrors.length < 10) result.parsingErrors.push({ reason: 'malformed_flight_chunk: unbalanced push call' })
+      cursor = markerIndex + marker.length
+      continue
+    }
+    try {
+      const parsed = JSON.parse(argument)
+      if (Array.isArray(parsed) && parsed[0] === 1 && typeof parsed[1] === 'string') {
+        result.flightText += parsed[1]
+        result.flightChunksDecoded += 1
+      } else {
+        result.malformedChunks += 1
+      }
+    } catch (error) {
+      result.malformedChunks += 1
+      if (result.parsingErrors.length < 10) result.parsingErrors.push({ reason: error instanceof Error ? `malformed_flight_chunk: ${error.message}` : 'malformed_flight_chunk' })
+    }
+    cursor = openParenIndex + argument.length + 2
   }
   return result
 }
@@ -217,9 +274,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, reason = 'timeout'): Pr
   })
 }
 
-function structuredDiagnosticError(reason: EdgeOfNorwaySkipReason, error: unknown): EdgeOfNorwayDiagnosticResult {
-  const message = error instanceof Error && error.message ? error.message : reason
-  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: { [reason]: 1 }, acceptedEvents: [], parsingErrors: [{ reason, title: message }], networkError: reason === 'fetch_failed' || reason === 'timeout' ? message : undefined, error: message }
+function diagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown): EdgeOfNorwayDiagnosticError {
+  const record = error as { name?: unknown; code?: unknown; message?: unknown }
+  return { stage, message: typeof record?.message === 'string' && record.message ? record.message : stage, ...(typeof record?.name === 'string' ? { name: record.name } : {}), ...(typeof record?.code === 'string' ? { code: record.code } : {}) }
+}
+
+function structuredDiagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown, fetchMeta?: EdgeOfNorwayFetchDiagnostic): EdgeOfNorwayDiagnosticResult {
+  const diagnostic = diagnosticError(stage, error)
+  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
 }
 
 export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promise<EdgeOfNorwayDiagnosticResult> {
@@ -228,21 +290,36 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
     const fetchTimer = setTimeout(() => controller.abort(), 15_000)
     let listResp: Response
     try {
-      listResp = await fetchImpl(EDGE_OF_NORWAY_STAVANGER_LIST_URL, { headers: { 'user-agent': EDGE_OF_NORWAY_USER_AGENT }, signal: controller.signal })
+      listResp = await fetchImpl(EDGE_OF_NORWAY_STAVANGER_LIST_URL, {
+        headers: {
+          'User-Agent': EDGE_OF_NORWAY_USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-GB,en;q=0.9',
+          'Cache-Control': 'no-cache',
+        },
+        signal: controller.signal,
+      })
     } catch (error) {
-      if (controller.signal.aborted) return structuredDiagnosticError('timeout', error)
-      return structuredDiagnosticError('fetch_failed', error)
+      return structuredDiagnosticError(controller.signal.aborted ? 'fetch' : 'fetch', error)
     } finally {
       clearTimeout(fetchTimer)
     }
-    if (!listResp.ok) return structuredDiagnosticError('fetch_failed', new Error(`Failed to fetch list page: ${listResp.status}`))
+    let html: string
     try {
-      const parsed = parseEdgeOfNorwayListPage(await listResp.text(), EDGE_OF_NORWAY_STAVANGER_LIST_URL)
+      html = await listResp.text()
+    } catch (error) {
+      return structuredDiagnosticError('read_response', error)
+    }
+    const fetchMeta = inspectEdgeOfNorwayHtmlInput(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, listResp)
+    if (!listResp.ok) return structuredDiagnosticError('fetch', new Error(`Failed to fetch list page: ${listResp.status}`), fetchMeta)
+    if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta)
+    try {
+      const parsed = parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL)
       const acceptedEvents = parsed.results.filter((result) => result.accepted).map((result) => result.event)
       const parseErrors = parsed.results.filter((result) => !result.accepted).map((result) => ({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }))
-      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
+      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
     } catch (error) {
-      return structuredDiagnosticError('parser_failed', error)
+      return structuredDiagnosticError('extract_events', error, fetchMeta)
     }
-  })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError(error instanceof Error && error.message === 'timeout' ? 'timeout' : 'parser_failed', error))
+  })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError('fetch', error))
 }
