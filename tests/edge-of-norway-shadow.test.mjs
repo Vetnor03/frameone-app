@@ -74,7 +74,7 @@ test('recurring event Read more occurrences resolve before grouping by URL', () 
   assert.equal(result.exactDuplicateCardsRemoved, 0)
   assert.equal(result.uniqueEventUrls, 2)
   assert.equal(result.cardsDiscovered, 4)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['article', 'article', 'article', 'article'])
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li', 'li', 'li'])
   assert.deepEqual(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/triple').map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
     { title: 'Triple harbour walk', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
     { title: 'Triple harbour walk', badgeText: '14. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
@@ -157,4 +157,33 @@ test('event anchors without Read more are not occurrence starting points', () =>
   assert.equal(result.readMoreAnchorsDiscovered, 0)
   assert.equal(result.cardsDiscovered, 0)
   assert.deepEqual(result.groupedFailureCounts, {})
+})
+
+test('proven live li structure keeps neighbouring cards isolated', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('live-proven-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.cardsDiscovered, 4)
+  assert.equal(result.rawCardsParsed, 4)
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li', 'li', 'li'])
+  assert.deepEqual(result.rawCards.slice(0, 3).map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
+    { title: 'FIFA World Cup: Third-place play-off, 18 July // Football festival in Stavanger @ Fiskepiren', badgeText: '18. Jul.', timeText: '20:00', sourceUrl: 'https://www.fjordnorway.com/en/events/fifa-world-cup-third-place-play-off-18-july-football-festival-in-stavanger-fiskepiren' },
+    { title: 'Viking - Sandefjord', badgeText: '18. Jul.', timeText: '18:00', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord' },
+    { title: 'Stavanger Football Festival in Vågen | FINAL', badgeText: '19. Jul.', timeText: '17:00', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final' },
+  ])
+})
+
+test('live verification values parse from the proven li card only', () => {
+  const events = accepted(fixture('live-proven-structure.html'))
+  assert.deepEqual(events.find((event) => event.title === 'Viking - Sandefjord'), { title: 'Viking - Sandefjord', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord', date: '2026-07-18', startTime: '18:00', allDay: false })
+  assert.deepEqual(events.find((event) => event.title === 'Stavanger Football Festival in Vågen | FINAL'), { title: 'Stavanger Football Festival in Vågen | FINAL', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final', date: '2026-07-19', startTime: '17:00', allDay: false })
+})
+
+test('image links and Book links are ignored in proven live structure', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('live-proven-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.rawCards.some((card) => card.title === 'Plakat VM Finale 19 juli'), false)
+  assert.equal(result.rawCards.some((card) => card.sourceUrl === 'https://www.ticketmaster.no'), false)
+})
+
+test('no time becomes all-day in proven live structure', () => {
+  const event = accepted(fixture('live-proven-structure.html')).find((entry) => entry.title === 'No time card')
+  assert.deepEqual(event, { title: 'No time card', sourceUrl: 'https://www.fjordnorway.com/en/events/no-time-card', date: '2026-07-20', startTime: null, allDay: true })
 })
