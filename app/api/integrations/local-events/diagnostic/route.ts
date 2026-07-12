@@ -24,5 +24,6 @@ export async function POST(req: Request) {
   }
   if (!userId) return NextResponse.json({ error: 'Unauthorized', diagnosticError: { stage: 'authentication', message: 'Unauthorized' } }, { status: 401 })
 
-  return NextResponse.json(await runEdgeOfNorwayShadowDiagnostic())
+  const body = await req.json().catch(() => ({}))
+  return NextResponse.json(await runEdgeOfNorwayShadowDiagnostic(fetch, body?.areaPreference))
 }

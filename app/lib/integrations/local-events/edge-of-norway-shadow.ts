@@ -1,30 +1,13 @@
+import { DEFAULT_LOCAL_EVENT_AREA, buildEdgeOfNorwayEventsUrlForPlaceIds, normalizeLocalEventAreaPreference, type LocalEventAreaPreference } from './places.ts'
+
 export const EDGE_OF_NORWAY_PROVIDER = 'edge-of-norway' as const
 export const EDGE_OF_NORWAY_MODE = 'shadow' as const
-export type LocalEventArea = 'stavanger-area'
 
-export const EDGE_OF_NORWAY_AREA_PLACES: Record<
-  LocalEventArea,
-  readonly string[]
-> = {
-  'stavanger-area': [
-    'stavanger',
-    'sola',
-    'sandnes',
-    'randaberg',
-  ],
+export function buildEdgeOfNorwayEventsUrl(preference: LocalEventAreaPreference | null = DEFAULT_LOCAL_EVENT_AREA) {
+  return buildEdgeOfNorwayEventsUrlForPlaceIds((preference || DEFAULT_LOCAL_EVENT_AREA).includedPlaceIds)
 }
 
-export const EDGE_OF_NORWAY_SELECTED_AREA: LocalEventArea = 'stavanger-area'
-
-export function buildEdgeOfNorwayEventsUrl(area: LocalEventArea = EDGE_OF_NORWAY_SELECTED_AREA) {
-  const url = new URL('https://www.edgeofnorway.com/en/events')
-  url.searchParams.set('date', 'next_30')
-  url.searchParams.set('filtertype', 'place')
-  for (const place of EDGE_OF_NORWAY_AREA_PLACES[area]) url.searchParams.append('place', place)
-  return url.toString()
-}
-
-export const EDGE_OF_NORWAY_EVENTS_URL = buildEdgeOfNorwayEventsUrl()
+export const EDGE_OF_NORWAY_EVENTS_URL = buildEdgeOfNorwayEventsUrl(DEFAULT_LOCAL_EVENT_AREA)
 export const EDGE_OF_NORWAY_USER_AGENT = 'Mozilla/5.0 (compatible; REMIND-LocalEvents/1.0; +https://www.edgeofnorway.com/)'
 
 export type EdgeOfNorwaySkipReason =
@@ -447,9 +430,9 @@ function diagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unk
   return { stage, message: typeof record?.message === 'string' && record.message ? record.message : stage, ...(typeof record?.name === 'string' ? { name: record.name } : {}), ...(typeof record?.code === 'string' ? { code: record.code } : {}), ...(typeof record?.requestedUrl === 'string' ? { requestedUrl: record.requestedUrl } : {}), ...(typeof record?.finalUrl === 'string' ? { finalUrl: record.finalUrl } : {}) }
 }
 
-function structuredDiagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown, fetchMeta?: EdgeOfNorwayFetchDiagnostic): EdgeOfNorwayDiagnosticResult {
+function structuredDiagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown, fetchMeta?: EdgeOfNorwayFetchDiagnostic, listPageUrl = EDGE_OF_NORWAY_EVENTS_URL): EdgeOfNorwayDiagnosticResult {
   const diagnostic = diagnosticError(stage, error)
-  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], repeatedSeriesCount: 0, repeatedSeriesEventsCount: 0, repeatedSeriesExamples: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
+  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], repeatedSeriesCount: 0, repeatedSeriesEventsCount: 0, repeatedSeriesExamples: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
 }
 
 function hostnameForUrl(url: string) {
@@ -468,13 +451,14 @@ function unexpectedSourceRedirect(requestedUrl: string, finalUrl: string, fetchM
   return structuredDiagnosticError('fetch', { message: 'Unexpected source redirect', requestedUrl, finalUrl }, fetchMeta)
 }
 
-export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promise<EdgeOfNorwayDiagnosticResult> {
+export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPreference?: unknown): Promise<EdgeOfNorwayDiagnosticResult> {
+  const listPageUrl = buildEdgeOfNorwayEventsUrl(normalizeLocalEventAreaPreference(areaPreference) || DEFAULT_LOCAL_EVENT_AREA)
   return withTimeout((async () => {
     const controller = new AbortController()
     const fetchTimer = setTimeout(() => controller.abort(), 15_000)
     let listResp: Response
     try {
-      listResp = await fetchImpl(EDGE_OF_NORWAY_EVENTS_URL, {
+      listResp = await fetchImpl(listPageUrl, {
         headers: {
           'User-Agent': EDGE_OF_NORWAY_USER_AGENT,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -485,7 +469,7 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
         signal: controller.signal,
       })
     } catch (error) {
-      return structuredDiagnosticError(controller.signal.aborted ? 'fetch' : 'fetch', error)
+      return structuredDiagnosticError(controller.signal.aborted ? 'fetch' : 'fetch', error, undefined, listPageUrl)
     } finally {
       clearTimeout(fetchTimer)
     }
@@ -493,20 +477,20 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
     try {
       html = await listResp.text()
     } catch (error) {
-      return structuredDiagnosticError('read_response', error)
+      return structuredDiagnosticError('read_response', error, undefined, listPageUrl)
     }
-    const fetchMeta = inspectEdgeOfNorwayHtmlInput(html, EDGE_OF_NORWAY_EVENTS_URL, listResp)
-    if (fetchMeta.redirectStatus || fetchMeta.redirected) return unexpectedSourceRedirect(EDGE_OF_NORWAY_EVENTS_URL, fetchMeta.finalUrl, fetchMeta)
-    if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(EDGE_OF_NORWAY_EVENTS_URL, fetchMeta.finalUrl, fetchMeta)
-    if (!listResp.ok) return structuredDiagnosticError('fetch', new Error(`Failed to fetch list page: ${listResp.status}`), fetchMeta)
-    if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta)
+    const fetchMeta = inspectEdgeOfNorwayHtmlInput(html, listPageUrl, listResp)
+    if (fetchMeta.redirectStatus || fetchMeta.redirected) return unexpectedSourceRedirect(listPageUrl, fetchMeta.finalUrl, fetchMeta)
+    if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(listPageUrl, fetchMeta.finalUrl, fetchMeta)
+    if (!listResp.ok) return structuredDiagnosticError('fetch', new Error(`Failed to fetch list page: ${listResp.status}`), fetchMeta, listPageUrl)
+    if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta, listPageUrl)
     try {
-      const parsed = parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_EVENTS_URL)
+      const parsed = parseEdgeOfNorwayListPage(html, listPageUrl)
       const acceptedEvents = parsed.results.filter(isAcceptedResult).map((result) => result.event)
       const parseErrors = parsed.results.filter(isSkippedResult).map((result) => ({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }))
-      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, repeatedSeriesCount: parsed.repeatedSeriesCount, repeatedSeriesEventsCount: parsed.repeatedSeriesEventsCount, repeatedSeriesExamples: parsed.repeatedSeriesExamples, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
+      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, repeatedSeriesCount: parsed.repeatedSeriesCount, repeatedSeriesEventsCount: parsed.repeatedSeriesEventsCount, repeatedSeriesExamples: parsed.repeatedSeriesExamples, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
     } catch (error) {
-      return structuredDiagnosticError('extract_events', error, fetchMeta)
+      return structuredDiagnosticError('extract_events', error, fetchMeta, listPageUrl)
     }
-  })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError('fetch', error))
+  })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError('fetch', error, undefined, listPageUrl))
 }
