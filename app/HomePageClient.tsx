@@ -2411,11 +2411,17 @@ type LocalEventsDiagnosticResult = {
   exactDuplicateCardsRemoved?: number
   uniqueSourceUrls?: number
   validCardsParsed?: number
+  readMoreAnchorsDiscovered?: number
+  occurrencesResolved?: number
+  rawCardsParsed?: number
+  cardsWithTime?: number
+  cardsWithoutTime?: number
   acceptedCount?: number
   skippedCounts?: Record<string, number>
   acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
   parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
   cardRoots?: Array<{ tagName: string; className?: string }>
+  rawCards?: Array<{ title: string | null; badgeText: string | null; timeText: string | null; sourceUrl: string | null }>
   error?: string
 }
 type DisconnectableConnectAppKey = 'spond' | 'teams'
@@ -2729,11 +2735,20 @@ function ConnectAppsScreen({
           {localEventsDiagnostic && (
             <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
               <div className="grid grid-cols-2 gap-2">
+                <div>Read more anchors: {localEventsDiagnostic.readMoreAnchorsDiscovered ?? 0}</div>
+                <div>Occurrences resolved: {localEventsDiagnostic.occurrencesResolved ?? 0}</div>
+                <div>Raw cards parsed: {localEventsDiagnostic.rawCardsParsed ?? 0}</div>
                 <div>Cards discovered: {localEventsDiagnostic.cardsDiscovered ?? 0}</div>
                 <div>Valid cards parsed: {localEventsDiagnostic.validCardsParsed ?? localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Exact duplicates removed: {localEventsDiagnostic.exactDuplicateCardsRemoved ?? 0}</div>
                 <div>Unique source URLs: {localEventsDiagnostic.uniqueSourceUrls ?? 0}</div>
+                <div>Cards with time: {localEventsDiagnostic.cardsWithTime ?? 0}</div>
+                <div>Cards without time: {localEventsDiagnostic.cardsWithoutTime ?? 0}</div>
+              </div>
+              <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
+                <div className="font-medium text-[color:var(--fg-90)]">First raw cards</div>
+                {localEventsDiagnostic.rawCards?.length ? localEventsDiagnostic.rawCards.slice(0, 5).map((card, index) => <div key={`${index}-${card.sourceUrl || card.title || 'raw'}`} className="mt-1 break-words text-[color:var(--fg-70)]">{card.title || 'Untitled'} · {card.badgeText || 'No badge'} · {card.timeText || 'All-day'} · {card.sourceUrl || 'No URL'}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
               </div>
               <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
                 <div className="font-medium text-[color:var(--fg-90)]">Skipped counts</div>

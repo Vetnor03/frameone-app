@@ -42,6 +42,9 @@ export type EdgeOfNorwayDiagnosticResult = {
   acceptedEvents: EdgeOfNorwayAcceptedEvent[]
   parsingErrors: Array<{ title?: string; sourceUrl?: string; reason: string }>
   eventAnchorsDiscovered?: number
+  readMoreAnchorsDiscovered?: number
+  occurrencesResolved?: number
+  rawCardsParsed?: number
   titleAnchorsFound?: number
   occurrenceListItemsResolved?: number
   uniqueCardNodes?: number
@@ -98,7 +101,7 @@ function isVoidTag(tagName: string) {
 type HtmlNode = { tagName: string; start: number; openEnd: number; end: number; parent: number | null; html: string }
 type AnchorInfo = { nodeIndex: number; html: string; text: string; url: string; isReadMore: boolean; isTitle: boolean }
 type CardContainer = { html: string; sourceUrl: string; title: string; rootTagName: string; rootClassName?: string; start: number; end: number }
-type DiscoveryFailureReason = 'missing_title_anchor' | 'missing_read_more_anchor' | 'no_common_ancestor' | 'ancestor_contains_other_event' | 'missing_badge_date' | 'multiple_badge_dates'
+type DiscoveryFailureReason = 'missing_title_anchor' | 'missing_read_more_anchor' | 'unresolved_card' | 'ancestor_contains_other_event' | 'missing_badge_date' | 'multiple_badge_dates'
 type DiscoveryFailure = { reason: DiscoveryFailureReason; sourceUrl?: string; title?: string }
 export type EdgeOfNorwayRawCard = { title: string | null; badgeText: string | null; timeText: string | null; sourceUrl: string | null }
 
@@ -196,20 +199,6 @@ function countBadgeTexts(card: string) {
   return badgeDateTexts(card)
 }
 
-function lowestCommonAncestor(nodes: HtmlNode[], a: number, b: number, maxLevels = 10) {
-  const seen = new Set<number>()
-  let current: number | null = a
-  for (let level = 0; current != null && current >= 0 && level <= maxLevels; level += 1) {
-    seen.add(current)
-    current = nodes[current].parent
-  }
-  current = b
-  for (let level = 0; current != null && current >= 0 && level <= maxLevels; level += 1) {
-    if (seen.has(current)) return current
-    current = nodes[current].parent
-  }
-  return null
-}
 
 function cardHasOtherEventUrl(card: string, pageUrl: string, sourceUrl: string) {
   for (const m of card.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)) {
@@ -243,82 +232,52 @@ function leafTextsMatching(nodes: HtmlNode[], rootIndex: number, pattern: RegExp
   return Array.from(new Set(matches))
 }
 
-function closestLiAncestorIndexes(nodes: HtmlNode[], nodeIndex: number, maxListItemLevels = 2) {
-  const listItems: number[] = []
-  let current = nodes[nodeIndex]?.parent ?? null
-  while (current != null && current >= 0 && listItems.length < maxListItemLevels) {
-    if (nodes[current].tagName === 'li') listItems.push(current)
-    current = nodes[current].parent
-  }
-  return listItems
-}
-
-function readMoreUrlsInNode(nodes: HtmlNode[], rootIndex: number, pageUrl: string) {
+function anchorsInNode(nodes: HtmlNode[], rootIndex: number, pageUrl: string) {
   const root = nodes[rootIndex]
-  const urls: string[] = []
-  for (const anchor of eventAnchors(nodes, pageUrl)) {
-    const node = nodes[anchor.nodeIndex]
-    if (node.start < root.start || node.end > root.end) continue
-    if (anchor.isReadMore) urls.push(anchor.url)
-  }
-  return urls
-}
-
-function validateOccurrenceListItem(nodes: HtmlNode[], rootIndex: number, pageUrl: string, titleAnchor: AnchorInfo) {
-  const root = nodes[rootIndex]
-  const anchorsInRoot = eventAnchors(nodes, pageUrl).filter((anchor) => {
+  return eventAnchors(nodes, pageUrl).filter((anchor) => {
     const node = nodes[anchor.nodeIndex]
     return node.start >= root.start && node.end <= root.end
   })
-  const titleAnchors = anchorsInRoot.filter((anchor) => anchor.isTitle)
-  const matchingReadMore = anchorsInRoot.filter((anchor) => anchor.isReadMore && anchor.url === titleAnchor.url)
+}
+
+function validateReadMoreAncestor(nodes: HtmlNode[], rootIndex: number, pageUrl: string, readMoreAnchor: AnchorInfo) {
+  const anchors = anchorsInNode(nodes, rootIndex, pageUrl)
+  if (anchors.some((anchor) => anchor.url !== readMoreAnchor.url)) return { valid: false as const, reason: 'ancestor_contains_other_event' as DiscoveryFailureReason }
+  const titles = anchors.filter((anchor) => anchor.url === readMoreAnchor.url && anchor.isTitle)
+  if (titles.length !== 1) return { valid: false as const, reason: 'missing_title_anchor' as DiscoveryFailureReason }
   const badges = leafTextsMatching(nodes, rootIndex, badgeDatePattern)
-  if (titleAnchors.length !== 1 || titleAnchors[0].url !== titleAnchor.url) return { valid: false as const, reason: 'ancestor_contains_other_event' as DiscoveryFailureReason }
-  if (matchingReadMore.length === 0) return { valid: false as const, reason: 'missing_read_more_anchor' as DiscoveryFailureReason }
   if (badges.length === 0) return { valid: false as const, reason: 'missing_badge_date' as DiscoveryFailureReason }
   if (badges.length > 1) return { valid: false as const, reason: 'multiple_badge_dates' as DiscoveryFailureReason }
-  return { valid: true as const, readMoreUrl: matchingReadMore[0].url, badgeText: badges[0] }
+  return { valid: true as const, title: titles[0].text, badgeText: badges[0] }
 }
 
 function findCardContainers(html: string, pageUrl: string, _referenceDate: Date | string) {
   const nodes = parseHtmlNodes(html)
   const anchors = eventAnchors(nodes, pageUrl)
-  const titleAnchors = anchors.filter((anchor) => anchor.isTitle)
+  const readMoreAnchors = anchors.filter((anchor) => anchor.isReadMore)
   const uniqueUrls = new Set(anchors.map((anchor) => anchor.url))
   const failures: DiscoveryFailure[] = []
   const containers: CardContainer[] = []
-  const seenRoots = new Set<string>()
 
-  const titleUrls = new Set(titleAnchors.map((anchor) => anchor.url))
-  for (const readMoreAnchor of anchors.filter((anchor) => anchor.isReadMore)) {
-    if (!titleUrls.has(readMoreAnchor.url)) failures.push({ reason: 'missing_title_anchor', sourceUrl: readMoreAnchor.url })
-  }
-
-  for (const titleAnchor of titleAnchors) {
-    const candidateLis = closestLiAncestorIndexes(nodes, titleAnchor.nodeIndex, 2)
-    if (candidateLis.length === 0) {
-      failures.push({ reason: 'missing_read_more_anchor', sourceUrl: titleAnchor.url, title: titleAnchor.text })
-      continue
-    }
-    let resolved: number | null = null
+  for (const readMoreAnchor of readMoreAnchors) {
+    let current: number | null = readMoreAnchor.nodeIndex
+    let resolved: { nodeIndex: number; title: string } | null = null
     let lastFailure: DiscoveryFailureReason | null = null
-    for (const liIndex of candidateLis) {
-      const validation = validateOccurrenceListItem(nodes, liIndex, pageUrl, titleAnchor)
-      if (validation.valid) { resolved = liIndex; break }
+    for (let level = 0; current != null && current >= 0 && level <= 8; level += 1) {
+      const validation = validateReadMoreAncestor(nodes, current, pageUrl, readMoreAnchor)
+      if (validation.valid) { resolved = { nodeIndex: current, title: validation.title }; break }
       lastFailure = validation.reason
+      current = nodes[current].parent
     }
-    if (resolved == null) {
-      failures.push({ reason: lastFailure || 'no_common_ancestor', sourceUrl: titleAnchor.url, title: titleAnchor.text })
+    if (!resolved) {
+      failures.push({ reason: lastFailure || 'unresolved_card', sourceUrl: readMoreAnchor.url })
       continue
     }
-    const node = nodes[resolved]
-    const key = `${node.start}:${node.end}`
-    if (seenRoots.has(key)) continue
-    seenRoots.add(key)
-    containers.push({ html: node.html, sourceUrl: titleAnchor.url, title: titleAnchor.text, rootTagName: node.tagName, rootClassName: attr(openingTagOfNode(node), 'class') || undefined, start: node.start, end: node.end })
+    const node = nodes[resolved.nodeIndex]
+    containers.push({ html: node.html, sourceUrl: readMoreAnchor.url, title: resolved.title, rootTagName: node.tagName, rootClassName: attr(openingTagOfNode(node), 'class') || undefined, start: node.start, end: node.end })
   }
 
-  return { containers: containers.sort((a, b) => a.start - b.start), failures, eventAnchorsDiscovered: anchors.length, titleAnchorsFound: titleAnchors.length, uniqueEventUrls: uniqueUrls.size, urlGroupsWithTitleAndReadMore: 0 }
+  return { containers: containers.sort((a, b) => a.start - b.start), failures, eventAnchorsDiscovered: anchors.length, readMoreAnchorsDiscovered: readMoreAnchors.length, titleAnchorsFound: anchors.filter((anchor) => anchor.isTitle).length, uniqueEventUrls: uniqueUrls.size, urlGroupsWithTitleAndReadMore: 0 }
 }
 
 export function inspectEdgeOfNorwayCardHierarchy(html: string, pageUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL): EdgeOfNorwayCardHierarchyInspection {
@@ -371,6 +330,10 @@ function parseBadgeDateText(value: string, referenceDate: Date | string) {
 function parseTime(value: string) {
   const m = value.match(/\b([01]?\d|2[0-3])[:.](\d{2})\b/)
   return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
+}
+
+function exactRawCardKey(card: EdgeOfNorwayRawCard) {
+  return JSON.stringify([card.title, card.badgeText, card.timeText, card.sourceUrl])
 }
 
 function extractReadMoreUrl(card: string, pageUrl: string) {
@@ -455,14 +418,26 @@ function parseCard(card: string, pageUrl: string, referenceDate: Date | string):
 export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL, referenceDate: Date | string = EDGE_OF_NORWAY_DEFAULT_REFERENCE_DATE) {
   const discovery = findCardContainers(html, pageUrl, referenceDate)
   const cardContainers = discovery.containers
-  const rawCards = cardContainers.map((card) => extractRawCard(card, pageUrl))
-  const cardResults = cardContainers.map((card) => parseCard(card.html, pageUrl, referenceDate))
+  const rawOccurrenceCards = cardContainers.map((card) => extractRawCard(card, pageUrl))
+  const uniqueContainers: CardContainer[] = []
+  const seenRawCards = new Set<string>()
+  rawOccurrenceCards.forEach((rawCard, index) => {
+    const key = exactRawCardKey(rawCard)
+    if (seenRawCards.has(key)) return
+    seenRawCards.add(key)
+    uniqueContainers.push(cardContainers[index])
+  })
+  const rawCards = uniqueContainers.map((card) => extractRawCard(card, pageUrl))
+  const cardResults = uniqueContainers.map((card) => parseCard(card.html, pageUrl, referenceDate))
   return {
     eventAnchorsDiscovered: discovery.eventAnchorsDiscovered,
+    readMoreAnchorsDiscovered: discovery.readMoreAnchorsDiscovered,
+    occurrencesResolved: cardContainers.length,
+    rawCardsParsed: rawOccurrenceCards.length,
     titleAnchorsFound: discovery.titleAnchorsFound,
     occurrenceListItemsResolved: cardContainers.length,
     uniqueCardNodes: cardContainers.length,
-    rawOccurrencesParsed: rawCards.length,
+    rawOccurrencesParsed: rawOccurrenceCards.length,
     cardsMissingBadge: discovery.failures.filter((f) => f.reason === 'missing_badge_date').length,
     cardsMissingReadMore: discovery.failures.filter((f) => f.reason === 'missing_read_more_anchor').length,
     cardsContainingOtherEvent: discovery.failures.filter((f) => f.reason === 'ancestor_contains_other_event').length,
@@ -476,7 +451,7 @@ export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY
     errorExamples: discovery.failures.slice(0, 10),
     cardsDiscovered: cardResults.length,
     validCardsParsedBeforeGrouping: cardResults.filter((r) => r.accepted).length,
-    exactDuplicateCardsRemoved: 0,
+    exactDuplicateCardsRemoved: rawOccurrenceCards.length - rawCards.length,
     results: cardResults,
     rawCards,
     missingRawFields: rawCards.map((card, index) => ({ index, titleMissing: !card.title, badgeMissing: !card.badgeText, sourceUrlMissing: !card.sourceUrl })).filter((card) => card.titleMissing || card.badgeMissing || card.sourceUrlMissing),
@@ -526,6 +501,6 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, referen
         if (parsingErrors.length < 10) parsingErrors.push({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason })
       }
     }
-    return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: parsed.cardsDiscovered, validCardsParsed: parsed.validCardsParsedBeforeGrouping, exactDuplicateCardsRemoved: parsed.exactDuplicateCardsRemoved, uniqueSourceUrls: parsed.uniqueEventUrls, acceptedCount: acceptedEvents.length, skippedCounts: { ...parsed.groupedFailureCounts, ...skippedCounts }, acceptedEvents, parsingErrors: [...parsed.errorExamples.map((e) => ({ title: e.title, sourceUrl: e.sourceUrl, reason: e.reason })), ...parsingErrors].slice(0, 10), eventAnchorsDiscovered: parsed.eventAnchorsDiscovered, titleAnchorsFound: parsed.titleAnchorsFound, occurrenceListItemsResolved: parsed.occurrenceListItemsResolved, uniqueCardNodes: parsed.uniqueCardNodes, rawOccurrencesParsed: parsed.rawOccurrencesParsed, cardsMissingBadge: parsed.cardsMissingBadge, cardsMissingReadMore: parsed.cardsMissingReadMore, cardsContainingOtherEvent: parsed.cardsContainingOtherEvent, urlGroupsWithTitleAndReadMore: parsed.urlGroupsWithTitleAndReadMore, cardsWithOneBadgeDate: parsed.cardsWithOneBadgeDate, cardsWithTime: parsed.cardsWithTime, cardsWithoutTime: parsed.cardsWithoutTime, cardRoots: parsed.cardRoots, rawCards: parsed.rawCards.slice(0, 5), missingRawFields: parsed.missingRawFields }
+    return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: parsed.cardsDiscovered, validCardsParsed: parsed.validCardsParsedBeforeGrouping, exactDuplicateCardsRemoved: parsed.exactDuplicateCardsRemoved, uniqueSourceUrls: parsed.uniqueEventUrls, acceptedCount: acceptedEvents.length, skippedCounts: { ...parsed.groupedFailureCounts, ...skippedCounts }, acceptedEvents, parsingErrors: [...parsed.errorExamples.map((e) => ({ title: e.title, sourceUrl: e.sourceUrl, reason: e.reason })), ...parsingErrors].slice(0, 10), eventAnchorsDiscovered: parsed.eventAnchorsDiscovered, readMoreAnchorsDiscovered: parsed.readMoreAnchorsDiscovered, occurrencesResolved: parsed.occurrencesResolved, rawCardsParsed: parsed.rawCardsParsed, titleAnchorsFound: parsed.titleAnchorsFound, occurrenceListItemsResolved: parsed.occurrenceListItemsResolved, uniqueCardNodes: parsed.uniqueCardNodes, rawOccurrencesParsed: parsed.rawOccurrencesParsed, cardsMissingBadge: parsed.cardsMissingBadge, cardsMissingReadMore: parsed.cardsMissingReadMore, cardsContainingOtherEvent: parsed.cardsContainingOtherEvent, urlGroupsWithTitleAndReadMore: parsed.urlGroupsWithTitleAndReadMore, cardsWithOneBadgeDate: parsed.cardsWithOneBadgeDate, cardsWithTime: parsed.cardsWithTime, cardsWithoutTime: parsed.cardsWithoutTime, cardRoots: parsed.cardRoots, rawCards: parsed.rawCards.slice(0, 5), missingRawFields: parsed.missingRawFields }
   })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError(error instanceof Error && error.message === 'timeout' ? 'timeout' : 'parser_failed', error))
 }

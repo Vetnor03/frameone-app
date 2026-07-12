@@ -22,9 +22,9 @@ test('missing badge date', () => { const result = parseEdgeOfNorwayListPage(fixt
 test('unclear badge date', () => { const result = parseEdgeOfNorwayListPage(fixture('unclear-badge-date.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_badge_date: 1 }) })
 test('multiple dates in one card', () => { const result = parseEdgeOfNorwayListPage(fixture('multiple-dates-one-card.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { multiple_badge_dates: 1 }) })
 test('same canonical URL on multiple dates remains raw and ungrouped', () => assert.equal(accepted(fixture('same-url-multiple-dates.html')).length, 2))
-test('exact duplicate cards remain raw and ungrouped', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.exactDuplicateCardsRemoved, 0); assert.equal(result.results.length, 2); assert.equal(result.results[0].accepted, true) })
+test('exact duplicate cards are removed after raw occurrence parsing', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.rawOccurrencesParsed, 2); assert.equal(result.exactDuplicateCardsRemoved, 1); assert.equal(result.results.length, 1); assert.equal(result.results[0].accepted, true) })
 test('missing title', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-title.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_title_anchor: 1 }) })
-test('missing Read more URL', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-read-more-url.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_read_more_anchor: 1 }) })
+test('card without Fjord Norway Read more URL is not an occurrence', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-read-more-url.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.readMoreAnchorsDiscovered, 0); assert.deepEqual(result.groupedFailureCounts, {}) })
 test('unrelated dates elsewhere on page are ignored', () => { const result = accepted(fixture('unrelated-dates-elsewhere.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
 test('selected or active calendar dates are ignored', () => { const result = accepted(fixture('selected-active-calendar.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
 test('time from neighbouring card is not used', () => { const events = accepted(fixture('neighbour-time.html')); assert.equal(events[0].startTime, null); assert.equal(events[0].allDay, true); assert.equal(events[1].startTime, '17:00') })
@@ -65,6 +65,25 @@ test('recurring URLs resolve nested occurrence list items locally without cross-
   assert.equal(result.groupedFailureCounts.ancestor_contains_other_event || 0, 0)
 })
 
+
+
+test('recurring event Read more occurrences resolve before grouping by URL', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('recurring-readmore-occurrences.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.readMoreAnchorsDiscovered, 4)
+  assert.equal(result.occurrencesResolved, 4)
+  assert.equal(result.rawCardsParsed, 4)
+  assert.equal(result.exactDuplicateCardsRemoved, 0)
+  assert.equal(result.uniqueEventUrls, 2)
+  assert.equal(result.cardsDiscovered, 4)
+  assert.equal(result.groupedFailureCounts.ancestor_contains_other_event || 0, 0)
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['article', 'article', 'article', 'article'])
+  assert.deepEqual(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/triple'), [
+    { title: 'Triple harbour walk', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
+    { title: 'Triple harbour walk', badgeText: '14. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
+    { title: 'Triple harbour walk', badgeText: '15. Jul.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
+  ])
+})
+
 test('shadow diagnostic parses list page only and reports list-card metrics', async () => {
   const fetchedUrls = []
   const fetchImpl = async (requestUrl) => { fetchedUrls.push(String(requestUrl)); return { ok: true, text: async () => fixture('stavanger-list.html') } }
@@ -100,17 +119,17 @@ test('deterministic event-link discovery resolves generated-class cards independ
   assert.equal(result.eventAnchorsDiscovered, 7)
   assert.equal(result.uniqueEventUrls, 2)
   assert.equal(result.urlGroupsWithTitleAndReadMore, 0)
-  assert.equal(result.cardCandidatesResolved, 0)
-  assert.equal(result.cardsWithOneBadgeDate, 0)
-  assert.equal(result.cardsWithTime, 0)
-  assert.equal(result.cardsWithoutTime, 0)
-  assert.deepEqual(result.rawCards, [])
-  assert.deepEqual(accepted(fixture('generated-classes-links.html')), [])
+  assert.equal(result.cardCandidatesResolved, 2)
+  assert.equal(result.cardsWithOneBadgeDate, 2)
+  assert.equal(result.cardsWithTime, 1)
+  assert.equal(result.cardsWithoutTime, 1)
+  assert.deepEqual(accepted(fixture('generated-classes-links.html')).map((event) => event.sourceUrl), ['https://www.fjordnorway.com/en/events/alpha-event', 'https://www.fjordnorway.com/en/events/beta-market'])
 })
 
-test('event anchors without resolvable cards produce explicit failures instead of silent success', () => {
+test('event anchors without Read more are not occurrence starting points', () => {
   const result = parseEdgeOfNorwayListPage('<a href="https://www.fjordnorway.com/en/events/orphan">Orphan event</a>', EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
   assert.equal(result.eventAnchorsDiscovered, 1)
+  assert.equal(result.readMoreAnchorsDiscovered, 0)
   assert.equal(result.cardsDiscovered, 0)
-  assert.deepEqual(result.groupedFailureCounts, { missing_read_more_anchor: 1 })
+  assert.deepEqual(result.groupedFailureCounts, {})
 })
