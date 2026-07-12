@@ -218,13 +218,25 @@ function sourceUrlForSlug(slug: unknown) {
   return typeof slug === 'string' && slug.trim() ? `https://www.fjordnorway.com/en/events/${slug.trim()}` : null
 }
 
+function parseSchedulePart(value: unknown, min: number, max: number): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null
+
+  const text = String(value).trim()
+  if (!/^\d{1,2}$/.test(text)) return null
+
+  const parsed = Number(text)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return null
+
+  return parsed
+}
+
 function parseTime(schedule: unknown): { accepted: true; startTime: string | null; allDay: boolean } | { accepted: false; reason: EdgeOfNorwaySkipReason } {
   if (!Array.isArray(schedule) || schedule.length === 0) return { accepted: true, startTime: null, allDay: true }
   const times = new Set<string>()
   for (const entry of schedule) {
-    const hour = (entry as { hour?: unknown })?.hour
-    const minutes = (entry as { minutes?: unknown })?.minutes
-    if (typeof hour !== 'number' || typeof minutes !== 'number' || !Number.isInteger(hour) || !Number.isInteger(minutes) || hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return { accepted: false, reason: 'unclear_time' }
+    const hour = parseSchedulePart((entry as { hour?: unknown })?.hour, 0, 23)
+    const minutes = parseSchedulePart((entry as { minutes?: unknown })?.minutes, 0, 59)
+    if (hour === null || minutes === null) return { accepted: false, reason: 'unclear_time' }
     times.add(`${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`)
   }
   if (times.size > 1) return { accepted: false, reason: 'multiple_times' }

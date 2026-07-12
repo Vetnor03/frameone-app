@@ -6,6 +6,17 @@ import { EDGE_OF_NORWAY_EVENTS_URL, parseEdgeOfNorwayListPage, runEdgeOfNorwaySh
 const fixture = (name) => readFileSync(new URL(`./fixtures/edge-of-norway/${name}`, import.meta.url), 'utf8')
 const events = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_EVENTS_URL).results.filter((r) => r.accepted).map((r) => r.event)
 
+const eventHtml = (event) => `self.__next_f.push(${JSON.stringify([1, JSON.stringify({ data: event })])});`
+const scheduleProbeHtml = (schedule) => eventHtml({
+  _id: `schedule-probe-${JSON.stringify(schedule)}`,
+  _type: 'Event',
+  locTitle: { en: 'Schedule Probe' },
+  locSlug: { en: { current: 'schedule-probe' } },
+  event: { _type: 'EventInfo', recurring: false, recurringShowings: null, showings: [{ date: '2026-07-26', schedule }] },
+})
+const eventFromSchedule = (schedule) => parseEdgeOfNorwayListPage(scheduleProbeHtml(schedule)).results.find((r) => r.accepted)?.event
+const reasonFromSchedule = (schedule) => parseEdgeOfNorwayListPage(scheduleProbeHtml(schedule)).results.find((r) => !r.accepted)?.reason
+
 test('configured Edge of Norway list URL is exact and has no Stavanger/date query parameters', () => {
   assert.equal(EDGE_OF_NORWAY_EVENTS_URL, 'https://www.edgeofnorway.com/en/events')
   const url = new URL(EDGE_OF_NORWAY_EVENTS_URL)
@@ -52,6 +63,26 @@ test('recurring, multiple-date and multiple-time Event objects are skipped; no s
   assert.equal(result.skippedCounts.multiple_dates, 1)
   assert.equal(result.skippedCounts.multiple_times, 1)
   assert.deepEqual(events(fixture('flight-payload.html')).find((event) => event.title === 'Harbour market all day'), { title: 'Harbour market all day', sourceUrl: 'https://www.fjordnorway.com/en/events/harbour-market-all-day', date: '2026-07-23', startTime: null, allDay: true })
+})
+
+
+test('EventSchedule string hour and minutes normalize to padded start times', () => {
+  assert.equal(eventFromSchedule([{ hour: '17', minutes: '00' }])?.startTime, '17:00')
+  assert.equal(eventFromSchedule([{ hour: '9', minutes: '5' }])?.startTime, '09:05')
+  assert.equal(eventFromSchedule([{ hour: 18, minutes: 0 }])?.startTime, '18:00')
+  assert.equal(eventFromSchedule([{ hour: '00', minutes: '00' }])?.startTime, '00:00')
+})
+
+test('malformed non-empty EventSchedule values are unclear_time', () => {
+  assert.equal(reasonFromSchedule([{ hour: '24', minutes: '00' }]), 'unclear_time')
+  assert.equal(reasonFromSchedule([{ hour: '17', minutes: '60' }]), 'unclear_time')
+  assert.equal(reasonFromSchedule([{ hour: 'noon', minutes: '00' }]), 'unclear_time')
+  assert.equal(reasonFromSchedule([{ hour: '17', minutes: 'zero' }]), 'unclear_time')
+})
+
+test('duplicate normalized EventSchedule representations collapse and empty schedule remains all-day', () => {
+  assert.equal(eventFromSchedule([{ hour: '17', minutes: '00' }, { hour: 17, minutes: 0 }])?.startTime, '17:00')
+  assert.deepEqual(eventFromSchedule([]), { title: 'Schedule Probe', sourceUrl: 'https://www.fjordnorway.com/en/events/schedule-probe', date: '2026-07-26', startTime: null, allDay: true })
 })
 
 test('shadow diagnostic reports structured flight metrics from list page only', async () => {
