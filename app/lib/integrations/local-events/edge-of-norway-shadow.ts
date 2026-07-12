@@ -1,7 +1,30 @@
 export const EDGE_OF_NORWAY_PROVIDER = 'edge-of-norway' as const
 export const EDGE_OF_NORWAY_MODE = 'shadow' as const
-export const EDGE_OF_NORWAY_EVENTS_URL =
-  "https://www.edgeofnorway.com/en/events"
+export type LocalEventArea = 'stavanger-area'
+
+export const EDGE_OF_NORWAY_AREA_PLACES: Record<
+  LocalEventArea,
+  readonly string[]
+> = {
+  'stavanger-area': [
+    'stavanger',
+    'sola',
+    'sandnes',
+    'randaberg',
+  ],
+}
+
+export const EDGE_OF_NORWAY_SELECTED_AREA: LocalEventArea = 'stavanger-area'
+
+export function buildEdgeOfNorwayEventsUrl(area: LocalEventArea = EDGE_OF_NORWAY_SELECTED_AREA) {
+  const url = new URL('https://www.edgeofnorway.com/en/events')
+  url.searchParams.set('date', 'next_30')
+  url.searchParams.set('filtertype', 'place')
+  for (const place of EDGE_OF_NORWAY_AREA_PLACES[area]) url.searchParams.append('place', place)
+  return url.toString()
+}
+
+export const EDGE_OF_NORWAY_EVENTS_URL = buildEdgeOfNorwayEventsUrl()
 export const EDGE_OF_NORWAY_USER_AGENT = 'Mozilla/5.0 (compatible; REMIND-LocalEvents/1.0; +https://www.edgeofnorway.com/)'
 
 export type EdgeOfNorwaySkipReason =

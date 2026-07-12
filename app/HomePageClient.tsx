@@ -2677,8 +2677,8 @@ function ConnectAppsScreen({
       name: language === 'no' ? 'Lokale arrangementer' : 'Local Events',
       description:
         language === 'no'
-          ? 'Test ny Stavanger-kilde uten import eller lagring'
-          : 'Test the new Stavanger source without importing or saving events',
+          ? 'Test ny Stavanger area-kilde uten import eller lagring'
+          : 'Test the new Stavanger area source without importing or saving events',
     },
     {
       key: 'vigilo',
@@ -2729,7 +2729,7 @@ function ConnectAppsScreen({
           </div>
           <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
             <div className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Statusvisning' : 'Status view'}</div>
-            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-45)]">{language === 'no' ? 'Kilden er Stavanger. Dette er bare en shadow-diagnostikk: ingen gamle importer vises, og ingenting lagres i Supabase.' : 'The current source is Stavanger. This only runs the shadow diagnostic: no old imports are shown and nothing is written to Supabase.'}</p>
+            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-45)]">{language === 'no' ? 'Kilden er Stavanger area. Inkluderte steder: Stavanger, Sola, Sandnes og Randaberg. Dette er bare en shadow-diagnostikk: ingen gamle importer vises, og ingenting lagres i Supabase.' : 'The current source is Stavanger area. Included places: Stavanger, Sola, Sandnes and Randaberg. This only runs the shadow diagnostic: no old imports are shown and nothing is written to Supabase.'}</p>
             <button type="button" onClick={testLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? (language === 'no' ? 'TESTER…' : 'TESTING…') : (language === 'no' ? 'TEST LIVE ARRANGEMENTER' : 'TEST LIVE EVENTS')}</button>
           </div>
           {localEventsDiagnostic && (
