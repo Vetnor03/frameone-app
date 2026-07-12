@@ -452,6 +452,9 @@ export function mergeRegionalEvents(cards: ParsedEdgeCard[], details: Record<str
       detailShowings = []
     }
     const titleDate = explicitDateFromTitle(detail?.title || first.title, new Date(`${range.start}T00:00:00Z`))
+    if (classification !== 'continuous' && listDates.length === 1 && titleDate && titleDate !== listDates[0]) {
+      continue
+    }
     if (titleDate && classification !== 'continuous' && !detailShowings.some((s) => s.date === titleDate)) {
       detailShowings = [{ date: titleDate, endDate: null, startTime: first.startTime, endTime: first.endTime, startsAt: osloIso(titleDate, first.startTime), endsAt: first.endTime ? osloIso(titleDate, first.endTime) : null, allDay: !first.startTime, source: 'visible_html' }]
     }

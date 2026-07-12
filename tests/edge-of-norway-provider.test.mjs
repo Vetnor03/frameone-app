@@ -210,6 +210,13 @@ test('detail showings parser does not borrow a time from another row', () => {
   ])
 })
 
+test('single-date events are excluded when the title date conflicts with the card date', () => {
+  const url = 'https://www.fjordnorway.com/en/events/football-fest-title-date-mismatch'
+  const cards = parseEdgeOfNorwayListPage(`<li class="event-card"><div>20. Jul.</div><a href="${url}">Football Fest in Stavanger // Fiskepiren // July 19</a><p>18:00</p></li>`, 'stavanger', new Date('2026-07-12T00:00:00Z'))
+  const { occurrences } = mergeRegionalEvents(cards)
+  assert.equal(cards.length, 1)
+  assert.deepEqual(occurrences, [])
+})
 
 test('date-only detail showings do not move a single list occurrence one week ahead', () => {
   const url = 'https://www.fjordnorway.com/en/events/date-only-active-calendar-test'
@@ -219,12 +226,12 @@ test('date-only detail showings do not move a single list occurrence one week ah
   assert.deepEqual(occurrences.map(o => [o.date, o.startTime, o.allDay]), [['2026-07-12', null, true]])
 })
 
-test('title-specific dated tour is not moved to a different active detail date', () => {
+test('single-date events are excluded when detail title date conflicts with list date', () => {
   const url = 'https://www.fjordnorway.com/en/events/sunday-tour-lervigskvartalet-12-july'
   const cards = parseEdgeOfNorwayListPage(`<li class="event-card"><div>19. Jul.</div><a href="${url}">Sunday tour: Lervigskvartalet, 12 July</a></li>`, 'stavanger', new Date('2026-07-12T00:00:00Z'))
   const detailHtml = `<main><h1>Sunday tour: Lervigskvartalet, 12 July</h1><h2>Showings</h2><div class="showing-row"><span>July 19</span></div><h2>Contact</h2></main>`
   const { occurrences } = mergeRegionalEvents(cards, { [url]: detailHtml })
-  assert.deepEqual(occurrences.map(o => [o.title, o.date]), [['Sunday tour: Lervigskvartalet, 12 July', '2026-07-12']])
+  assert.deepEqual(occurrences, [])
 })
 
 test('football festival detail showing stays one-off on 11 July at 17:00', () => {
