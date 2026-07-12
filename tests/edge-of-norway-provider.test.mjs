@@ -211,6 +211,13 @@ test('detail showings parser does not borrow a time from another row', () => {
 })
 
 
+test('date-only detail showings do not move a single list occurrence one week ahead', () => {
+  const url = 'https://www.fjordnorway.com/en/events/date-only-active-calendar-test'
+  const cards = parseEdgeOfNorwayListPage(`<li class="event-card"><div>12. Jul.</div><a href="${url}">Date-only active calendar test</a></li>`, 'stavanger', new Date('2026-07-12T00:00:00Z'))
+  const detailHtml = `<main><h1>Date-only active calendar test</h1><h2>Showings</h2><div class="showing-row"><span>July 19</span></div><h2>Contact</h2></main>`
+  const { occurrences } = mergeRegionalEvents(cards, { [url]: detailHtml })
+  assert.deepEqual(occurrences.map(o => [o.date, o.startTime, o.allDay]), [['2026-07-12', null, true]])
+})
 
 test('title-specific dated tour is not moved to a different active detail date', () => {
   const url = 'https://www.fjordnorway.com/en/events/sunday-tour-lervigskvartalet-12-july'
