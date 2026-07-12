@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { EDGE_OF_NORWAY_STAVANGER_LIST_URL, parseEdgeOfNorwayListPage, runEdgeOfNorwayShadowDiagnostic } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
+import { EDGE_OF_NORWAY_EVENTS_URL, parseEdgeOfNorwayListPage, runEdgeOfNorwayShadowDiagnostic } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/edge-of-norway/${name}`, import.meta.url), 'utf8')
-const events = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL).results.filter((r) => r.accepted).map((r) => r.event)
+const events = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_EVENTS_URL).results.filter((r) => r.accepted).map((r) => r.event)
+
+test('configured Edge of Norway list URL is exact and has no Stavanger/date query parameters', () => {
+  assert.equal(EDGE_OF_NORWAY_EVENTS_URL, 'https://www.edgeofnorway.com/en/events')
+  const url = new URL(EDGE_OF_NORWAY_EVENTS_URL)
+  assert.equal(url.search, '')
+  assert.equal(url.searchParams.has('date'), false)
+  assert.equal(url.searchParams.has('filtertype'), false)
+  assert.equal(url.searchParams.has('place'), false)
+})
 
 test('page with only Loading in main parses structured flight Event objects without DOM cards', () => {
   const result = parseEdgeOfNorwayListPage(fixture('flight-payload.html'))
@@ -47,14 +56,40 @@ test('recurring, multiple-date and multiple-time Event objects are skipped; no s
 
 test('shadow diagnostic reports structured flight metrics from list page only', async () => {
   const fetchedUrls = []
-  const fetchImpl = async (requestUrl) => { fetchedUrls.push(String(requestUrl)); return { ok: true, text: async () => fixture('flight-payload.html') } }
+  const fetchImpl = async (requestUrl, init) => {
+    fetchedUrls.push(String(requestUrl))
+    assert.equal(init.redirect, 'manual')
+    return new Response(fixture('flight-payload.html'), { status: 200, headers: { 'content-type': 'text/html' } })
+  }
   const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl)
-  assert.deepEqual(fetchedUrls, [EDGE_OF_NORWAY_STAVANGER_LIST_URL])
+  assert.deepEqual(fetchedUrls, [EDGE_OF_NORWAY_EVENTS_URL])
+  assert.equal(result.fetch?.requestedUrl, EDGE_OF_NORWAY_EVENTS_URL)
+  assert.equal(result.fetch?.finalHostname, 'www.edgeofnorway.com')
   assert.equal(result.flightScriptsFound, 5)
   assert.equal(result.flightChunksDecoded, 3)
   assert.equal(result.uniqueEvents, 7)
   assert.equal(result.acceptedCount, 4)
   assert.equal(result.skippedCounts.recurring_event, 1)
+})
+
+test('response from www.edgeofnorway.com is accepted', async () => {
+  const response = new Response(fixture('flight-payload.html'), { status: 200 })
+  Object.defineProperty(response, 'url', { value: EDGE_OF_NORWAY_EVENTS_URL })
+  const result = await runEdgeOfNorwayShadowDiagnostic(async () => response)
+  assert.equal(result.diagnosticError, undefined)
+  assert.equal(result.fetch?.finalHostname, 'www.edgeofnorway.com')
+  assert.equal(result.acceptedCount, 4)
+})
+
+test('redirect or final URL on www.fjordnorway.com is rejected before parsing', async () => {
+  const response = new Response(fixture('flight-payload.html'), { status: 200 })
+  Object.defineProperty(response, 'url', { value: 'https://www.fjordnorway.com/en/events' })
+  const result = await runEdgeOfNorwayShadowDiagnostic(async () => response)
+  assert.equal(result.diagnosticError?.stage, 'fetch')
+  assert.equal(result.diagnosticError?.message, 'Unexpected source redirect')
+  assert.equal(result.diagnosticError?.requestedUrl, EDGE_OF_NORWAY_EVENTS_URL)
+  assert.equal(result.diagnosticError?.finalUrl, 'https://www.fjordnorway.com/en/events')
+  assert.equal(result.acceptedCount, 0)
 })
 
 test('raw HTML containing Flight scripts is detected without DOM parsing', () => {
