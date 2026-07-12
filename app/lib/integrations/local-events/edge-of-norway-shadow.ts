@@ -37,6 +37,7 @@ export type EdgeOfNorwayDiagnosticResult = {
   acceptedCount: number
   skippedCounts: Record<string, number>
   acceptedEvents: EdgeOfNorwayAcceptedEvent[]
+  fetchErrors: string[]
 }
 
 function decodeEntities(value: string) {
@@ -201,6 +202,7 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
   const unique = Array.from(new Map(candidates.map((c) => [c.sourceUrl, c])).values())
   const skippedCounts: Record<string, number> = {}
   const acceptedEvents: EdgeOfNorwayAcceptedEvent[] = []
+  const fetchErrors: string[] = []
   let fetched = 0
   for (const candidate of unique) {
     try {
@@ -210,9 +212,11 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
       const parsed = parseEdgeOfNorwayDetailPage(await resp.text(), candidate.sourceUrl, candidate.title)
       if (parsed.accepted) acceptedEvents.push(parsed.event)
       else skippedCounts[parsed.reason] = (skippedCounts[parsed.reason] || 0) + 1
-    } catch {
+    } catch (error: unknown) {
       skippedCounts.fetch_failed = (skippedCounts.fetch_failed || 0) + 1
+      const message = error instanceof Error && error.message ? error.message : 'Unknown fetch error'
+      fetchErrors.push(`${candidate.sourceUrl}: ${message}`)
     }
   }
-  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, detailPagesDiscovered: discovered, duplicateUrlsRemoved: discovered - unique.length, detailPagesFetched: fetched, acceptedCount: acceptedEvents.length, skippedCounts, acceptedEvents }
+  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, detailPagesDiscovered: discovered, duplicateUrlsRemoved: discovered - unique.length, detailPagesFetched: fetched, acceptedCount: acceptedEvents.length, skippedCounts, acceptedEvents, fetchErrors }
 }

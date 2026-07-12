@@ -2402,7 +2402,16 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'vigilo'
+type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'vigilo' | 'local-events'
+type LocalEventsDiagnosticResult = {
+  detailPagesDiscovered?: number
+  duplicateUrlsRemoved?: number
+  detailPagesFetched?: number
+  acceptedCount?: number
+  skippedCounts?: Record<string, number>
+  fetchErrors?: string[]
+  error?: string
+}
 type DisconnectableConnectAppKey = 'spond' | 'teams'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
@@ -2451,6 +2460,9 @@ function ConnectAppsScreen({
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams', string>>>({})
+  const [localEventsOpen, setLocalEventsOpen] = useState(false)
+  const [localEventsLoading, setLocalEventsLoading] = useState(false)
+  const [localEventsDiagnostic, setLocalEventsDiagnostic] = useState<LocalEventsDiagnosticResult | null>(null)
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -2556,6 +2568,31 @@ function ConnectAppsScreen({
     }
   }
 
+
+  async function testLocalEvents() {
+    if (localEventsLoading) return
+    setLocalEventsLoading(true)
+    setLocalEventsDiagnostic(null)
+    setStatus(null)
+    setStatusTone('info')
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å teste lokale arrangementer' : 'Sign in to test Local Events')
+      const resp = await fetch('/api/integrations/local-events/diagnostic', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(json?.error || 'Local Events diagnostic failed')
+      setLocalEventsDiagnostic(json)
+    } catch (error: unknown) {
+      const message = error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke teste lokale arrangementer' : 'Could not test Local Events')
+      setLocalEventsDiagnostic({ detailPagesFetched: 0, acceptedCount: 0, skippedCounts: {}, fetchErrors: [message], error: message })
+    } finally {
+      setLocalEventsLoading(false)
+    }
+  }
+
   async function disconnectIntegration(provider: DisconnectableConnectAppKey) {
     const appName = provider === 'teams' ? 'Microsoft Calendar' : 'Spond'
     const setProviderLoading = provider === 'teams' ? setTeamsLoading : setSpondLoading
@@ -2616,6 +2653,14 @@ function ConnectAppsScreen({
         language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
     },
     {
+      key: 'local-events',
+      name: language === 'no' ? 'Lokale arrangementer' : 'Local Events',
+      description:
+        language === 'no'
+          ? 'Test ny Stavanger-kilde uten import eller lagring'
+          : 'Test the new Stavanger source without importing or saving events',
+    },
+    {
       key: 'vigilo',
       name: 'Vigilo',
       description:
@@ -2645,12 +2690,50 @@ function ConnectAppsScreen({
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
+    if (app.key === 'local-events') return false
     return connectAppIsConnected(modulesJson, app.key)
   }
 
   const sortedApps = apps
     .map((app, index) => ({ app, index, connected: getAppConnected(app) }))
     .sort((a, b) => Number(b.connected) - Number(a.connected) || a.index - b.index)
+
+  if (localEventsOpen) {
+    const skippedCounts = localEventsDiagnostic?.skippedCounts || {}
+    return (
+      <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
+        <div className="pt-5 pb-6">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <button type="button" onClick={() => setLocalEventsOpen(false)} className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'TILBAKE' : 'BACK'}</button>
+            <div className="text-[color:var(--fg-90)] text-sm font-semibold">{language === 'no' ? 'Lokale arrangementer' : 'Local Events'}</div>
+          </div>
+          <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
+            <div className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Statusvisning' : 'Status view'}</div>
+            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-45)]">{language === 'no' ? 'Kilden er Stavanger. Dette er bare en shadow-diagnostikk: ingen gamle importer vises, og ingenting lagres i Supabase.' : 'The current source is Stavanger. This only runs the shadow diagnostic: no old imports are shown and nothing is written to Supabase.'}</p>
+            <button type="button" onClick={testLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? (language === 'no' ? 'TESTER…' : 'TESTING…') : (language === 'no' ? 'TEST LIVE ARRANGEMENTER' : 'TEST LIVE EVENTS')}</button>
+          </div>
+          {localEventsDiagnostic && (
+            <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
+              <div className="grid grid-cols-2 gap-2">
+                <div>Fetched pages: {localEventsDiagnostic.detailPagesFetched ?? 0}</div>
+                <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
+                <div>Discovered: {localEventsDiagnostic.detailPagesDiscovered ?? 0}</div>
+                <div>Duplicates skipped: {localEventsDiagnostic.duplicateUrlsRemoved ?? 0}</div>
+              </div>
+              <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
+                <div className="font-medium text-[color:var(--fg-90)]">Skipped counts</div>
+                {Object.keys(skippedCounts).length ? Object.entries(skippedCounts).map(([key, value]) => <div key={key} className="mt-1 flex justify-between gap-3"><span>{key}</span><span>{value}</span></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+              </div>
+              <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
+                <div className="font-medium text-[color:var(--fg-90)]">Fetch errors</div>
+                {localEventsDiagnostic.fetchErrors?.length ? localEventsDiagnostic.fetchErrors.map((error, index) => <div key={`${index}-${error}`} className="mt-1 break-words text-[#ff7a7a]">{error}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
@@ -2716,11 +2799,13 @@ function ConnectAppsScreen({
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
                           connectTeams()
+                        } else if (app.key === 'local-events') {
+                          setLocalEventsOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {((app.key === 'teams' && teamsLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                      {app.key === 'local-events' ? (language === 'no' ? 'ÅPNE' : 'OPEN') : ((app.key === 'teams' && teamsLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>

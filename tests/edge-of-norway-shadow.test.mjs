@@ -78,6 +78,23 @@ test('shadow diagnostic fetches each deduplicated detail URL once and groups ski
   assert.equal(new Set(fetchedUrls).size, fetchedUrls.length)
   assert.equal(result.acceptedCount, 1)
   assert.deepEqual(result.skippedCounts, { multiple_dates: 1 })
+  assert.deepEqual(result.fetchErrors, [])
   assert.equal(result.acceptedEvents[0].date, '2026-07-11')
   assert.notEqual(result.acceptedEvents[0].date, '2026-07-19')
+})
+
+
+test('shadow diagnostic reports detail fetch failures without throwing', async () => {
+  const fetchImpl = async (requestUrl) => {
+    const requestUrlString = String(requestUrl)
+    if (requestUrlString === EDGE_OF_NORWAY_STAVANGER_LIST_URL) return { ok: true, text: async () => fixture('stavanger-list.html') }
+    throw new Error('getaddrinfo ENOTFOUND example.test')
+  }
+
+  const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl)
+  assert.equal(result.detailPagesFetched, 0)
+  assert.equal(result.acceptedCount, 0)
+  assert.deepEqual(result.skippedCounts, { fetch_failed: 2 })
+  assert.equal(result.fetchErrors.length, 2)
+  assert.match(result.fetchErrors[0], /ENOTFOUND/)
 })
