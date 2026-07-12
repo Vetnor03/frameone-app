@@ -174,8 +174,15 @@ function parseVisibleShowings(html: string, fallbackDate: string) {
   // First parse repeated showing cards/rows as atomic containers. Dates and times
   // are extracted from the same container to avoid pairing one row's date with
   // another row's time. Match order preserves DOM order.
-  const rowMatches = [...section.matchAll(/<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi)]
+  const rowMatches = [
+    ...section.matchAll(/<(article|li)\b[^>]*>[\s\S]*?<\/\1>/gi),
+    ...section.matchAll(/<div\b[^>]*(?:class|data-testid|aria-label)=['"][^'"]*(?:showing|showtime|event-time|date-time|session|occurrence)[^'"]*['"][^>]*>[\s\S]*?<\/div>/gi),
+  ].sort((a, b) => (a.index || 0) - (b.index || 0))
+  const seenRows = new Set<string>()
   for (const row of rowMatches) {
+    if (seenRows.has(row[0])) continue
+    seenRows.add(row[0])
+    if (/class=['"][^'"]*(?:calendar|datepicker|date-picker)[^'"]*['"]/i.test(row[0])) continue
     const parsed = parsedShowingFromContainer(row[0], reference)
     if (parsed) parsedShowings.push(parsed)
   }
