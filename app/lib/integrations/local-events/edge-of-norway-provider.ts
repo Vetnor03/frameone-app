@@ -107,6 +107,11 @@ function parseMonthDayHeading(label: string, referenceDate = new Date()) {
 }
 function parseAnyDateHeading(label: string, referenceDate = new Date()) { return parseDateHeading(label, referenceDate) || parseMonthDayHeading(label, referenceDate) }
 function parseDateOnlyLabel(label: string, referenceDate = new Date()) { return parseAnyDateHeading(label, referenceDate) }
+function explicitDateFromTitle(title: string | null | undefined, referenceDate: Date) {
+  if (!title) return null
+  const withoutRanges = text(title).replace(/\b\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+\.?\s*(?:-|–|—|to)\s*\d{1,2}\.?\s+[A-Za-zæøåÆØÅ]+\.?/gi, ' ')
+  return parseAnyDateHeading(withoutRanges, referenceDate)
+}
 
 export function extractTime(input: string | null) {
   const s = text(input || '')
@@ -440,11 +445,15 @@ export function mergeRegionalEvents(cards: ParsedEdgeCard[], details: Record<str
     const range = importWindowFromCards(group)
     const detail = details[url] ? parseEdgeOfNorwayDetailPage(details[url], url, group[0].date) : null
     const classification = detail?.showings.length ? detail.classificationHint : classify(group, details[url]); const baseEventId = stableBaseEventId(url); const listDates = group.map(g => g.date).sort(); const places = [...new Set(group.map(g => g.sourcePlace))]
-    const detailShowings = filterValidShowings(detail?.showings || [], classification, range.start, range.end)
+    const first = group.find(g => g.startTime) || group[0]
+    let detailShowings = filterValidShowings(detail?.showings || [], classification, range.start, range.end)
+    const titleDate = explicitDateFromTitle(detail?.title || first.title, new Date(`${range.start}T00:00:00Z`))
+    if (titleDate && classification !== 'continuous' && !detailShowings.some((s) => s.date === titleDate)) {
+      detailShowings = [{ date: titleDate, endDate: null, startTime: first.startTime, endTime: first.endTime, startsAt: osloIso(titleDate, first.startTime), endsAt: first.endTime ? osloIso(titleDate, first.endTime) : null, allDay: !first.startTime, source: 'visible_html' }]
+    }
     datesFromJsonLd += detailShowings.filter((s) => s.source === 'json_ld').length
     datesFromEmbeddedData += detailShowings.filter((s) => s.source === 'embedded_data').length
     datesFromShowingsHtml += detailShowings.filter((s) => s.source === 'showings_html' || s.source === 'visible_html').length
-    const first = group.find(g => g.startTime) || group[0]
     if (classification === 'continuous') {
       const detailRange = detailShowings[0]
       const startDate = detailRange?.date || listDates[0]
