@@ -59,9 +59,10 @@ test('changing the selected area changes the diagnostic request URL', () => {
   assert.notEqual(buildEdgeOfNorwayEventsUrl(suggestedLocalEventArea('stavanger')), buildEdgeOfNorwayEventsUrl(suggestedLocalEventArea('sandnes')))
 })
 
-test('app/api/device/reminders/route.ts remains untouched by Local Events', () => {
+test('app/api/device/reminders/route.ts limits Local Events to the frame candidate builder', () => {
   const route = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
-  assert.doesNotMatch(route, /local[-_ ]?events|Local Events|localEvents/i)
+  assert.match(route, /buildLocalEventFrameItem/)
+  assert.match(route, /logOptionalReminderProviderFailure\('local-events'/)
 })
 
 test('format helper uses connected summary grammar', () => {
@@ -100,10 +101,11 @@ test('calendar imports Local Events as Events category with source URL action', 
   assert.match(home, /Open event page/)
 })
 
-test('Local Events stay out of frame and mirror surfaces', () => {
+test('Local Events frame feed is limited and mirror stays decoupled', () => {
   const deviceRoute = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
   const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
-  assert.doesNotMatch(deviceRoute, /edge-of-norway|local[-_ ]?events|Local Events/i)
+  assert.match(deviceRoute, /buildLocalEventFrameItem/)
+  assert.match(deviceRoute, /logOptionalReminderProviderFailure\('local-events'/)
   assert.doesNotMatch(mirrorRoute, /edge-of-norway|Local Events/i)
 })
 

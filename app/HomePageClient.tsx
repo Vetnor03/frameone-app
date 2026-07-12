@@ -8637,6 +8637,8 @@ type ReminderUiItem = {
   source?: ReminderSource
   editable?: boolean
   sourceUrl?: string | null
+  externalEventId?: string | null
+  skippedOnFrame?: boolean
 }
 
 type ReminderCompletionItem = {
@@ -12274,6 +12276,7 @@ function RemindersModuleSettingsTab({
   const [reminders, setReminders] = useState<ReminderUiItem[]>([])
   const [completedOccurrences, setCompletedOccurrences] = useState<ReminderCompletionItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [skipToggleError, setSkipToggleError] = useState<string | null>(null)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
@@ -12355,6 +12358,7 @@ const manualItems: ReminderUiItem[] = (data || [])
       const userId = (await supabase.auth.getUser())?.data?.user?.id
       if (userId) {
         const nowIso = new Date().toISOString()
+        let localEventSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
@@ -12366,6 +12370,28 @@ const manualItems: ReminderUiItem[] = (data || [])
         if (integrationError) {
           alert(integrationError.message)
         } else {
+          const localEventExternalIds = (integrationData || [])
+            .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
+            .map((row: any) => String(row.external_id || '').trim())
+            .filter(Boolean)
+
+          if (activeDeviceId && localEventExternalIds.length > 0) {
+            const { data: skipData, error: skipError } = await supabase
+              .from('local_event_frame_skips')
+              .select('external_event_id, skipped')
+              .eq('device_id', activeDeviceId)
+              .eq('provider', 'edge-of-norway')
+              .in('external_event_id', Array.from(new Set(localEventExternalIds)))
+            if (skipError) {
+              alert(skipError.message)
+            } else {
+              localEventSkippedIds = new Set((skipData || [])
+                .filter((row: any) => row.skipped !== false)
+                .map((row: any) => String(row.external_event_id || '').trim())
+                .filter(Boolean))
+            }
+          }
+
           integrationItems = (integrationData || [])
             .map((row: any) => {
               const source = integrationProviderToReminderSource(row.provider)
@@ -12384,6 +12410,8 @@ const manualItems: ReminderUiItem[] = (data || [])
                 source,
                 editable: false,
                 sourceUrl: typeof row.raw?.sourceUrl === 'string' ? row.raw.sourceUrl : null,
+                externalEventId: source === 'local-events' ? String(row.external_id || '').trim() : null,
+                skippedOnFrame: source === 'local-events' ? localEventSkippedIds.has(String(row.external_id || '').trim()) : false,
               }
             })
             .filter(Boolean) as ReminderUiItem[]
@@ -12604,6 +12632,30 @@ const sortedReminders = useMemo(() => {
 }, [filteredReminders, selectedDayYmd, allListOccurrences, todayYmd, listRangeEnd])
 
 
+
+  async function toggleLocalEventFrameSkip(item: ReminderUiItem, nextSkipped: boolean) {
+    if (!activeDeviceId || item.source !== 'local-events' || !item.externalEventId) return
+    const previous = reminders
+    setSkipToggleError(null)
+    setReminders((current) => current.map((x) => x.id === item.id ? { ...x, skippedOnFrame: nextSkipped } : x))
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å endre frame-visning' : 'Sign in to change frame visibility')
+      const resp = await fetch('/api/integrations/local-events/frame-skip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ deviceId: activeDeviceId, externalEventId: item.externalEventId, skipped: nextSkipped }),
+      })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(json?.error || (language === 'no' ? 'Kunne ikke lagre frame-valget' : 'Could not save frame visibility'))
+      window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    } catch (error) {
+      setReminders(previous)
+      setSkipToggleError(error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke lagre frame-valget' : 'Could not save frame visibility'))
+    }
+  }
+
   function toggleSelectedDay(ymd: string) {
     setSelectedDayYmd((prev) => (prev === ymd ? null : ymd))
   }
@@ -12805,7 +12857,10 @@ const sortedReminders = useMemo(() => {
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
               ) : loading ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Laster…' : 'Loading…'}</div>
-              ) : sortedReminders.length === 0 ? (
+              ) : (
+                <>
+                  {skipToggleError ? <div className="mb-2 text-xs text-red-500">{skipToggleError}</div> : null}
+                  {sortedReminders.length === 0 ? (
                 <div className="text-sm text-[color:var(--fg-50)]">
                   {selectedDayYmd
                     ? language === 'no'
@@ -12846,9 +12901,27 @@ const sortedReminders = useMemo(() => {
                       </div>
                       <div className="shrink-0 self-center">
                         {item.editable === false ? (
-                          <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[10px] tracking-widest text-[#2aa3ff]">
-                            {integrationReminderSourceLabel(language, item.source).toUpperCase()}
-                          </span>
+                          item.source === 'local-events' ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleLocalEventFrameSkip(item, !item.skippedOnFrame)
+                              }}
+                              aria-label={item.skippedOnFrame ? 'Show this event on the frame again' : 'Skip this event on the frame'}
+                              className={`inline-flex h-6.5 items-center px-2.5 rounded-lg border text-[10px] tracking-widest ${
+                                item.skippedOnFrame
+                                  ? 'border-[color:var(--bd-20)] bg-[color:var(--panel-05)] text-[color:var(--fg-55)]'
+                                  : 'border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[#2aa3ff]'
+                              }`}
+                            >
+                              {(item.skippedOnFrame ? 'Skipped on frame' : integrationReminderSourceLabel(language, item.source)).toUpperCase()}
+                            </button>
+                          ) : (
+                            <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[10px] tracking-widest text-[#2aa3ff]">
+                              {integrationReminderSourceLabel(language, item.source).toUpperCase()}
+                            </span>
+                          )
                         ) : completedOccurrenceKeySet.has(`${item.id}__${item.displayDate}`) ? (
                           <span className="inline-flex h-6.5 items-center px-2.5 rounded-lg border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[10px] tracking-widest text-[#1f9d4a]">
                             {language === 'no' ? 'FULLFØRT' : 'COMPLETED'}
@@ -12869,6 +12942,8 @@ const sortedReminders = useMemo(() => {
                     </div>
                   ))}
                 </div>
+                  )}
+                </>
               )}
             </div>
           </div>

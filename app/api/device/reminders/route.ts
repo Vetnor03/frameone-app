@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -467,6 +467,7 @@ export async function GET(req: Request) {
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
+    let localEventItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
       try {
         if (!skipSync) await syncSpondIfStaleForUsers(memberUserIds)
@@ -539,15 +540,55 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
       }
+
+      try {
+        const { data: localEventsData, error: localEventsError } = await supabase
+          .from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'edge-of-norway')
+          .in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
+
+        if (localEventsError) throw localEventsError
+
+        const localEventRows = Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : []
+        const localEventExternalIds = localEventRows.map((row) => String(row.external_id || '').trim()).filter(Boolean)
+        let localEventSkipRows: LocalEventSkipRow[] = []
+
+        if (localEventExternalIds.length > 0) {
+          const { data: skipsData, error: skipsError } = await supabase
+            .from('local_event_frame_skips')
+            .select('device_id, provider, external_event_id, skipped')
+            .eq('device_id', device_id)
+            .eq('provider', 'edge-of-norway')
+            .in('external_event_id', Array.from(new Set(localEventExternalIds)))
+
+          if (skipsError) throw skipsError
+          localEventSkipRows = Array.isArray(skipsData) ? (skipsData as LocalEventSkipRow[]) : []
+        }
+
+        localEventItems = buildLocalEventFrameItem(localEventRows, localEventSkipRows, todayYmd, now)
+      } catch (error) {
+        logOptionalReminderProviderFailure('local-events', error)
+      }
     }
 
     const integrationItems = [
       ...spondItems,
       ...teamsItems,
       ...wasteItems,
+      ...localEventItems,
     ].sort(compareReminderItems)
 
-    const allItems = [...manualItems, ...integrationItems].sort(compareReminderItems)
+    const seenKeys = new Set<string>()
+    const allItems = [...manualItems, ...integrationItems]
+      .sort(compareReminderItems)
+      .filter((item) => {
+        const key = item.external_id ? `${item.source || 'remind'}:${item.external_id}` : item.reminder_id
+        if (seenKeys.has(key)) return false
+        seenKeys.add(key)
+        return true
+      })
     const selectedItems = selectReminderDisplayGroups(allItems, limit)
 
     return NextResponse.json({ items: selectedItems })

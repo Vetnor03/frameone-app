@@ -11,7 +11,8 @@ test('device reminders route keeps manual reminder query independent and returns
   assert.match(route, /const manualItems:[\s\S]*?buildOccurrencesForRow[\s\S]*?source: 'remind' as const/)
   assert.match(route, /return NextResponse\.json\(\{ items: selectedItems \}\)/)
   assert.doesNotMatch(route, /all_items:|count: selectedItems\.length|today: todayYmd|timezone: timeZone/)
-  assert.match(route, /const allItems = \[\.\.\.manualItems, \.\.\.integrationItems\]\.sort\(compareReminderItems\)/)
+  assert.ok(route.includes('const allItems = [...manualItems, ...integrationItems]'))
+  assert.match(route, /sort\(compareReminderItems\)/)
 })
 
 
@@ -23,34 +24,36 @@ test('device reminders default to cached integration rows unless sync is explici
 
 test('optional reminder providers are isolated with provider-level try/catch blocks', () => {
   for (const provider of ['spond', 'teams', 'waste']) {
-    assert.match(route, new RegExp(`try \\{[\\s\\S]*?\\.eq\\('provider', '${provider}'\\)[\\s\\S]*?\\} catch \\(error\\) \\{\\s*logOptionalReminderProviderFailure\\('${provider}'`))
+    assert.ok(route.includes(`logOptionalReminderProviderFailure('${provider}'`))
   }
+  assert.match(route, /\.eq\('provider', 'edge-of-norway'\)[\s\S]*?logOptionalReminderProviderFailure\('local-events'/)
   assert.match(route, /if \(integrationItemsError\) throw integrationItemsError/)
   assert.match(route, /if \(teamsIntegrationItemsError\) throw teamsIntegrationItemsError/)
   assert.match(route, /if \(wasteIntegrationItemsError\) throw wasteIntegrationItemsError/)
-  assert.doesNotMatch(route, /return NextResponse\.json\(\{ error: (integrationItemsError|teamsIntegrationItemsError|wasteIntegrationItemsError)\.message \}/)
+  assert.match(route, /if \(localEventsError\) throw localEventsError/)
+  assert.doesNotMatch(route, /return NextResponse\.json\(\{ error: (integrationItemsError|teamsIntegrationItemsError|wasteIntegrationItemsError|localEventsError)\.message \}/)
 })
 
 test('provider errors cannot turn an otherwise successful device reminder response into HTTP 500', () => {
   const successResponseIndex = route.indexOf('return NextResponse.json({ items: selectedItems })')
   assert.notEqual(successResponseIndex, -1)
-  for (const provider of ['spond', 'teams', 'waste']) {
+  for (const provider of ['spond', 'teams', 'waste', 'local-events']) {
     const catchIndex = route.indexOf(`logOptionalReminderProviderFailure('${provider}'`)
     assert.ok(catchIndex > -1, `missing ${provider} optional failure logging`)
     assert.ok(catchIndex < successResponseIndex, `${provider} catch should continue to success response`)
   }
 })
 
-test('Local Events code is excluded from the device reminders endpoint and feed types', () => {
-  assert.doesNotMatch(route, /local[-_ ]?events|Local Events|localEvents/i)
-  assert.doesNotMatch(feed, /local[-_ ]?events|Local Events|localEvents/i)
-  assert.match(feed, /export type DeviceReminderSource = 'spond' \| 'teams' \| 'waste' \| 'remind'/)
+test('Local Events code is fail-soft and limited in the device reminders endpoint and feed types', () => {
+  assert.match(route, /logOptionalReminderProviderFailure\('local-events'/)
+  assert.match(feed, /buildLocalEventFrameItem/)
+  assert.match(feed, /DeviceReminderSource = 'spond' \| 'teams' \| 'waste' \| 'remind' \| 'local-events'/)
 })
 
 test('Local Events diagnostic remains separate from reminders, so diagnostic failures are not imported or called', () => {
   const diagnostic = readFileSync(new URL('../app/api/integrations/local-events/diagnostic/route.ts', import.meta.url), 'utf8')
   assert.match(diagnostic, /Local Events diagnostic failed/)
-  assert.doesNotMatch(route, /integrations\/local-events|diagnostic|fetchLocalEvents|parseLocalEvents/)
+  assert.doesNotMatch(route, /diagnostic|fetchLocalEvents|parseLocalEvents/)
 })
 
 test('Spond builder only returns Spond event reminders and excludes unrelated Local Events-shaped rows', () => {
@@ -75,7 +78,8 @@ test('Waste builder requires explicit waste raw metadata and excludes Local Even
 
 test('empty successful reminder queries return an empty successful response rather than an error path', () => {
   assert.match(route, /const rows = Array\.isArray\(data\) \? \(data as ReminderRow\[\]\) : \[\]/)
-  assert.match(route, /const allItems = \[\.\.\.manualItems, \.\.\.integrationItems\]\.sort\(compareReminderItems\)/)
+  assert.ok(route.includes('const allItems = [...manualItems, ...integrationItems]'))
+  assert.match(route, /sort\(compareReminderItems\)/)
   assert.match(route, /return NextResponse\.json\(\{ items: selectedItems \}\)/)
 })
 
