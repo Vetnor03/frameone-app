@@ -1,100 +1,44 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { EDGE_OF_NORWAY_STAVANGER_LIST_URL, parseEdgeOfNorwayDetailPage, parseEdgeOfNorwayListPage, runEdgeOfNorwayShadowDiagnostic } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
+import { EDGE_OF_NORWAY_STAVANGER_LIST_URL, parseEdgeOfNorwayListPage, runEdgeOfNorwayShadowDiagnostic } from '../app/lib/integrations/local-events/edge-of-norway-shadow.ts'
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/edge-of-norway/${name}`, import.meta.url), 'utf8')
-const url = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
+const ref = '2026-07-12'
+const footballUrl = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
+const accepted = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref).results.filter((r) => r.accepted).map((r) => r.event)
+const skipped = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref).results.filter((r) => !r.accepted).map((r) => r.reason)
 
-test('list parser discovers only title and canonical Fjord Norway detail URLs', () => {
-  const results = parseEdgeOfNorwayListPage(fixture('stavanger-list.html'))
-  assert.deepEqual(results, [
-    { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: url },
-    { title: 'Duplicate card should not fetch', sourceUrl: url },
-    { title: 'Multiple showings', sourceUrl: 'https://www.fjordnorway.com/en/events/multiple-showings' },
-  ])
+test('football regression accepts badge date 11 July and never active calendar 19 July', () => {
+  const result = accepted(fixture('stavanger-list.html')).find((event) => event.sourceUrl === footballUrl)
+  assert.ok(result)
+  assert.deepEqual(result, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
+  assert.equal(result.date, '2026-07-11')
+  assert.notEqual(result.date, '2026-07-19')
 })
 
-test('football regression accepts 11 July and never accepts 19 July', () => {
-  const result = parseEdgeOfNorwayDetailPage(fixture('football.html'), url)
-  assert.equal(result.accepted, true)
-  assert.equal(result.event.title, 'Football festival in Vågen on 11 July – Norway v England')
-  assert.equal(result.event.date, '2026-07-11')
-  assert.notEqual(result.event.date, '2026-07-19')
-  assert.equal(result.event.startTime, '17:00')
-  assert.equal(result.event.allDay, false)
-})
+test('one date with time', () => assert.deepEqual(accepted(fixture('one-date-with-time.html'))[0], { title: 'Evening concert', sourceUrl: 'https://www.fjordnorway.com/en/events/evening-concert', date: '2026-07-12', startTime: '19:30', allDay: false }))
+test('one date without time is all-day', () => assert.deepEqual(accepted(fixture('one-date-no-time.html'))[0], { title: 'Street market', sourceUrl: 'https://www.fjordnorway.com/en/events/street-market', date: '2026-07-12', startTime: null, allDay: true }))
+test('missing badge date', () => assert.deepEqual(skipped(fixture('missing-badge-date.html')), ['missing_badge_date']))
+test('unclear badge date', () => assert.deepEqual(skipped(fixture('unclear-badge-date.html')), ['missing_badge_date']))
+test('multiple dates in one card', () => assert.deepEqual(skipped(fixture('multiple-dates-one-card.html')), ['multiple_dates']))
+test('same canonical URL on multiple dates skips all occurrences', () => assert.deepEqual(skipped(fixture('same-url-multiple-dates.html')), ['multiple_dates', 'multiple_dates']))
+test('exact duplicate cards collapse', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.exactDuplicateCardsRemoved, 1); assert.equal(result.results.length, 1); assert.equal(result.results[0].accepted, true) })
+test('missing title', () => assert.deepEqual(skipped(fixture('missing-title.html')), ['missing_title']))
+test('missing Read more URL', () => assert.deepEqual(skipped(fixture('missing-read-more-url.html')), ['missing_source_url']))
+test('unrelated dates elsewhere on page are ignored', () => { const result = accepted(fixture('unrelated-dates-elsewhere.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
+test('selected or active calendar dates are ignored', () => { const result = accepted(fixture('selected-active-calendar.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
+test('time from neighbouring card is not used', () => { const events = accepted(fixture('neighbour-time.html')); assert.equal(events[0].startTime, null); assert.equal(events[0].allDay, true); assert.equal(events[1].startTime, '17:00') })
 
-test('date without time is accepted as all-day', () => {
-  const result = parseEdgeOfNorwayDetailPage(fixture('date-only.html'), 'https://www.fjordnorway.com/en/events/date-only')
-  assert.equal(result.accepted, true)
-  assert.equal(result.event.startTime, null)
-  assert.equal(result.event.allDay, true)
-})
-
-for (const [file, reason] of [
-  ['multiple-dates.html', 'multiple_dates'],
-  ['recurring.html', 'recurring_event'],
-  ['exhibition.html', 'exhibition_or_continuous'],
-  ['date-range.html', 'date_range'],
-  ['unclear.html', 'unclear_date'],
-  ['conflicting.html', 'conflicting_showing_data'],
-  ['missing-container.html', 'missing_showing_container'],
-]) {
-  test(`${file} skips with ${reason}`, () => {
-    const result = parseEdgeOfNorwayDetailPage(fixture(file), `https://www.fjordnorway.com/en/events/${file}`)
-    assert.equal(result.accepted, false)
-    assert.equal(result.reason, reason)
-  })
-}
-
-test('unrelated embedded dates and active calendar buttons are ignored', () => {
-  for (const file of ['unrelated-embedded-date.html', 'selected-calendar-button.html']) {
-    const result = parseEdgeOfNorwayDetailPage(fixture(file), `https://www.fjordnorway.com/en/events/${file}`)
-    assert.equal(result.accepted, true)
-    assert.equal(result.event.date, '2026-07-11')
-    assert.notEqual(result.event.date, '2026-07-19')
-  }
-})
-
-
-test('shadow diagnostic fetches each deduplicated detail URL once and groups skips', async () => {
-  const detailHtml = new Map([
-    [url, fixture('football.html')],
-    ['https://www.fjordnorway.com/en/events/multiple-showings', fixture('multiple-dates.html')],
-  ])
+test('shadow diagnostic parses list page only and reports list-card metrics', async () => {
   const fetchedUrls = []
-  const fetchImpl = async (requestUrl) => {
-    const requestUrlString = String(requestUrl)
-    if (requestUrlString === EDGE_OF_NORWAY_STAVANGER_LIST_URL) return { ok: true, text: async () => fixture('stavanger-list.html') }
-    fetchedUrls.push(requestUrlString)
-    return { ok: true, text: async () => detailHtml.get(requestUrlString) || '' }
-  }
-
-  const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl)
-  assert.equal(result.detailPagesDiscovered, 3)
-  assert.equal(result.duplicateUrlsRemoved, 1)
-  assert.equal(result.detailPagesFetched, 2)
-  assert.equal(new Set(fetchedUrls).size, fetchedUrls.length)
-  assert.equal(result.acceptedCount, 1)
-  assert.deepEqual(result.skippedCounts, { multiple_dates: 1 })
-  assert.deepEqual(result.fetchErrors, [])
+  const fetchImpl = async (requestUrl) => { fetchedUrls.push(String(requestUrl)); return { ok: true, text: async () => fixture('stavanger-list.html') } }
+  const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl, ref)
+  assert.deepEqual(fetchedUrls, [EDGE_OF_NORWAY_STAVANGER_LIST_URL])
+  assert.equal(result.cardsDiscovered, 3)
+  assert.equal(result.exactDuplicateCardsRemoved, 0)
+  assert.equal(result.acceptedCount, 3)
+  assert.deepEqual(result.skippedCounts, {})
   assert.equal(result.acceptedEvents[0].date, '2026-07-11')
   assert.notEqual(result.acceptedEvents[0].date, '2026-07-19')
-})
-
-
-test('shadow diagnostic reports detail fetch failures without throwing', async () => {
-  const fetchImpl = async (requestUrl) => {
-    const requestUrlString = String(requestUrl)
-    if (requestUrlString === EDGE_OF_NORWAY_STAVANGER_LIST_URL) return { ok: true, text: async () => fixture('stavanger-list.html') }
-    throw new Error('getaddrinfo ENOTFOUND example.test')
-  }
-
-  const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl)
-  assert.equal(result.detailPagesFetched, 0)
-  assert.equal(result.acceptedCount, 0)
-  assert.deepEqual(result.skippedCounts, { fetch_failed: 2 })
-  assert.equal(result.fetchErrors.length, 2)
-  assert.match(result.fetchErrors[0], /ENOTFOUND/)
 })

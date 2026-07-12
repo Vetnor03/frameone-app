@@ -2404,12 +2404,16 @@ async function handleSelectTab(k: TabKey) {
 
 type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'vigilo' | 'local-events'
 type LocalEventsDiagnosticResult = {
-  detailPagesDiscovered?: number
-  duplicateUrlsRemoved?: number
-  detailPagesFetched?: number
+  provider?: string
+  mode?: string
+  listPageUrl?: string
+  cardsDiscovered?: number
+  exactDuplicateCardsRemoved?: number
+  uniqueSourceUrls?: number
   acceptedCount?: number
   skippedCounts?: Record<string, number>
-  fetchErrors?: string[]
+  acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
+  parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
   error?: string
 }
 type DisconnectableConnectAppKey = 'spond' | 'teams'
@@ -2587,7 +2591,7 @@ function ConnectAppsScreen({
       setLocalEventsDiagnostic(json)
     } catch (error: unknown) {
       const message = error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke teste lokale arrangementer' : 'Could not test Local Events')
-      setLocalEventsDiagnostic({ detailPagesFetched: 0, acceptedCount: 0, skippedCounts: {}, fetchErrors: [message], error: message })
+      setLocalEventsDiagnostic({ cardsDiscovered: 0, exactDuplicateCardsRemoved: 0, uniqueSourceUrls: 0, acceptedCount: 0, skippedCounts: {}, parsingErrors: [{ reason: message }], error: message })
     } finally {
       setLocalEventsLoading(false)
     }
@@ -2715,18 +2719,18 @@ function ConnectAppsScreen({
           {localEventsDiagnostic && (
             <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
               <div className="grid grid-cols-2 gap-2">
-                <div>Fetched pages: {localEventsDiagnostic.detailPagesFetched ?? 0}</div>
+                <div>Cards discovered: {localEventsDiagnostic.cardsDiscovered ?? 0}</div>
                 <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
-                <div>Discovered: {localEventsDiagnostic.detailPagesDiscovered ?? 0}</div>
-                <div>Duplicates skipped: {localEventsDiagnostic.duplicateUrlsRemoved ?? 0}</div>
+                <div>Exact duplicates removed: {localEventsDiagnostic.exactDuplicateCardsRemoved ?? 0}</div>
+                <div>Unique source URLs: {localEventsDiagnostic.uniqueSourceUrls ?? 0}</div>
               </div>
               <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
                 <div className="font-medium text-[color:var(--fg-90)]">Skipped counts</div>
                 {Object.keys(skippedCounts).length ? Object.entries(skippedCounts).map(([key, value]) => <div key={key} className="mt-1 flex justify-between gap-3"><span>{key}</span><span>{value}</span></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
               </div>
               <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
-                <div className="font-medium text-[color:var(--fg-90)]">Fetch errors</div>
-                {localEventsDiagnostic.fetchErrors?.length ? localEventsDiagnostic.fetchErrors.map((error, index) => <div key={`${index}-${error}`} className="mt-1 break-words text-[#ff7a7a]">{error}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+                <div className="font-medium text-[color:var(--fg-90)]">Parsing errors</div>
+                {localEventsDiagnostic.parsingErrors?.length ? localEventsDiagnostic.parsingErrors.map((error, index) => <div key={`${index}-${error.reason}`} className="mt-1 break-words text-[#ff7a7a]">{error.title ? `${error.title}: ` : ''}{error.reason}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
               </div>
             </div>
           )}
