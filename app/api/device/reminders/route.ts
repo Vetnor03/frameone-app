@@ -550,13 +550,7 @@ export async function GET(req: Request) {
     const allItems = [...manualItems, ...integrationItems].sort(compareReminderItems)
     const selectedItems = selectReminderDisplayGroups(allItems, limit)
 
-    return NextResponse.json({
-      items: selectedItems,
-      all_items: allItems,
-      count: selectedItems.length,
-      today: todayYmd,
-      timezone: timeZone,
-    })
+    return NextResponse.json({ items: selectedItems })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to load reminders' }, { status: 500 })
   }

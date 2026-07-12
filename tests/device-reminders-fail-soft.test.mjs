@@ -9,7 +9,9 @@ const feed = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.m
 test('device reminders route keeps manual reminder query independent and returns the expected response shape', () => {
   assert.match(route, /\.from\('reminders'\)[\s\S]*?\.select\('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done'\)/)
   assert.match(route, /const manualItems:[\s\S]*?buildOccurrencesForRow[\s\S]*?source: 'remind' as const/)
-  assert.match(route, /return NextResponse\.json\(\{\s*items: selectedItems,\s*all_items: allItems,\s*count: selectedItems\.length,\s*today: todayYmd,\s*timezone: timeZone,\s*\}\)/)
+  assert.match(route, /return NextResponse\.json\(\{ items: selectedItems \}\)/)
+  assert.doesNotMatch(route, /all_items:|count: selectedItems\.length|today: todayYmd|timezone: timeZone/)
+  assert.match(route, /const allItems = \[\.\.\.manualItems, \.\.\.integrationItems\]\.sort\(compareReminderItems\)/)
 })
 
 
@@ -30,7 +32,7 @@ test('optional reminder providers are isolated with provider-level try/catch blo
 })
 
 test('provider errors cannot turn an otherwise successful device reminder response into HTTP 500', () => {
-  const successResponseIndex = route.indexOf('return NextResponse.json({\n      items: selectedItems')
+  const successResponseIndex = route.indexOf('return NextResponse.json({ items: selectedItems })')
   assert.notEqual(successResponseIndex, -1)
   for (const provider of ['spond', 'teams', 'waste']) {
     const catchIndex = route.indexOf(`logOptionalReminderProviderFailure('${provider}'`)
@@ -74,7 +76,7 @@ test('Waste builder requires explicit waste raw metadata and excludes Local Even
 test('empty successful reminder queries return an empty successful response rather than an error path', () => {
   assert.match(route, /const rows = Array\.isArray\(data\) \? \(data as ReminderRow\[\]\) : \[\]/)
   assert.match(route, /const allItems = \[\.\.\.manualItems, \.\.\.integrationItems\]\.sort\(compareReminderItems\)/)
-  assert.match(route, /count: selectedItems\.length/)
+  assert.match(route, /return NextResponse\.json\(\{ items: selectedItems \}\)/)
 })
 
 test('existing user and frame ownership isolation is preserved', () => {
