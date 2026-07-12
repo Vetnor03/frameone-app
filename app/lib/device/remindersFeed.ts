@@ -327,58 +327,46 @@ export function buildLocalEventFrameItem(
       const occurrenceDate = isoToYmdInTimeZone(startsAt, LOCAL_EVENTS_FRAME_TIME_ZONE)
       const displayTime = isoToHmInTimeZone(startsAt, LOCAL_EVENTS_FRAME_TIME_ZONE)
       if (!occurrenceDate || !displayTime) return null
-      return { row, startMs, occurrenceDate, displayTime, titleKey: normalizedTitle(String(row.title || '')) }
+      return { row, kind: 'timed' as const, startMs, occurrenceDate, displayTime, titleKey: normalizedTitle(String(row.title || '')) }
     })
-    .filter(Boolean) as Array<{ row: IntegrationItemRow; startMs: number; occurrenceDate: string; displayTime: string; titleKey: string }>)
-    .sort((a, b) => a.startMs - b.startMs || a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id)))
-
-  const timedSelection = timed[0]
-  if (timedSelection) {
-    const title = String(timedSelection.row.title || '').trim()
-    return [{
-      reminder_id: `local-events:${timedSelection.row.external_id}`,
-      title,
-      occurrence_date: timedSelection.occurrenceDate,
-      display_date: formatDisplayDate(timedSelection.occurrenceDate, todayYmd),
-      days_until: diffDaysFromYmd(todayYmd, timedSelection.occurrenceDate),
-      is_overdue: false,
-      repeat: 'none',
-      due_time: timedSelection.displayTime,
-      display_time: timedSelection.displayTime,
-      source: 'local-events',
-      provider: LOCAL_EVENTS_FRAME_PROVIDER,
-      external_id: String(timedSelection.row.external_id),
-      raw: { ...(timedSelection.row.raw || {}), all_day: false },
-    }]
-  }
+    .filter(Boolean) as Array<{ row: IntegrationItemRow; kind: 'timed'; startMs: number; occurrenceDate: string; displayTime: string; titleKey: string }>)
 
   const allDay = (candidates
     .map((row) => {
       if (!localEventIsAllDay(row)) return null
       const occurrenceDate = localEventDateFromRow(row)
-      if (!occurrenceDate || occurrenceDate !== todayYmd) return null
-      return { row, occurrenceDate, titleKey: normalizedTitle(String(row.title || '')) }
+      if (!occurrenceDate || occurrenceDate < todayYmd) return null
+      return { row, kind: 'all-day' as const, startMs: Number.POSITIVE_INFINITY, occurrenceDate, displayTime: null, titleKey: normalizedTitle(String(row.title || '')) }
     })
-    .filter(Boolean) as Array<{ row: IntegrationItemRow; occurrenceDate: string; titleKey: string }>)
-    .sort((a, b) => a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id)))
+    .filter(Boolean) as Array<{ row: IntegrationItemRow; kind: 'all-day'; startMs: number; occurrenceDate: string; displayTime: null; titleKey: string }>)
 
-  const allDaySelection = allDay[0]
-  if (!allDaySelection) return []
-  const title = String(allDaySelection.row.title || '').trim()
+  const selection = [...timed, ...allDay]
+    .sort((a, b) => {
+      if (a.occurrenceDate !== b.occurrenceDate) return a.occurrenceDate.localeCompare(b.occurrenceDate)
+      const at = a.displayTime || '99:99'
+      const bt = b.displayTime || '99:99'
+      if (at !== bt) return at.localeCompare(bt)
+      if (a.kind !== b.kind) return a.kind === 'timed' ? -1 : 1
+      return a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id))
+    })[0]
+
+  if (!selection) return []
+  const title = String(selection.row.title || '').trim()
+  const allDaySelection = selection.kind === 'all-day'
   return [{
-    reminder_id: `local-events:${allDaySelection.row.external_id}`,
+    reminder_id: `local-events:${selection.row.external_id}`,
     title,
-    occurrence_date: allDaySelection.occurrenceDate,
-    display_date: `${formatDisplayDate(allDaySelection.occurrenceDate, todayYmd)} • All day`,
-    days_until: diffDaysFromYmd(todayYmd, allDaySelection.occurrenceDate),
+    occurrence_date: selection.occurrenceDate,
+    display_date: allDaySelection ? `${formatDisplayDate(selection.occurrenceDate, todayYmd)} • All day` : formatDisplayDate(selection.occurrenceDate, todayYmd),
+    days_until: diffDaysFromYmd(todayYmd, selection.occurrenceDate),
     is_overdue: false,
     repeat: 'none',
-    due_time: null,
-    display_time: null,
+    due_time: selection.displayTime,
+    display_time: selection.displayTime,
     source: 'local-events',
     provider: LOCAL_EVENTS_FRAME_PROVIDER,
-    external_id: String(allDaySelection.row.external_id),
-    raw: { ...(allDaySelection.row.raw || {}), all_day: true },
+    external_id: String(selection.row.external_id),
+    raw: { ...(selection.row.raw || {}), all_day: allDaySelection },
   }]
 }
 

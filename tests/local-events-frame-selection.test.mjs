@@ -28,6 +28,23 @@ test('Local Events frame selection returns at most one nearest future timed even
   assert.equal(items[0].external_id, 'first')
 })
 
+test('timed Local Event several days in the future is eligible without same-day or lead-time filters', () => {
+  const items = buildLocalEventFrameItem([
+    row('far', 'Future Festival', '2026-07-20T17:00:00+02:00'),
+  ], [], today, at('2026-07-12T14:00:00Z'))
+  assert.equal(items.length, 1)
+  assert.equal(items[0].external_id, 'far')
+  assert.equal(items[0].occurrence_date, '2026-07-20')
+})
+
+test('Local Event becomes next in line when no earlier reminder exists', () => {
+  const local = buildLocalEventFrameItem([row('sat', 'Saturday Local Event', '2026-07-18T17:00:00+02:00')], [], today, at('2026-07-12T14:00:00Z'))
+  const laterManual = { reminder_id: 'm1', title: 'Later Manual', occurrence_date: '2026-07-19', display_date: '19.07.2026', days_until: 7, is_overdue: false, repeat: 'none', due_time: null, display_time: null, source: 'remind' }
+  const sorted = [laterManual, local[0]].sort(compareReminderItems)
+  assert.equal(sorted[0].title, 'Saturday Local Event')
+  assert.equal(sorted[1].title, 'Later Manual')
+})
+
 test('timed Local Event disappears exactly at its start time', () => {
   assert.equal(buildLocalEventFrameItem([row('a', 'A', '2026-07-12T17:00:00+02:00')], [], today, at('2026-07-12T14:59:59Z')).length, 1)
   assert.equal(buildLocalEventFrameItem([row('a', 'A', '2026-07-12T17:00:00+02:00')], [], today, at('2026-07-12T15:00:00Z')).length, 0)
@@ -40,11 +57,11 @@ test('equal-time Local Events sort by normalized title and skipping reveals the 
   assert.equal(buildLocalEventFrameItem(rows, [], today, at('2026-07-12T15:00:00Z')).length, 0)
 })
 
-test('all-day Local Events are eligible only on the Oslo event date and expire after midnight', () => {
-  const allDay = row('all', 'All Day', null, { date: '2026-07-12', all_day: true })
-  assert.equal(buildLocalEventFrameItem([allDay], [], '2026-07-11', at('2026-07-11T21:59:00Z')).length, 0)
-  assert.equal(buildLocalEventFrameItem([allDay], [], '2026-07-12', at('2026-07-11T22:00:00Z')).length, 1)
-  assert.equal(buildLocalEventFrameItem([allDay], [], '2026-07-13', at('2026-07-12T22:00:00Z')).length, 0)
+test('future all-day Local Event is eligible before its event date and expires after Oslo midnight next day', () => {
+  const allDay = row('all', 'All Day', null, { date: '2026-07-15', all_day: true })
+  assert.equal(buildLocalEventFrameItem([allDay], [], today, at('2026-07-12T12:00:00Z'))[0].external_id, 'all')
+  assert.equal(buildLocalEventFrameItem([allDay], [], '2026-07-15', at('2026-07-15T21:59:00Z')).length, 1)
+  assert.equal(buildLocalEventFrameItem([allDay], [], '2026-07-16', at('2026-07-15T22:00:00Z')).length, 0)
 })
 
 test('future timed event on current date takes priority over all-day until it starts', () => {
@@ -67,9 +84,11 @@ test('skip state is frame scoped by caller-provided skip rows', () => {
 })
 
 test('Local Events sort as one integration without breaking other providers', () => {
-  const local = buildLocalEventFrameItem([row('a', 'Alpha', '2026-07-12T17:00:00+02:00')], [], today, at('2026-07-12T14:00:00Z'))
-  const manual = { reminder_id: 'm1', title: 'Manual', occurrence_date: today, display_date: 'Today', days_until: 0, is_overdue: false, repeat: 'none', due_time: '16:00', display_time: '16:00', source: 'remind' }
+  const local = buildLocalEventFrameItem([row('a', 'Saturday Local Event', '2026-07-18T17:00:00+02:00')], [], today, at('2026-07-12T14:00:00Z'))
+  const manual = { reminder_id: 'm1', title: 'Thursday Manual', occurrence_date: '2026-07-16', display_date: '16.07.2026', days_until: 4, is_overdue: false, repeat: 'none', due_time: '16:00', display_time: '16:00', source: 'remind' }
   const sorted = [local[0], manual].sort(compareReminderItems)
   assert.equal(sorted.length, 2)
+  assert.equal(sorted[0].title, 'Thursday Manual')
+  assert.equal(sorted[1].title, 'Saturday Local Event')
   assert.deepEqual(Object.keys({ items: sorted }), ['items'])
 })
