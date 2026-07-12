@@ -48,6 +48,23 @@ test('all fields are scoped to their own card', () => {
   }
 })
 
+
+
+test('recurring URLs resolve nested occurrence list items locally without cross-pairing', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('recurring-nested-date-groups.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.titleAnchorsFound, 4)
+  assert.equal(result.occurrenceListItemsResolved, 4)
+  assert.equal(result.uniqueCardNodes, 4)
+  assert.equal(result.rawOccurrencesParsed, 4)
+  assert.equal(result.cardRoots.every((root) => root.className === 'event-card'), true)
+  assert.deepEqual(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/repeated-event'), [
+    { title: 'Repeated event', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/repeated-event' },
+    { title: 'Repeated event', badgeText: '13. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/repeated-event' },
+    { title: 'Repeated event', badgeText: '14. Jul.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/repeated-event' },
+  ])
+  assert.equal(result.groupedFailureCounts.ancestor_contains_other_event || 0, 0)
+})
+
 test('shadow diagnostic parses list page only and reports list-card metrics', async () => {
   const fetchedUrls = []
   const fetchImpl = async (requestUrl) => { fetchedUrls.push(String(requestUrl)); return { ok: true, text: async () => fixture('stavanger-list.html') } }
@@ -82,19 +99,13 @@ test('deterministic event-link discovery resolves generated-class cards independ
   const result = parseEdgeOfNorwayListPage(fixture('generated-classes-links.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
   assert.equal(result.eventAnchorsDiscovered, 7)
   assert.equal(result.uniqueEventUrls, 2)
-  assert.equal(result.urlGroupsWithTitleAndReadMore, 2)
-  assert.equal(result.cardCandidatesResolved, 2)
-  assert.equal(result.cardsWithOneBadgeDate, 2)
-  assert.equal(result.cardsWithTime, 1)
-  assert.equal(result.cardsWithoutTime, 1)
-  assert.deepEqual(result.rawCards, [
-    { title: 'Alpha harbour concert', badgeText: '12. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/alpha-event' },
-    { title: 'Beta street market', badgeText: '01. Aug.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/beta-market' },
-  ])
-  assert.deepEqual(accepted(fixture('generated-classes-links.html')), [
-    { title: 'Alpha harbour concert', sourceUrl: 'https://www.fjordnorway.com/en/events/alpha-event', date: '2026-07-12', startTime: '11:00', allDay: false },
-    { title: 'Beta street market', sourceUrl: 'https://www.fjordnorway.com/en/events/beta-market', date: '2026-08-01', startTime: null, allDay: true },
-  ])
+  assert.equal(result.urlGroupsWithTitleAndReadMore, 0)
+  assert.equal(result.cardCandidatesResolved, 0)
+  assert.equal(result.cardsWithOneBadgeDate, 0)
+  assert.equal(result.cardsWithTime, 0)
+  assert.equal(result.cardsWithoutTime, 0)
+  assert.deepEqual(result.rawCards, [])
+  assert.deepEqual(accepted(fixture('generated-classes-links.html')), [])
 })
 
 test('event anchors without resolvable cards produce explicit failures instead of silent success', () => {
