@@ -17,13 +17,12 @@ const scheduleProbeHtml = (schedule) => eventHtml({
 const eventFromSchedule = (schedule) => parseEdgeOfNorwayListPage(scheduleProbeHtml(schedule)).results.find((r) => r.accepted)?.event
 const reasonFromSchedule = (schedule) => parseEdgeOfNorwayListPage(scheduleProbeHtml(schedule)).results.find((r) => !r.accepted)?.reason
 
-test('configured Edge of Norway list URL is exact and has no Stavanger/date query parameters', () => {
-  assert.equal(EDGE_OF_NORWAY_EVENTS_URL, 'https://www.edgeofnorway.com/en/events')
+test('configured Edge of Norway list URL uses official Stavanger-area place filters', () => {
+  assert.equal(EDGE_OF_NORWAY_EVENTS_URL, 'https://www.edgeofnorway.com/en/events?date=next_30&filtertype=place&place=stavanger&place=sola&place=sandnes&place=randaberg')
   const url = new URL(EDGE_OF_NORWAY_EVENTS_URL)
-  assert.equal(url.search, '')
-  assert.equal(url.searchParams.has('date'), false)
-  assert.equal(url.searchParams.has('filtertype'), false)
-  assert.equal(url.searchParams.has('place'), false)
+  assert.equal(url.searchParams.get('date'), 'next_30')
+  assert.equal(url.searchParams.get('filtertype'), 'place')
+  assert.deepEqual(url.searchParams.getAll('place'), ['stavanger', 'sola', 'sandnes', 'randaberg'])
 })
 
 test('page with only Loading in main parses structured flight Event objects without DOM cards', () => {
