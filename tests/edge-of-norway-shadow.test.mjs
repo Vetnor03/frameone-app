@@ -22,13 +22,32 @@ test('one date without time is all-day', () => assert.deepEqual(accepted(fixture
 test('missing badge date', () => assert.deepEqual(skipped(fixture('missing-badge-date.html')), ['unclear_date']))
 test('unclear badge date', () => assert.deepEqual(skipped(fixture('unclear-badge-date.html')), ['unclear_date']))
 test('multiple dates in one card', () => assert.deepEqual(skipped(fixture('multiple-dates-one-card.html')), ['multiple_dates']))
-test('same canonical URL on multiple dates skips all occurrences', () => assert.deepEqual(skipped(fixture('same-url-multiple-dates.html')), ['multiple_dates', 'multiple_dates']))
-test('exact duplicate cards collapse', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.exactDuplicateCardsRemoved, 1); assert.equal(result.results.length, 1); assert.equal(result.results[0].accepted, true) })
+test('same canonical URL on multiple dates remains raw and ungrouped', () => assert.equal(accepted(fixture('same-url-multiple-dates.html')).length, 2))
+test('exact duplicate cards remain raw and ungrouped', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.exactDuplicateCardsRemoved, 0); assert.equal(result.results.length, 2); assert.equal(result.results[0].accepted, true) })
 test('missing title', () => assert.deepEqual(skipped(fixture('missing-title.html')), ['missing_title']))
 test('missing Read more URL', () => assert.deepEqual(skipped(fixture('missing-read-more-url.html')), ['missing_source_url']))
 test('unrelated dates elsewhere on page are ignored', () => { const result = accepted(fixture('unrelated-dates-elsewhere.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
 test('selected or active calendar dates are ignored', () => { const result = accepted(fixture('selected-active-calendar.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
 test('time from neighbouring card is not used', () => { const events = accepted(fixture('neighbour-time.html')); assert.equal(events[0].startTime, null); assert.equal(events[0].allDay, true); assert.equal(events[1].startTime, '17:00') })
+
+
+test('all fields are scoped to their own card', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('scoped-two-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.cardsDiscovered, 2)
+  assert.deepEqual(result.rawCards, [
+    { title: 'First scoped title', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/first-scoped' },
+    { title: 'Second scoped title', badgeText: '13. Jul.', timeText: '21:30', sourceUrl: 'https://www.fjordnorway.com/en/events/second-scoped' },
+  ])
+  const second = result.results[1]
+  assert.equal(second.accepted, true)
+  if (second.accepted) {
+    assert.deepEqual(second.event, { title: 'Second scoped title', sourceUrl: 'https://www.fjordnorway.com/en/events/second-scoped', date: '2026-07-13', startTime: '21:30', allDay: false })
+    assert.notEqual(second.event.title, 'First scoped title')
+    assert.notEqual(second.event.date, '2026-07-12')
+    assert.notEqual(second.event.startTime, '10:00')
+    assert.notEqual(second.event.sourceUrl, 'https://www.fjordnorway.com/en/events/first-scoped')
+  }
+})
 
 test('shadow diagnostic parses list page only and reports list-card metrics', async () => {
   const fetchedUrls = []
@@ -52,7 +71,7 @@ test('real card wrapper selector discovers only physical cards, not child wrappe
 test('live card boundary starts from Read more and resolves one root per physical card', () => {
   const result = parseEdgeOfNorwayListPage(fixture('live-card-boundary.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
   assert.equal(result.cardsDiscovered, 2)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['article', 'article'])
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li'])
   assert.equal(result.results.length, 2)
   assert.equal(result.results[0].accepted, true)
   assert.equal(result.results[1].accepted, true)
