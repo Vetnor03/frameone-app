@@ -77,11 +77,13 @@ test('normal Local Events UI hides diagnostics and developer area editing', () =
   assert.doesNotMatch(home, /Included places|Add nearby|SAVE AREA/)
 })
 
-test('Local Events connect, status and disconnect API routes are user scoped', () => {
+test('Local Events connect, status and disconnect API routes are frame scoped', () => {
   const connectRoute = readFileSync(new URL('../app/api/integrations/local-events/connect/route.ts', import.meta.url), 'utf8')
+  const statusRoute = readFileSync(new URL('../app/api/integrations/local-events/status/route.ts', import.meta.url), 'utf8')
   const disconnectRoute = readFileSync(new URL('../app/api/integrations/local-events/disconnect/route.ts', import.meta.url), 'utf8')
-  assert.match(connectRoute, /connectLocalEventsForUser\(userId/)
-  assert.match(disconnectRoute, /disconnectLocalEventsForUser\(userId\)/)
+  assert.match(connectRoute, /connectLocalEventsForFrame\(userId, deviceId/)
+  assert.match(statusRoute, /requireLocalEventsFrameMember\(userId, deviceId, false\)/)
+  assert.match(disconnectRoute, /disconnectLocalEventsForFrame\(userId, deviceId\)/)
 })
 
 test('accepted Edge of Norway events are persisted with stable external IDs and upserted', () => {
@@ -89,7 +91,7 @@ test('accepted Edge of Norway events are persisted with stable external IDs and 
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
   assert.match(parser, /externalId: String\(eventObject\._id\)/)
   assert.match(server, /provider: EDGE_OF_NORWAY_PROVIDER/)
-  assert.match(server, /upsert\(rows, \{ onConflict: 'user_id,provider,external_id' \}\)/)
+  assert.match(server, /upsert\(rows, \{ onConflict: 'device_id,provider,external_id' \}\)/)
   assert.match(server, /raw: \{[\s\S]*sourceUrl:[\s\S]*primaryPlaceId:[\s\S]*includedPlaceIds:/)
 })
 
