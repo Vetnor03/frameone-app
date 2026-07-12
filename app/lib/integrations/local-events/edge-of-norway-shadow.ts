@@ -13,6 +13,8 @@ export type EdgeOfNorwaySkipReason =
   | 'missing_title'
   | 'missing_source_url'
   | 'fetch_failed'
+  | 'timeout'
+  | 'parser_failed'
 
 export type EdgeOfNorwayAcceptedEvent = {
   title: string
@@ -33,11 +35,13 @@ export type EdgeOfNorwayDiagnosticResult = {
   cardsDiscovered: number
   exactDuplicateCardsRemoved: number
   uniqueSourceUrls: number
+  validCardsParsed: number
   acceptedCount: number
   skippedCounts: Record<string, number>
   acceptedEvents: EdgeOfNorwayAcceptedEvent[]
   parsingErrors: Array<{ title?: string; sourceUrl?: string; reason: string }>
   cardRoots?: Array<{ tagName: string; className?: string }>
+  error?: string
 }
 
 function decodeEntities(value: string) {
@@ -120,54 +124,27 @@ function extractHeadingTitle(card: string) {
   return headings.length === 1 ? headings[0] : null
 }
 
-function hasDateBadge(card: string, referenceDate: Date | string) {
-  return extractBadgeDates(card, referenceDate).length > 0
-}
+export const EDGE_OF_NORWAY_CARD_WRAPPER_SELECTOR = 'li.event-card, article.event-card__root, li[class*=event], article[class*=event], li:has(a[href*=fjordnorway][href*="/en/events/"])'
 
-function findCardContainers(html: string, pageUrl: string, referenceDate: Date | string): CardContainer[] {
+function findCardContainers(html: string, pageUrl: string, _referenceDate: Date | string): CardContainer[] {
   const nodes = parseHtmlNodes(html)
   const containers: CardContainer[] = []
   const seenRoots = new Set<string>()
 
-  for (const linkNode of nodes.filter((node) => node.tagName === 'a')) {
-    const linkHtml = linkNode.html
-    if (!/\bread\s*more\b/i.test(stripTags(linkHtml))) continue
-    const sourceUrl = canonicalizeFjordNorwayUrl(attr(openingTagOfNode(linkNode), 'href') || '', pageUrl) || undefined
-
-    let parent = linkNode.parent
-    let fallback: HtmlNode | null = null
-    while (parent !== null) {
-      const ancestor = nodes[parent]
-      const candidateHtml = ancestor.html
-      const readMoreUrl = extractReadMoreUrl(candidateHtml, pageUrl)
-      const hasSameReadMore = sourceUrl ? readMoreUrl === sourceUrl : /\bread\s*more\b/i.test(stripTags(linkHtml))
-      const title = extractHeadingTitle(candidateHtml)
-      const date = hasDateBadge(candidateHtml, referenceDate)
-      if (hasSameReadMore && (title || date) && !fallback) fallback = ancestor
-      if (hasSameReadMore && title && date) {
-        fallback = ancestor
-        break
-      }
-      parent = ancestor.parent
-    }
-    if (fallback) {
-      const key = `${fallback.start}:${fallback.end}`
-      if (!seenRoots.has(key)) {
-        seenRoots.add(key)
-        const openingTag = openingTagOfNode(fallback)
-        containers.push({ html: fallback.html, sourceUrl: sourceUrl || '', rootTagName: fallback.tagName, rootClassName: attr(openingTag, 'class') || undefined })
-      }
-    }
+  for (const node of nodes) {
+    if (node.tagName !== 'li' && node.tagName !== 'article') continue
+    const openingTag = openingTagOfNode(node)
+    const className = attr(openingTag, 'class') || ''
+    const hasStableCardClass = /\b(event-card|event|teaser|card)\b/i.test(className)
+    const hasReadMoreUrl = Boolean(extractReadMoreUrl(node.html, pageUrl))
+    const hasTitleLink = /<a\b[^>]*href=["'][^"']*www\.fjordnorway\.com\/en\/events\//i.test(node.html)
+    if (!(hasReadMoreUrl || (hasStableCardClass && hasTitleLink)) || (!hasStableCardClass && !(node.tagName === 'li' && hasTitleLink))) continue
+    const key = `${node.start}:${node.end}`
+    if (seenRoots.has(key)) continue
+    seenRoots.add(key)
+    containers.push({ html: node.html, sourceUrl: extractReadMoreUrl(node.html, pageUrl) || '', rootTagName: node.tagName, rootClassName: className || undefined })
   }
   return containers
-}
-
-function sanitizeOuterHtml(html: string) {
-  return html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, '<script>[removed]</script>')
-    .replace(/<style\b[\s\S]*?<\/style>/gi, '<style>[removed]</style>')
-    .replace(/\s+/g, ' ')
-    .slice(0, 1800)
 }
 
 const monthMap: Record<string, number> = { jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, mai: 5, jun: 6, june: 6, juni: 6, jul: 7, july: 7, juli: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, okt: 10, oktober: 10, nov: 11, november: 11, dec: 12, december: 12 }
@@ -229,7 +206,7 @@ function parseCard(card: string, pageUrl: string, referenceDate: Date | string):
   if (!sourceUrl) return { accepted: false, reason: 'missing_source_url', title: stripTags(card.match(/<h[1-4]\b[^>]*>([\s\S]*?)<\/h[1-4]>/i)?.[1] || '') || undefined }
   if (!title) return { accepted: false, reason: 'missing_title', sourceUrl }
   const dates = extractBadgeDates(card, referenceDate)
-  if (dates.length === 0) return { accepted: false, reason: 'missing_badge_date', title, sourceUrl }
+  if (dates.length === 0) return { accepted: false, reason: 'unclear_date', title, sourceUrl }
   if (dates.length > 1) return { accepted: false, reason: 'multiple_dates', title, sourceUrl }
   const text = stripTags(card)
   if (/\b(exhibition|exhibited|continuous|ongoing)\b/i.test(text)) return { accepted: false, reason: 'exhibition_or_continuous', title, sourceUrl }
@@ -241,13 +218,6 @@ function parseCard(card: string, pageUrl: string, referenceDate: Date | string):
 export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL, referenceDate: Date | string = EDGE_OF_NORWAY_DEFAULT_REFERENCE_DATE) {
   const cardContainers = findCardContainers(html, pageUrl, referenceDate)
   const cardResults = cardContainers.map((card) => parseCard(card.html, pageUrl, referenceDate))
-  if (process.env.NODE_ENV === 'development') {
-    cardResults.forEach((result, index) => {
-      if (!result.accepted && cardResults.slice(0, index).filter((previous) => !previous.accepted).length < 3) {
-        console.debug('[edge-of-norway] failed candidate outerHTML', { reason: result.reason, sourceUrl: result.sourceUrl, outerHTML: sanitizeOuterHtml(cardContainers[index]?.html || '') })
-      }
-    })
-  }
   const exactSeen = new Set<string>()
   const deduped: EdgeOfNorwayCardParseResult[] = []
   let exactDuplicateCardsRemoved = 0
@@ -268,19 +238,51 @@ export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY
   }
   const multiUrl = new Set(Array.from(urlsWithDates).filter(([, dates]) => dates.size > 1).map(([url]) => url))
   const finalResults = deduped.map((r) => r.accepted && multiUrl.has(r.event.sourceUrl) ? { accepted: false as const, reason: 'multiple_dates' as const, title: r.event.title, sourceUrl: r.event.sourceUrl } : r)
-  return { cardsDiscovered: cardResults.length, exactDuplicateCardsRemoved, results: finalResults, cardRoots: cardContainers.map((card) => ({ tagName: card.rootTagName, className: card.rootClassName })) }
+  return { cardsDiscovered: cardResults.length, validCardsParsedBeforeGrouping: cardResults.filter((r) => r.accepted).length, exactDuplicateCardsRemoved, results: finalResults, cardRoots: cardContainers.map((card) => ({ tagName: card.rootTagName, className: card.rootClassName })) }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, reason = 'timeout'): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(reason)), ms)
+    promise.then((value) => { clearTimeout(timer); resolve(value) }, (error) => { clearTimeout(timer); reject(error) })
+  })
+}
+
+function structuredDiagnosticError(reason: string, error: unknown): EdgeOfNorwayDiagnosticResult {
+  const message = error instanceof Error && error.message ? error.message : reason
+  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: 0, validCardsParsed: 0, exactDuplicateCardsRemoved: 0, uniqueSourceUrls: 0, acceptedCount: 0, skippedCounts: { [reason]: 1 }, acceptedEvents: [], parsingErrors: [{ reason, title: message }], error: message }
 }
 
 export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, referenceDate: Date | string = EDGE_OF_NORWAY_DEFAULT_REFERENCE_DATE): Promise<EdgeOfNorwayDiagnosticResult> {
-  const skippedCounts: Record<string, number> = {}
-  const acceptedEvents: EdgeOfNorwayAcceptedEvent[] = []
-  const parsingErrors: Array<{ title?: string; sourceUrl?: string; reason: string }> = []
-  const listResp = await fetchImpl(EDGE_OF_NORWAY_STAVANGER_LIST_URL, { headers: { 'user-agent': EDGE_OF_NORWAY_USER_AGENT } })
-  if (!listResp.ok) throw new Error(`Failed to fetch list page: ${listResp.status}`)
-  const parsed = parseEdgeOfNorwayListPage(await listResp.text(), EDGE_OF_NORWAY_STAVANGER_LIST_URL, referenceDate)
-  for (const result of parsed.results) {
-    if (result.accepted) acceptedEvents.push(result.event)
-    else { skippedCounts[result.reason] = (skippedCounts[result.reason] || 0) + 1; parsingErrors.push({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }) }
-  }
-  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: parsed.cardsDiscovered, exactDuplicateCardsRemoved: parsed.exactDuplicateCardsRemoved, uniqueSourceUrls: new Set(acceptedEvents.map((e) => e.sourceUrl).concat(parsingErrors.map((e) => e.sourceUrl || '').filter(Boolean))).size, acceptedCount: acceptedEvents.length, skippedCounts, acceptedEvents, parsingErrors: parsingErrors.slice(0, 10), cardRoots: parsed.cardRoots }
+  return withTimeout((async () => {
+    const skippedCounts: Record<string, number> = {}
+    const acceptedEvents: EdgeOfNorwayAcceptedEvent[] = []
+    const parsingErrors: Array<{ title?: string; sourceUrl?: string; reason: string }> = []
+    const controller = new AbortController()
+    const fetchTimer = setTimeout(() => controller.abort(), 15_000)
+    let listResp: Response
+    try {
+      listResp = await fetchImpl(EDGE_OF_NORWAY_STAVANGER_LIST_URL, { headers: { 'user-agent': EDGE_OF_NORWAY_USER_AGENT }, signal: controller.signal })
+    } catch (error) {
+      if (controller.signal.aborted) return structuredDiagnosticError('timeout', error)
+      return structuredDiagnosticError('fetch_failed', error)
+    } finally {
+      clearTimeout(fetchTimer)
+    }
+    if (!listResp.ok) return structuredDiagnosticError('fetch_failed', new Error(`Failed to fetch list page: ${listResp.status}`))
+    let parsed: ReturnType<typeof parseEdgeOfNorwayListPage>
+    try {
+      parsed = parseEdgeOfNorwayListPage(await listResp.text(), EDGE_OF_NORWAY_STAVANGER_LIST_URL, referenceDate)
+    } catch (error) {
+      return structuredDiagnosticError('parser_failed', error)
+    }
+    for (const result of parsed.results) {
+      if (result.accepted) acceptedEvents.push(result.event)
+      else {
+        skippedCounts[result.reason] = (skippedCounts[result.reason] || 0) + 1
+        if (parsingErrors.length < 10) parsingErrors.push({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason })
+      }
+    }
+    return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: parsed.cardsDiscovered, validCardsParsed: parsed.validCardsParsedBeforeGrouping, exactDuplicateCardsRemoved: parsed.exactDuplicateCardsRemoved, uniqueSourceUrls: new Set(acceptedEvents.map((e) => e.sourceUrl).concat(parsingErrors.map((e) => e.sourceUrl || '').filter(Boolean))).size, acceptedCount: acceptedEvents.length, skippedCounts, acceptedEvents, parsingErrors, cardRoots: parsed.cardRoots }
+  })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError(error instanceof Error && error.message === 'timeout' ? 'timeout' : 'parser_failed', error))
 }
