@@ -546,7 +546,7 @@ export async function GET(req: Request) {
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'edge-of-norway')
-          .in('user_id', memberUserIds)
+          .eq('device_id', device_id)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (localEventsError) throw localEventsError

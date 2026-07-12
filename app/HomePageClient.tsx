@@ -2298,6 +2298,7 @@ async function handleSelectTab(k: TabKey) {
                     <ConnectAppsScreen
                       language={language}
                       modulesJson={modulesJson}
+                      activeDeviceId={activeDeviceId}
                       onBack={() => setRemindersConnectScreenOpen(false)}
                     />
                   ) : (
@@ -2423,11 +2424,13 @@ function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectApp
 function ConnectAppsScreen({
   language,
   modulesJson,
+  activeDeviceId = null,
   onBack,
   startup = false,
 }: {
   language: AppLanguage
   modulesJson: Record<string, unknown>
+  activeDeviceId?: string | null
   onBack: () => void
   startup?: boolean
 }) {
@@ -2455,6 +2458,7 @@ function ConnectAppsScreen({
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
+  const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
     if (typeof window === 'undefined') return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
     return normalizeLocalEventAreaPreference(window.localStorage.getItem('local-events-area') ? JSON.parse(window.localStorage.getItem('local-events-area') || '{}') : null)
@@ -2568,12 +2572,17 @@ function ConnectAppsScreen({
 
   async function fetchLocalEventsStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) return
-    const resp = await fetch('/api/integrations/local-events/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+    if (!accessToken || !activeDeviceId) {
+      setLocalEventsSavedArea(null)
+      setLocalEventsCanManage(false)
+      return
+    }
+    const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(activeDeviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
     if (!resp.ok) return
     const json = await resp.json()
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
     setLocalEventsSavedArea(json?.connected === true ? area : null)
+    setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
   }
 
@@ -2585,8 +2594,10 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til lokale arrangementer' : 'Sign in to connect Local Events')
+      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
+      if (!localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
       const areaPreference = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
-      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ areaPreference }) })
+      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: activeDeviceId, areaPreference }) })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
@@ -2613,7 +2624,9 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble fra lokale arrangementer' : 'Sign in to disconnect Local Events')
-      const resp = await fetch('/api/integrations/local-events/disconnect', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } })
+      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
+      if (!localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
+      const resp = await fetch('/api/integrations/local-events/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: activeDeviceId }) })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
@@ -2672,10 +2685,13 @@ function ConnectAppsScreen({
   useEffect(() => {
     fetchSpondStatus()
     fetchTeamsStatus()
-    fetchLocalEventsStatus()
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
+
+  useEffect(() => {
+    fetchLocalEventsStatus()
+  }, [activeDeviceId])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string; comingSoon?: boolean }> = [
     {
       key: 'spond',
@@ -2768,7 +2784,7 @@ function ConnectAppsScreen({
           </div>
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
+            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !localEventsCanManage || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
           </div>
         </div>
       </div>
@@ -2831,10 +2847,10 @@ function ConnectAppsScreen({
                   ) : connected ? (
                     app.key === 'local-events' ? (
                       <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                        <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading} className="h-8 rounded-xl border border-[#d94b4b]/45 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
+                        <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading || !localEventsCanManage} className="h-8 rounded-xl border border-[#d94b4b]/45 px-3 text-[11px] tracking-widest text-[#d94b4b] disabled:opacity-60">
                           {localEventsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
                         </button>
-                        <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
+                        <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading || !localEventsCanManage} className="h-7 rounded-xl border border-[color:var(--bd-15)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)] disabled:opacity-60">
                           {language === 'no' ? 'ENDRE' : 'EDIT'}
                         </button>
                       </div>
@@ -12361,8 +12377,8 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .eq('user_id', userId)
           .in('provider', ['spond', 'teams', 'waste', 'edge-of-norway'])
+          .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
