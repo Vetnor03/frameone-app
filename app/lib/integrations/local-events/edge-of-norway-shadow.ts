@@ -164,7 +164,7 @@ function parseTime(schedule: unknown): { accepted: true; startTime: string | nul
   for (const entry of schedule) {
     const hour = (entry as { hour?: unknown })?.hour
     const minutes = (entry as { minutes?: unknown })?.minutes
-    if (!Number.isInteger(hour) || !Number.isInteger(minutes) || hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return { accepted: false, reason: 'unclear_time' }
+    if (typeof hour !== 'number' || typeof minutes !== 'number' || !Number.isInteger(hour) || !Number.isInteger(minutes) || hour < 0 || hour > 23 || minutes < 0 || minutes > 59) return { accepted: false, reason: 'unclear_time' }
     times.add(`${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`)
   }
   if (times.size > 1) return { accepted: false, reason: 'multiple_times' }
