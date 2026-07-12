@@ -326,7 +326,8 @@ function cleanLocalEventDisplayTitle(title: string, occurrenceDate: string) {
   }
   return title.replace(/(?:,\s*|\s+[–-]\s+|\s+)(\d{1,2})\.?\s+([A-Za-zæøåÆØÅ]+)\.?\s*$/i, (match, day, monthName) => {
     const month = monthForName[String(monthName).toLowerCase()]
-    return Number(day) === dayValue && month === monthValue ? '' : match
+    const isRecognizedDate = Number.isFinite(Number(day)) && month !== undefined
+    return isRecognizedDate ? '' : match
   }).replace(/\s+/g, ' ').trim()
 }
 
