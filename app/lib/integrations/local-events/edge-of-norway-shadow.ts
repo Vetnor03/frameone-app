@@ -17,6 +17,7 @@ export type EdgeOfNorwaySkipReason =
   | 'inspect_input'
   | 'unclear_time'
   | 'multiple_times'
+  | 'repeated_series'
 
 export type EdgeOfNorwayAcceptedEvent = {
   title: string
@@ -26,8 +27,19 @@ export type EdgeOfNorwayAcceptedEvent = {
   allDay: boolean
 }
 
+export type EdgeOfNorwayRepeatedSeriesExample = {
+  title: string
+  venueName: string | null
+  startTime: string | null
+  dates: string[]
+  sourceUrls: string[]
+}
+
+type SeriesCandidateMetadata = { venueName: string | null; shortDescription: string }
+type AcceptedSeriesCandidate = EdgeOfNorwayAcceptedEvent & SeriesCandidateMetadata
+
 type EventParseResult =
-  | { accepted: true; event: EdgeOfNorwayAcceptedEvent }
+  | { accepted: true; event: AcceptedSeriesCandidate }
   | { accepted: false; reason: EdgeOfNorwaySkipReason; title?: string; sourceUrl?: string }
 
 type EdgeOfNorwayDiagnosticError = { stage: 'authentication' | 'fetch' | 'read_response' | 'inspect_input' | 'decode_flight' | 'extract_events'; message: string; name?: string; code?: string; requestedUrl?: string; finalUrl?: string }
@@ -45,6 +57,9 @@ export type EdgeOfNorwayDiagnosticResult = {
   acceptedCount: number
   skippedCounts: Record<string, number>
   acceptedEvents: EdgeOfNorwayAcceptedEvent[]
+  repeatedSeriesCount: number
+  repeatedSeriesEventsCount: number
+  repeatedSeriesExamples: EdgeOfNorwayRepeatedSeriesExample[]
   parsingErrors: Array<{ title?: string; sourceUrl?: string; reason: string }>
   networkError?: string
   error?: string
@@ -59,6 +74,10 @@ type StructuredEvent = {
   _type?: unknown
   locTitle?: { en?: unknown }
   locSlug?: { en?: { current?: unknown } }
+  locShortDescription?: { en?: unknown }
+  locDescription?: { en?: unknown }
+  venue?: unknown
+  location?: unknown
   event?: {
     _type?: unknown
     recurring?: unknown
@@ -243,6 +262,85 @@ function parseTime(schedule: unknown): { accepted: true; startTime: string | nul
   return { accepted: true, startTime: Array.from(times)[0], allDay: false }
 }
 
+function localizedEnglishText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    if (typeof record.en === 'string') return record.en.trim()
+    if (typeof record.name === 'string') return record.name.trim()
+    if (typeof record.title === 'string') return record.title.trim()
+  }
+  return ''
+}
+
+function venueNameForEvent(eventObject: StructuredEvent): string | null {
+  const candidates = [eventObject.venue, eventObject.location]
+  for (const candidate of candidates) {
+    const direct = localizedEnglishText(candidate)
+    if (direct) return direct
+    if (candidate && typeof candidate === 'object') {
+      const record = candidate as Record<string, unknown>
+      const nested = localizedEnglishText(record.locTitle) || localizedEnglishText(record.title) || localizedEnglishText(record.name)
+      if (nested) return nested
+    }
+  }
+  return null
+}
+
+function shortDescriptionForEvent(eventObject: StructuredEvent): string {
+  return localizedEnglishText(eventObject.locShortDescription) || localizedEnglishText(eventObject.locDescription)
+}
+
+function normalizeSeriesText(value: string | null): string {
+  return (value || '')
+    .normalize('NFKC')
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[‐‑‒–—―]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function repeatedSeriesKey(event: AcceptedSeriesCandidate) {
+  return [normalizeSeriesText(event.title), normalizeSeriesText(event.venueName), normalizeSeriesText(event.startTime), normalizeSeriesText(event.shortDescription)].join('\u001f')
+}
+
+function splitRepeatedSeriesCandidates(results: EventParseResult[]) {
+  const groups = new Map<string, AcceptedSeriesCandidate[]>()
+  for (const result of results) {
+    if (!result.accepted) continue
+    const key = repeatedSeriesKey(result.event)
+    const group = groups.get(key) || []
+    group.push(result.event)
+    groups.set(key, group)
+  }
+  const repeatedUrls = new Set<string>()
+  let repeatedSeriesCount = 0
+  const repeatedSeriesExamples: EdgeOfNorwayRepeatedSeriesExample[] = []
+  for (const group of groups.values()) {
+    const dates = Array.from(new Set(group.map((event) => event.date))).sort()
+    if (dates.length <= 1) continue
+    repeatedSeriesCount += 1
+    for (const event of group) repeatedUrls.add(event.sourceUrl)
+    if (repeatedSeriesExamples.length < 10) {
+      repeatedSeriesExamples.push({
+        title: group[0].title,
+        venueName: group[0].venueName,
+        startTime: group[0].startTime,
+        dates,
+        sourceUrls: Array.from(new Set(group.map((event) => event.sourceUrl))),
+      })
+    }
+  }
+  const filteredResults: EventParseResult[] = results.map((result) => result.accepted && repeatedUrls.has(result.event.sourceUrl) ? { accepted: false, reason: 'repeated_series', title: result.event.title, sourceUrl: result.event.sourceUrl } : result)
+  return { results: filteredResults, repeatedSeriesCount, repeatedSeriesEventsCount: repeatedUrls.size, repeatedSeriesExamples }
+}
+
+function publicAcceptedEvent(event: AcceptedSeriesCandidate): EdgeOfNorwayAcceptedEvent {
+  return { title: event.title, sourceUrl: event.sourceUrl, date: event.date, startTime: event.startTime, allDay: event.allDay }
+}
+
 function parseStructuredEvent(eventObject: StructuredEvent): EventParseResult {
   const title = typeof eventObject.locTitle?.en === 'string' ? eventObject.locTitle.en.trim() : ''
   const sourceUrl = sourceUrlForSlug(eventObject.locSlug?.en?.current)
@@ -260,13 +358,15 @@ function parseStructuredEvent(eventObject: StructuredEvent): EventParseResult {
   if (showings.length !== 1 || dates.size !== 1) return { accepted: false, reason: 'multiple_dates', title, sourceUrl }
   const time = parseTime(showings[0].schedule)
   if (!time.accepted) return { accepted: false, reason: time.reason, title, sourceUrl }
-  return { accepted: true, event: { title, sourceUrl, date: showings[0].date as string, startTime: time.startTime, allDay: time.allDay } }
+  return { accepted: true, event: { title, sourceUrl, date: showings[0].date as string, startTime: time.startTime, allDay: time.allDay, venueName: venueNameForEvent(eventObject), shortDescription: shortDescriptionForEvent(eventObject) } }
 }
 
 export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWAY_EVENTS_URL) {
   const decoded = decodeFlightPayload(html)
   const extracted = extractStructuredEvents(decoded.flightText)
-  const results = extracted.uniqueEvents.map(parseStructuredEvent)
+  const parsedResults = extracted.uniqueEvents.map(parseStructuredEvent)
+  const series = splitRepeatedSeriesCandidates(parsedResults)
+  const results = series.results
   const skippedCounts: Record<string, number> = {}
   for (const result of results) if (!result.accepted) skippedCounts[result.reason] = (skippedCounts[result.reason] || 0) + 1
   return {
@@ -277,7 +377,10 @@ export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWA
     uniqueEvents: extracted.uniqueEvents.length,
     acceptedCount: results.filter((result) => result.accepted).length,
     skippedCounts,
-    results,
+    repeatedSeriesCount: series.repeatedSeriesCount,
+    repeatedSeriesEventsCount: series.repeatedSeriesEventsCount,
+    repeatedSeriesExamples: series.repeatedSeriesExamples,
+    results: results.map((result) => result.accepted ? { accepted: true, event: publicAcceptedEvent(result.event) } : result),
     parsingErrors: [...decoded.parsingErrors, ...extracted.parsingErrors].slice(0, 10),
   }
 }
@@ -296,7 +399,7 @@ function diagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unk
 
 function structuredDiagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown, fetchMeta?: EdgeOfNorwayFetchDiagnostic): EdgeOfNorwayDiagnosticResult {
   const diagnostic = diagnosticError(stage, error)
-  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
+  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], repeatedSeriesCount: 0, repeatedSeriesEventsCount: 0, repeatedSeriesExamples: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
 }
 
 function hostnameForUrl(url: string) {
@@ -351,7 +454,7 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
       const parsed = parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_EVENTS_URL)
       const acceptedEvents = parsed.results.filter((result) => result.accepted).map((result) => result.event)
       const parseErrors = parsed.results.filter((result) => !result.accepted).map((result) => ({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }))
-      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
+      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, repeatedSeriesCount: parsed.repeatedSeriesCount, repeatedSeriesEventsCount: parsed.repeatedSeriesEventsCount, repeatedSeriesExamples: parsed.repeatedSeriesExamples, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
     } catch (error) {
       return structuredDiagnosticError('extract_events', error, fetchMeta)
     }

@@ -164,3 +164,97 @@ test('HTML page with zero Flight markers produces explicit inspect_input result'
   assert.equal(result.fetch?.documentTitle, 'Interstitial')
   assert.match(result.fetch?.htmlPreview || '', /Interstitial/)
 })
+
+const seriesEvent = ({ id, title = 'Summer at sea', slug = id, date = '2026-07-27', venueName = 'Harbour Pier', hour = 10, minutes = 0, description = 'A family-friendly maritime programme.' }) => ({
+  _id: id,
+  _type: 'Event',
+  locTitle: { en: title },
+  locSlug: { en: { current: slug } },
+  locShortDescription: { en: description },
+  venue: { name: venueName },
+  event: { _type: 'EventInfo', recurring: false, recurringShowings: null, showings: [{ date, schedule: [{ hour, minutes }] }] },
+})
+const eventsHtml = (items) => `self.__next_f.push(${JSON.stringify([1, items.map((event) => JSON.stringify({ data: event })).join(',')])});`
+
+const acceptedTitles = (result) => result.results.filter((entry) => entry.accepted).map((entry) => entry.event.title)
+
+test('same title, venue, time and description on several dates becomes repeated_series', () => {
+  const result = parseEdgeOfNorwayListPage(eventsHtml([
+    seriesEvent({ id: 'summer-1', slug: 'summer-at-sea-1', date: '2026-07-27' }),
+    seriesEvent({ id: 'summer-2', slug: 'summer-at-sea-2', date: '2026-07-28' }),
+    seriesEvent({ id: 'single', title: 'One night concert', slug: 'one-night-concert', date: '2026-07-29' }),
+  ]))
+  assert.equal(result.acceptedCount, 1)
+  assert.equal(result.skippedCounts.repeated_series, 2)
+  assert.equal(result.repeatedSeriesCount, 1)
+  assert.equal(result.repeatedSeriesEventsCount, 2)
+  assert.deepEqual(result.repeatedSeriesExamples[0], {
+    title: 'Summer at sea',
+    venueName: 'Harbour Pier',
+    startTime: '10:00',
+    dates: ['2026-07-27', '2026-07-28'],
+    sourceUrls: ['https://www.fjordnorway.com/en/events/summer-at-sea-1', 'https://www.fjordnorway.com/en/events/summer-at-sea-2'],
+  })
+  assert.deepEqual(acceptedTitles(result), ['One night concert'])
+})
+
+test('different titles do not group as repeated_series', () => {
+  const result = parseEdgeOfNorwayListPage(eventsHtml([
+    seriesEvent({ id: 'different-title-1', title: 'Summer at sea', date: '2026-07-27' }),
+    seriesEvent({ id: 'different-title-2', title: 'Winter at sea', date: '2026-07-28' }),
+  ]))
+  assert.equal(result.acceptedCount, 2)
+  assert.equal(result.skippedCounts.repeated_series, undefined)
+})
+
+test('same title at different venues does not group as repeated_series', () => {
+  const result = parseEdgeOfNorwayListPage(eventsHtml([
+    seriesEvent({ id: 'venue-1', venueName: 'Harbour Pier', date: '2026-07-27' }),
+    seriesEvent({ id: 'venue-2', venueName: 'City Museum', date: '2026-07-28' }),
+  ]))
+  assert.equal(result.acceptedCount, 2)
+  assert.equal(result.skippedCounts.repeated_series, undefined)
+})
+
+test('same title at different times does not group as repeated_series', () => {
+  const result = parseEdgeOfNorwayListPage(eventsHtml([
+    seriesEvent({ id: 'time-1', hour: 10, date: '2026-07-27' }),
+    seriesEvent({ id: 'time-2', hour: 12, date: '2026-07-28' }),
+  ]))
+  assert.equal(result.acceptedCount, 2)
+  assert.equal(result.skippedCounts.repeated_series, undefined)
+})
+
+test('same title with materially different descriptions does not group as repeated_series', () => {
+  const result = parseEdgeOfNorwayListPage(eventsHtml([
+    seriesEvent({ id: 'description-1', description: 'A family-friendly maritime programme.', date: '2026-07-27' }),
+    seriesEvent({ id: 'description-2', description: 'A late-night music cruise for adults.', date: '2026-07-28' }),
+  ]))
+  assert.equal(result.acceptedCount, 2)
+  assert.equal(result.skippedCounts.repeated_series, undefined)
+})
+
+test('a genuine single event remains accepted after repeated-series filtering', () => {
+  const result = parseEdgeOfNorwayListPage(eventsHtml([seriesEvent({ id: 'single-genuine', title: 'Genuine single event', date: '2026-07-27' })]))
+  assert.equal(result.acceptedCount, 1)
+  assert.deepEqual(acceptedTitles(result), ['Genuine single event'])
+  assert.equal(result.repeatedSeriesCount, 0)
+  assert.equal(result.repeatedSeriesEventsCount, 0)
+})
+
+test('recurring, exhibition, multiple-date and multiple-time rules remain unchanged with repeated-series filtering', () => {
+  const recurring = seriesEvent({ id: 'recurring-rule', title: 'Recurring rule' })
+  recurring.event.recurring = true
+  const exhibition = seriesEvent({ id: 'exhibition-rule', title: 'Harbour exhibition' })
+  const multipleDate = seriesEvent({ id: 'multiple-date-rule', title: 'Multiple date rule' })
+  multipleDate.event.showings.push({ date: '2026-07-28', schedule: [{ hour: 10, minutes: 0 }] })
+  const multipleTime = seriesEvent({ id: 'multiple-time-rule', title: 'Multiple time rule' })
+  multipleTime.event.showings[0].schedule.push({ hour: 11, minutes: 0 })
+  const result = parseEdgeOfNorwayListPage(eventsHtml([recurring, exhibition, multipleDate, multipleTime]))
+  assert.equal(result.acceptedCount, 0)
+  assert.equal(result.skippedCounts.recurring_event, 1)
+  assert.equal(result.skippedCounts.exhibition_or_continuous, 1)
+  assert.equal(result.skippedCounts.multiple_dates, 1)
+  assert.equal(result.skippedCounts.multiple_times, 1)
+  assert.equal(result.skippedCounts.repeated_series, undefined)
+})
