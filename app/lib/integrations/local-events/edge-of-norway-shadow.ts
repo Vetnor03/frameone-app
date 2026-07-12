@@ -26,6 +26,7 @@ export type EdgeOfNorwaySkipReason =
   | 'repeated_series'
 
 export type EdgeOfNorwayAcceptedEvent = {
+  externalId: string
   title: string
   sourceUrl: string
   date: string
@@ -41,7 +42,7 @@ export type EdgeOfNorwayRepeatedSeriesExample = {
   sourceUrls: string[]
 }
 
-type SeriesCandidateMetadata = { venueName: string | null; shortDescription: string }
+type SeriesCandidateMetadata = { externalId: string; venueName: string | null; shortDescription: string }
 type AcceptedSeriesCandidate = EdgeOfNorwayAcceptedEvent & SeriesCandidateMetadata
 
 type EventParseResult =
@@ -371,7 +372,9 @@ function splitRepeatedSeriesCandidates(results: EventParseResult[]) {
 }
 
 function publicAcceptedEvent(event: AcceptedSeriesCandidate): EdgeOfNorwayAcceptedEvent {
-  return { title: event.title, sourceUrl: event.sourceUrl, date: event.date, startTime: event.startTime, allDay: event.allDay }
+  const publicEvent = { title: event.title, sourceUrl: event.sourceUrl, date: event.date, startTime: event.startTime, allDay: event.allDay } as EdgeOfNorwayAcceptedEvent
+  Object.defineProperty(publicEvent, 'externalId', { value: event.externalId, enumerable: false })
+  return publicEvent
 }
 
 function parseStructuredEvent(eventObject: StructuredEvent): EventParseResult {
@@ -391,7 +394,7 @@ function parseStructuredEvent(eventObject: StructuredEvent): EventParseResult {
   if (showings.length !== 1 || dates.size !== 1) return { accepted: false, reason: 'multiple_dates', title, sourceUrl }
   const time = parseTime(showings[0].schedule)
   if (!time.accepted) return { accepted: false, reason: time.reason, title, sourceUrl }
-  return { accepted: true, event: { title, sourceUrl, date: showings[0].date as string, startTime: time.startTime, allDay: time.allDay, venueName: venueNameForEvent(eventObject), shortDescription: shortDescriptionForEvent(eventObject) } }
+  return { accepted: true, event: { externalId: String(eventObject._id), title, sourceUrl, date: showings[0].date as string, startTime: time.startTime, allDay: time.allDay, venueName: venueNameForEvent(eventObject), shortDescription: shortDescriptionForEvent(eventObject) } }
 }
 
 export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWAY_EVENTS_URL): EdgeOfNorwayListParseResult {

@@ -67,3 +67,53 @@ test('app/api/device/reminders/route.ts remains untouched by Local Events', () =
 test('format helper uses connected summary grammar', () => {
   assert.equal(formatLocalEventPlaceList(['stavanger', 'sola', 'sandnes', 'randaberg']), 'Stavanger, Sola, Sandnes and Randaberg')
 })
+
+test('normal Local Events UI hides diagnostics and developer area editing', () => {
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(home, /Search for your place/)
+  assert.match(home, /We also include nearby places that are close enough for spontaneous events\./)
+  assert.doesNotMatch(home, /TEST LIVE EVENTS|Flight script counts|skipped counts|shadow-mode wording|Supabase wording/i)
+  assert.doesNotMatch(home, /Included places|Add nearby|SAVE AREA/)
+})
+
+test('Local Events connect, status and disconnect API routes are user scoped', () => {
+  const connectRoute = readFileSync(new URL('../app/api/integrations/local-events/connect/route.ts', import.meta.url), 'utf8')
+  const disconnectRoute = readFileSync(new URL('../app/api/integrations/local-events/disconnect/route.ts', import.meta.url), 'utf8')
+  assert.match(connectRoute, /connectLocalEventsForUser\(userId/)
+  assert.match(disconnectRoute, /disconnectLocalEventsForUser\(userId\)/)
+})
+
+test('accepted Edge of Norway events are persisted with stable external IDs and upserted', () => {
+  const parser = readFileSync(new URL('../app/lib/integrations/local-events/edge-of-norway-shadow.ts', import.meta.url), 'utf8')
+  const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
+  assert.match(parser, /externalId: String\(eventObject\._id\)/)
+  assert.match(server, /provider: EDGE_OF_NORWAY_PROVIDER/)
+  assert.match(server, /upsert\(rows, \{ onConflict: 'user_id,provider,external_id' \}\)/)
+  assert.match(server, /raw: \{[\s\S]*sourceUrl:[\s\S]*primaryPlaceId:[\s\S]*includedPlaceIds:/)
+})
+
+test('calendar imports Local Events as Events category with source URL action', () => {
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(home, /'edge-of-norway'\) return 'local-events'/)
+  assert.match(home, /if \(source === 'local-events'\) return 'event'/)
+  assert.match(home, /if \(source === 'local-events'\) return 'Events'/)
+  assert.match(home, /Open event page/)
+})
+
+test('Local Events stay out of frame and mirror surfaces', () => {
+  const deviceRoute = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
+  const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(deviceRoute, /edge-of-norway|local[-_ ]?events|Local Events/i)
+  assert.doesNotMatch(mirrorRoute, /edge-of-norway|Local Events/i)
+})
+
+test('connect marks Local Events connected only after sync succeeds', () => {
+  const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
+  assert.ok(server.indexOf('const sync = await syncLocalEventsForUser') < server.indexOf(".from('user_integrations').upsert"))
+})
+
+test('failed Local Events sync cannot delete last successful data before parsing', () => {
+  const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
+  assert.ok(server.indexOf('runEdgeOfNorwayShadowDiagnostic') < server.indexOf(".from('integration_items').delete()"))
+  assert.match(server, /if \(result\.error \|\| result\.diagnosticError\) throw new Error/)
+})
