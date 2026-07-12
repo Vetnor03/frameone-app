@@ -42,6 +42,33 @@ type EventParseResult =
   | { accepted: true; event: AcceptedSeriesCandidate }
   | { accepted: false; reason: EdgeOfNorwaySkipReason; title?: string; sourceUrl?: string }
 
+type PublicEventParseResult =
+  | { accepted: true; event: EdgeOfNorwayAcceptedEvent }
+  | { accepted: false; reason: EdgeOfNorwaySkipReason; title?: string; sourceUrl?: string }
+
+function isAcceptedResult(result: PublicEventParseResult): result is Extract<PublicEventParseResult, { accepted: true }> {
+  return result.accepted
+}
+
+function isSkippedResult(result: PublicEventParseResult): result is Extract<PublicEventParseResult, { accepted: false }> {
+  return !result.accepted
+}
+
+type EdgeOfNorwayListParseResult = {
+  flightScriptsFound: number
+  flightChunksDecoded: number
+  malformedChunks: number
+  eventObjectsFound: number
+  uniqueEvents: number
+  acceptedCount: number
+  skippedCounts: Record<string, number>
+  repeatedSeriesCount: number
+  repeatedSeriesEventsCount: number
+  repeatedSeriesExamples: EdgeOfNorwayRepeatedSeriesExample[]
+  results: PublicEventParseResult[]
+  parsingErrors: Array<{ reason: string }>
+}
+
 type EdgeOfNorwayDiagnosticError = { stage: 'authentication' | 'fetch' | 'read_response' | 'inspect_input' | 'decode_flight' | 'extract_events'; message: string; name?: string; code?: string; requestedUrl?: string; finalUrl?: string }
 type EdgeOfNorwayFetchDiagnostic = { requestedUrl: string; finalUrl: string; finalHostname: string | null; status: number; ok: boolean; redirected: boolean; redirectStatus: boolean; contentType: string | null; contentLengthHeader: string | null; htmlLength: number; startsWithDoctype: boolean; documentTitle: string | null; containsLoadingPlaceholder: boolean; containsKnownEventText: boolean; rawFlightMarkerCount: number; escapedEventMarkerCount: number; htmlPreview?: string }
 
@@ -361,7 +388,7 @@ function parseStructuredEvent(eventObject: StructuredEvent): EventParseResult {
   return { accepted: true, event: { title, sourceUrl, date: showings[0].date as string, startTime: time.startTime, allDay: time.allDay, venueName: venueNameForEvent(eventObject), shortDescription: shortDescriptionForEvent(eventObject) } }
 }
 
-export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWAY_EVENTS_URL) {
+export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWAY_EVENTS_URL): EdgeOfNorwayListParseResult {
   const decoded = decodeFlightPayload(html)
   const extracted = extractStructuredEvents(decoded.flightText)
   const parsedResults = extracted.uniqueEvents.map(parseStructuredEvent)
@@ -452,8 +479,8 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
     if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta)
     try {
       const parsed = parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_EVENTS_URL)
-      const acceptedEvents = parsed.results.filter((result) => result.accepted).map((result) => result.event)
-      const parseErrors = parsed.results.filter((result) => !result.accepted).map((result) => ({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }))
+      const acceptedEvents = parsed.results.filter(isAcceptedResult).map((result) => result.event)
+      const parseErrors = parsed.results.filter(isSkippedResult).map((result) => ({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }))
       return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, repeatedSeriesCount: parsed.repeatedSeriesCount, repeatedSeriesEventsCount: parsed.repeatedSeriesEventsCount, repeatedSeriesExamples: parsed.repeatedSeriesExamples, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
     } catch (error) {
       return structuredDiagnosticError('extract_events', error, fetchMeta)
