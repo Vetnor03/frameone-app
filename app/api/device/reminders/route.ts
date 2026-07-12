@@ -3,9 +3,8 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
-import { syncLocalEventsForUser } from '@/app/lib/integrations/local-events/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
-import { buildLocalEventItems, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, limitLocalEventsToNext, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
+import { buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow } from '@/app/lib/device/remindersFeed'
 
 export const runtime = 'nodejs'
 
@@ -463,7 +462,6 @@ export async function GET(req: Request) {
     let spondItems: DeviceReminderItem[] = []
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
-    let localEventItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
       if (!skipSync) await syncSpondIfStaleForUsers(memberUserIds)
 
@@ -526,34 +524,25 @@ export async function GET(req: Request) {
         includeOverdue
       )
 
-      if (!skipSync) await Promise.allSettled(memberUserIds.map((userId) => syncLocalEventsForUser(userId)))
-      const { data: localEventsData, error: localEventsError } = await supabase
-        .from('integration_items')
-        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
-        .eq('provider', 'local_events')
-        .in('user_id', memberUserIds)
-        .order('starts_at', { ascending: true, nullsFirst: false })
-
-      if (localEventsError) {
-        return NextResponse.json({ error: localEventsError.message }, { status: 500 })
-      }
-
-      localEventItems = buildLocalEventItems(
-        Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [],
-        todayYmd,
-        horizonEndYmd,
-        timeZone
-      )
     }
 
-    const sortedCandidates = limitLocalEventsToNext([...teamsItems, ...spondItems, ...wasteItems, ...manualItems, ...localEventItems], now).sort(compareReminderItems)
-    const items = selectReminderDisplayGroups(sortedCandidates, limit)
+    const integrationItems = [
+      ...spondItems,
+      ...teamsItems,
+      ...wasteItems,
+    ].sort(compareReminderItems)
 
-    return NextResponse.json({ items })
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Unknown error' },
-      { status: 500 }
-    )
+    const allItems = [...manualItems, ...integrationItems].sort(compareReminderItems)
+    const selectedItems = selectReminderDisplayGroups(allItems, limit)
+
+    return NextResponse.json({
+      items: selectedItems,
+      all_items: allItems,
+      count: selectedItems.length,
+      today: todayYmd,
+      timezone: timeZone,
+    })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to load reminders' }, { status: 500 })
   }
 }

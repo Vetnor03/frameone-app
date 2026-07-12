@@ -25,7 +25,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'local_events' | 'remind'
+export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'remind'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -267,68 +267,8 @@ export function buildWasteCollectionItems(
   })
 }
 
-export function buildLocalEventItems(
-  rows: IntegrationItemRow[],
-  todayYmd: string,
-  horizonEndYmd: string,
-  timeZone: string
-): DeviceReminderItem[] {
-  return rows.flatMap((row) => {
-    const title = String(row.title || '').trim()
-    const externalId = String(row.external_id || '').trim()
-    const startsAt = row.starts_at
-    const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
-    if (!title || !externalId || !startsAt || raw.source !== 'local_events') return []
-
-    const occurrenceDate = isoToYmdInTimeZone(startsAt, timeZone)
-    if (!occurrenceDate || occurrenceDate > horizonEndYmd) return []
-    const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
-    if (daysUntil < 0) return []
-    const displayTime = isoToHmInTimeZone(startsAt, timeZone)
-
-    return [{
-      reminder_id: `local_events:${externalId}`,
-      title: cleanLocalEventDisplayTitle(title, occurrenceDate),
-      occurrence_date: occurrenceDate,
-      display_date: formatDisplayDate(occurrenceDate, todayYmd),
-      days_until: daysUntil,
-      is_overdue: false,
-      repeat: 'none' as ReminderRepeatKey,
-      due_time: displayTime,
-      display_time: displayTime,
-      source: 'local_events' as const,
-      external_id: externalId,
-      raw,
-    }]
-  })
-}
-
 function sortTimeValue(value: string | null) {
   return value || '99:99'
-}
-
-function cleanLocalEventDisplayTitle(title: string, occurrenceDate: string) {
-  const [, monthValue, dayValue] = occurrenceDate.split('-').map(Number)
-  if (!Number.isFinite(monthValue) || !Number.isFinite(dayValue)) return title
-  const monthForName: Record<string, number> = {
-    january: 1, jan: 1,
-    february: 2, februar: 2, feb: 2,
-    march: 3, mars: 3, mar: 3,
-    april: 4, apr: 4,
-    may: 5, mai: 5,
-    june: 6, juni: 6, jun: 6,
-    july: 7, juli: 7, jul: 7,
-    august: 8, aug: 8,
-    september: 9, sep: 9,
-    october: 10, oktober: 10, oct: 10, okt: 10,
-    november: 11, nov: 11,
-    december: 12, desember: 12, dec: 12, des: 12,
-  }
-  return title.replace(/(?:,\s*|\s+[–-]\s+|\s+)(\d{1,2})\.?\s+([A-Za-zæøåÆØÅ]+)\.?\s*$/i, (match, day, monthName) => {
-    const month = monthForName[String(monthName).toLowerCase()]
-    const isRecognizedDate = Number.isFinite(Number(day)) && month !== undefined
-    return isRecognizedDate ? '' : match
-  }).replace(/\s+/g, ' ').trim()
 }
 
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
@@ -360,45 +300,6 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   return selectedItems
 }
 
-export function selectNextLocalEventItem(items: DeviceReminderItem[], now = new Date()) {
-  const nowYmd = isoToYmdInTimeZone(now.toISOString(), 'Europe/Oslo')
-  const nowHm = isoToHmInTimeZone(now.toISOString(), 'Europe/Oslo')
-  const nowSort = `${nowYmd} ${nowHm}`
-  const importedLocalEvents = items.length
-  const removedAlreadyStarted = items.filter((event) => reminderSortTimestamp(event) <= nowSort && event.raw?.all_day !== true).length
-  const removedExpiredAllDay = items.filter((event) => reminderSortTimestamp(event) <= nowSort && event.raw?.all_day === true).length
-  const removedSkipped = items.filter((event) => (event as DeviceReminderItem & { skippedOnFrame?: boolean }).skippedOnFrame).length
-  const eligible = items
-    .filter((event) => !(event as DeviceReminderItem & { skippedOnFrame?: boolean }).skippedOnFrame)
-    .filter((event) => reminderSortTimestamp(event) > nowSort)
-  const rank = (event: DeviceReminderItem) => {
-    const classification = String(event.raw?.event_kind || '')
-    if (classification === 'one_off') return { priority: 1, reason: 'timely one-off event' }
-    if (classification === 'separate_session') return { priority: 3, reason: 'meaningful separate session' }
-    if (classification === 'continuous') return event.days_until <= 1 ? { priority: 4, reason: 'newly opened continuous event' } : { priority: 5, reason: 'continuous event ending soon' }
-    return { priority: 2, reason: 'festival or limited event' }
-  }
-  const ranked = eligible.map((event) => ({ event, ...rank(event) })).sort((a, b) => a.priority - b.priority || reminderSortTimestamp(a.event).localeCompare(reminderSortTimestamp(b.event)))
-  const selected = ranked[0] ?? null
-  console.info('frame/mirror local event selector diagnostics', {
-    importedLocalEvents,
-    upcomingEligibleEvents: eligible.length,
-    removedAlreadyStarted,
-    removedExpiredAllDay,
-    removedSkipped,
-    removedHiddenSeries: 0,
-    removedByContinuousCooldown: 0,
-    rankedCandidates: ranked.slice(0, 10).map(({ event, priority, reason }) => ({ title: event.title, classification: event.raw?.event_kind || null, startAt: `${event.occurrence_date} ${event.display_time || 'all-day'}`, priority, reason })),
-    selectedEvent: selected ? { title: selected.event.title, startAt: `${selected.event.occurrence_date} ${selected.event.display_time || 'all-day'}`, classification: selected.event.raw?.event_kind || null, reason: selected.reason } : null,
-  })
-  return selected?.event ?? null
-}
-
-export function limitLocalEventsToNext(items: DeviceReminderItem[], now = new Date()) {
-  const nextLocalEvent = selectNextLocalEventItem(items.filter((item) => item.source === 'local_events'), now)
-  return items.filter((item) => item.source !== 'local_events' || item === nextLocalEvent)
-}
-
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
   if (a.days_until !== b.days_until) return a.days_until - b.days_until
   if (a.occurrence_date < b.occurrence_date) return -1
@@ -409,7 +310,7 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (at < bt) return -1
   if (at > bt) return 1
 
-  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : source === 'local_events' ? 3 : 4
+  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : 4
   const as = sourceRank(a.source)
   const bs = sourceRank(b.source)
   if (as !== bs) return as - bs
