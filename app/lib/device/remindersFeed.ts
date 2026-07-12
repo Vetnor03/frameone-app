@@ -25,7 +25,7 @@ export type ReminderRepeatKey =
   | '2years'
   | 'custom'
 
-export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'remind'
+export type DeviceReminderSource = 'spond' | 'teams' | 'waste' | 'remind' | 'local-events'
 
 export type DeviceReminderItem = {
   reminder_id: string
@@ -40,6 +40,7 @@ export type DeviceReminderItem = {
   source?: DeviceReminderSource
   external_id?: string
   raw?: Record<string, unknown>
+  provider?: string
 }
 
 export type IntegrationItemRow = {
@@ -267,6 +268,120 @@ export function buildWasteCollectionItems(
   })
 }
 
+
+export const LOCAL_EVENTS_FRAME_TIME_ZONE = 'Europe/Oslo'
+export const LOCAL_EVENTS_FRAME_PROVIDER = 'edge-of-norway'
+
+export type LocalEventSkipRow = {
+  device_id: string
+  provider: string
+  external_event_id: string
+  skipped: boolean | null
+}
+
+function normalizedTitle(value: string) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('nb-NO')
+}
+
+function localEventDateFromRow(row: IntegrationItemRow) {
+  const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
+  const rawDate = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.date) ? raw.date.slice(0, 10) : ''
+  if (rawDate) return rawDate
+  const timestamp = row.starts_at || row.due_at
+  return timestamp ? isoToYmdInTimeZone(timestamp, LOCAL_EVENTS_FRAME_TIME_ZONE) : null
+}
+
+function localEventIsAllDay(row: IntegrationItemRow) {
+  const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
+  return raw.all_day === true && !row.starts_at
+}
+
+export function buildLocalEventFrameItem(
+  rows: IntegrationItemRow[],
+  skipRows: LocalEventSkipRow[],
+  todayYmd: string,
+  now = new Date()
+): DeviceReminderItem[] {
+  const skipped = new Set(
+    skipRows
+      .filter((row) => row.provider === LOCAL_EVENTS_FRAME_PROVIDER && row.skipped !== false)
+      .map((row) => String(row.external_event_id || '').trim())
+      .filter(Boolean)
+  )
+
+  const candidates = rows
+    .filter((row) => row.provider === LOCAL_EVENTS_FRAME_PROVIDER)
+    .filter((row) => {
+      const title = String(row.title || '').trim()
+      const externalId = String(row.external_id || '').trim()
+      return !!title && !!externalId && !skipped.has(externalId)
+    })
+
+  const timed = (candidates
+    .map((row) => {
+      const startsAt = String(row.starts_at || '').trim()
+      if (!startsAt || localEventIsAllDay(row)) return null
+      const start = new Date(startsAt)
+      const startMs = start.getTime()
+      if (!Number.isFinite(startMs) || now.getTime() >= startMs) return null
+      const occurrenceDate = isoToYmdInTimeZone(startsAt, LOCAL_EVENTS_FRAME_TIME_ZONE)
+      const displayTime = isoToHmInTimeZone(startsAt, LOCAL_EVENTS_FRAME_TIME_ZONE)
+      if (!occurrenceDate || !displayTime) return null
+      return { row, startMs, occurrenceDate, displayTime, titleKey: normalizedTitle(String(row.title || '')) }
+    })
+    .filter(Boolean) as Array<{ row: IntegrationItemRow; startMs: number; occurrenceDate: string; displayTime: string; titleKey: string }>)
+    .sort((a, b) => a.startMs - b.startMs || a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id)))
+
+  const timedSelection = timed[0]
+  if (timedSelection) {
+    const title = String(timedSelection.row.title || '').trim()
+    return [{
+      reminder_id: `local-events:${timedSelection.row.external_id}`,
+      title,
+      occurrence_date: timedSelection.occurrenceDate,
+      display_date: formatDisplayDate(timedSelection.occurrenceDate, todayYmd),
+      days_until: diffDaysFromYmd(todayYmd, timedSelection.occurrenceDate),
+      is_overdue: false,
+      repeat: 'none',
+      due_time: timedSelection.displayTime,
+      display_time: timedSelection.displayTime,
+      source: 'local-events',
+      provider: LOCAL_EVENTS_FRAME_PROVIDER,
+      external_id: String(timedSelection.row.external_id),
+      raw: { ...(timedSelection.row.raw || {}), all_day: false },
+    }]
+  }
+
+  const allDay = (candidates
+    .map((row) => {
+      if (!localEventIsAllDay(row)) return null
+      const occurrenceDate = localEventDateFromRow(row)
+      if (!occurrenceDate || occurrenceDate !== todayYmd) return null
+      return { row, occurrenceDate, titleKey: normalizedTitle(String(row.title || '')) }
+    })
+    .filter(Boolean) as Array<{ row: IntegrationItemRow; occurrenceDate: string; titleKey: string }>)
+    .sort((a, b) => a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id)))
+
+  const allDaySelection = allDay[0]
+  if (!allDaySelection) return []
+  const title = String(allDaySelection.row.title || '').trim()
+  return [{
+    reminder_id: `local-events:${allDaySelection.row.external_id}`,
+    title,
+    occurrence_date: allDaySelection.occurrenceDate,
+    display_date: `${formatDisplayDate(allDaySelection.occurrenceDate, todayYmd)} • All day`,
+    days_until: diffDaysFromYmd(todayYmd, allDaySelection.occurrenceDate),
+    is_overdue: false,
+    repeat: 'none',
+    due_time: null,
+    display_time: null,
+    source: 'local-events',
+    provider: LOCAL_EVENTS_FRAME_PROVIDER,
+    external_id: String(allDaySelection.row.external_id),
+    raw: { ...(allDaySelection.row.raw || {}), all_day: true },
+  }]
+}
+
 function sortTimeValue(value: string | null) {
   return value || '99:99'
 }
@@ -310,7 +425,7 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (at < bt) return -1
   if (at > bt) return 1
 
-  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : 4
+  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : source === 'local-events' ? 3 : 4
   const as = sourceRank(a.source)
   const bs = sourceRank(b.source)
   if (as !== bs) return as - bs
