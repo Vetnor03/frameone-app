@@ -2298,6 +2298,7 @@ async function handleSelectTab(k: TabKey) {
                     <ConnectAppsScreen
                       language={language}
                       modulesJson={modulesJson}
+                      activeDeviceId={activeDeviceId}
                       onBack={() => setRemindersConnectScreenOpen(false)}
                     />
                   ) : (
@@ -2423,11 +2424,13 @@ function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectApp
 function ConnectAppsScreen({
   language,
   modulesJson,
+  activeDeviceId = null,
   onBack,
   startup = false,
 }: {
   language: AppLanguage
   modulesJson: Record<string, unknown>
+  activeDeviceId?: string | null
   onBack: () => void
   startup?: boolean
 }) {
