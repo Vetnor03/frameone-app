@@ -19,11 +19,14 @@ export async function POST(req: Request) {
     return NextResponse.json({
       provider: 'edge-of-norway',
       mode: 'shadow',
-      source: 'Stavanger',
-      detailPagesFetched: 0,
+      listPageUrl: 'https://www.edgeofnorway.com/en/events?date=next_30&filtertype=place&place=stavanger',
+      cardsDiscovered: 0,
+      exactDuplicateCardsRemoved: 0,
+      uniqueSourceUrls: 0,
       acceptedCount: 0,
       skippedCounts: {},
-      fetchErrors: [diagnosticErrorMessage(error)],
+      acceptedEvents: [],
+      parsingErrors: [{ reason: diagnosticErrorMessage(error) }],
       error: diagnosticErrorMessage(error),
     }, { status: 200 })
   }
