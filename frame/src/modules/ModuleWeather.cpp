@@ -1575,6 +1575,8 @@ static void renderMedium(const Cell& c,
   const int topPad = 20;
   const int mmGap = 10;
   const int dividerW = 1;
+  const int tempUnderlineGap = 4;
+  const int tempUnderlineH = 2;
 
   int totalTempW = (int)lw + mmGap + dividerW + mmGap + (int)rw;
   int tempStartX = c.x + (c.w - totalTempW) / 2;
@@ -1588,11 +1590,14 @@ static void renderMedium(const Cell& c,
   tx += dividerW + mmGap;
   drawLeft(tx, tempBaseline, hiBuf, FONT_B12, ink);
 
+  int tempUnderlineY = tempTop + (int)b12H + tempUnderlineGap;
+  d.fillRect(tempStartX, tempUnderlineY, totalTempW, tempUnderlineH, ink);
+
   const int bottomPad = 35;
   const int gapWindToPrecip = 5;
   const int gapIconToWind = 10;
   const int gapInsightToIcon = 10;
-  const int gapTempToInsight = 10;
+  const int gapTempToInsight = 10 + tempUnderlineGap + tempUnderlineH;
 
   int precipBaseline = c.y + c.h - bottomPad - b9Y1;
   int precipTop      = precipBaseline + b9Y1;
