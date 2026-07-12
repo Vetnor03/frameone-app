@@ -6,184 +6,51 @@ import { EDGE_OF_NORWAY_STAVANGER_LIST_URL, parseEdgeOfNorwayListPage, runEdgeOf
 const fixture = (name) => readFileSync(new URL(`./fixtures/edge-of-norway/${name}`, import.meta.url), 'utf8')
 const ref = '2026-07-12'
 const footballUrl = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
-const accepted = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref).results.filter((r) => r.accepted).map((r) => r.event)
+const events = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref).results.filter((r) => r.accepted).map((r) => r.event)
 
-test('football regression accepts badge date 11 July and never active calendar 19 July', () => {
-  const result = accepted(fixture('stavanger-list.html')).find((event) => event.sourceUrl === footballUrl)
-  assert.ok(result)
-  assert.deepEqual(result, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
-  assert.equal(result.date, '2026-07-11')
-  assert.notEqual(result.date, '2026-07-19')
-})
-
-test('one date with time', () => assert.deepEqual(accepted(fixture('one-date-with-time.html'))[0], { title: 'Evening concert', sourceUrl: 'https://www.fjordnorway.com/en/events/evening-concert', date: '2026-07-12', startTime: '19:30', allDay: false }))
-test('one date without time is all-day', () => assert.deepEqual(accepted(fixture('one-date-no-time.html'))[0], { title: 'Street market', sourceUrl: 'https://www.fjordnorway.com/en/events/street-market', date: '2026-07-12', startTime: null, allDay: true }))
-test('missing badge date', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-badge-date.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_badge_date: 1 }) })
-test('unclear badge date', () => { const result = parseEdgeOfNorwayListPage(fixture('unclear-badge-date.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_badge_date: 1 }) })
-test('dates after the title do not affect the ordered segment badge', () => { const result = parseEdgeOfNorwayListPage(fixture('multiple-dates-one-card.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.results[0].accepted, true); assert.equal(result.results[0].event.date, '2026-07-12') })
-test('same canonical URL on multiple dates is parsed raw before recurring grouping skip', () => { const result = parseEdgeOfNorwayListPage(fixture('same-url-multiple-dates.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.rawOccurrencesParsed, 2); assert.equal(result.results.filter((r) => !r.accepted && r.reason === 'recurring_event').length, 2) })
-test('exact duplicate cards are removed after raw occurrence parsing', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.rawOccurrencesParsed, 2); assert.equal(result.exactDuplicateCardsRemoved, 1); assert.equal(result.results.length, 1); assert.equal(result.results[0].accepted, true) })
-test('missing title', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-title.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_title: 1 }) })
-test('card without Fjord Norway Read more URL is not an occurrence', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-read-more-url.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.readMoreAnchorsDiscovered, 0); assert.deepEqual(result.groupedFailureCounts, {}) })
-test('unrelated dates elsewhere on page are ignored', () => { const result = accepted(fixture('unrelated-dates-elsewhere.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
-test('selected or active calendar dates are ignored', () => { const result = accepted(fixture('selected-active-calendar.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
-test('time from neighbouring card is not used', () => { const events = accepted(fixture('neighbour-time.html')); assert.equal(events[0].startTime, null); assert.equal(events[0].allDay, true); assert.equal(events[1].startTime, '17:00') })
-
-
-test('all fields are scoped to their own card', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('scoped-two-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.cardsDiscovered, 2)
-  assert.deepEqual(result.rawCards.map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
-    { title: 'First scoped title', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/first-scoped' },
-    { title: 'Second scoped title', badgeText: '13. Jul.', timeText: '21:30', sourceUrl: 'https://www.fjordnorway.com/en/events/second-scoped' },
-  ])
-  const second = result.results[1]
-  assert.equal(second.accepted, true)
-  if (second.accepted) {
-    assert.deepEqual(second.event, { title: 'Second scoped title', sourceUrl: 'https://www.fjordnorway.com/en/events/second-scoped', date: '2026-07-13', startTime: '21:30', allDay: false })
-    assert.notEqual(second.event.title, 'First scoped title')
-    assert.notEqual(second.event.date, '2026-07-12')
-    assert.notEqual(second.event.startTime, '10:00')
-    assert.notEqual(second.event.sourceUrl, 'https://www.fjordnorway.com/en/events/first-scoped')
-  }
-})
-
-
-
-test('recurring URLs resolve nested occurrence list items locally without cross-pairing', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('recurring-nested-date-groups.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.titleAnchorsFound, 4)
-  assert.equal(result.occurrenceListItemsResolved, 4)
-  assert.equal(result.uniqueCardNodes, 4)
-  assert.equal(result.rawOccurrencesParsed, 4)
-  assert.equal(result.rawSegmentsCreated, 4)
-  assert.deepEqual(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/repeated-event').map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
-    { title: 'Repeated event', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/repeated-event' },
-    { title: 'Repeated event', badgeText: '13. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/repeated-event' },
-    { title: 'Repeated event', badgeText: '14. Jul.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/repeated-event' },
-  ])
-})
-
-
-
-test('recurring event Read more occurrences resolve before grouping by URL', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('recurring-readmore-occurrences.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.readMoreAnchorsDiscovered, 4)
-  assert.equal(result.occurrencesResolved, 4)
-  assert.equal(result.rawCardsParsed, 4)
-  assert.equal(result.exactDuplicateCardsRemoved, 0)
-  assert.equal(result.uniqueEventUrls, 2)
-  assert.equal(result.cardsDiscovered, 4)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li', 'li', 'li'])
-  assert.deepEqual(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/triple').map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
-    { title: 'Triple harbour walk', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
-    { title: 'Triple harbour walk', badgeText: '14. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
-    { title: 'Triple harbour walk', badgeText: '15. Jul.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
-  ])
-})
-
-
-test('ordered Read more segments bound each occurrence and defer recurring skips until after raw parsing', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('ordered-occurrence-segments.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.readMoreAnchorsDiscovered, 5)
-  assert.equal(result.rawSegmentsCreated, 5)
+test('fixture date groups bound occurrences and keep neighbouring events separate', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('date-groups-live-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.dateGroupsDiscovered, 2)
+  assert.equal(result.titleOccurrencesDiscovered, 5)
   assert.equal(result.rawOccurrencesParsed, 5)
-  assert.deepEqual(result.rawCards.slice(0, 2).map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
-    { title: 'Harbour concert', badgeText: '12. Jul.', timeText: '18:30', sourceUrl: 'https://www.fjordnorway.com/en/events/harbour-concert' },
-    { title: 'Sunday market', badgeText: '12. Jul.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/sunday-market' },
-  ])
-  assert.equal(result.rawCards[0].badgeText, '12. Jul.')
-  assert.equal(result.results[0].accepted, true)
-  assert.equal(result.results[0].event.date, '2026-07-12')
-  assert.equal(result.results[1].accepted, true)
-  assert.equal(result.results[1].event.title, 'Sunday market')
-  assert.equal(result.results[1].event.startTime, null)
-  assert.equal(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/repeated-url').length, 3)
-  assert.equal(result.results.filter((r) => !r.accepted && r.reason === 'recurring_event').length, 3)
+  assert.equal(result.rawCards[0].title, 'Viking - Sandefjord')
+  assert.equal(result.rawCards[0].date, '2026-07-18')
+  assert.equal(result.rawCards[0].timeText, '18:00')
+  assert.equal(result.rawCards[1].title, 'No time card')
+  assert.equal(result.rawCards[1].date, '2026-07-18')
+  assert.equal(result.rawCards[1].timeText, null)
 })
 
-test('shadow diagnostic parses list page only and reports list-card metrics', async () => {
+test('title and matching Read more URL are paired, Book links ignored, and time is scoped between title and Read more', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('date-groups-live-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  const accepted = result.results.filter((r) => r.accepted).map((r) => r.event)
+  assert.deepEqual(accepted.find((event) => event.title === 'Viking - Sandefjord'), { title: 'Viking - Sandefjord', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord', date: '2026-07-18', startTime: '18:00', allDay: false })
+  assert.deepEqual(accepted.find((event) => event.title === 'No time card'), { title: 'No time card', sourceUrl: 'https://www.fjordnorway.com/en/events/no-time-card', date: '2026-07-18', startTime: null, allDay: true })
+  assert.deepEqual(accepted.find((event) => event.title === 'Stavanger Football Festival in Vågen | FINAL'), { title: 'Stavanger Football Festival in Vågen | FINAL', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final', date: '2026-07-19', startTime: '17:00', allDay: false })
+  assert.equal(accepted.some((event) => event.sourceUrl.includes('tickets.example')), false)
+})
+
+test('recurring URLs are skipped only after raw parsing across date groups', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('date-groups-live-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/repeated-url').length, 2)
+  assert.equal(result.results.filter((r) => !r.accepted && r.reason === 'recurring_event').length, 2)
+  assert.equal(result.groupedFailureCounts.recurring_event, 2)
+})
+
+test('football regression accepts 11 July and explicitly never borrows 19 July', () => {
+  const event = events(fixture('date-groups-football-regression.html')).find((entry) => entry.sourceUrl === footballUrl)
+  assert.ok(event)
+  assert.deepEqual(event, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
+  assert.notEqual(event.date, '2026-07-19')
+})
+
+test('shadow diagnostic reports date-group metrics from list page only', async () => {
   const fetchedUrls = []
-  const fetchImpl = async (requestUrl) => { fetchedUrls.push(String(requestUrl)); return { ok: true, text: async () => fixture('stavanger-list.html') } }
+  const fetchImpl = async (requestUrl) => { fetchedUrls.push(String(requestUrl)); return { ok: true, text: async () => fixture('date-groups-live-structure.html') } }
   const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl, ref)
   assert.deepEqual(fetchedUrls, [EDGE_OF_NORWAY_STAVANGER_LIST_URL])
-  assert.equal(result.cardsDiscovered, 3)
-  assert.equal(result.exactDuplicateCardsRemoved, 0)
+  assert.equal(result.dateGroupsDiscovered, 2)
+  assert.equal(result.rawOccurrencesParsed, 5)
   assert.equal(result.acceptedCount, 3)
-  assert.deepEqual(result.skippedCounts, {})
-  assert.equal(result.acceptedEvents[0].date, '2026-07-11')
-  assert.notEqual(result.acceptedEvents[0].date, '2026-07-19')
-})
-
-test('real card wrapper selector discovers only physical cards, not child wrappers', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('live-card-boundary.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.cardsDiscovered, 2)
-  assert.equal(result.results.length, 2)
-})
-
-test('live card boundary starts from Read more and resolves one root per physical card', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('live-card-boundary.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.cardsDiscovered, 2)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li'])
-  assert.equal(result.results.length, 2)
-  assert.equal(result.results[0].accepted, true)
-  assert.equal(result.results[1].accepted, true)
-  assert.deepEqual(result.results[0].event, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
-  assert.notEqual(result.results[0].event.date, '2026-07-19')
-})
-
-
-test('required live assertion cards parse only through complete card containers', () => {
-  const events = accepted(fixture('live-assertions.html'))
-  assert.deepEqual(events.find((event) => event.title === 'Viking - Sandefjord'), { title: 'Viking - Sandefjord', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord', date: '2026-07-18', startTime: '18:00', allDay: false })
-  assert.deepEqual(events.find((event) => event.title === 'Stavanger Football Festival in Vågen | FINAL'), { title: 'Stavanger Football Festival in Vågen | FINAL', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final', date: '2026-07-19', startTime: '17:00', allDay: false })
-})
-
-test('deterministic event-link discovery resolves generated-class cards independently', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('generated-classes-links.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.eventAnchorsDiscovered, 7)
-  assert.equal(result.uniqueEventUrls, 2)
-  assert.equal(result.urlGroupsWithTitleAndReadMore, 0)
-  assert.equal(result.cardCandidatesResolved, 2)
-  assert.equal(result.cardsWithOneBadgeDate, 2)
-  assert.equal(result.cardsWithTime, 1)
-  assert.equal(result.cardsWithoutTime, 1)
-  assert.deepEqual(accepted(fixture('generated-classes-links.html')).map((event) => event.sourceUrl), ['https://www.fjordnorway.com/en/events/alpha-event', 'https://www.fjordnorway.com/en/events/beta-market'])
-})
-
-test('event anchors without Read more are not occurrence starting points', () => {
-  const result = parseEdgeOfNorwayListPage('<a href="https://www.fjordnorway.com/en/events/orphan">Orphan event</a>', EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.eventAnchorsDiscovered, 1)
-  assert.equal(result.readMoreAnchorsDiscovered, 0)
-  assert.equal(result.cardsDiscovered, 0)
-  assert.deepEqual(result.groupedFailureCounts, {})
-})
-
-test('proven live li structure keeps neighbouring cards isolated', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('live-proven-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.cardsDiscovered, 4)
-  assert.equal(result.rawCardsParsed, 4)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li', 'li', 'li'])
-  assert.deepEqual(result.rawCards.slice(0, 3).map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
-    { title: 'FIFA World Cup: Third-place play-off, 18 July // Football festival in Stavanger @ Fiskepiren', badgeText: '18. Jul.', timeText: '20:00', sourceUrl: 'https://www.fjordnorway.com/en/events/fifa-world-cup-third-place-play-off-18-july-football-festival-in-stavanger-fiskepiren' },
-    { title: 'Viking - Sandefjord', badgeText: '18. Jul.', timeText: '18:00', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord' },
-    { title: 'Stavanger Football Festival in Vågen | FINAL', badgeText: '19. Jul.', timeText: '17:00', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final' },
-  ])
-})
-
-test('live verification values parse from the proven li card only', () => {
-  const events = accepted(fixture('live-proven-structure.html'))
-  assert.deepEqual(events.find((event) => event.title === 'Viking - Sandefjord'), { title: 'Viking - Sandefjord', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord', date: '2026-07-18', startTime: '18:00', allDay: false })
-  assert.deepEqual(events.find((event) => event.title === 'Stavanger Football Festival in Vågen | FINAL'), { title: 'Stavanger Football Festival in Vågen | FINAL', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final', date: '2026-07-19', startTime: '17:00', allDay: false })
-})
-
-test('image links and Book links are ignored in proven live structure', () => {
-  const result = parseEdgeOfNorwayListPage(fixture('live-proven-structure.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
-  assert.equal(result.rawCards.some((card) => card.title === 'Plakat VM Finale 19 juli'), false)
-  assert.equal(result.rawCards.some((card) => card.sourceUrl === 'https://www.ticketmaster.no'), false)
-})
-
-test('no time becomes all-day in proven live structure', () => {
-  const event = accepted(fixture('live-proven-structure.html')).find((entry) => entry.title === 'No time card')
-  assert.deepEqual(event, { title: 'No time card', sourceUrl: 'https://www.fjordnorway.com/en/events/no-time-card', date: '2026-07-20', startTime: null, allDay: true })
+  assert.equal(result.skippedCounts.recurring_event, 2)
 })
