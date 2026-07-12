@@ -300,15 +300,6 @@ function parseBadgeDateText(value: string, referenceDate: Date | string) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function parseTime(value: string) {
-  const m = value.match(/\b([01]?\d|2[0-3])[:.](\d{2})\b/)
-  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
-}
-
-function exactRawCardKey(card: EdgeOfNorwayRawCard) {
-  return JSON.stringify([card.title, card.badgeText, card.timeText, card.sourceUrl])
-}
-
 function extractReadMoreUrl(card: string, pageUrl: string) {
   for (const m of card.matchAll(/<a\b[^>]*href=["'][^"']+["'][^>]*>(?:(?!<a\b)[\s\S])*?read\s*more(?:(?!<a\b)[\s\S])*?<\/a>/gi)) {
     const tag = m[0].match(/^<a\b[^>]*>/i)?.[0] || ''
@@ -316,38 +307,6 @@ function extractReadMoreUrl(card: string, pageUrl: string) {
     if (canonical) return canonical
   }
   return null
-}
-
-function extractTitle(card: string, sourceUrl: string, pageUrl: string) {
-  for (const m of card.matchAll(/<a\b[^>]*href=["'][^"']+["'][^>]*>(?:(?!<a\b)[\s\S])*?<\/a>/gi)) {
-    const tag = m[0].match(/^<a\b[^>]*>/i)?.[0] || ''
-    const canonical = canonicalizeFjordNorwayUrl(attr(tag, 'href') || '', pageUrl)
-    const text = stripTags(m[0])
-    if (canonical === sourceUrl && text && !/^read\s*more\b/i.test(text) && !/^book\b/i.test(text)) return text
-  }
-  return extractHeadingTitle(card)
-}
-
-function extractBadgeDates(card: string, referenceDate: Date | string) {
-  const badgeMatches = badgeTextsInCard(card).map((text) => parseBadgeDateText(text, referenceDate)).filter(Boolean) as string[]
-  return Array.from(new Set(badgeMatches))
-}
-
-function extractClockTime(card: string) {
-  const times = standaloneTimeTextsInCard(card)
-  return times.length === 1 ? times[0] : null
-}
-
-function extractRawTitle(card: string, sourceUrl: string | null, pageUrl: string) {
-  return sourceUrl ? extractTitle(card, sourceUrl, pageUrl) : extractHeadingTitle(card)
-}
-
-function extractRawBadgeText(card: string) {
-  return countBadgeTexts(card)[0] || null
-}
-
-function extractRawTimeText(card: string) {
-  return parseTime(textWithoutAnchorsScriptsStyles(card))
 }
 
 function standaloneTimeTextsInCard(card: string) {
