@@ -71,7 +71,7 @@ test('format helper uses connected summary grammar', () => {
 test('normal Local Events UI hides diagnostics and developer area editing', () => {
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(home, /Search for your place/)
-  assert.match(home, /We also include nearby places that are close enough for spontaneous events\./)
+  assert.doesNotMatch(home, /Selected place:|We also include nearby places that are close enough for spontaneous events\./)
   assert.doesNotMatch(home, /TEST LIVE EVENTS|Flight script counts|skipped counts|shadow-mode wording|Supabase wording/i)
   assert.doesNotMatch(home, /Included places|Add nearby|SAVE AREA/)
 })

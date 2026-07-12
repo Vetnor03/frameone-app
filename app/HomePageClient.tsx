@@ -2771,10 +2771,6 @@ function ConnectAppsScreen({
                 </button>
               ))}
             </div>
-            <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] px-3 py-3 text-xs text-[color:var(--fg-70)]">
-              <span className="font-medium text-[color:var(--fg-90)]">Selected place:</span> {primaryName}
-              <p className="mt-2 leading-5 text-[color:var(--fg-45)]">We also include nearby places that are close enough for spontaneous events.</p>
-            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !area.primaryPlaceId} className="h-10 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff]/10 px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? 'Connecting…' : 'Connect'}</button>
               {localEventsSavedArea ? <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea); setLocalEventsOpen(false) }} disabled={localEventsLoading} className="h-10 rounded-xl border border-[color:var(--bd-15)] px-4 text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">Cancel</button> : null}
