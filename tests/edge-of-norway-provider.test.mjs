@@ -83,6 +83,28 @@ test('current sanitized Edge of Norway card uses heading, Read more URL, visible
   assert.equal(cards[0].category, 'Sport')
 })
 
+test('list parser falls back to visible card time when description has no time', () => {
+  const html = `
+    <li class="event-card product-list-item">
+      <div class="event-card__date">12. jul.</div>
+      <div class="event-card__category">Theatre and dramatic arts</div>
+      <h3><a href="https://www.fjordnorway.com/en/events/summer-at-boretunet">Summer at Boretunet</a></h3>
+      <div class="event-card__location">Boretunet</div>
+      <div class="event-card__metadata">
+        <span aria-hidden="true">clock</span>
+        <span>10:00</span>
+      </div>
+      <p class="event-card__description">Free family activities at Boretunet by the sea: games, treasure hunt, concerts, café treats, and stays in tiny houses for a relaxed summer.</p>
+      <a href="https://www.fjordnorway.com/en/events/summer-at-boretunet">Read more</a>
+    </li>
+  `
+  const cards = parseEdgeOfNorwayListPage(html, 'stavanger', new Date('2026-07-12T00:00:00Z'))
+  assert.equal(cards.length, 1)
+  assert.equal(cards[0].date, '2026-07-12')
+  assert.equal(cards[0].startTime, '10:00')
+  assert.equal(cards[0].timeSource, 'card')
+})
+
 test('list parser uses explicit card date when no broad date heading is present', () => {
   const html = `
     <div class="search-result-card">
