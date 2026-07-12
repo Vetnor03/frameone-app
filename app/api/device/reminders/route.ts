@@ -292,6 +292,10 @@ function normalizeHorizonDays(raw: string | null) {
   return Math.min(MAX_HORIZON_DAYS, Math.floor(n))
 }
 
+function logOptionalReminderProviderFailure(provider: string, error: unknown) {
+  console.warn(`[device/reminders] Optional reminder provider ${provider} failed`, error)
+}
+
 function isTimedOccurrenceAlreadyPassed(
   occurrenceYmd: string,
   dueTime: string | null,
@@ -450,11 +454,11 @@ export async function GET(req: Request) {
       .eq('device_id', device_id)
 
     if (membersError) {
-      return NextResponse.json({ error: membersError.message }, { status: 500 })
+      logOptionalReminderProviderFailure('device_members', membersError)
     }
 
     const memberUserIds = Array.from(new Set(
-      (Array.isArray(membersData) ? membersData : [])
+      (!membersError && Array.isArray(membersData) ? membersData : [])
         .map((row: { user_id?: unknown }) => String(row.user_id || '').trim())
         .filter(Boolean)
     ))
@@ -463,67 +467,77 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
-      if (!skipSync) await syncSpondIfStaleForUsers(memberUserIds)
+      try {
+        if (!skipSync) await syncSpondIfStaleForUsers(memberUserIds)
 
-      const { data: integrationItemsData, error: integrationItemsError } = await supabase
-        .from('integration_items')
-        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
-        .eq('provider', 'spond')
-        .in('user_id', memberUserIds)
-        .order('priority', { ascending: true })
-        .order('starts_at', { ascending: true, nullsFirst: false })
+        const { data: integrationItemsData, error: integrationItemsError } = await supabase
+          .from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'spond')
+          .in('user_id', memberUserIds)
+          .order('priority', { ascending: true })
+          .order('starts_at', { ascending: true, nullsFirst: false })
 
-      if (integrationItemsError) {
-        return NextResponse.json({ error: integrationItemsError.message }, { status: 500 })
+        if (integrationItemsError) throw integrationItemsError
+
+        spondItems = buildSpondReminderItems(
+          Array.isArray(integrationItemsData) ? (integrationItemsData as IntegrationItemRow[]) : [],
+          todayYmd,
+          horizonEndYmd,
+          timeZone,
+          includeOverdue
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('spond', error)
       }
 
-      spondItems = buildSpondReminderItems(
-        Array.isArray(integrationItemsData) ? (integrationItemsData as IntegrationItemRow[]) : [],
-        todayYmd,
-        horizonEndYmd,
-        timeZone,
-        includeOverdue
-      )
+      try {
+        if (!skipSync) {
+          const syncResults = await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays })))
+          syncResults.forEach((result) => {
+            if (result.status === 'rejected') logOptionalReminderProviderFailure('teams-sync', result.reason)
+          })
+        }
 
-      if (!skipSync) await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays })))
+        const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
+          .from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'teams')
+          .in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
 
-      const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
-        .from('integration_items')
-        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
-        .eq('provider', 'teams')
-        .in('user_id', memberUserIds)
-        .order('starts_at', { ascending: true, nullsFirst: false })
+        if (teamsIntegrationItemsError) throw teamsIntegrationItemsError
 
-      if (teamsIntegrationItemsError) {
-        return NextResponse.json({ error: teamsIntegrationItemsError.message }, { status: 500 })
+        teamsItems = buildTeamsMeetingItems(
+          Array.isArray(teamsIntegrationItemsData) ? (teamsIntegrationItemsData as IntegrationItemRow[]) : [],
+          todayYmd,
+          horizonEndYmd,
+          timeZone
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('teams', error)
       }
 
-      teamsItems = buildTeamsMeetingItems(
-        Array.isArray(teamsIntegrationItemsData) ? (teamsIntegrationItemsData as IntegrationItemRow[]) : [],
-        todayYmd,
-        horizonEndYmd,
-        timeZone
-      )
+      try {
+        const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
+          .from('integration_items')
+          .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
+          .eq('provider', 'waste')
+          .in('user_id', memberUserIds)
+          .order('starts_at', { ascending: true, nullsFirst: false })
 
-      const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
-        .from('integration_items')
-        .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
-        .eq('provider', 'waste')
-        .in('user_id', memberUserIds)
-        .order('starts_at', { ascending: true, nullsFirst: false })
+        if (wasteIntegrationItemsError) throw wasteIntegrationItemsError
 
-      if (wasteIntegrationItemsError) {
-        return NextResponse.json({ error: wasteIntegrationItemsError.message }, { status: 500 })
+        wasteItems = buildWasteCollectionItems(
+          Array.isArray(wasteIntegrationItemsData) ? (wasteIntegrationItemsData as IntegrationItemRow[]) : [],
+          todayYmd,
+          horizonEndYmd,
+          timeZone,
+          includeOverdue
+        )
+      } catch (error) {
+        logOptionalReminderProviderFailure('waste', error)
       }
-
-      wasteItems = buildWasteCollectionItems(
-        Array.isArray(wasteIntegrationItemsData) ? (wasteIntegrationItemsData as IntegrationItemRow[]) : [],
-        todayYmd,
-        horizonEndYmd,
-        timeZone,
-        includeOverdue
-      )
-
     }
 
     const integrationItems = [

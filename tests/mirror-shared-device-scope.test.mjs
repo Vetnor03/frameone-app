@@ -46,5 +46,5 @@ test('mirror snapshot requests cached reminders to avoid blocking integration sy
   assert.match(mirrorRoute, /url\.searchParams\.set\('skip_sync', '1'\)/)
   assert.match(remindersRoute, /const skipSync = normalizeSkipSync\(url\.searchParams\.get\('skip_sync'\)\)/)
   assert.match(remindersRoute, /if \(!skipSync\) await syncSpondIfStaleForUsers\(memberUserIds\)/)
-  assert.match(remindersRoute, /if \(!skipSync\) await Promise\.allSettled\(memberUserIds\.map\(\(userId\) => syncTeamsFromStoredConnection/)
+  assert.match(remindersRoute, /if \(!skipSync\) \{[\s\S]*?Promise\.allSettled\(memberUserIds\.map\(\(userId\) => syncTeamsFromStoredConnection/)
 })
