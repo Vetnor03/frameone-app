@@ -4,32 +4,25 @@ import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 
 export const runtime = 'nodejs'
 
-function diagnosticErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message
-  return 'Local Events diagnostic failed'
+function diagnosticError(error: unknown) {
+  const record = error as { name?: unknown; code?: unknown; message?: unknown }
+  return {
+    stage: 'authentication' as const,
+    message: typeof record?.message === 'string' && record.message ? record.message : 'Local Events diagnostic failed',
+    ...(typeof record?.name === 'string' ? { name: record.name } : {}),
+    ...(typeof record?.code === 'string' ? { code: record.code } : {}),
+  }
 }
 
 export async function POST(req: Request) {
-  const userId = await getAuthenticatedUserId(req)
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+  let userId: string | null
   try {
-    return NextResponse.json(await runEdgeOfNorwayShadowDiagnostic())
-  } catch (error: unknown) {
-    return NextResponse.json({
-      provider: 'edge-of-norway',
-      mode: 'shadow',
-      listPageUrl: 'https://www.fjordnorway.com/en/events?date=next_30&filtertype=place&place=stavanger',
-      flightScriptsFound: 0,
-      flightChunksDecoded: 0,
-      malformedChunks: 0,
-      eventObjectsFound: 0,
-      uniqueEvents: 0,
-      acceptedCount: 0,
-      skippedCounts: {},
-      acceptedEvents: [],
-      parsingErrors: [{ reason: diagnosticErrorMessage(error) }],
-      error: diagnosticErrorMessage(error),
-    }, { status: 200 })
+    userId = await getAuthenticatedUserId(req)
+  } catch (error) {
+    const details = diagnosticError(error)
+    return NextResponse.json({ error: details.message, diagnosticError: details }, { status: 500 })
   }
+  if (!userId) return NextResponse.json({ error: 'Unauthorized', diagnosticError: { stage: 'authentication', message: 'Unauthorized' } }, { status: 401 })
+
+  return NextResponse.json(await runEdgeOfNorwayShadowDiagnostic())
 }

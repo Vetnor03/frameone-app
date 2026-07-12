@@ -2418,6 +2418,8 @@ type LocalEventsDiagnosticResult = {
   parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
   networkError?: string
   error?: string
+  diagnosticError?: { stage: string; message: string; name?: string; code?: string }
+  fetch?: { requestedUrl: string; finalUrl: string; status: number; ok: boolean; redirected: boolean; contentType: string | null; contentLengthHeader: string | null; htmlLength: number; startsWithDoctype: boolean; documentTitle: string | null; containsLoadingPlaceholder: boolean; containsKnownEventText: boolean; rawFlightMarkerCount: number; escapedEventMarkerCount: number; htmlPreview?: string }
 }
 type DisconnectableConnectAppKey = 'spond' | 'teams'
 
@@ -2730,6 +2732,13 @@ function ConnectAppsScreen({
           {localEventsDiagnostic && (
             <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
               <div className="grid grid-cols-2 gap-2">
+                <div>Fetch status: {localEventsDiagnostic.fetch?.status ?? 'Unknown'}</div>
+                <div>Final URL: {localEventsDiagnostic.fetch?.finalUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
+                <div>Content type: {localEventsDiagnostic.fetch?.contentType || 'Unknown'}</div>
+                <div>HTML length: {localEventsDiagnostic.fetch?.htmlLength ?? 'Unknown'}</div>
+                <div>Document title: {localEventsDiagnostic.fetch?.documentTitle || 'None'}</div>
+                <div>Raw Flight marker count: {localEventsDiagnostic.fetch?.rawFlightMarkerCount ?? localEventsDiagnostic.flightScriptsFound ?? 0}</div>
+                <div>Escaped Event marker count: {localEventsDiagnostic.fetch?.escapedEventMarkerCount ?? 0}</div>
                 <div>Flight scripts found: {localEventsDiagnostic.flightScriptsFound ?? 0}</div>
                 <div>Flight chunks decoded: {localEventsDiagnostic.flightChunksDecoded ?? 0}</div>
                 <div>Malformed chunks: {localEventsDiagnostic.malformedChunks ?? 0}</div>
@@ -2737,7 +2746,8 @@ function ConnectAppsScreen({
                 <div>Unique Events after _id dedupe: {localEventsDiagnostic.uniqueEvents ?? 0}</div>
                 <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Grouped skip counts: {Object.values(skippedCounts).reduce((sum: number, value) => sum + Number(value), 0)}</div>
-                <div>Network/timeout errors: {localEventsDiagnostic.networkError || 'None'}</div>
+                <div>Failure: {localEventsDiagnostic.diagnosticError ? `${localEventsDiagnostic.diagnosticError.stage}: ${localEventsDiagnostic.diagnosticError.message}` : (localEventsDiagnostic.networkError || 'None')}</div>
+                {localEventsDiagnostic.fetch?.htmlPreview && <div>HTML preview: {localEventsDiagnostic.fetch.htmlPreview}</div>}
               </div>
               <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
                 <div className="font-medium text-[color:var(--fg-90)]">First 10 accepted events</div>

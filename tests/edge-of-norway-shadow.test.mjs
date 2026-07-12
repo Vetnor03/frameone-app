@@ -56,3 +56,45 @@ test('shadow diagnostic reports structured flight metrics from list page only', 
   assert.equal(result.acceptedCount, 4)
   assert.equal(result.skippedCounts.recurring_event, 1)
 })
+
+test('raw HTML containing Flight scripts is detected without DOM parsing', () => {
+  const html = '<main>Loading</main>self.__next_f.push([1,"{\\"data\\":{\\"_id\\":\\"raw\\",\\"_type\\":\\"Event\\",\\"locTitle\\":{\\"en\\":\\"Raw Event\\"},\\"locSlug\\":{\\"en\\":{\\"current\\":\\"raw-event\\"}},\\"event\\":{\\"_type\\":\\"EventInfo\\",\\"recurring\\":false,\\"recurringShowings\\":null,\\"showings\\":[{\\"date\\":\\"2026-07-25\\",\\"schedule\\":[{\\"hour\\":12,\\"minutes\\":30}]}]}}}"])'
+  const result = parseEdgeOfNorwayListPage(html)
+  assert.equal(result.flightScriptsFound, 1)
+  assert.equal(result.flightChunksDecoded, 1)
+  assert.equal(result.uniqueEvents, 1)
+})
+
+test('multiple self.__next_f.push calls are extracted from raw HTML', () => {
+  const html = 'self.__next_f.push([1,"first"]);<div></div>self.__next_f.push([1,"second"]);self.__next_f.push([0,"ignored"])'
+  const result = parseEdgeOfNorwayListPage(html)
+  assert.equal(result.flightScriptsFound, 3)
+  assert.equal(result.flightChunksDecoded, 2)
+  assert.equal(result.malformedChunks, 1)
+})
+
+test('escaped quotes and parentheses inside payload strings do not break push extraction', () => {
+  const payload = JSON.stringify([1, 'alpha "quoted" (parentheses) \\ slash'])
+  const result = parseEdgeOfNorwayListPage(`self.__next_f.push(${payload});`)
+  assert.equal(result.flightScriptsFound, 1)
+  assert.equal(result.flightChunksDecoded, 1)
+  assert.equal(result.malformedChunks, 0)
+})
+
+test('fetch/parser exception cannot become a silent all-zero success response', async () => {
+  const result = await runEdgeOfNorwayShadowDiagnostic(async () => { throw Object.assign(new Error('network exploded'), { code: 'ECONNRESET' }) })
+  assert.equal(result.flightScriptsFound, 0)
+  assert.equal(result.eventObjectsFound, 0)
+  assert.equal(result.diagnosticError?.stage, 'fetch')
+  assert.equal(result.diagnosticError?.message, 'network exploded')
+  assert.equal(result.diagnosticError?.code, 'ECONNRESET')
+})
+
+test('HTML page with zero Flight markers produces explicit inspect_input result', async () => {
+  const fetchImpl = async () => new Response('<!doctype html><title>Interstitial</title><main>Blocked</main>', { status: 200, headers: { 'content-type': 'text/html' } })
+  const result = await runEdgeOfNorwayShadowDiagnostic(fetchImpl)
+  assert.equal(result.diagnosticError?.stage, 'inspect_input')
+  assert.equal(result.fetch?.rawFlightMarkerCount, 0)
+  assert.equal(result.fetch?.documentTitle, 'Interstitial')
+  assert.match(result.fetch?.htmlPreview || '', /Interstitial/)
+})
