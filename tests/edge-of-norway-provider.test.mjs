@@ -211,6 +211,15 @@ test('detail showings parser does not borrow a time from another row', () => {
 })
 
 
+
+test('title-specific dated tour is not moved to a different active detail date', () => {
+  const url = 'https://www.fjordnorway.com/en/events/sunday-tour-lervigskvartalet-12-july'
+  const cards = parseEdgeOfNorwayListPage(`<li class="event-card"><div>19. Jul.</div><a href="${url}">Sunday tour: Lervigskvartalet, 12 July</a></li>`, 'stavanger', new Date('2026-07-12T00:00:00Z'))
+  const detailHtml = `<main><h1>Sunday tour: Lervigskvartalet, 12 July</h1><h2>Showings</h2><div class="showing-row"><span>July 19</span></div><h2>Contact</h2></main>`
+  const { occurrences } = mergeRegionalEvents(cards, { [url]: detailHtml })
+  assert.deepEqual(occurrences.map(o => [o.title, o.date]), [['Sunday tour: Lervigskvartalet, 12 July', '2026-07-12']])
+})
+
 test('football festival detail showing stays one-off on 11 July at 17:00', () => {
   const url = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
   const cards = parseEdgeOfNorwayListPage(`<li class="event-card"><div>11. Jul.</div><a href="${url}">Football festival in Vågen on 11 July – Norway v England</a><p>17:00</p></li>`, 'stavanger', new Date('2026-07-11T00:00:00Z'))
