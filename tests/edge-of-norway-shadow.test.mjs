@@ -7,7 +7,6 @@ const fixture = (name) => readFileSync(new URL(`./fixtures/edge-of-norway/${name
 const ref = '2026-07-12'
 const footballUrl = 'https://www.fjordnorway.com/en/events/football-festival-in-vagen-on-11-july-norway-v-england'
 const accepted = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref).results.filter((r) => r.accepted).map((r) => r.event)
-const skipped = (html) => parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref).results.filter((r) => !r.accepted).map((r) => r.reason)
 
 test('football regression accepts badge date 11 July and never active calendar 19 July', () => {
   const result = accepted(fixture('stavanger-list.html')).find((event) => event.sourceUrl === footballUrl)
@@ -19,13 +18,13 @@ test('football regression accepts badge date 11 July and never active calendar 1
 
 test('one date with time', () => assert.deepEqual(accepted(fixture('one-date-with-time.html'))[0], { title: 'Evening concert', sourceUrl: 'https://www.fjordnorway.com/en/events/evening-concert', date: '2026-07-12', startTime: '19:30', allDay: false }))
 test('one date without time is all-day', () => assert.deepEqual(accepted(fixture('one-date-no-time.html'))[0], { title: 'Street market', sourceUrl: 'https://www.fjordnorway.com/en/events/street-market', date: '2026-07-12', startTime: null, allDay: true }))
-test('missing badge date', () => assert.deepEqual(skipped(fixture('missing-badge-date.html')), ['unclear_date']))
-test('unclear badge date', () => assert.deepEqual(skipped(fixture('unclear-badge-date.html')), ['unclear_date']))
-test('multiple dates in one card', () => assert.deepEqual(skipped(fixture('multiple-dates-one-card.html')), ['multiple_dates']))
+test('missing badge date', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-badge-date.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_badge_date: 1 }) })
+test('unclear badge date', () => { const result = parseEdgeOfNorwayListPage(fixture('unclear-badge-date.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_badge_date: 1 }) })
+test('multiple dates in one card', () => { const result = parseEdgeOfNorwayListPage(fixture('multiple-dates-one-card.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { multiple_badge_dates: 1 }) })
 test('same canonical URL on multiple dates remains raw and ungrouped', () => assert.equal(accepted(fixture('same-url-multiple-dates.html')).length, 2))
 test('exact duplicate cards remain raw and ungrouped', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.exactDuplicateCardsRemoved, 0); assert.equal(result.results.length, 2); assert.equal(result.results[0].accepted, true) })
-test('missing title', () => assert.deepEqual(skipped(fixture('missing-title.html')), ['missing_title']))
-test('missing Read more URL', () => assert.deepEqual(skipped(fixture('missing-read-more-url.html')), ['missing_source_url']))
+test('missing title', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-title.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_title_anchor: 1 }) })
+test('missing Read more URL', () => { const result = parseEdgeOfNorwayListPage(fixture('missing-read-more-url.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.deepEqual(result.groupedFailureCounts, { missing_read_more_anchor: 1 }) })
 test('unrelated dates elsewhere on page are ignored', () => { const result = accepted(fixture('unrelated-dates-elsewhere.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
 test('selected or active calendar dates are ignored', () => { const result = accepted(fixture('selected-active-calendar.html'))[0]; assert.equal(result.date, '2026-07-11'); assert.notEqual(result.date, '2026-07-19') })
 test('time from neighbouring card is not used', () => { const events = accepted(fixture('neighbour-time.html')); assert.equal(events[0].startTime, null); assert.equal(events[0].allDay, true); assert.equal(events[1].startTime, '17:00') })
@@ -77,4 +76,30 @@ test('live card boundary starts from Read more and resolves one root per physica
   assert.equal(result.results[1].accepted, true)
   assert.deepEqual(result.results[0].event, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
   assert.notEqual(result.results[0].event.date, '2026-07-19')
+})
+
+test('deterministic event-link discovery resolves generated-class cards independently', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('generated-classes-links.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.eventAnchorsDiscovered, 7)
+  assert.equal(result.uniqueEventUrls, 2)
+  assert.equal(result.urlGroupsWithTitleAndReadMore, 2)
+  assert.equal(result.cardCandidatesResolved, 2)
+  assert.equal(result.cardsWithOneBadgeDate, 2)
+  assert.equal(result.cardsWithTime, 1)
+  assert.equal(result.cardsWithoutTime, 1)
+  assert.deepEqual(result.rawCards, [
+    { title: 'Alpha harbour concert', badgeText: '12. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/alpha-event' },
+    { title: 'Beta street market', badgeText: '01. Aug.', timeText: null, sourceUrl: 'https://www.fjordnorway.com/en/events/beta-market' },
+  ])
+  assert.deepEqual(accepted(fixture('generated-classes-links.html')), [
+    { title: 'Alpha harbour concert', sourceUrl: 'https://www.fjordnorway.com/en/events/alpha-event', date: '2026-07-12', startTime: '11:00', allDay: false },
+    { title: 'Beta street market', sourceUrl: 'https://www.fjordnorway.com/en/events/beta-market', date: '2026-08-01', startTime: null, allDay: true },
+  ])
+})
+
+test('event anchors without resolvable cards produce explicit failures instead of silent success', () => {
+  const result = parseEdgeOfNorwayListPage('<a href="https://www.fjordnorway.com/en/events/orphan">Orphan event</a>', EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.eventAnchorsDiscovered, 1)
+  assert.equal(result.cardsDiscovered, 0)
+  assert.deepEqual(result.groupedFailureCounts, { missing_read_more_anchor: 1 })
 })
