@@ -11,6 +11,7 @@ import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/c
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
+import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, formatLocalEventPlaceList, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, uniqueLocalEventPlaceIds, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -2475,6 +2476,12 @@ function ConnectAppsScreen({
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsDiagnostic, setLocalEventsDiagnostic] = useState<LocalEventsDiagnosticResult | null>(null)
+  const [localEventsSearch, setLocalEventsSearch] = useState('')
+  const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
+    if (typeof window === 'undefined') return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
+    return normalizeLocalEventAreaPreference(window.localStorage.getItem('local-events-area') ? JSON.parse(window.localStorage.getItem('local-events-area') || '{}') : null)
+  })
+  const [localEventsDraftArea, setLocalEventsDraftArea] = useState<LocalEventAreaPreference>(() => localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -2596,7 +2603,8 @@ function ConnectAppsScreen({
       try {
         resp = await fetch('/api/integrations/local-events/diagnostic', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ areaPreference: localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA }),
           signal: controller.signal,
         })
       } finally {
@@ -2677,8 +2685,8 @@ function ConnectAppsScreen({
       name: language === 'no' ? 'Lokale arrangementer' : 'Local Events',
       description:
         language === 'no'
-          ? 'Test ny Stavanger area-kilde uten import eller lagring'
-          : 'Test the new Stavanger area source without importing or saving events',
+          ? 'Velg nærområdet ditt for lokale arrangementer'
+          : 'Choose your local area for nearby events',
     },
     {
       key: 'vigilo',
@@ -2710,7 +2718,7 @@ function ConnectAppsScreen({
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
-    if (app.key === 'local-events') return false
+    if (app.key === 'local-events') return !!localEventsSavedArea
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -2720,59 +2728,77 @@ function ConnectAppsScreen({
 
   if (localEventsOpen) {
     const skippedCounts = localEventsDiagnostic?.skippedCounts || {}
+    const area = localEventsDraftArea
+    const selectedIds = uniqueLocalEventPlaceIds(area.includedPlaceIds)
+    const searchResults = searchLocalEventPlaces(localEventsSearch).filter((place) => !selectedIds.includes(place.id))
+    const saveLocalEventsArea = () => {
+      const normalized = normalizeLocalEventAreaPreference(area) || DEFAULT_LOCAL_EVENT_AREA
+      window.localStorage.setItem('local-events-area', JSON.stringify(normalized))
+      setLocalEventsSavedArea(normalized)
+      setLocalEventsDraftArea(normalized)
+      setStatusTone('success')
+      setStatus(language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local Events connected')
+    }
+    const choosePrimaryPlace = (id: LocalEventPlaceId) => {
+      setLocalEventsDraftArea(suggestedLocalEventArea(id))
+      setLocalEventsSearch('')
+    }
+    const addIncludedPlace = (id: LocalEventPlaceId) => setLocalEventsDraftArea((current) => ({ ...current, includedPlaceIds: uniqueLocalEventPlaceIds([...current.includedPlaceIds, id]) }))
+    const removeIncludedPlace = (id: LocalEventPlaceId) => {
+      if (id === area.primaryPlaceId) return
+      setLocalEventsDraftArea((current) => ({ ...current, includedPlaceIds: uniqueLocalEventPlaceIds(current.includedPlaceIds.filter((placeId) => placeId !== id)) }))
+    }
     return (
       <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
         <div className="pt-5 pb-6">
           <div className="flex items-center justify-between gap-3 px-1">
             <button type="button" onClick={() => setLocalEventsOpen(false)} className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'TILBAKE' : 'BACK'}</button>
-            <div className="text-[color:var(--fg-90)] text-sm font-semibold">{language === 'no' ? 'Lokale arrangementer' : 'Local Events'}</div>
+            <div className="text-[color:var(--fg-90)] text-sm font-semibold">Local Events</div>
           </div>
           <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
-            <div className="text-sm font-medium text-[color:var(--fg-90)]">{language === 'no' ? 'Statusvisning' : 'Status view'}</div>
-            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-45)]">{language === 'no' ? 'Kilden er Stavanger area. Inkluderte steder: Stavanger, Sola, Sandnes og Randaberg. Dette er bare en shadow-diagnostikk: ingen gamle importer vises, og ingenting lagres i Supabase.' : 'The current source is Stavanger area. Included places: Stavanger, Sola, Sandnes and Randaberg. This only runs the shadow diagnostic: no old imports are shown and nothing is written to Supabase.'}</p>
-            <button type="button" onClick={testLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? (language === 'no' ? 'TESTER…' : 'TESTING…') : (language === 'no' ? 'TEST LIVE ARRANGEMENTER' : 'TEST LIVE EVENTS')}</button>
+            {localEventsSavedArea ? (
+              <div className="mb-4 rounded-2xl border border-[#1f9d4a]/25 bg-[#1f9d4a]/10 px-3 py-3 text-sm text-[color:var(--fg-90)]">
+                <div className="font-semibold">Local Events connected</div>
+                <div className="mt-2 text-xs leading-5 text-[color:var(--fg-70)]">Primary place: {getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger'}</div>
+                <div className="text-xs leading-5 text-[color:var(--fg-70)]">Included area: {formatLocalEventPlaceList(localEventsSavedArea.includedPlaceIds)}</div>
+              </div>
+            ) : null}
+            <h2 className="text-lg font-semibold text-[color:var(--fg-90)]">Choose your area</h2>
+            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-45)]">Nearby places are included so you can also discover events that are realistically close by.</p>
+            <label className="mt-4 block text-xs font-medium text-[color:var(--fg-70)]" htmlFor="local-events-place-search">Search for a place</label>
+            <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder="Search for a place" className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-sm outline-none focus:border-[#2aa3ff]" />
+            <div className="mt-3 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+              {(localEventsSearch ? searchLocalEventPlaces(localEventsSearch) : LOCAL_EVENT_PLACE_CATALOGUE).map((place) => (
+                <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place.id)} aria-pressed={area.primaryPlaceId === place.id} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm ${area.primaryPlaceId === place.id ? 'bg-[#2aa3ff]/15 text-[#2aa3ff]' : 'text-[color:var(--fg-80)]'}`}>
+                  <span>{place.displayName}</span>
+                  {area.primaryPlaceId === place.id ? <span className="text-[10px] uppercase tracking-widest">Selected</span> : null}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4">
+              <div className="text-xs font-medium text-[color:var(--fg-70)]">Included places</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedIds.map((id) => {
+                  const place = getLocalEventPlace(id)
+                  if (!place) return null
+                  const primary = id === area.primaryPlaceId
+                  return <button key={id} type="button" onClick={() => removeIncludedPlace(id)} disabled={primary} className="rounded-full border border-[color:var(--bd-15)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-70">{place.displayName}{primary ? ' (primary)' : ' ×'}</button>
+                })}
+              </div>
+            </div>
+            {localEventsSearch && searchResults.length ? <div className="mt-3 text-xs text-[color:var(--fg-45)]">Add nearby: {searchResults.slice(0, 4).map((place) => <button key={place.id} type="button" onClick={() => addIncludedPlace(place.id)} className="ml-2 rounded-full border border-[color:var(--bd-15)] px-2 py-1 text-[color:var(--fg-70)]">{place.displayName}</button>)}</div> : null}
+            <button type="button" onClick={saveLocalEventsArea} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff]/10 px-4 text-xs tracking-widest text-[#2aa3ff]">SAVE AREA</button>
           </div>
+          <details className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
+            <summary className="cursor-pointer text-xs font-medium text-[color:var(--fg-70)]">Development / diagnostic</summary>
+            <button type="button" onClick={testLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? 'TESTING…' : 'TEST LIVE EVENTS'}</button>
+          </details>
           {localEventsDiagnostic && (
             <div className="mt-3 min-w-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)] [overflow-wrap:anywhere]">
-              <div className="grid min-w-0 grid-cols-1 gap-2 min-[520px]:grid-cols-2">
-                <div>Requested URL: {localEventsDiagnostic.fetch?.requestedUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
-                <div>Final URL: {localEventsDiagnostic.fetch?.finalUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
-                <div>Final hostname: {localEventsDiagnostic.fetch?.finalHostname || 'Unknown'}</div>
-                <div>Redirect status: {localEventsDiagnostic.fetch ? String(localEventsDiagnostic.fetch.redirectStatus || localEventsDiagnostic.fetch.redirected) : 'Unknown'}</div>
-                <div>Fetch status: {localEventsDiagnostic.fetch?.status ?? 'Unknown'}</div>
-                <div>Content type: {localEventsDiagnostic.fetch?.contentType || 'Unknown'}</div>
-                <div>HTML length: {localEventsDiagnostic.fetch?.htmlLength ?? 'Unknown'}</div>
-                <div>Document title: {localEventsDiagnostic.fetch?.documentTitle || 'None'}</div>
-                <div>Raw Flight marker count: {localEventsDiagnostic.fetch?.rawFlightMarkerCount ?? localEventsDiagnostic.flightScriptsFound ?? 0}</div>
-                <div>Escaped Event marker count: {localEventsDiagnostic.fetch?.escapedEventMarkerCount ?? 0}</div>
-                <div>Decoded chunks: {localEventsDiagnostic.flightChunksDecoded ?? 0}</div>
-                <div>Malformed chunks: {localEventsDiagnostic.malformedChunks ?? 0}</div>
-                <div>Event objects found: {localEventsDiagnostic.eventObjectsFound ?? 0}</div>
-                <div>Unique Event objects: {localEventsDiagnostic.uniqueEvents ?? 0}</div>
-                <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
-                <div>Skipped counts: {Object.values(skippedCounts).reduce((sum: number, value) => sum + Number(value), 0)}</div>
-                <div>Repeated-series groups: {localEventsDiagnostic.repeatedSeriesCount ?? 0}</div>
-                <div>Repeated-series events: {localEventsDiagnostic.repeatedSeriesEventsCount ?? 0}</div>
-                <div>Exact failure message: {localEventsDiagnostic.diagnosticError ? `${localEventsDiagnostic.diagnosticError.stage}: ${localEventsDiagnostic.diagnosticError.message}` : (localEventsDiagnostic.networkError || 'None')}</div>
-                {localEventsDiagnostic.fetch?.htmlPreview && <div>HTML preview: {localEventsDiagnostic.fetch.htmlPreview}</div>}
-              </div>
-              <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
-                <div className="font-medium text-[color:var(--fg-90)]">First 10 accepted events</div>
-                {localEventsDiagnostic.acceptedEvents?.length ? localEventsDiagnostic.acceptedEvents.slice(0, 10).map((event, index) => <div key={`${index}-${event.sourceUrl}`} className="mt-1 break-words text-[color:var(--fg-70)]">{event.title} · {event.date} · {event.startTime || 'All-day'} · {event.sourceUrl}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
-              </div>
-              <div className="mt-3 min-w-0 border-t border-[color:var(--bd-10)] pt-3">
-                <div className="font-medium text-[color:var(--fg-90)]">Repeated-series examples</div>
-                {localEventsDiagnostic.repeatedSeriesExamples?.length ? localEventsDiagnostic.repeatedSeriesExamples.map((group, index) => <div key={`${index}-${group.title}`} className="mt-2 min-w-0 text-[color:var(--fg-70)] [overflow-wrap:anywhere]"><div>{group.title} · {group.venueName || 'No venue'} · {group.startTime || 'All-day'} · {group.dates.join(', ')}</div><div className="text-[color:var(--fg-45)]">{group.sourceUrls.join(' · ')}</div></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
-              </div>
-              <div className="mt-3 min-w-0 border-t border-[color:var(--bd-10)] pt-3">
-                <div className="font-medium text-[color:var(--fg-90)]">Skipped counts</div>
-                {Object.keys(skippedCounts).length ? Object.entries(skippedCounts).map(([key, value]) => <div key={key} className="mt-1 flex min-w-0 justify-between gap-3 [overflow-wrap:anywhere]"><span>{key}</span><span>{value}</span></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
-              </div>
-              <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
-                <div className="font-medium text-[color:var(--fg-90)]">Parsing errors</div>
-                {localEventsDiagnostic.parsingErrors?.length ? localEventsDiagnostic.parsingErrors.slice(0, 10).map((error, index) => <div key={`${index}-${error.reason}`} className="mt-1 break-words text-[#ff7a7a]">{error.title || error.sourceUrl ? `${error.title || error.sourceUrl}: ` : ''}{error.reason}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
-                {(localEventsDiagnostic.parsingErrors?.length || 0) > 10 && <div className="mt-1 text-[color:var(--fg-45)]">Showing first 10 parsing-error examples only.</div>}
-              </div>
+              <div>Requested URL: {localEventsDiagnostic.fetch?.requestedUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
+              <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
+              <div>Skipped counts: {Object.values(skippedCounts).reduce((sum: number, value) => sum + Number(value), 0)}</div>
+              <div>Exact failure message: {localEventsDiagnostic.diagnosticError ? `${localEventsDiagnostic.diagnosticError.stage}: ${localEventsDiagnostic.diagnosticError.message}` : (localEventsDiagnostic.networkError || 'None')}</div>
             </div>
           )}
         </div>
@@ -2845,12 +2871,13 @@ function ConnectAppsScreen({
                         } else if (app.key === 'teams') {
                           connectTeams()
                         } else if (app.key === 'local-events') {
+                          setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
                     >
-                      {app.key === 'local-events' ? (language === 'no' ? 'ÅPNE' : 'OPEN') : ((app.key === 'teams' && teamsLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
+                      {app.key === 'local-events' ? (language === 'no' ? 'KOBLE TIL' : 'CONNECT') : ((app.key === 'teams' && teamsLoading)) ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}
                     </button>
                   )}
                 </div>
@@ -2868,6 +2895,21 @@ function ConnectAppsScreen({
                       className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)] transition hover:border-[#d94b4b]/35 hover:text-[#d94b4b] disabled:opacity-60"
                     >
                       {spondLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
+                    </button>
+                  </div>
+                )}
+                {app.key === 'local-events' && localEventsSavedArea && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0">
+                      <span className="block font-medium text-[color:var(--fg-80)]">{getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger'} area</span>
+                      <span className="block">{formatLocalEventPlaceList(localEventsSavedArea.includedPlaceIds)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setLocalEventsDraftArea(localEventsSavedArea); setLocalEventsOpen(true) }}
+                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)]"
+                    >
+                      Edit area
                     </button>
                   </div>
                 )}
