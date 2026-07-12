@@ -11,7 +11,7 @@ import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/c
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
-import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, formatLocalEventPlaceList, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, uniqueLocalEventPlaceIds, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
+import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -2404,27 +2404,6 @@ async function handleSelectTab(k: TabKey) {
 }
 
 type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'vigilo' | 'local-events'
-type LocalEventsDiagnosticResult = {
-  provider?: string
-  mode?: string
-  listPageUrl?: string
-  flightScriptsFound?: number
-  flightChunksDecoded?: number
-  malformedChunks?: number
-  eventObjectsFound?: number
-  uniqueEvents?: number
-  acceptedCount?: number
-  skippedCounts?: Record<string, number>
-  acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
-  repeatedSeriesCount?: number
-  repeatedSeriesEventsCount?: number
-  repeatedSeriesExamples?: Array<{ title: string; venueName: string | null; startTime: string | null; dates: string[]; sourceUrls: string[] }>
-  parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
-  networkError?: string
-  error?: string
-  diagnosticError?: { stage: string; message: string; name?: string; code?: string; requestedUrl?: string; finalUrl?: string }
-  fetch?: { requestedUrl: string; finalUrl: string; finalHostname: string | null; status: number; ok: boolean; redirected: boolean; redirectStatus: boolean; contentType: string | null; contentLengthHeader: string | null; htmlLength: number; startsWithDoctype: boolean; documentTitle: string | null; containsLoadingPlaceholder: boolean; containsKnownEventText: boolean; rawFlightMarkerCount: number; escapedEventMarkerCount: number; htmlPreview?: string }
-}
 type DisconnectableConnectAppKey = 'spond' | 'teams'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
@@ -2475,7 +2454,6 @@ function ConnectAppsScreen({
   const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
-  const [localEventsDiagnostic, setLocalEventsDiagnostic] = useState<LocalEventsDiagnosticResult | null>(null)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
     if (typeof window === 'undefined') return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
@@ -2588,34 +2566,64 @@ function ConnectAppsScreen({
   }
 
 
-  async function testLocalEvents() {
+  async function fetchLocalEventsStatus() {
+    const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+    if (!accessToken) return
+    const resp = await fetch('/api/integrations/local-events/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+    if (!resp.ok) return
+    const json = await resp.json()
+    const area = normalizeLocalEventAreaPreference(json?.areaPreference)
+    setLocalEventsSavedArea(json?.connected === true ? area : null)
+    if (area) setLocalEventsDraftArea(area)
+  }
+
+  async function connectLocalEvents() {
     if (localEventsLoading) return
     setLocalEventsLoading(true)
-    setLocalEventsDiagnostic(null)
     setStatus(null)
     setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å teste lokale arrangementer' : 'Sign in to test Local Events')
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 30_000)
-      let resp: Response
-      try {
-        resp = await fetch('/api/integrations/local-events/diagnostic', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ areaPreference: localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA }),
-          signal: controller.signal,
-        })
-      } finally {
-        clearTimeout(timer)
-      }
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til lokale arrangementer' : 'Sign in to connect Local Events')
+      const areaPreference = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
+      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ areaPreference }) })
       const json = await resp.json().catch(() => ({}))
-      if (!resp.ok) throw new Error(json?.error || 'Local Events diagnostic failed')
-      setLocalEventsDiagnostic(json)
+      if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
+      const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
+      setLocalEventsSavedArea(saved)
+      setLocalEventsDraftArea(saved)
+      setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
+      setStatusTone('success')
+      setStatus(json?.zeroEvents ? 'Connected. No upcoming events were found right now.' : (language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local Events connected'))
+      window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
     } catch (error: unknown) {
-      const message = error instanceof DOMException && error.name === 'AbortError' ? (language === 'no' ? 'Testen av lokale arrangementer tidsavbrøt' : 'Local Events diagnostic timed out') : error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke teste lokale arrangementer' : 'Could not test Local Events')
-      setLocalEventsDiagnostic({ flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, parsingErrors: [{ reason: message }], networkError: message, error: message })
+      setStatusTone('error')
+      setStatus(error instanceof Error && error.message ? error.message : 'Could not connect Local Events. Please try again.')
+    } finally {
+      setLocalEventsLoading(false)
+    }
+  }
+
+  async function disconnectLocalEvents() {
+    if (localEventsLoading) return
+    if (!window.confirm(language === 'no' ? 'Koble fra lokale arrangementer?' : 'Disconnect Local Events?')) return
+    setLocalEventsLoading(true)
+    setStatus(null)
+    try {
+      const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
+      if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble fra lokale arrangementer' : 'Sign in to disconnect Local Events')
+      const resp = await fetch('/api/integrations/local-events/disconnect', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
+      setLocalEventsSavedArea(null)
+      setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
+      setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': true }))
+      setStatusTone('success')
+      setStatus(language === 'no' ? 'Lokale arrangementer er frakoblet' : 'Local Events disconnected')
+      window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    } catch (error: unknown) {
+      setStatusTone('error')
+      setStatus(error instanceof Error && error.message ? error.message : 'Could not disconnect Local Events')
     } finally {
       setLocalEventsLoading(false)
     }
@@ -2662,6 +2670,7 @@ function ConnectAppsScreen({
   useEffect(() => {
     fetchSpondStatus()
     fetchTeamsStatus()
+    fetchLocalEventsStatus()
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
@@ -2727,26 +2736,13 @@ function ConnectAppsScreen({
     .sort((a, b) => Number(b.connected) - Number(a.connected) || a.index - b.index)
 
   if (localEventsOpen) {
-    const skippedCounts = localEventsDiagnostic?.skippedCounts || {}
-    const area = localEventsDraftArea
-    const selectedIds = uniqueLocalEventPlaceIds(area.includedPlaceIds)
-    const searchResults = searchLocalEventPlaces(localEventsSearch).filter((place) => !selectedIds.includes(place.id))
-    const saveLocalEventsArea = () => {
-      const normalized = normalizeLocalEventAreaPreference(area) || DEFAULT_LOCAL_EVENT_AREA
-      window.localStorage.setItem('local-events-area', JSON.stringify(normalized))
-      setLocalEventsSavedArea(normalized)
-      setLocalEventsDraftArea(normalized)
-      setStatusTone('success')
-      setStatus(language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local Events connected')
-    }
+    const area = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
+    const primaryName = getLocalEventPlace(area.primaryPlaceId)?.displayName || 'Stavanger'
+    const visiblePlaces = localEventsSearch ? searchLocalEventPlaces(localEventsSearch) : LOCAL_EVENT_PLACE_CATALOGUE
+    const connected = !!localEventsSavedArea
     const choosePrimaryPlace = (id: LocalEventPlaceId) => {
       setLocalEventsDraftArea(suggestedLocalEventArea(id))
       setLocalEventsSearch('')
-    }
-    const addIncludedPlace = (id: LocalEventPlaceId) => setLocalEventsDraftArea((current) => ({ ...current, includedPlaceIds: uniqueLocalEventPlaceIds([...current.includedPlaceIds, id]) }))
-    const removeIncludedPlace = (id: LocalEventPlaceId) => {
-      if (id === area.primaryPlaceId) return
-      setLocalEventsDraftArea((current) => ({ ...current, includedPlaceIds: uniqueLocalEventPlaceIds(current.includedPlaceIds.filter((placeId) => placeId !== id)) }))
     }
     return (
       <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
@@ -2756,51 +2752,35 @@ function ConnectAppsScreen({
             <div className="text-[color:var(--fg-90)] text-sm font-semibold">Local Events</div>
           </div>
           <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
-            {localEventsSavedArea ? (
-              <div className="mb-4 rounded-2xl border border-[#1f9d4a]/25 bg-[#1f9d4a]/10 px-3 py-3 text-sm text-[color:var(--fg-90)]">
-                <div className="font-semibold">Local Events connected</div>
-                <div className="mt-2 text-xs leading-5 text-[color:var(--fg-70)]">Primary place: {getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger'}</div>
-                <div className="text-xs leading-5 text-[color:var(--fg-70)]">Included area: {formatLocalEventPlaceList(localEventsSavedArea.includedPlaceIds)}</div>
+            {connected ? (
+              <div className="text-sm text-[color:var(--fg-90)]">
+                <h2 className="text-lg font-semibold">Local Events</h2>
+                <div className="mt-3 font-semibold">Connected to {primaryName} area</div>
+                <p className="mt-2 text-xs leading-5 text-[color:var(--fg-70)]">Events from {primaryName} and nearby places are added to your calendar.</p>
+                <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#d94b4b]/45 px-4 text-xs tracking-widest text-[#d94b4b] disabled:opacity-60">{localEventsLoading ? 'Disconnecting…' : 'Disconnect'}</button>
               </div>
-            ) : null}
-            <h2 className="text-lg font-semibold text-[color:var(--fg-90)]">Choose your area</h2>
-            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-45)]">Nearby places are included so you can also discover events that are realistically close by.</p>
-            <label className="mt-4 block text-xs font-medium text-[color:var(--fg-70)]" htmlFor="local-events-place-search">Search for a place</label>
-            <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder="Search for a place" className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-sm outline-none focus:border-[#2aa3ff]" />
-            <div className="mt-3 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
-              {(localEventsSearch ? searchLocalEventPlaces(localEventsSearch) : LOCAL_EVENT_PLACE_CATALOGUE).map((place) => (
-                <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place.id)} aria-pressed={area.primaryPlaceId === place.id} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm ${area.primaryPlaceId === place.id ? 'bg-[#2aa3ff]/15 text-[#2aa3ff]' : 'text-[color:var(--fg-80)]'}`}>
-                  <span>{place.displayName}</span>
-                  {area.primaryPlaceId === place.id ? <span className="text-[10px] uppercase tracking-widest">Selected</span> : null}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4">
-              <div className="text-xs font-medium text-[color:var(--fg-70)]">Included places</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedIds.map((id) => {
-                  const place = getLocalEventPlace(id)
-                  if (!place) return null
-                  const primary = id === area.primaryPlaceId
-                  return <button key={id} type="button" onClick={() => removeIncludedPlace(id)} disabled={primary} className="rounded-full border border-[color:var(--bd-15)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-70">{place.displayName}{primary ? ' (primary)' : ' ×'}</button>
-                })}
+            ) : (
+              <div>
+                <h2 className="text-lg font-semibold text-[color:var(--fg-90)]">Local Events</h2>
+                <p className="mt-2 text-sm text-[color:var(--fg-70)]">Discover events close to you.</p>
+                <label className="mt-4 block text-xs font-medium text-[color:var(--fg-70)]" htmlFor="local-events-place-search">Search for your place</label>
+                <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder="Search for your place" className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-sm outline-none focus:border-[#2aa3ff]" />
+                <div className="mt-3 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+                  {visiblePlaces.map((place) => (
+                    <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place.id)} aria-pressed={area.primaryPlaceId === place.id} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm ${area.primaryPlaceId === place.id ? 'bg-[#2aa3ff]/15 text-[#2aa3ff]' : 'text-[color:var(--fg-80)]'}`}>
+                      <span>{place.displayName}</span>
+                      {area.primaryPlaceId === place.id ? <span className="text-[10px] uppercase tracking-widest">Selected</span> : null}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] px-3 py-3 text-xs text-[color:var(--fg-70)]">
+                  <span className="font-medium text-[color:var(--fg-90)]">Selected place:</span> {primaryName}
+                  <p className="mt-2 leading-5 text-[color:var(--fg-45)]">We also include nearby places that are close enough for spontaneous events.</p>
+                </div>
+                <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !area.primaryPlaceId} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff]/10 px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? 'Connecting…' : 'Connect'}</button>
               </div>
-            </div>
-            {localEventsSearch && searchResults.length ? <div className="mt-3 text-xs text-[color:var(--fg-45)]">Add nearby: {searchResults.slice(0, 4).map((place) => <button key={place.id} type="button" onClick={() => addIncludedPlace(place.id)} className="ml-2 rounded-full border border-[color:var(--bd-15)] px-2 py-1 text-[color:var(--fg-70)]">{place.displayName}</button>)}</div> : null}
-            <button type="button" onClick={saveLocalEventsArea} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff]/10 px-4 text-xs tracking-widest text-[#2aa3ff]">SAVE AREA</button>
+            )}
           </div>
-          <details className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
-            <summary className="cursor-pointer text-xs font-medium text-[color:var(--fg-70)]">Development / diagnostic</summary>
-            <button type="button" onClick={testLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? 'TESTING…' : 'TEST LIVE EVENTS'}</button>
-          </details>
-          {localEventsDiagnostic && (
-            <div className="mt-3 min-w-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)] [overflow-wrap:anywhere]">
-              <div>Requested URL: {localEventsDiagnostic.fetch?.requestedUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
-              <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
-              <div>Skipped counts: {Object.values(skippedCounts).reduce((sum: number, value) => sum + Number(value), 0)}</div>
-              <div>Exact failure message: {localEventsDiagnostic.diagnosticError ? `${localEventsDiagnostic.diagnosticError.stage}: ${localEventsDiagnostic.diagnosticError.message}` : (localEventsDiagnostic.networkError || 'None')}</div>
-            </div>
-          )}
         </div>
       </div>
     )
@@ -2901,16 +2881,9 @@ function ConnectAppsScreen({
                 {app.key === 'local-events' && localEventsSavedArea && (
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     <span className="min-w-0">
-                      <span className="block font-medium text-[color:var(--fg-80)]">{getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger'} area</span>
-                      <span className="block">{formatLocalEventPlaceList(localEventsSavedArea.includedPlaceIds)}</span>
+                      <span className="block font-medium text-[color:var(--fg-80)]">Connected to {getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger'} area</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => { setLocalEventsDraftArea(localEventsSavedArea); setLocalEventsOpen(true) }}
-                      className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)]"
-                    >
-                      Edit area
-                    </button>
+                    <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea); setLocalEventsOpen(true) }} className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)]">Open</button>
                   </div>
                 )}
                 {app.key === 'teams' && teamsConnected && (
@@ -8651,7 +8624,7 @@ type ReminderRepeatKey =
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
 type ReminderTagFilter = 'all' | ReminderTag
-type ReminderSource = 'remind' | 'spond' | 'teams' | 'waste'
+type ReminderSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events'
 
 type ReminderUiItem = {
   id: string
@@ -8663,6 +8636,7 @@ type ReminderUiItem = {
   customRepeatDays?: number | null
   source?: ReminderSource
   editable?: boolean
+  sourceUrl?: string | null
 }
 
 type ReminderCompletionItem = {
@@ -8738,6 +8712,7 @@ function isReminderTag(v: any): v is ReminderTag {
 
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
+  if (value === 'edge-of-norway') return 'local-events'
   if (value === 'spond' || value === 'teams' || value === 'waste') return value
   return null
 }
@@ -8767,6 +8742,7 @@ function integrationReminderTag(source?: ReminderSource): ReminderTag | null {
   if (source === 'teams') return 'work'
   if (source === 'spond') return 'sports'
   if (source === 'waste') return 'chores'
+  if (source === 'local-events') return 'event'
   return null
 }
 
@@ -8774,6 +8750,7 @@ function integrationReminderSourceLabel(language: AppLanguage, source?: Reminder
   if (source === 'teams') return 'Teams'
   if (source === 'spond') return 'Spond'
   if (source === 'waste') return language === 'no' ? 'Renovasjon' : 'Waste'
+  if (source === 'local-events') return 'Events'
   return language === 'no' ? 'Påminnelse' : 'Reminder'
 }
 
@@ -12382,7 +12359,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
           .eq('user_id', userId)
-          .in('provider', ['spond', 'teams', 'waste'])
+          .in('provider', ['spond', 'teams', 'waste', 'edge-of-norway'])
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
@@ -12406,6 +12383,7 @@ const manualItems: ReminderUiItem[] = (data || [])
                 customRepeatDays: null,
                 source,
                 editable: false,
+                sourceUrl: typeof row.raw?.sourceUrl === 'string' ? row.raw.sourceUrl : null,
               }
             })
             .filter(Boolean) as ReminderUiItem[]
@@ -12420,6 +12398,12 @@ const manualItems: ReminderUiItem[] = (data || [])
 
   useEffect(() => {
     loadReminders()
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    const handler = () => { loadReminders() }
+    window.addEventListener('remind:refresh-reminders', handler)
+    return () => window.removeEventListener('remind:refresh-reminders', handler)
   }, [activeDeviceId])
 
   useEffect(() => {
@@ -12856,6 +12840,9 @@ const sortedReminders = useMemo(() => {
                             normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
                           } • ${item.editable === false ? integrationReminderSourceLabel(language, item.source) : reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
                         </div>
+                        {item.source === 'local-events' && item.sourceUrl ? (
+                          <a href={item.sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-1 inline-flex text-[11px] text-[#2aa3ff]">Open event page</a>
+                        ) : null}
                       </div>
                       <div className="shrink-0 self-center">
                         {item.editable === false ? (

@@ -15,6 +15,10 @@ function diagnosticError(error: unknown) {
 }
 
 export async function POST(req: Request) {
+  if (process.env.NODE_ENV === 'production' && process.env.LOCAL_EVENTS_DIAGNOSTIC_ENABLED !== 'true') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   let userId: string | null
   try {
     userId = await getAuthenticatedUserId(req)
