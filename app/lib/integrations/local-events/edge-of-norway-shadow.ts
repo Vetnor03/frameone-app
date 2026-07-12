@@ -1,6 +1,7 @@
 export const EDGE_OF_NORWAY_PROVIDER = 'edge-of-norway' as const
 export const EDGE_OF_NORWAY_MODE = 'shadow' as const
-export const EDGE_OF_NORWAY_STAVANGER_LIST_URL = 'https://www.fjordnorway.com/en/events?date=next_30&filtertype=place&place=stavanger'
+export const EDGE_OF_NORWAY_EVENTS_URL =
+  "https://www.edgeofnorway.com/en/events"
 export const EDGE_OF_NORWAY_USER_AGENT = 'Mozilla/5.0 (compatible; REMIND-LocalEvents/1.0; +https://www.edgeofnorway.com/)'
 
 export type EdgeOfNorwaySkipReason =
@@ -29,8 +30,8 @@ type EventParseResult =
   | { accepted: true; event: EdgeOfNorwayAcceptedEvent }
   | { accepted: false; reason: EdgeOfNorwaySkipReason; title?: string; sourceUrl?: string }
 
-type EdgeOfNorwayDiagnosticError = { stage: 'authentication' | 'fetch' | 'read_response' | 'inspect_input' | 'decode_flight' | 'extract_events'; message: string; name?: string; code?: string }
-type EdgeOfNorwayFetchDiagnostic = { requestedUrl: string; finalUrl: string; status: number; ok: boolean; redirected: boolean; contentType: string | null; contentLengthHeader: string | null; htmlLength: number; startsWithDoctype: boolean; documentTitle: string | null; containsLoadingPlaceholder: boolean; containsKnownEventText: boolean; rawFlightMarkerCount: number; escapedEventMarkerCount: number; htmlPreview?: string }
+type EdgeOfNorwayDiagnosticError = { stage: 'authentication' | 'fetch' | 'read_response' | 'inspect_input' | 'decode_flight' | 'extract_events'; message: string; name?: string; code?: string; requestedUrl?: string; finalUrl?: string }
+type EdgeOfNorwayFetchDiagnostic = { requestedUrl: string; finalUrl: string; finalHostname: string | null; status: number; ok: boolean; redirected: boolean; redirectStatus: boolean; contentType: string | null; contentLengthHeader: string | null; htmlLength: number; startsWithDoctype: boolean; documentTitle: string | null; containsLoadingPlaceholder: boolean; containsKnownEventText: boolean; rawFlightMarkerCount: number; escapedEventMarkerCount: number; htmlPreview?: string }
 
 export type EdgeOfNorwayDiagnosticResult = {
   provider: typeof EDGE_OF_NORWAY_PROVIDER
@@ -69,15 +70,17 @@ type StructuredEvent = {
 const eventObjectMarker = '"data"'
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/
 
-export function inspectEdgeOfNorwayHtmlInput(html: string, requestedUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL, response?: Response) {
+export function inspectEdgeOfNorwayHtmlInput(html: string, requestedUrl = EDGE_OF_NORWAY_EVENTS_URL, response?: Response) {
   const titleMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)
   const rawFlightMarkerCount = html.match(/self\.__next_f\.push\(/g)?.length ?? 0
   return {
     requestedUrl,
     finalUrl: response?.url || requestedUrl,
+    finalHostname: hostnameForUrl(response?.url || requestedUrl),
     status: response?.status ?? 0,
     ok: response?.ok ?? true,
     redirected: response?.redirected ?? false,
+    redirectStatus: isRedirectStatus(response?.status ?? 0),
     contentType: response?.headers?.get('content-type') ?? null,
     contentLengthHeader: response?.headers?.get('content-length') ?? null,
     htmlLength: html.length,
@@ -248,7 +251,7 @@ function parseStructuredEvent(eventObject: StructuredEvent): EventParseResult {
   return { accepted: true, event: { title, sourceUrl, date: showings[0].date as string, startTime: time.startTime, allDay: time.allDay } }
 }
 
-export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL) {
+export function parseEdgeOfNorwayListPage(html: string, _pageUrl = EDGE_OF_NORWAY_EVENTS_URL) {
   const decoded = decodeFlightPayload(html)
   const extracted = extractStructuredEvents(decoded.flightText)
   const results = extracted.uniqueEvents.map(parseStructuredEvent)
@@ -275,13 +278,29 @@ function withTimeout<T>(promise: Promise<T>, ms: number, reason = 'timeout'): Pr
 }
 
 function diagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown): EdgeOfNorwayDiagnosticError {
-  const record = error as { name?: unknown; code?: unknown; message?: unknown }
-  return { stage, message: typeof record?.message === 'string' && record.message ? record.message : stage, ...(typeof record?.name === 'string' ? { name: record.name } : {}), ...(typeof record?.code === 'string' ? { code: record.code } : {}) }
+  const record = error as { name?: unknown; code?: unknown; message?: unknown; requestedUrl?: unknown; finalUrl?: unknown }
+  return { stage, message: typeof record?.message === 'string' && record.message ? record.message : stage, ...(typeof record?.name === 'string' ? { name: record.name } : {}), ...(typeof record?.code === 'string' ? { code: record.code } : {}), ...(typeof record?.requestedUrl === 'string' ? { requestedUrl: record.requestedUrl } : {}), ...(typeof record?.finalUrl === 'string' ? { finalUrl: record.finalUrl } : {}) }
 }
 
 function structuredDiagnosticError(stage: EdgeOfNorwayDiagnosticError['stage'], error: unknown, fetchMeta?: EdgeOfNorwayFetchDiagnostic): EdgeOfNorwayDiagnosticResult {
   const diagnostic = diagnosticError(stage, error)
-  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
+  return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, flightScriptsFound: 0, flightChunksDecoded: 0, malformedChunks: 0, eventObjectsFound: 0, uniqueEvents: 0, acceptedCount: 0, skippedCounts: {}, acceptedEvents: [], parsingErrors: [{ reason: diagnostic.message }], networkError: stage === 'fetch' ? diagnostic.message : undefined, error: diagnostic.message, diagnosticError: diagnostic, ...(fetchMeta ? { fetch: fetchMeta } : {}) }
+}
+
+function hostnameForUrl(url: string) {
+  try { return new URL(url).hostname } catch { return null }
+}
+
+function isAllowedEdgeOfNorwayHostname(hostname: string | null) {
+  return hostname === 'www.edgeofnorway.com' || hostname === 'edgeofnorway.com'
+}
+
+function isRedirectStatus(status: number) {
+  return status >= 300 && status < 400
+}
+
+function unexpectedSourceRedirect(requestedUrl: string, finalUrl: string, fetchMeta?: EdgeOfNorwayFetchDiagnostic): EdgeOfNorwayDiagnosticResult {
+  return structuredDiagnosticError('fetch', { message: 'Unexpected source redirect', requestedUrl, finalUrl }, fetchMeta)
 }
 
 export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promise<EdgeOfNorwayDiagnosticResult> {
@@ -290,13 +309,14 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
     const fetchTimer = setTimeout(() => controller.abort(), 15_000)
     let listResp: Response
     try {
-      listResp = await fetchImpl(EDGE_OF_NORWAY_STAVANGER_LIST_URL, {
+      listResp = await fetchImpl(EDGE_OF_NORWAY_EVENTS_URL, {
         headers: {
           'User-Agent': EDGE_OF_NORWAY_USER_AGENT,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-GB,en;q=0.9',
           'Cache-Control': 'no-cache',
         },
+        redirect: 'manual',
         signal: controller.signal,
       })
     } catch (error) {
@@ -310,14 +330,16 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch): Promis
     } catch (error) {
       return structuredDiagnosticError('read_response', error)
     }
-    const fetchMeta = inspectEdgeOfNorwayHtmlInput(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL, listResp)
+    const fetchMeta = inspectEdgeOfNorwayHtmlInput(html, EDGE_OF_NORWAY_EVENTS_URL, listResp)
+    if (fetchMeta.redirectStatus || fetchMeta.redirected) return unexpectedSourceRedirect(EDGE_OF_NORWAY_EVENTS_URL, fetchMeta.finalUrl, fetchMeta)
+    if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(EDGE_OF_NORWAY_EVENTS_URL, fetchMeta.finalUrl, fetchMeta)
     if (!listResp.ok) return structuredDiagnosticError('fetch', new Error(`Failed to fetch list page: ${listResp.status}`), fetchMeta)
     if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta)
     try {
-      const parsed = parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_STAVANGER_LIST_URL)
+      const parsed = parseEdgeOfNorwayListPage(html, EDGE_OF_NORWAY_EVENTS_URL)
       const acceptedEvents = parsed.results.filter((result) => result.accepted).map((result) => result.event)
       const parseErrors = parsed.results.filter((result) => !result.accepted).map((result) => ({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason }))
-      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
+      return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_EVENTS_URL, fetch: fetchMeta, flightScriptsFound: parsed.flightScriptsFound, flightChunksDecoded: parsed.flightChunksDecoded, malformedChunks: parsed.malformedChunks, eventObjectsFound: parsed.eventObjectsFound, uniqueEvents: parsed.uniqueEvents, acceptedCount: acceptedEvents.length, skippedCounts: parsed.skippedCounts, acceptedEvents, parsingErrors: [...parsed.parsingErrors, ...parseErrors].slice(0, 10) }
     } catch (error) {
       return structuredDiagnosticError('extract_events', error, fetchMeta)
     }
