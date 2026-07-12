@@ -16,6 +16,7 @@ export type EdgeOfNorwaySkipReason =
   | 'timeout'
   | 'parser_failed'
   | 'unclear_time'
+  | 'multiple_times'
 
 export type EdgeOfNorwayAcceptedEvent = {
   title: string
@@ -49,6 +50,7 @@ export type EdgeOfNorwayDiagnosticResult = {
   occurrenceListItemsResolved?: number
   uniqueCardNodes?: number
   rawOccurrencesParsed?: number
+  rawSegmentsCreated?: number
   cardsMissingBadge?: number
   cardsMissingReadMore?: number
   cardsContainingOtherEvent?: number
@@ -99,11 +101,10 @@ function isVoidTag(tagName: string) {
   return ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'].includes(tagName)
 }
 type HtmlNode = { tagName: string; start: number; openEnd: number; end: number; parent: number | null; html: string }
-type AnchorInfo = { nodeIndex: number; html: string; text: string; url: string; isReadMore: boolean; isTitle: boolean }
-type CardContainer = { html: string; sourceUrl: string; title: string; rootTagName: string; rootClassName?: string; start: number; end: number }
-type DiscoveryFailureReason = 'missing_title_anchor' | 'missing_read_more_anchor' | 'unresolved_card' | 'ancestor_contains_other_event' | 'missing_badge_date' | 'multiple_badge_dates'
-type DiscoveryFailure = { reason: DiscoveryFailureReason; sourceUrl?: string; title?: string }
-export type EdgeOfNorwayRawCard = { title: string | null; badgeText: string | null; timeText: string | null; sourceUrl: string | null }
+type AnchorInfo = { nodeIndex: number; html: string; text: string; url: string; isReadMore: boolean; isTitle: boolean; start: number; end: number }
+type CardContainer = { html: string; sourceUrl: string; title: string | null; rootTagName: string; rootClassName?: string; start: number; end: number; readMoreStart: number; titleStart: number | null; badgeText: string | null; date: string | null; timeText: string | null; skipReason?: EdgeOfNorwaySkipReason | 'multiple_times' }
+type DiscoveryFailure = { reason: EdgeOfNorwaySkipReason | 'multiple_times'; sourceUrl?: string; title?: string }
+export type EdgeOfNorwayRawCard = { title: string | null; badgeText: string | null; date?: string | null; timeText: string | null; startTime?: string | null; allDay?: boolean; sourceUrl: string | null }
 
 function parseHtmlNodes(html: string) {
   const nodes: HtmlNode[] = []
@@ -146,7 +147,7 @@ function extractHeadingTitle(card: string) {
   return headings.length === 1 ? headings[0] : null
 }
 
-export const EDGE_OF_NORWAY_CARD_WRAPPER_SELECTOR = 'li.event-card'
+export const EDGE_OF_NORWAY_CARD_WRAPPER_SELECTOR = 'ordered-read-more-segment'
 const EDGE_OF_NORWAY_INSPECTION_TITLE = 'Uncovering the Secrets of Stavanger Cathedral by the Museum of Archaeology'
 
 export type EdgeOfNorwayCardHierarchyInspection = Array<{
@@ -171,8 +172,9 @@ function eventAnchors(nodes: HtmlNode[], pageUrl: string): AnchorInfo[] {
     const text = stripTags(node.html)
     const normalized = text.replace(/\s+/g, ' ').trim()
     const isReadMore = /^read\s*more\b/i.test(normalized)
-    const isTitle = Boolean(normalized) && !isReadMore && !/^book\b/i.test(normalized)
-    return { nodeIndex, html: node.html, text: normalized, url, isReadMore, isTitle }
+    const isImageOnly = /<img\b/i.test(node.html) && !normalized
+    const isTitle = Boolean(normalized) && !isReadMore && !/^book\b/i.test(normalized) && !isImageOnly
+    return { nodeIndex, html: node.html, text: normalized, url, isReadMore, isTitle, start: node.start, end: node.end }
   }).filter(Boolean) as AnchorInfo[]
 }
 
@@ -190,34 +192,10 @@ function countEventTitleLinks(card: string, pageUrl: string) {
   return { count, urls }
 }
 
-function badgeDateTexts(card: string) {
-  const matches = textWithoutAnchorsScriptsStyles(card).match(/\b\d{1,2}\.\s*(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|mai|jun(?:e|i)?|jul(?:y|i)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|okt(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\.)?(?=\s|$)/gi) || []
-  return Array.from(new Set(matches.map((text) => text.replace(/\s+/g, ' ').trim())))
-}
-
-function countBadgeTexts(card: string) {
-  return badgeDateTexts(card)
-}
-
-
-function cardHasOtherEventUrl(card: string, pageUrl: string, sourceUrl: string) {
-  for (const m of card.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)) {
-    const url = canonicalizeFjordNorwayUrl(m[1], pageUrl)
-    if (url && url !== sourceUrl) return true
-  }
-  return false
-}
-
-function childElementIndexes(nodes: HtmlNode[], nodeIndex: number) {
-  return nodes.map((node, index) => (node.parent === nodeIndex ? index : -1)).filter((index) => index >= 0)
-}
-
-function nodeHasTextualElementChild(nodes: HtmlNode[], nodeIndex: number) {
-  return childElementIndexes(nodes, nodeIndex).some((childIndex) => stripTags(nodes[childIndex].html).length > 0)
-}
-
 const badgeDatePattern = /^\d{1,2}\.\s*(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|mai|jun(?:e|i)?|jul(?:y|i)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|okt(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\.)?$/i
+const badgeDateGlobalPattern = /\b\d{1,2}\.\s*(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|mai|jun(?:e|i)?|jul(?:y|i)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|okt(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\.)?(?=\s|$|<)/gi
 const standaloneTimePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/
+const standaloneTimeGlobalPattern = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g
 
 function leafTextsMatching(nodes: HtmlNode[], rootIndex: number, pattern: RegExp) {
   const root = nodes[rootIndex]
@@ -225,59 +203,54 @@ function leafTextsMatching(nodes: HtmlNode[], rootIndex: number, pattern: RegExp
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index]
     if (node.start < root.start || node.end > root.end) continue
-    if (nodeHasTextualElementChild(nodes, index)) continue
     const text = textWithoutAnchorsScriptsStyles(node.html).replace(/\s+/g, ' ').trim()
     if (pattern.test(text)) matches.push(text)
   }
   return Array.from(new Set(matches))
 }
 
-function anchorsInNode(nodes: HtmlNode[], rootIndex: number, pageUrl: string) {
-  const root = nodes[rootIndex]
-  return eventAnchors(nodes, pageUrl).filter((anchor) => {
-    const node = nodes[anchor.nodeIndex]
-    return node.start >= root.start && node.end <= root.end
-  })
+function visibleTextMatchesBefore(html: string, absoluteSegmentStart: number, absoluteEnd: number, pattern: RegExp) {
+  const relEnd = Math.max(0, absoluteEnd - absoluteSegmentStart)
+  const part = html.slice(0, relEnd).replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, ' ')
+  return Array.from(part.matchAll(pattern)).map((m) => ({ text: m[0].replace(/\s+/g, ' ').trim(), start: absoluteSegmentStart + Number(m.index) }))
 }
 
-function validateReadMoreAncestor(nodes: HtmlNode[], rootIndex: number, pageUrl: string, readMoreAnchor: AnchorInfo) {
-  const anchors = anchorsInNode(nodes, rootIndex, pageUrl)
-  if (anchors.some((anchor) => anchor.url !== readMoreAnchor.url)) return { valid: false as const, reason: 'ancestor_contains_other_event' as DiscoveryFailureReason }
-  const titles = anchors.filter((anchor) => anchor.url === readMoreAnchor.url && anchor.isTitle)
-  if (titles.length !== 1) return { valid: false as const, reason: 'missing_title_anchor' as DiscoveryFailureReason }
-  const badges = leafTextsMatching(nodes, rootIndex, badgeDatePattern)
-  if (badges.length === 0) return { valid: false as const, reason: 'missing_badge_date' as DiscoveryFailureReason }
-  if (badges.length > 1) return { valid: false as const, reason: 'multiple_badge_dates' as DiscoveryFailureReason }
-  return { valid: true as const, title: titles[0].text, badgeText: badges[0] }
+function findEventResultsStart(html: string) {
+  const main = html.search(/<main\b/i)
+  return main >= 0 ? main : 0
 }
 
-function findCardContainers(html: string, pageUrl: string, _referenceDate: Date | string) {
+function findCardContainers(html: string, pageUrl: string, referenceDate: Date | string) {
   const nodes = parseHtmlNodes(html)
   const anchors = eventAnchors(nodes, pageUrl)
-  const readMoreAnchors = anchors.filter((anchor) => anchor.isReadMore)
+  const readMoreAnchors = anchors.filter((anchor) => anchor.isReadMore).sort((a, b) => a.start - b.start)
   const uniqueUrls = new Set(anchors.map((anchor) => anchor.url))
   const failures: DiscoveryFailure[] = []
   const containers: CardContainer[] = []
+  let previousReadMoreEnd = findEventResultsStart(html)
 
   for (const readMoreAnchor of readMoreAnchors) {
-    let current: number | null = readMoreAnchor.nodeIndex
-    let resolved: { nodeIndex: number; title: string } | null = null
-    let lastFailure: DiscoveryFailureReason | null = null
-    for (let level = 0; current != null && current >= 0 && level <= 8; level += 1) {
-      const validation = validateReadMoreAncestor(nodes, current, pageUrl, readMoreAnchor)
-      if (validation.valid) { resolved = { nodeIndex: current, title: validation.title }; break }
-      lastFailure = validation.reason
-      current = nodes[current].parent
-    }
-    if (!resolved) {
-      failures.push({ reason: lastFailure || 'unresolved_card', sourceUrl: readMoreAnchor.url })
-      continue
-    }
-    const node = nodes[resolved.nodeIndex]
-    containers.push({ html: node.html, sourceUrl: readMoreAnchor.url, title: resolved.title, rootTagName: node.tagName, rootClassName: attr(openingTagOfNode(node), 'class') || undefined, start: node.start, end: node.end })
+    const segmentStart = previousReadMoreEnd
+    const segmentEnd = readMoreAnchor.end
+    const segmentHtml = html.slice(segmentStart, segmentEnd)
+    const segmentAnchors = anchors.filter((anchor) => anchor.start >= segmentStart && anchor.end <= segmentEnd)
+    const titleAnchor = segmentAnchors.filter((anchor) => anchor.start < readMoreAnchor.start && anchor.url === readMoreAnchor.url && anchor.isTitle).at(-1) || null
+    const times = Array.from(stripTags(segmentHtml.slice(Math.max(0, (titleAnchor?.end ?? segmentStart) - segmentStart), readMoreAnchor.start - segmentStart)).matchAll(standaloneTimeGlobalPattern)).map((m) => `${m[1].padStart(2, '0')}:${m[2]}`)
+    const uniqueTimes = Array.from(new Set(times))
+    const badgeCandidates = titleAnchor ? visibleTextMatchesBefore(segmentHtml, segmentStart, titleAnchor.start, badgeDateGlobalPattern) : []
+    const badgeText = badgeCandidates.at(-1)?.text || null
+    const date = badgeText ? parseBadgeDateText(badgeText, referenceDate) : null
+    let skipReason: CardContainer['skipReason']
+    if (!titleAnchor) skipReason = 'missing_title'
+    else if (!badgeText) skipReason = 'missing_badge_date'
+    else if (!date) skipReason = 'unclear_date'
+    else if (uniqueTimes.length > 1) skipReason = 'multiple_times'
+    if (skipReason) failures.push({ reason: skipReason, sourceUrl: readMoreAnchor.url, title: titleAnchor?.text })
+    containers.push({ html: segmentHtml, sourceUrl: readMoreAnchor.url, title: titleAnchor?.text || null, rootTagName: 'segment', start: segmentStart, end: segmentEnd, readMoreStart: readMoreAnchor.start, titleStart: titleAnchor?.start ?? null, badgeText, date, timeText: uniqueTimes.length === 1 ? uniqueTimes[0] : null, skipReason })
+    previousReadMoreEnd = readMoreAnchor.end
   }
 
-  return { containers: containers.sort((a, b) => a.start - b.start), failures, eventAnchorsDiscovered: anchors.length, readMoreAnchorsDiscovered: readMoreAnchors.length, titleAnchorsFound: anchors.filter((anchor) => anchor.isTitle).length, uniqueEventUrls: uniqueUrls.size, urlGroupsWithTitleAndReadMore: 0 }
+  return { containers, failures, eventAnchorsDiscovered: anchors.length, readMoreAnchorsDiscovered: readMoreAnchors.length, titleAnchorsFound: anchors.filter((anchor) => anchor.isTitle).length, uniqueEventUrls: uniqueUrls.size, urlGroupsWithTitleAndReadMore: 0 }
 }
 
 export function inspectEdgeOfNorwayCardHierarchy(html: string, pageUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL): EdgeOfNorwayCardHierarchyInspection {
@@ -327,15 +300,6 @@ function parseBadgeDateText(value: string, referenceDate: Date | string) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function parseTime(value: string) {
-  const m = value.match(/\b([01]?\d|2[0-3])[:.](\d{2})\b/)
-  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
-}
-
-function exactRawCardKey(card: EdgeOfNorwayRawCard) {
-  return JSON.stringify([card.title, card.badgeText, card.timeText, card.sourceUrl])
-}
-
 function extractReadMoreUrl(card: string, pageUrl: string) {
   for (const m of card.matchAll(/<a\b[^>]*href=["'][^"']+["'][^>]*>(?:(?!<a\b)[\s\S])*?read\s*more(?:(?!<a\b)[\s\S])*?<\/a>/gi)) {
     const tag = m[0].match(/^<a\b[^>]*>/i)?.[0] || ''
@@ -343,38 +307,6 @@ function extractReadMoreUrl(card: string, pageUrl: string) {
     if (canonical) return canonical
   }
   return null
-}
-
-function extractTitle(card: string, sourceUrl: string, pageUrl: string) {
-  for (const m of card.matchAll(/<a\b[^>]*href=["'][^"']+["'][^>]*>(?:(?!<a\b)[\s\S])*?<\/a>/gi)) {
-    const tag = m[0].match(/^<a\b[^>]*>/i)?.[0] || ''
-    const canonical = canonicalizeFjordNorwayUrl(attr(tag, 'href') || '', pageUrl)
-    const text = stripTags(m[0])
-    if (canonical === sourceUrl && text && !/^read\s*more\b/i.test(text) && !/^book\b/i.test(text)) return text
-  }
-  return extractHeadingTitle(card)
-}
-
-function extractBadgeDates(card: string, referenceDate: Date | string) {
-  const badgeMatches = badgeTextsInCard(card).map((text) => parseBadgeDateText(text, referenceDate)).filter(Boolean) as string[]
-  return Array.from(new Set(badgeMatches))
-}
-
-function extractClockTime(card: string) {
-  const times = standaloneTimeTextsInCard(card)
-  return times.length === 1 ? times[0] : null
-}
-
-function extractRawTitle(card: string, sourceUrl: string | null, pageUrl: string) {
-  return sourceUrl ? extractTitle(card, sourceUrl, pageUrl) : extractHeadingTitle(card)
-}
-
-function extractRawBadgeText(card: string) {
-  return countBadgeTexts(card)[0] || null
-}
-
-function extractRawTimeText(card: string) {
-  return parseTime(textWithoutAnchorsScriptsStyles(card))
 }
 
 function standaloneTimeTextsInCard(card: string) {
@@ -392,27 +324,16 @@ function badgeTextsInCard(card: string) {
   return rootIndex >= 0 ? leafTextsMatching(nodes, rootIndex, badgeDatePattern) : []
 }
 
-function extractRawCard(card: CardContainer, pageUrl: string): EdgeOfNorwayRawCard {
-  const readMoreUrl = extractReadMoreUrl(card.html, pageUrl)
-  const timeTexts = standaloneTimeTextsInCard(card.html)
-  return { title: card.title, badgeText: badgeTextsInCard(card.html)[0] || null, timeText: timeTexts.length === 1 ? timeTexts[0] : null, sourceUrl: readMoreUrl === card.sourceUrl ? readMoreUrl : card.sourceUrl }
+function extractRawCard(card: CardContainer, _pageUrl: string): EdgeOfNorwayRawCard {
+  return { title: card.title, badgeText: card.badgeText, date: card.date, timeText: card.timeText, startTime: card.timeText, allDay: !card.timeText, sourceUrl: card.sourceUrl }
 }
 
-function parseCard(card: string, pageUrl: string, referenceDate: Date | string): EdgeOfNorwayCardParseResult {
-  const sourceUrl = extractReadMoreUrl(card, pageUrl) || undefined
-  const title = sourceUrl ? extractTitle(card, sourceUrl, pageUrl) || undefined : undefined
-  if (!sourceUrl) return { accepted: false, reason: 'missing_source_url', title: stripTags(card.match(/<h[1-4]\b[^>]*>([\s\S]*?)<\/h[1-4]>/i)?.[1] || '') || undefined }
-  if (!title) return { accepted: false, reason: 'missing_title', sourceUrl }
-  const dates = extractBadgeDates(card, referenceDate)
-  if (dates.length === 0) return { accepted: false, reason: 'unclear_date', title, sourceUrl }
-  if (dates.length > 1) return { accepted: false, reason: 'multiple_dates', title, sourceUrl }
-  const text = stripTags(card)
-  if (/\b(exhibition|exhibited|continuous|ongoing)\b/i.test(text)) return { accepted: false, reason: 'exhibition_or_continuous', title, sourceUrl }
-  if (/\b(recurring|every\s+(day|week|month)|weekly|daily)\b/i.test(text)) return { accepted: false, reason: 'recurring_event', title, sourceUrl }
-  const times = standaloneTimeTextsInCard(card)
-  if (times.length > 1) return { accepted: false, reason: 'unclear_time', title, sourceUrl }
-  const time = times[0] || null
-  return { accepted: true, event: { title, sourceUrl, date: dates[0], startTime: time, allDay: !time } }
+function parseContainer(card: CardContainer): EdgeOfNorwayCardParseResult {
+  if (card.skipReason) return { accepted: false, reason: card.skipReason, title: card.title || undefined, sourceUrl: card.sourceUrl }
+  if (!card.title) return { accepted: false, reason: 'missing_title', sourceUrl: card.sourceUrl }
+  if (!card.badgeText) return { accepted: false, reason: 'missing_badge_date', title: card.title, sourceUrl: card.sourceUrl }
+  if (!card.date) return { accepted: false, reason: 'unclear_date', title: card.title, sourceUrl: card.sourceUrl }
+  return { accepted: true, event: { title: card.title, sourceUrl: card.sourceUrl, date: card.date, startTime: card.timeText, allDay: !card.timeText } }
 }
 
 export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY_STAVANGER_LIST_URL, referenceDate: Date | string = EDGE_OF_NORWAY_DEFAULT_REFERENCE_DATE) {
@@ -420,34 +341,50 @@ export function parseEdgeOfNorwayListPage(html: string, pageUrl = EDGE_OF_NORWAY
   const cardContainers = discovery.containers
   const rawOccurrenceCards = cardContainers.map((card) => extractRawCard(card, pageUrl))
   const uniqueContainers: CardContainer[] = []
-  const seenRawCards = new Set<string>()
+  const seenOccurrenceKeys = new Set<string>()
   rawOccurrenceCards.forEach((rawCard, index) => {
-    const key = exactRawCardKey(rawCard)
-    if (seenRawCards.has(key)) return
-    seenRawCards.add(key)
+    const key = JSON.stringify([rawCard.sourceUrl, rawCard.date, rawCard.timeText])
+    if (seenOccurrenceKeys.has(key)) return
+    seenOccurrenceKeys.add(key)
     uniqueContainers.push(cardContainers[index])
   })
+  const groupedByUrl = new Map<string, CardContainer[]>()
+  for (const card of uniqueContainers) {
+    const group = groupedByUrl.get(card.sourceUrl) || []
+    group.push(card)
+    groupedByUrl.set(card.sourceUrl, group)
+  }
+  const groupedFailureCounts = discovery.failures.reduce((counts, failure) => ({ ...counts, [failure.reason]: (counts[failure.reason] || 0) + 1 }), {} as Record<string, number>)
+  const cardResults = uniqueContainers.map((card) => {
+    const parsed = parseContainer(card)
+    if (!parsed.accepted) return parsed
+    const group = groupedByUrl.get(card.sourceUrl) || []
+    const dates = Array.from(new Set(group.map((entry) => entry.date).filter(Boolean)))
+    if (dates.length > 1) return { accepted: false as const, reason: 'recurring_event' as EdgeOfNorwaySkipReason, title: card.title || undefined, sourceUrl: card.sourceUrl }
+    return parsed
+  })
+  for (const result of cardResults) if (!result.accepted && (result.reason === 'recurring_event' || result.reason === 'multiple_dates')) groupedFailureCounts[result.reason] = (groupedFailureCounts[result.reason] || 0) + 1
   const rawCards = uniqueContainers.map((card) => extractRawCard(card, pageUrl))
-  const cardResults = uniqueContainers.map((card) => parseCard(card.html, pageUrl, referenceDate))
   return {
     eventAnchorsDiscovered: discovery.eventAnchorsDiscovered,
     readMoreAnchorsDiscovered: discovery.readMoreAnchorsDiscovered,
+    rawSegmentsCreated: cardContainers.length,
     occurrencesResolved: cardContainers.length,
     rawCardsParsed: rawOccurrenceCards.length,
     titleAnchorsFound: discovery.titleAnchorsFound,
     occurrenceListItemsResolved: cardContainers.length,
     uniqueCardNodes: cardContainers.length,
-    rawOccurrencesParsed: rawOccurrenceCards.length,
+    rawOccurrencesParsed: rawOccurrenceCards.filter((card) => card.title && card.badgeText && card.date).length,
     cardsMissingBadge: discovery.failures.filter((f) => f.reason === 'missing_badge_date').length,
-    cardsMissingReadMore: discovery.failures.filter((f) => f.reason === 'missing_read_more_anchor').length,
-    cardsContainingOtherEvent: discovery.failures.filter((f) => f.reason === 'ancestor_contains_other_event').length,
+    cardsMissingReadMore: 0,
+    cardsContainingOtherEvent: 0,
     uniqueEventUrls: discovery.uniqueEventUrls,
     urlGroupsWithTitleAndReadMore: discovery.urlGroupsWithTitleAndReadMore,
     cardCandidatesResolved: cardResults.length,
     cardsWithOneBadgeDate: rawCards.filter((card) => card.badgeText).length,
     cardsWithTime: rawCards.filter((card) => card.timeText).length,
     cardsWithoutTime: rawCards.filter((card) => !card.timeText).length,
-    groupedFailureCounts: discovery.failures.reduce((counts, failure) => ({ ...counts, [failure.reason]: (counts[failure.reason] || 0) + 1 }), {} as Record<string, number>),
+    groupedFailureCounts,
     errorExamples: discovery.failures.slice(0, 10),
     cardsDiscovered: cardResults.length,
     validCardsParsedBeforeGrouping: cardResults.filter((r) => r.accepted).length,
@@ -501,6 +438,6 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, referen
         if (parsingErrors.length < 10) parsingErrors.push({ title: result.title, sourceUrl: result.sourceUrl, reason: result.reason })
       }
     }
-    return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: parsed.cardsDiscovered, validCardsParsed: parsed.validCardsParsedBeforeGrouping, exactDuplicateCardsRemoved: parsed.exactDuplicateCardsRemoved, uniqueSourceUrls: parsed.uniqueEventUrls, acceptedCount: acceptedEvents.length, skippedCounts: { ...parsed.groupedFailureCounts, ...skippedCounts }, acceptedEvents, parsingErrors: [...parsed.errorExamples.map((e) => ({ title: e.title, sourceUrl: e.sourceUrl, reason: e.reason })), ...parsingErrors].slice(0, 10), eventAnchorsDiscovered: parsed.eventAnchorsDiscovered, readMoreAnchorsDiscovered: parsed.readMoreAnchorsDiscovered, occurrencesResolved: parsed.occurrencesResolved, rawCardsParsed: parsed.rawCardsParsed, titleAnchorsFound: parsed.titleAnchorsFound, occurrenceListItemsResolved: parsed.occurrenceListItemsResolved, uniqueCardNodes: parsed.uniqueCardNodes, rawOccurrencesParsed: parsed.rawOccurrencesParsed, cardsMissingBadge: parsed.cardsMissingBadge, cardsMissingReadMore: parsed.cardsMissingReadMore, cardsContainingOtherEvent: parsed.cardsContainingOtherEvent, urlGroupsWithTitleAndReadMore: parsed.urlGroupsWithTitleAndReadMore, cardsWithOneBadgeDate: parsed.cardsWithOneBadgeDate, cardsWithTime: parsed.cardsWithTime, cardsWithoutTime: parsed.cardsWithoutTime, cardRoots: parsed.cardRoots, rawCards: parsed.rawCards.slice(0, 5), missingRawFields: parsed.missingRawFields }
+    return { provider: EDGE_OF_NORWAY_PROVIDER, mode: EDGE_OF_NORWAY_MODE, listPageUrl: EDGE_OF_NORWAY_STAVANGER_LIST_URL, cardsDiscovered: parsed.cardsDiscovered, validCardsParsed: parsed.validCardsParsedBeforeGrouping, exactDuplicateCardsRemoved: parsed.exactDuplicateCardsRemoved, uniqueSourceUrls: parsed.uniqueEventUrls, acceptedCount: acceptedEvents.length, skippedCounts: { ...parsed.groupedFailureCounts, ...skippedCounts }, acceptedEvents, parsingErrors: [...parsed.errorExamples.map((e) => ({ title: e.title, sourceUrl: e.sourceUrl, reason: e.reason })), ...parsingErrors].slice(0, 10), eventAnchorsDiscovered: parsed.eventAnchorsDiscovered, readMoreAnchorsDiscovered: parsed.readMoreAnchorsDiscovered, occurrencesResolved: parsed.occurrencesResolved, rawCardsParsed: parsed.rawCardsParsed, titleAnchorsFound: parsed.titleAnchorsFound, occurrenceListItemsResolved: parsed.occurrenceListItemsResolved, uniqueCardNodes: parsed.uniqueCardNodes, rawOccurrencesParsed: parsed.rawOccurrencesParsed, rawSegmentsCreated: parsed.rawSegmentsCreated, cardsMissingBadge: parsed.cardsMissingBadge, cardsMissingReadMore: parsed.cardsMissingReadMore, cardsContainingOtherEvent: parsed.cardsContainingOtherEvent, urlGroupsWithTitleAndReadMore: parsed.urlGroupsWithTitleAndReadMore, cardsWithOneBadgeDate: parsed.cardsWithOneBadgeDate, cardsWithTime: parsed.cardsWithTime, cardsWithoutTime: parsed.cardsWithoutTime, cardRoots: parsed.cardRoots, rawCards: parsed.rawCards.slice(0, 5), missingRawFields: parsed.missingRawFields }
   })(), 25_000, 'timeout').catch((error) => structuredDiagnosticError(error instanceof Error && error.message === 'timeout' ? 'timeout' : 'parser_failed', error))
 }
