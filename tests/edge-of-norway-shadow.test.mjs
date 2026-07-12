@@ -74,7 +74,7 @@ test('recurring event Read more occurrences resolve before grouping by URL', () 
   assert.equal(result.exactDuplicateCardsRemoved, 0)
   assert.equal(result.uniqueEventUrls, 2)
   assert.equal(result.cardsDiscovered, 4)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['segment', 'segment', 'segment', 'segment'])
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['article', 'article', 'article', 'article'])
   assert.deepEqual(result.rawCards.filter((card) => card.sourceUrl === 'https://www.fjordnorway.com/en/events/triple').map(({ title, badgeText, timeText, sourceUrl }) => ({ title, badgeText, timeText, sourceUrl })), [
     { title: 'Triple harbour walk', badgeText: '12. Jul.', timeText: '10:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
     { title: 'Triple harbour walk', badgeText: '14. Jul.', timeText: '11:00', sourceUrl: 'https://www.fjordnorway.com/en/events/triple' },
@@ -124,12 +124,19 @@ test('real card wrapper selector discovers only physical cards, not child wrappe
 test('live card boundary starts from Read more and resolves one root per physical card', () => {
   const result = parseEdgeOfNorwayListPage(fixture('live-card-boundary.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
   assert.equal(result.cardsDiscovered, 2)
-  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['segment', 'segment'])
+  assert.deepEqual(result.cardRoots.map((root) => root.tagName), ['li', 'li'])
   assert.equal(result.results.length, 2)
   assert.equal(result.results[0].accepted, true)
   assert.equal(result.results[1].accepted, true)
   assert.deepEqual(result.results[0].event, { title: 'Football festival in Vågen on 11 July – Norway v England', sourceUrl: footballUrl, date: '2026-07-11', startTime: '17:00', allDay: false })
   assert.notEqual(result.results[0].event.date, '2026-07-19')
+})
+
+
+test('required live assertion cards parse only through complete card containers', () => {
+  const events = accepted(fixture('live-assertions.html'))
+  assert.deepEqual(events.find((event) => event.title === 'Viking - Sandefjord'), { title: 'Viking - Sandefjord', sourceUrl: 'https://www.fjordnorway.com/en/events/viking-sandefjord', date: '2026-07-18', startTime: '18:00', allDay: false })
+  assert.deepEqual(events.find((event) => event.title === 'Stavanger Football Festival in Vågen | FINAL'), { title: 'Stavanger Football Festival in Vågen | FINAL', sourceUrl: 'https://www.fjordnorway.com/en/events/stavanger-football-festival-in-vagen-final', date: '2026-07-19', startTime: '17:00', allDay: false })
 })
 
 test('deterministic event-link discovery resolves generated-class cards independently', () => {
