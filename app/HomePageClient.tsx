@@ -2412,7 +2412,6 @@ type LocalEventsDiagnosticResult = {
   uniqueSourceUrls?: number
   validCardsParsed?: number
   readMoreAnchorsDiscovered?: number
-  occurrencesResolved?: number
   rawCardsParsed?: number
   cardsWithTime?: number
   cardsWithoutTime?: number
@@ -2420,7 +2419,8 @@ type LocalEventsDiagnosticResult = {
   skippedCounts?: Record<string, number>
   acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
   parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
-  cardRoots?: Array<{ tagName: string; className?: string }>
+  dateGroupsDiscovered?: number
+  titleOccurrencesDiscovered?: number
   rawCards?: Array<{ title: string | null; badgeText: string | null; timeText: string | null; sourceUrl: string | null }>
   error?: string
 }
@@ -2735,11 +2735,9 @@ function ConnectAppsScreen({
           {localEventsDiagnostic && (
             <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
               <div className="grid grid-cols-2 gap-2">
-                <div>Read more anchors: {localEventsDiagnostic.readMoreAnchorsDiscovered ?? 0}</div>
-                <div>Occurrences resolved: {localEventsDiagnostic.occurrencesResolved ?? 0}</div>
-                <div>Raw cards parsed: {localEventsDiagnostic.rawCardsParsed ?? 0}</div>
-                <div>Occurrences discovered: {localEventsDiagnostic.readMoreAnchorsDiscovered ?? 0}</div>
-                <div>Occurrences successfully resolved: {localEventsDiagnostic.occurrencesResolved ?? 0}</div>
+                <div>Date groups discovered: {localEventsDiagnostic.dateGroupsDiscovered ?? 0}</div>
+                <div>Title occurrences discovered: {localEventsDiagnostic.titleOccurrencesDiscovered ?? 0}</div>
+                <div>Raw occurrences parsed: {localEventsDiagnostic.rawCardsParsed ?? 0}</div>
                 <div>Cards discovered: {localEventsDiagnostic.cardsDiscovered ?? 0}</div>
                 <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Grouped skip counts: {Object.values(skippedCounts).reduce((sum: number, value) => sum + Number(value), 0)}</div>
