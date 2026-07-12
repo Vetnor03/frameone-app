@@ -2592,6 +2592,7 @@ function ConnectAppsScreen({
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
       setLocalEventsDraftArea(saved)
+      setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
       setStatusTone('success')
       setStatus(json?.zeroEvents ? 'Connected. No upcoming events were found right now.' : (language === 'no' ? 'Lokale arrangementer er tilkoblet' : 'Local Events connected'))
@@ -2617,6 +2618,7 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
+      setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': true }))
       setStatusTone('success')
       setStatus(language === 'no' ? 'Lokale arrangementer er frakoblet' : 'Local Events disconnected')
@@ -2735,56 +2737,54 @@ function ConnectAppsScreen({
     .map((app, index) => ({ app, index, connected: getAppConnected(app) }))
     .sort((a, b) => Number(b.connected) - Number(a.connected) || a.index - b.index)
 
-  if (localEventsOpen) {
+  const renderLocalEventsPanel = () => {
     const area = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
     const primaryName = getLocalEventPlace(area.primaryPlaceId)?.displayName || 'Stavanger'
     const visiblePlaces = localEventsSearch ? searchLocalEventPlaces(localEventsSearch) : LOCAL_EVENT_PLACE_CATALOGUE
-    const connected = !!localEventsSavedArea
+    const connected = !!localEventsSavedArea && !localEventsOpen
     const choosePrimaryPlace = (id: LocalEventPlaceId) => {
       setLocalEventsDraftArea(suggestedLocalEventArea(id))
       setLocalEventsSearch('')
     }
+
     return (
-      <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
-        <div className="pt-5 pb-6">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <button type="button" onClick={() => setLocalEventsOpen(false)} className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'TILBAKE' : 'BACK'}</button>
-            <div className="text-[color:var(--fg-90)] text-sm font-semibold">Local Events</div>
+      <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
+        {connected ? (
+          <div className="text-sm text-[color:var(--fg-90)]">
+            <div className="font-semibold">Connected to {primaryName} area</div>
+            <p className="mt-2 text-xs leading-5 text-[color:var(--fg-70)]">Events from {primaryName} and nearby places are added to your calendar.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA); setLocalEventsOpen(true) }} disabled={localEventsLoading} className="h-10 rounded-xl border border-[color:var(--bd-15)] px-4 text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">Change area</button>
+              <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading} className="h-10 rounded-xl border border-[#d94b4b]/45 px-4 text-xs tracking-widest text-[#d94b4b] disabled:opacity-60">{localEventsLoading ? 'Disconnecting…' : 'Disconnect'}</button>
+            </div>
           </div>
-          <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4">
-            {connected ? (
-              <div className="text-sm text-[color:var(--fg-90)]">
-                <h2 className="text-lg font-semibold">Local Events</h2>
-                <div className="mt-3 font-semibold">Connected to {primaryName} area</div>
-                <p className="mt-2 text-xs leading-5 text-[color:var(--fg-70)]">Events from {primaryName} and nearby places are added to your calendar.</p>
-                <button type="button" onClick={disconnectLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#d94b4b]/45 px-4 text-xs tracking-widest text-[#d94b4b] disabled:opacity-60">{localEventsLoading ? 'Disconnecting…' : 'Disconnect'}</button>
-              </div>
-            ) : (
-              <div>
-                <h2 className="text-lg font-semibold text-[color:var(--fg-90)]">Local Events</h2>
-                <p className="mt-2 text-sm text-[color:var(--fg-70)]">Discover events close to you.</p>
-                <label className="mt-4 block text-xs font-medium text-[color:var(--fg-70)]" htmlFor="local-events-place-search">Search for your place</label>
-                <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder="Search for your place" className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-sm outline-none focus:border-[#2aa3ff]" />
-                <div className="mt-3 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
-                  {visiblePlaces.map((place) => (
-                    <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place.id)} aria-pressed={area.primaryPlaceId === place.id} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm ${area.primaryPlaceId === place.id ? 'bg-[#2aa3ff]/15 text-[#2aa3ff]' : 'text-[color:var(--fg-80)]'}`}>
-                      <span>{place.displayName}</span>
-                      {area.primaryPlaceId === place.id ? <span className="text-[10px] uppercase tracking-widest">Selected</span> : null}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] px-3 py-3 text-xs text-[color:var(--fg-70)]">
-                  <span className="font-medium text-[color:var(--fg-90)]">Selected place:</span> {primaryName}
-                  <p className="mt-2 leading-5 text-[color:var(--fg-45)]">We also include nearby places that are close enough for spontaneous events.</p>
-                </div>
-                <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !area.primaryPlaceId} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff]/10 px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? 'Connecting…' : 'Connect'}</button>
-              </div>
-            )}
+        ) : (
+          <div>
+            <p className="text-sm text-[color:var(--fg-70)]">Discover events close to you.</p>
+            <label className="mt-4 block text-xs font-medium text-[color:var(--fg-70)]" htmlFor="local-events-place-search">Search for your place</label>
+            <input id="local-events-place-search" value={localEventsSearch} onChange={(e) => setLocalEventsSearch(e.target.value)} placeholder="Search for your place" className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 text-sm outline-none focus:border-[#2aa3ff]" />
+            <div className="mt-3 max-h-56 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">
+              {visiblePlaces.map((place) => (
+                <button key={place.id} type="button" onClick={() => choosePrimaryPlace(place.id)} aria-pressed={area.primaryPlaceId === place.id} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm ${area.primaryPlaceId === place.id ? 'bg-[#2aa3ff]/15 text-[#2aa3ff]' : 'text-[color:var(--fg-80)]'}`}>
+                  <span>{place.displayName}</span>
+                  {area.primaryPlaceId === place.id ? <span className="text-[10px] uppercase tracking-widest">Selected</span> : null}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 rounded-2xl border border-[color:var(--bd-10)] px-3 py-3 text-xs text-[color:var(--fg-70)]">
+              <span className="font-medium text-[color:var(--fg-90)]">Selected place:</span> {primaryName}
+              <p className="mt-2 leading-5 text-[color:var(--fg-45)]">We also include nearby places that are close enough for spontaneous events.</p>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !area.primaryPlaceId} className="h-10 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff]/10 px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? 'Connecting…' : 'Connect'}</button>
+              {localEventsSavedArea ? <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea); setLocalEventsOpen(false) }} disabled={localEventsLoading} className="h-10 rounded-xl border border-[color:var(--bd-15)] px-4 text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">Cancel</button> : null}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     )
   }
+
 
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
@@ -2878,14 +2878,7 @@ function ConnectAppsScreen({
                     </button>
                   </div>
                 )}
-                {app.key === 'local-events' && localEventsSavedArea && (
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
-                    <span className="min-w-0">
-                      <span className="block font-medium text-[color:var(--fg-80)]">Connected to {getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger'} area</span>
-                    </span>
-                    <button type="button" onClick={() => { setLocalEventsDraftArea(localEventsSavedArea); setLocalEventsOpen(true) }} className="shrink-0 rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest text-[color:var(--fg-45)]">Open</button>
-                  </div>
-                )}
+                {app.key === 'local-events' && (localEventsOpen || localEventsSavedArea) && renderLocalEventsPanel()}
                 {app.key === 'teams' && teamsConnected && (
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
                     <span className="min-w-0 truncate">
