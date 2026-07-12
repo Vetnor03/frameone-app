@@ -2415,6 +2415,9 @@ type LocalEventsDiagnosticResult = {
   acceptedCount?: number
   skippedCounts?: Record<string, number>
   acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
+  repeatedSeriesCount?: number
+  repeatedSeriesEventsCount?: number
+  repeatedSeriesExamples?: Array<{ title: string; venueName: string | null; startTime: string | null; dates: string[]; sourceUrls: string[] }>
   parsingErrors?: Array<{ title?: string; sourceUrl?: string; reason: string }>
   networkError?: string
   error?: string
@@ -2730,8 +2733,8 @@ function ConnectAppsScreen({
             <button type="button" onClick={testLocalEvents} disabled={localEventsLoading} className="mt-4 h-10 rounded-xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-60">{localEventsLoading ? (language === 'no' ? 'TESTER…' : 'TESTING…') : (language === 'no' ? 'TEST LIVE ARRANGEMENTER' : 'TEST LIVE EVENTS')}</button>
           </div>
           {localEventsDiagnostic && (
-            <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="mt-3 min-w-0 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)] [overflow-wrap:anywhere]">
+              <div className="grid min-w-0 grid-cols-1 gap-2 min-[520px]:grid-cols-2">
                 <div>Requested URL: {localEventsDiagnostic.fetch?.requestedUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
                 <div>Final URL: {localEventsDiagnostic.fetch?.finalUrl || localEventsDiagnostic.listPageUrl || 'Unknown'}</div>
                 <div>Final hostname: {localEventsDiagnostic.fetch?.finalHostname || 'Unknown'}</div>
@@ -2748,6 +2751,8 @@ function ConnectAppsScreen({
                 <div>Unique Event objects: {localEventsDiagnostic.uniqueEvents ?? 0}</div>
                 <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Skipped counts: {Object.values(skippedCounts).reduce((sum: number, value) => sum + Number(value), 0)}</div>
+                <div>Repeated-series groups: {localEventsDiagnostic.repeatedSeriesCount ?? 0}</div>
+                <div>Repeated-series events: {localEventsDiagnostic.repeatedSeriesEventsCount ?? 0}</div>
                 <div>Exact failure message: {localEventsDiagnostic.diagnosticError ? `${localEventsDiagnostic.diagnosticError.stage}: ${localEventsDiagnostic.diagnosticError.message}` : (localEventsDiagnostic.networkError || 'None')}</div>
                 {localEventsDiagnostic.fetch?.htmlPreview && <div>HTML preview: {localEventsDiagnostic.fetch.htmlPreview}</div>}
               </div>
@@ -2755,9 +2760,13 @@ function ConnectAppsScreen({
                 <div className="font-medium text-[color:var(--fg-90)]">First 10 accepted events</div>
                 {localEventsDiagnostic.acceptedEvents?.length ? localEventsDiagnostic.acceptedEvents.slice(0, 10).map((event, index) => <div key={`${index}-${event.sourceUrl}`} className="mt-1 break-words text-[color:var(--fg-70)]">{event.title} · {event.date} · {event.startTime || 'All-day'} · {event.sourceUrl}</div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
               </div>
-              <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
+              <div className="mt-3 min-w-0 border-t border-[color:var(--bd-10)] pt-3">
+                <div className="font-medium text-[color:var(--fg-90)]">Repeated-series examples</div>
+                {localEventsDiagnostic.repeatedSeriesExamples?.length ? localEventsDiagnostic.repeatedSeriesExamples.map((group, index) => <div key={`${index}-${group.title}`} className="mt-2 min-w-0 text-[color:var(--fg-70)] [overflow-wrap:anywhere]"><div>{group.title} · {group.venueName || 'No venue'} · {group.startTime || 'All-day'} · {group.dates.join(', ')}</div><div className="text-[color:var(--fg-45)]">{group.sourceUrls.join(' · ')}</div></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+              </div>
+              <div className="mt-3 min-w-0 border-t border-[color:var(--bd-10)] pt-3">
                 <div className="font-medium text-[color:var(--fg-90)]">Skipped counts</div>
-                {Object.keys(skippedCounts).length ? Object.entries(skippedCounts).map(([key, value]) => <div key={key} className="mt-1 flex justify-between gap-3"><span>{key}</span><span>{value}</span></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
+                {Object.keys(skippedCounts).length ? Object.entries(skippedCounts).map(([key, value]) => <div key={key} className="mt-1 flex min-w-0 justify-between gap-3 [overflow-wrap:anywhere]"><span>{key}</span><span>{value}</span></div>) : <div className="mt-1 text-[color:var(--fg-45)]">None</div>}
               </div>
               <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
                 <div className="font-medium text-[color:var(--fg-90)]">Parsing errors</div>
