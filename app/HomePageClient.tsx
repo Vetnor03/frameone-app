@@ -2410,6 +2410,7 @@ type LocalEventsDiagnosticResult = {
   cardsDiscovered?: number
   exactDuplicateCardsRemoved?: number
   uniqueSourceUrls?: number
+  validCardsParsed?: number
   acceptedCount?: number
   skippedCounts?: Record<string, number>
   acceptedEvents?: Array<{ title: string; sourceUrl: string; date: string; startTime: string | null; allDay: boolean }>
@@ -2583,15 +2584,23 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å teste lokale arrangementer' : 'Sign in to test Local Events')
-      const resp = await fetch('/api/integrations/local-events/diagnostic', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 30_000)
+      let resp: Response
+      try {
+        resp = await fetch('/api/integrations/local-events/diagnostic', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timer)
+      }
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Local Events diagnostic failed')
       setLocalEventsDiagnostic(json)
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke teste lokale arrangementer' : 'Could not test Local Events')
+      const message = error instanceof DOMException && error.name === 'AbortError' ? (language === 'no' ? 'Testen av lokale arrangementer tidsavbrøt' : 'Local Events diagnostic timed out') : error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke teste lokale arrangementer' : 'Could not test Local Events')
       setLocalEventsDiagnostic({ cardsDiscovered: 0, exactDuplicateCardsRemoved: 0, uniqueSourceUrls: 0, acceptedCount: 0, skippedCounts: {}, parsingErrors: [{ reason: message }], error: message })
     } finally {
       setLocalEventsLoading(false)
@@ -2721,6 +2730,7 @@ function ConnectAppsScreen({
             <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-4 text-xs text-[color:var(--fg-70)]">
               <div className="grid grid-cols-2 gap-2">
                 <div>Cards discovered: {localEventsDiagnostic.cardsDiscovered ?? 0}</div>
+                <div>Valid cards parsed: {localEventsDiagnostic.validCardsParsed ?? localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Accepted events: {localEventsDiagnostic.acceptedCount ?? 0}</div>
                 <div>Exact duplicates removed: {localEventsDiagnostic.exactDuplicateCardsRemoved ?? 0}</div>
                 <div>Unique source URLs: {localEventsDiagnostic.uniqueSourceUrls ?? 0}</div>

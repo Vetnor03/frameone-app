@@ -19,8 +19,8 @@ test('football regression accepts badge date 11 July and never active calendar 1
 
 test('one date with time', () => assert.deepEqual(accepted(fixture('one-date-with-time.html'))[0], { title: 'Evening concert', sourceUrl: 'https://www.fjordnorway.com/en/events/evening-concert', date: '2026-07-12', startTime: '19:30', allDay: false }))
 test('one date without time is all-day', () => assert.deepEqual(accepted(fixture('one-date-no-time.html'))[0], { title: 'Street market', sourceUrl: 'https://www.fjordnorway.com/en/events/street-market', date: '2026-07-12', startTime: null, allDay: true }))
-test('missing badge date', () => assert.deepEqual(skipped(fixture('missing-badge-date.html')), ['missing_badge_date']))
-test('unclear badge date', () => assert.deepEqual(skipped(fixture('unclear-badge-date.html')), ['missing_badge_date']))
+test('missing badge date', () => assert.deepEqual(skipped(fixture('missing-badge-date.html')), ['unclear_date']))
+test('unclear badge date', () => assert.deepEqual(skipped(fixture('unclear-badge-date.html')), ['unclear_date']))
 test('multiple dates in one card', () => assert.deepEqual(skipped(fixture('multiple-dates-one-card.html')), ['multiple_dates']))
 test('same canonical URL on multiple dates skips all occurrences', () => assert.deepEqual(skipped(fixture('same-url-multiple-dates.html')), ['multiple_dates', 'multiple_dates']))
 test('exact duplicate cards collapse', () => { const result = parseEdgeOfNorwayListPage(fixture('exact-duplicate-cards.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref); assert.equal(result.exactDuplicateCardsRemoved, 1); assert.equal(result.results.length, 1); assert.equal(result.results[0].accepted, true) })
@@ -41,6 +41,12 @@ test('shadow diagnostic parses list page only and reports list-card metrics', as
   assert.deepEqual(result.skippedCounts, {})
   assert.equal(result.acceptedEvents[0].date, '2026-07-11')
   assert.notEqual(result.acceptedEvents[0].date, '2026-07-19')
+})
+
+test('real card wrapper selector discovers only physical cards, not child wrappers', () => {
+  const result = parseEdgeOfNorwayListPage(fixture('live-card-boundary.html'), EDGE_OF_NORWAY_STAVANGER_LIST_URL, ref)
+  assert.equal(result.cardsDiscovered, 2)
+  assert.equal(result.results.length, 2)
 })
 
 test('live card boundary starts from Read more and resolves one root per physical card', () => {

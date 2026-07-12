@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       listPageUrl: 'https://www.edgeofnorway.com/en/events?date=next_30&filtertype=place&place=stavanger',
       cardsDiscovered: 0,
       exactDuplicateCardsRemoved: 0,
+      validCardsParsed: 0,
       uniqueSourceUrls: 0,
       acceptedCount: 0,
       skippedCounts: {},
