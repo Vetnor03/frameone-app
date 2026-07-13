@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { stableFingerprint, monitoringJsonSchema, normalizeMonitoringResult, DEFAULT_OPENAI_MONITORING_MODEL, extractReturnedSources, hasCompletedWebSearchCall, normalizeSourceUrl } from '../supabase/functions/_shared/monitoring/provider.ts'
+import { stableFingerprint, monitoringJsonSchema, normalizeMonitoringResult, DEFAULT_OPENAI_MONITORING_MODEL, extractReturnedSources, extractCitationSources, hasCompletedWebSearchCall, normalizeSourceUrl } from '../supabase/functions/_shared/monitoring/provider.ts'
 
 const provider = readFileSync(new URL('../supabase/functions/_shared/monitoring/provider.ts', import.meta.url), 'utf8')
 const interpreter = readFileSync(new URL('../supabase/functions/interpret-ai-assistant/index.ts', import.meta.url), 'utf8')
@@ -27,6 +27,8 @@ test('runtime validation requires a completed web_search_call and parses returne
   const response = { output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://www.Example.com/a?utm_source=x#frag', title: 'T', published_at: '2026-07-13' }] } }, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '{}' }] }] }
   assert.equal(hasCompletedWebSearchCall(response), true)
   assert.equal(extractReturnedSources(response)[0].normalized_url, 'https://example.com/a')
+  const annotated = { output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '{}', annotations: [{ type: 'url_citation', url: 'https://www.Example.com/a?utm_source=x#frag', title: 'T', start_index: 1, end_index: 2 }] }] }] }
+  assert.equal(extractCitationSources(annotated)[0].normalized_url, 'https://example.com/a')
   assert.equal(hasCompletedWebSearchCall({ output: [{ type: 'web_search_call', status: 'failed' }] }), false)
 })
 
@@ -36,7 +38,29 @@ test('source grounding rejects invented sources and deduplicates normalized retu
   assert.equal(result.sources.length, 1)
   assert.equal(result.sources[0].title, 'Returned')
   assert.equal(result.sources[0].published_at, null)
-  assert.throws(() => normalizeMonitoringResult({ status: 'change', trigger_met: true, sources: [{ url: 'https://invented.example', title: 'I', published_at: null }], suggested_next_check_minutes: 60 }, returned), /source_grounding_failed/)
+  const rejected = normalizeMonitoringResult({ status: 'change', trigger_met: true, sources: [{ url: 'https://invented.example', title: 'I', published_at: null }], suggested_next_check_minutes: 60 }, returned)
+  assert.equal(rejected.status, 'uncertain')
+  assert.equal(rejected.raw.diagnostic_reason, 'source_grounding_failed')
+})
+
+test('annotation grounding is preferred over structured JSON hints and normalizes tracking parameters', () => {
+  const returned = [{ url: 'https://news.example.com/story?id=1', normalized_url: normalizeSourceUrl('https://news.example.com/story?id=1'), title: 'Returned title', published_at: '2026-07-13' }]
+  const citations = [{ url: 'https://www.news.example.com/story?utm_source=openai&id=1#cite', normalized_url: normalizeSourceUrl('https://www.news.example.com/story?utm_source=openai&id=1#cite'), title: 'Citation title', start_index: 10, end_index: 20 }]
+  const result = normalizeMonitoringResult({ status: 'change', trigger_met: true, headline: 'H', summary: 'S', sources: [{ url: 'https://different.example/model-url', title: 'Model hint', published_at: null }], suggested_next_check_minutes: 60 }, returned, citations)
+  assert.equal(result.status, 'change')
+  assert.deepEqual(result.sources, [{ url: 'https://news.example.com/story?id=1', title: 'Returned title', published_at: '2026-07-13' }])
+})
+
+test('multiple citation annotations deduplicate and invented model URLs are rejected', () => {
+  const returned = [{ url: 'https://example.com/a', normalized_url: normalizeSourceUrl('https://example.com/a'), title: 'A', published_at: null }]
+  const citations = [
+    { url: 'https://example.com/a?utm_campaign=x', normalized_url: normalizeSourceUrl('https://example.com/a?utm_campaign=x'), title: 'A1', start_index: 1, end_index: 2 },
+    { url: 'https://www.example.com/a#again', normalized_url: normalizeSourceUrl('https://www.example.com/a#again'), title: 'A2', start_index: 3, end_index: 4 },
+    { url: 'https://invented.example/nope', normalized_url: normalizeSourceUrl('https://invented.example/nope'), title: 'Nope', start_index: 5, end_index: 6 },
+  ]
+  const result = normalizeMonitoringResult({ status: 'change', trigger_met: true, headline: 'H', summary: 'S', sources: [{ url: 'https://invented.example/model', title: 'I', published_at: null }], suggested_next_check_minutes: 60 }, returned, citations)
+  assert.equal(result.sources.length, 1)
+  assert.equal(result.sources[0].url, 'https://example.com/a')
 })
 
 test('monitoring prompt covers first-run freshness, prompt-injection boundaries and semantic fingerprints', () => {
@@ -47,7 +71,9 @@ test('strict output validation covers no_change, uncertain, grounded change, ref
   assert.equal(normalizeMonitoringResult({ status: 'no_change', trigger_met: false, sources: [], suggested_next_check_minutes: 60 }).status, 'no_change')
   assert.equal(normalizeMonitoringResult({ status: 'uncertain', trigger_met: false, sources: [], confidence: .3, suggested_next_check_minutes: 60 }).status, 'uncertain')
   assert.equal(normalizeMonitoringResult({ status: 'change', trigger_met: true, headline: 'H', summary: 'S', sources: [{ url: 'https://example.com', title: 'T', published_at: null }], suggested_next_check_minutes: 60 }, [{ url: 'https://example.com', normalized_url: 'https://example.com', title: 'T', published_at: null }]).sources.length, 1)
-  assert.throws(() => normalizeMonitoringResult({ status: 'change', trigger_met: true, sources: [], suggested_next_check_minutes: 60 }, []), /source_grounding_failed/)
+  const ungrounded = normalizeMonitoringResult({ status: 'change', trigger_met: true, sources: [], suggested_next_check_minutes: 60 }, [])
+  assert.equal(ungrounded.status, 'uncertain')
+  assert.equal(ungrounded.raw.diagnostic_reason, 'source_grounding_failed')
   assert.match(provider, /openai_refusal/)
   assert.match(provider, /openai_incomplete/)
   assert.match(provider, /item\.type !== 'message'/)
@@ -108,6 +134,8 @@ test('worker captures diagnostics, skips paused/completed/deleted watches, does 
   assert.match(worker, /usage: result\.usage/)
   assert.match(worker, /previous_updates/)
   assert.match(worker, /watch\.status !== 'active' && watch\.status !== 'error'/)
+  assert.match(worker, /status: 'active'/)
+  assert.match(worker, /status: 'error'/)
   assert.doesNotMatch(worker, /status: 'completed'|status = 'completed'/)
 })
 
