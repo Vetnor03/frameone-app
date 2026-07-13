@@ -17,12 +17,12 @@ const scheduleProbeHtml = (schedule) => eventHtml({
 const eventFromSchedule = (schedule) => parseEdgeOfNorwayListPage(scheduleProbeHtml(schedule)).results.find((r) => r.accepted)?.event
 const reasonFromSchedule = (schedule) => parseEdgeOfNorwayListPage(scheduleProbeHtml(schedule)).results.find((r) => !r.accepted)?.reason
 
-test('configured Edge of Norway list URL uses official Stavanger group place filters', () => {
-  assert.equal(EDGE_OF_NORWAY_EVENTS_URL, 'https://www.edgeofnorway.com/en/events?date=next_30&filtertype=place&place=stavanger&place=randaberg&place=rennesoy-and-the-green-islands&place=finnoy&place=kvitsoy')
+test('configured Edge of Norway list URL uses official Stavanger-area place filters', () => {
+  assert.equal(EDGE_OF_NORWAY_EVENTS_URL, 'https://www.edgeofnorway.com/en/events?date=next_30&filtertype=place&place=stavanger&place=sola&place=sandnes&place=randaberg')
   const url = new URL(EDGE_OF_NORWAY_EVENTS_URL)
   assert.equal(url.searchParams.get('date'), 'next_30')
   assert.equal(url.searchParams.get('filtertype'), 'place')
-  assert.deepEqual(url.searchParams.getAll('place'), ['stavanger', 'randaberg', 'rennesoy-and-the-green-islands', 'finnoy', 'kvitsoy'])
+  assert.deepEqual(url.searchParams.getAll('place'), ['stavanger', 'sola', 'sandnes', 'randaberg'])
 })
 
 test('page with only Loading in main parses structured flight Event objects without DOM cards', () => {
