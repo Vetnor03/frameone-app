@@ -559,7 +559,7 @@ export async function GET(req: Request) {
           .maybeSingle()
         const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
         const localEventRows = (Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [])
-          .filter((row) => !selectedLocalEventArea || String((row.raw as any)?.areaKey || (row.raw as any)?.primaryPlaceId || '').trim() === selectedLocalEventArea)
+          .filter((row) => !selectedLocalEventArea || (Array.isArray((row.raw as any)?.areaKeys) ? (row.raw as any).areaKeys.includes(selectedLocalEventArea) : String((row.raw as any)?.areaKey || (row.raw as any)?.primaryPlaceId || '').trim() === selectedLocalEventArea))
         const localEventExternalIds = localEventRows.map((row) => String(row.external_id || '').trim()).filter(Boolean)
         let localEventSkipRows: LocalEventSkipRow[] = []
 
