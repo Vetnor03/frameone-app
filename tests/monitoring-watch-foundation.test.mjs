@@ -79,9 +79,9 @@ test('running-run uniqueness prevents duplicate simultaneous processing', () => 
   assert.match(worker, /watch_already_running/)
 })
 
-test('OpenAI abstraction uses Responses API web_search_preview and strict schema', () => {
+test('OpenAI abstraction uses Responses API web_search and strict schema', () => {
   assert.equal(monitoringJsonSchema.additionalProperties, false)
   assert.match(readFileSync(new URL('../supabase/functions/_shared/monitoring/provider.ts', import.meta.url), 'utf8'), /https:\/\/api\.openai\.com\/v1\/responses/)
-  assert.match(readFileSync(new URL('../supabase/functions/_shared/monitoring/provider.ts', import.meta.url), 'utf8'), /tools: \[\{ type: 'web_search_preview' \}\]/)
+  assert.match(readFileSync(new URL('../supabase/functions/_shared/monitoring/provider.ts', import.meta.url), 'utf8'), /tools: \[\{ type: 'web_search' \}\]/)
   assert.match(readFileSync(new URL('../supabase/functions/_shared/monitoring/provider.ts', import.meta.url), 'utf8'), /strict: true/)
 })
