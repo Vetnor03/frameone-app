@@ -10,10 +10,11 @@ import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
+import AIAssistantTab from './components/AIAssistantTab'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
-type CoreTabKey = 'frame' | 'settings'
+type CoreTabKey = 'frame' | 'assistant' | 'settings'
 type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
@@ -29,6 +30,7 @@ const UI = {
   en: {
     frame: 'FRAME',
     settings: 'SETTINGS',
+    assistant: 'AI Assistant',
 
     modules: {
       date: 'DATE',
@@ -149,6 +151,7 @@ const UI = {
   no: {
     frame: 'FRAME',
     settings: 'INNSTILLINGER',
+    assistant: 'KI-assistent',
 
     modules: {
       date: 'DATO',
@@ -1239,6 +1242,7 @@ export default function HomePage() {
   const tabs = useMemo(() => {
     return [
       { key: 'frame' as const, label: tx(language).frame },
+      { key: 'assistant' as const, label: tx(language).assistant },
       ...dynamicTabs,
       { key: 'settings' as const, label: tx(language).settings },
     ]
@@ -2236,6 +2240,10 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
+              {activeTab === 'assistant' && (
+                <AIAssistantTab language={language} activeDeviceId={activeDeviceId} />
+              )}
+
               {activeTab === 'settings' && (
                 <SettingsTab
                   language={language}
@@ -2253,7 +2261,7 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab !== 'frame' && activeTab !== 'settings' && (
+              {activeTab !== 'frame' && activeTab !== 'assistant' && activeTab !== 'settings' && (
                 <div className="relative h-full">
                   <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
                     {activeTab === 'reminders' && !remindersConnectScreenOpen && (
@@ -3040,6 +3048,8 @@ function ConnectAppsScreen({
     </div>
   )
 }
+
+
 
 function TabBar({
   tabs,
