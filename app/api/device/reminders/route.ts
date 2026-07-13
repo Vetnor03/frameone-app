@@ -551,7 +551,15 @@ export async function GET(req: Request) {
 
         if (localEventsError) throw localEventsError
 
-        const localEventRows = Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : []
+        const { data: localEventsIntegrationData } = await supabase
+          .from('user_integrations')
+          .select('encrypted_credentials')
+          .eq('device_id', device_id)
+          .eq('provider', 'edge-of-norway')
+          .maybeSingle()
+        const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
+        const localEventRows = (Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [])
+          .filter((row) => !selectedLocalEventArea || String((row.raw as any)?.areaKey || (row.raw as any)?.primaryPlaceId || '').trim() === selectedLocalEventArea)
         const localEventExternalIds = localEventRows.map((row) => String(row.external_id || '').trim()).filter(Boolean)
         let localEventSkipRows: LocalEventSkipRow[] = []
 
