@@ -12392,7 +12392,15 @@ const manualItems: ReminderUiItem[] = (data || [])
         if (integrationError) {
           alert(integrationError.message)
         } else {
-          const selectedLocalEventArea = String(localEventsSavedArea?.primaryPlaceId || '').trim()
+          const { data: localEventsIntegrationData } = activeDeviceId
+            ? await supabase
+              .from('user_integrations')
+              .select('encrypted_credentials')
+              .eq('device_id', activeDeviceId)
+              .eq('provider', 'edge-of-norway')
+              .maybeSingle()
+            : { data: null }
+          const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
           const visibleIntegrationData = (integrationData || []).filter((row: any) => String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)
           const localEventExternalIds = visibleIntegrationData
             .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
