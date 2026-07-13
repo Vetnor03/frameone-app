@@ -95,12 +95,12 @@ test('accepted Edge of Norway events are persisted with stable external IDs and 
   assert.match(server, /raw: \{[\s\S]*sourceUrl:[\s\S]*primaryPlaceId:[\s\S]*includedPlaceIds:/)
 })
 
-test('calendar imports Local Events as Events category with source URL action', () => {
+test('calendar imports Local Events as Events category without source URL action', () => {
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(home, /'edge-of-norway'\) return 'local-events'/)
   assert.match(home, /if \(source === 'local-events'\) return 'event'/)
   assert.match(home, /if \(source === 'local-events'\) return 'Events'/)
-  assert.match(home, /Open event page/)
+  assert.doesNotMatch(home, /Open event page/)
 })
 
 test('calendar hides Local Events after they have been skipped for 24 hours', () => {

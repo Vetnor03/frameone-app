@@ -12924,9 +12924,6 @@ const sortedReminders = useMemo(() => {
                             normalizeReminderTime(item.time) ? ` • ${normalizeReminderTime(item.time)}` : ''
                           } • ${item.editable === false ? integrationReminderSourceLabel(language, item.source) : reminderRepeatLabel(language, item.repeat, item.customRepeatDays)}`}
                         </div>
-                        {item.source === 'local-events' && item.sourceUrl ? (
-                          <a href={item.sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-1 inline-flex text-[11px] text-[#2aa3ff]">Open event page</a>
-                        ) : null}
                       </div>
                       <div className="shrink-0 self-center">
                         {item.editable === false ? (
