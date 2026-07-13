@@ -12392,7 +12392,9 @@ const manualItems: ReminderUiItem[] = (data || [])
         if (integrationError) {
           alert(integrationError.message)
         } else {
-          const localEventExternalIds = (integrationData || [])
+          const selectedLocalEventArea = String(localEventsSavedArea?.primaryPlaceId || '').trim()
+          const visibleIntegrationData = (integrationData || []).filter((row: any) => String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)
+          const localEventExternalIds = visibleIntegrationData
             .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
             .map((row: any) => String(row.external_id || '').trim())
             .filter(Boolean)
@@ -12418,7 +12420,7 @@ const manualItems: ReminderUiItem[] = (data || [])
             }
           }
 
-          integrationItems = (integrationData || [])
+          integrationItems = visibleIntegrationData
             .map((row: any) => {
               const source = integrationProviderToReminderSource(row.provider)
               if (!source) return null
