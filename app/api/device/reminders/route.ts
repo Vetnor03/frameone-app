@@ -545,7 +545,7 @@ export async function GET(req: Request) {
         const { data: localEventsData, error: localEventsError } = await supabase
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
-          .eq('provider', 'edge-of-norway')
+          .in('provider', ['edge-of-norway', 'linticket'])
           .eq('device_id', device_id)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
@@ -559,8 +559,8 @@ export async function GET(req: Request) {
           .maybeSingle()
         const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
         const localEventRows = (Array.isArray(localEventsData) ? (localEventsData as IntegrationItemRow[]) : [])
-          .filter((row) => !selectedLocalEventArea || String((row.raw as any)?.areaKey || (row.raw as any)?.primaryPlaceId || '').trim() === selectedLocalEventArea)
-        const localEventExternalIds = localEventRows.map((row) => String(row.external_id || '').trim()).filter(Boolean)
+          .filter((row) => !selectedLocalEventArea || String((row.raw as any)?.locationId || (row.raw as any)?.areaKey || (row.raw as any)?.primaryPlaceId || '').trim() === selectedLocalEventArea)
+        const localEventExternalIds = localEventRows.map((row) => String((row.raw as any)?.canonicalEventId || row.external_id || '').trim()).filter(Boolean)
         let localEventSkipRows: LocalEventSkipRow[] = []
 
         if (localEventExternalIds.length > 0) {
@@ -568,7 +568,7 @@ export async function GET(req: Request) {
             .from('local_event_frame_skips')
             .select('device_id, provider, external_event_id, skipped')
             .eq('device_id', device_id)
-            .eq('provider', 'edge-of-norway')
+            .eq('provider', 'local-events')
             .in('external_event_id', Array.from(new Set(localEventExternalIds)))
 
           if (skipsError) throw skipsError
