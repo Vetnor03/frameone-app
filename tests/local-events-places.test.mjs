@@ -103,6 +103,19 @@ test('accepted Edge of Norway events are persisted with stable external IDs and 
   assert.match(server, /raw: \{[\s\S]*sourceUrl:[\s\S]*primaryPlaceId:[\s\S]*includedPlaceIds:/)
 })
 
+
+test('Local Events frame upsert conflicts have exact non-partial unique indexes', () => {
+  const migration = readFileSync(new URL('../supabase/migrations/20260713120000_fix_local_events_frame_upsert_conflicts.sql', import.meta.url), 'utf8')
+  const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
+  assert.match(server, /upsert\(rows, \{ onConflict: 'device_id,provider,external_id' \}\)/)
+  assert.match(server, /from\('user_integrations'\)\.upsert\([\s\S]*\{ onConflict: 'device_id,provider' \}\)/)
+  assert.match(migration, /partition by device_id, provider/)
+  assert.match(migration, /partition by device_id, provider, external_id/)
+  assert.match(migration, /create unique index if not exists user_integrations_device_provider_unique_idx\s+on public\.user_integrations \(device_id, provider\);/)
+  assert.match(migration, /create unique index if not exists integration_items_device_provider_external_idx\s+on public\.integration_items \(device_id, provider, external_id\);/)
+  assert.doesNotMatch(migration, /where device_id is not null;\s*$/m)
+})
+
 test('calendar imports Local Events as Events category without source URL action', () => {
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(home, /'edge-of-norway'\) return 'local-events'/)

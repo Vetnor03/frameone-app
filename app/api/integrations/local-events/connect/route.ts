@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { connectLocalEventsForFrame } from '@/app/lib/integrations/local-events/server'
+import { connectLocalEventsForFrame, localEventUserMessage } from '@/app/lib/integrations/local-events/server'
 import { getAuthenticatedUserId } from '@/app/lib/integrations/spond/server'
 
 export const runtime = 'nodejs'
@@ -14,8 +14,7 @@ export async function POST(req: Request) {
     const result = await connectLocalEventsForFrame(userId, deviceId, body?.areaPreference)
     return NextResponse.json({ connected: true, deviceId, areaPreference: result.areaPreference, importedCount: result.importedCount, zeroEvents: result.zeroEvents, account: result.external_account_label, last_sync_at: result.last_sync_at })
   } catch (error) {
-    const message = error instanceof Error && error.message ? error.message : 'Local Events connection failed'
     console.error('Local Events connect failed', { userId, deviceId, error })
-    return NextResponse.json({ error: message }, { status: 502 })
+    return NextResponse.json({ error: localEventUserMessage(error) }, { status: 502 })
   }
 }
