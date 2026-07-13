@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { mockMonitoringResult, runOpenAIWatch, stableFingerprint } from '../_shared/monitoring/provider.ts'
+import { mockMonitoringResult, monitoringModelFromEnv, runOpenAIWatch, stableFingerprint } from '../_shared/monitoring/provider.ts'
 
 const MINUTES = 60_000
 
@@ -25,7 +25,7 @@ async function processJob(supabase: any, job: any) {
   }
 
   const provider = Deno.env.get('MONITORING_PROVIDER') || 'mock'
-  const model = provider === 'openai' ? (Deno.env.get('OPENAI_MONITORING_MODEL') || 'gpt-4.1-mini') : 'mock'
+  const model = provider === 'openai' ? (monitoringModelFromEnv(Deno.env)) : 'mock'
   const staleRunBefore = new Date(Date.now() - 30 * MINUTES).toISOString()
   await supabase.from('monitoring_runs').update({ status: 'error', completed_at: new Date().toISOString(), error_message: 'stale_running_run_recovered' }).eq('watch_id', watch.id).eq('status', 'running').lt('started_at', staleRunBefore)
   const { data: run, error: runError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider, model }).select('id').single()
@@ -38,8 +38,9 @@ async function processJob(supabase: any, job: any) {
   }
 
   try {
+    const { data: previousUpdates } = await supabase.from('monitoring_updates').select('headline,summary,event_at,fingerprint,source_urls,created_at').eq('watch_id', watch.id).order('created_at', { ascending: false }).limit(10)
     const result = provider === 'openai'
-      ? await runOpenAIWatch(watch, Deno.env.get('OPENAI_API_KEY')!, model)
+      ? await runOpenAIWatch({ ...watch, previous_updates: previousUpdates ?? [] }, Deno.env.get('OPENAI_API_KEY')!, model)
       : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
     const status = result.status === 'change' && result.trigger_met ? 'change' : result.status
     let createdUpdate = false

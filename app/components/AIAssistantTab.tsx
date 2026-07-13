@@ -13,6 +13,7 @@ type AssistantWatch = {
   trigger_description: string
   status: AssistantWatchStatus
   last_checked_at: string | null
+  interpretation_status?: 'pending' | 'complete' | 'failed'
   created_at: string
 }
 type AssistantUpdate = {
@@ -81,7 +82,8 @@ function friendlyAssistantTime(value: string | null, language: AppLanguage) {
 }
 
 function sourceUrls(input: unknown): string[] {
-  return Array.isArray(input) ? input.filter((x): x is string => typeof x === 'string' && /^https?:\/\//i.test(x)).slice(0, 3) : []
+  if (!Array.isArray(input)) return []
+  return input.map((x) => typeof x === 'string' ? x : (x && typeof x === 'object' && 'url' in x ? (x as { url?: unknown }).url : null)).filter((x): x is string => typeof x === 'string' && /^https?:\/\//i.test(x)).slice(0, 3)
 }
 
 export default function AIAssistantTab({ language, activeDeviceId }: { language: AppLanguage; activeDeviceId: string | null }) {
@@ -104,7 +106,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const loadAssistant = useCallback(async () => {
     setLoading(true)
     const [watchResult, updateResult] = await Promise.all([
-      supabase.from('monitoring_watches').select('id,original_request,title,normalized_goal,trigger_description,status,last_checked_at,created_at').order('created_at', { ascending: false }),
+      supabase.from('monitoring_watches').select('id,original_request,title,normalized_goal,trigger_description,status,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
       supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,created_at,monitoring_watches(title)').order('created_at', { ascending: false }).limit(40),
     ])
     if (watchResult.error || updateResult.error) setError(c.friendlyError)
@@ -135,7 +137,9 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       setRequest('')
       setMessage(c.success)
       await loadAssistant()
-      setSelectedId(Array.isArray(data) ? data[0]?.id ?? null : data?.id ?? null)
+      const createdId = Array.isArray(data) ? data[0]?.id ?? null : data?.id ?? null
+      setSelectedId(createdId)
+      if (createdId) window.setTimeout(() => { void loadAssistant() }, 3000)
     }
     setCreating(false)
   }
@@ -146,7 +150,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     setBusyWatchId(id); setError(null)
     const { error } = await supabase.rpc('update_ai_assistant_watch_request', { p_watch_id: id, p_original_request: validation.clean })
     if (error) setError(c.friendlyError)
-    else { setEditingId(null); await loadAssistant() }
+    else { setEditingId(null); await loadAssistant(); window.setTimeout(() => { void loadAssistant() }, 3000) }
     setBusyWatchId(null)
   }
 
