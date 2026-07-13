@@ -8,7 +8,7 @@ const names = (query) => searchLocalEventPlaces(query).map((place) => place.disp
 
 test('only allowed place options appear in search', () => {
   assert.deepEqual(names('stav'), ['Stavanger'])
-  assert.equal(LOCAL_EVENT_PLACE_CATALOGUE.length, 6)
+  assert.equal(LOCAL_EVENT_PLACE_CATALOGUE.length, 20)
 })
 
 test('attractions and broad regions do not appear', () => {
@@ -20,26 +20,25 @@ test('attractions and broad regions do not appear', () => {
 
 test('search is case-insensitive and accent-insensitive', () => {
   assert.deepEqual(names('STAVANGER'), ['Stavanger'])
-  assert.deepEqual(names('bry'), ['Bryne'])
-  assert.deepEqual(names('algard'), [])
+  assert.deepEqual(names('algard'), ['Ålgård'])
 })
 
-test('selecting Stavanger groups nearby smaller places under Stavanger', () => {
-  assert.deepEqual(suggestedLocalEventArea('stavanger').includedPlaceIds, ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'])
+test('selecting Stavanger preselects Stavanger, Sola, Sandnes and Randaberg', () => {
+  assert.deepEqual(suggestedLocalEventArea('stavanger').includedPlaceIds, ['stavanger', 'sola', 'sandnes', 'randaberg'])
 })
 
-test('selecting Sandnes groups nearby smaller places under Sandnes', () => {
-  assert.deepEqual(suggestedLocalEventArea('sandnes').includedPlaceIds, ['sandnes', 'hommersak', 'forsand'])
+test('selecting Sandnes uses its configured nearby suggestions', () => {
+  assert.deepEqual(suggestedLocalEventArea('sandnes').includedPlaceIds, ['sandnes', 'sola', 'stavanger', 'algard'])
 })
 
 test('primary place cannot be removed by normalization', () => {
-  assert.deepEqual(normalizeLocalEventAreaPreference({ primaryPlaceId: 'stavanger', includedPlaceIds: [] })?.includedPlaceIds, ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'])
+  assert.deepEqual(normalizeLocalEventAreaPreference({ primaryPlaceId: 'stavanger', includedPlaceIds: ['sola'] })?.includedPlaceIds, ['stavanger', 'sola'])
 })
 
-test('smaller places can be resolved for source URLs without appearing in UI options', () => {
+test('nearby places can be added and removed', () => {
   const withAdded = uniqueLocalEventPlaceIds([...suggestedLocalEventArea('stavanger').includedPlaceIds, 'kvitsoy'])
   assert.ok(withAdded.includes('kvitsoy'))
-  assert.deepEqual(names('kvitsoy'), [])
+  assert.deepEqual(withAdded.filter((id) => id !== 'sola'), ['stavanger', 'sandnes', 'randaberg', 'kvitsoy'])
 })
 
 test('duplicate places cannot be added', () => {
@@ -47,13 +46,13 @@ test('duplicate places cannot be added', () => {
 })
 
 test('saved selection restores after reload', () => {
-  const saved = JSON.stringify({ primaryPlaceId: 'sandnes', includedPlaceIds: ['sandnes'] })
-  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'sandnes', includedPlaceIds: ['sandnes', 'hommersak', 'forsand'] })
+  const saved = JSON.stringify({ primaryPlaceId: 'sandnes', includedPlaceIds: ['sandnes', 'algard'] })
+  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'sandnes', includedPlaceIds: ['sandnes', 'algard'] })
 })
 
 test('repeated place query parameters use official source slugs', () => {
-  const url = new URL(buildEdgeOfNorwayEventsUrl({ primaryPlaceId: 'stavanger', includedPlaceIds: ['rennesoy', 'kvitsoy'] }))
-  assert.deepEqual(url.searchParams.getAll('place'), ['rennesoy-and-the-green-islands', 'kvitsoy'])
+  const url = new URL(buildEdgeOfNorwayEventsUrl({ primaryPlaceId: 'rennesoy', includedPlaceIds: ['rennesoy', 'strand'] }))
+  assert.deepEqual(url.searchParams.getAll('place'), ['rennesoy-and-the-green-islands', 'strand-municipality'])
 })
 
 test('changing the selected area changes the diagnostic request URL', () => {
@@ -67,7 +66,7 @@ test('app/api/device/reminders/route.ts limits Local Events to the frame candida
 })
 
 test('format helper uses connected summary grammar', () => {
-  assert.equal(formatLocalEventPlaceList(['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy']), 'Stavanger, Randaberg, Rennesøy, Finnøy and Kvitsøy')
+  assert.equal(formatLocalEventPlaceList(['stavanger', 'sola', 'sandnes', 'randaberg']), 'Stavanger, Sola, Sandnes and Randaberg')
 })
 
 test('normal Local Events UI hides diagnostics and developer area editing', () => {
