@@ -1,4 +1,4 @@
-import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA, buildEdgeOfNorwayEventsUrlForPlaceIds, buildEdgeOfNorwayEventsUrlForSourceLocation, getLocalEventAreaForSourceLocation, normalizeLocalEventAreaPreference, type LocalEventAreaKey, type LocalEventAreaPreference, type LocalEventSourceLocation } from './places.ts'
+import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA, buildEdgeOfNorwayEventsUrlForPlaceIds, getLocalEventAreaForSourceLocation, normalizeLocalEventAreaPreference, type LocalEventAreaKey, type LocalEventAreaPreference } from './places.ts'
 
 export const EDGE_OF_NORWAY_PROVIDER = 'edge-of-norway' as const
 export const EDGE_OF_NORWAY_MODE = 'shadow' as const
@@ -466,7 +466,7 @@ function unexpectedSourceRedirect(requestedUrl: string, finalUrl: string, fetchM
 }
 
 async function fetchEdgeOfNorwayHtml(fetchImpl: typeof fetch, listPageUrl: string): Promise<{ html: string; fetchMeta: EdgeOfNorwayFetchDiagnostic }> {
-  const response = await withTimeout(fetchImpl(listPageUrl, { headers: { 'User-Agent': EDGE_OF_NORWAY_USER_AGENT, Accept: 'text/html,application/xhtml+xml' }, cache: 'no-store' }), 20000, 'timeout')
+  const response = await withTimeout(fetchImpl(listPageUrl, { headers: { 'User-Agent': EDGE_OF_NORWAY_USER_AGENT, Accept: 'text/html,application/xhtml+xml' }, cache: 'no-store', redirect: 'manual' }), 20000, 'timeout')
   const html = await withTimeout(response.text(), 10000, 'timeout')
   return { html, fetchMeta: inspectEdgeOfNorwayHtmlInput(html, listPageUrl, response) }
 }
@@ -499,21 +499,17 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPre
   const repeatedSeriesExamples: EdgeOfNorwayRepeatedSeriesExample[] = []
   let firstFetch: EdgeOfNorwayFetchDiagnostic | undefined
 
-  for (const sourceLocation of sourceLocations) {
-    const locationUrl = buildEdgeOfNorwayEventsUrlForSourceLocation(sourceLocation as LocalEventSourceLocation)
-    let fetched: { html: string; fetchMeta: EdgeOfNorwayFetchDiagnostic }
-    try {
-      fetched = await fetchEdgeOfNorwayHtml(fetchImpl, locationUrl)
-    } catch (error) {
-      return structuredDiagnosticError('fetch', error, undefined, locationUrl)
-    }
+  try {
+    const fetched = await fetchEdgeOfNorwayHtml(fetchImpl, listPageUrl)
     const { html, fetchMeta } = fetched
-    if (!fetchMeta.ok) return structuredDiagnosticError('fetch', new Error(`Edge of Norway returned ${fetchMeta.status}`), fetchMeta, locationUrl)
-    if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(locationUrl, fetchMeta.finalUrl, fetchMeta)
-    if (!firstFetch) firstFetch = fetchMeta
-    const parsed = parseEdgeOfNorwayListPage(html, locationUrl)
-    const acceptedForSource = parsed.results.filter(isAcceptedResult).map((result) => ({ ...result.event, sourceLocation: sourceLocation.label, areaKey: area.primaryPlaceId }))
-    fetchedEventsPerSourceLocation[sourceLocation.label] = acceptedForSource.length
+    if (!fetchMeta.ok) return structuredDiagnosticError('fetch', new Error(`Edge of Norway returned ${fetchMeta.status}`), fetchMeta, listPageUrl)
+    if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(listPageUrl, fetchMeta.finalUrl, fetchMeta)
+    if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No Edge of Norway Flight data found'), fetchMeta, listPageUrl)
+    firstFetch = fetchMeta
+    const parsed = parseEdgeOfNorwayListPage(html, listPageUrl)
+    const primarySourceLocation = sourceLocations[0]?.label || area.primaryPlaceId
+    const acceptedForSource = parsed.results.filter(isAcceptedResult).map((result) => ({ ...result.event, sourceLocation: result.event.sourceLocation || primarySourceLocation, areaKey: area.primaryPlaceId }))
+    fetchedEventsPerSourceLocation[primarySourceLocation] = acceptedForSource.length
     allAccepted.push(...acceptedForSource)
     for (const result of parsed.results) if (result.accepted && result.event.sourceLocation && !result.event.areaKey) unassigned.add(result.event.sourceLocation)
     totals.flightScriptsFound += parsed.flightScriptsFound
@@ -526,6 +522,8 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPre
     for (const [key, count] of Object.entries(parsed.skippedCounts)) skippedCounts[key] = (skippedCounts[key] || 0) + count
     parsingErrors.push(...parsed.parsingErrors)
     repeatedSeriesExamples.push(...parsed.repeatedSeriesExamples)
+  } catch (error) {
+    return structuredDiagnosticError('fetch', error, undefined, listPageUrl)
   }
 
   const acceptedEvents = dedupeAcceptedEvents(allAccepted).filter((event) => event.areaKey === area.primaryPlaceId)

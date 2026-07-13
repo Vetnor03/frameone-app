@@ -270,7 +270,8 @@ export function buildWasteCollectionItems(
 
 
 export const LOCAL_EVENTS_FRAME_TIME_ZONE = 'Europe/Oslo'
-export const LOCAL_EVENTS_FRAME_PROVIDER = 'edge-of-norway'
+export const LOCAL_EVENTS_FRAME_PROVIDER = 'local-events'
+export const LOCAL_EVENTS_ITEM_PROVIDERS = new Set(['edge-of-norway', 'linticket'])
 
 export type LocalEventSkipRow = {
   device_id: string
@@ -293,7 +294,7 @@ function localEventDateFromRow(row: IntegrationItemRow) {
 
 function localEventIsAllDay(row: IntegrationItemRow) {
   const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
-  return raw.all_day === true && !row.starts_at
+  return (raw.all_day === true || raw.allDay === true) && !row.starts_at
 }
 
 export function buildLocalEventFrameItem(
@@ -304,17 +305,17 @@ export function buildLocalEventFrameItem(
 ): DeviceReminderItem[] {
   const skipped = new Set(
     skipRows
-      .filter((row) => row.provider === LOCAL_EVENTS_FRAME_PROVIDER && row.skipped !== false)
+      .filter((row) => (row.provider === LOCAL_EVENTS_FRAME_PROVIDER || row.provider === 'edge-of-norway') && row.skipped !== false)
       .map((row) => String(row.external_event_id || '').trim())
       .filter(Boolean)
   )
 
   const candidates = rows
-    .filter((row) => row.provider === LOCAL_EVENTS_FRAME_PROVIDER)
+    .filter((row) => LOCAL_EVENTS_ITEM_PROVIDERS.has(row.provider))
     .filter((row) => {
       const title = String(row.title || '').trim()
       const externalId = String(row.external_id || '').trim()
-      return !!title && !!externalId && !skipped.has(externalId)
+      return !!title && !!externalId && !skipped.has(String((row.raw as any)?.canonicalEventId || externalId).trim())
     })
 
   const timed = (candidates
@@ -354,7 +355,7 @@ export function buildLocalEventFrameItem(
   const title = String(selection.row.title || '').trim()
   const allDaySelection = selection.kind === 'all-day'
   return [{
-    reminder_id: `local-events:${selection.row.external_id}`,
+    reminder_id: `local-events:${(selection.row.raw as any)?.canonicalEventId || selection.row.external_id}`,
     title,
     occurrence_date: selection.occurrenceDate,
     display_date: allDaySelection ? `${formatDisplayDate(selection.occurrenceDate, todayYmd)} • All day` : formatDisplayDate(selection.occurrenceDate, todayYmd),
@@ -365,7 +366,7 @@ export function buildLocalEventFrameItem(
     display_time: selection.displayTime,
     source: 'local-events',
     provider: LOCAL_EVENTS_FRAME_PROVIDER,
-    external_id: String(selection.row.external_id),
+    external_id: String((selection.row.raw as any)?.canonicalEventId || selection.row.external_id),
     raw: { ...(selection.row.raw || {}), all_day: allDaySelection },
   }]
 }
