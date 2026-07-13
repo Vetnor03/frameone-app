@@ -103,6 +103,14 @@ test('calendar imports Local Events as Events category with source URL action', 
   assert.match(home, /Open event page/)
 })
 
+test('calendar hides Local Events after they have been skipped for 24 hours', () => {
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(home, /LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS = 24 \* 60 \* 60 \* 1000/)
+  assert.match(home, /localEventSkipIsHiddenFromCalendar\(row\.updated_at\)/)
+  assert.match(home, /localEventHiddenSkippedIds\.has\(externalEventId\)/)
+  assert.match(home, /\.select\('external_event_id, skipped, updated_at'\)/)
+})
+
 test('Local Events frame feed is limited and mirror stays decoupled', () => {
   const deviceRoute = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
   const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')

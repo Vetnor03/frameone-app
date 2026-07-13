@@ -8734,6 +8734,13 @@ function integrationProviderToReminderSource(provider: any): ReminderSource | nu
   return null
 }
 
+const LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS = 24 * 60 * 60 * 1000
+
+function localEventSkipIsHiddenFromCalendar(updatedAt: any, nowMs = Date.now()) {
+  const updatedMs = new Date(String(updatedAt || '')).getTime()
+  return Number.isFinite(updatedMs) && nowMs - updatedMs >= LOCAL_EVENT_CALENDAR_SKIP_HIDE_AFTER_MS
+}
+
 function integrationItemDateTime(row: any) {
   const raw = row?.raw && typeof row.raw === 'object' ? row.raw : {}
   const rawDate = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.date) ? raw.date.slice(0, 10) : ''
@@ -12374,6 +12381,7 @@ const manualItems: ReminderUiItem[] = (data || [])
       if (userId) {
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
+        let localEventHiddenSkippedIds = new Set<string>()
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
@@ -12393,7 +12401,7 @@ const manualItems: ReminderUiItem[] = (data || [])
           if (activeDeviceId && localEventExternalIds.length > 0) {
             const { data: skipData, error: skipError } = await supabase
               .from('local_event_frame_skips')
-              .select('external_event_id, skipped')
+              .select('external_event_id, skipped, updated_at')
               .eq('device_id', activeDeviceId)
               .eq('provider', 'edge-of-norway')
               .in('external_event_id', Array.from(new Set(localEventExternalIds)))
@@ -12404,6 +12412,10 @@ const manualItems: ReminderUiItem[] = (data || [])
                 .filter((row: any) => row.skipped !== false)
                 .map((row: any) => String(row.external_event_id || '').trim())
                 .filter(Boolean))
+              localEventHiddenSkippedIds = new Set((skipData || [])
+                .filter((row: any) => row.skipped !== false && localEventSkipIsHiddenFromCalendar(row.updated_at))
+                .map((row: any) => String(row.external_event_id || '').trim())
+                .filter(Boolean))
             }
           }
 
@@ -12411,6 +12423,8 @@ const manualItems: ReminderUiItem[] = (data || [])
             .map((row: any) => {
               const source = integrationProviderToReminderSource(row.provider)
               if (!source) return null
+              const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
+              if (externalEventId && localEventHiddenSkippedIds.has(externalEventId)) return null
               const { date, time } = integrationItemDateTime(row)
               const title = integrationReminderTitle(row, source)
               if (!title || !date) return null
@@ -12425,8 +12439,8 @@ const manualItems: ReminderUiItem[] = (data || [])
                 source,
                 editable: false,
                 sourceUrl: typeof row.raw?.sourceUrl === 'string' ? row.raw.sourceUrl : null,
-                externalEventId: source === 'local-events' ? String(row.external_id || '').trim() : null,
-                skippedOnFrame: source === 'local-events' ? localEventSkippedIds.has(String(row.external_id || '').trim()) : false,
+                externalEventId: externalEventId || null,
+                skippedOnFrame: source === 'local-events' ? localEventSkippedIds.has(externalEventId) : false,
               }
             })
             .filter(Boolean) as ReminderUiItem[]
