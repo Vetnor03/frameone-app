@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const deviceId = String(body?.deviceId || body?.device_id || '').trim()
   const externalEventId = String(body?.externalEventId || body?.external_event_id || '').trim()
   const skipped = body?.skipped === true
-  const provider = 'local-events'
+  const provider = 'edge-of-norway'
 
   if (!deviceId) return NextResponse.json({ error: 'Missing deviceId' }, { status: 400 })
   if (!externalEventId) return NextResponse.json({ error: 'Missing externalEventId' }, { status: 400 })

@@ -8728,7 +8728,7 @@ function isReminderTag(v: any): v is ReminderTag {
 
 function integrationProviderToReminderSource(provider: any): ReminderSource | null {
   const value = String(provider ?? '').trim().toLowerCase()
-  if (value === 'edge-of-norway' || value === 'linticket') return 'local-events'
+  if (value === 'edge-of-norway') return 'local-events'
   if (value === 'spond' || value === 'teams' || value === 'waste') return value
   return null
 }
@@ -12384,7 +12384,7 @@ const manualItems: ReminderUiItem[] = (data || [])
         const { data: integrationData, error: integrationError } = await supabase
           .from('integration_items')
           .select('id, provider, external_id, title, starts_at, due_at, raw')
-          .in('provider', ['spond', 'teams', 'waste', 'edge-of-norway', 'linticket'])
+          .in('provider', ['spond', 'teams', 'waste', 'edge-of-norway'])
           .or(activeDeviceId ? `user_id.eq.${userId},device_id.eq.${activeDeviceId}` : `user_id.eq.${userId}`)
           .or(`starts_at.gte.${nowIso},due_at.gte.${nowIso}`)
           .order('starts_at', { ascending: true, nullsFirst: false })
@@ -12401,10 +12401,10 @@ const manualItems: ReminderUiItem[] = (data || [])
               .maybeSingle()
             : { data: null }
           const selectedLocalEventArea = String(((localEventsIntegrationData?.encrypted_credentials as any)?.areaPreference?.primaryPlaceId) || '').trim()
-          const visibleIntegrationData = (integrationData || []).filter((row: any) => !['edge-of-norway', 'linticket'].includes(String(row.provider || '')) || !selectedLocalEventArea || String(row.raw?.locationId || row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)
+          const visibleIntegrationData = (integrationData || []).filter((row: any) => String(row.provider || '') !== 'edge-of-norway' || !selectedLocalEventArea || String(row.raw?.areaKey || row.raw?.primaryPlaceId || '').trim() === selectedLocalEventArea)
           const localEventExternalIds = visibleIntegrationData
-            .filter((row: any) => ['edge-of-norway', 'linticket'].includes(String(row.provider || '')))
-            .map((row: any) => String(row.raw?.canonicalEventId || row.external_id || '').trim())
+            .filter((row: any) => String(row.provider || '') === 'edge-of-norway')
+            .map((row: any) => String(row.external_id || '').trim())
             .filter(Boolean)
 
           if (activeDeviceId && localEventExternalIds.length > 0) {
@@ -12412,7 +12412,7 @@ const manualItems: ReminderUiItem[] = (data || [])
               .from('local_event_frame_skips')
               .select('external_event_id, skipped, updated_at')
               .eq('device_id', activeDeviceId)
-              .eq('provider', 'local-events')
+              .eq('provider', 'edge-of-norway')
               .in('external_event_id', Array.from(new Set(localEventExternalIds)))
             if (skipError) {
               alert(skipError.message)
@@ -12432,7 +12432,7 @@ const manualItems: ReminderUiItem[] = (data || [])
             .map((row: any) => {
               const source = integrationProviderToReminderSource(row.provider)
               if (!source) return null
-              const externalEventId = source === 'local-events' ? String(row.raw?.canonicalEventId || row.external_id || '').trim() : ''
+              const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               if (externalEventId && localEventHiddenSkippedIds.has(externalEventId)) return null
               const { date, time } = integrationItemDateTime(row)
               const title = integrationReminderTitle(row, source)
