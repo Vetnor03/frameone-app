@@ -8,7 +8,8 @@ const names = (query) => searchLocalEventPlaces(query).map((place) => place.disp
 
 test('only allowed place options appear in search', () => {
   assert.deepEqual(names('stav'), ['Stavanger'])
-  assert.equal(LOCAL_EVENT_PLACE_CATALOGUE.length, 6)
+  assert.equal(LOCAL_EVENT_PLACE_CATALOGUE.length, 5)
+  assert.deepEqual(names('haugesund'), [])
 })
 
 test('attractions and broad regions do not appear', () => {
