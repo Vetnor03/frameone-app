@@ -45,7 +45,7 @@ export type EdgeOfNorwayRepeatedSeriesExample = {
 }
 
 type SeriesCandidateMetadata = { externalId: string; venueName: string | null; shortDescription: string }
-type AcceptedSeriesCandidate = EdgeOfNorwayAcceptedEvent & SeriesCandidateMetadata
+type AcceptedSeriesCandidate = Omit<EdgeOfNorwayAcceptedEvent, 'sourceLocation' | 'areaKey'> & SeriesCandidateMetadata
 
 type EventParseResult =
   | { accepted: true; event: AcceptedSeriesCandidate }
