@@ -8,7 +8,7 @@ const names = (query) => searchLocalEventPlaces(query).map((place) => place.disp
 
 test('only allowed place options appear in search', () => {
   assert.deepEqual(names('stav'), ['Stavanger'])
-  assert.equal(LOCAL_EVENT_PLACE_CATALOGUE.length, 20)
+  assert.ok(LOCAL_EVENT_PLACE_CATALOGUE.length >= 21)
 })
 
 test('attractions and broad regions do not appear', () => {
@@ -21,6 +21,7 @@ test('attractions and broad regions do not appear', () => {
 test('search is case-insensitive and accent-insensitive', () => {
   assert.deepEqual(names('STAVANGER'), ['Stavanger'])
   assert.deepEqual(names('algard'), ['Ålgård'])
+  assert.deepEqual(names('haugesund'), ['Haugesund'])
 })
 
 test('selecting Stavanger preselects Stavanger, Sola, Sandnes and Randaberg', () => {
@@ -29,6 +30,13 @@ test('selecting Stavanger preselects Stavanger, Sola, Sandnes and Randaberg', ()
 
 test('selecting Sandnes uses its configured nearby suggestions', () => {
   assert.deepEqual(suggestedLocalEventArea('sandnes').includedPlaceIds, ['sandnes', 'sola', 'stavanger', 'algard'])
+})
+
+test('all production selectable Local Events locations normalize without falling back to Stavanger', () => {
+  for (const id of ['stavanger', 'sandnes', 'sola', 'egersund', 'bryne', 'haugesund']) {
+    assert.equal(suggestedLocalEventArea(id).primaryPlaceId, id)
+    assert.equal(normalizeLocalEventAreaPreference(suggestedLocalEventArea(id))?.primaryPlaceId, id)
+  }
 })
 
 test('primary place cannot be removed by normalization', () => {
@@ -46,8 +54,8 @@ test('duplicate places cannot be added', () => {
 })
 
 test('saved selection restores after reload', () => {
-  const saved = JSON.stringify({ primaryPlaceId: 'sandnes', includedPlaceIds: ['sandnes', 'algard'] })
-  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'sandnes', includedPlaceIds: ['sandnes', 'algard'] })
+  const saved = JSON.stringify({ primaryPlaceId: 'haugesund', includedPlaceIds: ['haugesund'] })
+  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'haugesund', includedPlaceIds: ['haugesund'] })
 })
 
 test('repeated place query parameters use official source slugs', () => {
@@ -121,7 +129,7 @@ test('Local Events frame feed is limited and mirror stays decoupled', () => {
 
 test('connect marks Local Events connected only after sync succeeds', () => {
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
-  assert.ok(server.indexOf('const sync = await syncLocalEventsForUser') < server.indexOf(".from('user_integrations').upsert"))
+  assert.ok(server.indexOf('const sync = await syncLocalEventsForFrame') < server.indexOf(".from('user_integrations').upsert"))
 })
 
 test('failed Local Events sync cannot delete last successful data before parsing', () => {

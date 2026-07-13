@@ -2460,8 +2460,7 @@ function ConnectAppsScreen({
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
-    if (typeof window === 'undefined') return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
-    return normalizeLocalEventAreaPreference(window.localStorage.getItem('local-events-area') ? JSON.parse(window.localStorage.getItem('local-events-area') || '{}') : null)
+    return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
   })
   const [localEventsDraftArea, setLocalEventsDraftArea] = useState<LocalEventAreaPreference>(() => localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
 

@@ -486,7 +486,27 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPre
     if (fetchMeta.redirectStatus || fetchMeta.redirected) return unexpectedSourceRedirect(listPageUrl, fetchMeta.finalUrl, fetchMeta)
     if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(listPageUrl, fetchMeta.finalUrl, fetchMeta)
     if (!listResp.ok) return structuredDiagnosticError('fetch', new Error(`Failed to fetch list page: ${listResp.status}`), fetchMeta, listPageUrl)
-    if (fetchMeta.rawFlightMarkerCount === 0) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta, listPageUrl)
+    if (fetchMeta.rawFlightMarkerCount === 0 && /interstitial|blocked|captcha|access denied/i.test(`${fetchMeta.documentTitle || ''} ${fetchMeta.htmlPreview || ''}`)) return structuredDiagnosticError('inspect_input', new Error('No self.__next_f.push markers found in fetched HTML'), fetchMeta, listPageUrl)
+    if (fetchMeta.rawFlightMarkerCount === 0) {
+      return {
+        provider: EDGE_OF_NORWAY_PROVIDER,
+        mode: EDGE_OF_NORWAY_MODE,
+        listPageUrl,
+        fetch: fetchMeta,
+        flightScriptsFound: 0,
+        flightChunksDecoded: 0,
+        malformedChunks: 0,
+        eventObjectsFound: 0,
+        uniqueEvents: 0,
+        acceptedCount: 0,
+        skippedCounts: {},
+        acceptedEvents: [],
+        repeatedSeriesCount: 0,
+        repeatedSeriesEventsCount: 0,
+        repeatedSeriesExamples: [],
+        parsingErrors: [],
+      }
+    }
     try {
       const parsed = parseEdgeOfNorwayListPage(html, listPageUrl)
       const acceptedEvents = parsed.results.filter(isAcceptedResult).map((result) => result.event)

@@ -5,6 +5,7 @@ export type LocalEventPlaceId =
   | 'randaberg'
   | 'bryne'
   | 'ha'
+  | 'haugesund'
   | 'algard'
   | 'egersund'
   | 'jossingfjorden'
@@ -39,6 +40,7 @@ export const LOCAL_EVENT_PLACE_CATALOGUE: readonly LocalEventPlace[] = [
   { id: 'randaberg', displayName: 'Randaberg', sourceName: 'Randaberg', sourceSlug: 'randaberg' },
   { id: 'bryne', displayName: 'Bryne', sourceName: 'Bryne', sourceSlug: 'bryne' },
   { id: 'ha', displayName: 'Hå', sourceName: 'Hå', sourceSlug: 'ha' },
+  { id: 'haugesund', displayName: 'Haugesund', sourceName: 'Haugesund', sourceSlug: 'haugesund' },
   { id: 'algard', displayName: 'Ålgård', sourceName: 'Ålgård', sourceSlug: 'algard' },
   { id: 'egersund', displayName: 'Egersund', sourceName: 'Egersund', sourceSlug: 'egersund' },
   { id: 'jossingfjorden', displayName: 'Jøssingfjorden', sourceName: 'Jøssingfjorden', sourceSlug: 'jossingfjorden' },
@@ -62,6 +64,7 @@ export const NEARBY_LOCAL_EVENT_PLACES: Record<LocalEventPlaceId, readonly Local
   randaberg: ['randaberg', 'stavanger', 'sola', 'rennesoy'],
   bryne: ['bryne', 'ha', 'algard', 'sandnes'],
   ha: ['ha', 'bryne', 'egersund', 'algard'],
+  haugesund: ['haugesund'],
   algard: ['algard', 'sandnes', 'bryne', 'byrkjedal'],
   egersund: ['egersund', 'jossingfjorden', 'ha'],
   jossingfjorden: ['jossingfjorden', 'egersund'],
