@@ -34,7 +34,7 @@ export type LocalEventCanonicalLocation = {
 
 export type LocalEventPlace = LocalEventCanonicalLocation
 
-type SeedLocation = Omit<LocalEventCanonicalLocation, 'normalizedName' | 'displayName' | 'activeEventCount' | 'nextEventAt' | 'countryCode' | 'sources' | 'sourceLocations'> & {
+type SeedLocation = Omit<LocalEventCanonicalLocation, 'normalizedName' | 'displayName' | 'activeEventCount' | 'nextEventAt' | 'countryCode' | 'sources' | 'sourceLocations' | 'aliases'> & {
   aliases?: string[]
   sourceLocations?: readonly string[]
   suggestedNearby?: readonly string[]
