@@ -4,6 +4,7 @@ export const DEFAULT_OPENAI_MONITORING_MODEL = 'gpt-4.1-mini'
 export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
 export type MonitoringSource = { url: string; title: string; published_at: string | null }
+export type CitationSource = { url: string; normalized_url: string; title: string; start_index: number | null; end_index: number | null }
 export type MonitoringProviderResult = {
   status: Exclude<WatchStatus, 'error'>
   trigger_met: boolean
@@ -20,6 +21,8 @@ export type MonitoringProviderResult = {
 }
 
 type ToolSource = MonitoringSource & { normalized_url: string }
+
+const MAX_STORED_SOURCES = 5
 
 export function monitoringModelFromEnv(env: { get(name: string): string | undefined | null }) {
   return env.get('OPENAI_MONITORING_MODEL') || DEFAULT_OPENAI_MONITORING_MODEL
@@ -69,21 +72,30 @@ export const monitoringJsonSchema = {
   },
 } as const
 
-export function normalizeMonitoringResult(parsed: any, returnedSources: ToolSource[] = []): MonitoringProviderResult {
-  if (!parsed || !['no_change', 'change', 'uncertain'].includes(parsed.status)) throw new Error('invalid_structured_output')
+function selectGroundedSources(returnedSources: ToolSource[], candidates: Array<{ url?: string | null; title?: string | null }>): MonitoringSource[] {
   const sourceByUrl = new Map(returnedSources.map((s) => [s.normalized_url, s]))
   const selected: MonitoringSource[] = []
   const seen = new Set<string>()
-  for (const item of Array.isArray(parsed.sources) ? parsed.sources : []) {
+  for (const item of candidates) {
     const normalized = normalizeSourceUrl(String(item?.url || ''))
     const grounded = sourceByUrl.get(normalized)
     if (!grounded || seen.has(normalized)) continue
     seen.add(normalized)
     selected.push({ url: grounded.url.slice(0, 1000), title: (grounded.title || String(item.title || grounded.url)).slice(0, 240), published_at: grounded.published_at || null })
-    if (selected.length >= 5) break
+    if (selected.length >= MAX_STORED_SOURCES) break
   }
-  if (parsed.status === 'change' && selected.length === 0) throw new Error('source_grounding_failed')
-  return { status: parsed.status, trigger_met: Boolean(parsed.trigger_met), headline: parsed.headline ? String(parsed.headline).slice(0, 180) : null, summary: parsed.summary ? String(parsed.summary).slice(0, 1200) : null, event_at: parsed.event_at || null, confidence: Math.max(0, Math.min(1, Number(parsed.confidence || 0))), fingerprint: parsed.fingerprint ? String(parsed.fingerprint).slice(0, 180) : null, sources: selected, suggested_next_check_minutes: Math.max(5, Math.min(10080, Number(parsed.suggested_next_check_minutes || 60))) }
+  return selected
+}
+
+export function normalizeMonitoringResult(parsed: any, returnedSources: ToolSource[] = [], citationSources: CitationSource[] = []): MonitoringProviderResult {
+  if (!parsed || !['no_change', 'change', 'uncertain'].includes(parsed.status)) throw new Error('invalid_structured_output')
+  const selectedFromCitations = selectGroundedSources(returnedSources, citationSources)
+  const selected = selectedFromCitations.length > 0 || citationSources.length > 0 ? selectedFromCitations : selectGroundedSources(returnedSources, Array.isArray(parsed.sources) ? parsed.sources : [])
+  const suggestedNext = Math.max(5, Math.min(10080, Number(parsed.suggested_next_check_minutes || 60)))
+  if (parsed.status === 'change' && selected.length === 0) {
+    return { status: 'uncertain', trigger_met: false, headline: null, summary: 'source_grounding_failed', event_at: null, confidence: 0, fingerprint: null, sources: [], suggested_next_check_minutes: suggestedNext, raw: { diagnostic_reason: 'source_grounding_failed' } }
+  }
+  return { status: parsed.status, trigger_met: Boolean(parsed.trigger_met), headline: parsed.headline ? String(parsed.headline).slice(0, 180) : null, summary: parsed.summary ? String(parsed.summary).slice(0, 1200) : null, event_at: parsed.event_at || null, confidence: Math.max(0, Math.min(1, Number(parsed.confidence || 0))), fingerprint: parsed.fingerprint ? String(parsed.fingerprint).slice(0, 180) : null, sources: selected, suggested_next_check_minutes: suggestedNext }
 }
 
 function safeErrorBody(text: string) { return text.replace(/sk-[A-Za-z0-9_-]+/g, 'sk-REDACTED').slice(0, 500) }
@@ -101,6 +113,27 @@ export function extractReturnedSources(json: any): ToolSource[] {
       seen.add(normalized)
       out.push({ url: url.slice(0, 1000), normalized_url: normalized, title: String(s.title || s.name || url).slice(0, 240), published_at: s.published_at || s.publication_date || null })
       if (out.length >= 10) return out
+    }
+  }
+  return out
+}
+
+
+export function extractCitationSources(json: any): CitationSource[] {
+  const out: CitationSource[] = []
+  const seen = new Set<string>()
+  for (const item of json.output || []) {
+    if (item.type !== 'message' || (item.role && item.role !== 'assistant')) continue
+    for (const c of item.content || []) {
+      if (c.type !== 'output_text' || !Array.isArray(c.annotations)) continue
+      for (const a of c.annotations) {
+        if (a?.type !== 'url_citation') continue
+        const url = String(a.url || '')
+        const normalized = normalizeSourceUrl(url)
+        if (!normalized || seen.has(normalized)) continue
+        seen.add(normalized)
+        out.push({ url: url.slice(0, 1000), normalized_url: normalized, title: String(a.title || url).slice(0, 240), start_index: Number.isFinite(a.start_index) ? Number(a.start_index) : null, end_index: Number.isFinite(a.end_index) ? Number(a.end_index) : null })
+      }
     }
   }
   return out
@@ -147,6 +180,8 @@ export async function runOpenAIWatch(watch: Record<string, unknown>, apiKey: str
   const json = await response.json()
   if (!hasCompletedWebSearchCall(json)) throw new Error('missing_completed_web_search_call')
   const returnedSources = extractReturnedSources(json)
-  const parsed = normalizeMonitoringResult(JSON.parse(extractAssistantOutputText(json)), returnedSources)
-  return { ...parsed, response_id: json.id, usage: json.usage ?? {}, raw: { id: json.id, status: json.status, usage: json.usage, output: json.output, incomplete_details: json.incomplete_details, returned_source_count: returnedSources.length } }
+  const citationSources = extractCitationSources(json)
+  const parsed = normalizeMonitoringResult(JSON.parse(extractAssistantOutputText(json)), returnedSources, citationSources)
+  const diagnostics = { id: json.id, status: json.status, usage: json.usage, output: json.output, incomplete_details: json.incomplete_details, returned_source_count: returnedSources.length, citation_annotation_count: citationSources.length, normalized_citation_urls: citationSources.map((s) => s.normalized_url), normalized_returned_source_urls: returnedSources.map((s) => s.normalized_url), completed_web_search_call: hasCompletedWebSearchCall(json), diagnostic_reason: parsed.raw?.diagnostic_reason }
+  return { ...parsed, response_id: json.id, usage: json.usage ?? {}, raw: diagnostics }
 }
