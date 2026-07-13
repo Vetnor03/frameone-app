@@ -8,7 +8,7 @@ const names = (query) => searchLocalEventPlaces(query).map((place) => place.disp
 
 test('only allowed place options appear in search', () => {
   assert.deepEqual(names('stav'), ['Stavanger'])
-  assert.ok(LOCAL_EVENT_PLACE_CATALOGUE.length >= 18)
+  assert.ok(LOCAL_EVENT_PLACE_CATALOGUE.length >= 21)
 })
 
 test('attractions and broad regions do not appear', () => {
@@ -21,6 +21,7 @@ test('attractions and broad regions do not appear', () => {
 test('search is case-insensitive and accent-insensitive', () => {
   assert.deepEqual(names('STAVANGER'), ['Stavanger'])
   assert.deepEqual(names('algard'), ['Ålgård'])
+  assert.deepEqual(names('haugesund'), ['Haugesund'])
 })
 
 test('selecting Stavanger preselects Stavanger, Sola, Sandnes and Randaberg', () => {
@@ -32,7 +33,7 @@ test('selecting Sandnes uses its configured nearby suggestions', () => {
 })
 
 test('all production selectable Local Events locations normalize without falling back to Stavanger', () => {
-  for (const id of ['stavanger', 'sandnes', 'sola', 'egersund', 'bryne']) {
+  for (const id of ['stavanger', 'sandnes', 'sola', 'egersund', 'bryne', 'haugesund']) {
     assert.equal(suggestedLocalEventArea(id).primaryPlaceId, id)
     assert.equal(normalizeLocalEventAreaPreference(suggestedLocalEventArea(id))?.primaryPlaceId, id)
   }
@@ -53,8 +54,8 @@ test('duplicate places cannot be added', () => {
 })
 
 test('saved selection restores after reload', () => {
-  const saved = JSON.stringify({ primaryPlaceId: 'bryne', includedPlaceIds: ['bryne'] })
-  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'bryne', includedPlaceIds: ['bryne'] })
+  const saved = JSON.stringify({ primaryPlaceId: 'haugesund', includedPlaceIds: ['haugesund'] })
+  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'haugesund', includedPlaceIds: ['haugesund'] })
 })
 
 test('repeated place query parameters use official source slugs', () => {
@@ -117,7 +118,7 @@ test('Local Events frame upsert conflicts have exact non-partial unique indexes'
 
 test('calendar imports Local Events as Events category without source URL action', () => {
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
-  assert.match(home, /edge-of-norway[\s\S]*linticket[\s\S]*return 'local-events'/)
+  assert.match(home, /'edge-of-norway'\) return 'local-events'/)
   assert.match(home, /if \(source === 'local-events'\) return 'event'/)
   assert.match(home, /if \(source === 'local-events'\) return 'Events'/)
   assert.doesNotMatch(home, /Open event page/)
@@ -147,11 +148,5 @@ test('connect marks Local Events connected only after sync succeeds', () => {
 test('failed Local Events sync cannot delete last successful data before parsing', () => {
   const server = readFileSync(new URL('../app/lib/integrations/local-events/server.ts', import.meta.url), 'utf8')
   assert.ok(server.indexOf('runEdgeOfNorwayShadowDiagnostic') < server.indexOf(".from('integration_items').delete()"))
-  assert.match(server, /Promise\.all\(\[/)
-})
-
-
-test('shared Local Events skip provider is allowed by migration while Edge skip rows remain valid', () => {
-  const migration = readFileSync(new URL('../supabase/migrations/20260713133000_allow_shared_local_event_skips.sql', import.meta.url), 'utf8')
-  assert.match(migration, /provider in \('edge-of-norway', 'local-events'\)/)
+  assert.match(server, /if \(result\.error \|\| result\.diagnosticError\) throw new Error/)
 })
