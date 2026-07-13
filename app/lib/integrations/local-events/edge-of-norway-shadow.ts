@@ -1,4 +1,4 @@
-import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA, buildEdgeOfNorwayEventsUrlForPlaceIds, buildEdgeOfNorwayEventsUrlForSourceLocation, getLocalEventAreaForSourceLocation, normalizeLocalEventAreaPreference, type LocalEventAreaKey, type LocalEventAreaPreference, type LocalEventSourceLocation } from './places.ts'
+import { DEFAULT_LOCAL_EVENT_AREA, buildEdgeOfNorwayEventsUrlForPlaceIds, getLocalEventAreaKeysForSourceLocation, normalizeLocalEventAreaPreference, uniqueLocalEventSourceLocationsForArea, type LocalEventAreaKey, type LocalEventAreaPreference } from './places.ts'
 
 export const EDGE_OF_NORWAY_PROVIDER = 'edge-of-norway' as const
 export const EDGE_OF_NORWAY_MODE = 'shadow' as const
@@ -34,6 +34,7 @@ export type EdgeOfNorwayAcceptedEvent = {
   allDay: boolean
   sourceLocation: string | null
   areaKey: LocalEventAreaKey | null
+  areaKeys: LocalEventAreaKey[]
 }
 
 export type EdgeOfNorwayRepeatedSeriesExample = {
@@ -45,7 +46,7 @@ export type EdgeOfNorwayRepeatedSeriesExample = {
 }
 
 type SeriesCandidateMetadata = { externalId: string; venueName: string | null; shortDescription: string }
-type AcceptedSeriesCandidate = Omit<EdgeOfNorwayAcceptedEvent, 'sourceLocation' | 'areaKey'> & SeriesCandidateMetadata
+type AcceptedSeriesCandidate = Omit<EdgeOfNorwayAcceptedEvent, 'sourceLocation' | 'areaKey' | 'areaKeys'> & SeriesCandidateMetadata
 
 type EventParseResult =
   | { accepted: true; event: AcceptedSeriesCandidate }
@@ -384,7 +385,8 @@ function publicAcceptedEvent(event: AcceptedSeriesCandidate): EdgeOfNorwayAccept
   const publicEvent = { title: event.title, sourceUrl: event.sourceUrl, date: event.date, startTime: event.startTime, allDay: event.allDay } as EdgeOfNorwayAcceptedEvent
   Object.defineProperty(publicEvent, 'externalId', { value: event.externalId, enumerable: false })
   Object.defineProperty(publicEvent, 'sourceLocation', { value: sourceLocation, enumerable: false, writable: true })
-  Object.defineProperty(publicEvent, 'areaKey', { value: getLocalEventAreaForSourceLocation(sourceLocation), enumerable: false, writable: true })
+  Object.defineProperty(publicEvent, 'areaKeys', { value: getLocalEventAreaKeysForSourceLocation(sourceLocation), enumerable: false, writable: true })
+  Object.defineProperty(publicEvent, 'areaKey', { value: publicEvent.areaKeys[0] || null, enumerable: false, writable: true })
   return publicEvent
 }
 
@@ -466,7 +468,7 @@ function unexpectedSourceRedirect(requestedUrl: string, finalUrl: string, fetchM
 }
 
 async function fetchEdgeOfNorwayHtml(fetchImpl: typeof fetch, listPageUrl: string): Promise<{ html: string; fetchMeta: EdgeOfNorwayFetchDiagnostic }> {
-  const response = await withTimeout(fetchImpl(listPageUrl, { headers: { 'User-Agent': EDGE_OF_NORWAY_USER_AGENT, Accept: 'text/html,application/xhtml+xml' }, cache: 'no-store' }), 20000, 'timeout')
+  const response = await withTimeout(fetchImpl(listPageUrl, { headers: { 'User-Agent': EDGE_OF_NORWAY_USER_AGENT, Accept: 'text/html,application/xhtml+xml' }, cache: 'no-store', redirect: 'manual' }), 20000, 'timeout')
   const html = await withTimeout(response.text(), 10000, 'timeout')
   return { html, fetchMeta: inspectEdgeOfNorwayHtmlInput(html, listPageUrl, response) }
 }
@@ -476,8 +478,11 @@ function dedupeAcceptedEvents(events: EdgeOfNorwayAcceptedEvent[]) {
   for (const event of events) {
     const key = `${event.externalId || event.sourceUrl}|${event.sourceUrl}|${event.date}|${event.startTime || 'all-day'}`
     const existing = byKey.get(key)
-    if (!existing) byKey.set(key, event)
-    else if (!existing.sourceLocation && event.sourceLocation) byKey.set(key, event)
+    if (!existing) byKey.set(key, { ...event, areaKeys: Array.from(new Set(event.areaKeys || (event.areaKey ? [event.areaKey] : []))) })
+    else {
+      const areaKeys = Array.from(new Set([...(existing.areaKeys || (existing.areaKey ? [existing.areaKey] : [])), ...(event.areaKeys || (event.areaKey ? [event.areaKey] : []))]))
+      byKey.set(key, { ...(!existing.sourceLocation && event.sourceLocation ? event : existing), areaKeys, areaKey: existing.areaKey || event.areaKey || areaKeys[0] || null })
+    }
   }
   return Array.from(byKey.values())
 }
@@ -488,7 +493,7 @@ function emptyDiagnostic(listPageUrl: string, developmentReport: EdgeOfNorwayDev
 
 export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPreference?: unknown): Promise<EdgeOfNorwayDiagnosticResult> {
   const area = normalizeLocalEventAreaPreference(areaPreference) || DEFAULT_LOCAL_EVENT_AREA
-  const sourceLocations = LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA[area.primaryPlaceId]
+  const sourceLocations = uniqueLocalEventSourceLocationsForArea(area.primaryPlaceId)
   const listPageUrl = buildEdgeOfNorwayEventsUrl(area)
   const fetchedEventsPerSourceLocation: Record<string, number> = {}
   const allAccepted: EdgeOfNorwayAcceptedEvent[] = []
@@ -499,36 +504,43 @@ export async function runEdgeOfNorwayShadowDiagnostic(fetchImpl = fetch, areaPre
   const repeatedSeriesExamples: EdgeOfNorwayRepeatedSeriesExample[] = []
   let firstFetch: EdgeOfNorwayFetchDiagnostic | undefined
 
-  for (const sourceLocation of sourceLocations) {
-    const locationUrl = buildEdgeOfNorwayEventsUrlForSourceLocation(sourceLocation as LocalEventSourceLocation)
-    let fetched: { html: string; fetchMeta: EdgeOfNorwayFetchDiagnostic }
-    try {
-      fetched = await fetchEdgeOfNorwayHtml(fetchImpl, locationUrl)
-    } catch (error) {
-      return structuredDiagnosticError('fetch', error, undefined, locationUrl)
-    }
-    const { html, fetchMeta } = fetched
-    if (!fetchMeta.ok) return structuredDiagnosticError('fetch', new Error(`Edge of Norway returned ${fetchMeta.status}`), fetchMeta, locationUrl)
-    if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(locationUrl, fetchMeta.finalUrl, fetchMeta)
-    if (!firstFetch) firstFetch = fetchMeta
-    const parsed = parseEdgeOfNorwayListPage(html, locationUrl)
-    const acceptedForSource = parsed.results.filter(isAcceptedResult).map((result) => ({ ...result.event, sourceLocation: sourceLocation.label, areaKey: area.primaryPlaceId }))
-    fetchedEventsPerSourceLocation[sourceLocation.label] = acceptedForSource.length
-    allAccepted.push(...acceptedForSource)
-    for (const result of parsed.results) if (result.accepted && result.event.sourceLocation && !result.event.areaKey) unassigned.add(result.event.sourceLocation)
-    totals.flightScriptsFound += parsed.flightScriptsFound
-    totals.flightChunksDecoded += parsed.flightChunksDecoded
-    totals.malformedChunks += parsed.malformedChunks
-    totals.eventObjectsFound += parsed.eventObjectsFound
-    totals.uniqueEvents += parsed.uniqueEvents
-    totals.repeatedSeriesCount += parsed.repeatedSeriesCount
-    totals.repeatedSeriesEventsCount += parsed.repeatedSeriesEventsCount
-    for (const [key, count] of Object.entries(parsed.skippedCounts)) skippedCounts[key] = (skippedCounts[key] || 0) + count
-    parsingErrors.push(...parsed.parsingErrors)
-    repeatedSeriesExamples.push(...parsed.repeatedSeriesExamples)
+  let fetched: { html: string; fetchMeta: EdgeOfNorwayFetchDiagnostic }
+  try {
+    fetched = await fetchEdgeOfNorwayHtml(fetchImpl, listPageUrl)
+  } catch (error) {
+    return structuredDiagnosticError('fetch', error, undefined, listPageUrl)
   }
+  const { html, fetchMeta } = fetched
+  if (!fetchMeta.ok) return structuredDiagnosticError('fetch', new Error(`Edge of Norway returned ${fetchMeta.status}`), fetchMeta, listPageUrl)
+  if (!isAllowedEdgeOfNorwayHostname(fetchMeta.finalHostname)) return unexpectedSourceRedirect(listPageUrl, fetchMeta.finalUrl, fetchMeta)
+  firstFetch = fetchMeta
 
-  const acceptedEvents = dedupeAcceptedEvents(allAccepted).filter((event) => event.areaKey === area.primaryPlaceId)
+  const parsed = parseEdgeOfNorwayListPage(html, listPageUrl)
+  if (fetchMeta.rawFlightMarkerCount === 0 && parsed.acceptedCount === 0) {
+    return structuredDiagnosticError('inspect_input', new Error('No structured Edge of Norway flight data found'), fetchMeta, listPageUrl)
+  }
+  for (const location of sourceLocations) fetchedEventsPerSourceLocation[location.label] = 0
+  const acceptedForArea = parsed.results.filter(isAcceptedResult).map((result) => {
+    const sourceLocation = result.event.sourceLocation
+    const sourceAreaKeys = getLocalEventAreaKeysForSourceLocation(sourceLocation)
+    if (sourceLocation && sourceAreaKeys.length === 0) unassigned.add(sourceLocation)
+    const areaKeys = sourceAreaKeys.length ? sourceAreaKeys : [area.primaryPlaceId]
+    if (sourceLocation) fetchedEventsPerSourceLocation[sourceLocation] = (fetchedEventsPerSourceLocation[sourceLocation] || 0) + 1
+    return { ...result.event, externalId: result.event.externalId, sourceLocation, areaKeys, areaKey: areaKeys[0] || area.primaryPlaceId }
+  })
+  allAccepted.push(...acceptedForArea)
+  totals.flightScriptsFound += parsed.flightScriptsFound
+  totals.flightChunksDecoded += parsed.flightChunksDecoded
+  totals.malformedChunks += parsed.malformedChunks
+  totals.eventObjectsFound += parsed.eventObjectsFound
+  totals.uniqueEvents += parsed.uniqueEvents
+  totals.repeatedSeriesCount += parsed.repeatedSeriesCount
+  totals.repeatedSeriesEventsCount += parsed.repeatedSeriesEventsCount
+  for (const [key, count] of Object.entries(parsed.skippedCounts)) skippedCounts[key] = (skippedCounts[key] || 0) + count
+  parsingErrors.push(...parsed.parsingErrors)
+  repeatedSeriesExamples.push(...parsed.repeatedSeriesExamples)
+
+  const acceptedEvents = dedupeAcceptedEvents(allAccepted).filter((event) => event.areaKeys.includes(area.primaryPlaceId) || event.areaKey === area.primaryPlaceId)
   const developmentReport: EdgeOfNorwayDevelopmentReport = {
     areas: [{ areaKey: area.primaryPlaceId, requestedSourceLocations: sourceLocations.map((location) => location.label), fetchedEventsPerSourceLocation, totalAfterDeduplication: acceptedEvents.length }],
     unassignedSourceLocations: Array.from(unassigned).sort(),

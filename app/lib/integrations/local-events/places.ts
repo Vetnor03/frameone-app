@@ -31,26 +31,35 @@ const slugifySourceLocation = (value: string) => value
 const sourceLocation = (label: string): LocalEventSourceLocation => ({ label, sourceSlug: slugifySourceLocation(label) })
 
 export const LOCAL_EVENT_PLACE_CATALOGUE: readonly LocalEventPlace[] = [
-  { id: 'stavanger', displayName: 'Stavanger', sourceLocations: ['Stavanger', 'Randaberg', 'Rennesøy and the green islands', 'Kvitsøy', 'Swords in rock', 'Jørpeland', 'Tau', 'Strand municipality', 'Preikestolen', 'Ryfylke Islands', 'Flørli', 'Lysebotn', 'Songesand', 'Nesflaten'].map(sourceLocation) },
-  { id: 'sandnes', displayName: 'Sandnes', sourceLocations: ['Sandnes', 'Ålgård', 'Byrkjedal', 'Dirdal'].map(sourceLocation) },
-  { id: 'sola', displayName: 'Sola', sourceLocations: ['Sola'].map(sourceLocation) },
-  { id: 'bryne', displayName: 'Bryne', sourceLocations: ['Bryne', 'Hå', 'Norwegian Scenic Route Jæren', 'The Jæren beaches'].map(sourceLocation) },
-  { id: 'egersund', displayName: 'Egersund', sourceLocations: ['Egersund', 'Magma UNESCO Global Geopark', 'Jøssingfjorden', 'Sogndalstrand', 'Sirdal'].map(sourceLocation) },
+  { id: 'stavanger', displayName: 'Stavanger', sourceLocations: ['Stavanger', 'Sandnes', 'Sola', 'Randaberg', 'Rennesøy and the green islands', 'Kvitsøy', 'Swords in rock', 'Jørpeland', 'Tau', 'Strand municipality', 'Preikestolen'].map(sourceLocation) },
+  { id: 'sandnes', displayName: 'Sandnes', sourceLocations: ['Sandnes', 'Stavanger', 'Sola', 'Ålgård', 'Byrkjedal', 'Dirdal'].map(sourceLocation) },
+  { id: 'sola', displayName: 'Sola', sourceLocations: ['Sola', 'Stavanger', 'Sandnes', 'Randaberg'].map(sourceLocation) },
+  { id: 'bryne', displayName: 'Bryne', sourceLocations: ['Bryne', 'Hå', 'Norwegian Scenic Route Jæren', 'The Jæren beaches', 'Ålgård', 'Sandnes'].map(sourceLocation) },
+  { id: 'egersund', displayName: 'Egersund', sourceLocations: ['Egersund', 'Magma UNESCO Global Geopark', 'Jøssingfjorden', 'Sogndalstrand', 'Sirdal', 'Bryne', 'Hå'].map(sourceLocation) },
 ] as const
 
 export const LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA = Object.fromEntries(LOCAL_EVENT_PLACE_CATALOGUE.map((place) => [place.id, place.sourceLocations])) as Record<LocalEventAreaKey, readonly LocalEventSourceLocation[]>
 
 const placeById = new Map(LOCAL_EVENT_PLACE_CATALOGUE.map((place) => [place.id, place]))
-const areaBySourceLabel = new Map<string, LocalEventAreaKey>()
-for (const place of LOCAL_EVENT_PLACE_CATALOGUE) for (const location of place.sourceLocations) areaBySourceLabel.set(location.label, place.id)
+const areaKeysBySourceLabel = new Map<string, LocalEventAreaKey[]>()
+for (const place of LOCAL_EVENT_PLACE_CATALOGUE) {
+  for (const location of place.sourceLocations) {
+    const existing = areaKeysBySourceLabel.get(location.label) || []
+    if (!existing.includes(place.id)) areaKeysBySourceLabel.set(location.label, [...existing, place.id])
+  }
+}
 const normalizeSearch = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
 export function getLocalEventPlace(id: string | null | undefined) {
   return placeById.get(id as LocalEventAreaKey) || null
 }
 
+export function getLocalEventAreaKeysForSourceLocation(label: string | null | undefined) {
+  return label ? areaKeysBySourceLabel.get(label) || [] : []
+}
+
 export function getLocalEventAreaForSourceLocation(label: string | null | undefined) {
-  return label ? areaBySourceLabel.get(label) || null : null
+  return getLocalEventAreaKeysForSourceLocation(label)[0] || null
 }
 
 export function searchLocalEventPlaces(query: string) {
@@ -92,8 +101,19 @@ export function buildEdgeOfNorwayEventsUrlForSourceLocations(sourceLocations: re
   return url.toString()
 }
 
+export function uniqueLocalEventSourceLocationsForArea(areaKey: LocalEventAreaKey) {
+  const seen = new Set<string>()
+  const locations: LocalEventSourceLocation[] = []
+  for (const location of LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA[areaKey]) {
+    if (seen.has(location.sourceSlug)) continue
+    seen.add(location.sourceSlug)
+    locations.push(location)
+  }
+  return locations
+}
+
 export function buildEdgeOfNorwayEventsUrlForPlaceIds(placeIds: readonly string[]) {
-  const sourceLocations = uniqueLocalEventPlaceIds(placeIds).flatMap((id) => Array.from(LOCAL_EVENT_SOURCE_LOCATIONS_BY_AREA[id]))
+  const sourceLocations = uniqueLocalEventPlaceIds(placeIds).flatMap((id) => uniqueLocalEventSourceLocationsForArea(id))
   return buildEdgeOfNorwayEventsUrlForSourceLocations(sourceLocations)
 }
 

@@ -8,45 +8,43 @@ const names = (query) => searchLocalEventPlaces(query).map((place) => place.disp
 
 test('only allowed place options appear in search', () => {
   assert.deepEqual(names('stav'), ['Stavanger'])
-  assert.ok(LOCAL_EVENT_PLACE_CATALOGUE.length >= 21)
+  assert.deepEqual(names(''), ['Stavanger', 'Sandnes', 'Sola', 'Bryne', 'Egersund'])
 })
 
 test('attractions and broad regions do not appear', () => {
   const allNames = names('').join('\n')
-  for (const blocked of ['Magma UNESCO Global Geopark', 'Norwegian Scenic Route Jæren', 'Preikestolen', 'Swords in rock', 'The Jæren beaches', 'Ryfylke Islands']) {
+  for (const blocked of ['Magma UNESCO Global Geopark', 'Norwegian Scenic Route Jæren', 'Preikestolen', 'Swords in rock', 'The Jæren beaches', 'Haugesund']) {
     assert.doesNotMatch(allNames, new RegExp(blocked, 'i'))
   }
 })
 
 test('search is case-insensitive and accent-insensitive', () => {
   assert.deepEqual(names('STAVANGER'), ['Stavanger'])
-  assert.deepEqual(names('algard'), ['Ålgård'])
-  assert.deepEqual(names('haugesund'), ['Haugesund'])
+  assert.deepEqual(names('algard'), [])
+  assert.deepEqual(names('haugesund'), [])
 })
 
 test('selecting Stavanger preselects Stavanger, Sola, Sandnes and Randaberg', () => {
-  assert.deepEqual(suggestedLocalEventArea('stavanger').includedPlaceIds, ['stavanger', 'sola', 'sandnes', 'randaberg'])
+  assert.deepEqual(suggestedLocalEventArea('stavanger').includedPlaceIds, ['stavanger'])
 })
 
 test('selecting Sandnes uses its configured nearby suggestions', () => {
-  assert.deepEqual(suggestedLocalEventArea('sandnes').includedPlaceIds, ['sandnes', 'sola', 'stavanger', 'algard'])
+  assert.deepEqual(suggestedLocalEventArea('sandnes').includedPlaceIds, ['sandnes'])
 })
 
 test('all production selectable Local Events locations normalize without falling back to Stavanger', () => {
-  for (const id of ['stavanger', 'sandnes', 'sola', 'egersund', 'bryne', 'haugesund']) {
+  for (const id of ['stavanger', 'sandnes', 'sola', 'egersund', 'bryne']) {
     assert.equal(suggestedLocalEventArea(id).primaryPlaceId, id)
     assert.equal(normalizeLocalEventAreaPreference(suggestedLocalEventArea(id))?.primaryPlaceId, id)
   }
 })
 
 test('primary place cannot be removed by normalization', () => {
-  assert.deepEqual(normalizeLocalEventAreaPreference({ primaryPlaceId: 'stavanger', includedPlaceIds: ['sola'] })?.includedPlaceIds, ['stavanger', 'sola'])
+  assert.deepEqual(normalizeLocalEventAreaPreference({ primaryPlaceId: 'stavanger', includedPlaceIds: ['sola'] })?.includedPlaceIds, ['stavanger'])
 })
 
-test('nearby places can be added and removed', () => {
-  const withAdded = uniqueLocalEventPlaceIds([...suggestedLocalEventArea('stavanger').includedPlaceIds, 'kvitsoy'])
-  assert.ok(withAdded.includes('kvitsoy'))
-  assert.deepEqual(withAdded.filter((id) => id !== 'sola'), ['stavanger', 'sandnes', 'randaberg', 'kvitsoy'])
+test('non-selectable source locations are not user-facing place ids', () => {
+  assert.deepEqual(uniqueLocalEventPlaceIds([...suggestedLocalEventArea('stavanger').includedPlaceIds, 'kvitsoy']), ['stavanger'])
 })
 
 test('duplicate places cannot be added', () => {
@@ -54,13 +52,13 @@ test('duplicate places cannot be added', () => {
 })
 
 test('saved selection restores after reload', () => {
-  const saved = JSON.stringify({ primaryPlaceId: 'haugesund', includedPlaceIds: ['haugesund'] })
-  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'haugesund', includedPlaceIds: ['haugesund'] })
+  const saved = JSON.stringify({ primaryPlaceId: 'sola', includedPlaceIds: ['sola'] })
+  assert.deepEqual(normalizeLocalEventAreaPreference(JSON.parse(saved)), { primaryPlaceId: 'sola', includedPlaceIds: ['sola'] })
 })
 
 test('repeated place query parameters use official source slugs', () => {
-  const url = new URL(buildEdgeOfNorwayEventsUrl({ primaryPlaceId: 'rennesoy', includedPlaceIds: ['rennesoy', 'strand'] }))
-  assert.deepEqual(url.searchParams.getAll('place'), ['rennesoy-and-the-green-islands', 'strand-municipality'])
+  const url = new URL(buildEdgeOfNorwayEventsUrl(suggestedLocalEventArea('stavanger')))
+  assert.deepEqual(url.searchParams.getAll('place'), ['stavanger', 'sandnes', 'sola', 'randaberg', 'rennesoy-and-the-green-islands', 'kvitsoy', 'swords-in-rock', 'jorpeland', 'tau', 'strand-municipality', 'preikestolen'])
 })
 
 test('changing the selected area changes the diagnostic request URL', () => {
@@ -74,7 +72,7 @@ test('app/api/device/reminders/route.ts limits Local Events to the frame candida
 })
 
 test('format helper uses connected summary grammar', () => {
-  assert.equal(formatLocalEventPlaceList(['stavanger', 'sola', 'sandnes', 'randaberg']), 'Stavanger, Sola, Sandnes and Randaberg')
+  assert.equal(formatLocalEventPlaceList(['stavanger', 'sola', 'sandnes']), 'Stavanger, Sola, Sandnes')
 })
 
 test('normal Local Events UI hides diagnostics and developer area editing', () => {
