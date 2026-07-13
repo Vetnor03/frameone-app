@@ -46,7 +46,7 @@ export type LocalEventPlace = {
   sourceSlug: string
 }
 
-export const LOCAL_EVENT_MAIN_PLACE_IDS = ['stavanger', 'sandnes', 'sola', 'bryne', 'egersund'] as const satisfies readonly LocalEventPlaceId[]
+export const LOCAL_EVENT_MAIN_PLACE_IDS = ['stavanger', 'sandnes', 'sola', 'bryne', 'egersund', 'haugesund'] as const satisfies readonly LocalEventPlaceId[]
 
 const LOCAL_EVENT_SOURCE_PLACE_CATALOGUE: readonly LocalEventPlace[] = [
   { id: 'stavanger', displayName: 'Stavanger', sourceName: 'Stavanger', sourceSlug: 'stavanger' },
