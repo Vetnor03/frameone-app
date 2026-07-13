@@ -31,29 +31,29 @@ const MAX_ASSISTANT_REQUEST_LENGTH = 1000
 function assistantCopy(language: AppLanguage) {
   return language === 'no' ? {
     heading: 'KI-assistent',
-    intro: 'Be RE:MIND holde øye med noe for deg. Du får beskjed når noe faktisk endrer seg.',
+    intro: 'Be RE:MIND holde øye med noe for deg. Nye endringer og oppdateringer samles her og kan vises på rammen.',
     placeholder: 'Hva vil du at RE:MIND skal holde øye med?',
-    examples: ['Si fra hvis det blir satt opp et nytt møte i oljestreiken', 'Varsle meg når Coldplay annonserer konsert i Norge', 'Si fra når denne varen er tilbake på lager'],
+    examples: ['Følg med på endringer i en sak jeg er interessert i', 'Si fra når noe jeg venter på blir tilgjengelig', 'Hold øye med prisendringer på noe jeg vurderer å kjøpe'],
     button: 'La RE:MIND følge med',
     creating: 'RE:MIND begynner å følge med…',
     success: 'RE:MIND følger nå med.',
-    onlyRelevant: 'Du får bare beskjed når noe nytt og relevant skjer.',
+    onlyRelevant: 'Bare nye og relevante endringer vises.',
     tasks: 'Det RE:MIND følger med på',
     updates: 'Oppdateringer',
     emptyTasks: 'Spør RE:MIND om å holde øye med noe, så vises det her.',
-    emptyUpdates: 'RE:MIND sier fra her når noe nytt skjer.',
+    emptyUpdates: 'Nye endringer og oppdateringer vises her.',
     statuses: { active: 'Følger med', paused: 'Satt på pause', error: 'Trenger oppmerksomhet', completed: 'Avsluttet' } as Record<AssistantWatchStatus, string>,
     lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', dismiss: 'Skjul', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…'
   } : {
     heading: 'AI Assistant',
-    intro: 'Ask RE:MIND to keep an eye on something for you. You get notified when something actually changes.',
+    intro: 'Ask RE:MIND to keep an eye on something for you. New changes and updates are collected here and can appear on your frame.',
     placeholder: 'What would you like RE:MIND to keep an eye on?',
-    examples: ['Tell me if a new mediation meeting is announced in the oil strike', 'Notify me when Coldplay announces a concert in Norway', 'Tell me when this product is back in stock'],
+    examples: ['Keep track of changes to something I care about', 'Tell me when something I am waiting for becomes available', 'Keep an eye on price changes for something I am considering buying'],
     button: 'Let RE:MIND follow along',
     creating: 'RE:MIND is starting to follow along…',
     success: 'RE:MIND is now following along.',
-    onlyRelevant: 'You only get notified when something new and relevant happens.',
-    tasks: 'What RE:MIND is following', updates: 'Updates', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'RE:MIND will let you know here when something new happens.',
+    onlyRelevant: 'Only new and relevant changes are shown.',
+    tasks: 'What RE:MIND is following', updates: 'Updates', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
     statuses: { active: 'Following', paused: 'Paused', error: 'Needs attention', completed: 'Ended' } as Record<AssistantWatchStatus, string>,
     lastChecked: 'Last checked', never: 'Not checked yet', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', dismiss: 'Dismiss', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…'
   }

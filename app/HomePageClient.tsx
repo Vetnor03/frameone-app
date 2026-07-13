@@ -14,8 +14,8 @@ import AIAssistantTab from './components/AIAssistantTab'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
-type CoreTabKey = 'frame' | 'assistant' | 'settings'
-type ModuleKey = 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+type CoreTabKey = 'frame' | 'settings'
+type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
@@ -41,6 +41,7 @@ const UI = {
       soccer: 'SOCCER',
       stocks: 'INVESTMENTS',
       groceries: 'GROCERIES',
+      assistant: 'AI Assistant',
     },
 
     layouts: {
@@ -162,6 +163,7 @@ const UI = {
       soccer: 'FOTBALL',
       stocks: 'INVESTERINGER',
       groceries: 'HANDLELISTE',
+      assistant: 'KI-assistent',
     },
 
     layouts: {
@@ -814,23 +816,28 @@ function emptyCellsFor(layout: LayoutKey): Record<number, ModuleKey | null> {
   return { 0: null }
 }
 
+function isModuleKey(value: unknown): value is ModuleKey {
+  return (
+    value === 'assistant' ||
+    value === 'date' ||
+    value === 'weather' ||
+    value === 'surf' ||
+    value === 'reminders' ||
+    value === 'countdown' ||
+    value === 'soccer' ||
+    value === 'stocks' ||
+    value === 'groceries'
+  )
+}
+
 function baseModuleKeyFromStored(moduleStr: string): ModuleKey | null {
   const raw = String(moduleStr || '').trim()
   if (!raw) return null
 
   const base = raw.split(':')[0].toLowerCase()
 
-  if (
-    base === 'date' ||
-    base === 'weather' ||
-    base === 'surf' ||
-    base === 'reminders' ||
-    base === 'countdown' ||
-    base === 'soccer' ||
-    base === 'stocks' ||
-    base === 'groceries'
-  ) {
-    return base as ModuleKey
+  if (isModuleKey(base)) {
+    return base
   }
 
   return null
@@ -1242,11 +1249,18 @@ export default function HomePage() {
   const tabs = useMemo(() => {
     return [
       { key: 'frame' as const, label: tx(language).frame },
-      { key: 'assistant' as const, label: tx(language).assistant },
       ...dynamicTabs,
       { key: 'settings' as const, label: tx(language).settings },
     ]
   }, [dynamicTabs, language])
+
+
+  useEffect(() => {
+    if (tabs.some((tab) => tab.key === activeTab)) return
+    stickySettingsRef.current = false
+    setRemindersConnectScreenOpen(false)
+    setActiveTab('frame')
+  }, [activeTab, tabs])
 
   const shouldShowFirstFrameOnboarding =
     authReady &&
@@ -1716,7 +1730,7 @@ export default function HomePage() {
     const reusableModules = await loadReusableUserModules(frames.map((frame) => frame.device_id), deviceId).catch(() => ({}))
     const normalizedModules = normalizeModulesForSave(mergeReusableUserModules(rawModules, reusableModules))
     const nextPinnedTabs = Array.isArray((json as any).pinned_tabs)
-      ? ((json as any).pinned_tabs as ModuleKey[]).filter((m) => m !== 'date')
+      ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
       : []
 
     setTheme(nextTheme)
@@ -2240,10 +2254,6 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab === 'assistant' && (
-                <AIAssistantTab language={language} activeDeviceId={activeDeviceId} />
-              )}
-
               {activeTab === 'settings' && (
                 <SettingsTab
                   language={language}
@@ -2261,7 +2271,7 @@ async function handleSelectTab(k: TabKey) {
                 />
               )}
 
-              {activeTab !== 'frame' && activeTab !== 'assistant' && activeTab !== 'settings' && (
+              {activeTab !== 'frame' && activeTab !== 'settings' && (
                 <div className="relative h-full">
                   <div className="absolute right-0 -top-4 z-20 flex items-center gap-2">
                     {activeTab === 'reminders' && !remindersConnectScreenOpen && (
@@ -2302,7 +2312,9 @@ async function handleSelectTab(k: TabKey) {
                     </button>
                   </div>
 
-                  {activeTab === 'reminders' && remindersConnectScreenOpen ? (
+                  {activeTab === 'assistant' ? (
+                    <AIAssistantTab language={language} activeDeviceId={activeDeviceId} />
+                  ) : activeTab === 'reminders' && remindersConnectScreenOpen ? (
                     <ConnectAppsScreen
                       language={language}
                       modulesJson={modulesJson}
@@ -7229,6 +7241,7 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
+  const prominentOption: ModuleKey = 'assistant'
   const options: ModuleKey[] = ['reminders', 'date', 'weather', 'countdown', 'surf', 'soccer', 'groceries', 'stocks']
   const t = tx(language)
 
@@ -7243,6 +7256,13 @@ function PickerModal({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            key={prominentOption}
+            onClick={() => onPick(prominentOption)}
+            className="col-span-2 min-h-11 rounded-2xl border border-[color:var(--bd-10)] px-4 py-3 text-sm text-[color:var(--fg-80)] tracking-widest transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
+          >
+            {moduleLabel(language, prominentOption)}
+          </button>
           {options.map((m) => (
             <button
               key={m}

@@ -7,11 +7,12 @@ const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', i
 const rpc = readFileSync(new URL('../supabase/migrations/20260713143000_add_ai_assistant_creation_rpc.sql', import.meta.url), 'utf8')
 const foundation = readFileSync(new URL('../supabase/migrations/20260713130000_add_monitoring_watch_foundation.sql', import.meta.url), 'utf8')
 
-test('AI Assistant is a main destination and uses consumer naming', () => {
+test('AI Assistant uses consumer naming and is registered as selectable module', () => {
   assert.match(home, /import AIAssistantTab from '\.\/components\/AIAssistantTab'/)
   assert.match(home, /assistant: 'AI Assistant'/)
   assert.match(home, /assistant: 'KI-assistent'/)
-  assert.match(home, /key: 'assistant' as const/)
+  assert.match(home, /type ModuleKey = 'assistant' \| 'date'/)
+  assert.match(home, /const prominentOption: ModuleKey = 'assistant'/)
   assert.match(assistant, /Be RE:MIND holde øye med noe for deg/)
   assert.match(assistant, /Hva vil du at RE:MIND skal holde øye med\?/)
   assert.match(assistant, /La RE:MIND følge med/)
