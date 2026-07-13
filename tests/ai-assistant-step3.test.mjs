@@ -84,6 +84,23 @@ test('interpretation security keeps owner/frame/update fields out of model contr
   assert.doesNotMatch(interpreter, /show_on_frame\s*:/)
 })
 
+test('interpretation prompt requires localized human-facing fields after preferred language detection', () => {
+  for (const phrase of ['First determine preferred_language', 'write every human-facing interpretation field in that same language', 'title, normalized_goal, trigger_description, completion_condition', 'all search guidance text', 'Norwegian requests must use natural Norwegian', 'English requests must use English', 'Preserve product names and proper nouns']) assert.match(interpreter, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+})
+
+test('interpretation language validation rejects Norwegian outputs with clearly English title and trigger description', () => {
+  assert.match(interpreter, /language_mismatch_no_english_output/)
+  assert.match(interpreter, /v\.preferred_language !== 'no'/)
+  assert.match(interpreter, /isClearlyEnglishText\(v\.title\) && isClearlyEnglishText\(v\.trigger_description\)/)
+  assert.match(interpreter, /for \(let attempt = 0; attempt < 2; attempt\+\+\)/)
+})
+
+test('interpretation language guard allows English fields and preserves proper nouns', () => {
+  assert.match(interpreter, /Use "no" for Norwegian and "en" for English/)
+  assert.match(interpreter, /OpenAI, ChatGPT, Coldplay, and SpaceX/)
+  assert.match(interpreter, /v\.preferred_language === 'no' \? 'no' : 'en'/)
+})
+
 test('worker captures diagnostics, skips paused/completed/deleted watches, does not auto-complete, and preserves mock provider', () => {
   assert.match(worker, /mockMonitoringResult/)
   assert.match(worker, /response_id: result\.response_id/)
