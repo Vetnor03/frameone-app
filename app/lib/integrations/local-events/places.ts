@@ -1,18 +1,32 @@
 export type LocalEventPlaceId =
   | 'stavanger'
-  | 'sola'
-  | 'sandnes'
   | 'randaberg'
+  | 'rennesoy'
+  | 'finnoy'
+  | 'kvitsoy'
+  | 'sandnes'
+  | 'hommersak'
+  | 'forsand'
+  | 'sola'
+  | 'tananger'
   | 'bryne'
+  | 'klepp'
+  | 'time'
+  | 'naerbo'
+  | 'varhaug'
+  | 'egersund'
+  | 'bjerkreim'
+  | 'sokndal'
+  | 'haugesund'
+  | 'karmoy'
+  | 'tysvaer'
+  | 'sveio'
   | 'ha'
   | 'algard'
-  | 'egersund'
   | 'jossingfjorden'
   | 'jorpeland'
   | 'tau'
   | 'strand'
-  | 'rennesoy'
-  | 'kvitsoy'
   | 'byrkjedal'
   | 'dirdal'
   | 'sirdal'
@@ -32,21 +46,37 @@ export type LocalEventPlace = {
   sourceSlug: string
 }
 
-export const LOCAL_EVENT_PLACE_CATALOGUE: readonly LocalEventPlace[] = [
+export const LOCAL_EVENT_MAIN_PLACE_IDS = ['stavanger', 'sandnes', 'sola', 'bryne', 'egersund', 'haugesund'] as const satisfies readonly LocalEventPlaceId[]
+
+const LOCAL_EVENT_SOURCE_PLACE_CATALOGUE: readonly LocalEventPlace[] = [
   { id: 'stavanger', displayName: 'Stavanger', sourceName: 'Stavanger', sourceSlug: 'stavanger' },
-  { id: 'sola', displayName: 'Sola', sourceName: 'Sola', sourceSlug: 'sola' },
-  { id: 'sandnes', displayName: 'Sandnes', sourceName: 'Sandnes', sourceSlug: 'sandnes' },
   { id: 'randaberg', displayName: 'Randaberg', sourceName: 'Randaberg', sourceSlug: 'randaberg' },
+  { id: 'rennesoy', displayName: 'Rennesøy', sourceName: 'Rennesøy and the green islands', sourceSlug: 'rennesoy-and-the-green-islands' },
+  { id: 'finnoy', displayName: 'Finnøy', sourceName: 'Finnøy', sourceSlug: 'finnoy' },
+  { id: 'kvitsoy', displayName: 'Kvitsøy', sourceName: 'Kvitsøy', sourceSlug: 'kvitsoy' },
+  { id: 'sandnes', displayName: 'Sandnes', sourceName: 'Sandnes', sourceSlug: 'sandnes' },
+  { id: 'hommersak', displayName: 'Hommersåk', sourceName: 'Hommersåk', sourceSlug: 'hommersak' },
+  { id: 'forsand', displayName: 'Forsand', sourceName: 'Forsand', sourceSlug: 'forsand' },
+  { id: 'sola', displayName: 'Sola', sourceName: 'Sola', sourceSlug: 'sola' },
+  { id: 'tananger', displayName: 'Tananger', sourceName: 'Tananger', sourceSlug: 'tananger' },
   { id: 'bryne', displayName: 'Bryne', sourceName: 'Bryne', sourceSlug: 'bryne' },
+  { id: 'klepp', displayName: 'Klepp', sourceName: 'Klepp', sourceSlug: 'klepp' },
+  { id: 'time', displayName: 'Time', sourceName: 'Time', sourceSlug: 'time' },
+  { id: 'naerbo', displayName: 'Nærbø', sourceName: 'Nærbø', sourceSlug: 'naerbo' },
+  { id: 'varhaug', displayName: 'Varhaug', sourceName: 'Varhaug', sourceSlug: 'varhaug' },
+  { id: 'egersund', displayName: 'Egersund', sourceName: 'Egersund', sourceSlug: 'egersund' },
+  { id: 'bjerkreim', displayName: 'Bjerkreim', sourceName: 'Bjerkreim', sourceSlug: 'bjerkreim' },
+  { id: 'sokndal', displayName: 'Sokndal', sourceName: 'Sokndal', sourceSlug: 'sokndal' },
+  { id: 'haugesund', displayName: 'Haugesund', sourceName: 'Haugesund', sourceSlug: 'haugesund' },
+  { id: 'karmoy', displayName: 'Karmøy', sourceName: 'Karmøy', sourceSlug: 'karmoy' },
+  { id: 'tysvaer', displayName: 'Tysvær', sourceName: 'Tysvær', sourceSlug: 'tysvaer' },
+  { id: 'sveio', displayName: 'Sveio', sourceName: 'Sveio', sourceSlug: 'sveio' },
   { id: 'ha', displayName: 'Hå', sourceName: 'Hå', sourceSlug: 'ha' },
   { id: 'algard', displayName: 'Ålgård', sourceName: 'Ålgård', sourceSlug: 'algard' },
-  { id: 'egersund', displayName: 'Egersund', sourceName: 'Egersund', sourceSlug: 'egersund' },
   { id: 'jossingfjorden', displayName: 'Jøssingfjorden', sourceName: 'Jøssingfjorden', sourceSlug: 'jossingfjorden' },
   { id: 'jorpeland', displayName: 'Jørpeland', sourceName: 'Jørpeland', sourceSlug: 'jorpeland' },
   { id: 'tau', displayName: 'Tau', sourceName: 'Tau', sourceSlug: 'tau' },
   { id: 'strand', displayName: 'Strand', sourceName: 'Strand municipality', sourceSlug: 'strand-municipality' },
-  { id: 'rennesoy', displayName: 'Rennesøy', sourceName: 'Rennesøy and the green islands', sourceSlug: 'rennesoy-and-the-green-islands' },
-  { id: 'kvitsoy', displayName: 'Kvitsøy', sourceName: 'Kvitsøy', sourceSlug: 'kvitsoy' },
   { id: 'byrkjedal', displayName: 'Byrkjedal', sourceName: 'Byrkjedal', sourceSlug: 'byrkjedal' },
   { id: 'dirdal', displayName: 'Dirdal', sourceName: 'Dirdal', sourceSlug: 'dirdal' },
   { id: 'sirdal', displayName: 'Sirdal', sourceName: 'Sirdal', sourceSlug: 'sirdal' },
@@ -55,30 +85,46 @@ export const LOCAL_EVENT_PLACE_CATALOGUE: readonly LocalEventPlace[] = [
   { id: 'nesflaten', displayName: 'Nesflaten', sourceName: 'Nesflaten', sourceSlug: 'nesflaten' },
 ] as const
 
+const placeById = new Map(LOCAL_EVENT_SOURCE_PLACE_CATALOGUE.map((place) => [place.id, place]))
+export const LOCAL_EVENT_PLACE_CATALOGUE: readonly LocalEventPlace[] = LOCAL_EVENT_MAIN_PLACE_IDS.map((id) => placeById.get(id)!).filter(Boolean)
+
 export const NEARBY_LOCAL_EVENT_PLACES: Record<LocalEventPlaceId, readonly LocalEventPlaceId[]> = {
-  stavanger: ['stavanger', 'sola', 'sandnes', 'randaberg'],
-  sola: ['sola', 'stavanger', 'sandnes', 'randaberg'],
-  sandnes: ['sandnes', 'sola', 'stavanger', 'algard'],
-  randaberg: ['randaberg', 'stavanger', 'sola', 'rennesoy'],
-  bryne: ['bryne', 'ha', 'algard', 'sandnes'],
-  ha: ['ha', 'bryne', 'egersund', 'algard'],
-  algard: ['algard', 'sandnes', 'bryne', 'byrkjedal'],
-  egersund: ['egersund', 'jossingfjorden', 'ha'],
-  jossingfjorden: ['jossingfjorden', 'egersund'],
-  jorpeland: ['jorpeland', 'tau', 'strand', 'stavanger'],
-  tau: ['tau', 'jorpeland', 'strand', 'stavanger'],
-  strand: ['strand', 'tau', 'jorpeland', 'stavanger'],
-  rennesoy: ['rennesoy', 'randaberg', 'stavanger', 'kvitsoy'],
-  kvitsoy: ['kvitsoy', 'rennesoy', 'randaberg', 'stavanger'],
-  byrkjedal: ['byrkjedal', 'dirdal', 'algard', 'sirdal'],
-  dirdal: ['dirdal', 'byrkjedal', 'algard', 'sirdal'],
-  sirdal: ['sirdal', 'byrkjedal', 'dirdal'],
-  florli: ['florli', 'songesand', 'jorpeland'],
-  songesand: ['songesand', 'florli', 'jorpeland', 'tau'],
-  nesflaten: ['nesflaten'],
+  stavanger: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  randaberg: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  rennesoy: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  finnoy: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  kvitsoy: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  sandnes: ['sandnes', 'hommersak', 'forsand'],
+  hommersak: ['sandnes', 'hommersak', 'forsand'],
+  forsand: ['sandnes', 'hommersak', 'forsand'],
+  sola: ['sola', 'tananger'],
+  tananger: ['sola', 'tananger'],
+  bryne: ['bryne', 'klepp', 'time', 'naerbo', 'varhaug'],
+  klepp: ['bryne', 'klepp', 'time', 'naerbo', 'varhaug'],
+  time: ['bryne', 'klepp', 'time', 'naerbo', 'varhaug'],
+  naerbo: ['bryne', 'klepp', 'time', 'naerbo', 'varhaug'],
+  varhaug: ['bryne', 'klepp', 'time', 'naerbo', 'varhaug'],
+  egersund: ['egersund', 'bjerkreim', 'sokndal'],
+  bjerkreim: ['egersund', 'bjerkreim', 'sokndal'],
+  sokndal: ['egersund', 'bjerkreim', 'sokndal'],
+  haugesund: ['haugesund', 'karmoy', 'tysvaer', 'sveio'],
+  karmoy: ['haugesund', 'karmoy', 'tysvaer', 'sveio'],
+  tysvaer: ['haugesund', 'karmoy', 'tysvaer', 'sveio'],
+  sveio: ['haugesund', 'karmoy', 'tysvaer', 'sveio'],
+  ha: ['bryne', 'klepp', 'time', 'naerbo', 'varhaug'],
+  algard: ['sandnes', 'hommersak', 'forsand'],
+  jossingfjorden: ['egersund', 'bjerkreim', 'sokndal'],
+  jorpeland: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  tau: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  strand: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  byrkjedal: ['sandnes', 'hommersak', 'forsand'],
+  dirdal: ['sandnes', 'hommersak', 'forsand'],
+  sirdal: ['sandnes', 'hommersak', 'forsand'],
+  florli: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  songesand: ['stavanger', 'randaberg', 'rennesoy', 'finnoy', 'kvitsoy'],
+  nesflaten: ['haugesund', 'karmoy', 'tysvaer', 'sveio'],
 } as const
 
-const placeById = new Map(LOCAL_EVENT_PLACE_CATALOGUE.map((place) => [place.id, place]))
 const normalizeSearch = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
 export function getLocalEventPlace(id: string | null | undefined) {
@@ -98,19 +144,21 @@ export function uniqueLocalEventPlaceIds(ids: readonly string[]) {
 }
 
 export function suggestedLocalEventArea(primaryPlaceId: string): LocalEventAreaPreference {
-  const primary = getLocalEventPlace(primaryPlaceId)?.id || 'stavanger'
-  return { primaryPlaceId: primary, includedPlaceIds: uniqueLocalEventPlaceIds(NEARBY_LOCAL_EVENT_PLACES[primary]) }
+  const requested = getLocalEventPlace(primaryPlaceId)?.id || 'stavanger'
+  const primary = (LOCAL_EVENT_MAIN_PLACE_IDS as readonly string[]).includes(requested) ? requested : (NEARBY_LOCAL_EVENT_PLACES[requested]?.[0] || 'stavanger')
+  return { primaryPlaceId: primary as LocalEventPlaceId, includedPlaceIds: uniqueLocalEventPlaceIds(NEARBY_LOCAL_EVENT_PLACES[primary as LocalEventPlaceId]) }
 }
 
 export function normalizeLocalEventAreaPreference(value: unknown): LocalEventAreaPreference | null {
   if (!value || typeof value !== 'object') return null
   const record = value as { primaryPlaceId?: unknown; includedPlaceIds?: unknown }
   if (typeof record.primaryPlaceId !== 'string') return null
-  const primary = getLocalEventPlace(record.primaryPlaceId)?.id
-  if (!primary) return null
+  if (!getLocalEventPlace(record.primaryPlaceId)) return null
+  const area = suggestedLocalEventArea(record.primaryPlaceId)
   const included = uniqueLocalEventPlaceIds(Array.isArray(record.includedPlaceIds) ? record.includedPlaceIds.map(String) : [])
-  if (!included.includes(primary)) included.unshift(primary)
-  return { primaryPlaceId: primary, includedPlaceIds: included.length ? included : [primary] }
+  const grouped = included.length ? uniqueLocalEventPlaceIds([...area.includedPlaceIds, ...included]) : area.includedPlaceIds
+  if (!grouped.includes(area.primaryPlaceId)) grouped.unshift(area.primaryPlaceId)
+  return { primaryPlaceId: area.primaryPlaceId, includedPlaceIds: grouped }
 }
 
 export function formatLocalEventPlaceList(ids: readonly string[]) {
