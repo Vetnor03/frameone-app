@@ -5,6 +5,7 @@ import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine,
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
+import { AI_ASSISTANT_FRAME_LIMITS, selectAiAssistantFrameItems, type AiAssistantFrameUpdate } from '@/app/lib/device/aiAssistantFrame'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,9 @@ type Detail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
+  aiAssistantItems?: Array<{ id: string; headline: string; created_at: string }>
+  aiAssistantOverflowCount?: number
+  aiAssistantHasActiveWatches?: boolean
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -1843,6 +1847,28 @@ function formatReminderMirrorNextItems(items: UnknownRecord[]) {
     .filter((item) => item.date && item.title)
 }
 
+
+async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
+  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('monitoring_updates')
+    .select('id, headline, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(frame_id, show_on_frame)')
+    .eq('monitoring_watches.frame_id', frameId)
+    .eq('monitoring_watches.show_on_frame', true)
+    .eq('dismissed_from_frame', false)
+    .gt('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(limit + 25)
+  if (error) throw error
+  const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { frameId, limit })
+  return {
+    primary: 'AI Assistant',
+    secondary: 'AI Assistant',
+    aiAssistantItems: selected.items,
+    aiAssistantOverflowCount: selected.overflowCount,
+  }
+}
+
 async function remindersDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
@@ -2052,6 +2078,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
+        else if (parsed.base === 'assistant') detailsBySlot[String(slot)] = await aiAssistantDetail(supabase, deviceId)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, mirrorScope.storageDeviceIds, mirrorScope.ownerId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, mirrorScope.storageDeviceIds, language)
       } catch (e: unknown) {
