@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20260714210000_fix_ai_assistant_watch_controls.sql', import.meta.url), 'utf8')
-const simplifiedEditMigration = readFileSync(new URL('../supabase/migrations/20260714223000_simplify_ai_assistant_watch_edit.sql', import.meta.url), 'utf8')
+const simplifiedEditMigration = readFileSync(new URL('../supabase/migrations/20260714224500_repair_ai_assistant_watch_edit_rpc.sql', import.meta.url), 'utf8')
 const worker = readFileSync(new URL('../supabase/functions/monitoring-worker/index.ts', import.meta.url), 'utf8')
 const foundation = readFileSync(new URL('../supabase/migrations/20260713130000_add_monitoring_watch_foundation.sql', import.meta.url), 'utf8')
 
@@ -21,7 +21,7 @@ test('edit opens with the existing natural-language request and only saves that 
 test('save, cancel, failure, and duplicate-submit protections are present', () => {
   assert.match(assistant, /if \(busyWatchId\) return/)
   assert.match(assistant, /setError\(c\.friendlyError\)/)
-  assert.match(assistant, /setEditingId\(null\); await loadAssistant\(\)/)
+  assert.match(assistant, /setEditingId\(null\)[\s\S]*setSelectedId\(id\)[\s\S]*await loadAssistant\(\)/)
   assert.match(assistant, /onClick=\{\(\) => setEditingId\(null\)\}/)
   assert.match(assistant, /disabled=\{busy\}/)
 })
@@ -62,6 +62,6 @@ test('shared-frame users can read shared watches but cannot manage another owner
   assert.match(foundation, /can_access_monitoring_watch/)
   assert.match(foundation, /dm\.device_id = w\.frame_id and dm\.user_id = auth\.uid\(\)/)
   for (const fn of ['update_ai_assistant_watch_request', 'pause_ai_assistant_watch', 'resume_ai_assistant_watch']) {
-    assert.match(migration, new RegExp(`function public\\.${fn}[\\s\\S]*?owner_user_id = auth\\.uid\\(\\)`))
+    assert.match((fn === 'update_ai_assistant_watch_request' ? simplifiedEditMigration : migration), new RegExp(`function public\\.${fn}[\\s\\S]*?owner_user_id = auth\\.uid\\(\\)`))
   }
 })
