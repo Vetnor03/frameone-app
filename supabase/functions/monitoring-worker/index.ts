@@ -4,6 +4,26 @@ import { calculateNextCheck } from '../_shared/monitoring/schedule.ts'
 
 const MINUTES = 60_000
 
+function envInt(name: string, fallback: number | null = null) {
+  const raw = Deno.env.get(name)
+  if (raw == null || raw.trim() === '') return fallback
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : fallback
+}
+
+function resetWithJitter(resetAt: string) {
+  const base = new Date(resetAt).getTime()
+  const jitterMinutes = 1 + Math.floor(Math.random() * 15)
+  return new Date(base + jitterMinutes * MINUTES).toISOString()
+}
+
+const LIMIT_REASONS = new Set([
+  'daily_run_limit_reached',
+  'monthly_run_limit_reached',
+  'global_daily_run_limit_reached',
+  'global_monthly_run_limit_reached',
+])
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-monitoring-secret') !== Deno.env.get('MONITORING_WORKER_SECRET')) return new Response('Unauthorized', { status: 401 })
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
@@ -49,13 +69,46 @@ async function processJob(supabase: any, job: any) {
   const model = provider === 'openai' ? (monitoringModelFromEnv(Deno.env)) : 'mock'
   const staleRunBefore = new Date(Date.now() - 30 * MINUTES).toISOString()
   await supabase.from('monitoring_runs').update({ status: 'error', completed_at: new Date().toISOString(), error_message: 'stale_running_run_recovered' }).eq('watch_id', watch.id).eq('status', 'running').lt('started_at', staleRunBefore)
-  const { data: run, error: runError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider, model }).select('id').single()
-  if (runError) {
-    if (String(runError.code).includes('23505')) {
-      await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 5 * MINUTES).toISOString(), last_error: 'watch_already_running' }).eq('id', job.id)
-      return { job_id: job.id, watch_id: watch.id, ok: false, error: 'watch_already_running', retry_in_minutes: 5 }
+
+  let run: { id: string }
+  if (provider === 'openai') {
+    const { data: reservation, error: reservationError } = await supabase.rpc('reserve_paid_monitoring_run', {
+      p_watch_id: watch.id,
+      p_provider: provider,
+      p_model: model,
+      p_default_daily_limit: envInt('MONITORING_DEFAULT_DAILY_RUN_LIMIT_PER_USER', 20),
+      p_default_monthly_limit: envInt('MONITORING_DEFAULT_MONTHLY_RUN_LIMIT_PER_USER', 300),
+      p_global_daily_limit: envInt('MONITORING_GLOBAL_DAILY_RUN_LIMIT', 0),
+      p_global_monthly_limit: envInt('MONITORING_GLOBAL_MONTHLY_RUN_LIMIT', 0),
+    })
+    if (reservationError) {
+      if (String(reservationError.code).includes('23505')) {
+        await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 5 * MINUTES).toISOString(), last_error: 'watch_already_running' }).eq('id', job.id)
+        return { job_id: job.id, watch_id: watch.id, ok: false, error: 'watch_already_running', retry_in_minutes: 5 }
+      }
+      throw reservationError
     }
-    throw runError
+    if (!reservation?.allowed) {
+      const reason = String(reservation?.reason || 'monitoring_run_limit_reached')
+      if (LIMIT_REASONS.has(reason)) {
+        const nextCheckAt = resetWithJitter(String(reservation.next_reset_at))
+        await supabase.from('monitoring_watches').update({ next_check_at: nextCheckAt, status: 'active' }).eq('id', watch.id)
+        await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: reason }).eq('id', job.id)
+        return { job_id: job.id, watch_id: watch.id, ok: true, blocked: true, reason, next_check_at: nextCheckAt }
+      }
+      throw new Error(reason)
+    }
+    run = { id: reservation.run_id }
+  } else {
+    const { data: insertedRun, error: runError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider, model }).select('id').single()
+    if (runError) {
+      if (String(runError.code).includes('23505')) {
+        await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 5 * MINUTES).toISOString(), last_error: 'watch_already_running' }).eq('id', job.id)
+        return { job_id: job.id, watch_id: watch.id, ok: false, error: 'watch_already_running', retry_in_minutes: 5 }
+      }
+      throw runError
+    }
+    run = insertedRun
   }
 
   try {
