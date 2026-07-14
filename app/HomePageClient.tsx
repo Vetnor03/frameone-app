@@ -4944,6 +4944,17 @@ function MirrorAiAssistantRecap({ children, lines, className = '', mutedColor }:
   return <div className={`mx-auto overflow-hidden text-balance text-center font-medium leading-[1.18] tracking-[0.01em] [-webkit-box-orient:vertical] [display:-webkit-box] ${lines === 4 ? '[-webkit-line-clamp:4]' : lines === 3 ? '[-webkit-line-clamp:3]' : '[-webkit-line-clamp:2]'} ${className}`} style={{ color: mutedColor }}>{children}</div>
 }
 
+function MirrorAiAssistantLayout({ header, children, className = '', contentClassName = '' }: { header: string; children: React.ReactNode; className?: string; contentClassName?: string }) {
+  return (
+    <div className={`relative flex h-full w-full flex-col items-center overflow-hidden text-center leading-none ${className}`}>
+      <MirrorModuleHeader title={header} className="mx-auto" />
+      <div className={`flex min-h-0 w-full flex-1 flex-col items-center justify-center ${contentClassName}`}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxItems, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; borderColor: string; maxItems: number; variant: 'small' | 'medium' | 'large' | 'xl' }) {
   const displayLimit = variant === 'small' || variant === 'medium' ? 1 : 2
   const recapWords = variant === 'large' || variant === 'xl' ? 42 : variant === 'medium' ? 28 : 0
@@ -4954,21 +4965,27 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
 
   if (items.length <= 0) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.34rem,0.9vw,0.68rem)] px-[clamp(0.55rem,1.35vw,1.2rem)] py-[clamp(0.5rem,1.2vw,1.1rem)] text-center leading-none">
-        <MirrorModuleHeader title={header} className="mx-auto" />
+      <MirrorAiAssistantLayout
+        header={header}
+        className="px-[clamp(0.55rem,1.35vw,1.2rem)] py-[clamp(0.5rem,1.2vw,1.1rem)]"
+        contentClassName="gap-[clamp(0.34rem,0.9vw,0.68rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]"
+      >
         <div className="max-w-full text-[clamp(0.72rem,1.45vw,0.96rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>{mirrorAiAssistantEmptyMessage(language)}</div>
         <div className="max-w-full text-[clamp(0.55rem,1.05vw,0.72rem)] font-medium leading-[1.2] tracking-[0.04em]" style={{ color: mutedColor }}>{mirrorAiAssistantEmptyStatus(detail, language)}</div>
-      </div>
+      </MirrorAiAssistantLayout>
     )
   }
 
   if (variant === 'small') {
     const item = items[0]
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.52rem,1.3vw,0.88rem)] py-[clamp(0.5rem,1.2vw,0.78rem)] text-center leading-none">
-        <MirrorModuleHeader title={header} className="mx-auto" />
-        <MirrorAiAssistantHeadline lines={2} className="mt-[clamp(0.5rem,1.2vw,0.78rem)] max-w-[18ch] text-[clamp(0.76rem,1.55vw,0.98rem)] font-semibold leading-[1.09] tracking-[-0.005em]">{item.headline}</MirrorAiAssistantHeadline>
-      </div>
+      <MirrorAiAssistantLayout
+        header={header}
+        className="px-[clamp(0.52rem,1.3vw,0.88rem)] py-[clamp(0.5rem,1.2vw,0.78rem)]"
+        contentClassName="py-[clamp(0.5rem,1.2vw,0.78rem)]"
+      >
+        <MirrorAiAssistantHeadline lines={2} className="max-w-[18ch] text-[clamp(0.76rem,1.55vw,0.98rem)] font-semibold leading-[1.09] tracking-[-0.005em]">{item.headline}</MirrorAiAssistantHeadline>
+      </MirrorAiAssistantLayout>
     )
   }
 
@@ -4976,18 +4993,19 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
   const secondary = items[1]
   const isMedium = variant === 'medium'
   return (
-    <div className="relative flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.8rem,2vw,1.35rem)] py-[clamp(0.75rem,1.85vw,1.25rem)] text-center leading-none">
-      <MirrorModuleHeader title={header} className="mx-auto" />
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-[clamp(0.58rem,1.35vw,0.96rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]">
-        <div className={`${isMedium ? 'max-w-[34ch]' : 'max-w-[42ch]'} min-h-0 w-full`}>
-          <MirrorAiAssistantHeadline lines={3} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{primary.headline}</MirrorAiAssistantHeadline>
-          <MirrorAiAssistantRecap mutedColor={mutedColor} lines={isMedium ? 2 : 3} className={`mt-[clamp(0.38rem,0.9vw,0.62rem)] ${MIRROR_SECONDARY_TEXT_CLASS}`}>{primary.summary}</MirrorAiAssistantRecap>
-          <div className={`mt-[clamp(0.42rem,1vw,0.7rem)] text-center ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantDiscoveredLabel(primary.created_at, language)}</div>
-        </div>
-        {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{secondary.headline}</MirrorAiAssistantHeadline></div>}
+    <MirrorAiAssistantLayout
+      header={header}
+      className="px-[clamp(0.8rem,2vw,1.35rem)] py-[clamp(0.75rem,1.85vw,1.25rem)]"
+      contentClassName="gap-[clamp(0.58rem,1.35vw,0.96rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]"
+    >
+      <div className={`${isMedium ? 'max-w-[34ch]' : 'max-w-[42ch]'} min-h-0 w-full`}>
+        <MirrorAiAssistantHeadline lines={3} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{primary.headline}</MirrorAiAssistantHeadline>
+        <MirrorAiAssistantRecap mutedColor={mutedColor} lines={isMedium ? 2 : 3} className={`mt-[clamp(0.38rem,0.9vw,0.62rem)] ${MIRROR_SECONDARY_TEXT_CLASS}`}>{primary.summary}</MirrorAiAssistantRecap>
+        <div className={`mt-[clamp(0.42rem,1vw,0.7rem)] text-center ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantDiscoveredLabel(primary.created_at, language)}</div>
       </div>
+      {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{secondary.headline}</MirrorAiAssistantHeadline></div>}
       {moreLabel && <div className="shrink-0 text-center text-[clamp(0.5rem,1vw,0.68rem)] font-medium tracking-[0.04em]" style={{ color: mutedColor }}>{moreLabel}</div>}
-    </div>
+    </MirrorAiAssistantLayout>
   )
 }
 
