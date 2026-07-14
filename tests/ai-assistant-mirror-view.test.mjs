@@ -25,9 +25,9 @@ function row(id, hoursAgo, extra = {}) {
 const options = { memberUserIds: ['member-a', 'member-b'], now: new Date('2026-07-14T12:00:00.000Z'), limit: 8 }
 
 function mirrorSnapshotModules() {
-  const match = route.match(/const MODULES = new Set\(\[([^\]]+)\]\)/)
+  const match = route.match(/const MODULES = new Set\(\[([\s\S]*?)\]\)/)
   assert.ok(match, 'Mirror snapshot MODULES whitelist should be declared as a Set literal')
-  return [...match[1].matchAll(/'([^']+)'/g)].map((x) => x[1])
+  return [...match[1].matchAll(/["']([^"']+)["']/g)].map((x) => x[1])
 }
 
 function parseStoredModuleLikeRoute(value) {
@@ -50,13 +50,12 @@ test('AI Assistant manual Show on frame control is removed from the app tab', ()
 test('AI Assistant mirror heading and loaded empty state support Norwegian and English copy', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /function mirrorAiAssistantHeader\(language: AppLanguage\)/)
-  assert.match(renderer, /NYTT FOR DEG/)
-  assert.match(renderer, /NEW FOR YOU/)
-  assert.match(renderer, /FØLGER MED/)
-  assert.match(renderer, /WATCHING/)
+  assert.match(renderer, /OPPDATERINGER/)
+  assert.match(renderer, /UPDATES/)
   assert.match(renderer, /Ingen nye oppdateringer/)
   assert.match(renderer, /No new updates/)
-  assert.doesNotMatch(renderer, /Loading AI Assistant|AI ASSISTANT|KI-ASSISTENT|Watch|monitoring/)
+  assert.doesNotMatch(renderer, /NYTT FOR DEG|NEW FOR YOU|FØLGER MED|WATCHING/)
+  assert.doesNotMatch(renderer, /Loading AI Assistant|AI ASSISTANT|KI-ASSISTENT|\"Watch\"|\"monitoring\"/)
 })
 
 test('AI Assistant frame selector ignores show_on_frame and frame_id but enforces membership', () => {
@@ -105,6 +104,8 @@ test('AI Assistant zero updates returns structured empty snapshot data and serve
   assert.deepEqual(selected, { items: [], overflowCount: 0 })
   assert.match(route, /aiAssistantItems: \[\]/)
   assert.match(route, /aiAssistantOverflowCount: 0/)
+  assert.match(route, /aiAssistantActiveWatchCount: 0/)
+  assert.match(route, /aiAssistantLastCheckedAt: null/)
   assert.match(route, /\[mirror-snapshot:ai-assistant-failed\]/)
   assert.match(route, /return empty/)
 })
@@ -195,4 +196,43 @@ test('AI Assistant summary sanitizer truncates with at most one proper ellipsis 
   const cleaned = sanitizeAiAssistantMirrorSummary('Alpha beta gamma delta epsilon zeta eta theta iota', '', 5)
   assert.equal(cleaned, 'Alpha beta gamma delta epsilon…')
   assert.doesNotMatch(cleaned, /\.{3}|….*…|epsil$/)
+})
+
+
+test('AI Assistant empty state includes active watch count and latest successful check time', () => {
+  const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  assert.match(renderer, /aiAssistantActiveWatchCount/)
+  assert.match(renderer, /aiAssistantLastCheckedAt/)
+  assert.match(renderer, /Following \$\{count\} \$\{count === 1 \? 'thing' : 'things'\}/)
+  assert.match(renderer, /Følger \$\{count\} \$\{count === 1 \? 'ting' : 'ting'\}/)
+  assert.match(renderer, /Checked today/)
+  assert.match(renderer, /Sjekket i dag/)
+  assert.match(renderer, /checked \? `\$\{countLabel\} · \$\{checked\}` : countLabel/)
+})
+
+test('AI Assistant active watch metadata excludes inactive and error states in the shared snapshot path', () => {
+  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
+  assert.match(detail, /from\('monitoring_watches'\)/)
+  assert.match(detail, /select\('id, last_checked_at, status'\)/)
+  assert.match(detail, /\.eq\('status', 'active'\)/)
+  assert.doesNotMatch(detail, /\.in\('status', \['active', 'error'\]\)/)
+  assert.match(detail, /activeWatches\.length/)
+  assert.match(detail, /lastCheckedAt = activeWatches[\s\S]*sort\(\(a: string, b: string\) => new Date\(b\)\.getTime\(\) - new Date\(a\)\.getTime\(\)\)\[0\] \|\| null/)
+})
+
+test('AI Assistant zero active watches shows dedicated nothing-followed copy without private fields', () => {
+  const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  assert.match(renderer, /Nothing is being followed yet/)
+  assert.match(renderer, /Følger ikke med på noe ennå/)
+  assert.match(renderer, /if \(count <= 0\) return mirrorAiAssistantNothingFollowedMessage\(language\)/)
+  const emptyBlock = renderer.slice(renderer.indexOf('if (items.length <= 0)'), renderer.indexOf("if (variant === 'small')"))
+  assert.doesNotMatch(emptyBlock, /original_request|trigger_description|instructions|monitoring_watches/i)
+})
+
+test('AI Assistant Mirror View and physical frame consume the same snapshot fields without client polling', () => {
+  assert.match(route, /aiAssistantActiveWatchCount: activeWatches\.length/)
+  assert.match(route, /aiAssistantLastCheckedAt: lastCheckedAt/)
+  assert.match(home, /detail\.aiAssistantActiveWatchCount/)
+  assert.match(home, /detail\.aiAssistantLastCheckedAt/)
+  assert.doesNotMatch(home.slice(home.indexOf('function MirrorAiAssistantCard'), home.indexOf('function MirrorLargeRemindersCard')), /fetch\(|setTimeout|setInterval|wake|refresh/i)
 })

@@ -365,6 +365,8 @@ type MirrorModuleDetail = {
   reminderDateBadge?: string
   aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string }>
   aiAssistantOverflowCount?: number
+  aiAssistantActiveWatchCount?: number
+  aiAssistantLastCheckedAt?: string | null
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -4856,11 +4858,7 @@ function mirrorRemindersEmptyMessage(language: AppLanguage) {
 
 
 function mirrorAiAssistantHeader(language: AppLanguage) {
-  return language === 'no' ? 'NYTT FOR DEG' : 'NEW FOR YOU'
-}
-
-function mirrorAiAssistantEmptyEyebrow(language: AppLanguage) {
-  return language === 'no' ? 'FØLGER MED' : 'WATCHING'
+  return language === 'no' ? 'OPPDATERINGER' : 'UPDATES'
 }
 
 function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, recapWords: number) {
@@ -4880,6 +4878,33 @@ function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, re
 
 function mirrorAiAssistantEmptyMessage(language: AppLanguage) {
   return language === 'no' ? 'Ingen nye oppdateringer' : 'No new updates'
+}
+
+function mirrorAiAssistantNothingFollowedMessage(language: AppLanguage) {
+  return language === 'no' ? 'Følger ikke med på noe ennå' : 'Nothing is being followed yet'
+}
+
+function mirrorAiAssistantCheckedLabel(value: string | null | undefined, language: AppLanguage) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startValue = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const dayDiff = Math.round((startToday - startValue) / (24 * 60 * 60 * 1000))
+  const time = new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  if (dayDiff <= 0) return language === 'no' ? `Sjekket i dag ${time}` : `Checked today ${time}`
+  if (dayDiff === 1) return language === 'no' ? `Sjekket i går ${time}` : `Checked yesterday ${time}`
+  return language === 'no' ? `Sjekket ${date.toLocaleDateString('nb-NO')} ${time}` : `Checked ${date.toLocaleDateString('en-GB')} ${time}`
+}
+
+function mirrorAiAssistantEmptyStatus(detail: MirrorModuleDetail, language: AppLanguage) {
+  const count = Math.max(0, Math.floor(Number(detail.aiAssistantActiveWatchCount) || 0))
+  if (count <= 0) return mirrorAiAssistantNothingFollowedMessage(language)
+  const countLabel = language === 'no' ? `Følger ${count} ${count === 1 ? 'ting' : 'ting'}` : `Following ${count} ${count === 1 ? 'thing' : 'things'}`
+  const checked = mirrorAiAssistantCheckedLabel(detail.aiAssistantLastCheckedAt, language)
+  return checked ? `${countLabel} · ${checked}` : countLabel
 }
 
 function mirrorAiAssistantDiscoveredLabel(value: string, language: AppLanguage) {
@@ -4919,8 +4944,9 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
   if (items.length <= 0) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.34rem,0.9vw,0.68rem)] px-[clamp(0.55rem,1.35vw,1.2rem)] py-[clamp(0.5rem,1.2vw,1.1rem)] text-center leading-none">
-        <MirrorModuleHeader title={mirrorAiAssistantEmptyEyebrow(language)} className="mx-auto" />
+        <MirrorModuleHeader title={header} className="mx-auto" />
         <div className="max-w-full text-[clamp(0.72rem,1.45vw,0.96rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>{mirrorAiAssistantEmptyMessage(language)}</div>
+        <div className="max-w-full text-[clamp(0.55rem,1.05vw,0.72rem)] font-medium leading-[1.2] tracking-[0.04em]" style={{ color: mutedColor }}>{mirrorAiAssistantEmptyStatus(detail, language)}</div>
       </div>
     )
   }
