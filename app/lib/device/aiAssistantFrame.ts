@@ -17,6 +17,7 @@ export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], opti
   const memberUserIds = new Set((options.memberUserIds ?? []).map((id) => String(id).trim()).filter(Boolean))
   const candidates = rows
     .filter((row) => !hasMembershipFilter || memberUserIds.has(String(row.monitoring_watches?.owner_user_id ?? '').trim()))
+    .filter((row) => row.is_read !== true)
     .filter((row) => row.dismissed_from_frame !== true)
     .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), created_at: String(row.created_at ?? '') }))
     .filter((row) => row.id && row.headline && !Number.isNaN(new Date(row.created_at).getTime()) && new Date(row.created_at).getTime() > cutoffMs)

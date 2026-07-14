@@ -4,15 +4,18 @@ import { readFileSync } from 'node:fs'
 
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20260714210000_fix_ai_assistant_watch_controls.sql', import.meta.url), 'utf8')
+const simplifiedEditMigration = readFileSync(new URL('../supabase/migrations/20260714223000_simplify_ai_assistant_watch_edit.sql', import.meta.url), 'utf8')
 const worker = readFileSync(new URL('../supabase/functions/monitoring-worker/index.ts', import.meta.url), 'utf8')
 const foundation = readFileSync(new URL('../supabase/migrations/20260713130000_add_monitoring_watch_foundation.sql', import.meta.url), 'utf8')
 
-test('edit opens with existing Watch values and saves the same owner-owned row', () => {
+test('edit opens with the existing natural-language request and only saves that owner-owned field', () => {
   assert.match(assistant, /function openEditor\(w: AssistantWatch\)/)
-  for (const field of ['title: w.title', 'original_request: w.original_request', 'frequency_minutes: w.frequency_minutes', 'preferred_language: w.preferred_language', 'completion_condition: w.completion_condition', 'show_on_frame: Boolean']) assert.match(assistant, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(assistant, /setEditingRequest\(w\.original_request\)/)
+  for (const field of ['title: w.title', 'frequency_minutes: w.frequency_minutes', 'preferred_language: w.preferred_language', 'completion_condition: w.completion_condition', 'show_on_frame: Boolean']) assert.doesNotMatch(assistant, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   assert.match(assistant, /rpc\('update_ai_assistant_watch_request'/)
-  assert.match(migration, /where id = p_watch_id and owner_user_id = auth\.uid\(\)/)
-  assert.doesNotMatch(migration, /insert into public\.monitoring_watches[\s\S]*update_ai_assistant_watch_request/)
+  assert.match(simplifiedEditMigration, /set original_request = cleaned_request/)
+  assert.match(simplifiedEditMigration, /where id = p_watch_id and owner_user_id = auth\.uid\(\)/)
+  assert.doesNotMatch(simplifiedEditMigration, /set[\s\S]*title =|status =|frequency_minutes =|preferred_language =|completion_condition =|show_on_frame =|frame_id =|insert into public\.monitoring_queue/)
 })
 
 test('save, cancel, failure, and duplicate-submit protections are present', () => {
@@ -39,11 +42,12 @@ test('resume persists active state without immediate manufactured update', () =>
   assert.doesNotMatch(resumeBody, /insert into public\.monitoring_updates|insert into public\.monitoring_queue/)
 })
 
-test('read unread mark all and dismiss actions persist through Supabase and refetch', () => {
+test('read unread and mark all persist through Supabase and refetch without exposing dismiss', () => {
   assert.match(assistant, /markUpdate\(u\.id, \{ is_read: !u\.is_read \}\)/)
   assert.match(assistant, /function markAllRead\(\)/)
   assert.match(assistant, /\.update\(\{ is_read: true \}\)\.in\('id', ids\)/)
-  assert.match(assistant, /markUpdate\(u\.id, \{ dismissed_from_frame: true \}\)/)
+  assert.doesNotMatch(assistant, /markUpdate\(u\.id, \{ dismissed_from_frame: true \}\)/)
+  assert.doesNotMatch(assistant, /\{c\.dismiss\}/)
   assert.match(assistant, /else await loadAssistant\(\)/)
   assert.match(foundation, /grant update \(is_read, dismissed_from_frame\) on public\.monitoring_updates to authenticated/)
 })
