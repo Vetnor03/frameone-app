@@ -1849,23 +1849,44 @@ function formatReminderMirrorNextItems(items: UnknownRecord[]) {
 
 
 async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
-  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { data, error } = await supabase
-    .from('monitoring_updates')
-    .select('id, headline, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(frame_id, show_on_frame)')
-    .eq('monitoring_watches.frame_id', frameId)
-    .eq('monitoring_watches.show_on_frame', true)
-    .eq('dismissed_from_frame', false)
-    .gt('created_at', sinceIso)
-    .order('created_at', { ascending: false })
-    .limit(limit + 25)
-  if (error) throw error
-  const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { frameId, limit })
-  return {
+  const empty = {
     primary: 'AI Assistant',
     secondary: 'AI Assistant',
-    aiAssistantItems: selected.items,
-    aiAssistantOverflowCount: selected.overflowCount,
+    aiAssistantItems: [],
+    aiAssistantOverflowCount: 0,
+  }
+
+  try {
+    const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { data: memberRows, error: memberError } = await supabase
+      .from('device_members')
+      .select('user_id')
+      .eq('device_id', frameId)
+    if (memberError) throw memberError
+
+    const memberUserIds = uniqueNonEmpty(Array.isArray(memberRows) ? memberRows.map((row: { user_id?: unknown }) => row.user_id) : [])
+    if (memberUserIds.length <= 0) return empty
+
+    const { data, error } = await supabase
+      .from('monitoring_updates')
+      .select('id, headline, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id)')
+      .in('monitoring_watches.owner_user_id', memberUserIds)
+      .eq('dismissed_from_frame', false)
+      .gt('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(limit + 25)
+    if (error) throw error
+
+    const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { memberUserIds, limit })
+    return {
+      primary: 'AI Assistant',
+      secondary: 'AI Assistant',
+      aiAssistantItems: selected.items,
+      aiAssistantOverflowCount: selected.overflowCount,
+    }
+  } catch (e: unknown) {
+    console.error('[mirror-snapshot:ai-assistant-failed]', { frameId, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })
+    return empty
   }
 }
 
