@@ -11,6 +11,11 @@ type AssistantWatch = {
   title: string
   normalized_goal: string
   trigger_description: string
+  frequency_minutes: number
+  preferred_language: AppLanguage
+  completion_condition: string | null
+  frame_id: string | null
+  show_on_frame: boolean
   status: AssistantWatchStatus
   last_checked_at: string | null
   interpretation_status?: 'pending' | 'complete' | 'failed'
@@ -23,6 +28,7 @@ type AssistantUpdate = {
   summary: string
   source_urls: unknown
   is_read: boolean
+  dismissed_from_frame?: boolean
   created_at: string
 }
 
@@ -43,7 +49,7 @@ function assistantCopy(language: AppLanguage) {
     emptyTasks: 'Spør RE:MIND om å holde øye med noe, så vises det her.',
     emptyUpdates: 'Nye endringer og oppdateringer vises her.',
     statuses: { active: 'Følger med', paused: 'Satt på pause', error: 'Trenger oppmerksomhet', completed: 'Avsluttet' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', dismiss: 'Skjul', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…'
+    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', title: 'Navn', instruction: 'Instruksjon', frequency: 'Intervall (minutter)', languageLabel: 'Språk', completion: 'Avsluttes når', showOnFrame: 'Vis på rammen', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne Watchen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', dismiss: 'Skjul', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…'
   } : {
     heading: 'AI Assistant',
     intro: 'Ask RE:MIND to keep an eye on something for you. New changes and updates are collected here.',
@@ -55,7 +61,7 @@ function assistantCopy(language: AppLanguage) {
     onlyRelevant: 'Only new and relevant changes are shown.',
     tasks: 'What RE:MIND is following', updates: 'Updates', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
     statuses: { active: 'Following', paused: 'Paused', error: 'Needs attention', completed: 'Ended' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Last checked', never: 'Not checked yet', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', dismiss: 'Dismiss', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…'
+    lastChecked: 'Last checked', never: 'Not checked yet', title: 'Name', instruction: 'Instruction', frequency: 'Interval (minutes)', languageLabel: 'Language', completion: 'Completion condition', showOnFrame: 'Show on frame', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this Watch? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', dismiss: 'Dismiss', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…'
   }
 }
 
@@ -92,7 +98,8 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const [updates, setUpdates] = useState<AssistantUpdate[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingText, setEditingText] = useState('')
+  const [editingForm, setEditingForm] = useState({ title: '', original_request: '', frequency_minutes: 60, preferred_language: language, completion_condition: '', show_on_frame: false })
+  const [busyUpdateId, setBusyUpdateId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [busyWatchId, setBusyWatchId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -106,8 +113,8 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     setLoading(true)
     try {
       const [watchResult, updateResult] = await Promise.all([
-        supabase.from('monitoring_watches').select('id,original_request,title,normalized_goal,trigger_description,status,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
-        supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,created_at').order('created_at', { ascending: false }).limit(40),
+        supabase.from('monitoring_watches').select('id,original_request,title,normalized_goal,trigger_description,frequency_minutes,preferred_language,completion_condition,frame_id,show_on_frame,status,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
+        supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,dismissed_from_frame,created_at').order('created_at', { ascending: false }).limit(40),
       ])
       if (watchResult.error) throw watchResult.error
       if (updateResult.error) throw updateResult.error
@@ -149,24 +156,38 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   }
 
   async function editWatch(id: string) {
-    const validation = validateRequestText(editingText)
+    if (busyWatchId) return
+    const validation = validateRequestText(editingForm.original_request)
     if (validation.error) { setError(validation.error); return }
-    setBusyWatchId(id); setError(null)
-    const { error } = await supabase.rpc('update_ai_assistant_watch_request', { p_watch_id: id, p_original_request: validation.clean })
+    const cleanTitle = normalizeAssistantRequest(editingForm.title)
+    if (!cleanTitle) { setError(c.needsText); return }
+    setBusyWatchId(id); setError(null); setMessage(null)
+    const { error } = await supabase.rpc('update_ai_assistant_watch_request', {
+      p_watch_id: id,
+      p_original_request: validation.clean,
+      p_title: cleanTitle,
+      p_frequency_minutes: editingForm.frequency_minutes,
+      p_completion_condition: normalizeAssistantRequest(editingForm.completion_condition) || null,
+      p_preferred_language: editingForm.preferred_language,
+      p_frame_id: activeDeviceId,
+      p_show_on_frame: Boolean(editingForm.show_on_frame && activeDeviceId),
+    })
     if (error) setError(c.friendlyError)
     else { setEditingId(null); await loadAssistant(); window.setTimeout(() => { void loadAssistant() }, 3000) }
     setBusyWatchId(null)
   }
 
   async function setWatchPaused(id: string, paused: boolean) {
-    setBusyWatchId(id); setError(null)
+    if (busyWatchId) return
+    setBusyWatchId(id); setError(null); setMessage(null)
     const { error } = await supabase.rpc(paused ? 'pause_ai_assistant_watch' : 'resume_ai_assistant_watch', { p_watch_id: id })
     if (error) setError(c.friendlyError); else await loadAssistant()
     setBusyWatchId(null)
   }
 
   async function deleteWatch(id: string) {
-    setBusyWatchId(id); setError(null)
+    if (busyWatchId || !window.confirm(c.confirmDelete)) return
+    setBusyWatchId(id); setError(null); setMessage(null)
     const { error } = await supabase.rpc('delete_ai_assistant_watch', { p_watch_id: id })
     if (error) setError(c.friendlyError)
     else { if (selectedId === id) setSelectedId(null); await loadAssistant() }
@@ -174,8 +195,26 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   }
 
   async function markUpdate(id: string, patch: { is_read?: boolean; dismissed_from_frame?: boolean }) {
+    if (busyUpdateId) return
+    setBusyUpdateId(id); setError(null); setMessage(null)
     const { error } = await supabase.from('monitoring_updates').update(patch).eq('id', id)
     if (error) setError(c.friendlyError); else await loadAssistant()
+    setBusyUpdateId(null)
+  }
+
+  async function markAllRead() {
+    if (busyUpdateId) return
+    setBusyUpdateId('all'); setError(null); setMessage(null)
+    const ids = updates.filter((u) => !u.is_read).map((u) => u.id)
+    if (ids.length === 0) { setBusyUpdateId(null); return }
+    const { error } = await supabase.from('monitoring_updates').update({ is_read: true }).in('id', ids)
+    if (error) setError(c.friendlyError); else await loadAssistant()
+    setBusyUpdateId(null)
+  }
+
+  function openEditor(w: AssistantWatch) {
+    setEditingId(w.id)
+    setEditingForm({ title: w.title, original_request: w.original_request, frequency_minutes: w.frequency_minutes, preferred_language: w.preferred_language || language, completion_condition: w.completion_condition || '', show_on_frame: Boolean(w.show_on_frame) })
   }
 
   return <div className="h-full overflow-y-auto pb-8 pr-1 tab-scroll">
@@ -190,9 +229,9 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
     </div>
 
-    <section className="mt-6"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.tasks}</h2>{loading ? <p className="mt-4 text-sm text-[color:var(--fg-55)]">{c.loading}</p> : watches.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyTasks}</p> : <div className="mt-3 space-y-3">{watches.map((w) => { const latest = updates.find((u) => u.watch_id === w.id); return <article key={w.id} onClick={() => setSelectedId(w.id)} className={`rounded-3xl border p-4 ${selected?.id === w.id ? 'border-[#2aa3ff]/70' : 'border-[color:var(--bd-15)]'} bg-[color:var(--card-bg)]/55`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{w.title}</h3><p className="mt-1 break-words text-sm leading-5 text-[color:var(--fg-65)]">{w.trigger_description}</p></div><span className="shrink-0 rounded-full bg-[#2aa3ff]/10 px-2.5 py-1 text-[10px] text-[#2aa3ff]">{c.statuses[w.status]}</span></div><p className="mt-3 text-xs text-[color:var(--fg-45)]">{c.lastChecked}: {friendlyAssistantTime(w.last_checked_at, language)}</p>{latest && <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{latest.headline}</p>}<div className="mt-4 flex flex-wrap gap-2"><button disabled={busyWatchId === w.id} onClick={(e) => { e.stopPropagation(); setWatchPaused(w.id, w.status !== 'paused') }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{w.status === 'paused' ? c.resume : c.pause}</button><button disabled={busyWatchId === w.id} onClick={(e) => { e.stopPropagation(); setEditingId(w.id); setEditingText(w.original_request) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.edit}</button><button disabled={busyWatchId === w.id} onClick={(e) => { e.stopPropagation(); deleteWatch(w.id) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.delete}</button></div>{editingId === w.id && <div className="mt-3"><textarea value={editingText} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} onChange={(e) => setEditingText(e.target.value)} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent p-3 text-sm outline-none"/><div className="mt-2 flex gap-2"><button disabled={busyWatchId === w.id} onClick={() => editWatch(w.id)} className="rounded-full border border-[#2aa3ff] px-3 py-1.5 text-xs text-[#2aa3ff] disabled:opacity-50">{c.save}</button><button onClick={() => setEditingId(null)} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs">{c.cancel}</button></div></div>}</article>})}</div>}</section>
+    <section className="mt-6"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.tasks}</h2>{loading ? <p className="mt-4 text-sm text-[color:var(--fg-55)]">{c.loading}</p> : watches.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyTasks}</p> : <div className="mt-3 space-y-3">{watches.map((w) => { const latest = updates.find((u) => u.watch_id === w.id); const busy = busyWatchId === w.id; return <article key={w.id} onClick={() => setSelectedId(w.id)} className={`rounded-3xl border p-4 ${selected?.id === w.id ? 'border-[#2aa3ff]/70' : 'border-[color:var(--bd-15)]'} bg-[color:var(--card-bg)]/55`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{w.title}</h3><p className="mt-1 break-words text-sm leading-5 text-[color:var(--fg-65)]">{w.trigger_description}</p></div><span className="shrink-0 rounded-full bg-[#2aa3ff]/10 px-2.5 py-1 text-[10px] text-[#2aa3ff]">{c.statuses[w.status]}</span></div><p className="mt-3 text-xs text-[color:var(--fg-45)]">{c.lastChecked}: {friendlyAssistantTime(w.last_checked_at, language)}</p>{latest && <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{latest.headline}</p>}<div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); setWatchPaused(w.id, w.status !== 'paused') }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{busy ? c.loading : (w.status === 'paused' ? c.resume : c.pause)}</button><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openEditor(w) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.edit}</button><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); deleteWatch(w.id) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{busy ? c.deleting : c.delete}</button></div>{editingId === w.id && <div onClick={(e) => e.stopPropagation()} className="mt-3 space-y-3 rounded-2xl border border-[color:var(--bd-15)] p-3"><label className="block text-xs text-[color:var(--fg-55)]">{c.title}<input value={editingForm.title} maxLength={90} onChange={(e) => setEditingForm((f) => ({ ...f, title: e.target.value }))} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-transparent p-2 text-sm text-[color:var(--fg-90)] outline-none" /></label><label className="block text-xs text-[color:var(--fg-55)]">{c.instruction}<textarea value={editingForm.original_request} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} onChange={(e) => setEditingForm((f) => ({ ...f, original_request: e.target.value }))} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-transparent p-2 text-sm text-[color:var(--fg-90)] outline-none" /></label><div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs text-[color:var(--fg-55)]">{c.frequency}<input type="number" min={5} max={10080} value={editingForm.frequency_minutes} onChange={(e) => setEditingForm((f) => ({ ...f, frequency_minutes: Number(e.target.value) }))} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-transparent p-2 text-sm" /></label><label className="block text-xs text-[color:var(--fg-55)]">{c.languageLabel}<select value={editingForm.preferred_language} onChange={(e) => setEditingForm((f) => ({ ...f, preferred_language: e.target.value as AppLanguage }))} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] p-2 text-sm"><option value="en">English</option><option value="no">Norsk</option></select></label></div><label className="block text-xs text-[color:var(--fg-55)]">{c.completion}<input value={editingForm.completion_condition} maxLength={500} onChange={(e) => setEditingForm((f) => ({ ...f, completion_condition: e.target.value }))} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-transparent p-2 text-sm" /></label>{activeDeviceId && <label className="flex items-center gap-2 text-xs text-[color:var(--fg-65)]"><input type="checkbox" checked={editingForm.show_on_frame} onChange={(e) => setEditingForm((f) => ({ ...f, show_on_frame: e.target.checked }))} />{c.showOnFrame}</label>}<div className="mt-2 flex gap-2"><button type="button" disabled={busy} onClick={() => editWatch(w.id)} className="rounded-full border border-[#2aa3ff] px-3 py-1.5 text-xs text-[#2aa3ff] disabled:opacity-50">{busy ? c.saving : c.save}</button><button type="button" disabled={busy} onClick={() => setEditingId(null)} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs disabled:opacity-50">{c.cancel}</button></div></div>}</article>})}</div>}</section>
 
-    <section className="mt-6"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.updates}</h2>{updates.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyUpdates}</p> : <div className="mt-3 space-y-3">{updates.map((u) => <article key={u.id} className={`rounded-3xl border border-[color:var(--bd-15)] p-4 ${u.is_read ? 'opacity-70' : ''}`}><div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{u.headline}</h3>{!u.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2aa3ff]" />}</div><p className="mt-2 break-words text-sm leading-5 text-[color:var(--fg-70)]">{u.summary}</p><p className="mt-2 break-words text-xs text-[color:var(--fg-45)]">{friendlyAssistantTime(u.created_at, language)} · {watches.find((w) => w.id === u.watch_id)?.title}</p><div className="mt-3 flex flex-wrap gap-2">{sourceUrls(u.source_urls).map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[#2aa3ff]">{c.source} {i + 1}</a>)}<button onClick={() => markUpdate(u.id, { is_read: true })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)]">{c.markRead}</button><button onClick={() => markUpdate(u.id, { dismissed_from_frame: true })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)]">{c.dismiss}</button></div></article>)}</div>}</section>
+    <section className="mt-6"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.updates}</h2><button type="button" disabled={busyUpdateId !== null || updates.every((u) => u.is_read)} onClick={markAllRead} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.markAllRead}</button></div>{updates.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyUpdates}</p> : <div className="mt-3 space-y-3">{updates.map((u) => <article key={u.id} className={`rounded-3xl border border-[color:var(--bd-15)] p-4 ${u.is_read ? 'opacity-70' : ''}`}><div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{u.headline}</h3>{!u.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2aa3ff]" />}</div><p className="mt-2 break-words text-sm leading-5 text-[color:var(--fg-70)]">{u.summary}</p><p className="mt-2 break-words text-xs text-[color:var(--fg-45)]">{friendlyAssistantTime(u.created_at, language)} · {watches.find((w) => w.id === u.watch_id)?.title}</p><div className="mt-3 flex flex-wrap gap-2">{sourceUrls(u.source_urls).map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[#2aa3ff]">{c.source} {i + 1}</a>)}<button type="button" disabled={busyUpdateId !== null} onClick={() => markUpdate(u.id, { is_read: !u.is_read })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{u.is_read ? c.markUnread : c.markRead}</button><button type="button" disabled={busyUpdateId !== null || u.dismissed_from_frame} onClick={() => markUpdate(u.id, { dismissed_from_frame: true })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.dismiss}</button></div></article>)}</div>}</section>
 
     {selected && <section className="mt-6 rounded-[2rem] border border-[color:var(--bd-15)] p-5"><h2 className="break-words text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{selected.title}</h2><p className="mt-3 break-words text-sm text-[color:var(--fg-65)]"><strong>{c.detailRequest}:</strong> {selected.original_request}</p><p className="mt-2 text-sm text-[color:var(--fg-65)]">{c.statuses[selected.status]} · {c.lastChecked}: {friendlyAssistantTime(selected.last_checked_at, language)}</p><h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.latest}</h3>{updatesByWatch[0] ? <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{updatesByWatch[0].headline} — {updatesByWatch[0].summary}</p> : <p className="mt-2 text-sm text-[color:var(--fg-50)]">{c.emptyUpdates}</p>}<h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.previous}</h3><div className="mt-2 space-y-2">{updatesByWatch.slice(1).map((u) => <p key={u.id} className="break-words text-sm text-[color:var(--fg-60)]">{u.headline}</p>)}</div></section>}
 

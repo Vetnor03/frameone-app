@@ -40,9 +40,11 @@ Deno.serve(async (req) => {
 
 async function processJob(supabase: any, job: any) {
   const { data: watch, error: watchError } = await supabase.from('monitoring_watches').select('*').eq('id', job.watch_id).maybeSingle()
-  if (watchError || !watch || (watch.status !== 'active' && watch.status !== 'error')) {
-    await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: watchError?.message || 'watch_not_processable' }).eq('id', job.id)
-    return { job_id: job.id, ok: true, skipped: true }
+  if (watchError || !watch || watch.status === 'paused' || (watch.status !== 'active' && watch.status !== 'error')) {
+    const reason = watchError?.message || (watch?.status === 'paused' ? 'watch_paused' : 'watch_not_processable')
+    console.info('[monitoring-worker:skip-watch]', { watch_id: job.watch_id, reason })
+    await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: reason }).eq('id', job.id)
+    return { job_id: job.id, ok: true, skipped: true, reason }
   }
 
   const { data: openInterpretationJobs, error: interpretationQueueError } = await supabase
