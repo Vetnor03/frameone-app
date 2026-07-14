@@ -4871,7 +4871,7 @@ function mirrorAiAssistantEmptyHeader(detail: MirrorModuleDetail, language: AppL
   return aiAssistantMultipleWatchesHeader(language)
 }
 
-function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, recapWords: number) {
+function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, recapWords: number, language: AppLanguage) {
   return (Array.isArray(detail.aiAssistantItems) ? detail.aiAssistantItems : [])
     .map((item) => {
       const headline = String(item?.headline ?? '').trim()
@@ -4947,7 +4947,7 @@ function MirrorAiAssistantRecap({ children, lines, className = '', mutedColor }:
 function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxItems, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; borderColor: string; maxItems: number; variant: 'small' | 'medium' | 'large' | 'xl' }) {
   const displayLimit = variant === 'small' || variant === 'medium' ? 1 : 2
   const recapWords = variant === 'large' || variant === 'xl' ? 42 : variant === 'medium' ? 28 : 0
-  const items = mirrorAiAssistantItems(detail, Math.min(maxItems, displayLimit), recapWords)
+  const items = mirrorAiAssistantItems(detail, Math.min(maxItems, displayLimit), recapWords, language)
   const header = items[0]?.topicTitle || mirrorAiAssistantEmptyHeader(detail, language)
   const overflowCount = Math.max(0, Math.floor(Number(detail.aiAssistantOverflowCount) || 0))
   const moreLabel = mirrorAiAssistantMoreLabel(overflowCount, language)
