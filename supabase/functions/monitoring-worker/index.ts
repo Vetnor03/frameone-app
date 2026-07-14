@@ -24,6 +24,26 @@ async function processJob(supabase: any, job: any) {
     return { job_id: job.id, ok: true, skipped: true }
   }
 
+  const { data: openInterpretationJobs, error: interpretationQueueError } = await supabase
+    .from('ai_assistant_interpretation_queue')
+    .select('id,request_snapshot')
+    .eq('watch_id', watch.id)
+    .is('completed_at', null)
+    .limit(1)
+  if (interpretationQueueError) throw interpretationQueueError
+  const hasOpenInterpretationJob = (openInterpretationJobs?.length ?? 0) > 0
+
+  if (watch.interpretation_status === 'pending' || hasOpenInterpretationJob) {
+    await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 2 * MINUTES).toISOString(), last_error: 'waiting_for_interpretation' }).eq('id', job.id)
+    return { job_id: job.id, watch_id: watch.id, ok: true, result: 'waiting_for_interpretation', retry_in_minutes: 2 }
+  }
+
+  if (watch.interpretation_status === 'failed') {
+    await supabase.from('monitoring_watches').update({ status: 'error' }).eq('id', watch.id)
+    await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: 'interpretation_failed' }).eq('id', job.id)
+    return { job_id: job.id, watch_id: watch.id, ok: false, error: 'interpretation_failed', parked: true }
+  }
+
   const provider = Deno.env.get('MONITORING_PROVIDER') || 'mock'
   const model = provider === 'openai' ? (monitoringModelFromEnv(Deno.env)) : 'mock'
   const staleRunBefore = new Date(Date.now() - 30 * MINUTES).toISOString()
