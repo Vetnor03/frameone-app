@@ -4941,9 +4941,10 @@ function MirrorAiAssistantRecap({ children, lines, className = '', mutedColor }:
 }
 
 const MIRROR_ASSISTANT_SHELL_CLASS = "px-[clamp(0.8rem,2vw,1.35rem)] py-[clamp(0.75rem,1.85vw,1.25rem)]"
-const MIRROR_ASSISTANT_SMALL_SHELL_CLASS = "px-[clamp(0.52rem,1.3vw,0.88rem)] py-[clamp(0.5rem,1.2vw,0.78rem)]"
+const MIRROR_ASSISTANT_SMALL_SHELL_CLASS = "px-[clamp(0.45rem,1.2vw,0.8rem)] pb-[clamp(0.38rem,0.95vw,0.62rem)] pt-[clamp(0.65rem,1.7vw,1rem)]"
 const MIRROR_ASSISTANT_BODY_CLASS = "gap-[clamp(0.58rem,1.35vw,0.96rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]"
-const MIRROR_ASSISTANT_SMALL_BODY_CLASS = "py-[clamp(0.5rem,1.2vw,0.78rem)]"
+const MIRROR_ASSISTANT_SMALL_BODY_CLASS = "w-full"
+const MIRROR_ASSISTANT_SMALL_HEADLINE_CLASS = "w-full max-w-full text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium leading-[1.09] tracking-[0.04em]"
 const MIRROR_ASSISTANT_HEADER_ROW_CLASS = "flex h-[clamp(1.02rem,2.48vw,1.52rem)] shrink-0 items-start justify-center"
 
 function MirrorAiAssistantLayout({ header, children, className = '', contentClassName = '' }: { header: string; children: React.ReactNode; className?: string; contentClassName?: string }) {
@@ -4987,7 +4988,7 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
         className={MIRROR_ASSISTANT_SMALL_SHELL_CLASS}
         contentClassName={MIRROR_ASSISTANT_SMALL_BODY_CLASS}
       >
-        <MirrorAiAssistantHeadline lines={2} className="max-w-[18ch] text-[clamp(0.76rem,1.55vw,0.98rem)] font-semibold leading-[1.09] tracking-[-0.005em]">{item.headline}</MirrorAiAssistantHeadline>
+        <MirrorAiAssistantHeadline lines={2} className={MIRROR_ASSISTANT_SMALL_HEADLINE_CLASS}>{item.headline}</MirrorAiAssistantHeadline>
       </MirrorAiAssistantLayout>
     )
   }
