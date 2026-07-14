@@ -142,6 +142,34 @@ test('AI Assistant mirror snapshot carries summary but not private watch request
   assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|trigger_description|Skjer det noe kjekt/)
 })
 
+test('AI Assistant empty and populated states reserve the same header area', () => {
+  const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  const layout = renderer.slice(renderer.indexOf('function MirrorAiAssistantLayout'), renderer.indexOf('function MirrorAiAssistantCard'))
+  const emptyBlock = renderer.slice(renderer.indexOf('if (items.length <= 0)'), renderer.indexOf("if (variant === 'small')"))
+  const smallBlock = renderer.slice(renderer.indexOf("if (variant === 'small')"), renderer.indexOf('const primary = items[0]'))
+  const populatedBlock = renderer.slice(renderer.indexOf('const primary = items[0]'), renderer.indexOf('function MirrorLargeRemindersCard'))
+
+  assert.match(layout, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
+  assert.match(layout, /flex h-full w-full flex-col items-center overflow-hidden text-center leading-none/)
+  assert.match(layout, /flex min-h-0 w-full flex-1 flex-col items-center justify-center/)
+  assert.match(emptyBlock, /<MirrorAiAssistantLayout[\s\S]*header=\{header\}/)
+  assert.match(smallBlock, /<MirrorAiAssistantLayout[\s\S]*header=\{header\}/)
+  assert.match(populatedBlock, /<MirrorAiAssistantLayout[\s\S]*header=\{header\}/)
+  assert.doesNotMatch(emptyBlock, /<MirrorModuleHeader/)
+  assert.doesNotMatch(emptyBlock, /h-full w-full flex-col items-center justify-center[\s\S]*<MirrorModuleHeader/)
+})
+
+test('AI Assistant Mirror View and physical frame use the shared assistant layout structure', () => {
+  const renderer = home.slice(home.indexOf('function MirrorAiAssistantLayout'), home.indexOf('function MirrorLargeRemindersCard'))
+  const renderBranches = home.slice(home.indexOf("if (module === 'assistant' && size === 'large')"), home.indexOf("if (module === 'reminders' && size === 'large')"))
+  assert.match(renderer, /function MirrorAiAssistantLayout/)
+  assert.match(renderer, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
+  assert.match(renderer, /<div className=\{`flex min-h-0 w-full flex-1 flex-col items-center justify-center/)
+  assert.match(renderBranches, /size === 'large'[\s\S]*<MirrorAiAssistantCard/)
+  assert.match(renderBranches, /size === 'medium'[\s\S]*<MirrorAiAssistantCard/)
+  assert.match(renderBranches, /size === 'small'[\s\S]*<MirrorAiAssistantCard/)
+})
+
 test('AI Assistant mirror renderer uses summary recap and no Watch title/request context', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
