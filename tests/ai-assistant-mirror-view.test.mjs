@@ -149,7 +149,8 @@ test('AI Assistant empty and populated states reserve the same header area', () 
   const smallBlock = renderer.slice(renderer.indexOf("if (variant === 'small')"), renderer.indexOf('const primary = items[0]'))
   const populatedBlock = renderer.slice(renderer.indexOf('const primary = items[0]'), renderer.indexOf('function MirrorLargeRemindersCard'))
 
-  assert.match(layout, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
+  assert.match(layout, /MIRROR_ASSISTANT_HEADER_ROW_CLASS/)
+  assert.match(layout, /<div className=\{MIRROR_ASSISTANT_HEADER_ROW_CLASS\}>[\s\S]*<MirrorModuleHeader title=\{header\} className="mx-auto" \/>[\s\S]*<\/div>/)
   assert.match(layout, /flex h-full w-full flex-col items-center overflow-hidden text-center leading-none/)
   assert.match(layout, /flex min-h-0 w-full flex-1 flex-col items-center justify-center/)
   assert.match(emptyBlock, /<MirrorAiAssistantLayout[\s\S]*header=\{header\}/)
@@ -160,10 +161,11 @@ test('AI Assistant empty and populated states reserve the same header area', () 
 })
 
 test('AI Assistant Mirror View and physical frame use the shared assistant layout structure', () => {
-  const renderer = home.slice(home.indexOf('function MirrorAiAssistantLayout'), home.indexOf('function MirrorLargeRemindersCard'))
+  const renderer = home.slice(home.indexOf('const MIRROR_ASSISTANT_SHELL_CLASS'), home.indexOf('function MirrorLargeRemindersCard'))
   const renderBranches = home.slice(home.indexOf("if (module === 'assistant' && size === 'large')"), home.indexOf("if (module === 'reminders' && size === 'large')"))
   assert.match(renderer, /function MirrorAiAssistantLayout/)
-  assert.match(renderer, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
+  assert.match(renderer, /const MIRROR_ASSISTANT_HEADER_ROW_CLASS = "flex h-\[clamp\(1\.02rem,2\.48vw,1\.52rem\)\] shrink-0 items-start justify-center"/)
+  assert.match(renderer, /<div className=\{MIRROR_ASSISTANT_HEADER_ROW_CLASS\}>[\s\S]*<MirrorModuleHeader title=\{header\} className="mx-auto" \/>[\s\S]*<\/div>/)
   assert.match(renderer, /<div className=\{`flex min-h-0 w-full flex-1 flex-col items-center justify-center/)
   assert.match(renderBranches, /size === 'large'[\s\S]*<MirrorAiAssistantCard/)
   assert.match(renderBranches, /size === 'medium'[\s\S]*<MirrorAiAssistantCard/)
@@ -208,12 +210,32 @@ test('AI Assistant mirror renderer clamps large and medium recap and omits small
 
 test('AI Assistant mirror typography stays aligned with surrounding module scale', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  const emptyBlock = renderer.slice(renderer.indexOf('if (items.length <= 0)'), renderer.indexOf("if (variant === 'small')"))
   assert.match(home, /MIRROR_PRIMARY_TEXT_CLASS = "text-\[clamp\(0\.7rem,1\.5vw,0\.98rem\)\] font-medium tracking-\[0\.04em\]"/)
   assert.match(home, /MIRROR_SECONDARY_TEXT_CLASS = "text-\[clamp\(0\.66rem,1\.48vw,0\.94rem\)\] font-medium tracking-\[0\.035em\]"/)
   assert.match(renderer, /MIRROR_PRIMARY_TEXT_CLASS/)
   assert.match(renderer, /MIRROR_SECONDARY_TEXT_CLASS/)
   assert.doesNotMatch(renderer, /2\.55vw|1\.72rem|2\.35vw|1\.42rem/)
   assert.match(renderer, /font-medium leading-\[1\.18\]/)
+  assert.match(emptyBlock, /\$\{MIRROR_SECONDARY_TEXT_CLASS\}/)
+  assert.match(emptyBlock, /style=\{\{ color: mutedColor \}\}/)
+  assert.doesNotMatch(emptyBlock, /font-family|fontFamily|#[0-9a-fA-F]{3,8}|rgb\(|rgba\(|text-zinc|text-gray|text-slate|text-neutral/)
+})
+
+test('AI Assistant empty body is centered below the fixed shared header area', () => {
+  const renderer = home.slice(home.indexOf('const MIRROR_ASSISTANT_SHELL_CLASS'), home.indexOf('function MirrorLargeRemindersCard'))
+  const emptyBlock = renderer.slice(renderer.indexOf('if (items.length <= 0)'), renderer.indexOf("if (variant === 'small')"))
+  const smallBlock = renderer.slice(renderer.indexOf("if (variant === 'small')"), renderer.indexOf('const primary = items[0]'))
+  const populatedBlock = renderer.slice(renderer.indexOf('const primary = items[0]'), renderer.indexOf('function MirrorLargeRemindersCard'))
+
+  assert.match(renderer, /MIRROR_ASSISTANT_HEADER_ROW_CLASS/)
+  assert.match(renderer, /shrink-0 items-start justify-center/)
+  assert.match(renderer, /flex min-h-0 w-full flex-1 flex-col items-center justify-center/)
+  assert.match(emptyBlock, /className=\{variant === 'small' \? MIRROR_ASSISTANT_SMALL_SHELL_CLASS : MIRROR_ASSISTANT_SHELL_CLASS\}/)
+  assert.match(emptyBlock, /contentClassName=\{variant === 'small' \? MIRROR_ASSISTANT_SMALL_BODY_CLASS : MIRROR_ASSISTANT_BODY_CLASS\}/)
+  assert.match(smallBlock, /className=\{MIRROR_ASSISTANT_SMALL_SHELL_CLASS\}/)
+  assert.match(populatedBlock, /className=\{MIRROR_ASSISTANT_SHELL_CLASS\}/)
+  assert.doesNotMatch(emptyBlock, /translate-y|mt-\[|pt-\[clamp\(0\.0|items-center justify-center[\s\S]*<MirrorModuleHeader/)
 })
 
 test('AI Assistant summary sanitizer removes generic intros and prefers concrete list findings', () => {
