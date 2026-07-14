@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { selectAiAssistantFrameItems } from '../app/lib/device/aiAssistantFrame.ts'
-import { simplifyAiAssistantTopicTitle } from '../app/lib/device/aiAssistantTopicTitle.ts'
+import { isValidAiAssistantTopicTitle, simplifyAiAssistantTopicTitle } from '../app/lib/device/aiAssistantTopicTitle.ts'
 
 const route = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
@@ -37,8 +37,9 @@ test('valid short titles remain unchanged', () => {
   assert.equal(simplifyAiAssistantTopicTitle('Surfutstyr', 'no'), 'SURFUTSTYR')
 })
 
-test('invalid existing titles fall back instead of being derived in renderers', () => {
+test('invalid existing titles are invalid and only simplify to legacy fallback outside watch lists', () => {
   const title = 'Skjer det noe kjekt i Stavanger til helgen?'
+  assert.equal(isValidAiAssistantTopicTitle(title), false)
   assert.equal(simplifyAiAssistantTopicTitle(title, 'no'), 'OPPDATERING')
   assert.notEqual(simplifyAiAssistantTopicTitle(title, 'no'), title.toUpperCase())
 })
@@ -46,7 +47,7 @@ test('invalid existing titles fall back instead of being derived in renderers', 
 test('original request never reaches frame rendering', () => {
   const selected = selectAiAssistantFrameItems([row('private', { original_request: 'Gi beskjed om salg på våtdrakter og surfebrett' })], options)
   assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|Gi beskjed/)
-  assert.doesNotMatch(route, /original_request|trigger_description/)
+  assert.doesNotMatch(route, /original_request|trigger_description|search_guidance/)
 })
 
 test('update headline is not reused as topic header', () => {
@@ -69,24 +70,36 @@ test('empty state headers use NOTHING NEW or INGENTING NYTT, and zero RE:MIND', 
 })
 
 test('topic title interpretation rules are implemented without reducing detailed monitoring fields', () => {
-  for (const phrase of ['proper short topic header', 'never more than three words', 'Explicitly reject titles such as Hva', 'Never expose the complete original request in title', 'Keep original_request unchanged', 'normalized_goal, trigger_description, and search_guidance']) assert.match(interpreter, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  for (const phrase of ['persisted in monitoring_watches.title', 'normally one or two words', 'never more than three words', 'Watch\'s preferred language', 'Explicitly reject titles such as Hva', 'Update, Oppdatering, News, Watch, and Assistant', 'Never expose the complete original request in title', 'Keep original_request unchanged', 'normalized_goal, trigger_description, and search_guidance']) assert.match(interpreter, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
 })
 
 test('GPT interpretation produces Stavanger not Hva and rejects question or instruction words', () => {
   assert.match(interpreter, /Hva skjer i Stavanger denne helgen\?" -> "Stavanger"/)
   for (const word of ['Hva','Hvor','Når','Hvordan','What','Where','When','Find','Follow','Update','News','Assistant']) assert.match(interpreter, new RegExp(word))
   assert.match(interpreter, /words\.length > 3/)
+  assert.match(interpreter, /invalidTopicWord[\s\S]*oppdatering[\s\S]*watch/)
 })
 
 test('question and instruction words cannot render as topic titles and titles are at most three words', () => {
   for (const bad of ['Hva', 'Where', 'Find', 'Follow', 'Update', 'News', 'Assistant', 'Hva?']) assert.equal(simplifyAiAssistantTopicTitle(bad, 'no'), 'OPPDATERING')
   assert.equal(simplifyAiAssistantTopicTitle('one two three four', 'en'), 'UPDATE')
+  for (const generic of ['UPDATE', 'OPPDATERING']) assert.equal(isValidAiAssistantTopicTitle(generic), false)
+})
+
+test('selected update uses temporary NEW UPDATE fallback for invalid watch titles', () => {
+  const selectedEn = selectAiAssistantFrameItems([row('invalid-en', { monitoring_watches: { owner_user_id: 'member-a', title: 'Find houses near Stavanger under 6 million', preferred_language: 'en' } })], options)
+  assert.equal(selectedEn.items[0].topicTitle, 'NEW UPDATE')
+  const selectedNo = selectAiAssistantFrameItems([row('invalid-no', { monitoring_watches: { owner_user_id: 'member-a', title: 'Hva skjer i Stavanger denne helgen?', preferred_language: 'no' } })], options)
+  assert.equal(selectedNo.items[0].topicTitle, 'NY OPPDATERING')
 })
 
 test('existing invalid titles are queued for reinterpretation without SQL substring rewriting', () => {
   assert.match(migration, /enqueue_ai_assistant_interpretation/)
   assert.match(migration, /ai_assistant_has_valid_topic_title/)
   assert.match(migration, /interpretation_status = 'pending'/)
+  assert.match(migration, /status in \('active', 'error'\)/)
+  assert.match(migration, /oppdatering/)
+  assert.match(migration, /array_length\(regexp_split_to_array\(btrim\(p_title\), '\\s\+'\), 1\) between 1 and 3/)
   assert.doesNotMatch(migration, /substring|substr\(/i)
 })
 
