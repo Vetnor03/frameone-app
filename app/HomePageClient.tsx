@@ -369,6 +369,7 @@ type MirrorModuleDetail = {
   aiAssistantActiveWatchCount?: number
   aiAssistantLastCheckedAt?: string | null
   aiAssistantTopicTitle?: string
+  aiAssistantActiveWatchTopics?: string[]
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -4888,7 +4889,26 @@ function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, re
 }
 
 function mirrorAiAssistantNothingFollowedMessage(language: AppLanguage) {
-  return language === 'no' ? 'Følger ikke med på noe ennå' : 'Nothing is being followed yet'
+  return language === 'no' ? 'Følger ikke med på noe ennå' : 'Nothing followed yet'
+}
+
+function mirrorAiAssistantFollowingHeader(language: AppLanguage) {
+  return language === 'no' ? 'FØLGER MED' : 'FOLLOWING'
+}
+
+function mirrorAiAssistantNoUpdatesBody(language: AppLanguage) {
+  return language === 'no' ? 'Ingen nye oppdateringer' : 'No new updates'
+}
+
+function mirrorAiAssistantActiveWatchTopics(detail: MirrorModuleDetail, language: AppLanguage) {
+  const seen = new Set<string>()
+  return (Array.isArray(detail.aiAssistantActiveWatchTopics) ? detail.aiAssistantActiveWatchTopics : [])
+    .map((topic) => simplifyAiAssistantTopicTitle(topic, language))
+    .filter((topic) => {
+      if (!topic || seen.has(topic)) return false
+      seen.add(topic)
+      return true
+    })
 }
 
 function mirrorAiAssistantCheckedLabel(value: string | null | undefined, language: AppLanguage) {
@@ -4928,7 +4948,7 @@ function mirrorAiAssistantDiscoveredLabel(value: string, language: AppLanguage) 
 
 function mirrorAiAssistantMoreLabel(count: number, language: AppLanguage) {
   if (count <= 0) return ''
-  return language === 'no' ? `+ ${count} flere i RE:MIND` : `+ ${count} more in RE:MIND`
+  return language === 'no' ? `+ ${count} til` : `+ ${count} more`
 }
 
 function MirrorAiAssistantHeadline({ children, lines, className = '' }: { children: React.ReactNode; lines: 2 | 3; className?: string }) {
@@ -5010,6 +5030,53 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
       {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{secondary.headline}</MirrorAiAssistantHeadline></div>}
       {moreLabel && <div className="shrink-0 text-center text-[clamp(0.5rem,1vw,0.68rem)] font-medium tracking-[0.04em]" style={{ color: mutedColor }}>{moreLabel}</div>}
     </MirrorAiAssistantLayout>
+  )
+}
+
+
+function MirrorAiAssistantLargeCard({ detail, language, mutedColor, borderColor, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; borderColor: string; variant: 'large' | 'xl' }) {
+  const [item] = mirrorAiAssistantItems(detail, 1, 42, language)
+  const topics = mirrorAiAssistantActiveWatchTopics(detail, language)
+  const visibleTopics = topics.slice(0, 5)
+  const overflowCount = Math.max(0, topics.length - visibleTopics.length)
+  const checked = mirrorAiAssistantCheckedLabel(detail.aiAssistantLastCheckedAt, language)
+  return (
+    <div className={`grid h-full w-full grid-cols-2 overflow-hidden text-center leading-none ${MIRROR_ASSISTANT_SHELL_CLASS}`}>
+      <MirrorAiAssistantLayout
+        header={item?.topicTitle || aiAssistantNoUpdatesHeader(language)}
+        className="min-w-0 pr-[clamp(0.7rem,1.65vw,1.15rem)]"
+        contentClassName={MIRROR_ASSISTANT_BODY_CLASS}
+      >
+        {item ? (
+          <div className={`${variant === 'xl' ? 'max-w-[44ch]' : 'max-w-[40ch]'} min-h-0 w-full`}>
+            <MirrorAiAssistantHeadline lines={3} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{item.headline}</MirrorAiAssistantHeadline>
+            <MirrorAiAssistantRecap mutedColor={mutedColor} lines={3} className={`mt-[clamp(0.38rem,0.9vw,0.62rem)] ${MIRROR_SECONDARY_TEXT_CLASS}`}>{item.summary}</MirrorAiAssistantRecap>
+            <div className={`mt-[clamp(0.42rem,1vw,0.7rem)] text-center ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantDiscoveredLabel(item.created_at, language)}</div>
+          </div>
+        ) : (
+          <div className="max-w-[28ch]">
+            <div className={`leading-[1.18] ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantNoUpdatesBody(language)}</div>
+            {checked && <div className={`mt-[clamp(0.38rem,0.9vw,0.62rem)] ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{checked}</div>}
+          </div>
+        )}
+      </MirrorAiAssistantLayout>
+      <MirrorAiAssistantLayout
+        header={mirrorAiAssistantFollowingHeader(language)}
+        className="min-w-0 border-l pl-[clamp(0.7rem,1.65vw,1.15rem)]"
+        contentClassName={MIRROR_ASSISTANT_BODY_CLASS}
+      >
+        {visibleTopics.length > 0 ? (
+          <div className="w-full max-w-[30ch]">
+            {visibleTopics.map((topic, index) => (
+              <div key={`${topic}-${index}`} className={`mx-auto py-[clamp(0.18rem,0.52vw,0.34rem)] text-center ${MIRROR_SECONDARY_TEXT_CLASS} ${index > 0 && visibleTopics.length > 3 ? 'border-t' : ''}`} style={{ borderColor, color: mutedColor }}>{topic}</div>
+            ))}
+            {overflowCount > 0 && <div className={`mt-[clamp(0.28rem,0.72vw,0.48rem)] ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantMoreLabel(overflowCount, language)}</div>}
+          </div>
+        ) : (
+          <div className={`max-w-[26ch] leading-[1.18] ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantNothingFollowedMessage(language)}</div>
+        )}
+      </MirrorAiAssistantLayout>
+    </div>
   )
 }
 
@@ -7141,7 +7208,7 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'assistant' && size === 'large') {
-      return <MirrorAiAssistantCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} maxItems={2} variant={snapshot.layoutKey === 'full' ? 'xl' : 'large'} />
+      return <MirrorAiAssistantLargeCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} variant={snapshot.layoutKey === 'full' ? 'xl' : 'large'} />
     }
 
     if (module === 'assistant' && size === 'medium') {
