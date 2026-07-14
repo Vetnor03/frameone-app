@@ -66,6 +66,7 @@ type Detail = {
   aiAssistantActiveWatchCount?: number
   aiAssistantLastCheckedAt?: string | null
   aiAssistantTopicTitle?: string
+  aiAssistantActiveWatchTopics?: string[]
   aiAssistantHasActiveWatches?: boolean
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
@@ -1861,6 +1862,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
     aiAssistantActiveWatchCount: 0,
     aiAssistantLastCheckedAt: null,
     aiAssistantTopicTitle: aiAssistantDefaultTopicTitle('en'),
+    aiAssistantActiveWatchTopics: [],
   }
 
   try {
@@ -1878,13 +1880,17 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data: watchRows, error: watchError } = await supabase
       .from('monitoring_watches')
-      .select('id, last_checked_at, status, title, preferred_language')
+      .select('id, last_checked_at, status, title, preferred_language, created_at, show_on_frame, frame_id')
       .in('owner_user_id', memberUserIds)
       .eq('status', 'active')
+      .eq('show_on_frame', true)
+      .eq('frame_id', frameId)
+      .order('created_at', { ascending: true })
     if (watchError) throw watchError
 
     const activeWatches = Array.isArray(watchRows) ? watchRows : []
-    const activeTopicTitle = activeWatches.length === 1 ? simplifyAiAssistantTopicTitle((activeWatches[0] as { title?: unknown }).title, (activeWatches[0] as { preferred_language?: unknown }).preferred_language === 'no' ? 'no' : 'en') : aiAssistantDefaultTopicTitle('en')
+    const aiAssistantActiveWatchTopics = uniqueNonEmpty(activeWatches.map((row: { title?: unknown; preferred_language?: unknown }) => simplifyAiAssistantTopicTitle(row.title, row.preferred_language === 'no' ? 'no' : 'en')))
+    const activeTopicTitle = activeWatches.length === 1 ? aiAssistantActiveWatchTopics[0] || aiAssistantDefaultTopicTitle('en') : aiAssistantDefaultTopicTitle('en')
 
     const lastCheckedAt = activeWatches
       .map((row: { last_checked_at?: unknown }) => asString(row.last_checked_at).trim())
@@ -1893,8 +1899,10 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data, error } = await supabase
       .from('monitoring_updates')
-      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language)')
+      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language, show_on_frame, frame_id)')
       .in('monitoring_watches.owner_user_id', memberUserIds)
+      .eq('monitoring_watches.show_on_frame', true)
+      .eq('monitoring_watches.frame_id', frameId)
       .eq('is_read', false)
       .eq('dismissed_from_frame', false)
       .gt('created_at', sinceIso)
@@ -1912,6 +1920,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
       aiAssistantActiveWatchCount: activeWatches.length,
       aiAssistantLastCheckedAt: lastCheckedAt,
       aiAssistantTopicTitle: selected.items[0]?.topicTitle || activeTopicTitle,
+      aiAssistantActiveWatchTopics,
     }
   } catch (e: unknown) {
     console.error('[mirror-snapshot:ai-assistant-failed]', { frameId, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })

@@ -110,13 +110,13 @@ test('AI Assistant zero updates returns structured empty snapshot data and serve
   assert.match(route, /return empty/)
 })
 
-test('AI Assistant mirror snapshot uses device members instead of watch frame visibility fields', () => {
+test('AI Assistant mirror snapshot uses device members and frame-visible watches', () => {
   assert.match(route, /from\('device_members'\)/)
   assert.match(route, /select\('user_id'\)/)
-  assert.match(route, /monitoring_watches!inner\(owner_user_id, title, preferred_language\)/)
+  assert.match(route, /monitoring_watches!inner\(owner_user_id, title, preferred_language, show_on_frame, frame_id\)/)
   assert.match(route, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
-  assert.doesNotMatch(route, /eq\('monitoring_watches\.frame_id'/)
-  assert.doesNotMatch(route, /eq\('monitoring_watches\.show_on_frame'/)
+  assert.match(route, /eq\('monitoring_watches\.frame_id', frameId\)/)
+  assert.match(route, /eq\('monitoring_watches\.show_on_frame', true\)/)
   assert.match(route, /eq\('is_read', false\)/)
   assert.match(route, /eq\('dismissed_from_frame', false\)/)
   assert.match(route, /gt\('created_at', sinceIso\)/)
@@ -167,7 +167,7 @@ test('AI Assistant Mirror View and physical frame use the shared assistant layou
   assert.match(renderer, /const MIRROR_ASSISTANT_HEADER_ROW_CLASS = "flex h-\[clamp\(1\.02rem,2\.48vw,1\.52rem\)\] shrink-0 items-start justify-center"/)
   assert.match(renderer, /<div className=\{MIRROR_ASSISTANT_HEADER_ROW_CLASS\}>[\s\S]*<MirrorModuleHeader title=\{header\} className="mx-auto" \/>[\s\S]*<\/div>/)
   assert.match(renderer, /<div className=\{`flex min-h-0 w-full flex-1 flex-col items-center justify-center/)
-  assert.match(renderBranches, /size === 'large'[\s\S]*<MirrorAiAssistantCard/)
+  assert.match(renderBranches, /size === 'large'[\s\S]*<MirrorAiAssistantLargeCard/)
   assert.match(renderBranches, /size === 'medium'[\s\S]*<MirrorAiAssistantCard/)
   assert.match(renderBranches, /size === 'small'[\s\S]*<MirrorAiAssistantCard/)
 })
@@ -284,7 +284,7 @@ test('AI Assistant empty state includes active watch count and latest successful
 test('AI Assistant active watch metadata excludes inactive and error states in the shared snapshot path', () => {
   const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
   assert.match(detail, /from\('monitoring_watches'\)/)
-  assert.match(detail, /select\('id, last_checked_at, status, title, preferred_language'\)/)
+  assert.match(detail, /select\('id, last_checked_at, status, title, preferred_language, created_at, show_on_frame, frame_id'\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)
   assert.doesNotMatch(detail, /\.in\('status', \['active', 'error'\]\)/)
   assert.match(detail, /activeWatches\.length/)
@@ -293,7 +293,7 @@ test('AI Assistant active watch metadata excludes inactive and error states in t
 
 test('AI Assistant zero active watches shows dedicated nothing-followed copy without private fields', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
-  assert.match(renderer, /Nothing is being followed yet/)
+  assert.match(renderer, /Nothing followed yet/)
   assert.match(renderer, /Følger ikke med på noe ennå/)
   assert.match(renderer, /if \(count <= 0\) return mirrorAiAssistantNothingFollowedMessage\(language\)/)
   const emptyBlock = renderer.slice(renderer.indexOf('if (items.length <= 0)'), renderer.indexOf("if (variant === 'small')"))
@@ -303,7 +303,9 @@ test('AI Assistant zero active watches shows dedicated nothing-followed copy wit
 test('AI Assistant Mirror View and physical frame consume the same snapshot fields without client polling', () => {
   assert.match(route, /aiAssistantActiveWatchCount: activeWatches\.length/)
   assert.match(route, /aiAssistantLastCheckedAt: lastCheckedAt/)
+  assert.match(route, /aiAssistantActiveWatchTopics/)
   assert.match(home, /detail\.aiAssistantActiveWatchCount/)
   assert.match(home, /detail\.aiAssistantLastCheckedAt/)
+  assert.match(home, /detail\.aiAssistantActiveWatchTopics/)
   assert.doesNotMatch(home.slice(home.indexOf('function MirrorAiAssistantCard'), home.indexOf('function MirrorLargeRemindersCard')), /fetch\(|setTimeout|setInterval|wake|refresh/i)
 })
