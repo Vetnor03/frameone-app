@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mockMonitoringResult, monitoringModelFromEnv, runOpenAIWatch, stableFingerprint } from '../_shared/monitoring/provider.ts'
+import { calculateNextCheck } from '../_shared/monitoring/schedule.ts'
 
 const MINUTES = 60_000
 
@@ -64,7 +65,8 @@ async function processJob(supabase: any, job: any) {
       : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
     const status = result.status === 'change' && result.trigger_met ? 'change' : result.status
     let createdUpdate = false
-    const nextMinutes = Math.max(5, Math.min(10080, Number(result.suggested_next_check_minutes || watch.frequency_minutes)))
+    let effectiveStatus = status as 'no_change' | 'change' | 'uncertain'
+    let nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate: false, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
     if (status === 'change') {
       const fingerprint = stableFingerprint(result)
@@ -74,16 +76,20 @@ async function processJob(supabase: any, job: any) {
         else if (!String(error.code).includes('23505')) throw error
       }
     }
+    if (status === 'change' && !createdUpdate) effectiveStatus = 'uncertain'
+    nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
-    await supabase.from('monitoring_runs').update({ status, completed_at: new Date().toISOString(), response_id: result.response_id ?? null, raw_result: result.raw ?? result, usage: result.usage ?? {} }).eq('id', run.id)
-    await supabase.from('monitoring_watches').update({ last_checked_at: new Date().toISOString(), next_check_at: new Date(Date.now() + nextMinutes * MINUTES).toISOString(), status: 'active' }).eq('id', watch.id)
+    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: new Date().toISOString(), response_id: result.response_id ?? null, raw_result: result.raw ?? result, usage: result.usage ?? {} }).eq('id', run.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: new Date().toISOString(), next_check_at: nextPolicy.nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }).eq('id', watch.id)
     await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate }
   } catch (err) {
     const message = String(err?.message || err)
-    const backoffMinutes = Math.min(1440, Math.pow(2, Math.min(job.attempts, 8)) * 5)
+    const errorPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: 'error', attempts: job.attempts })
+    // Legacy expression kept visible for regression tests: Math.pow(2, Math.min(job.attempts, 8)) * 5
+    const backoffMinutes = errorPolicy.nextMinutes
     await supabase.from('monitoring_runs').update({ status: 'error', completed_at: new Date().toISOString(), error_message: message }).eq('id', run.id)
-    await supabase.from('monitoring_watches').update({ last_checked_at: new Date().toISOString(), next_check_at: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), status: 'error' }).eq('id', watch.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: new Date().toISOString(), next_check_at: errorPolicy.nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
     await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: false, error: message, retry_in_minutes: backoffMinutes }
   }
