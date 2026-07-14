@@ -1880,11 +1880,9 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data: watchRows, error: watchError } = await supabase
       .from('monitoring_watches')
-      .select('id, last_checked_at, status, title, preferred_language, created_at, show_on_frame, frame_id')
+      .select('id, last_checked_at, status, title, preferred_language, created_at')
       .in('owner_user_id', memberUserIds)
       .eq('status', 'active')
-      .eq('show_on_frame', true)
-      .eq('frame_id', frameId)
       .order('created_at', { ascending: true })
     if (watchError) throw watchError
 
@@ -1899,10 +1897,8 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data, error } = await supabase
       .from('monitoring_updates')
-      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language, show_on_frame, frame_id)')
+      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language)')
       .in('monitoring_watches.owner_user_id', memberUserIds)
-      .eq('monitoring_watches.show_on_frame', true)
-      .eq('monitoring_watches.frame_id', frameId)
       .eq('is_read', false)
       .eq('dismissed_from_frame', false)
       .gt('created_at', sinceIso)
@@ -1911,7 +1907,15 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
       .limit(limit + 25)
     if (error) throw error
 
-    const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { memberUserIds, limit, renderCycleId })
+    const updateCandidates = Array.isArray(data) ? data : []
+    const selected = selectAiAssistantFrameItems(updateCandidates as AiAssistantFrameUpdate[], { memberUserIds, limit, renderCycleId })
+    console.info('[mirror-snapshot:ai-assistant-snapshot]', {
+      frameId,
+      frameMemberCount: memberUserIds.length,
+      activeAccessibleWatchCount: activeWatches.length,
+      unreadUpdateCandidateCount: updateCandidates.length,
+      selectedCount: selected.items.length,
+    })
     return {
       primary: 'UPDATES',
       secondary: 'UPDATES',
