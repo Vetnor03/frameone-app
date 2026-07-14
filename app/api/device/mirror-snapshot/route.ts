@@ -133,7 +133,7 @@ type Detail = {
 
 type UnknownRecord = Record<string, unknown>
 
-const MODULES = new Set(['date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+const MODULES = new Set(['assistant', 'date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
 const MIRROR_FETCH_TIMEOUT_MS = 8000
 const WEATHER_FETCH_TIMEOUT_MS = 6500
 
