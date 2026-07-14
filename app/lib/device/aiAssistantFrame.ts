@@ -10,7 +10,7 @@ export type AiAssistantFrameUpdate = {
   source_urls?: unknown
   is_read?: boolean | null
   dismissed_from_frame?: boolean | null
-  monitoring_watches?: { owner_user_id?: string | null; frame_id?: string | null; show_on_frame?: boolean | null; title?: string | null; preferred_language?: AiAssistantTopicLanguage | null } | null
+  monitoring_watches?: { owner_user_id?: string | null; title?: string | null; preferred_language?: AiAssistantTopicLanguage | null } | null
 }
 
 type AiAssistantSelectionOptions = {
