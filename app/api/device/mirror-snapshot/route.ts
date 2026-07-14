@@ -60,7 +60,7 @@ type Detail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
-  aiAssistantItems?: Array<{ id: string; headline: string; title?: string; created_at: string }>
+  aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string }>
   aiAssistantOverflowCount?: number
   aiAssistantHasActiveWatches?: boolean
   dinnerTodayTitle?: string
@@ -1869,7 +1869,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
 
     const { data, error } = await supabase
       .from('monitoring_updates')
-      .select('id, headline, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id,title)')
+      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id)')
       .in('monitoring_watches.owner_user_id', memberUserIds)
       .eq('is_read', false)
       .eq('dismissed_from_frame', false)

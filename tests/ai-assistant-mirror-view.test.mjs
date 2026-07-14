@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { selectAiAssistantFrameItems, AI_ASSISTANT_FRAME_LIMITS } from '../app/lib/device/aiAssistantFrame.ts'
+import { selectAiAssistantFrameItems, AI_ASSISTANT_FRAME_LIMITS, sanitizeAiAssistantMirrorSummary } from '../app/lib/device/aiAssistantFrame.ts'
 
 const route = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
@@ -112,7 +112,7 @@ test('AI Assistant zero updates returns structured empty snapshot data and serve
 test('AI Assistant mirror snapshot uses device members instead of watch frame visibility fields', () => {
   assert.match(route, /from\('device_members'\)/)
   assert.match(route, /select\('user_id'\)/)
-  assert.match(route, /monitoring_watches!inner\(owner_user_id,title\)/)
+  assert.match(route, /monitoring_watches!inner\(owner_user_id\)/)
   assert.match(route, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.frame_id'/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.show_on_frame'/)
@@ -121,27 +121,66 @@ test('AI Assistant mirror snapshot uses device members instead of watch frame vi
   assert.match(route, /gt\('created_at', sinceIso\)/)
 })
 
-test('AI Assistant mirror renderer uses centered module heading and calm hierarchy without bullets or private instructions', () => {
+
+test('AI Assistant mirror snapshot carries summary but not private watch request fields', () => {
+  const selected = selectAiAssistantFrameItems([row('summary-item', 1, {
+    headline: 'Events in Stavanger this weekend',
+    summary: 'Fashion show Saturday at 18:00, football festival Sunday at 17:00.',
+    monitoring_watches: { owner_user_id: 'member-a', title: 'Skjer det noe kjekt i Stavanger til helgen?' },
+    original_request: 'private request',
+    trigger_description: 'private trigger',
+  })], options)
+  assert.deepEqual(selected.items[0], {
+    id: 'summary-item',
+    headline: 'Events in Stavanger this weekend',
+    summary: 'Fashion show Saturday at 18:00, football festival Sunday at 17:00.',
+    created_at: '2026-07-14T11:00:00.000Z',
+  })
+  assert.match(route, /select\('id, headline, summary, created_at/)
+  assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|trigger_description|Skjer det noe kjekt/)
+})
+
+test('AI Assistant mirror renderer uses summary recap and no Watch title/request context', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
   assert.match(renderer, /text-balance text-center/)
   assert.match(renderer, /items-center justify-center/)
-  assert.match(renderer, /headline/)
-  assert.match(renderer, /title/)
-  assert.match(renderer, /\[-webkit-line-clamp:3\]/)
-  assert.match(renderer, /\[-webkit-line-clamp:2\]/)
-  assert.match(renderer, /displayLimit = variant === 'small' \|\| variant === 'medium' \? 1 : 2/)
-  assert.match(renderer, /\+ \$\{count\} flere i RE:MIND/)
-  assert.match(renderer, /\+ \$\{count\} more in RE:MIND/)
-  assert.doesNotMatch(renderer, /rounded-full bg-current|•|summary|source_urls|source URL|confidence|timestamp|button|original_request|instructions/i)
+  assert.match(renderer, /sanitizeAiAssistantMirrorSummary\(item\?\.summary, headline, recapWords\)/)
+  assert.match(renderer, /<MirrorAiAssistantRecap/)
+  assert.match(renderer, /primary\.summary/)
+  assert.doesNotMatch(renderer, /item\?\.title|primary\.title|secondary\.title|mirrorAiAssistantContextLabel|monitoring_watches|original_request|trigger_description|instructions/i)
 })
 
-test('AI Assistant mirror renderer omits repetitive Watch titles and keeps only subtle distinct context', () => {
+test('AI Assistant summary sanitizer removes markdown, keeps link labels, removes URLs, and strips duplicate headline', () => {
+  const summary = `# Events in Stavanger this weekend
+**Events in Stavanger this weekend** - [Fashion show](https://example.com/path?utm_source=x&fbclid=y) Saturday at 18:00.
+- Football festival Sunday at 17:00
+See https://tracker.example.com/a?utm_campaign=nope and [rail work](https://rail.example/?utm_medium=x).`
+  const cleaned = sanitizeAiAssistantMirrorSummary(summary, 'Events in Stavanger this weekend', 80)
+  assert.equal(cleaned, 'Fashion show Saturday at 18:00. Football festival Sunday at 17:00 See and rail work.')
+  assert.doesNotMatch(cleaned, /[#*_\[\]\(\)]|https?:|utm_|fbclid/)
+})
+
+test('AI Assistant summary sanitizer falls back to empty for unusable input and clamps at word boundaries', () => {
+  assert.equal(sanitizeAiAssistantMirrorSummary('', 'Headline', 20), '')
+  assert.equal(sanitizeAiAssistantMirrorSummary('https://example.com/?utm_source=x', 'Headline', 20), '')
+  assert.equal(sanitizeAiAssistantMirrorSummary('Headline: one two three four five', 'Headline', 3), 'one two three')
+  assert.doesNotMatch(sanitizeAiAssistantMirrorSummary('one two three four', '', 3), /\.\.\.$|thr$/)
+})
+
+test('AI Assistant mirror renderer clamps large and medium recap and omits small recap', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
-  assert.match(renderer, /function mirrorAiAssistantContextLabel\(title: string, headline: string\)/)
-  assert.match(renderer, /similarity >= 0\.6\) return ''/)
-  assert.match(renderer, /trimmed\.length > 48 \|\| words\.length > 7/)
-  assert.match(renderer, /isShortDistinctSource = words\.length <= 3 && trimmed\.length <= 32 && similarity < 0\.6/)
-  assert.match(renderer, /font-medium normal-case tracking-\[0\.05em\]/)
-  assert.doesNotMatch(renderer, /uppercase tracking-\[0\.12em\][\s\S]*\{(?:primary|secondary|item)\.title/)
+  assert.match(renderer, /variant === 'large' \|\| variant === 'xl' \? 42 : variant === 'medium' \? 28 : 0/)
+  assert.match(renderer, /lines=\{isMedium \? 3 : 4\}/)
+  const smallBlock = renderer.slice(renderer.indexOf("if (variant === 'small')"), renderer.indexOf('const primary = items[0]'))
+  assert.doesNotMatch(smallBlock, /MirrorAiAssistantRecap|summary/)
+})
+
+test('AI Assistant mirror typography stays aligned with surrounding module scale', () => {
+  const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  assert.match(renderer, /text-\[clamp\(0\.9rem,1\.82vw,1\.18rem\)\]/)
+  assert.match(renderer, /text-\[clamp\(0\.82rem,1\.72vw,1\.08rem\)\]/)
+  assert.match(renderer, /text-\[clamp\(0\.64rem,1\.2vw,0\.82rem\)\]/)
+  assert.doesNotMatch(renderer, /2\.55vw|1\.72rem|2\.35vw|1\.42rem/)
+  assert.match(renderer, /font-medium leading-\[1\.18\]/)
 })
