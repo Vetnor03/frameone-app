@@ -39,8 +39,8 @@ test('saved module configurations remain backwards compatible and pinned values 
 })
 
 test('generic Assistant copy is localized and does not promise notifications', () => {
-  assert.match(assistant, /Be RE:MIND holde øye med noe for deg\. Nye endringer og oppdateringer samles her og kan vises på rammen\./)
-  assert.match(assistant, /Ask RE:MIND to keep an eye on something for you\. New changes and updates are collected here and can appear on your frame\./)
+  assert.match(assistant, /Be RE:MIND holde øye med noe for deg\. Nye endringer og oppdateringer samles her\./)
+  assert.match(assistant, /Ask RE:MIND to keep an eye on something for you\. New changes and updates are collected here\./)
   assert.match(assistant, /Følg med på endringer i en sak jeg er interessert i/)
   assert.match(assistant, /Si fra når noe jeg venter på blir tilgjengelig/)
   assert.match(assistant, /Hold øye med prisendringer på noe jeg vurderer å kjøpe/)

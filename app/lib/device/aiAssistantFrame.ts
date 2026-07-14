@@ -8,14 +8,15 @@ export type AiAssistantFrameUpdate = {
   source_urls?: unknown
   is_read?: boolean | null
   dismissed_from_frame?: boolean | null
-  monitoring_watches?: { frame_id?: string | null; show_on_frame?: boolean | null } | null
+  monitoring_watches?: { owner_user_id?: string | null; frame_id?: string | null; show_on_frame?: boolean | null } | null
 }
 
-export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], options: { frameId: string; now?: Date; limit: number }) {
+export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], options: { frameId?: string; memberUserIds?: string[]; now?: Date; limit: number }) {
   const cutoffMs = (options.now ?? new Date()).getTime() - 24 * 60 * 60 * 1000
+  const hasMembershipFilter = Array.isArray(options.memberUserIds)
+  const memberUserIds = new Set((options.memberUserIds ?? []).map((id) => String(id).trim()).filter(Boolean))
   const candidates = rows
-    .filter((row) => String(row.monitoring_watches?.frame_id ?? '') === options.frameId)
-    .filter((row) => row.monitoring_watches?.show_on_frame === true)
+    .filter((row) => !hasMembershipFilter || memberUserIds.has(String(row.monitoring_watches?.owner_user_id ?? '').trim()))
     .filter((row) => row.dismissed_from_frame !== true)
     .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), created_at: String(row.created_at ?? '') }))
     .filter((row) => row.id && row.headline && !Number.isNaN(new Date(row.created_at).getTime()) && new Date(row.created_at).getTime() > cutoffMs)
