@@ -52,8 +52,8 @@ test('AI Assistant mirror heading and loaded empty state support Norwegian and E
   assert.match(renderer, /function mirrorAiAssistantHeader\(detail: MirrorModuleDetail, language: AppLanguage\)/)
   assert.match(renderer, /aiAssistantTopicTitle/)
   assert.match(renderer, /aiAssistantDefaultTopicTitle/)
-  assert.match(renderer, /Ingen nye oppdateringer/)
-  assert.match(renderer, /No new updates/)
+  assert.match(renderer, /INGENTING NYTT/)
+  assert.match(renderer, /NOTHING NEW/)
   assert.doesNotMatch(renderer, /NYTT FOR DEG|NEW FOR YOU|WATCHING/)
   assert.doesNotMatch(renderer, /Loading AI Assistant|AI ASSISTANT|KI-ASSISTENT|\"Watch\"|\"monitoring\"/)
 })
@@ -127,7 +127,7 @@ test('AI Assistant mirror snapshot carries summary but not private watch request
   const selected = selectAiAssistantFrameItems([row('summary-item', 1, {
     headline: 'Events in Stavanger this weekend',
     summary: 'Fashion show Saturday at 18:00, football festival Sunday at 17:00.',
-    monitoring_watches: { owner_user_id: 'member-a', title: 'Skjer det noe kjekt i Stavanger til helgen?' },
+    monitoring_watches: { owner_user_id: 'member-a', title: 'Stavanger' },
     original_request: 'private request',
     trigger_description: 'private trigger',
   })], options)

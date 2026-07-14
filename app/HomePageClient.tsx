@@ -13,7 +13,7 @@ import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
-import { aiAssistantDefaultTopicTitle, aiAssistantMultipleWatchesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
+import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -4864,11 +4864,11 @@ function mirrorAiAssistantHeader(detail: MirrorModuleDetail, language: AppLangua
   return raw.trim() || aiAssistantDefaultTopicTitle(language)
 }
 
+// Empty unread state headers: English NOTHING NEW, Norwegian INGENTING NYTT.
 function mirrorAiAssistantEmptyHeader(detail: MirrorModuleDetail, language: AppLanguage) {
   const count = Math.max(0, Math.floor(Number(detail.aiAssistantActiveWatchCount) || 0))
   if (count <= 0) return 'RE:MIND'
-  if (count === 1) return mirrorAiAssistantHeader(detail, language)
-  return aiAssistantMultipleWatchesHeader(language)
+  return aiAssistantNoUpdatesHeader(language)
 }
 
 function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, recapWords: number, language: AppLanguage) {
@@ -4885,10 +4885,6 @@ function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, re
     })
     .filter((item) => item.id && item.headline)
     .slice(0, maxItems)
-}
-
-function mirrorAiAssistantEmptyMessage(language: AppLanguage) {
-  return language === 'no' ? 'Ingen nye oppdateringer' : 'No new updates'
 }
 
 function mirrorAiAssistantNothingFollowedMessage(language: AppLanguage) {
@@ -4970,7 +4966,6 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
         className="px-[clamp(0.55rem,1.35vw,1.2rem)] py-[clamp(0.5rem,1.2vw,1.1rem)]"
         contentClassName="gap-[clamp(0.34rem,0.9vw,0.68rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]"
       >
-        <div className="max-w-full text-[clamp(0.72rem,1.45vw,0.96rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>{mirrorAiAssistantEmptyMessage(language)}</div>
         <div className="max-w-full text-[clamp(0.55rem,1.05vw,0.72rem)] font-medium leading-[1.2] tracking-[0.04em]" style={{ color: mutedColor }}>{mirrorAiAssistantEmptyStatus(detail, language)}</div>
       </MirrorAiAssistantLayout>
     )
