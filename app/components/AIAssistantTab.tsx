@@ -33,7 +33,9 @@ type AssistantUpdate = {
   created_at: string
 }
 
+export const MAX_AI_ASSISTANT_WATCHES = 5
 const MAX_ASSISTANT_REQUEST_LENGTH = 1000
+const ONGOING_ASSISTANT_WATCH_STATUSES: AssistantWatchStatus[] = ['active', 'paused', 'error']
 
 function assistantCopy(language: AppLanguage) {
   return language === 'no' ? {
@@ -50,7 +52,7 @@ function assistantCopy(language: AppLanguage) {
     emptyTasks: 'Spør RE:MIND om å holde øye med noe, så vises det her.',
     emptyUpdates: 'Nye endringer og oppdateringer vises her.',
     statuses: { active: 'Følger med', paused: 'Satt på pause', error: 'Trenger oppmerksomhet', completed: 'Avsluttet' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne Watchen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…'
+    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne Watchen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', limitCounter: (count: number) => `Følger ${count} av ${MAX_AI_ASSISTANT_WATCHES}`, limitReached: `Du kan følge med på opptil ${MAX_AI_ASSISTANT_WATCHES} ting. Slett eller avslutt én for å legge til en ny.`
   } : {
     heading: 'AI Assistant',
     intro: 'Ask RE:MIND to keep an eye on something for you. New changes and updates are collected here.',
@@ -62,7 +64,7 @@ function assistantCopy(language: AppLanguage) {
     onlyRelevant: 'Only new and relevant changes are shown.',
     tasks: 'What RE:MIND is following', updates: 'Updates', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
     statuses: { active: 'Following', paused: 'Paused', error: 'Needs attention', completed: 'Ended' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this Watch? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…'
+    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this Watch? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', limitCounter: (count: number) => `${count} of ${MAX_AI_ASSISTANT_WATCHES} followed`, limitReached: `You can follow up to ${MAX_AI_ASSISTANT_WATCHES} things. Delete or complete one to add another.`
   }
 }
 
@@ -108,6 +110,8 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
+  const ownedOngoingWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
+  const reachedWatchLimit = ownedOngoingWatchCount >= MAX_AI_ASSISTANT_WATCHES
   const selected = watches.find((w) => w.id === selectedId) ?? watches[0] ?? null
   const updatesByWatch = useMemo(() => updates.filter((u) => u.watch_id === selected?.id), [updates, selected?.id])
 
@@ -146,10 +150,18 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   async function createWatch() {
     const validation = validateRequestText(request)
     if (validation.error) { setError(validation.error); return }
+    if (reachedWatchLimit) { setError(c.limitReached); return }
     setCreating(true); setError(null); setMessage(null)
     const { data, error } = await supabase.rpc('create_ai_assistant_watch', { p_original_request: validation.clean, p_frame_id: activeDeviceId })
-    if (error) setError(c.friendlyError)
-    else {
+    if (error) {
+      if (error.message === 'watch_limit_reached' || error.code === 'watch_limit_reached' || error.message?.includes('watch_limit_reached')) {
+        console.warn('[ai-assistant:watch-limit-reached]', { code: error.code, message: error.message, ownedOngoingWatchCount })
+        setError(c.limitReached)
+      } else {
+        console.error('[ai-assistant:create-failed]', { code: error.code, message: error.message, ownedOngoingWatchCount })
+        setError(c.friendlyError)
+      }
+    } else {
       setRequest('')
       setMessage(c.success)
       await loadAssistant()
@@ -240,7 +252,8 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       <p className="mt-3 text-sm leading-6 text-[color:var(--fg-70)]">{c.intro}</p>
       <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="mt-5 w-full resize-none rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)]/70 p-4 text-base leading-6 text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" />
       <div className="mt-3 flex flex-wrap gap-2">{c.examples.map((ex) => <button key={ex} type="button" onClick={() => setRequest(ex)} className="max-w-full rounded-full border border-[color:var(--bd-15)] px-3 py-2 text-left text-[11px] leading-4 text-[color:var(--fg-70)] break-words">{ex}</button>)}</div>
-      <button type="button" onClick={createWatch} disabled={creating} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-sm font-semibold tracking-wide text-white disabled:opacity-60">{creating ? c.creating : c.button}</button>
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[color:var(--fg-55)]"><span>{c.limitCounter(ownedOngoingWatchCount)}</span>{reachedWatchLimit && <span className="text-right text-amber-300">{c.limitReached}</span>}</div>
+      <button type="button" onClick={createWatch} disabled={creating || reachedWatchLimit} aria-disabled={creating || reachedWatchLimit} title={reachedWatchLimit ? c.limitReached : undefined} className="mt-3 h-12 w-full rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-sm font-semibold tracking-wide text-white disabled:cursor-not-allowed disabled:border-[color:var(--bd-20)] disabled:bg-[color:var(--fg-35)] disabled:opacity-60">{creating ? c.creating : c.button}</button>
       {message && <div className="mt-4 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 p-4 text-sm text-[color:var(--fg-85)]"><strong>{message}</strong><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.title}</div><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.trigger_description}</div><div className="mt-2 text-[color:var(--fg-70)]">{c.onlyRelevant}</div></div>}
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
     </div>
