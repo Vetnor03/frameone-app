@@ -7,6 +7,7 @@ const provider = readFileSync(new URL('../supabase/functions/_shared/monitoring/
 const interpreter = readFileSync(new URL('../supabase/functions/interpret-ai-assistant/index.ts', import.meta.url), 'utf8')
 const baseMigration = readFileSync(new URL('../supabase/migrations/20260713170000_add_ai_assistant_interpretation.sql', import.meta.url), 'utf8')
 const durableMigration = readFileSync(new URL('../supabase/migrations/20260713183000_add_durable_ai_interpretation_queue.sql', import.meta.url), 'utf8')
+const retryReactivationMigration = readFileSync(new URL('../supabase/migrations/20260714100000_reactivate_watch_after_interpretation_retry.sql', import.meta.url), 'utf8')
 const worker = readFileSync(new URL('../supabase/functions/monitoring-worker/index.ts', import.meta.url), 'utf8')
 const docs = readFileSync(new URL('../docs/ai-assistant-step3-manual.md', import.meta.url), 'utf8')
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
@@ -146,4 +147,55 @@ test('manual operations and required secrets are documented', () => {
 
 test('client contains no secrets or provider terminology', () => {
   assert.doesNotMatch(assistant, /OPENAI_API_KEY|SERVICE_ROLE|MONITORING_WORKER_SECRET|MONITORING_CRON_SECRET|web-search|provider|GPT|model|API/i)
+})
+
+test('monitoring worker defers pending or open interpretation without creating a run or touching check timestamps', () => {
+  assert.match(worker, /interpretation_status === 'pending' \|\| hasOpenInterpretationJob/)
+  assert.match(worker, /from\('ai_assistant_interpretation_queue'\)[\s\S]*\.is\('completed_at', null\)/)
+  assert.match(worker, /run_after: new Date\(Date\.now\(\) \+ 2 \* MINUTES\)\.toISOString\(\)/)
+  assert.match(worker, /last_error: 'waiting_for_interpretation'/)
+  assert.match(worker, /result: 'waiting_for_interpretation'/)
+  assert.ok(worker.indexOf("result: 'waiting_for_interpretation'") < worker.indexOf("from('monitoring_runs').insert"))
+  const waitingBlock = worker.slice(worker.indexOf("if (watch.interpretation_status === 'pending'"), worker.indexOf("if (watch.interpretation_status === 'failed'"))
+  assert.doesNotMatch(waitingBlock, /runOpenAIWatch|monitoring_runs|last_checked_at|status: 'error'/)
+})
+
+test('monitoring worker parks failed interpretation until an authenticated retry succeeds', () => {
+  assert.match(worker, /watch\.interpretation_status === 'failed'/)
+  assert.match(worker, /status: 'error'/)
+  assert.match(worker, /completed_at: new Date\(\)\.toISOString\(\), last_error: 'interpretation_failed'/)
+  const failedBlock = worker.slice(worker.indexOf("if (watch.interpretation_status === 'failed'"), worker.indexOf("const provider ="))
+  assert.doesNotMatch(failedBlock, /runOpenAIWatch|monitoring_runs\.insert|claimed_at: null/)
+  assert.doesNotMatch(durableMigration, /status = case when status = 'error' then 'active' else status end/)
+  assert.match(retryReactivationMigration, /create or replace function public\.apply_ai_assistant_interpretation/)
+  assert.match(retryReactivationMigration, /security definer set search_path = public/)
+  assert.match(retryReactivationMigration, /status = case when status = 'error' then 'active' else status end/)
+  assert.match(retryReactivationMigration, /next_check_at = least\(next_check_at, now\(\)\)/)
+})
+
+test('monitoring waits for fresh interpretation so edits and stale interpretation cannot unblock temporary fields', () => {
+  assert.match(durableMigration, /set original_request = cleaned_request[\s\S]*interpretation_status = 'pending'/)
+  assert.match(durableMigration, /perform public\.enqueue_ai_assistant_interpretation\(updated_watch\.id, updated_watch\.owner_user_id, updated_watch\.original_request, now\(\)\)/)
+  assert.match(durableMigration + retryReactivationMigration, /where id = p_watch_id and owner_user_id = p_owner_user_id and original_request = p_request_snapshot and status <> 'completed'/)
+  assert.match(interpreter, /watch\.original_request !== job\.request_snapshot/)
+  assert.match(worker, /watch\.status !== 'active' && watch\.status !== 'error'/)
+})
+
+test('applied durable interpretation migration remains unchanged and retry recovery is forward-only', () => {
+  assert.doesNotMatch(durableMigration, /Reactivate errored AI Assistant watches/)
+  assert.doesNotMatch(durableMigration, /status = case when status = 'error' then 'active' else status end/)
+  assert.match(retryReactivationMigration, /Reactivate errored AI Assistant watches/)
+  assert.match(retryReactivationMigration, /revoke execute on function public\.apply_ai_assistant_interpretation\(uuid,uuid,text,text,text,text,jsonb,integer,text,text\) from public, anon, authenticated/)
+  assert.match(retryReactivationMigration, /grant execute on function public\.apply_ai_assistant_interpretation\(uuid,uuid,text,text,text,text,jsonb,integer,text,text\) to service_role/)
+})
+
+test('retry reactivation migration only reactivates errored watches and preserves stale snapshot rejection', () => {
+  assert.match(retryReactivationMigration, /status = case when status = 'error' then 'active' else status end/)
+  assert.match(retryReactivationMigration, /else status end/)
+  assert.match(retryReactivationMigration, /status <> 'completed'/)
+  assert.match(retryReactivationMigration, /original_request = p_request_snapshot/)
+  assert.match(retryReactivationMigration, /owner_user_id = p_owner_user_id/)
+  assert.match(retryReactivationMigration, /raise exception 'watch_not_found_forbidden_or_stale'/)
+  assert.match(retryReactivationMigration, /interpretation_status = 'complete'/)
+  assert.match(retryReactivationMigration, /interpretation_error = null/)
 })
