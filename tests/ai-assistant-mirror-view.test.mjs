@@ -172,6 +172,26 @@ test('AI Assistant Mirror View and physical frame use the shared assistant layou
   assert.match(renderBranches, /size === 'small'[\s\S]*<MirrorAiAssistantCard/)
 })
 
+
+
+test('AI Assistant small layout uses full-width headline area with reminder-style padding', () => {
+  const renderer = home.slice(home.indexOf('const MIRROR_ASSISTANT_SHELL_CLASS'), home.indexOf('function MirrorLargeRemindersCard'))
+  const smallBlock = renderer.slice(renderer.indexOf("if (variant === 'small')"), renderer.indexOf('const primary = items[0]'))
+  const populatedBlock = renderer.slice(renderer.indexOf('const primary = items[0]'), renderer.indexOf('function MirrorLargeRemindersCard'))
+
+  assert.doesNotMatch(smallBlock, /max-w-\[18ch\]/)
+  assert.doesNotMatch(renderer, /max-w-\[18ch\]/)
+  assert.match(renderer, /const MIRROR_ASSISTANT_SMALL_SHELL_CLASS = "px-\[clamp\(0\.45rem,1\.2vw,0\.8rem\)\] pb-\[clamp\(0\.38rem,0\.95vw,0\.62rem\)\] pt-\[clamp\(0\.65rem,1\.7vw,1rem\)\]"/)
+  assert.match(renderer, /const MIRROR_ASSISTANT_SMALL_BODY_CLASS = "w-full"/)
+  assert.match(renderer, /const MIRROR_ASSISTANT_SMALL_HEADLINE_CLASS = "w-full max-w-full text-\[clamp\(0\.68rem,1\.6vw,0\.96rem\)\] font-medium leading-\[1\.09\] tracking-\[0\.04em\]"/)
+  assert.match(smallBlock, /contentClassName=\{MIRROR_ASSISTANT_SMALL_BODY_CLASS\}/)
+  assert.match(smallBlock, /<MirrorAiAssistantHeadline lines=\{2\} className=\{MIRROR_ASSISTANT_SMALL_HEADLINE_CLASS\}>\{item\.headline\}<\/MirrorAiAssistantHeadline>/)
+  assert.match(home, /mx-auto overflow-hidden text-balance text-center \[-webkit-box-orient:vertical\] \[display:-webkit-box\]/)
+  assert.match(home, /lines === 2 \? '\[-webkit-line-clamp:2\]'/)
+  assert.match(smallBlock, /className=\{MIRROR_ASSISTANT_SMALL_SHELL_CLASS\}/)
+  assert.match(populatedBlock, /\$\{isMedium \? 'max-w-\[34ch\]' : 'max-w-\[42ch\]'\}/)
+  assert.match(populatedBlock, /!isMedium && secondary && <div className="w-full max-w-\[26ch\]/)
+})
 test('AI Assistant mirror renderer uses summary recap and no Watch title/request context', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
