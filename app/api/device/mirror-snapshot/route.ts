@@ -62,6 +62,8 @@ type Detail = {
   reminderDateBadge?: string
   aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string }>
   aiAssistantOverflowCount?: number
+  aiAssistantActiveWatchCount?: number
+  aiAssistantLastCheckedAt?: string | null
   aiAssistantHasActiveWatches?: boolean
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
@@ -1850,10 +1852,12 @@ function formatReminderMirrorNextItems(items: UnknownRecord[]) {
 
 async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, renderCycleId: string | null, limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
   const empty = {
-    primary: 'AI Assistant',
-    secondary: 'AI Assistant',
+    primary: 'UPDATES',
+    secondary: 'UPDATES',
     aiAssistantItems: [],
     aiAssistantOverflowCount: 0,
+    aiAssistantActiveWatchCount: 0,
+    aiAssistantLastCheckedAt: null,
   }
 
   try {
@@ -1869,6 +1873,19 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
     const memberUserIds = uniqueNonEmpty(Array.isArray(memberRows) ? memberRows.map((row: { user_id?: unknown }) => row.user_id) : [])
     if (memberUserIds.length <= 0) return empty
 
+    const { data: watchRows, error: watchError } = await supabase
+      .from('monitoring_watches')
+      .select('id, last_checked_at, status')
+      .in('owner_user_id', memberUserIds)
+      .eq('status', 'active')
+    if (watchError) throw watchError
+
+    const activeWatches = Array.isArray(watchRows) ? watchRows : []
+    const lastCheckedAt = activeWatches
+      .map((row: { last_checked_at?: unknown }) => asString(row.last_checked_at).trim())
+      .filter(Boolean)
+      .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] || null
+
     const { data, error } = await supabase
       .from('monitoring_updates')
       .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id)')
@@ -1883,10 +1900,12 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { memberUserIds, limit, renderCycleId })
     return {
-      primary: 'AI Assistant',
-      secondary: 'AI Assistant',
+      primary: 'UPDATES',
+      secondary: 'UPDATES',
       aiAssistantItems: selected.items,
       aiAssistantOverflowCount: selected.overflowCount,
+      aiAssistantActiveWatchCount: activeWatches.length,
+      aiAssistantLastCheckedAt: lastCheckedAt,
     }
   } catch (e: unknown) {
     console.error('[mirror-snapshot:ai-assistant-failed]', { frameId, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })
