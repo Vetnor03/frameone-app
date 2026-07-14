@@ -20,7 +20,17 @@ function isClearlyEnglishText(text: string) {
   return englishMatches >= 2 && norwegianMatches === 0
 }
 
+const invalidTopicStart = /^(?:hva|hvor|når|hvordan|what|where|when|how|find|follow|update|news|assistant|watch|monitor|track|alert)\b/i
+const invalidTopicWord = /^(?:hva|hvor|når|hvordan|what|where|when|how|find|follow|update|news|assistant)$/i
+function validateTopicTitle(title: string) {
+  const text = String(title || '').trim().replace(/[\s,;:!?–—-]+$/g, '').trim()
+  const words = text.split(/\s+/).filter(Boolean)
+  if (!text || !/[\p{L}\p{N}]/u.test(text) || words.length > 3 || /(?:https?:\/\/|www\.)/i.test(text) || /[?!.:;()[\]{}]$/.test(text) || invalidTopicStart.test(text) || words.some((word) => invalidTopicWord.test(word))) throw new Error('invalid_topic_title')
+  return text
+}
+
 function validateInterpretationLanguage(v: ReturnType<typeof normalize>) {
+  v.title = validateTopicTitle(v.title)
   if (v.preferred_language !== 'no') return v
   if (isClearlyEnglishText(v.title) && isClearlyEnglishText(v.trigger_description)) throw new Error('language_mismatch_no_english_output')
   return v
@@ -96,7 +106,7 @@ Language requirements:
 4. English requests must use English.
 5. Preserve product names and proper nouns exactly as appropriate, such as OpenAI, ChatGPT, Coldplay, and SpaceX.
 ${retryLanguageMismatch ? 'Previous output mismatched preferred_language and English-looking fields. Correct it or fail safely; do not return English human-facing text when preferred_language is "no".\n' : ''}
-Set title to a very short stable topic title, usually one or two words and never more than three words. Prefer a place, person, artist, company, product category, or compact noun phrase. The title must describe the monitored subject, not the latest result; avoid questions, full sentences, URLs, dates, punctuation unless essential, and generic words such as update, news, Watch, monitoring, or Assistant. Never expose the complete original request in title. Keep original_request unchanged and keep detailed meaning in normalized_goal, trigger_description, and search_guidance. Identify subject, meaningful new developments, useful search queries/source priorities, what must not trigger an update, sensible interval, optional completion condition, preferred language, and a proposed monitoring_class. Classes: long_term for low-urgency product announcements/general company news/house listings; normal for major OpenAI/ChatGPT updates and general news topics; active for strikes/outages/developing public situations; urgent only when genuinely time-sensitive and delay matters. A vague request must never become urgent automatically. Major OpenAI/ChatGPT news should normally be normal, not active or urgent. Do not change or translate original_request; only interpret it.
+Set title to a proper short topic header: a very short stable topic title, usually one or two words and never more than three words. Prefer a noun, place, name, brand, product category, or compact noun phrase. The title must describe the stable subject being monitored, not the newest/latest result; it must not repeat the complete request and must not be a question or sentence. It must not begin with generic instruction or question words and must contain no URL or trailing punctuation. Explicitly reject titles such as Hva, Hvor, Når, Hvordan, What, Where, When, Find, Follow, Update, News, and Assistant. Examples: "Hva skjer i Stavanger denne helgen?" -> "Stavanger"; "Salg på våtdrakter og surfebrett" -> "Surfutstyr"; "Si fra når Coldplay annonserer konsert i Norge" -> "Coldplay"; "Følg med på nye meklinger i oljestreiken" -> "Oljestreiken"; "Finn billige flybilletter til syden" -> "Flybilletter". Never expose the complete original request in title. Keep original_request unchanged and keep detailed meaning in normalized_goal, trigger_description, and search_guidance. Identify subject, meaningful new developments, useful search queries/source priorities, what must not trigger an update, sensible interval, optional completion condition, preferred language, and a proposed monitoring_class. Classes: long_term for low-urgency product announcements/general company news/house listings; normal for major OpenAI/ChatGPT updates and general news topics; active for strikes/outages/developing public situations; urgent only when genuinely time-sensitive and delay matters. A vague request must never become urgent automatically. Major OpenAI/ChatGPT news should normally be normal, not active or urgent. Do not change or translate original_request; only interpret it.
 Request: ${originalRequest}`
 }
 

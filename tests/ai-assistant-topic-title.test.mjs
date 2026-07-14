@@ -8,6 +8,7 @@ const route = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts',
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const interpreter = readFileSync(new URL('../supabase/functions/interpret-ai-assistant/index.ts', import.meta.url), 'utf8')
 const topicHelper = readFileSync(new URL('../app/lib/device/aiAssistantTopicTitle.ts', import.meta.url), 'utf8')
+const migration = readFileSync(new URL('../supabase/migrations/20260714233000_reinterpret_invalid_ai_assistant_topic_titles.sql', import.meta.url), 'utf8')
 
 function row(id, extra = {}) {
   return {
@@ -17,7 +18,7 @@ function row(id, extra = {}) {
     is_read: false,
     dismissed_from_frame: false,
     created_at: '2026-07-14T11:00:00.000Z',
-    monitoring_watches: { owner_user_id: 'member-a', title: 'Skjer det noe kjekt i Stavanger til helgen?', preferred_language: 'no' },
+    monitoring_watches: { owner_user_id: 'member-a', title: 'Stavanger', preferred_language: 'no' },
     ...extra,
   }
 }
@@ -36,9 +37,9 @@ test('valid short titles remain unchanged', () => {
   assert.equal(simplifyAiAssistantTopicTitle('Surfutstyr', 'no'), 'SURFUTSTYR')
 })
 
-test('long question-style titles are not rendered directly', () => {
+test('invalid existing titles fall back instead of being derived in renderers', () => {
   const title = 'Skjer det noe kjekt i Stavanger til helgen?'
-  assert.equal(simplifyAiAssistantTopicTitle(title, 'no'), 'STAVANGER')
+  assert.equal(simplifyAiAssistantTopicTitle(title, 'no'), 'OPPDATERING')
   assert.notEqual(simplifyAiAssistantTopicTitle(title, 'no'), title.toUpperCase())
 })
 
@@ -60,16 +61,33 @@ test('Mirror View and physical frame use the same snapshot field', () => {
   assert.match(home, /MirrorModuleHeader title=\{header\} className="mx-auto"/)
 })
 
-test('empty state headers use one topic, multiple FOLLOWING or FØLGER MED, and zero RE:MIND', () => {
+test('empty state headers use NOTHING NEW or INGENTING NYTT, and zero RE:MIND', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /if \(count <= 0\) return 'RE:MIND'/)
-  assert.match(renderer, /if \(count === 1\) return mirrorAiAssistantHeader\(detail, language\)/)
-  assert.match(renderer, /aiAssistantMultipleWatchesHeader\(language\)/)
-  assert.match(topicHelper, /FØLGER MED|FOLLOWING/)
+  assert.match(renderer, /return aiAssistantNoUpdatesHeader\(language\)/)
+  assert.match(topicHelper, /INGENTING NYTT|NOTHING NEW/)
 })
 
 test('topic title interpretation rules are implemented without reducing detailed monitoring fields', () => {
-  for (const phrase of ['very short stable topic title', 'never more than three words', 'Never expose the complete original request in title', 'Keep original_request unchanged', 'normalized_goal, trigger_description, and search_guidance']) assert.match(interpreter, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  for (const phrase of ['proper short topic header', 'never more than three words', 'Explicitly reject titles such as Hva', 'Never expose the complete original request in title', 'Keep original_request unchanged', 'normalized_goal, trigger_description, and search_guidance']) assert.match(interpreter, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+})
+
+test('GPT interpretation produces Stavanger not Hva and rejects question or instruction words', () => {
+  assert.match(interpreter, /Hva skjer i Stavanger denne helgen\?" -> "Stavanger"/)
+  for (const word of ['Hva','Hvor','Når','Hvordan','What','Where','When','Find','Follow','Update','News','Assistant']) assert.match(interpreter, new RegExp(word))
+  assert.match(interpreter, /words\.length > 3/)
+})
+
+test('question and instruction words cannot render as topic titles and titles are at most three words', () => {
+  for (const bad of ['Hva', 'Where', 'Find', 'Follow', 'Update', 'News', 'Assistant', 'Hva?']) assert.equal(simplifyAiAssistantTopicTitle(bad, 'no'), 'OPPDATERING')
+  assert.equal(simplifyAiAssistantTopicTitle('one two three four', 'en'), 'UPDATE')
+})
+
+test('existing invalid titles are queued for reinterpretation without SQL substring rewriting', () => {
+  assert.match(migration, /enqueue_ai_assistant_interpretation/)
+  assert.match(migration, /ai_assistant_has_valid_topic_title/)
+  assert.match(migration, /interpretation_status = 'pending'/)
+  assert.doesNotMatch(migration, /substring|substr\(/i)
 })
 
 test('no timer, animation, polling, or additional refresh behavior is introduced', () => {
