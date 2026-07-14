@@ -121,8 +121,11 @@ test('AI Assistant mirror snapshot uses device members instead of watch frame vi
   assert.match(route, /gt\('created_at', sinceIso\)/)
 })
 
-test('AI Assistant mirror renderer uses hierarchy without bullets or private instructions', () => {
+test('AI Assistant mirror renderer uses centered module heading and calm hierarchy without bullets or private instructions', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  assert.match(renderer, /<MirrorModuleHeader title=\{header\} className="mx-auto" \/>/)
+  assert.match(renderer, /text-balance text-center/)
+  assert.match(renderer, /items-center justify-center/)
   assert.match(renderer, /headline/)
   assert.match(renderer, /title/)
   assert.match(renderer, /\[-webkit-line-clamp:3\]/)
@@ -131,4 +134,14 @@ test('AI Assistant mirror renderer uses hierarchy without bullets or private ins
   assert.match(renderer, /\+ \$\{count\} flere i RE:MIND/)
   assert.match(renderer, /\+ \$\{count\} more in RE:MIND/)
   assert.doesNotMatch(renderer, /rounded-full bg-current|•|summary|source_urls|source URL|confidence|timestamp|button|original_request|instructions/i)
+})
+
+test('AI Assistant mirror renderer omits repetitive Watch titles and keeps only subtle distinct context', () => {
+  const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  assert.match(renderer, /function mirrorAiAssistantContextLabel\(title: string, headline: string\)/)
+  assert.match(renderer, /similarity >= 0\.6\) return ''/)
+  assert.match(renderer, /trimmed\.length > 48 \|\| words\.length > 7/)
+  assert.match(renderer, /isShortDistinctSource = words\.length <= 3 && trimmed\.length <= 32 && similarity < 0\.6/)
+  assert.match(renderer, /font-medium normal-case tracking-\[0\.05em\]/)
+  assert.doesNotMatch(renderer, /uppercase tracking-\[0\.12em\][\s\S]*\{(?:primary|secondary|item)\.title/)
 })
