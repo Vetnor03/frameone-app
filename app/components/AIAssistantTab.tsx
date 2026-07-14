@@ -113,8 +113,8 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     ])
     if (watchResult.error || updateResult.error) setError(c.friendlyError)
     else {
-      setWatches((watchResult.data ?? []) as AssistantWatch[])
-      setUpdates((updateResult.data ?? []) as AssistantUpdate[])
+      setWatches((watchResult.data ?? []) as unknown as AssistantWatch[])
+      setUpdates((updateResult.data ?? []) as unknown as AssistantUpdate[])
       setError(null)
     }
     setLoading(false)
