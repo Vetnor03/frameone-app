@@ -362,6 +362,8 @@ type MirrorModuleDetail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
+  aiAssistantItems?: Array<{ id: string; headline: string; created_at: string }>
+  aiAssistantOverflowCount?: number
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -3521,6 +3523,10 @@ function frameModuleDetail(
     return { primary: t.modules.reminders, secondary: language === 'no' ? 'Lagrede påminnelser' : 'Saved reminders' }
   }
 
+  if (module === 'assistant') {
+    return { primary: 'AI Assistant', secondary: language === 'no' ? 'Nye oppdateringer' : 'New updates' }
+  }
+
   return { primary: moduleLabel(language, module) }
 }
 
@@ -4843,6 +4849,71 @@ function mirrorRemindersEmptyMessage(language: AppLanguage) {
   return language === 'no' ? 'Alt gjort' : 'All done'
 }
 
+
+
+function mirrorAiAssistantHeader() {
+  return 'AI Assistant'
+}
+
+function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number) {
+  return (Array.isArray(detail.aiAssistantItems) ? detail.aiAssistantItems : [])
+    .map((item) => ({
+      id: String(item?.id ?? '').trim(),
+      headline: String(item?.headline ?? '').trim(),
+      created_at: String(item?.created_at ?? '').trim(),
+    }))
+    .filter((item) => item.id && item.headline)
+    .slice(0, maxItems)
+}
+
+function mirrorAiAssistantEmptyMessage(language: AppLanguage) {
+  return language === 'no' ? 'Ingen nye oppdateringer' : 'No new updates'
+}
+
+function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxItems, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; borderColor: string; maxItems: number; variant: 'small' | 'medium' | 'large' | 'xl' }) {
+  const items = mirrorAiAssistantItems(detail, maxItems)
+  const header = mirrorAiAssistantHeader()
+  const overflowCount = Math.max(0, Math.floor(Number(detail.aiAssistantOverflowCount) || 0))
+  const moreLabel = overflowCount > 0 ? `+${overflowCount} ${language === 'no' ? 'til' : 'more'}` : ''
+
+  if (items.length <= 0) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.26rem,0.72vw,0.5rem)] px-[clamp(0.45rem,1.2vw,1.2rem)] py-[clamp(0.35rem,0.9vw,1.1rem)] text-center leading-none">
+        <MirrorModuleHeader title={header} />
+        <div className="max-w-full truncate text-[clamp(0.68rem,1.5vw,0.96rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>
+          {mirrorAiAssistantEmptyMessage(language)}
+        </div>
+      </div>
+    )
+  }
+
+  if (variant === 'small') {
+    return (
+      <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.45rem,1.2vw,0.8rem)] pb-[clamp(0.38rem,0.95vw,0.62rem)] pt-[clamp(0.65rem,1.7vw,1rem)] text-center leading-none">
+        {moreLabel && <div className="absolute right-[clamp(0.45rem,1.2vw,0.8rem)] top-[clamp(0.36rem,0.95vw,0.58rem)] max-w-[38%] truncate text-[clamp(0.48rem,1.05vw,0.66rem)] font-medium tracking-[0.04em]" title={moreLabel}>{moreLabel}</div>}
+        <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
+        <div className="relative min-h-0 w-full flex-1 mb-[clamp(0.12rem,0.38vw,0.28rem)] mt-[clamp(0.52rem,1.28vw,0.78rem)]">
+          {items.length > 1 && Array.from({ length: items.length - 1 }).map((_, index) => <div key={index} className="pointer-events-none absolute top-[12%] h-[76%] w-px" style={{ left: `${((index + 1) * 100) / items.length}%`, backgroundColor: borderColor }} aria-hidden="true" />)}
+          <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+            {items.map((item, index) => <div key={`${item.id}-${index}`} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]" title={item.headline}><span className="block max-w-full truncate">{item.headline}</span></div>)}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.75rem,1.9vw,1.2rem)] pb-[clamp(0.78rem,1.9vw,1.18rem)] pt-[clamp(0.92rem,2.3vw,1.45rem)] text-center leading-none">
+      {moreLabel && <div className="absolute right-[clamp(0.55rem,1.35vw,0.92rem)] top-[clamp(0.5rem,1.25vw,0.78rem)] max-w-[34%] truncate text-[clamp(0.48rem,1vw,0.66rem)] font-medium tracking-[0.04em]" title={moreLabel}>{moreLabel}</div>}
+      <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
+      <div className="flex min-h-0 flex-1 items-center justify-center pb-[clamp(0.18rem,0.55vw,0.38rem)] pt-[clamp(0.68rem,1.65vw,1.05rem)]">
+        <div className="flex max-w-full flex-col items-start gap-[clamp(0.42rem,1.05vw,0.72rem)] text-left">
+          {items.map((item, index) => <div key={`${item.id}-${index}`} className="grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.42rem,1.05vw,0.68rem)]"><span className="h-[clamp(0.24rem,0.55vw,0.36rem)] w-[clamp(0.24rem,0.55vw,0.36rem)] rounded-full bg-current" aria-hidden="true" /><span className="min-w-0 truncate text-[clamp(0.7rem,1.5vw,0.98rem)] font-medium tracking-[0.04em]" title={item.headline}>{item.headline}</span></div>)}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function MirrorLargeRemindersCard({
   detail,
@@ -6969,6 +7040,18 @@ function LandscapeFrameMirror({
 
     if (module === 'groceries' && size === 'medium') {
       return <MirrorGroceriesMediumCard detail={detail} language={language} mutedColor={mutedColor} />
+    }
+
+    if (module === 'assistant' && size === 'large') {
+      return <MirrorAiAssistantCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} maxItems={snapshot.layoutKey === 'full' ? 8 : 6} variant={snapshot.layoutKey === 'full' ? 'xl' : 'large'} />
+    }
+
+    if (module === 'assistant' && size === 'medium') {
+      return <MirrorAiAssistantCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} maxItems={4} variant="medium" />
+    }
+
+    if (module === 'assistant' && size === 'small') {
+      return <MirrorAiAssistantCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} maxItems={3} variant="small" />
     }
 
     if (module === 'reminders' && size === 'large') {
