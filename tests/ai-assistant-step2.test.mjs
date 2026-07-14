@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
 const rpc = readFileSync(new URL('../supabase/migrations/20260713143000_add_ai_assistant_creation_rpc.sql', import.meta.url), 'utf8')
+const simplifiedEditRpc = readFileSync(new URL('../supabase/migrations/20260714223000_simplify_ai_assistant_watch_edit.sql', import.meta.url), 'utf8')
 const foundation = readFileSync(new URL('../supabase/migrations/20260713130000_add_monitoring_watch_foundation.sql', import.meta.url), 'utf8')
 
 test('AI Assistant uses consumer naming and is registered as selectable module', () => {
@@ -40,18 +41,20 @@ test('browser uses narrow RPCs for edit delete pause resume and cannot mutate un
   assert.match(assistant, /rpc\('delete_ai_assistant_watch'/)
   assert.doesNotMatch(assistant, /from\('monitoring_watches'\)\.update/)
   assert.doesNotMatch(assistant, /from\('monitoring_watches'\)\.delete/)
-  assert.doesNotMatch(assistant, /owner_user_id|show_on_frame|frequency_minutes|next_check_at|search_guidance/)
+  const editBody = assistant.match(/async function editWatch[\s\S]*?async function setWatchPaused/)?.[0] ?? ''
+  assert.doesNotMatch(editBody, /owner_user_id|show_on_frame|frequency_minutes|next_check_at|search_guidance|p_title|p_completion_condition|p_preferred_language/)
   assert.doesNotMatch(assistant, /select\('\*'\)/)
   assert.doesNotMatch(assistant, /raw_result|usage|response_id|error_message|provider|model|fingerprint|confidence/)
 })
 
-test('mutation RPCs are owner-only and reset safe scheduling/display fields', () => {
+test('mutation RPCs are owner-only and edit now changes only the request field', () => {
   for (const fn of ['update_ai_assistant_watch_request', 'pause_ai_assistant_watch', 'resume_ai_assistant_watch', 'delete_ai_assistant_watch']) {
     const re = new RegExp(`function public\\.${fn}[\\s\\S]*?owner_user_id = auth\\.uid\\(\\)`)
     assert.match(rpc, re)
   }
   assert.match(rpc, /revoke insert, update, delete on public\.monitoring_watches from authenticated/)
-  assert.match(rpc, /set original_request = cleaned_request,[\s\S]*next_check_at = now\(\),[\s\S]*show_in_app = true,[\s\S]*show_on_frame = false/)
+  assert.match(simplifiedEditRpc, /set original_request = cleaned_request/)
+  assert.doesNotMatch(simplifiedEditRpc, /next_check_at =|show_in_app =|show_on_frame =|status =|frequency_minutes =|title =/)
   assert.match(rpc, /set status = 'paused', show_in_app = true, show_on_frame = false/)
   assert.match(rpc, /set status = 'active', frequency_minutes = 60, next_check_at = now\(\), show_in_app = true, show_on_frame = false/)
 })
@@ -60,7 +63,7 @@ test('update permissions allow only read/dismiss flags and source links are safe
   assert.match(foundation, /revoke update on public\.monitoring_updates from authenticated/)
   assert.match(foundation, /grant update \(is_read, dismissed_from_frame\) on public\.monitoring_updates to authenticated/)
   assert.match(assistant, /from\('monitoring_updates'\)\.update\(patch\)/)
-  assert.match(assistant, /function markUpdate\(id: string, patch: \{ is_read\?: boolean; dismissed_from_frame\?: boolean \}\)/)
+  assert.match(assistant, /function markUpdate\(id: string, patch: \{ is_read: boolean \}\)/)
   assert.match(assistant, /rel="noopener noreferrer"/)
 })
 

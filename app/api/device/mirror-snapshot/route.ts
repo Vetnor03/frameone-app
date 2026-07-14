@@ -1871,6 +1871,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
       .from('monitoring_updates')
       .select('id, headline, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id)')
       .in('monitoring_watches.owner_user_id', memberUserIds)
+      .eq('is_read', false)
       .eq('dismissed_from_frame', false)
       .gt('created_at', sinceIso)
       .order('created_at', { ascending: false })

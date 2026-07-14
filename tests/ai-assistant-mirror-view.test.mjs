@@ -79,13 +79,13 @@ test('AI Assistant frame selector applies size limits and overflow counts', () =
   assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.full }).items.length, 8)
 })
 
-test('AI Assistant frame selector excludes dismissed, keeps read, and includes shared-frame members', () => {
+test('AI Assistant frame selector excludes dismissed and read updates, and includes shared-frame members', () => {
   const selected = selectAiAssistantFrameItems([
     row('dismissed', 1, { dismissed_from_frame: true }),
-    row('read-visible', 1, { is_read: true }),
+    row('read-hidden', 1, { is_read: true }),
     row('shared-authorized', 2, { monitoring_watches: { owner_user_id: 'member-b', frame_id: null, show_on_frame: false } }),
   ], options)
-  assert.deepEqual(selected.items.map((x) => x.id), ['read-visible', 'shared-authorized'])
+  assert.deepEqual(selected.items.map((x) => x.id), ['shared-authorized'])
 })
 
 test('AI Assistant mirror snapshot parser accepts Assistant module cells', () => {
@@ -111,7 +111,7 @@ test('AI Assistant mirror snapshot uses device members instead of watch frame vi
   assert.match(route, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.frame_id'/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.show_on_frame'/)
-  assert.doesNotMatch(route, /eq\('is_read'/)
+  assert.match(route, /eq\('is_read', false\)/)
   assert.match(route, /eq\('dismissed_from_frame', false\)/)
   assert.match(route, /gt\('created_at', sinceIso\)/)
 })
