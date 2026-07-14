@@ -13,6 +13,7 @@ import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
+import { aiAssistantDefaultTopicTitle, aiAssistantMultipleWatchesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -363,10 +364,11 @@ type MirrorModuleDetail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
-  aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string }>
+  aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string; topicTitle?: string }>
   aiAssistantOverflowCount?: number
   aiAssistantActiveWatchCount?: number
   aiAssistantLastCheckedAt?: string | null
+  aiAssistantTopicTitle?: string
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -4857,8 +4859,16 @@ function mirrorRemindersEmptyMessage(language: AppLanguage) {
 
 
 
-function mirrorAiAssistantHeader(language: AppLanguage) {
-  return language === 'no' ? 'OPPDATERINGER' : 'UPDATES'
+function mirrorAiAssistantHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const raw = typeof detail.aiAssistantTopicTitle === 'string' ? detail.aiAssistantTopicTitle : ''
+  return raw.trim() || aiAssistantDefaultTopicTitle(language)
+}
+
+function mirrorAiAssistantEmptyHeader(detail: MirrorModuleDetail, language: AppLanguage) {
+  const count = Math.max(0, Math.floor(Number(detail.aiAssistantActiveWatchCount) || 0))
+  if (count <= 0) return 'RE:MIND'
+  if (count === 1) return mirrorAiAssistantHeader(detail, language)
+  return aiAssistantMultipleWatchesHeader(language)
 }
 
 function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, recapWords: number) {
@@ -4870,6 +4880,7 @@ function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, re
         headline,
         summary: sanitizeAiAssistantMirrorSummary(item?.summary, headline, recapWords),
         created_at: String(item?.created_at ?? '').trim(),
+        topicTitle: simplifyAiAssistantTopicTitle(item?.topicTitle, language),
       }
     })
     .filter((item) => item.id && item.headline)
@@ -4937,7 +4948,7 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
   const displayLimit = variant === 'small' || variant === 'medium' ? 1 : 2
   const recapWords = variant === 'large' || variant === 'xl' ? 42 : variant === 'medium' ? 28 : 0
   const items = mirrorAiAssistantItems(detail, Math.min(maxItems, displayLimit), recapWords)
-  const header = mirrorAiAssistantHeader(language)
+  const header = items[0]?.topicTitle || mirrorAiAssistantEmptyHeader(detail, language)
   const overflowCount = Math.max(0, Math.floor(Number(detail.aiAssistantOverflowCount) || 0))
   const moreLabel = mirrorAiAssistantMoreLabel(overflowCount, language)
 

@@ -49,12 +49,12 @@ test('AI Assistant manual Show on frame control is removed from the app tab', ()
 
 test('AI Assistant mirror heading and loaded empty state support Norwegian and English copy', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
-  assert.match(renderer, /function mirrorAiAssistantHeader\(language: AppLanguage\)/)
-  assert.match(renderer, /OPPDATERINGER/)
-  assert.match(renderer, /UPDATES/)
+  assert.match(renderer, /function mirrorAiAssistantHeader\(detail: MirrorModuleDetail, language: AppLanguage\)/)
+  assert.match(renderer, /aiAssistantTopicTitle/)
+  assert.match(renderer, /aiAssistantDefaultTopicTitle/)
   assert.match(renderer, /Ingen nye oppdateringer/)
   assert.match(renderer, /No new updates/)
-  assert.doesNotMatch(renderer, /NYTT FOR DEG|NEW FOR YOU|FØLGER MED|WATCHING/)
+  assert.doesNotMatch(renderer, /NYTT FOR DEG|NEW FOR YOU|WATCHING/)
   assert.doesNotMatch(renderer, /Loading AI Assistant|AI ASSISTANT|KI-ASSISTENT|\"Watch\"|\"monitoring\"/)
 })
 
@@ -113,7 +113,7 @@ test('AI Assistant zero updates returns structured empty snapshot data and serve
 test('AI Assistant mirror snapshot uses device members instead of watch frame visibility fields', () => {
   assert.match(route, /from\('device_members'\)/)
   assert.match(route, /select\('user_id'\)/)
-  assert.match(route, /monitoring_watches!inner\(owner_user_id\)/)
+  assert.match(route, /monitoring_watches!inner\(owner_user_id, title, preferred_language\)/)
   assert.match(route, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.frame_id'/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.show_on_frame'/)
@@ -136,6 +136,7 @@ test('AI Assistant mirror snapshot carries summary but not private watch request
     headline: 'Events in Stavanger this weekend',
     summary: 'Fashion show Saturday at 18:00, football festival Sunday at 17:00.',
     created_at: '2026-07-14T11:00:00.000Z',
+    topicTitle: 'STAVANGER',
   })
   assert.match(route, /select\('id, headline, summary, created_at/)
   assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|trigger_description|Skjer det noe kjekt/)
@@ -213,7 +214,7 @@ test('AI Assistant empty state includes active watch count and latest successful
 test('AI Assistant active watch metadata excludes inactive and error states in the shared snapshot path', () => {
   const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
   assert.match(detail, /from\('monitoring_watches'\)/)
-  assert.match(detail, /select\('id, last_checked_at, status'\)/)
+  assert.match(detail, /select\('id, last_checked_at, status, title, preferred_language'\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)
   assert.doesNotMatch(detail, /\.in\('status', \['active', 'error'\]\)/)
   assert.match(detail, /activeWatches\.length/)

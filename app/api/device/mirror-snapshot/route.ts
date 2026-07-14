@@ -6,6 +6,7 @@ import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 import { AI_ASSISTANT_FRAME_LIMITS, selectAiAssistantFrameItems, type AiAssistantFrameUpdate } from '@/app/lib/device/aiAssistantFrame'
+import { aiAssistantDefaultTopicTitle, simplifyAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -60,10 +61,11 @@ type Detail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
-  aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string }>
+  aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string; topicTitle?: string }>
   aiAssistantOverflowCount?: number
   aiAssistantActiveWatchCount?: number
   aiAssistantLastCheckedAt?: string | null
+  aiAssistantTopicTitle?: string
   aiAssistantHasActiveWatches?: boolean
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
@@ -1858,6 +1860,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
     aiAssistantOverflowCount: 0,
     aiAssistantActiveWatchCount: 0,
     aiAssistantLastCheckedAt: null,
+    aiAssistantTopicTitle: aiAssistantDefaultTopicTitle('en'),
   }
 
   try {
@@ -1875,12 +1878,14 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data: watchRows, error: watchError } = await supabase
       .from('monitoring_watches')
-      .select('id, last_checked_at, status')
+      .select('id, last_checked_at, status, title, preferred_language')
       .in('owner_user_id', memberUserIds)
       .eq('status', 'active')
     if (watchError) throw watchError
 
     const activeWatches = Array.isArray(watchRows) ? watchRows : []
+    const activeTopicTitle = activeWatches.length === 1 ? simplifyAiAssistantTopicTitle((activeWatches[0] as { title?: unknown }).title, (activeWatches[0] as { preferred_language?: unknown }).preferred_language === 'no' ? 'no' : 'en') : aiAssistantDefaultTopicTitle('en')
+
     const lastCheckedAt = activeWatches
       .map((row: { last_checked_at?: unknown }) => asString(row.last_checked_at).trim())
       .filter(Boolean)
@@ -1888,7 +1893,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data, error } = await supabase
       .from('monitoring_updates')
-      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id)')
+      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language)')
       .in('monitoring_watches.owner_user_id', memberUserIds)
       .eq('is_read', false)
       .eq('dismissed_from_frame', false)
@@ -1906,6 +1911,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
       aiAssistantOverflowCount: selected.overflowCount,
       aiAssistantActiveWatchCount: activeWatches.length,
       aiAssistantLastCheckedAt: lastCheckedAt,
+      aiAssistantTopicTitle: selected.items[0]?.topicTitle || activeTopicTitle,
     }
   } catch (e: unknown) {
     console.error('[mirror-snapshot:ai-assistant-failed]', { frameId, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })
