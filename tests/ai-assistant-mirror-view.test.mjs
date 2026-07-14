@@ -17,7 +17,7 @@ function row(id, hoursAgo, extra = {}) {
     is_read: false,
     dismissed_from_frame: false,
     created_at: new Date(now.getTime() - hoursAgo * 60 * 60 * 1000).toISOString(),
-    monitoring_watches: { owner_user_id: 'member-a', frame_id: null, show_on_frame: false },
+    monitoring_watches: { owner_user_id: 'member-a', frame_id: null, show_on_frame: false, title: 'Surfshop.no' },
     ...extra,
   }
 }
@@ -47,11 +47,16 @@ test('AI Assistant manual Show on frame control is removed from the app tab', ()
   assert.match(assistant, /Retry/)
 })
 
-test('AI Assistant mirror empty state supports Norwegian and English copy', () => {
-  assert.match(home, /function mirrorAiAssistantEmptyMessage/)
-  assert.match(home, /Ingen nye oppdateringer/)
-  assert.match(home, /No new updates/)
-  assert.match(home, /function mirrorAiAssistantHeader\(\) \{\n  return 'AI Assistant'/)
+test('AI Assistant mirror heading and loaded empty state support Norwegian and English copy', () => {
+  const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
+  assert.match(renderer, /function mirrorAiAssistantHeader\(language: AppLanguage\)/)
+  assert.match(renderer, /NYTT FOR DEG/)
+  assert.match(renderer, /NEW FOR YOU/)
+  assert.match(renderer, /FØLGER MED/)
+  assert.match(renderer, /WATCHING/)
+  assert.match(renderer, /Ingen nye oppdateringer/)
+  assert.match(renderer, /No new updates/)
+  assert.doesNotMatch(renderer, /Loading AI Assistant|AI ASSISTANT|KI-ASSISTENT|Watch|monitoring/)
 })
 
 test('AI Assistant frame selector ignores show_on_frame and frame_id but enforces membership', () => {
@@ -71,12 +76,12 @@ test('AI Assistant frame selector expires updates at the 24-hour boundary and so
 
 test('AI Assistant frame selector applies size limits and overflow counts', () => {
   const rows = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => row(String(n), n + 0.1))
-  assert.equal(AI_ASSISTANT_FRAME_LIMITS.small, 3)
-  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.small }).items.length, 3)
-  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.small }).overflowCount, 6)
-  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.medium }).items.length, 4)
-  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.large }).items.length, 6)
-  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.full }).items.length, 8)
+  assert.equal(AI_ASSISTANT_FRAME_LIMITS.small, 1)
+  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.small }).items.length, 1)
+  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.small }).overflowCount, 8)
+  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.medium }).items.length, 1)
+  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.large }).items.length, 2)
+  assert.equal(selectAiAssistantFrameItems(rows, { ...options, limit: AI_ASSISTANT_FRAME_LIMITS.full }).items.length, 2)
 })
 
 test('AI Assistant frame selector excludes dismissed and read updates, and includes shared-frame members', () => {
@@ -107,7 +112,7 @@ test('AI Assistant zero updates returns structured empty snapshot data and serve
 test('AI Assistant mirror snapshot uses device members instead of watch frame visibility fields', () => {
   assert.match(route, /from\('device_members'\)/)
   assert.match(route, /select\('user_id'\)/)
-  assert.match(route, /monitoring_watches!inner\(owner_user_id\)/)
+  assert.match(route, /monitoring_watches!inner\(owner_user_id,title\)/)
   assert.match(route, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.frame_id'/)
   assert.doesNotMatch(route, /eq\('monitoring_watches\.show_on_frame'/)
@@ -116,8 +121,14 @@ test('AI Assistant mirror snapshot uses device members instead of watch frame vi
   assert.match(route, /gt\('created_at', sinceIso\)/)
 })
 
-test('AI Assistant mirror renderer only uses headlines, not summary or source text', () => {
+test('AI Assistant mirror renderer uses hierarchy without bullets or private instructions', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /headline/)
-  assert.doesNotMatch(renderer, /summary|source_urls|source URL|confidence|timestamp|button/i)
+  assert.match(renderer, /title/)
+  assert.match(renderer, /\[-webkit-line-clamp:3\]/)
+  assert.match(renderer, /\[-webkit-line-clamp:2\]/)
+  assert.match(renderer, /displayLimit = variant === 'small' \|\| variant === 'medium' \? 1 : 2/)
+  assert.match(renderer, /\+ \$\{count\} flere i RE:MIND/)
+  assert.match(renderer, /\+ \$\{count\} more in RE:MIND/)
+  assert.doesNotMatch(renderer, /rounded-full bg-current|•|summary|source_urls|source URL|confidence|timestamp|button|original_request|instructions/i)
 })
