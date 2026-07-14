@@ -24,6 +24,22 @@ function row(id, hoursAgo, extra = {}) {
 
 const options = { memberUserIds: ['member-a', 'member-b'], now: new Date('2026-07-14T12:00:00.000Z'), limit: 8 }
 
+function mirrorSnapshotModules() {
+  const match = route.match(/const MODULES = new Set\(\[([^\]]+)\]\)/)
+  assert.ok(match, 'Mirror snapshot MODULES whitelist should be declared as a Set literal')
+  return [...match[1].matchAll(/'([^']+)'/g)].map((x) => x[1])
+}
+
+function parseStoredModuleLikeRoute(value) {
+  const modules = new Set(mirrorSnapshotModules())
+  const raw = String(value ?? '').trim()
+  const [baseRaw, idRaw] = raw.split(':', 2)
+  const base = baseRaw.toLowerCase()
+  if (!modules.has(base)) return null
+  const id = Math.max(1, Math.round(Number(idRaw || 1)) || 1)
+  return { raw, base, id }
+}
+
 test('AI Assistant manual Show on frame control is removed from the app tab', () => {
   assert.doesNotMatch(assistant, /Show on frame|Vis på frame|showOnFrame|setWatchFrameVisibility|set_ai_assistant_watch_frame_visibility/)
   assert.doesNotMatch(assistant, /show_' \+ 'on_frame|monitoring_watches\(title\)/)
@@ -70,6 +86,13 @@ test('AI Assistant frame selector excludes dismissed, keeps read, and includes s
     row('shared-authorized', 2, { monitoring_watches: { owner_user_id: 'member-b', frame_id: null, show_on_frame: false } }),
   ], options)
   assert.deepEqual(selected.items.map((x) => x.id), ['read-visible', 'shared-authorized'])
+})
+
+test('AI Assistant mirror snapshot parser accepts Assistant module cells', () => {
+  assert.ok(mirrorSnapshotModules().includes('assistant'))
+  assert.match(route, /parsed\.base === 'assistant'/)
+  assert.deepEqual(parseStoredModuleLikeRoute('assistant'), { raw: 'assistant', base: 'assistant', id: 1 })
+  assert.deepEqual(parseStoredModuleLikeRoute('assistant:2'), { raw: 'assistant:2', base: 'assistant', id: 2 })
 })
 
 test('AI Assistant zero updates returns structured empty snapshot data and server errors do not hang', () => {
