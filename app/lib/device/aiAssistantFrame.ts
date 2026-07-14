@@ -45,10 +45,12 @@ export function sanitizeAiAssistantMirrorSummary(summary: unknown, headline: unk
     .replace(/www\.\S+/gi, ' ')
     .replace(/^\s{0,3}#{1,6}\s*/gm, '')
     .replace(/^\s{0,3}>\s?/gm, '')
-    .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+|[-*_]{3,}\s*$)/gm, '')
+    .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, ' ¶ ')
+    .replace(/\s[-*+]\s+/g, ' ¶ ')
+    .replace(/^\s*(?:[-*_]{3,}\s*$)/gm, '')
     .replace(/[*_~`#|]+/g, '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/[ \t]*\n+[ \t]*/g, ' ')
+    .replace(/[ \t]*\n+[ \t]*/g, '\n')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -64,10 +66,50 @@ export function sanitizeAiAssistantMirrorSummary(summary: unknown, headline: unk
     }
   }
 
-  text = text.replace(/\s+/g, ' ').trim()
+  text = removeGenericAiAssistantIntro(text)
+  text = preferAiAssistantConcreteFindings(text)
+  text = text.replace(/\s+/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim()
   if (!text) return ''
 
   const words = text.split(/\s+/)
-  if (words.length > safeMaxWords) text = words.slice(0, safeMaxWords).join(' ')
-  return text.replace(/(?:\s*\.\.\.)+$/g, '').replace(/[\s,;:–—-]+$/g, '').trim()
+  if (words.length > safeMaxWords) text = `${words.slice(0, safeMaxWords).join(' ').replace(/[,:;–—-]+$/g, '').trim()}…`
+  return text.replace(/\.{3,}/g, '…').replace(/…+/g, '…').replace(/[\s,;:–—-]+(?=…$)/g, '').replace(/[\s,;:–—-]+$/g, '').trim()
+}
+
+function removeGenericAiAssistantIntro(value: string) {
+  let text = value.trim()
+  const genericIntro = /^(?:her er (?:noen|resultatene|et utvalg av|de viktigste)[^:.\n]{0,140}|jeg fant[^:.\n]{0,140}|here are (?:some|the results|a few|the key)[^:.\n]{0,140}|i found[^:.\n]{0,140})(?:[:.]\s*|\s+)/i
+  let previous = ''
+  while (text && text !== previous && genericIntro.test(text)) {
+    previous = text
+    text = text.replace(genericIntro, '').trim()
+  }
+  return text
+}
+
+function preferAiAssistantConcreteFindings(value: string) {
+  const text = value.includes('¶') ? `¶${value.split('¶').slice(1).join('¶')}`.trim() : value.trim()
+  const listMatches = text.includes('¶') ? text.split('¶').slice(1)
+    .map((match) => cleanupAiAssistantFinding(match))
+    .filter(isMeaningfulAiAssistantFinding)
+    .slice(0, 3) : []
+  if (listMatches.length > 0) return listMatches.join(' ')
+
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map(cleanupAiAssistantFinding)
+    .filter(isMeaningfulAiAssistantFinding)
+  return (sentences.length > 0 ? sentences.slice(0, 3).join(' ') : text).trim()
+}
+
+function cleanupAiAssistantFinding(value: string) {
+  const text = value.replace(/^(?:lørdag|søndag|mandag|tirsdag|onsdag|torsdag|fredag|saturday|sunday|monday|tuesday|wednesday|thursday|friday)\s+\d{1,2}\.\s+[a-zæøå]+\s+\d{4}:\s*/i, '').trim()
+  if (!text) return ''
+  return /[.!?]$/.test(text) ? text : `${text}.`
+}
+
+function isMeaningfulAiAssistantFinding(value: string) {
+  const text = value.trim()
+  if (text.length < 8) return false
+  return !/^(?:lørdag|søndag|mandag|tirsdag|onsdag|torsdag|fredag|saturday|sunday|monday|tuesday|wednesday|thursday|friday)\s+\d{1,2}\.\s+[a-zæøå]+\s+\d{4}\.?$/i.test(text)
 }

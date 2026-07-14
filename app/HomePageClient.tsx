@@ -3678,6 +3678,9 @@ function formatMirrorCountdownDaysUnit(days: number) {
 
 
 const MIRROR_MODULE_HEADER_CLASS = "max-w-full shrink-0 truncate border-b border-current px-[clamp(0.24rem,0.72vw,0.55rem)] pb-[clamp(0.06rem,0.18vw,0.12rem)] text-[clamp(0.72rem,1.75vw,1.08rem)] font-medium leading-none tracking-[0.12em] uppercase"
+const MIRROR_PRIMARY_TEXT_CLASS = "text-[clamp(0.7rem,1.5vw,0.98rem)] font-medium tracking-[0.04em]"
+const MIRROR_SECONDARY_TEXT_CLASS = "text-[clamp(0.66rem,1.48vw,0.94rem)] font-medium tracking-[0.035em]"
+const MIRROR_SUBTLE_TEXT_CLASS = "text-[clamp(0.5rem,1.08vw,0.72rem)] font-medium tracking-[0.04em]"
 
 function MirrorModuleHeader({
   title,
@@ -4939,12 +4942,12 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
     <div className="relative flex h-full w-full flex-col items-center overflow-hidden px-[clamp(0.8rem,2vw,1.35rem)] py-[clamp(0.75rem,1.85vw,1.25rem)] text-center leading-none">
       <MirrorModuleHeader title={header} className="mx-auto" />
       <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-[clamp(0.58rem,1.35vw,0.96rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]">
-        <div className={`${isMedium ? 'max-w-[24ch]' : 'max-w-[28ch]'} min-h-0 w-full`}>
-          <MirrorAiAssistantHeadline lines={3} className={`${isMedium ? 'text-[clamp(0.82rem,1.72vw,1.08rem)]' : 'text-[clamp(0.9rem,1.82vw,1.18rem)]'} font-semibold leading-[1.08] tracking-[-0.01em]`}>{primary.headline}</MirrorAiAssistantHeadline>
-          <MirrorAiAssistantRecap mutedColor={mutedColor} lines={isMedium ? 3 : 4} className="mt-[clamp(0.38rem,0.9vw,0.62rem)] text-[clamp(0.64rem,1.2vw,0.82rem)]">{primary.summary}</MirrorAiAssistantRecap>
-          <div className="mt-[clamp(0.42rem,1vw,0.7rem)] text-center text-[clamp(0.56rem,1.08vw,0.76rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>{mirrorAiAssistantDiscoveredLabel(primary.created_at, language)}</div>
+        <div className={`${isMedium ? 'max-w-[34ch]' : 'max-w-[42ch]'} min-h-0 w-full`}>
+          <MirrorAiAssistantHeadline lines={3} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{primary.headline}</MirrorAiAssistantHeadline>
+          <MirrorAiAssistantRecap mutedColor={mutedColor} lines={isMedium ? 2 : 3} className={`mt-[clamp(0.38rem,0.9vw,0.62rem)] ${MIRROR_SECONDARY_TEXT_CLASS}`}>{primary.summary}</MirrorAiAssistantRecap>
+          <div className={`mt-[clamp(0.42rem,1vw,0.7rem)] text-center ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantDiscoveredLabel(primary.created_at, language)}</div>
         </div>
-        {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className="text-[clamp(0.76rem,1.38vw,0.96rem)] font-medium leading-[1.1] tracking-[-0.005em]">{secondary.headline}</MirrorAiAssistantHeadline></div>}
+        {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className={`${MIRROR_PRIMARY_TEXT_CLASS} leading-[1.12]`}>{secondary.headline}</MirrorAiAssistantHeadline></div>}
       </div>
       {moreLabel && <div className="shrink-0 text-center text-[clamp(0.5rem,1vw,0.68rem)] font-medium tracking-[0.04em]" style={{ color: mutedColor }}>{moreLabel}</div>}
     </div>

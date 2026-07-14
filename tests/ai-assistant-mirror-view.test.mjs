@@ -164,23 +164,35 @@ See https://tracker.example.com/a?utm_campaign=nope and [rail work](https://rail
 test('AI Assistant summary sanitizer falls back to empty for unusable input and clamps at word boundaries', () => {
   assert.equal(sanitizeAiAssistantMirrorSummary('', 'Headline', 20), '')
   assert.equal(sanitizeAiAssistantMirrorSummary('https://example.com/?utm_source=x', 'Headline', 20), '')
-  assert.equal(sanitizeAiAssistantMirrorSummary('Headline: one two three four five', 'Headline', 3), 'one two three')
+  assert.equal(sanitizeAiAssistantMirrorSummary('Headline: one two three four five', 'Headline', 3), 'one two three…')
   assert.doesNotMatch(sanitizeAiAssistantMirrorSummary('one two three four', '', 3), /\.\.\.$|thr$/)
 })
 
 test('AI Assistant mirror renderer clamps large and medium recap and omits small recap', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
   assert.match(renderer, /variant === 'large' \|\| variant === 'xl' \? 42 : variant === 'medium' \? 28 : 0/)
-  assert.match(renderer, /lines=\{isMedium \? 3 : 4\}/)
+  assert.match(renderer, /lines=\{isMedium \? 2 : 3\}/)
   const smallBlock = renderer.slice(renderer.indexOf("if (variant === 'small')"), renderer.indexOf('const primary = items[0]'))
   assert.doesNotMatch(smallBlock, /MirrorAiAssistantRecap|summary/)
 })
 
 test('AI Assistant mirror typography stays aligned with surrounding module scale', () => {
   const renderer = home.slice(home.indexOf('function mirrorAiAssistantHeader'), home.indexOf('function MirrorLargeRemindersCard'))
-  assert.match(renderer, /text-\[clamp\(0\.9rem,1\.82vw,1\.18rem\)\]/)
-  assert.match(renderer, /text-\[clamp\(0\.82rem,1\.72vw,1\.08rem\)\]/)
-  assert.match(renderer, /text-\[clamp\(0\.64rem,1\.2vw,0\.82rem\)\]/)
+  assert.match(home, /MIRROR_PRIMARY_TEXT_CLASS = "text-\[clamp\(0\.7rem,1\.5vw,0\.98rem\)\] font-medium tracking-\[0\.04em\]"/)
+  assert.match(home, /MIRROR_SECONDARY_TEXT_CLASS = "text-\[clamp\(0\.66rem,1\.48vw,0\.94rem\)\] font-medium tracking-\[0\.035em\]"/)
+  assert.match(renderer, /MIRROR_PRIMARY_TEXT_CLASS/)
+  assert.match(renderer, /MIRROR_SECONDARY_TEXT_CLASS/)
   assert.doesNotMatch(renderer, /2\.55vw|1\.72rem|2\.35vw|1\.42rem/)
   assert.match(renderer, /font-medium leading-\[1\.18\]/)
+})
+
+test('AI Assistant summary sanitizer removes generic intros and prefers concrete list findings', () => {
+  const cleaned = sanitizeAiAssistantMirrorSummary('Her er noen arrangementer som finner sted i Stavanger helgen 18.–19. juli 2026: - Lørdag arrangeres Cute Closet Summer Fashion Show kl. 18. - Søndag er det fotballfest i Vågen kl. 17. - Jærbanen er stengt deler av helgen og kan påvirke reisen.', 'Arrangementer i Stavanger helgen 18.–19. juli', 40)
+  assert.equal(cleaned, 'Lørdag arrangeres Cute Closet Summer Fashion Show kl. 18. Søndag er det fotballfest i Vågen kl. 17. Jærbanen er stengt deler av helgen og kan påvirke reisen.')
+})
+
+test('AI Assistant summary sanitizer truncates with at most one proper ellipsis and never through a word', () => {
+  const cleaned = sanitizeAiAssistantMirrorSummary('Alpha beta gamma delta epsilon zeta eta theta iota', '', 5)
+  assert.equal(cleaned, 'Alpha beta gamma delta epsilon…')
+  assert.doesNotMatch(cleaned, /\.{3}|….*…|epsil$/)
 })
