@@ -11,8 +11,23 @@ export type AiAssistantFrameUpdate = {
   monitoring_watches?: { owner_user_id?: string | null; frame_id?: string | null; show_on_frame?: boolean | null; title?: string | null } | null
 }
 
-export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], options: { frameId?: string; memberUserIds?: string[]; now?: Date; limit: number }) {
-  const cutoffMs = (options.now ?? new Date()).getTime() - 24 * 60 * 60 * 1000
+type AiAssistantSelectionOptions = {
+  frameId?: string
+  memberUserIds?: string[]
+  now?: Date
+  limit: number
+  renderCycleId?: string | null
+  previousSelectedId?: string | null
+}
+
+function candidateTimestamp(row: { created_at: string }) {
+  return new Date(row.created_at).getTime()
+}
+
+export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], options: AiAssistantSelectionOptions) {
+  const renderCycleMs = options.renderCycleId ? new Date(options.renderCycleId).getTime() : Number.NaN
+  const referenceNow = !Number.isNaN(renderCycleMs) ? new Date(renderCycleMs) : (options.now ?? new Date())
+  const cutoffMs = referenceNow.getTime() - 24 * 60 * 60 * 1000
   const hasMembershipFilter = Array.isArray(options.memberUserIds)
   const memberUserIds = new Set((options.memberUserIds ?? []).map((id) => String(id).trim()).filter(Boolean))
   const candidates = rows
@@ -20,11 +35,22 @@ export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], opti
     .filter((row) => row.is_read !== true)
     .filter((row) => row.dismissed_from_frame !== true)
     .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), summary: typeof row.summary === 'string' ? row.summary : null, created_at: String(row.created_at ?? '') }))
-    .filter((row) => row.id && row.headline && !Number.isNaN(new Date(row.created_at).getTime()) && new Date(row.created_at).getTime() > cutoffMs)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .filter((row) => row.id && row.headline && !Number.isNaN(candidateTimestamp(row)) && candidateTimestamp(row) > cutoffMs)
+    .filter((row) => Number.isNaN(renderCycleMs) || candidateTimestamp(row) <= renderCycleMs)
+    .sort((a, b) => candidateTimestamp(b) - candidateTimestamp(a))
   const safeLimit = Math.max(0, Math.floor(options.limit))
-  return { items: candidates.slice(0, safeLimit), overflowCount: Math.max(0, candidates.length - safeLimit) }
+  if (safeLimit <= 0 || candidates.length <= 1) return { items: candidates.slice(0, safeLimit), overflowCount: Math.max(0, candidates.length - safeLimit) }
+
+  let selectedIndex = 0
+  const previousIndex = candidates.findIndex((row) => row.id === options.previousSelectedId)
+  if (previousIndex >= 0) {
+    selectedIndex = (previousIndex + 1) % candidates.length
+  }
+
+  const rotated = candidates.slice(selectedIndex).concat(candidates.slice(0, selectedIndex))
+  return { items: rotated.slice(0, safeLimit), overflowCount: Math.max(0, candidates.length - safeLimit) }
 }
+
 
 
 export function sanitizeAiAssistantMirrorSummary(summary: unknown, headline: unknown, maxWords: number) {

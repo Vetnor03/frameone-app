@@ -1848,7 +1848,7 @@ function formatReminderMirrorNextItems(items: UnknownRecord[]) {
 }
 
 
-async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
+async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, renderCycleId: string | null, limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
   const empty = {
     primary: 'AI Assistant',
     secondary: 'AI Assistant',
@@ -1857,7 +1857,9 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
   }
 
   try {
-    const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const renderCycleMs = renderCycleId ? new Date(renderCycleId).getTime() : Number.NaN
+    const referenceMs = Number.isNaN(renderCycleMs) ? Date.now() : renderCycleMs
+    const sinceIso = new Date(referenceMs - 24 * 60 * 60 * 1000).toISOString()
     const { data: memberRows, error: memberError } = await supabase
       .from('device_members')
       .select('user_id')
@@ -1874,11 +1876,12 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
       .eq('is_read', false)
       .eq('dismissed_from_frame', false)
       .gt('created_at', sinceIso)
+      .lte('created_at', new Date(referenceMs).toISOString())
       .order('created_at', { ascending: false })
       .limit(limit + 25)
     if (error) throw error
 
-    const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { memberUserIds, limit })
+    const selected = selectAiAssistantFrameItems((Array.isArray(data) ? data : []) as AiAssistantFrameUpdate[], { memberUserIds, limit, renderCycleId })
     return {
       primary: 'AI Assistant',
       secondary: 'AI Assistant',
@@ -2100,7 +2103,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
-        else if (parsed.base === 'assistant') detailsBySlot[String(slot)] = await aiAssistantDetail(supabase, deviceId)
+        else if (parsed.base === 'assistant') detailsBySlot[String(slot)] = await aiAssistantDetail(supabase, deviceId, statusRow?.last_render_at ?? statusRow?.last_refresh_at ?? null)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, mirrorScope.storageDeviceIds, mirrorScope.ownerId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, mirrorScope.storageDeviceIds, language)
       } catch (e: unknown) {
