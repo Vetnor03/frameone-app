@@ -44,10 +44,13 @@ test('invalid existing titles are invalid and only simplify to legacy fallback o
   assert.notEqual(simplifyAiAssistantTopicTitle(title, 'no'), title.toUpperCase())
 })
 
-test('original request never reaches frame rendering', () => {
+test('original request reaches only the shared active Watch request list', () => {
   const selected = selectAiAssistantFrameItems([row('private', { original_request: 'Gi beskjed om salg på våtdrakter og surfebrett' })], options)
   assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|Gi beskjed/)
-  assert.doesNotMatch(route, /original_request|trigger_description|search_guidance/)
+  assert.match(route, /original_request/)
+  assert.match(route, /aiAssistantActiveWatchRequests/)
+  assert.match(home, /detail\.aiAssistantActiveWatchRequests/)
+  assert.doesNotMatch(route, /trigger_description|search_guidance/)
 })
 
 test('update headline is not reused as topic header', () => {
