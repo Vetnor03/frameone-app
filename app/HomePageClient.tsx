@@ -12,6 +12,7 @@ import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased }
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
+import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -362,7 +363,7 @@ type MirrorModuleDetail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
-  aiAssistantItems?: Array<{ id: string; headline: string; title?: string; created_at: string }>
+  aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string }>
   aiAssistantOverflowCount?: number
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
@@ -4859,43 +4860,19 @@ function mirrorAiAssistantEmptyEyebrow(language: AppLanguage) {
   return language === 'no' ? 'FØLGER MED' : 'WATCHING'
 }
 
-function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number) {
+function mirrorAiAssistantItems(detail: MirrorModuleDetail, maxItems: number, recapWords: number) {
   return (Array.isArray(detail.aiAssistantItems) ? detail.aiAssistantItems : [])
     .map((item) => {
-      const title = String(item?.title ?? '').trim()
       const headline = String(item?.headline ?? '').trim()
       return {
         id: String(item?.id ?? '').trim(),
-        title: mirrorAiAssistantContextLabel(title, headline),
         headline,
+        summary: sanitizeAiAssistantMirrorSummary(item?.summary, headline, recapWords),
         created_at: String(item?.created_at ?? '').trim(),
       }
     })
     .filter((item) => item.id && item.headline)
     .slice(0, maxItems)
-}
-
-function mirrorAiAssistantComparableText(value: string) {
-  return value
-    .toLocaleLowerCase()
-    .replace(/https?:\/\/\S+/g, ' ')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .split(/\s+/)
-    .filter((word) => word.length >= 3)
-}
-
-function mirrorAiAssistantContextLabel(title: string, headline: string) {
-  if (!title) return ''
-  const trimmed = title.trim()
-  const words = trimmed.split(/\s+/).filter(Boolean)
-  const titleTerms = new Set(mirrorAiAssistantComparableText(trimmed))
-  const headlineTerms = new Set(mirrorAiAssistantComparableText(headline))
-  const overlap = [...titleTerms].filter((term) => headlineTerms.has(term)).length
-  const similarity = titleTerms.size > 0 ? overlap / titleTerms.size : 0
-  const isShortDistinctSource = words.length <= 3 && trimmed.length <= 32 && similarity < 0.6
-  if (isShortDistinctSource) return trimmed
-  if (trimmed.length > 48 || words.length > 7 || similarity >= 0.6) return ''
-  return trimmed
 }
 
 function mirrorAiAssistantEmptyMessage(language: AppLanguage) {
@@ -4923,14 +4900,15 @@ function MirrorAiAssistantHeadline({ children, lines, className = '' }: { childr
   return <div className={`mx-auto overflow-hidden text-balance text-center [-webkit-box-orient:vertical] [display:-webkit-box] ${lines === 2 ? '[-webkit-line-clamp:2]' : '[-webkit-line-clamp:3]'} ${className}`}>{children}</div>
 }
 
-function MirrorAiAssistantContext({ children, className = '', mutedColor }: { children: React.ReactNode; className?: string; mutedColor: string }) {
+function MirrorAiAssistantRecap({ children, lines, className = '', mutedColor }: { children: React.ReactNode; lines: 2 | 3 | 4; className?: string; mutedColor: string }) {
   if (!children) return null
-  return <div className={`mx-auto max-w-full truncate text-center font-medium normal-case tracking-[0.05em] ${className}`} style={{ color: mutedColor }}>{children}</div>
+  return <div className={`mx-auto overflow-hidden text-balance text-center font-medium leading-[1.18] tracking-[0.01em] [-webkit-box-orient:vertical] [display:-webkit-box] ${lines === 4 ? '[-webkit-line-clamp:4]' : lines === 3 ? '[-webkit-line-clamp:3]' : '[-webkit-line-clamp:2]'} ${className}`} style={{ color: mutedColor }}>{children}</div>
 }
 
 function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxItems, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; borderColor: string; maxItems: number; variant: 'small' | 'medium' | 'large' | 'xl' }) {
   const displayLimit = variant === 'small' || variant === 'medium' ? 1 : 2
-  const items = mirrorAiAssistantItems(detail, Math.min(maxItems, displayLimit))
+  const recapWords = variant === 'large' || variant === 'xl' ? 42 : variant === 'medium' ? 28 : 0
+  const items = mirrorAiAssistantItems(detail, Math.min(maxItems, displayLimit), recapWords)
   const header = mirrorAiAssistantHeader(language)
   const overflowCount = Math.max(0, Math.floor(Number(detail.aiAssistantOverflowCount) || 0))
   const moreLabel = mirrorAiAssistantMoreLabel(overflowCount, language)
@@ -4949,7 +4927,7 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
     return (
       <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden px-[clamp(0.52rem,1.3vw,0.88rem)] py-[clamp(0.5rem,1.2vw,0.78rem)] text-center leading-none">
         <MirrorModuleHeader title={header} className="mx-auto" />
-        <MirrorAiAssistantHeadline lines={2} className="mt-[clamp(0.5rem,1.2vw,0.78rem)] max-w-[18ch] text-[clamp(0.82rem,1.9vw,1.12rem)] font-semibold leading-[1.09] tracking-[-0.005em]">{item.headline}</MirrorAiAssistantHeadline>
+        <MirrorAiAssistantHeadline lines={2} className="mt-[clamp(0.5rem,1.2vw,0.78rem)] max-w-[18ch] text-[clamp(0.76rem,1.55vw,0.98rem)] font-semibold leading-[1.09] tracking-[-0.005em]">{item.headline}</MirrorAiAssistantHeadline>
       </div>
     )
   }
@@ -4962,11 +4940,11 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
       <MirrorModuleHeader title={header} className="mx-auto" />
       <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-[clamp(0.58rem,1.35vw,0.96rem)] py-[clamp(0.5rem,1.2vw,0.95rem)]">
         <div className={`${isMedium ? 'max-w-[24ch]' : 'max-w-[28ch]'} min-h-0 w-full`}>
-          <MirrorAiAssistantHeadline lines={3} className={`${isMedium ? 'text-[clamp(1rem,2.35vw,1.42rem)]' : 'text-[clamp(1.08rem,2.55vw,1.72rem)]'} font-semibold leading-[1.08] tracking-[-0.01em]`}>{primary.headline}</MirrorAiAssistantHeadline>
-          <MirrorAiAssistantContext mutedColor={mutedColor} className="mt-[clamp(0.38rem,0.9vw,0.62rem)] text-[clamp(0.58rem,1.08vw,0.76rem)]">{primary.title}</MirrorAiAssistantContext>
+          <MirrorAiAssistantHeadline lines={3} className={`${isMedium ? 'text-[clamp(0.82rem,1.72vw,1.08rem)]' : 'text-[clamp(0.9rem,1.82vw,1.18rem)]'} font-semibold leading-[1.08] tracking-[-0.01em]`}>{primary.headline}</MirrorAiAssistantHeadline>
+          <MirrorAiAssistantRecap mutedColor={mutedColor} lines={isMedium ? 3 : 4} className="mt-[clamp(0.38rem,0.9vw,0.62rem)] text-[clamp(0.64rem,1.2vw,0.82rem)]">{primary.summary}</MirrorAiAssistantRecap>
           <div className="mt-[clamp(0.42rem,1vw,0.7rem)] text-center text-[clamp(0.56rem,1.08vw,0.76rem)] font-medium tracking-[0.06em]" style={{ color: mutedColor }}>{mirrorAiAssistantDiscoveredLabel(primary.created_at, language)}</div>
         </div>
-        {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className="text-[clamp(0.82rem,1.58vw,1.08rem)] font-medium leading-[1.1] tracking-[-0.005em]">{secondary.headline}</MirrorAiAssistantHeadline><MirrorAiAssistantContext mutedColor={mutedColor} className="mt-[clamp(0.28rem,0.68vw,0.48rem)] text-[clamp(0.5rem,0.95vw,0.66rem)]">{secondary.title}</MirrorAiAssistantContext></div>}
+        {!isMedium && secondary && <div className="w-full max-w-[26ch] border-t pt-[clamp(0.55rem,1.2vw,0.82rem)]" style={{ borderColor }}><MirrorAiAssistantHeadline lines={2} className="text-[clamp(0.76rem,1.38vw,0.96rem)] font-medium leading-[1.1] tracking-[-0.005em]">{secondary.headline}</MirrorAiAssistantHeadline></div>}
       </div>
       {moreLabel && <div className="shrink-0 text-center text-[clamp(0.5rem,1vw,0.68rem)] font-medium tracking-[0.04em]" style={{ color: mutedColor }}>{moreLabel}</div>}
     </div>
