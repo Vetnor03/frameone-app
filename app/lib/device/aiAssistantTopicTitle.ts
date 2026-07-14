@@ -16,13 +16,6 @@ export function aiAssistantNoUpdatesHeader(language: AiAssistantTopicLanguage) {
   return language === 'no' ? 'INGENTING NYTT' : 'NOTHING NEW'
 }
 
-export function aiAssistantPendingTopicsMessage(language: AiAssistantTopicLanguage) {
-  return language === 'no' ? 'Klargjør temaer' : 'Preparing topics'
-}
-
-export function aiAssistantPreparingCountLabel(count: number, language: AiAssistantTopicLanguage) {
-  return language === 'no' ? `+ ${count} klargjøres` : `+ ${count} preparing`
-}
 
 export function aiAssistantSelectedUpdateFallbackTitle(language: AiAssistantTopicLanguage) {
   return language === 'no' ? 'NY OPPDATERING' : 'NEW UPDATE'
