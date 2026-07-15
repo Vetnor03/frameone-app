@@ -31,6 +31,18 @@ type ReminderRow = {
   is_done: boolean | null
 }
 
+type PhysicalDeviceReminderItem = {
+  reminder_id: string
+  title: string
+  occurrence_date: string
+  display_date: string
+  days_until: number
+  is_overdue: boolean
+  repeat: string
+  due_time: string | null
+  display_time: string | null
+}
+
 const DEFAULT_TZ = 'Europe/Oslo'
 const DEFAULT_LIMIT = 12
 const MAX_LIMIT = 12
@@ -295,6 +307,20 @@ function normalizeHorizonDays(raw: string | null) {
 
 function logOptionalReminderProviderFailure(provider: string, error: unknown) {
   console.warn(`[device/reminders] Optional reminder provider ${provider} failed`, error)
+}
+
+function toPhysicalDeviceReminderItem(item: DeviceReminderItem): PhysicalDeviceReminderItem {
+  return {
+    reminder_id: item.reminder_id,
+    title: item.title,
+    occurrence_date: item.occurrence_date,
+    display_date: item.display_date,
+    days_until: item.days_until,
+    is_overdue: item.is_overdue,
+    repeat: item.repeat,
+    due_time: item.due_time,
+    display_time: item.display_time,
+  }
 }
 
 function isTimedOccurrenceAlreadyPassed(
@@ -598,8 +624,17 @@ export async function GET(req: Request) {
         return true
       })
     const selectedItems = selectReminderDisplayGroups(allItems, limit)
+    const physicalItems = selectedItems.map(toPhysicalDeviceReminderItem)
+    const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems }), 'utf8')
 
-    return NextResponse.json({ items: selectedItems })
+    console.info('[device/reminders] compact response', {
+      device_id,
+      selected_item_count: physicalItems.length,
+      compact_json_byte_size: compactJsonByteSize,
+      includes_local_events: selectedItems.some((item) => item.source === 'local-events'),
+    })
+
+    return NextResponse.json({ items: physicalItems })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to load reminders' }, { status: 500 })
   }

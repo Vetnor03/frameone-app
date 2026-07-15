@@ -92,3 +92,14 @@ test('Local Events sort as one integration without breaking other providers', ()
   assert.equal(sorted[1].title, 'Saturday Local Event')
   assert.deepEqual(Object.keys({ items: sorted }), ['items'])
 })
+
+test('app-facing Local Events frame item still keeps raw metadata before the physical route compacts it', () => {
+  const items = buildLocalEventFrameItem([
+    row('raw-event', 'Raw Event', null, { date: '2026-07-15', all_day: true, areaKeys: ['oslo'], private_nested: { keep: true } }),
+  ], [], today, at('2026-07-12T12:00:00Z'))
+  assert.equal(items.length, 1)
+  assert.equal(items[0].source, 'local-events')
+  assert.equal(items[0].provider, provider)
+  assert.equal(items[0].external_id, 'raw-event')
+  assert.deepEqual(items[0].raw, { date: '2026-07-15', all_day: true, areaKeys: ['oslo'], private_nested: { keep: true } })
+})
