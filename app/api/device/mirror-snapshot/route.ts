@@ -2118,7 +2118,7 @@ export async function GET(req: Request) {
     const mirrorScope = await resolveMirrorDeviceScope(supabase, deviceId, authData.user.id)
 
     const origin = appOrigin(req)
-    const frameConfig = asRecord(await buildFrameConfigPayload(supabase, deviceId, { target: 'mirror' }))
+    const frameConfig = asRecord(await buildFrameConfigPayload(supabase, deviceId))
     if (frameConfig.pair_required === true || frameConfig.unpaired === true) {
       return NextResponse.json(frameConfig)
     }
