@@ -178,7 +178,7 @@ export async function deviceHasOwnerAccessLink(supabase: SupabaseClient, device_
   return Array.isArray(memberRows) && memberRows.length > 0
 }
 
-export async function buildFrameConfigPayload(supabase: SupabaseClient, device_id: string): Promise<DeviceFrameConfigPayload> {
+export async function buildFrameConfigPayload(supabase: SupabaseClient, device_id: string, options: { target?: 'firmware' | 'mirror' } = {}): Promise<DeviceFrameConfigPayload> {
     const hasOwnerAccessLink = await deviceHasOwnerAccessLink(supabase, device_id)
     if (!hasOwnerAccessLink) return pairRequiredPayload(device_id)
 
@@ -209,8 +209,17 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
         ? (settings_json.modules as UnknownRecord)
         : {}
 
-    // Read cells first and keep them unchanged for firmware layout parsing.
-    const cells = Array.isArray(settings_json.cells) ? settings_json.cells : []
+    // Mirror View may render Assistant in the browser, but currently deployed physical
+    // firmware does not have a complete Assistant implementation. Keep Assistant in
+    // mirror snapshots while omitting it from the firmware config payload so existing
+    // frames render the rest of the dashboard and acknowledge the revision.
+    const rawCells = Array.isArray(settings_json.cells) ? settings_json.cells : []
+    const cells = options.target === 'mirror' ? rawCells : rawCells.map((cell) => {
+      if (!cell || typeof cell !== 'object') return cell
+      const moduleName = asString((cell as UnknownRecord).module, '').trim().toLowerCase()
+      const base = moduleName.split(':', 1)[0]
+      return base === 'assistant' ? { ...(cell as UnknownRecord), module: '' } : cell
+    })
     const active = activeModulesFromCells(cells)
     const responseModules: UnknownRecord = {}
 

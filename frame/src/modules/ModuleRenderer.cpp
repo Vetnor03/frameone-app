@@ -11,7 +11,6 @@
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
 #include "ModuleGroceries.h"
-#include "ModuleAssistant.h"
 
 // Simple smooth placeholder font (keep UI consistent)
 #include <Fonts/FreeSansBold12pt7b.h>
@@ -87,11 +86,6 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
     }
 
     // Dispatch modules here
-    if (mod.equalsIgnoreCase("assistant") || mod.startsWith("assistant:")) {
-      ModuleAssistant::render(c, mod);
-      continue;
-    }
-
     if (mod.equalsIgnoreCase("date")) {
       ModuleDate::render(c);
       continue;
@@ -132,9 +126,7 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
       continue;
     }
 
-    // Unknown modules fail softly: leave the cell blank so one bad key never
-    // prevents the rest of the dashboard from rendering or being acknowledged.
-    Serial.print("Unknown module skipped: ");
-    Serial.println(mod);
+    // Placeholder for not-yet-built modules
+    drawCenteredLine(c.x, c.y, c.w, c.h, mod.c_str(), &FreeSansBold12pt7b, Theme::ink());
   }
 }

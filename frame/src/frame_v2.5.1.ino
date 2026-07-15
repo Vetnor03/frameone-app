@@ -21,7 +21,6 @@
 #include "ModuleReminders.h"
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
-#include "ModuleAssistant.h"
 #include "FirmwareUpdater.h"
 
 #include <Preferences.h>
@@ -776,14 +775,8 @@ void setup() {
       }
       if (recoverPairingIfTokenLost("frame-config fetch", pwr.usbPresent)) return;
 
-      // Fail-safe: preserve the last valid e-paper image when this content
-      // revision cannot be fetched or parsed. Acknowledging this specific
-      // revision prevents an infinite wake/render loop; a later updated_at
-      // change will still be picked up normally.
-      Serial.println("⚠️ Could not load frame config; preserving current ePaper image and suppressing this failing revision");
-      if (updatedAt.length() > 0) UpdateChecker::saveApplied(updatedAt);
-      postDeviceStatus(batt, pwr, false);
-      UpdateChecker::saveBatteryPercent(batt.percent);
+      ensureDisplay();
+      ScreenPairing::showError("Could not load frame");
       goToSleep(pwr.usbPresent);
       return;
     }
@@ -799,7 +792,6 @@ void setup() {
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
-  ModuleAssistant::setConfig(&g_cfg);
 
   ensureDisplay();
 
