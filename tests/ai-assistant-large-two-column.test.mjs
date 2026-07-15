@@ -28,18 +28,17 @@ test('large Assistant left panel shows exactly one selected update or the empty 
   assert.match(home, /NOTHING NEW|aiAssistantNoUpdatesHeader\(language\)/)
 })
 
-test('large Assistant right panel renders stored watch requests directly, caps at five and reports overflow', () => {
-  assert.match(home, /aiAssistantActiveWatchRequests\?: string\[\]/)
-  assert.match(route, /aiAssistantActiveWatchRequests: \[\]/)
-  assert.match(route, /original_request/)
-  assert.doesNotMatch(route, /isValidAiAssistantTopicTitle\(row\.title\)/)
-  assert.match(large, /const requests = mirrorAiAssistantActiveWatchRequests\(detail\)/)
-  assert.match(home, /\.slice\(0, 5\)/)
-  assert.match(large, /const overflowCount = Math\.max\(0, Math\.floor\(Number\(detail\.aiAssistantActiveWatchCount\) \|\| 0\) - requests\.length\)/)
+test('large Assistant right panel uses snapshot watch topics, deduplicates, caps at five and reports overflow', () => {
+  assert.match(home, /aiAssistantActiveWatchTopics\?: string\[\]/)
+  assert.match(route, /aiAssistantActiveWatchTopics: \[\]/)
+  assert.match(route, /isValidAiAssistantTopicTitle\(row\.title\)/)
+  assert.match(large, /const topics = mirrorAiAssistantActiveWatchTopics\(detail, language\)/)
+  assert.match(large, /const visibleTopics = topics\.slice\(0, 5\)/)
+  assert.match(large, /const overflowCount = Math\.max\(0, topics\.length - visibleTopics\.length\)/)
   assert.match(home, /`\+ \$\{count\} til`/)
   assert.match(home, /`\+ \$\{count\} more`/)
-  assert.match(large, /-webkit-line-clamp:2/)
-  assert.doesNotMatch(large, /aiAssistantPendingTopicsMessage|aiAssistantPreparingCountLabel|pendingCount|visibleTopics|topics/)
+  assert.match(home, /seen\.has\(topic\)/)
+  assert.match(home, /pendingCount > 0 \? aiAssistantPendingTopicsMessage\(language\) : mirrorAiAssistantNothingFollowedMessage\(language\)/)
 })
 
 test('snapshot filters to active member-owned watches without legacy frame visibility filters and does not expose private watch fields', () => {
@@ -47,9 +46,8 @@ test('snapshot filters to active member-owned watches without legacy frame visib
   assert.match(detail, /\.in\('owner_user_id', memberUserIds\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)
   assert.doesNotMatch(detail, /\.eq\('show_on_frame', true\)|\.eq\('frame_id', frameId\)|monitoring_watches\.show_on_frame|monitoring_watches\.frame_id/)
-  assert.match(detail, /original_request/)
-  assert.doesNotMatch(detail, /trigger_description|search_guidance/)
-  assert.doesNotMatch(large, /trigger_description|search_guidance|instructions/i)
+  assert.doesNotMatch(detail, /original_request|trigger_description|search_guidance/)
+  assert.doesNotMatch(large, /original_request|trigger_description|search_guidance|instructions/i)
 })
 
 test('small and medium Assistant layouts remain on the existing shared card without new timers or refreshes', () => {

@@ -6,7 +6,7 @@ import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 import { AI_ASSISTANT_FRAME_LIMITS, selectAiAssistantFrameItems, type AiAssistantFrameUpdate } from '@/app/lib/device/aiAssistantFrame'
-import { aiAssistantDefaultTopicTitle, simplifyAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
+import { aiAssistantDefaultTopicTitle, isValidAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -66,7 +66,8 @@ type Detail = {
   aiAssistantActiveWatchCount?: number
   aiAssistantLastCheckedAt?: string | null
   aiAssistantTopicTitle?: string
-  aiAssistantActiveWatchRequests?: string[]
+  aiAssistantActiveWatchTopics?: string[]
+  aiAssistantPreparingWatchCount?: number
   aiAssistantHasActiveWatches?: boolean
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
@@ -1862,7 +1863,8 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
     aiAssistantActiveWatchCount: 0,
     aiAssistantLastCheckedAt: null,
     aiAssistantTopicTitle: aiAssistantDefaultTopicTitle('en'),
-    aiAssistantActiveWatchRequests: [],
+    aiAssistantActiveWatchTopics: [],
+    aiAssistantPreparingWatchCount: 0,
   }
 
   try {
@@ -1880,18 +1882,18 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data: watchRows, error: watchError } = await supabase
       .from('monitoring_watches')
-      .select('id, last_checked_at, status, title, preferred_language, created_at, original_request')
+      .select('id, last_checked_at, status, title, preferred_language, created_at')
       .in('owner_user_id', memberUserIds)
       .eq('status', 'active')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
     if (watchError) throw watchError
 
     const activeWatches = Array.isArray(watchRows) ? watchRows : []
-    const aiAssistantActiveWatchRequests = activeWatches
-      .map((row: { original_request?: unknown }) => asString(row.original_request).trim())
-      .filter(Boolean)
-      .slice(0, 5)
-    const activeTopicTitle = activeWatches.length === 1 ? simplifyAiAssistantTopicTitle(activeWatches[0]?.title, 'en') || aiAssistantDefaultTopicTitle('en') : aiAssistantDefaultTopicTitle('en')
+    const aiAssistantActiveWatchTopics = uniqueNonEmpty(activeWatches
+      .map((row: { title?: unknown }) => isValidAiAssistantTopicTitle(row.title) ? String(row.title ?? '').trim().toUpperCase() : '')
+      .filter(Boolean))
+    const aiAssistantPreparingWatchCount = Math.max(0, activeWatches.length - aiAssistantActiveWatchTopics.length)
+    const activeTopicTitle = activeWatches.length === 1 ? aiAssistantActiveWatchTopics[0] || aiAssistantDefaultTopicTitle('en') : aiAssistantDefaultTopicTitle('en')
 
     const lastCheckedAt = activeWatches
       .map((row: { last_checked_at?: unknown }) => asString(row.last_checked_at).trim())
@@ -1927,7 +1929,8 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
       aiAssistantActiveWatchCount: activeWatches.length,
       aiAssistantLastCheckedAt: lastCheckedAt,
       aiAssistantTopicTitle: selected.items[0]?.topicTitle || activeTopicTitle,
-      aiAssistantActiveWatchRequests,
+      aiAssistantActiveWatchTopics,
+      aiAssistantPreparingWatchCount,
     }
   } catch (e: unknown) {
     console.error('[mirror-snapshot:ai-assistant-failed]', { frameId, reason: e instanceof Error ? e.message : String(e || 'Unknown error') })

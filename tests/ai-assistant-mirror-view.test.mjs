@@ -290,7 +290,7 @@ test('AI Assistant empty state includes active watch count and latest successful
 test('AI Assistant active watch metadata excludes inactive and error states in the shared snapshot path', () => {
   const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
   assert.match(detail, /from\('monitoring_watches'\)/)
-  assert.match(detail, /select\('id, last_checked_at, status, title, preferred_language, created_at, original_request'\)/)
+  assert.match(detail, /select\('id, last_checked_at, status, title, preferred_language, created_at'\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)
   assert.doesNotMatch(detail, /\.in\('status', \['active', 'error'\]\)/)
   assert.match(detail, /activeWatches\.length/)
@@ -309,9 +309,9 @@ test('AI Assistant zero active watches shows dedicated nothing-followed copy wit
 test('AI Assistant Mirror View and physical frame consume the same snapshot fields without client polling', () => {
   assert.match(route, /aiAssistantActiveWatchCount: activeWatches\.length/)
   assert.match(route, /aiAssistantLastCheckedAt: lastCheckedAt/)
-  assert.match(route, /aiAssistantActiveWatchRequests/)
+  assert.match(route, /aiAssistantActiveWatchTopics/)
   assert.match(home, /detail\.aiAssistantActiveWatchCount/)
   assert.match(home, /detail\.aiAssistantLastCheckedAt/)
-  assert.match(home, /detail\.aiAssistantActiveWatchRequests/)
+  assert.match(home, /detail\.aiAssistantActiveWatchTopics/)
   assert.doesNotMatch(home.slice(home.indexOf('function MirrorAiAssistantCard'), home.indexOf('function MirrorLargeRemindersCard')), /fetch\(|setTimeout|setInterval|wake|refresh/i)
 })
