@@ -42,9 +42,6 @@ export async function GET(req: Request) {
     const payload = isUnpaired ? await startPairingPayload(supabase as unknown as PairingRpcClient, device_id) : builtPayload
     const responseBody = JSON.stringify(payload)
 
-    if (device_id === 'frm_54AE37455F34') {
-      console.info(responseBody)
-    }
 
     return new NextResponse(responseBody, {
       headers: {

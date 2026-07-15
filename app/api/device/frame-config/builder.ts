@@ -1,4 +1,5 @@
 // app/api/device/frame-config/builder.ts
+import crypto from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
 
@@ -112,13 +113,31 @@ function cloneObject(v: unknown): UnknownRecord {
   return v && typeof v === 'object' && !Array.isArray(v) ? { ...(v as UnknownRecord) } : {}
 }
 
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  const record = value as UnknownRecord
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`
+}
 
+export function compatibleRevisionForPayload(settingsJson: UnknownRecord): string {
+  return `fw:${crypto.createHash('sha256').update(stableJson(settingsJson)).digest('hex').slice(0, 32)}`
+}
 
+function physicalCells(rawCells: unknown[], assistantSupported: boolean) {
+  if (assistantSupported) return rawCells
+  return rawCells.filter((cell) => {
+    if (!cell || typeof cell !== 'object') return true
+    const moduleName = asString((cell as UnknownRecord).module, '').trim().toLowerCase()
+    return moduleName.split(':', 1)[0] !== 'assistant'
+  })
+}
 
 export type FrameConfigPayload = {
   device_id: string
   settings_json: UnknownRecord
   updated_at: unknown
+  compatible_revision?: string
 }
 
 export type PairRequiredPayload = {
@@ -178,7 +197,7 @@ export async function deviceHasOwnerAccessLink(supabase: SupabaseClient, device_
   return Array.isArray(memberRows) && memberRows.length > 0
 }
 
-export async function buildFrameConfigPayload(supabase: SupabaseClient, device_id: string, options: { target?: 'firmware' | 'mirror' } = {}): Promise<DeviceFrameConfigPayload> {
+export async function buildFrameConfigPayload(supabase: SupabaseClient, device_id: string, options: { target?: 'firmware' | 'mirror', assistantSupported?: boolean } = {}): Promise<DeviceFrameConfigPayload> {
     const hasOwnerAccessLink = await deviceHasOwnerAccessLink(supabase, device_id)
     if (!hasOwnerAccessLink) return pairRequiredPayload(device_id)
 
@@ -214,12 +233,8 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
     // mirror snapshots while omitting it from the firmware config payload so existing
     // frames render the rest of the dashboard and acknowledge the revision.
     const rawCells = Array.isArray(settings_json.cells) ? settings_json.cells : []
-    const cells = options.target === 'mirror' ? rawCells : rawCells.map((cell) => {
-      if (!cell || typeof cell !== 'object') return cell
-      const moduleName = asString((cell as UnknownRecord).module, '').trim().toLowerCase()
-      const base = moduleName.split(':', 1)[0]
-      return base === 'assistant' ? { ...(cell as UnknownRecord), module: '' } : cell
-    })
+    const assistantSupported = options.assistantSupported === true
+    const cells = options.target === 'mirror' ? rawCells : physicalCells(rawCells, assistantSupported)
     const active = activeModulesFromCells(cells)
     const responseModules: UnknownRecord = {}
 
@@ -515,7 +530,8 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
     const payload = {
       device_id,
       settings_json: responseSettingsJson,
-      updated_at: data?.updated_at ?? null,
+      updated_at: options.target === 'mirror' ? (data?.updated_at ?? null) : compatibleRevisionForPayload(responseSettingsJson),
+      compatible_revision: options.target === 'mirror' ? undefined : compatibleRevisionForPayload(responseSettingsJson),
     }
 
     return payload

@@ -9,6 +9,9 @@ namespace UpdateChecker {
 
   void saveApplied(const String& updatedAt);
   String getLastApplied();
+  void saveFailed(const String& updatedAt);
+  String getLastFailed();
+  bool isFailedRevisionSuppressed(const String& updatedAt);
 
   bool shouldForceRedrawForFirmware(const char* fwVer);
   void saveFirmwareVersion(const char* fwVer);
