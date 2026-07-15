@@ -15,7 +15,7 @@ test('mirror snapshot resolves an owner-backed user device scope', () => {
 })
 
 test('mirror snapshot keeps frame config current-device scoped but queries legacy module data across user devices', () => {
-  assert.match(mirrorRoute, /buildFrameConfigPayload\(supabase, deviceId, \{ target: 'mirror' \}\)/)
+  assert.match(mirrorRoute, /buildFrameConfigPayload\(supabase, deviceId\)/)
   assert.match(mirrorRoute, /groceriesDetail\(supabase, mirrorScope\.storageDeviceIds, mirrorScope\.ownerId, language\)/)
   assert.match(mirrorRoute, /countdownDetail\(supabase, mirrorScope\.storageDeviceIds, language\)/)
   assert.match(mirrorRoute, /\.from\('grocery_items'\)[\s\S]*?\.in\('device_id', storageDeviceIds\)/)
