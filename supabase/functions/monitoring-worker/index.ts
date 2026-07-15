@@ -11,22 +11,6 @@ function envInt(name: string, fallback: number | null = null) {
   return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : fallback
 }
 
-async function requestAssistantFrameRefresh(supabase: any, watch: any, reason: 'new_update' | 'read_state_changed' | 'rotation_only' | 'duplicate' | 'no_change', insertedUpdateId: string | null = null) {
-  const watchId = String(watch?.id ?? '')
-  const frameId = String(watch?.frame_id ?? '')
-  if (!watchId || !frameId) {
-    console.info('[ai-assistant:frame-refresh-decision]', { watch_id: watchId || null, frame_id: frameId || null, inserted_update_id: insertedUpdateId, new_update_inserted: reason === 'new_update', frame_refresh_requested: false, reason, reused_pending_request: false })
-    return { requested: false, reused: false }
-  }
-  const { data, error } = await supabase.rpc('request_ai_assistant_frame_content_refresh', { p_watch_id: watchId, p_reason: reason })
-  if (error) {
-    console.warn('[ai-assistant:frame-refresh-decision]', { watch_id: watchId, frame_id: frameId, inserted_update_id: insertedUpdateId, new_update_inserted: reason === 'new_update', frame_refresh_requested: false, reason, reused_pending_request: false, error: error.message })
-    return { requested: false, reused: false }
-  }
-  console.info('[ai-assistant:frame-refresh-decision]', { watch_id: watchId, frame_id: frameId, inserted_update_id: insertedUpdateId, new_update_inserted: reason === 'new_update', frame_refresh_requested: Boolean(data?.requested), reason, reused_pending_request: Boolean(data?.reused_pending_request) })
-  return { requested: Boolean(data?.requested), reused: Boolean(data?.reused_pending_request) }
-}
-
 function resetWithJitter(resetAt: string) {
   const base = new Date(resetAt).getTime()
   const jitterMinutes = 1 + Math.floor(Math.random() * 15)
@@ -142,16 +126,11 @@ async function processJob(supabase: any, job: any) {
     if (status === 'change') {
       const fingerprint = stableFingerprint(result)
       if (fingerprint && result.headline && result.summary && result.sources.length > 0) {
-        const { data: insertedUpdate, error } = await supabase.from('monitoring_updates').insert({ watch_id: watch.id, run_id: run.id, headline: result.headline, summary: result.summary, event_at: result.event_at, confidence: result.confidence, fingerprint, source_urls: result.sources, is_read: false, dismissed_from_frame: false }).select('id').single()
-        if (!error) {
-          createdUpdate = true
-          await requestAssistantFrameRefresh(supabase, watch, 'new_update', insertedUpdate?.id ?? null)
-        } else if (String(error.code).includes('23505')) {
-          await requestAssistantFrameRefresh(supabase, watch, 'duplicate')
-        } else throw error
+        const { error } = await supabase.from('monitoring_updates').insert({ watch_id: watch.id, run_id: run.id, headline: result.headline, summary: result.summary, event_at: result.event_at, confidence: result.confidence, fingerprint, source_urls: result.sources, is_read: false, dismissed_from_frame: false })
+        if (!error) createdUpdate = true
+        else if (!String(error.code).includes('23505')) throw error
       }
     }
-    if (status === 'no_change') await requestAssistantFrameRefresh(supabase, watch, 'no_change')
     if (status === 'change' && !createdUpdate) effectiveStatus = 'uncertain'
     nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
