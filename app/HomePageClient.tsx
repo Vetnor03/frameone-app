@@ -5034,7 +5034,7 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
 }
 
 
-function MirrorAiAssistantLargeCard({ detail, language, mutedColor, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; variant: 'large' | 'xl' }) {
+function MirrorAiAssistantLargeCard({ detail, language, mutedColor, borderColor, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; borderColor: string; variant: 'large' | 'xl' }) {
   const [item] = mirrorAiAssistantItems(detail, 1, 42, language)
   const topics = mirrorAiAssistantActiveWatchTopics(detail, language)
   const visibleTopics = topics.slice(0, 5)
@@ -5062,13 +5062,13 @@ function MirrorAiAssistantLargeCard({ detail, language, mutedColor, variant }: {
       </MirrorAiAssistantLayout>
       <MirrorAiAssistantLayout
         header={mirrorAiAssistantFollowingHeader(language)}
-        className="min-w-0 pl-[clamp(0.7rem,1.65vw,1.15rem)]"
+        className="min-w-0 border-l pl-[clamp(0.7rem,1.65vw,1.15rem)]"
         contentClassName={MIRROR_ASSISTANT_BODY_CLASS}
       >
         {visibleTopics.length > 0 ? (
           <div className="w-full max-w-[30ch]">
             {visibleTopics.map((topic, index) => (
-              <div key={`${topic}-${index}`} className={`mx-auto py-[clamp(0.18rem,0.52vw,0.34rem)] text-center ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{topic}</div>
+              <div key={`${topic}-${index}`} className={`mx-auto py-[clamp(0.18rem,0.52vw,0.34rem)] text-center ${MIRROR_SECONDARY_TEXT_CLASS} ${index > 0 && visibleTopics.length > 3 ? 'border-t' : ''}`} style={{ borderColor, color: mutedColor }}>{topic}</div>
             ))}
             {overflowCount > 0 && <div className={`mt-[clamp(0.28rem,0.72vw,0.48rem)] ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantMoreLabel(overflowCount, language)}</div>}
           </div>
@@ -7208,7 +7208,7 @@ function LandscapeFrameMirror({
     }
 
     if (module === 'assistant' && size === 'large') {
-      return <MirrorAiAssistantLargeCard detail={detail} language={language} mutedColor={mutedColor} variant={snapshot.layoutKey === 'full' ? 'xl' : 'large'} />
+      return <MirrorAiAssistantLargeCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} variant={snapshot.layoutKey === 'full' ? 'xl' : 'large'} />
     }
 
     if (module === 'assistant' && size === 'medium') {

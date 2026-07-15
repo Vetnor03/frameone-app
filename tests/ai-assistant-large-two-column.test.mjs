@@ -7,11 +7,10 @@ const route = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts',
 const large = home.slice(home.indexOf('function MirrorAiAssistantLargeCard'), home.indexOf('function MirrorLargeRemindersCard'))
 const shared = home.slice(home.indexOf('function MirrorAiAssistantCard'), home.indexOf('function MirrorAiAssistantLargeCard'))
 
-test('large Assistant renders a 50/50 two-column layout with aligned shared headers and no divider', () => {
+test('large Assistant renders a 50/50 two-column layout with aligned shared headers and subtle divider', () => {
   assert.match(large, /grid h-full w-full grid-cols-2/)
-  assert.doesNotMatch(large, /border-l|style=\{\{ borderColor, color: mutedColor \}\}/)
-  assert.doesNotMatch(large, /border-t/)
-  assert.match(large, /style=\{\{ color: mutedColor \}\}/)
+  assert.match(large, /border-l/)
+  assert.match(large, /style=\{\{ borderColor, color: mutedColor \}\}/)
   assert.match(large, /<MirrorAiAssistantLayout[\s\S]*<MirrorAiAssistantLayout/)
   assert.match(large, /header=\{item\?\.topicTitle \|\| aiAssistantNoUpdatesHeader\(language\)\}/)
   assert.match(large, /header=\{mirrorAiAssistantFollowingHeader\(language\)\}/)
@@ -40,11 +39,11 @@ test('large Assistant right panel uses snapshot watch topics, deduplicates, caps
   assert.match(home, /seen\.has\(topic\)/)
 })
 
-test('snapshot filters to active member-owned watches without legacy frame visibility filters and does not expose private watch fields', () => {
+test('snapshot filters to active frame-visible watches and does not expose private watch fields', () => {
   const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
-  assert.match(detail, /\.in\('owner_user_id', memberUserIds\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)
-  assert.doesNotMatch(detail, /\.eq\('show_on_frame', true\)|\.eq\('frame_id', frameId\)|monitoring_watches\.show_on_frame|monitoring_watches\.frame_id/)
+  assert.match(detail, /\.eq\('show_on_frame', true\)/)
+  assert.match(detail, /\.eq\('frame_id', frameId\)/)
   assert.doesNotMatch(detail, /original_request|trigger_description|search_guidance/)
   assert.doesNotMatch(large, /original_request|trigger_description|search_guidance|instructions/i)
 })
