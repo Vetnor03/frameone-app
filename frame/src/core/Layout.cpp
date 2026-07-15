@@ -11,6 +11,7 @@
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleStocks.h"
+#include "ModuleAssistant.h"
 
 #include <GxEPD2_GFX.h>
 
@@ -147,6 +148,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   ModuleWeather::setConfig(&cfg);
   ModuleSurf::setConfig(&cfg);
   ModuleStocks::setConfig(&cfg);
+  ModuleAssistant::setConfig(&cfg);
 
   const int x = FRAME_X;
   const int y = FRAME_Y;
