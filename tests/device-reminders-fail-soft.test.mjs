@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { test } from 'node:test'
 import { buildSpondReminderItems, buildWasteCollectionItems } from '../app/lib/device/remindersFeed.ts'
 
@@ -9,12 +10,66 @@ const feed = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.m
 test('device reminders route keeps manual reminder query independent and returns the expected response shape', () => {
   assert.match(route, /\.from\('reminders'\)[\s\S]*?\.select\('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done'\)/)
   assert.match(route, /const manualItems:[\s\S]*?buildOccurrencesForRow[\s\S]*?source: 'remind' as const/)
-  assert.match(route, /return NextResponse\.json\(\{ items: selectedItems \}\)/)
+  assert.match(route, /const physicalItems = selectedItems\.map\(toPhysicalDeviceReminderItem\)/)
+  assert.match(route, /return NextResponse\.json\(\{ items: physicalItems \}\)/)
   assert.doesNotMatch(route, /all_items:|count: selectedItems\.length|today: todayYmd|timezone: timeZone/)
   assert.ok(route.includes('const allItems = [...manualItems, ...integrationItems]'))
   assert.match(route, /sort\(compareReminderItems\)/)
 })
 
+
+
+test('device reminders physical response maps selected items to the compact nine-field DTO only', () => {
+  const dtoSection = route.slice(route.indexOf('function toPhysicalDeviceReminderItem'), route.indexOf('function isTimedOccurrenceAlreadyPassed'))
+  const returnedKeys = Array.from(dtoSection.matchAll(/^    ([a-z_]+): item\.[a-z_]+,/gm)).map((match) => match[1])
+  assert.deepEqual(returnedKeys, [
+    'reminder_id',
+    'title',
+    'occurrence_date',
+    'display_date',
+    'days_until',
+    'is_overdue',
+    'repeat',
+    'due_time',
+    'display_time',
+  ])
+  for (const forbidden of ['raw', 'source', 'provider', 'external_id', 'url', 'area', 'integration']) {
+    assert.doesNotMatch(dtoSection, new RegExp(`\\b${forbidden}\\b`))
+  }
+})
+
+test('device reminders diagnostics are compact and do not log private reminder content', () => {
+  assert.match(route, /compact_json_byte_size: compactJsonByteSize/)
+  assert.match(route, /selected_item_count: physicalItems\.length/)
+  assert.match(route, /includes_local_events: selectedItems\.some\(\(item\) => item\.source === 'local-events'\)/)
+  const logSection = route.slice(route.indexOf("console.info('[device/reminders] compact response'"), route.indexOf('return NextResponse.json({ items: physicalItems })'))
+  assert.doesNotMatch(logSection, /title|raw|external_id|token|encrypted_credentials/)
+})
+
+test('device reminders continue to collect manual, Waste, Spond, Teams, and Local Events before compacting', () => {
+  assert.match(route, /const manualItems:[\s\S]*?source: 'remind' as const/)
+  assert.match(route, /spondItems = buildSpondReminderItems/)
+  assert.match(route, /teamsItems = buildTeamsMeetingItems/)
+  assert.match(route, /wasteItems = buildWasteCollectionItems/)
+  assert.match(route, /localEventItems = buildLocalEventFrameItem/)
+  assert.match(route, /const integrationItems = \[\s*\.\.\.spondItems,\s*\.\.\.teamsItems,\s*\.\.\.wasteItems,\s*\.\.\.localEventItems,\s*\]\.sort\(compareReminderItems\)/)
+})
+
+test('device reminders sorting and two-date-group selection are unchanged before compacting', () => {
+  assert.match(route, /const allItems = \[\.\.\.manualItems, \.\.\.integrationItems\][\s\S]*?\.sort\(compareReminderItems\)[\s\S]*?\.filter/)
+  assert.match(route, /const selectedItems = selectReminderDisplayGroups\(allItems, limit\)/)
+  assert.match(feed, /const selectedGroupKeys: string\[\] = \[\][\s\S]*?if \(selectedGroupKeys\.length >= 2\) break/)
+})
+
+test('no firmware, AI Assistant, or frame-config files are modified by this reminder web fix', () => {
+  const changedFiles = execSync('git diff --name-only HEAD', { encoding: 'utf8' })
+    .split('\n')
+    .map((file) => file.trim())
+    .filter(Boolean)
+  assert.deepEqual(changedFiles.filter((file) => file.startsWith('frame/') || file.startsWith('public/firmware/')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.includes('ai-assistant') || file.includes('interpret-ai-assistant')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.includes('frame-config')), [])
+})
 
 test('device reminders default to cached integration rows unless sync is explicitly requested', () => {
   assert.match(route, /function normalizeSkipSync\(raw: string \| null\) \{\s*if \(raw == null\) return true/)
@@ -35,7 +90,7 @@ test('optional reminder providers are isolated with provider-level try/catch blo
 })
 
 test('provider errors cannot turn an otherwise successful device reminder response into HTTP 500', () => {
-  const successResponseIndex = route.indexOf('return NextResponse.json({ items: selectedItems })')
+  const successResponseIndex = route.indexOf('return NextResponse.json({ items: physicalItems })')
   assert.notEqual(successResponseIndex, -1)
   for (const provider of ['spond', 'teams', 'waste', 'local-events']) {
     const catchIndex = route.indexOf(`logOptionalReminderProviderFailure('${provider}'`)
@@ -80,7 +135,8 @@ test('empty successful reminder queries return an empty successful response rath
   assert.match(route, /const rows = Array\.isArray\(data\) \? \(data as ReminderRow\[\]\) : \[\]/)
   assert.ok(route.includes('const allItems = [...manualItems, ...integrationItems]'))
   assert.match(route, /sort\(compareReminderItems\)/)
-  assert.match(route, /return NextResponse\.json\(\{ items: selectedItems \}\)/)
+  assert.match(route, /const physicalItems = selectedItems\.map\(toPhysicalDeviceReminderItem\)/)
+  assert.match(route, /return NextResponse\.json\(\{ items: physicalItems \}\)/)
 })
 
 test('existing user and frame ownership isolation is preserved', () => {
