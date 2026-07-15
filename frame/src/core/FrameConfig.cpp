@@ -140,9 +140,12 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
     return FETCH_ERROR;
   }
 
+  Serial.print("frame_config_http_status=");
+  Serial.println(code);
+  Serial.print("frame_config_response_bytes=");
+  Serial.println(body.length());
+
   if (!ok || code != 200) {
-    Serial.print("frame-config HTTP: ");
-    Serial.println(code);
     return FETCH_ERROR;
   }
 
@@ -150,9 +153,11 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
 
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
-    Serial.println("frame-config JSON parse failed");
+    Serial.print("frame_config_json_parse=");
+    Serial.println(err.c_str());
     return FETCH_ERROR;
   }
+  Serial.println("frame_config_json_parse=ok");
 
   const bool pairRequired = doc["pair_required"] == true || doc["unpaired"] == true || String((const char*)(doc["status"] | "")) == "unpaired";
   if (pairRequired) {
@@ -192,6 +197,9 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
       out.assignCount++;
     }
   }
+
+  Serial.print("assignment_count=");
+  Serial.println(out.assignCount);
 
   // ===== modules.* =====
   JsonObject modules = settings["modules"].as<JsonObject>();
