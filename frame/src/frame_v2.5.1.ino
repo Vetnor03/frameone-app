@@ -28,7 +28,7 @@
 #include <esp_sleep.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.5.1";
+static const char* FW_VER = "v2.5.2";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -792,6 +792,8 @@ void setup() {
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
+
+  ModuleReminders::preload();
 
   ensureDisplay();
 
