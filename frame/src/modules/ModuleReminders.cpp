@@ -13,6 +13,9 @@
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
+#include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "Fonts/FreeSans9ptNO.h"
 #include "Fonts/FreeSansBold12ptNO.h"
@@ -42,6 +45,9 @@ namespace ModuleReminders {
 static const FrameConfig* g_cfg = nullptr;
 
 static const int MAX_REMINDERS = 20;
+static const size_t REMINDERS_MAX_BODY_BYTES = 8192;
+static const size_t REMINDERS_JSON_CAPACITY = 8192;
+static const size_t REMINDERS_FILTER_CAPACITY = 768;
 static const int MAX_BUCKETS = 10;
 static const int MAX_BUCKET_ITEMS = 10;
 
@@ -133,6 +139,27 @@ static void clearCache() {
   g_cache.ok = false;
   g_cache.count = 0;
   for (int i = 0; i < MAX_REMINDERS; i++) g_cache.items[i] = ReminderItem{};
+}
+
+static void markUnavailable() {
+  g_cache.loaded = true;
+  g_cache.ok = false;
+  g_cache.count = 0;
+}
+
+static uint32_t loopStackHighWaterMarkBytes() {
+  return (uint32_t)uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t);
+}
+
+static void logMemoryStats(const char* stage) {
+  REM_LOG("REM memory ");
+  REM_LOG(stage);
+  REM_LOG(" free_heap=");
+  REM_LOG(ESP.getFreeHeap());
+  REM_LOG(" largest_free_block=");
+  REM_LOG(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  REM_LOG(" loop_stack_hwm=");
+  REM_LOGLN(loopStackHighWaterMarkBytes());
 }
 
 static void measureText(const char* text, const GFXfont* font,
@@ -646,6 +673,9 @@ static bool nextOccurrenceAfterDate(const ReminderItem& r,
 static bool fetchReminders() {
   clearCache();
 
+  Serial.println("REM before fetch");
+  logMemoryStats("before_fetch");
+
   String url = String(BASE_URL)
              + "/api/device/reminders?device_id="
              + DeviceIdentity::getDeviceId()
@@ -655,22 +685,71 @@ static bool fetchReminders() {
   String body;
   bool ok = NetClient::httpGetAuth(url, DeviceIdentity::getToken(), code, body);
 
-  REM_LOG("reminders HTTP: ");
-  REM_LOGLN(code);
-  REM_LOGLN(body);
+  Serial.println("REM after fetch");
+  REM_LOG("reminders HTTP code=");
+  REM_LOG(code);
+  REM_LOG(" body_bytes=");
+  REM_LOGLN(body.length());
+  logMemoryStats("after_fetch");
 
   if (!ok || code != 200 || body.length() == 0) {
-    g_cache.loaded = true;
-    g_cache.ok = false;
+    markUnavailable();
     return false;
   }
 
-  StaticJsonDocument<16384> doc;
-  DeserializationError err = deserializeJson(doc, body);
-  if (err) {
-    REM_LOGLN("reminders JSON parse failed");
-    g_cache.loaded = true;
-    g_cache.ok = false;
+  if (body.length() > REMINDERS_MAX_BODY_BYTES) {
+    REM_LOG("reminders oversized body_bytes=");
+    REM_LOG(body.length());
+    REM_LOG(" max=");
+    REM_LOGLN(REMINDERS_MAX_BODY_BYTES);
+    markUnavailable();
+    return false;
+  }
+
+  DynamicJsonDocument filter(REMINDERS_FILTER_CAPACITY);
+  if (filter.capacity() == 0) {
+    REM_LOGLN("reminders filter allocation failed");
+    markUnavailable();
+    return false;
+  }
+
+  JsonObject itemFilter = filter["items"][0].to<JsonObject>();
+  itemFilter["reminder_id"] = true;
+  itemFilter["title"] = true;
+  itemFilter["occurrence_date"] = true;
+  itemFilter["display_date"] = true;
+  itemFilter["days_until"] = true;
+  itemFilter["is_overdue"] = true;
+  itemFilter["repeat"] = true;
+  itemFilter["due_time"] = true;
+  itemFilter["display_time"] = true;
+
+  DynamicJsonDocument doc(REMINDERS_JSON_CAPACITY);
+  if (doc.capacity() == 0) {
+    REM_LOGLN("reminders JSON allocation failed");
+    markUnavailable();
+    return false;
+  }
+
+  Serial.println("REM before parse");
+  REM_LOG("reminders JSON capacity=");
+  REM_LOGLN(doc.capacity());
+  logMemoryStats("before_parse");
+
+  DeserializationError err = deserializeJson(
+    doc,
+    body,
+    DeserializationOption::Filter(filter)
+  );
+
+  Serial.println("REM after parse");
+  REM_LOG("reminders deserialize=");
+  REM_LOGLN(err ? err.c_str() : "Ok");
+  logMemoryStats("after_parse");
+
+  if (err || doc.overflowed()) {
+    if (doc.overflowed()) REM_LOGLN("reminders JSON document overflowed");
+    markUnavailable();
     return false;
   }
 
@@ -679,6 +758,8 @@ static bool fetchReminders() {
     g_cache.loaded = true;
     g_cache.ok = true;
     g_cache.count = 0;
+    Serial.println("REM cache populated");
+    REM_LOGLN("reminders parsed_count=0");
     return true;
   }
 
@@ -697,7 +778,6 @@ static bool fetchReminders() {
     char rawTime[24] = {0};
     safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
     if (!rawTime[0]) safeCopy(rawTime, sizeof(rawTime), it["due_time"] | "");
-    if (!rawTime[0]) safeCopy(rawTime, sizeof(rawTime), it["time"] | "");
     extractTimeHHMM(rawTime, r.time, sizeof(r.time));
 
     const char* rawOccurrenceDate = it["occurrence_date"] | "";
@@ -718,6 +798,10 @@ static bool fetchReminders() {
   g_cache.loaded = true;
   g_cache.ok = true;
   g_cache.count = idx;
+  Serial.println("REM cache populated");
+  REM_LOG("reminders parsed_count=");
+  REM_LOGLN(idx);
+  logMemoryStats("cache_populated");
   return true;
 }
 
@@ -2006,9 +2090,14 @@ void setConfig(const FrameConfig* cfg) {
   clearCache();
 }
 
+void preload() {
+  ensureLoaded();
+}
+
 void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
 
+  Serial.println("REM render start");
   ensureLoaded();
 
   ReminderBucket buckets[MAX_BUCKETS];
@@ -2017,25 +2106,30 @@ void render(const Cell& c, const String& moduleName) {
 
   if (c.size == CELL_SMALL) {
     renderSmall(c, buckets, bucketCount, primaryIdx);
+    Serial.println("REM render complete");
     return;
   }
 
   if (c.size == CELL_MEDIUM) {
     renderMedium(c, buckets, bucketCount, primaryIdx);
+    Serial.println("REM render complete");
     return;
   }
 
   if (c.size == CELL_LARGE) {
     renderLarge(c, buckets, bucketCount, primaryIdx);
+    Serial.println("REM render complete");
     return;
   }
 
   if (c.size == CELL_XL) {
     renderXL(c, buckets, bucketCount, primaryIdx);
+    Serial.println("REM render complete");
     return;
   }
 
   renderMedium(c, buckets, bucketCount, primaryIdx);
+  Serial.println("REM render complete");
 }
 
 } // namespace ModuleReminders

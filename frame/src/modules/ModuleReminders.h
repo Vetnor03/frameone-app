@@ -6,6 +6,7 @@
 namespace ModuleReminders {
 
   void setConfig(const FrameConfig* cfg);
+  void preload();
 
   // single-instance for now: "reminders"
   // later we can support "reminders:2" if needed
