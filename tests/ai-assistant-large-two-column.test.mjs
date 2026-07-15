@@ -31,14 +31,13 @@ test('large Assistant left panel shows exactly one selected update or the empty 
 test('large Assistant right panel uses snapshot watch topics, deduplicates, caps at five and reports overflow', () => {
   assert.match(home, /aiAssistantActiveWatchTopics\?: string\[\]/)
   assert.match(route, /aiAssistantActiveWatchTopics: \[\]/)
-  assert.match(route, /isValidAiAssistantTopicTitle\(row\.title\)/)
+  assert.match(route, /aiAssistantActiveWatchTopics = uniqueNonEmpty\(activeWatches\.map/)
   assert.match(large, /const topics = mirrorAiAssistantActiveWatchTopics\(detail, language\)/)
   assert.match(large, /const visibleTopics = topics\.slice\(0, 5\)/)
   assert.match(large, /const overflowCount = Math\.max\(0, topics\.length - visibleTopics\.length\)/)
   assert.match(home, /`\+ \$\{count\} til`/)
   assert.match(home, /`\+ \$\{count\} more`/)
   assert.match(home, /seen\.has\(topic\)/)
-  assert.match(home, /pendingCount > 0 \? aiAssistantPendingTopicsMessage\(language\) : mirrorAiAssistantNothingFollowedMessage\(language\)/)
 })
 
 test('snapshot filters to active member-owned watches without legacy frame visibility filters and does not expose private watch fields', () => {

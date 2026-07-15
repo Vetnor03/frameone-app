@@ -1,4 +1,4 @@
-import { aiAssistantSelectedUpdateFallbackTitle, isValidAiAssistantTopicTitle, simplifyAiAssistantTopicTitle, type AiAssistantTopicLanguage } from './aiAssistantTopicTitle.ts'
+import { simplifyAiAssistantTopicTitle, type AiAssistantTopicLanguage } from './aiAssistantTopicTitle.ts'
 
 export const AI_ASSISTANT_FRAME_LIMITS = { small: 1, medium: 1, large: 2, full: 2 } as const
 
@@ -36,7 +36,7 @@ export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], opti
     .filter((row) => !hasMembershipFilter || memberUserIds.has(String(row.monitoring_watches?.owner_user_id ?? '').trim()))
     .filter((row) => row.is_read !== true)
     .filter((row) => row.dismissed_from_frame !== true)
-    .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), summary: typeof row.summary === 'string' ? row.summary : null, created_at: String(row.created_at ?? ''), topicTitle: isValidAiAssistantTopicTitle(row.monitoring_watches?.title) ? simplifyAiAssistantTopicTitle(row.monitoring_watches?.title, row.monitoring_watches?.preferred_language === 'no' ? 'no' : 'en') : aiAssistantSelectedUpdateFallbackTitle(row.monitoring_watches?.preferred_language === 'no' ? 'no' : 'en') }))
+    .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), summary: typeof row.summary === 'string' ? row.summary : null, created_at: String(row.created_at ?? ''), topicTitle: simplifyAiAssistantTopicTitle(row.monitoring_watches?.title, row.monitoring_watches?.preferred_language === 'no' ? 'no' : 'en') }))
     .filter((row) => row.id && row.headline && !Number.isNaN(candidateTimestamp(row)) && candidateTimestamp(row) > cutoffMs)
     .filter((row) => Number.isNaN(renderCycleMs) || candidateTimestamp(row) <= renderCycleMs)
     .sort((a, b) => candidateTimestamp(b) - candidateTimestamp(a))
