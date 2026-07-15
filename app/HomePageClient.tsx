@@ -3084,15 +3084,8 @@ function TabBar({
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const getScrollBehaviorRef = useRef(getScrollBehavior)
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
-  const suppressClickRef = useRef(false)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
-
-  useEffect(() => {
-    getScrollBehaviorRef.current = getScrollBehavior
-  }, [getScrollBehavior])
 
   function recompute() {
     const el = scrollerRef.current
@@ -3111,7 +3104,7 @@ function TabBar({
     const el = btnRefs.current[String(activeTab)]
     if (!el) return
 
-    const behavior = getScrollBehaviorRef.current()
+    const behavior = getScrollBehavior()
 
     const r1 = requestAnimationFrame(() => {
       el.scrollIntoView({ behavior, block: 'nearest', inline: 'center' })
@@ -3122,7 +3115,7 @@ function TabBar({
       cancelAnimationFrame(r1)
       cancelAnimationFrame(r2)
     }
-  }, [activeTab, tabs.length])
+  }, [activeTab, tabs.length, getScrollBehavior])
 
   useEffect(() => {
     recompute()
@@ -3146,39 +3139,6 @@ function TabBar({
     }
   }, [tabs.length])
 
-  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    dragStartRef.current = { x: e.clientX, y: e.clientY }
-    suppressClickRef.current = false
-  }
-
-  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const start = dragStartRef.current
-    if (!start) return
-
-    const dx = Math.abs(e.clientX - start.x)
-    const dy = Math.abs(e.clientY - start.y)
-    if (dx > 8 && dx > dy) {
-      suppressClickRef.current = true
-    }
-  }
-
-  function handlePointerEnd() {
-    dragStartRef.current = null
-    window.setTimeout(() => {
-      suppressClickRef.current = false
-    }, 0)
-  }
-
-  function handleTabClick(e: React.MouseEvent<HTMLButtonElement>, key: TabKey) {
-    if (suppressClickRef.current) {
-      e.preventDefault()
-      e.stopPropagation()
-      return
-    }
-
-    onSelect(key)
-  }
-
   return (
     <div className="relative select-none touch-pan-x">
       {canLeft && (
@@ -3188,15 +3148,7 @@ function TabBar({
         <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-10 bg-gradient-to-l from-[color:var(--app-bg)] to-transparent" />
       )}
 
-      <div
-        ref={scrollerRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
-        onPointerLeave={handlePointerEnd}
-        className="flex gap-8 tracking-widest overflow-x-auto overflow-y-hidden tab-scroll pr-6"
-      >
+      <div ref={scrollerRef} className="flex gap-8 tracking-widest overflow-x-auto overflow-y-hidden tab-scroll pr-6">
         {tabs.map((t) => {
           const isActive = t.key === activeTab
           return (
@@ -3205,7 +3157,7 @@ function TabBar({
               ref={(node) => {
                 btnRefs.current[String(t.key)] = node
               }}
-              onClick={(e) => handleTabClick(e, t.key)}
+              onClick={() => onSelect(t.key)}
               className={`pb-2 whitespace-nowrap leading-none transition-[color,font-size,font-weight] duration-150 ${
                 isActive
                   ? 'text-[#2aa3ff] border-b-2 border-[#2aa3ff] text-[15px] font-semibold'
