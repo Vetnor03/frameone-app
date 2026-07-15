@@ -9,9 +9,8 @@ const firmware = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', import.me
 
 test('physical frame config omits Assistant cells without changing saved settings or Mirror View', () => {
   assert.match(builder, /target\?: 'firmware' \| 'mirror'/)
-  assert.match(builder, /options\.target === 'mirror' \? rawCells : physicalCells/)
-  assert.match(builder, /rawCells\.filter/)
-  assert.doesNotMatch(builder, /module: ''/)
+  assert.match(builder, /options\.target === 'mirror' \? rawCells : rawCells\.map/)
+  assert.match(builder, /base === 'assistant' \? \{ \.\.\.\(cell as UnknownRecord\), module: '' \} : cell/)
   assert.match(frameConfigRoute, /buildFrameConfigPayload\(supabase, device_id\)/)
   assert.match(mirrorRoute, /buildFrameConfigPayload\(supabase, deviceId, \{ target: 'mirror' \}\)/)
 })

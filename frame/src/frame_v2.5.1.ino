@@ -28,7 +28,7 @@
 #include <esp_sleep.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.5.2";
+static const char* FW_VER = "v2.5.1";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -139,7 +139,7 @@ static bool enablePowerSenseWakeForNextSleep(bool currentlyUsbPresent) {
 static void logWakeReason() {
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
 
-  Serial.print("wake_reason=");
+  Serial.print("Wake reason: ");
   switch (cause) {
     case ESP_SLEEP_WAKEUP_TIMER:
       Serial.println("timer");
@@ -349,8 +349,6 @@ static void postDeviceStatus(
     body
   );
 
-  Serial.print("device_status_did_render=");
-  Serial.println(didRender ? "true" : "false");
   Serial.print("Status report HTTP: ");
   Serial.println(code);
   Serial.println(body);
@@ -758,28 +756,12 @@ void setup() {
     reconnectedViaProvisioning ||
     setupFlowRefreshByCharger;
 
-  if (shouldRender) {
-    Serial.print("shouldRender=true reason=");
-    if (forceFw) Serial.println("firmware_changed");
-    else if (forcePeriodic) Serial.println("periodic_recovery");
-    else if (configChanged) Serial.println("config_revision_changed");
-    else if (remindersChanged) Serial.println("reminders_changed");
-    else if (surfChanged) Serial.println("surf_changed");
-    else if (usbChanged) Serial.println("usb_changed");
-    else if (batteryJumpChanged) Serial.println("battery_jump");
-    else if (reconnectedViaProvisioning) Serial.println("wifi_reconnected");
-    else Serial.println("setup_refresh");
-  } else {
-    Serial.println("shouldRender=false reason=no_change");
-  }
-
   // ---------------- No redraw ----------------
   if (!shouldRender) {
     Serial.println("😴 No change -> keep current ePaper image");
 
     postDeviceStatus(batt, pwr, false);
     UpdateChecker::saveBatteryPercent(batt.percent);
-    Serial.println("sleep_reached=true");
     goToSleep(pwr.usbPresent);
     return;
   }
@@ -793,33 +775,11 @@ void setup() {
       }
       if (recoverPairingIfTokenLost("frame-config fetch", pwr.usbPresent)) return;
 
-      Serial.println("render_started=false");
-      if (updatedAt.length() > 0) {
-        UpdateChecker::saveFailed(updatedAt);
-        Serial.print("revision_suppressed=");
-        Serial.println(updatedAt);
-      }
-      postDeviceStatus(batt, pwr, false);
-      UpdateChecker::saveBatteryPercent(batt.percent);
-      Serial.println("sleep_reached=true");
+      ensureDisplay();
+      ScreenPairing::showError("Could not load frame");
       goToSleep(pwr.usbPresent);
       return;
     }
-  }
-
-  if (g_cfg.assignCount == 0 && configChanged) {
-    Serial.println("render_started=false");
-    Serial.println("render_blocked=empty_firmware_payload");
-    if (updatedAt.length() > 0) {
-      UpdateChecker::saveFailed(updatedAt);
-      Serial.print("revision_suppressed=");
-      Serial.println(updatedAt);
-    }
-    postDeviceStatus(batt, pwr, false);
-    UpdateChecker::saveBatteryPercent(batt.percent);
-    Serial.println("sleep_reached=true");
-    goToSleep(pwr.usbPresent);
-    return;
   }
 
   if (usbChanged) {
@@ -833,7 +793,6 @@ void setup() {
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
 
-  Serial.println("render_started=true");
   ensureDisplay();
 
   Theme::set(g_cfg.theme);
@@ -841,13 +800,9 @@ void setup() {
 
   Layout::drawWithContent(g_cfg.layout, g_cfg);
 
-  Serial.println("render_completed=true");
-
   postDeviceStatus(batt, pwr, true);
 
   UpdateChecker::saveApplied(updatedAt);
-  Serial.print("revision_acknowledged=");
-  Serial.println(updatedAt);
   if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);
   if (surfSig.length() > 0) UpdateChecker::saveSurfSig(surfSig);
   UpdateChecker::saveFirmwareVersion(FW_VER);
@@ -858,7 +813,6 @@ void setup() {
   }
 
   Serial.println("✅ Applied");
-  Serial.println("sleep_reached=true");
   goToSleep(pwr.usbPresent);
 }
 

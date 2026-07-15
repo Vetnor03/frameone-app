@@ -146,20 +146,6 @@ String UpdateChecker::getLastApplied() {
 
 void UpdateChecker::saveApplied(const String& updatedAt) {
   prefs.putString("last_upd", updatedAt);
-  if (getLastFailed() == updatedAt) prefs.remove("fail_upd");
-}
-
-String UpdateChecker::getLastFailed() {
-  return prefs.getString("fail_upd", "");
-}
-
-void UpdateChecker::saveFailed(const String& updatedAt) {
-  if (updatedAt.length() == 0) return;
-  prefs.putString("fail_upd", updatedAt);
-}
-
-bool UpdateChecker::isFailedRevisionSuppressed(const String& updatedAt) {
-  return updatedAt.length() > 0 && getLastFailed() == updatedAt;
 }
 
 bool UpdateChecker::shouldForceRedrawForFirmware(const char* fwVer) {
@@ -254,22 +240,17 @@ bool UpdateChecker::hasConfigChanged(const String& deviceToken, String& outUpdat
   StaticJsonDocument<256> doc;
   if (deserializeJson(doc, body)) return false;
 
-  const char* upd = doc["compatible_revision"] | doc["updated_at"];
+  const char* upd = doc["updated_at"];
   if (!upd) return false;
 
   outUpdatedAt = String(upd);
 
   String last = getLastApplied();
 
-  Serial.print("local_applied_revision=");
+  Serial.print("last_upd: ");
   Serial.println(last);
-  Serial.print("remote_config_revision=");
+  Serial.print("server_upd: ");
   Serial.println(outUpdatedAt);
-
-  if (isFailedRevisionSuppressed(outUpdatedAt)) {
-    Serial.println("shouldRender=false reason=suppressed_failed_revision");
-    return false;
-  }
 
   return outUpdatedAt != last;
 }
