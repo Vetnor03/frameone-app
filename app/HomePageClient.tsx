@@ -13,7 +13,7 @@ import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
-import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
+import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, aiAssistantPendingTopicsMessage, aiAssistantPreparingCountLabel, isValidAiAssistantTopicTitle, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -369,7 +369,8 @@ type MirrorModuleDetail = {
   aiAssistantActiveWatchCount?: number
   aiAssistantLastCheckedAt?: string | null
   aiAssistantTopicTitle?: string
-  aiAssistantActiveWatchRequests?: string[]
+  aiAssistantActiveWatchTopics?: string[]
+  aiAssistantPreparingWatchCount?: number
   dinnerTodayTitle?: string
   groceryDinnerPlan?: Array<{ date: string; title: string }>
   groceryRunningLow?: Array<{ name: string; label?: string }>
@@ -4900,11 +4901,19 @@ function mirrorAiAssistantNoUpdatesBody(language: AppLanguage) {
   return language === 'no' ? 'Ingen nye oppdateringer' : 'No new updates'
 }
 
-function mirrorAiAssistantActiveWatchRequests(detail: MirrorModuleDetail) {
-  return (Array.isArray(detail.aiAssistantActiveWatchRequests) ? detail.aiAssistantActiveWatchRequests : [])
-    .map((request) => String(request ?? '').trim())
-    .filter(Boolean)
-    .slice(0, 5)
+function mirrorAiAssistantActiveWatchTopics(detail: MirrorModuleDetail, language: AppLanguage) {
+  const seen = new Set<string>()
+  return (Array.isArray(detail.aiAssistantActiveWatchTopics) ? detail.aiAssistantActiveWatchTopics : [])
+    .map((topic) => isValidAiAssistantTopicTitle(topic) ? simplifyAiAssistantTopicTitle(topic, language) : '')
+    .filter((topic) => {
+      if (!topic || seen.has(topic)) return false
+      seen.add(topic)
+      return true
+    })
+}
+
+function mirrorAiAssistantPreparingWatchCount(detail: MirrorModuleDetail) {
+  return Math.max(0, Math.floor(Number(detail.aiAssistantPreparingWatchCount) || 0))
 }
 
 function mirrorAiAssistantCheckedLabel(value: string | null | undefined, language: AppLanguage) {
@@ -4925,6 +4934,7 @@ function mirrorAiAssistantCheckedLabel(value: string | null | undefined, languag
 function mirrorAiAssistantEmptyStatus(detail: MirrorModuleDetail, language: AppLanguage) {
   const count = Math.max(0, Math.floor(Number(detail.aiAssistantActiveWatchCount) || 0))
   if (count <= 0) return mirrorAiAssistantNothingFollowedMessage(language)
+  if (mirrorAiAssistantPreparingWatchCount(detail) >= count) return aiAssistantPendingTopicsMessage(language)
   const countLabel = language === 'no' ? `Følger ${count} ${count === 1 ? 'ting' : 'ting'}` : `Following ${count} ${count === 1 ? 'thing' : 'things'}`
   const checked = mirrorAiAssistantCheckedLabel(detail.aiAssistantLastCheckedAt, language)
   return checked ? `${countLabel} · ${checked}` : countLabel
@@ -5032,8 +5042,10 @@ function MirrorAiAssistantCard({ detail, language, mutedColor, borderColor, maxI
 
 function MirrorAiAssistantLargeCard({ detail, language, mutedColor, variant }: { detail: MirrorModuleDetail; language: AppLanguage; mutedColor: string; variant: 'large' | 'xl' }) {
   const [item] = mirrorAiAssistantItems(detail, 1, 42, language)
-  const requests = mirrorAiAssistantActiveWatchRequests(detail)
-  const overflowCount = Math.max(0, Math.floor(Number(detail.aiAssistantActiveWatchCount) || 0) - requests.length)
+  const topics = mirrorAiAssistantActiveWatchTopics(detail, language)
+  const visibleTopics = topics.slice(0, 5)
+  const pendingCount = mirrorAiAssistantPreparingWatchCount(detail)
+  const overflowCount = Math.max(0, topics.length - visibleTopics.length)
   const checked = mirrorAiAssistantCheckedLabel(detail.aiAssistantLastCheckedAt, language)
   return (
     <div className={`grid h-full w-full grid-cols-2 overflow-hidden text-center leading-none ${MIRROR_ASSISTANT_SHELL_CLASS}`}>
@@ -5060,15 +5072,16 @@ function MirrorAiAssistantLargeCard({ detail, language, mutedColor, variant }: {
         className="min-w-0 pl-[clamp(0.7rem,1.65vw,1.15rem)]"
         contentClassName={MIRROR_ASSISTANT_BODY_CLASS}
       >
-        {requests.length > 0 ? (
+        {visibleTopics.length > 0 ? (
           <div className="w-full max-w-[30ch]">
-            {requests.map((request, index) => (
-              <div key={`${request}-${index}`} className={`mx-auto overflow-hidden py-[clamp(0.12rem,0.42vw,0.26rem)] text-center text-balance leading-[1.12] [-webkit-box-orient:vertical] [display:-webkit-box] [-webkit-line-clamp:2] ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{request}</div>
+            {visibleTopics.map((topic, index) => (
+              <div key={`${topic}-${index}`} className={`mx-auto py-[clamp(0.18rem,0.52vw,0.34rem)] text-center ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{topic}</div>
             ))}
             {overflowCount > 0 && <div className={`mt-[clamp(0.28rem,0.72vw,0.48rem)] ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantMoreLabel(overflowCount, language)}</div>}
+            {pendingCount > 0 && <div className={`mt-[clamp(0.28rem,0.72vw,0.48rem)] ${MIRROR_SUBTLE_TEXT_CLASS}`} style={{ color: mutedColor }}>{aiAssistantPreparingCountLabel(pendingCount, language)}</div>}
           </div>
         ) : (
-          <div className={`max-w-[26ch] leading-[1.18] ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{mirrorAiAssistantNothingFollowedMessage(language)}</div>
+          <div className={`max-w-[26ch] leading-[1.18] ${MIRROR_SECONDARY_TEXT_CLASS}`} style={{ color: mutedColor }}>{pendingCount > 0 ? aiAssistantPendingTopicsMessage(language) : mirrorAiAssistantNothingFollowedMessage(language)}</div>
         )}
       </MirrorAiAssistantLayout>
     </div>
