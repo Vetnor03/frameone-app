@@ -33,6 +33,8 @@ function stripUnsupportedPhysicalModules(payload: BuiltFrameConfigPayload): Buil
   if ('pair_required' in payload && payload.pair_required === true) return payload
 
   const settings = payload.settings_json
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return payload
+
   const rawCells = Array.isArray(settings.cells) ? settings.cells : []
   const cells = rawCells.map((cell) => {
     if (!cell || typeof cell !== 'object' || Array.isArray(cell)) return cell
