@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 const worker = readFileSync(new URL('../supabase/functions/monitoring-worker/index.ts', import.meta.url), 'utf8')
 const originalMigration = readFileSync(new URL('../supabase/migrations/20260714235900_ai_assistant_frame_refresh_requests.sql', import.meta.url), 'utf8')
 const rollbackMigration = readFileSync(new URL('../supabase/migrations/20260715203000_disable_ai_assistant_frame_refresh_requests.sql', import.meta.url), 'utf8')
+const physicalFrameConfigRoute = readFileSync(new URL('../app/api/device/frame-config/route.ts', import.meta.url), 'utf8')
 const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 
 
@@ -35,7 +36,16 @@ test('forward migration removes the live Assistant refresh trigger and functions
 })
 
 
-test('Mirror Assistant remains passive and does not request physical refreshes', () => {
+test('physical frame config masks Assistant cells so deployed firmware can acknowledge the revision', () => {
+  assert.match(physicalFrameConfigRoute, /function stripUnsupportedPhysicalModules/)
+  assert.match(physicalFrameConfigRoute, /moduleBase === 'assistant' \? \{ \.\.\.record, module: '' \} : cell/)
+  assert.match(physicalFrameConfigRoute, /: stripUnsupportedPhysicalModules\(builtPayload\)/)
+})
+
+
+test('Mirror Assistant remains available and passive', () => {
+  assert.match(mirrorRoute, /buildFrameConfigPayload\(supabase, deviceId\)/)
+  assert.doesNotMatch(mirrorRoute, /stripUnsupportedPhysicalModules/)
   const assistantSection = mirrorRoute.slice(
     mirrorRoute.indexOf('async function aiAssistantDetail'),
     mirrorRoute.indexOf('async function remindersDetail'),
