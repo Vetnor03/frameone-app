@@ -78,8 +78,10 @@ test('behavior-defining constants and rendering code remain present', () => {
 });
 
 test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {
-  assert.match(reminders, /static SmartReminderLayout g_smartLayoutScratchA;/);
-  assert.match(reminders, /static SmartReminderLayout g_smartLayoutScratchB;/);
-  assert.doesNotMatch(reminders, /\bSmartReminderLayout\s+(?![&*]|g_smartLayoutScratch)[A-Za-z_]\w*\s*(?:[;={])/);
+  assert.match(reminders, /static SmartReminderLayout\* g_smartLayoutScratch = nullptr;/);
+  assert.match(reminders, /sizeof\(SmartReminderLayout\) \* 2/);
+  assert.match(reminders, /heap_caps_malloc\(scratchBytes, MALLOC_CAP_8BIT\)/);
+  assert.doesNotMatch(reminders, /\bstatic\s+SmartReminderLayout\s+(?!\*)[A-Za-z_]\w*/);
+  assert.doesNotMatch(reminders, /^\s+(?!static\b)SmartReminderLayout\s+(?![&*])[A-Za-z_]\w*\s*(?:[;={])/m);
   assert.doesNotMatch(reminders, /SmartReminderLayout\s*\{\s*\}/);
 });

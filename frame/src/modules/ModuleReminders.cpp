@@ -1093,8 +1093,7 @@ struct SmartReminderLayout {
   SmartReminderLine items[4];
 };
 
-static SmartReminderLayout g_smartLayoutScratchA;
-static SmartReminderLayout g_smartLayoutScratchB;
+static SmartReminderLayout* g_smartLayoutScratch = nullptr;
 
 static void resetSmartReminderLayout(SmartReminderLayout& layout) {
   memset(&layout, 0, sizeof(layout));
@@ -1103,6 +1102,31 @@ static void resetSmartReminderLayout(SmartReminderLayout& layout) {
   for (int i = 0; i < 4; i++) {
     layout.items[i].itemIdx = -1;
   }
+}
+
+static bool ensureSmartReminderLayoutScratch() {
+  if (g_smartLayoutScratch) return true;
+
+  const size_t scratchBytes = sizeof(SmartReminderLayout) * 2;
+
+  g_smartLayoutScratch =
+    static_cast<SmartReminderLayout*>(
+      heap_caps_malloc(scratchBytes, MALLOC_CAP_8BIT)
+    );
+
+  if (!g_smartLayoutScratch) {
+    REM_LOG("smart layout heap allocation failed bytes=");
+    REM_LOGLN(scratchBytes);
+    return false;
+  }
+
+  resetSmartReminderLayout(g_smartLayoutScratch[0]);
+  resetSmartReminderLayout(g_smartLayoutScratch[1]);
+
+  REM_LOG("smart layout heap allocated bytes=");
+  REM_LOGLN(scratchBytes);
+
+  return true;
 }
 
 static bool buildSmartReminderLayout(const ReminderBucket& bucket,
@@ -1240,10 +1264,15 @@ static void drawBucketLinesCentered(const Cell& c,
   const int singleItemMaxTextW = c.w - sidePad * 2;
   if (multiItemMaxTextW <= 20 || singleItemMaxTextW <= 20) return;
 
+  if (!ensureSmartReminderLayoutScratch()) {
+    REM_LOGLN("smart reminder rendering skipped: no heap scratch");
+    return;
+  }
+
   char label[32];
   buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, label, sizeof(label));
 
-  SmartReminderLayout& layout = g_smartLayoutScratchA;
+  SmartReminderLayout& layout = g_smartLayoutScratch[0];
   resetSmartReminderLayout(layout);
   const int desiredCount = min(visibleCount, 4);
   const int initialMaxTextW = (desiredCount == 1) ? singleItemMaxTextW : multiItemMaxTextW;
@@ -1254,7 +1283,7 @@ static void drawBucketLinesCentered(const Cell& c,
   }
 
   if (layout.count == 1 && initialMaxTextW != singleItemMaxTextW) {
-    SmartReminderLayout& singleLayout = g_smartLayoutScratchB;
+    SmartReminderLayout& singleLayout = g_smartLayoutScratch[1];
     resetSmartReminderLayout(singleLayout);
     if (findSmartReminderLayout(bucket, 1, singleItemMaxTextW, totalH, label, singleLayout)) {
       layout = singleLayout;
