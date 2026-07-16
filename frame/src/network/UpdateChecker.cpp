@@ -64,11 +64,13 @@ namespace {
     return ok;
   }
 
+  static const size_t REMINDERS_MAX_BODY_BYTES = 4096;
+
   String buildRemindersUrl() {
     String url = String(BASE_URL)
                + "/api/device/reminders?device_id="
                + DeviceIdentity::getDeviceId()
-               + "&limit=20&tz=Europe/Oslo";
+               + "&limit=10&tz=Europe/Oslo&skip_sync=1";
     return url;
   }
 
@@ -263,17 +265,15 @@ bool UpdateChecker::hasRemindersChanged(const String& deviceToken, String& outSi
   bool ok = httpGetAuthWithTokenAwareness(url, deviceToken, code, body);
   if (!ok || code != 200) return false;
 
-  StaticJsonDocument<16384> doc;
-  if (deserializeJson(doc, body)) return false;
-
-  JsonArray items = doc["items"].as<JsonArray>();
-  if (items.isNull()) {
-    outSig = "__NO_REM_ITEMS__";
-  } else {
-    String itemsJson;
-    serializeJson(items, itemsJson);
-    outSig = reminderHashSig(itemsJson);
+  if (body.length() == 0 || body.length() > REMINDERS_MAX_BODY_BYTES) {
+    Serial.print("reminders change-check rejected bytes=");
+    Serial.println(body.length());
+    return false;
   }
+
+  // The compact physical endpoint is deterministic; hash its bytes directly.
+  // Avoid a duplicate JSON tree and re-serialized String on the loop-task stack/heap.
+  outSig = reminderHashSig(body);
 
   String last = getLastReminderSig();
 

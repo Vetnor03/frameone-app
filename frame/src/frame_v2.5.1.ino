@@ -351,7 +351,8 @@ static void postDeviceStatus(
 
   Serial.print("Status report HTTP: ");
   Serial.println(code);
-  Serial.println(body);
+  Serial.print("status response bytes=");
+  Serial.println(body.length());
 }
 
 static bool shouldRunOtaCheckNow() {

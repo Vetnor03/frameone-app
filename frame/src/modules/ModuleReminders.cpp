@@ -44,21 +44,19 @@ namespace ModuleReminders {
 // =========================================================
 static const FrameConfig* g_cfg = nullptr;
 
-static const int MAX_REMINDERS = 20;
-static const size_t REMINDERS_MAX_BODY_BYTES = 8192;
-static const size_t REMINDERS_JSON_CAPACITY = 8192;
-static const size_t REMINDERS_FILTER_CAPACITY = 768;
+static const int MAX_REMINDERS = 10;
+static const size_t REMINDERS_MAX_BODY_BYTES = 4096;
+static const size_t REMINDERS_JSON_CAPACITY = 6144;
+static const size_t REMINDERS_FILTER_CAPACITY = 512;
 static const int MAX_BUCKETS = 10;
 static const int MAX_BUCKET_ITEMS = 10;
 
 struct ReminderItem {
   bool used = false;
-  char id[48] = {0};
   char title[96] = {0};
   char time[12] = {0};           // HH:MM or empty
   char occurrenceDate[16] = {0}; // YYYY-MM-DD
   char displayDate[24] = {0};
-  char repeat[20] = {0};
   int daysUntil = 0;
   bool isOverdue = false;
 };
@@ -679,7 +677,7 @@ static bool fetchReminders() {
   String url = String(BASE_URL)
              + "/api/device/reminders?device_id="
              + DeviceIdentity::getDeviceId()
-             + "&limit=20&tz=Europe/Oslo";
+             + "&limit=10&tz=Europe/Oslo&skip_sync=1";
 
   int code = 0;
   String body;
@@ -714,14 +712,11 @@ static bool fetchReminders() {
   }
 
   JsonObject itemFilter = filter["items"][0].to<JsonObject>();
-  itemFilter["reminder_id"] = true;
   itemFilter["title"] = true;
   itemFilter["occurrence_date"] = true;
   itemFilter["display_date"] = true;
   itemFilter["days_until"] = true;
   itemFilter["is_overdue"] = true;
-  itemFilter["repeat"] = true;
-  itemFilter["due_time"] = true;
   itemFilter["display_time"] = true;
 
   DynamicJsonDocument doc(REMINDERS_JSON_CAPACITY);
@@ -770,14 +765,11 @@ static bool fetchReminders() {
     ReminderItem& r = g_cache.items[idx];
     r.used = true;
 
-    safeCopy(r.id, sizeof(r.id), it["reminder_id"] | "");
-
     const char* rawTitle = it["title"] | "";
     utf8ToLatin1(r.title, sizeof(r.title), rawTitle);
 
     char rawTime[24] = {0};
     safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
-    if (!rawTime[0]) safeCopy(rawTime, sizeof(rawTime), it["due_time"] | "");
     extractTimeHHMM(rawTime, r.time, sizeof(r.time));
 
     const char* rawOccurrenceDate = it["occurrence_date"] | "";
@@ -786,8 +778,6 @@ static bool fetchReminders() {
     const char* rawDisplayDate = it["display_date"] | "";
     utf8ToLatin1(r.displayDate, sizeof(r.displayDate), rawDisplayDate);
 
-    const char* rawRepeat = it["repeat"] | "";
-    safeCopy(r.repeat, sizeof(r.repeat), rawRepeat);
 
     r.daysUntil = it["days_until"] | 0;
     r.isOverdue = it["is_overdue"] | false;

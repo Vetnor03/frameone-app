@@ -98,6 +98,9 @@ static void resetStocks(FrameConfig& out) {
 
 namespace FrameConfigApi {
 
+static const size_t FRAME_CONFIG_MAX_BODY_BYTES = 12288;
+static const size_t FRAME_CONFIG_JSON_CAPACITY = 12288;
+
 FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // reset core
   out.layout = LAYOUT_DEFAULT;
@@ -146,7 +149,18 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
     return FETCH_ERROR;
   }
 
-  StaticJsonDocument<8192> doc;
+  if (body.length() == 0 || body.length() > FRAME_CONFIG_MAX_BODY_BYTES) {
+    Serial.print("frame-config rejected response bytes=");
+    Serial.println(body.length());
+    return FETCH_ERROR;
+  }
+
+  // Preserve the complete supported config schema while moving its parser off-stack.
+  DynamicJsonDocument doc(FRAME_CONFIG_JSON_CAPACITY);
+  if (doc.capacity() == 0) {
+    Serial.println("frame-config JSON allocation failed");
+    return FETCH_ERROR;
+  }
 
   DeserializationError err = deserializeJson(doc, body);
   if (err) {

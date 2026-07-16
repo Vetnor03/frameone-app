@@ -31,9 +31,9 @@ static const int MAX_TABLE_ROWS = 24;
 static const int DETAIL_LEFT_PAD = 8; // easy to tweak XL bottom-left left padding
 
 // Parse JSON in a temporary heap document (not global .bss DRAM).
-// We try a smaller capacity first, then retry with a larger one if needed.
-static const size_t SOCCER_DOC_CAP_SMALL = 12288;
-static const size_t SOCCER_DOC_CAP_LARGE = 16384;
+static const size_t SOCCER_MAX_BODY_BYTES = 24576;
+static const size_t SOCCER_JSON_CAPACITY = 16384;
+static const size_t SOCCER_FILTER_CAPACITY = 1024;
 
 struct SoccerInstanceConfig {
   uint8_t id = 1;
@@ -728,21 +728,23 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
   bool ok = NetClient::httpGet(url, httpCode, body);
   if (!ok || httpCode != 200) {
     Serial.printf("[soccer] GET failed ok=%d http=%d\n", ok ? 1 : 0, httpCode);
-    if (body.length() > 0) {
-      Serial.printf("[soccer] body=%s\n", body.c_str());
-    }
     return false;
   }
 
-  Serial.printf("[soccer] body len=%d\n", body.length());
-
-  DynamicJsonDocument doc(SOCCER_DOC_CAP_SMALL);
-  DeserializationError err = deserializeJson(doc, body);
-  if (err == DeserializationError::NoMemory) {
-    Serial.printf("[soccer] json needs larger doc, retrying %u bytes\n", (unsigned)SOCCER_DOC_CAP_LARGE);
-    doc = DynamicJsonDocument(SOCCER_DOC_CAP_LARGE);
-    err = deserializeJson(doc, body);
+  Serial.printf("[soccer] HTTP status=%d bytes=%d\n", httpCode, body.length());
+  if (body.length() == 0 || body.length() > SOCCER_MAX_BODY_BYTES) {
+    Serial.println("[soccer] response size rejected");
+    return false;
   }
+
+  DynamicJsonDocument filter(SOCCER_FILTER_CAPACITY);
+  if (filter.capacity() == 0) return false;
+  const char* fields[] = {"teamName", "teamKey", "competitionName", "domesticCompetitionCode",
+                          "next", "last", "standing", "table", "topScorer", "lastScorers"};
+  for (const char* field : fields) filter[field] = true;
+  DynamicJsonDocument doc(SOCCER_JSON_CAPACITY);
+  if (doc.capacity() == 0) return false;
+  DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
   if (err) {
     Serial.printf("[soccer] json err: %s\n", err.c_str());
     return false;

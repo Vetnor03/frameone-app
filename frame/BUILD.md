@@ -1,134 +1,63 @@
-# Build/reference notes for `frame/` firmware
+# ESP32 physical-frame build and memory report
 
-This document is intentionally based on what is verifiable from `frame/src/` code.
+## Reproducible build profile
 
-## Verified from code
+`frame/platformio.ini` pins PlatformIO Espressif32 `6.6.0` (Arduino-ESP32 `2.0.17`), ArduinoJson `6.21.5`, and GxEPD2 `1.6.4`; discovers the sketch and every nested source file; supplies the short-include paths used by the firmware; selects an OTA-capable dual-app partition; and emits a linker map.
 
-### Platform/framework signals
+From the repository root:
 
-- Firmware is Arduino-style for ESP32 (`.ino`, `Arduino.h`, `WiFi.h`, `Preferences.h`, `esp_sleep.h`).
-- Display stack uses GxEPD2 and Adafruit GFX-style fonts.
-- Main sketch file is `frame/src/frame_v2.4.8.ino`.
-- Current firmware version constant in code: `FW_VER = "v2.4.8"`.
+```sh
+pio run -d frame
+pio run -d frame -t size
+xtensa-esp32-elf-size -A frame/.pio/build/frame_esp32/firmware.elf
+xtensa-esp32-elf-nm -S --size-sort --radix=d frame/.pio/build/frame_esp32/firmware.elf | tail -40
+```
 
-### Key dependencies detected from includes
+Preserve these artifacts from `frame/.pio/build/frame_esp32/`: `firmware.bin`, `firmware.elf`, and `firmware.map`.
 
-#### Core/ESP32
+## Hardware facts verified from source
 
-- `Arduino.h`
-- `WiFi.h`
-- `Preferences.h`
-- `HTTPClient.h`
-- `WiFiClientSecure.h`
-- `Update.h`
-- `esp_sleep.h`
-- `time.h` / `sys/time.h`
+- ESP32 Arduino APIs are used (`WiFi`, `Preferences`, ESP sleep and heap APIs).
+- Panel type is `GxEPD2_750_T7` (800 × 480).
+- E-paper control pins are CS 5, DC 17, RST 16 and BUSY 4. Comments identify the conventional SPI SCK 18/MOSI 23 wiring.
+- Battery ADC is GPIO35 and power sense defaults to GPIO39.
+- OTA requires a dual application partition and sufficient free sketch space.
 
-#### JSON
+## Values requiring manual confirmation
 
-- `ArduinoJson.h`
+The repository contains no schematic, board manifest, prior binary/map, or production build metadata. Consequently these values are explicit **candidate assumptions**, not silently asserted facts:
 
-#### Display / graphics
+| Value in candidate profile | Required confirmation |
+| --- | --- |
+| `esp32dev` / classic ESP32 | Exact module/board and CPU/flash mode |
+| 4 MB flash | Read module marking or bootloader flash report |
+| `min_spiffs.csv` dual-app OTA | Compare production partition table and maximum published binary |
+| GPIO/SPI mapping above | Compare schematic for every hardware revision |
+| Power-sense polarity | Measure GPIO39 on USB and battery |
 
-- `GxEPD2_BW.h`
-- `GxEPD2_GFX.h`
-- Built-in GFX fonts (`<Fonts/...7b.h>`)
-- Project custom fonts (`frame/src/assets/fonts/*.h`)
+Do not publish from this profile until all five checks pass. If production differs, update `platformio.ini`, rebuild, and repeat hardware verification.
 
-#### Provisioning/captive portal
+## Memory audit and expected allocation changes
 
-- `WebServer.h`
-- `DNSServer.h`
+| Path | Before | After |
+| --- | --- | --- |
+| Reminder change check | 16,384-byte stack JSON + serialized items copy | direct FNV-1a over body; 4,096-byte response cap |
+| Reminder fetch | 20-item cache; 8,192-byte body/doc; 9-field DTO | 10-item cache; 4,096-byte body cap; 6,144-byte filtered heap doc; six-field DTO |
+| Surf | one or two 24,576-byte stack docs; body excerpts logged | 16,384-byte filtered heap doc; 32,768-byte body cap; selection doc destroyed before winner doc |
+| Countdown | 16,384-byte stack doc; complete body log | 12,288-byte filtered heap doc; 8,192-byte body cap; byte-count log |
+| Frame config | 8,192-byte stack doc | 12,288-byte bounded heap doc; 12,288-byte body cap; full supported schema retained |
+| Weather | unbounded body; 24,576-byte heap doc | 32,768-byte body cap; filtered 24,576-byte heap doc |
+| Soccer | unbounded body, full error body, 12/16 KB retry allocations | 24,576-byte cap; one filtered 16,384-byte heap doc |
+| Stocks | body-sized allocation | 16,384-byte cap; filtered fixed 12,288-byte heap doc |
 
-### Display panel/type and related constants
+The Countdown endpoint/cache remains at 20 because the renderer rotates across the cached event set; reducing it would change visible rotation. Module layouts, selection logic, refresh intervals, reminder grouping/order, Surf scoring/fuel/daypart logic, and Countdown rotation were not changed.
 
-- Display typedef: `GxEPD2_BW<GxEPD2_750_T7, GxEPD2_750_T7::HEIGHT>`.
-- Display object is created once globally in `DisplayCore.cpp`.
-- Logical safe/visible viewport constants (calibrated matte opening on the unchanged 800x480 panel):
-  - `VIEWPORT_X = 9` / `FRAME_X = 9`
-  - `VIEWPORT_Y = 22` / `FRAME_Y = 22`
-  - `VIEWPORT_W = 785` / `FRAME_W = 785`
-  - `VIEWPORT_H = 458` / `FRAME_H = 458`
-  - Inclusive bounds: `VIEW_LEFT = 9`, `VIEW_TOP = 22`, `VIEW_RIGHT = 793`, `VIEW_BOTTOM = 479`
+`NetClient` still materializes the complete HTTP response in a `String`. Call-site caps prevent oversized payloads from being parsed, but they cannot stop the initial body allocation. A follow-up should add an opt-in bounded/streaming API without changing current callers, validate `Content-Length` before reads, and migrate modules individually.
 
-### Pin mapping used in code
+## Font duplication determination
 
-#### E-paper control pins (from `core/Config.h`)
+The custom font headers define non-`extern` namespace-scope `const` bitmap/glyph objects and are included by multiple module translation units. In C++, those objects have internal linkage, so each including translation unit can emit its own copy. A successful ELF/map inspection is required to determine whether this toolchain merges identical constants; no build artifact is present to prove that it does. If the map shows duplicates, move definitions into one `.cpp` and expose `extern` declarations from headers in a separate, behavior-neutral change.
 
-- `EPAPER_CS   = GPIO5`
-- `EPAPER_DC   = GPIO17`
-- `EPAPER_RST  = GPIO16`
-- `EPAPER_BUSY = GPIO4`
+## Build/size result for this change
 
-> Note: comments mention typical SPI bus pins (SCK=18, MOSI=23, MISO unused), but only control pins above are explicit constants.
-
-#### Battery/power related pins
-
-- Battery ADC pin: `BATTERY_ADC_PIN = GPIO35`.
-- Power-sense / USB-presence pin: `PWR_SENSE_DEBUG_PIN = GPIO39` (default macro).
-
-### Battery and power behavior (code-confirmed)
-
-- Battery voltage uses ADC raw -> voltage conversion with divider ratio `2.0`.
-- Battery percentage is voltage-derived with smoothing/hysteresis logic.
-- Learned full-voltage calibration is stored in `Preferences` namespace `battery` (`full_v`, `full_n`).
-- USB presence is read from GPIO39 and used for:
-  - deciding sleep interval (USB: 5 min, battery: 15 min),
-  - selecting EXT1 wake polarity for plug/unplug transitions.
-
-### Wi-Fi provisioning / captive portal
-
-- If saved STA connect fails, firmware starts AP provisioning portal (blocking):
-  - AP SSID pattern: `FRAME-000-XXXX` (from MAC suffix).
-  - DNS catch-all via `DNSServer` for captive behavior.
-  - HTTP server on port 80 serves form and saves credentials to `Preferences` namespace `wifi`.
-  - Device restarts after credential save.
-
-### OTA/update dependencies and behavior
-
-- OTA binary update stack uses:
-  - `HTTPClient`
-  - `WiFiClientSecure`
-  - `Update`
-  - `ArduinoJson` (manifest parsing)
-- Manifest endpoint used: `/api/device/firmware?device_id=...&current_version=...`.
-- OTA currently accepts insecure TLS (`setInsecure()`).
-- Update install expects valid `Content-Length` and enough free sketch space.
-
-### Backend/API assumptions visible in code
-
-- Base URL default: `https://re-mind.no`.
-- Device identity/token stored in `Preferences` namespace `frame`.
-- Authenticated endpoints rely on Bearer token and clear token on `401/403` in several paths.
-
-### Module/data-source endpoints referenced
-
-- Pairing: `/api/device/pair/start`, `/api/device/pair/status`
-- Config: `/api/device/frame-config`, `/api/device/config-meta`
-- Status heartbeat: `/api/device/status`
-- Reminders: `/api/device/reminders`
-- Countdowns: `/api/device/countdowns`
-- Surf: `/api/surf/score`, `/api/device/surf-meta`
-- Soccer: `/api/soccer/frame`
-- Weather: `/api/weather/details?frame=1&days=5&lat=...&lon=...` (server caches/dedupes Open-Meteo)
-
-### Fonts/assets dependencies
-
-- Custom local fonts under `frame/src/assets/fonts/` are used by weather/surf/reminders/countdown/soccer modules.
-- Icon helper under `frame/src/assets/icons/ModuleIcons.*` is used by weather/surf modules.
-
-### Compile/build assumptions inferred from structure
-
-- Include paths must make subfolders available by short include names (`"Config.h"`, `"DisplayCore.h"`, etc.) even though files live in nested folders.
-- Build must compile all `.cpp` files under `frame/src/` and the `.ino` entrypoint.
-- Sufficient partition/free sketch space is required for OTA write of downloaded binary.
-
-## Needs manual confirmation
-
-- Exact ESP32 board definition/package target (e.g., WROOM dev board vs custom board) is not declared in source.
-- Arduino core version and exact library versions (`GxEPD2`, `ArduinoJson`, etc.) are not pinned in visible files.
-- Partition scheme used for OTA (required for robust update sizing) is not present in `frame/` source tree.
-- Final hardware wiring for SPI bus lines (SCK/MOSI/MISO) and any level shifting is not fully specified in code.
-- Whether GPIO39 power-sense polarity matches all hardware revisions should be verified on device.
-- TLS trust model is currently insecure in code; production certificate strategy is not defined here.
-- No build-system manifest (e.g., `platformio.ini`, `arduino-cli.yaml`, board JSON) was provided in this task scope, so exact build command cannot be verified from `frame/src/` alone.
+No `pio` or `arduino-cli` executable is installed in the supplied environment, and no previous ELF/map is present. Therefore flash, `.data`, `.bss`, available RAM, largest linked symbols/assets, definitive font deduplication, and before/after binary comparison remain **not measured**. Per release policy, `FW_VER` remains `v2.5.2`; bump to `v2.5.3` only after the confirmed production profile builds successfully. OTA artifact publication remains manual after that build and physical verification.
