@@ -185,7 +185,7 @@ bool FirmwareUpdater::fetchManifest(String& latestVersion, bool& updateAvailable
   if (code != HTTP_CODE_OK) {
     String body = http.getString();
     if (body.length() > 0) {
-      log("manifest body=" + body);
+      log("manifest response bytes=" + String(body.length()));
     }
     http.end();
     return false;
@@ -194,7 +194,7 @@ bool FirmwareUpdater::fetchManifest(String& latestVersion, bool& updateAvailable
   String body = http.getString();
   http.end();
 
-  log("manifest raw body=" + body);
+  log("manifest response bytes=" + String(body.length()));
 
   if (body.length() == 0) {
     log("manifest body empty");

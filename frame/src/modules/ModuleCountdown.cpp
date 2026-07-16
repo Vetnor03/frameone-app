@@ -39,6 +39,9 @@ namespace ModuleCountdown {
 static const FrameConfig* g_cfg = nullptr;
 
 static const int MAX_EVENTS = 20;
+static const size_t COUNTDOWN_MAX_BODY_BYTES = 8192;
+static const size_t COUNTDOWN_JSON_CAPACITY = 12288;
+static const size_t COUNTDOWN_FILTER_CAPACITY = 768;
 
 struct CountdownItem {
   bool used = false;
@@ -1158,7 +1161,8 @@ String url = String(BASE_URL)
 
   CD_LOG("countdown HTTP: ");
   CD_LOGLN(code);
-  CD_LOGLN(body);
+  CD_LOG("countdown response bytes: ");
+  CD_LOGLN(body.length());
 
   if (!ok || code != 200 || body.length() == 0) {
     g_cache.loaded = true;
@@ -1166,8 +1170,37 @@ String url = String(BASE_URL)
     return false;
   }
 
-  StaticJsonDocument<16384> doc;
-  DeserializationError err = deserializeJson(doc, body);
+  if (body.length() > COUNTDOWN_MAX_BODY_BYTES) {
+    CD_LOGLN("countdown response too large");
+    g_cache.loaded = true;
+    g_cache.ok = false;
+    return false;
+  }
+
+  DynamicJsonDocument filter(COUNTDOWN_FILTER_CAPACITY);
+  if (filter.capacity() == 0) {
+    g_cache.loaded = true;
+    g_cache.ok = false;
+    return false;
+  }
+  JsonObject itemFilter = filter["items"][0].to<JsonObject>();
+  itemFilter["pinned"] = true;
+  itemFilter["id"] = true;
+  itemFilter["event_id"] = true;
+  itemFilter["title"] = true;
+  itemFilter["name"] = true;
+  itemFilter["target_date"] = true;
+  itemFilter["date"] = true;
+  itemFilter["display_date"] = true;
+  itemFilter["days_left"] = true;
+
+  DynamicJsonDocument doc(COUNTDOWN_JSON_CAPACITY);
+  if (doc.capacity() == 0) {
+    g_cache.loaded = true;
+    g_cache.ok = false;
+    return false;
+  }
+  DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
   if (err) {
     CD_LOGLN("countdown JSON parse failed");
     g_cache.loaded = true;

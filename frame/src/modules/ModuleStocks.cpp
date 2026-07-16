@@ -462,9 +462,19 @@ static bool parseSeriesArray(JsonVariantConst arrVar, StockCache& out) {
   return out.seriesCount > 0;
 }
 
+static const size_t STOCKS_MAX_BODY_BYTES = 16384;
+static const size_t STOCKS_JSON_CAPACITY = 12288;
+static const size_t STOCKS_FILTER_CAPACITY = 1024;
+
 static bool parseQuoteJson(const String& body, const StockInstanceConfig& cfg, StockCache& out) {
-  DynamicJsonDocument doc((size_t)body.length() + 2048);
-  DeserializationError err = deserializeJson(doc, body);
+  DynamicJsonDocument filter(STOCKS_FILTER_CAPACITY);
+  if (filter.capacity() == 0) return false;
+  const char* fields[] = {"symbol", "name", "currency", "chartRange", "quote", "purchasePrice",
+                          "personalChangePercent", "baselinePrice", "baselineSource", "selectedSeries", "series"};
+  for (const char* field : fields) filter[field] = true;
+  DynamicJsonDocument doc(STOCKS_JSON_CAPACITY);
+  if (doc.capacity() == 0) return false;
+  DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
   if (err) {
     Serial.print("[STOCKS] JSON parse failed: ");
     Serial.println(err.c_str());
@@ -569,7 +579,8 @@ static bool fetchQuote(int idx, StockCache& out) {
     DeviceIdentity::clearToken();
   }
 
-  if (!ok || code != 200 || body.length() == 0) {
+  if (!ok || code != 200 || body.length() == 0 || body.length() > STOCKS_MAX_BODY_BYTES) {
+    if (body.length() > STOCKS_MAX_BODY_BYTES) Serial.println("[STOCKS] response size rejected");
     return false;
   }
 

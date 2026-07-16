@@ -13,7 +13,8 @@ bool BackendApi::pairStart(PairStartResponse& out) {
 
   Serial.print("pair/start HTTP: ");
   Serial.println(code);
-  Serial.println(body);
+  Serial.print("response bytes=");
+  Serial.println(body.length());
 
   if (!ok || code != 200) return false;
 
@@ -39,7 +40,8 @@ bool BackendApi::pairStatus(PairStatusResponse& out) {
 
   Serial.print("pair/status HTTP: ");
   Serial.println(code);
-  Serial.println(body);
+  Serial.print("response bytes=");
+  Serial.println(body.length());
 
   if (!ok || code != 200) return false;
 

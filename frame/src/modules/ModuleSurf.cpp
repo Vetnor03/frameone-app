@@ -872,59 +872,38 @@ static bool isTodaysBestConfig(const SurfInstanceConfig& cfg) {
 // =========================================================
 // TAB 6 — HTTP helpers
 // =========================================================
-static bool httpGetJson(const String& url, StaticJsonDocument<24576>& docOut) {
+static const size_t SURF_MAX_BODY_BYTES = 32768;
+static const size_t SURF_JSON_CAPACITY = 16384;
+static const size_t SURF_FILTER_CAPACITY = 4096;
+
+static void retainSurfFields(DynamicJsonDocument& filter) {
+  const char* fields[] = {"rating", "score", "line1", "line2", "summary", "detail", "spot", "spotId",
+    "sunrise", "sunset", "temp_c", "temp_min_c", "temp_max_c", "water_temp_min_c",
+    "water_temp_max_c", "wmo", "weather_code", "weather_label", "breakdown", "inputs",
+    "forecast", "sun", "air", "water", "weather", "temps", "picked", "dayparts", "daily"};
+  for (const char* field : fields) filter[field] = true;
+}
+
+static bool httpGetJson(const String& url, DynamicJsonDocument& docOut) {
   int httpCode = 0;
   String body;
-
-  String token = "";
-  if (DeviceIdentity::hasToken()) {
-    token = DeviceIdentity::getToken();
-  }
-
-  Serial.print("SURF URL = ");
-  Serial.println(url);
-  Serial.print("USING AUTH = ");
-  Serial.println(token.length() > 0 ? "yes" : "no");
-
-  bool ok;
-  if (token.length() > 0) ok = NetClient::httpGetAuth(url, token, httpCode, body);
-  else                    ok = NetClient::httpGet(url, httpCode, body);
-
-#if SURF_DEBUG
-  Serial.println("=== SURF HTTP GET ===");
-  Serial.println(url);
-  Serial.print("HTTP code: ");
-  Serial.println(httpCode);
-#endif
-
-  if (!ok || httpCode != 200) return false;
-
-  const int contentLength = NetClient::lastContentLength();
-
-#if SURF_DEBUG
-  Serial.print("Content-Length: ");
-  Serial.println(contentLength);
-  Serial.print("Actual bytes read: ");
-  Serial.println(body.length());
-#endif
-
-  DeserializationError err = deserializeJson(docOut, body);
-  if (err) {
-    Serial.print("Surf JSON deserialize failed: ");
-    Serial.println(err.c_str());
-    Serial.print("Content-Length=");
-    Serial.println(contentLength);
-    Serial.print("Actual bytes read=");
-    Serial.println(body.length());
-    Serial.print("Body first 200=");
-    Serial.println(body.substring(0, body.length() < 200 ? body.length() : 200));
-    Serial.print("Body last 200=");
-    unsigned int len = body.length();
-    Serial.println(body.substring(len > 200 ? len - 200 : 0));
+  String token = DeviceIdentity::hasToken() ? DeviceIdentity::getToken() : String();
+  bool ok = token.length() > 0 ? NetClient::httpGetAuth(url, token, httpCode, body)
+                               : NetClient::httpGet(url, httpCode, body);
+  Serial.print("SURF HTTP status="); Serial.print(httpCode);
+  Serial.print(" bytes="); Serial.println(body.length());
+  if (!ok || httpCode != 200 || body.length() == 0) return false;
+  if (body.length() > SURF_MAX_BODY_BYTES) {
+    Serial.println("Surf response exceeds limit");
     return false;
   }
-
-  return true;
+  if (docOut.capacity() == 0) return false;
+  DynamicJsonDocument filter(SURF_FILTER_CAPACITY);
+  if (filter.capacity() == 0) return false;
+  retainSurfFields(filter);
+  DeserializationError err = deserializeJson(docOut, body, DeserializationOption::Filter(filter));
+  Serial.print("SURF JSON parse="); Serial.println(err ? err.c_str() : "Ok");
+  return !err && !docOut.overflowed();
 }
 
 static String buildSurfUrlBase(const SurfInstanceConfig& cfg, const char* spotIdOverrideOrNull) {
@@ -973,7 +952,7 @@ static void appendDailyParamsIfWanted(String& url) {
   url += "&daily=1&days=5";
 }
 
-static bool parseScoreResponseIntoCache(const StaticJsonDocument<24576>& doc, SurfCache& out) {
+static bool parseScoreResponseIntoCache(const DynamicJsonDocument& doc, SurfCache& out) {
   int rating = jsonDocFinalRating1to6(doc);
   if (rating < 1 || rating > 6) return false;
 
@@ -1162,7 +1141,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   const bool isBest = isTodaysBestConfig(cfg);
 
   if (!isBest) {
-    StaticJsonDocument<24576> doc;
+    DynamicJsonDocument doc(SURF_JSON_CAPACITY);
     String url = buildSurfUrlBase(cfg, nullptr);
     if (wantDayparts) url += "&dayparts=1";
     if (wantDaily) appendDailyParamsIfWanted(url);
@@ -1182,7 +1161,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   const bool needsSecond = (wantDayparts || wantDaily);
 
   if (!needsSecond) {
-    StaticJsonDocument<24576> doc;
+    DynamicJsonDocument doc(SURF_JSON_CAPACITY);
     String url = buildSurfUrlBase(cfg, nullptr);
     appendFuelPenaltyParamsIfNeeded(cfg, url);
 
@@ -1194,12 +1173,14 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
     return true;
   }
 
-  StaticJsonDocument<24576> docTB;
-  String urlTB = buildSurfUrlBase(cfg, nullptr);
-  appendFuelPenaltyParamsIfNeeded(cfg, urlTB);
-
-  if (!httpGetJson(urlTB, docTB)) return false;
-  if (!parseScoreResponseIntoCache(docTB, out)) return false;
+  // Release the selection document before allocating the winner-detail document.
+  {
+    DynamicJsonDocument selectionDoc(SURF_JSON_CAPACITY);
+    String selectionUrl = buildSurfUrlBase(cfg, nullptr);
+    appendFuelPenaltyParamsIfNeeded(cfg, selectionUrl);
+    if (!httpGetJson(selectionUrl, selectionDoc)) return false;
+    if (!parseScoreResponseIntoCache(selectionDoc, out)) return false;
+  }
 
 #if SURF_DEBUG
   Serial.println("=== TODAYS BEST FIRST PASS ===");
@@ -1215,7 +1196,7 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
     return true;
   }
 
-  StaticJsonDocument<24576> docWinner;
+  DynamicJsonDocument docWinner(SURF_JSON_CAPACITY);
   String urlW = String(BASE_URL) + "/api/surf/score?";
   urlW += "spotId=" + urlEncode(out.spotIdResolved);
   urlW += "&hours=4";

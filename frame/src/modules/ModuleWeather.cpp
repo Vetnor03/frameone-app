@@ -950,6 +950,10 @@ static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data) {
 // -----------------------------------------------------------------------------
 // Fetch weather through backend cache/dedupe layer
 // -----------------------------------------------------------------------------
+static const size_t WEATHER_MAX_BODY_BYTES = 32768;
+static const size_t WEATHER_JSON_CAPACITY = 24576;
+static const size_t WEATHER_FILTER_CAPACITY = 512;
+
 static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& out) {
   String url = String(BASE_URL) + "/api/weather/details?frame=1&compact=2&days=5&lat=";
   url += String(cfg.lat, 6);
@@ -964,7 +968,11 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
     return false;
   }
 
-  Serial.printf("[weather] body len=%d\n", body.length());
+  Serial.printf("[weather] HTTP status=%d bytes=%d\n", httpCode, body.length());
+  if (body.length() == 0 || body.length() > WEATHER_MAX_BODY_BYTES) {
+    Serial.println("[weather] response size rejected");
+    return false;
+  }
 
   // Keep the JSON document off the task stack. The compact frame payload is
   // still several KB for 5 days of hourly data, and a 24 KB StaticJsonDocument
@@ -972,7 +980,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   // on alternate refreshes. Allocate the parser buffer from heap and log both
   // the payload size and available heap so RAM failures are explicit.
   uint32_t heapBeforeParse = ESP.getFreeHeap();
-  DynamicJsonDocument doc(24576);
+  DynamicJsonDocument doc(WEATHER_JSON_CAPACITY);
   if (doc.capacity() == 0) {
     Serial.printf("[weather] json alloc failed: capacity=24576 heap=%u body=%d\n",
                   (unsigned)heapBeforeParse,
@@ -980,7 +988,12 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
     return false;
   }
 
-  DeserializationError err = deserializeJson(doc, body);
+  DynamicJsonDocument filter(WEATHER_FILTER_CAPACITY);
+  if (filter.capacity() == 0) return false;
+  filter["current"] = true;
+  filter["hourly"] = true;
+  filter["daily"] = true;
+  DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
   uint32_t heapAfterParse = ESP.getFreeHeap();
   Serial.printf("[weather] heap before parse=%u after parse=%u docCap=%u\n",
                 (unsigned)heapBeforeParse,
