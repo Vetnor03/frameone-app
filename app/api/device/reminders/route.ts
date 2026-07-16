@@ -32,20 +32,17 @@ type ReminderRow = {
 }
 
 type PhysicalDeviceReminderItem = {
-  reminder_id: string
   title: string
   occurrence_date: string
   display_date: string
   days_until: number
   is_overdue: boolean
-  repeat: string
-  due_time: string | null
   display_time: string | null
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
-const DEFAULT_LIMIT = 12
-const MAX_LIMIT = 12
+const DEFAULT_LIMIT = 10
+const MAX_LIMIT = 10
 
 const DEFAULT_HORIZON_DAYS = 120
 const MAX_HORIZON_DAYS = 366
@@ -311,15 +308,12 @@ function logOptionalReminderProviderFailure(provider: string, error: unknown) {
 
 function toPhysicalDeviceReminderItem(item: DeviceReminderItem): PhysicalDeviceReminderItem {
   return {
-    reminder_id: item.reminder_id,
     title: item.title,
     occurrence_date: item.occurrence_date,
     display_date: item.display_date,
     days_until: item.days_until,
     is_overdue: item.is_overdue,
-    repeat: item.repeat,
-    due_time: item.due_time,
-    display_time: item.display_time,
+    display_time: normalizeReminderTime(item.display_time),
   }
 }
 
