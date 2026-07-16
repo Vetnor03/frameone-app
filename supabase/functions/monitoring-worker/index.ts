@@ -52,18 +52,6 @@ async function processJob(supabase: any, job: any) {
     return { job_id: job.id, ok: true, skipped: true, reason }
   }
 
-  // Due selection is canonical in Postgres, but re-check immediately before a
-  // run as subscription/status/Instant state may change after enqueueing.
-  const { data: scheduleEligibility, error: eligibilityError } = await supabase
-    .rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id })
-    .maybeSingle()
-  if (eligibilityError) throw eligibilityError
-  if (!scheduleEligibility?.eligible) {
-    const reason = 'watch_not_schedule_eligible'
-    await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: reason }).eq('id', job.id)
-    return { job_id: job.id, watch_id: watch.id, ok: true, skipped: true, reason }
-  }
-
   const { data: openInterpretationJobs, error: interpretationQueueError } = await supabase
     .from('ai_assistant_interpretation_queue')
     .select('id,request_snapshot')
@@ -158,18 +146,8 @@ async function processJob(supabase: any, job: any) {
     if (status === 'change' && !createdUpdate) effectiveStatus = 'uncertain'
     nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
-    const completedAt = new Date()
-    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: completedAt.toISOString(), response_id: result.response_id ?? null, raw_result: result.raw ?? result, usage: result.usage ?? {} }).eq('id', run.id)
-    // Re-check after the attempt. Eligible Instant Watches use exactly the
-    // server-side 15-minute cadence; all others retain adaptive scheduling.
-    const { data: currentEligibility, error: currentEligibilityError } = await supabase
-      .rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id })
-      .maybeSingle()
-    if (currentEligibilityError) throw currentEligibilityError
-    const nextCheckAt = currentEligibility?.use_instant_cadence
-      ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString()
-      : nextPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }).eq('id', watch.id)
+    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: new Date().toISOString(), response_id: result.response_id ?? null, raw_result: result.raw ?? result, usage: result.usage ?? {} }).eq('id', run.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: new Date().toISOString(), next_check_at: nextPolicy.nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }).eq('id', watch.id)
     await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate }
   } catch (err) {
@@ -177,14 +155,9 @@ async function processJob(supabase: any, job: any) {
     const errorPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: 'error', attempts: job.attempts })
     // Legacy expression kept visible for regression tests: Math.pow(2, Math.min(job.attempts, 8)) * 5
     const backoffMinutes = errorPolicy.nextMinutes
-    const completedAt = new Date()
-    await supabase.from('monitoring_runs').update({ status: 'error', completed_at: completedAt.toISOString(), error_message: message }).eq('id', run.id)
-    const { data: currentEligibility } = await supabase.rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id }).maybeSingle()
-    const instantRetry = currentEligibility?.use_instant_cadence === true
-    const nextCheckAt = instantRetry ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString() : errorPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
-    if (instantRetry) await supabase.from('monitoring_queue').update({ completed_at: completedAt.toISOString(), last_error: message }).eq('id', job.id)
-    else await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
-    return { job_id: job.id, watch_id: watch.id, ok: false, error: message, retry_in_minutes: instantRetry ? 15 : backoffMinutes }
+    await supabase.from('monitoring_runs').update({ status: 'error', completed_at: new Date().toISOString(), error_message: message }).eq('id', run.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: new Date().toISOString(), next_check_at: errorPolicy.nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
+    await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
+    return { job_id: job.id, watch_id: watch.id, ok: false, error: message, retry_in_minutes: backoffMinutes }
   }
 }
