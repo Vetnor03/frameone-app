@@ -1093,6 +1093,18 @@ struct SmartReminderLayout {
   SmartReminderLine items[4];
 };
 
+static SmartReminderLayout g_smartLayoutScratchA;
+static SmartReminderLayout g_smartLayoutScratchB;
+
+static void resetSmartReminderLayout(SmartReminderLayout& layout) {
+  memset(&layout, 0, sizeof(layout));
+  layout.font = FONT_B12;
+
+  for (int i = 0; i < 4; i++) {
+    layout.items[i].itemIdx = -1;
+  }
+}
+
 static bool buildSmartReminderLayout(const ReminderBucket& bucket,
                                      int count,
                                      int rotation,
@@ -1103,7 +1115,7 @@ static bool buildSmartReminderLayout(const ReminderBucket& bucket,
                                      bool includeLabel,
                                      bool allowWrap,
                                      SmartReminderLayout& out) {
-  out = SmartReminderLayout{};
+  resetSmartReminderLayout(out);
   out.font = font;
   out.count = count;
   out.includeLabel = includeLabel;
@@ -1184,7 +1196,7 @@ static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
                                          int maxTextW,
                                          int maxH,
                                          SmartReminderLayout& out) {
-  out = SmartReminderLayout{};
+  resetSmartReminderLayout(out);
   out.font = FONT_B9;
   out.count = 1;
   out.wrapped = false;
@@ -1217,6 +1229,7 @@ static void drawBucketLinesCentered(const Cell& c,
                                     int yTop,
                                     int totalH,
                                     const GFXfont* lineFont) {
+  logMemoryStats("before_smart_layout");
   (void)lineFont;
   if (visibleCount <= 0 || bucket.count <= 0 || totalH <= 0) return;
 
@@ -1230,7 +1243,8 @@ static void drawBucketLinesCentered(const Cell& c,
   char label[32];
   buildRelativeDateText(bucket.daysUntil, bucket.isOverdue, label, sizeof(label));
 
-  SmartReminderLayout layout;
+  SmartReminderLayout& layout = g_smartLayoutScratchA;
+  resetSmartReminderLayout(layout);
   const int desiredCount = min(visibleCount, 4);
   const int initialMaxTextW = (desiredCount == 1) ? singleItemMaxTextW : multiItemMaxTextW;
   if (!findSmartReminderLayout(bucket, desiredCount, initialMaxTextW, totalH, label, layout)) {
@@ -1240,13 +1254,15 @@ static void drawBucketLinesCentered(const Cell& c,
   }
 
   if (layout.count == 1 && initialMaxTextW != singleItemMaxTextW) {
-    SmartReminderLayout singleLayout;
+    SmartReminderLayout& singleLayout = g_smartLayoutScratchB;
+    resetSmartReminderLayout(singleLayout);
     if (findSmartReminderLayout(bucket, 1, singleItemMaxTextW, totalH, label, singleLayout)) {
       layout = singleLayout;
     } else if (buildEmergencyReminderLayout(bucket, getRotationStep4h(), singleItemMaxTextW, totalH, singleLayout)) {
       layout = singleLayout;
     }
   }
+  logMemoryStats("after_smart_layout");
 
   const bool drawBullets = layout.count > 1;
   const int rowW = (drawBullets ? dotR * 2 + gap : 0) + layout.maxLineW;
@@ -2088,11 +2104,13 @@ void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
 
   Serial.println("REM render start");
+  logMemoryStats("render_start");
   ensureLoaded();
 
   ReminderBucket buckets[MAX_BUCKETS];
   int bucketCount = buildBuckets(buckets, MAX_BUCKETS);
   int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
+  logMemoryStats("after_buckets");
 
   if (c.size == CELL_SMALL) {
     renderSmall(c, buckets, bucketCount, primaryIdx);
