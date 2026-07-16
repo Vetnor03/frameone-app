@@ -11,6 +11,7 @@ import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/c
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
+import SubscriptionSettingsPage from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
@@ -76,6 +77,7 @@ const UI = {
     themeRow: 'Theme',
     languageRow: 'Language',
     fontSizeRow: 'Font size',
+    subscription: 'Subscription',
     privacyPolicy: 'Privacy policy',
     termsAndConditions: 'Terms and conditions',
     contact: 'Contact',
@@ -198,6 +200,7 @@ const UI = {
     themeRow: 'Tema',
     languageRow: 'Språk',
     fontSizeRow: 'Skriftstørrelse',
+    subscription: 'Abonnement',
     privacyPolicy: 'Personvern',
     termsAndConditions: 'Vilkår og betingelser',
     contact: 'Kontakt',
@@ -7707,6 +7710,7 @@ function SettingsTab({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
   const [showBottomFade, setShowBottomFade] = useState(false)
+  const [subpage, setSubpage] = useState<'subscription' | null>(null)
 
   function updateFadeState() {
     const el = scrollRef.current
@@ -7750,6 +7754,10 @@ function SettingsTab({
     }
   }, [frames.length, activeDeviceId, theme, language, fontSize])
 
+  if (subpage === 'subscription') {
+    return <SubscriptionSettingsPage language={language} onBack={() => setSubpage(null)} />
+  }
+
   const languageValue = language === 'en' ? 'English' : 'Norsk'
   const fontSizeValue = fontSize === 'large' ? (language === 'no' ? 'Stor' : 'Large') : (language === 'no' ? 'Normal' : 'Normal')
 
@@ -7780,6 +7788,7 @@ function SettingsTab({
               <SettingRow label={t.themeRow} value={theme === 'dark' ? (language === 'no' ? 'Mørk' : 'Dark') : (language === 'no' ? 'Lys' : 'Light')} onClick={onOpenTheme} />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.fontSizeRow} value={fontSizeValue} onClick={onOpenFontSize} />
+              <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
