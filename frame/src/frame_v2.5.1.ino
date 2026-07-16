@@ -625,6 +625,8 @@ void setup() {
   bool reconnectedViaProvisioning = false;
   bool setupFlowRefreshByCharger = false;
   SetupStep activeSetupStep = SETUP_STEP_NONE;
+  const bool isCompletingWifiSetup =
+    WiFiManagerV2::hasCreds() && !DeviceIdentity::hasToken();
   if (!WiFiManagerV2::connectSaved(12000)) {
     activeSetupStep = SETUP_STEP_WIFI;
     if (chargerStateChanged) {
@@ -634,6 +636,11 @@ void setup() {
     ensureDisplay();
     ProvisioningPortal::runBlocking();
     reconnectedViaProvisioning = true;
+  }
+
+  if (isCompletingWifiSetup) {
+    ensureDisplay();
+    ScreenPairing::showWifiConnected();
   }
 
   TimeSync::ensure(8000);

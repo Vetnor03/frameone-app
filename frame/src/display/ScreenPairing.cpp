@@ -71,6 +71,18 @@ void showWifiSetup(const char* ssid) {
   renderPage(drawWifiSetup, &ctx);
 }
 
+// ---- WIFI CONNECTED ----
+static void drawWifiConnected(void* vctx) {
+  (void)vctx;
+  drawCenteredInFrame("Wi-Fi connected", FRAME_Y + 150, &FreeMonoBold18pt7b);
+  drawCenteredInFrame("Checking for updates", FRAME_Y + 230, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("This might take a few minutes", FRAME_Y + 282, &FreeMonoBold12pt7b);
+}
+
+void showWifiConnected() {
+  renderPage(drawWifiConnected, nullptr);
+}
+
 // ---- PAIR CODE ----
 struct PairCtx {
   const char* code;
