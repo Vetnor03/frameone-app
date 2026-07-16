@@ -17,7 +17,6 @@ type AssistantWatch = {
   frame_id: string | null
   show_on_frame: boolean
   status: AssistantWatchStatus
-  is_instant: boolean
   owner_user_id: string
   last_checked_at: string | null
   interpretation_status?: 'pending' | 'complete' | 'failed'
@@ -34,7 +33,7 @@ type AssistantUpdate = {
   created_at: string
 }
 
-type AssistantEntitlements = { effective_plan: 'basic' | 'normal' | 'pro'; effective_status: string; is_trial: boolean; days_remaining_in_trial: number; monitoring_enabled: boolean; max_ongoing_watches: number; max_instant_watches: number; can_use_instant: boolean; instant_check_interval_minutes: number | null }
+type AssistantEntitlements = { effective_plan: 'basic' | 'normal' | 'pro'; effective_status: string; is_trial: boolean; days_remaining_in_trial: number; monitoring_enabled: boolean; max_ongoing_watches: number | null; max_instant_watches: number; can_use_instant: boolean; instant_check_interval_minutes: number | null }
 const MAX_ASSISTANT_REQUEST_LENGTH = 1000
 const ONGOING_ASSISTANT_WATCH_STATUSES: AssistantWatchStatus[] = ['active', 'paused', 'error']
 
@@ -49,11 +48,11 @@ function assistantCopy(language: AppLanguage) {
     success: 'RE:MIND følger nå med.',
     onlyRelevant: 'Bare nye og relevante endringer vises.',
     tasks: 'Det RE:MIND følger med på',
-    updates: 'Oppdateringer', instant: 'Øyeblikkelig', instantDescription: 'Sjekkes hvert 15. minutt', instantCounter: (count: number, max: number) => `Øyeblikkelige følger: ${count} av ${max}`, instantFull: 'Alle Øyeblikkelig-plassene er i bruk. Slå av én for å frigjøre en plass.', instantUnavailable: 'Øyeblikkelig er ikke inkludert i Basic.', instantLimitReached: 'Alle Øyeblikkelig-plassene er allerede i bruk.', instantOwnerOnly: 'Bare eieren kan endre Øyeblikkelig.',
+    updates: 'Oppdateringer',
     emptyTasks: 'Spør RE:MIND om å holde øye med noe, så vises det her.',
     emptyUpdates: 'Nye endringer og oppdateringer vises her.',
     statuses: { active: 'Følger med', paused: 'Satt på pause', error: 'Trenger oppmerksomhet', completed: 'Avsluttet' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne Watchen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', limitCounter: (count: number, max: number) => `${count} av ${max} Watches`, limitReached: 'Du har nådd grensen for abonnementet ditt.', subscriptionRequired: 'Abonnementet ditt tillater ikke aktiv overvåking akkurat nå.', trial: 'Gratis prøveperiode'
+    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne Watchen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', limitCounter: (count: number, max: number | null) => max === null ? `Følger ${count}` : `Følger ${count} av ${max}`, limitReached: 'Du har nådd grensen for abonnementet ditt.', subscriptionRequired: 'Abonnementet ditt tillater ikke aktiv overvåking akkurat nå.', trial: 'Gratis prøveperiode'
   } : {
     heading: 'AI Assistant',
     intro: 'Ask RE:MIND to keep an eye on something for you. New changes and updates are collected here.',
@@ -63,9 +62,9 @@ function assistantCopy(language: AppLanguage) {
     creating: 'RE:MIND is starting to follow along…',
     success: 'RE:MIND is now following along.',
     onlyRelevant: 'Only new and relevant changes are shown.',
-    tasks: 'What RE:MIND is following', updates: 'Updates', instant: 'Instant', instantDescription: 'Checks every 15 minutes', instantCounter: (count: number, max: number) => `Instant Watches: ${count} of ${max}`, instantFull: 'All Instant slots are currently in use. Turn one off to free a slot.', instantUnavailable: 'Instant is not included in Basic.', instantLimitReached: 'All Instant slots are already in use.', instantOwnerOnly: 'Only the owner can change Instant.', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
+    tasks: 'What RE:MIND is following', updates: 'Updates', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
     statuses: { active: 'Following', paused: 'Paused', error: 'Needs attention', completed: 'Ended' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this Watch? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', limitCounter: (count: number, max: number) => `${count} of ${max} Watches`, limitReached: 'You have reached your plan’s Watch limit.', subscriptionRequired: 'Your subscription does not currently allow active monitoring.', trial: 'Free trial'
+    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this Watch? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', limitCounter: (count: number, max: number | null) => max === null ? `${count} followed` : `${count} of ${max} followed`, limitReached: 'You have reached your plan’s Watch limit.', subscriptionRequired: 'Your subscription does not currently allow active monitoring.', trial: 'Free trial'
   }
 }
 
@@ -114,8 +113,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const [entitlements, setEntitlements] = useState<AssistantEntitlements | null>(null)
 
   const ownedOngoingWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
-  const ownedInstantWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && w.is_instant && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
-  const reachedWatchLimit = !entitlements?.monitoring_enabled || (entitlements != null && ownedOngoingWatchCount >= entitlements.max_ongoing_watches)
+  const reachedWatchLimit = !entitlements?.monitoring_enabled || (entitlements.max_ongoing_watches !== null && ownedOngoingWatchCount >= entitlements.max_ongoing_watches)
   const selected = watches.find((w) => w.id === selectedId) ?? watches[0] ?? null
   const updatesByWatch = useMemo(() => updates.filter((u) => u.watch_id === selected?.id), [updates, selected?.id])
 
@@ -128,7 +126,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       if (!userId) throw new Error('not_authenticated')
 
       const [watchResult, updateResult, onboardingResult, entitlementResult] = await Promise.all([
-        supabase.from('monitoring_watches').select('id,owner_user_id,original_request,title,normalized_goal,trigger_description,frequency_minutes,preferred_language,completion_condition,frame_id,show_on_frame,status,is_instant,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
+        supabase.from('monitoring_watches').select('id,owner_user_id,original_request,title,normalized_goal,trigger_description,frequency_minutes,preferred_language,completion_condition,frame_id,show_on_frame,status,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
         supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,dismissed_from_frame,created_at').order('created_at', { ascending: false }).limit(40),
         supabase.from('user_onboarding_state').select('has_created_watch').eq('user_id', userId).maybeSingle(),
         supabase.rpc('get_ai_subscription_entitlements', { p_user_id: userId }).maybeSingle(),
@@ -228,21 +226,6 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     setBusyWatchId(null)
   }
 
-  async function setWatchInstant(watch: AssistantWatch, enabled: boolean) {
-    if (busyWatchId) return
-    setBusyWatchId(watch.id); setError(null); setMessage(null)
-    const { error } = await supabase.rpc('set_ai_assistant_watch_instant', { p_watch_id: watch.id, p_is_instant: enabled })
-    if (error) {
-      const stableError = `${error.code || ''} ${error.message || ''}`
-      if (stableError.includes('instant_watch_limit_reached')) setError(c.instantLimitReached)
-      else if (stableError.includes('instant_not_available')) setError(c.instantUnavailable)
-      else if (stableError.includes('subscription_required')) setError(c.subscriptionRequired)
-      else if (stableError.includes('watch_not_found_or_not_owned')) setError(c.instantOwnerOnly)
-      else setError(c.friendlyError)
-    } else await loadAssistant()
-    setBusyWatchId(null)
-  }
-
   async function deleteWatch(id: string) {
     if (busyWatchId || !window.confirm(c.confirmDelete)) return
     setBusyWatchId(id); setError(null); setMessage(null)
@@ -275,11 +258,6 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     setEditingRequest(w.original_request)
   }
 
-  const planLabel = entitlements?.is_trial ? c.trial : entitlements ? `${entitlements.effective_plan[0].toUpperCase()}${entitlements.effective_plan.slice(1)}` : ''
-  const accountSummary = entitlements
-    ? `${planLabel} · ${c.limitCounter(ownedOngoingWatchCount, entitlements.max_ongoing_watches)}${entitlements.max_instant_watches > 0 ? ` · ${ownedInstantWatchCount} ${language === 'no' ? 'av' : 'of'} ${entitlements.max_instant_watches} Instant` : ''}`
-    : c.loading
-
   return <div className="h-full overflow-y-auto pb-8 pr-1 tab-scroll">
     <div className="rounded-[2rem] border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/70 p-5 shadow-sm">
       <p className="text-[11px] tracking-[0.24em] text-[#2aa3ff]">RE:MIND</p>
@@ -287,37 +265,13 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       <p className="mt-3 text-sm leading-6 text-[color:var(--fg-70)]">{c.intro}</p>
       <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="mt-5 w-full resize-none rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)]/70 p-4 text-base leading-6 text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" />
       {!loading && hasCreatedWatch === false && <div className="mt-3 flex flex-wrap gap-2">{c.examples.map((ex) => <button key={ex} type="button" onClick={() => setRequest(ex)} className="max-w-full rounded-full border border-[color:var(--bd-15)] px-3 py-2 text-left text-[11px] leading-4 text-[color:var(--fg-70)] break-words">{ex}</button>)}</div>}
-      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[color:var(--fg-55)]"><span>{accountSummary}</span>{reachedWatchLimit && <span className="text-right text-amber-300">{c.limitReached}</span>}</div>
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[color:var(--fg-55)]"><span>{entitlements ? (entitlements.is_trial ? `${c.trial} · ${entitlements.days_remaining_in_trial} ${language === 'no' ? 'dager igjen' : 'days left'}` : `${entitlements.effective_plan[0].toUpperCase()}${entitlements.effective_plan.slice(1)} · ${c.limitCounter(ownedOngoingWatchCount, entitlements.max_ongoing_watches)}`) : c.loading}</span>{reachedWatchLimit && <span className="text-right text-amber-300">{c.limitReached}</span>}</div>
       <button type="button" onClick={createWatch} disabled={creating || reachedWatchLimit} aria-disabled={creating || reachedWatchLimit} title={reachedWatchLimit ? c.limitReached : undefined} className="mt-3 h-12 w-full rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-sm font-semibold tracking-wide text-white disabled:cursor-not-allowed disabled:border-[color:var(--bd-20)] disabled:bg-[color:var(--fg-35)] disabled:opacity-60">{creating ? c.creating : c.button}</button>
       {message && <div className="mt-4 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 p-4 text-sm text-[color:var(--fg-85)]"><strong>{message}</strong><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.title}</div><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.trigger_description}</div><div className="mt-2 text-[color:var(--fg-70)]">{c.onlyRelevant}</div></div>}
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
     </div>
 
-    <section className="mt-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.tasks}</h2>
-        {entitlements && entitlements.max_instant_watches > 0 && <span className="text-xs text-[color:var(--fg-55)]">{c.instantCounter(ownedInstantWatchCount, entitlements.max_instant_watches)}</span>}
-      </div>
-      {entitlements && entitlements.max_instant_watches > 0 && ownedInstantWatchCount >= entitlements.max_instant_watches && <p className="mt-2 text-xs text-amber-300">{c.instantFull}</p>}
-      {loading ? <p className="mt-4 text-sm text-[color:var(--fg-55)]">{c.loading}</p> : watches.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyTasks}</p> : <div className="mt-3 space-y-3">{watches.map((w) => {
-        const latest = updates.find((u) => u.watch_id === w.id)
-        const busy = busyWatchId === w.id
-        const canManageWatch = currentUserId === w.owner_user_id
-        const instantSlotsFull = !!entitlements && ownedInstantWatchCount >= entitlements.max_instant_watches
-        const cannotEnableInstant = !entitlements?.can_use_instant || instantSlotsFull || !ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)
-        return <article key={w.id} onClick={() => setSelectedId(w.id)} className={`rounded-3xl border p-4 ${selected?.id === w.id ? 'border-[#2aa3ff]/70' : 'border-[color:var(--bd-15)]'} bg-[color:var(--card-bg)]/55`}>
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{w.title}</h3><p className="mt-1 break-words text-sm leading-5 text-[color:var(--fg-65)]">{w.trigger_description}</p></div><span className="shrink-0 rounded-full bg-[#2aa3ff]/10 px-2.5 py-1 text-[10px] text-[#2aa3ff]">{c.statuses[w.status]}</span></div>
-          <p className="mt-3 text-xs text-[color:var(--fg-45)]">{c.lastChecked}: {friendlyAssistantTime(w.last_checked_at, language)}</p>
-          {latest && <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{latest.headline}</p>}
-          {canManageWatch && <div onClick={(e) => e.stopPropagation()} className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[color:var(--bd-15)] p-3">
-            <div><div className="text-sm font-medium text-[color:var(--fg-85)]">{c.instant}</div><div className="text-xs text-[color:var(--fg-50)]">{c.instantDescription}</div></div>
-            <button type="button" role="switch" aria-checked={w.is_instant} aria-label={`${c.instant}: ${w.title}`} disabled={busy || (!w.is_instant && cannotEnableInstant)} title={!w.is_instant && cannotEnableInstant ? (entitlements?.can_use_instant ? c.instantFull : c.instantUnavailable) : undefined} onClick={() => setWatchInstant(w, !w.is_instant)} className={`relative h-7 w-12 shrink-0 rounded-full transition ${w.is_instant ? 'bg-[#2aa3ff]' : 'bg-[color:var(--fg-25)]'} disabled:cursor-not-allowed disabled:opacity-45`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${w.is_instant ? 'left-6' : 'left-1'}`} /></button>
-          </div>}
-          {canManageWatch && <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); setWatchPaused(w.id, w.status !== 'paused') }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{busy ? c.loading : (w.status === 'paused' ? c.resume : c.pause)}</button><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openEditor(w) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.edit}</button><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); deleteWatch(w.id) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{busy ? c.deleting : c.delete}</button></div>}
-          {canManageWatch && editingId === w.id && <div onClick={(e) => e.stopPropagation()} className="mt-3 space-y-3 rounded-2xl border border-[color:var(--bd-15)] p-3"><label className="block text-xs text-[color:var(--fg-55)]">{c.instruction}<textarea value={editingRequest} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} onChange={(e) => setEditingRequest(e.target.value)} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-transparent p-2 text-sm text-[color:var(--fg-90)] outline-none" /></label><div className="mt-2 flex gap-2"><button type="button" disabled={busy} onClick={() => editWatch(w.id)} className="rounded-full border border-[#2aa3ff] px-3 py-1.5 text-xs text-[#2aa3ff] disabled:opacity-50">{busy ? c.saving : c.save}</button><button type="button" disabled={busy} onClick={() => setEditingId(null)} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs disabled:opacity-50">{c.cancel}</button></div></div>}
-        </article>
-      })}</div>}
-    </section>
+    <section className="mt-6"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.tasks}</h2>{loading ? <p className="mt-4 text-sm text-[color:var(--fg-55)]">{c.loading}</p> : watches.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyTasks}</p> : <div className="mt-3 space-y-3">{watches.map((w) => { const latest = updates.find((u) => u.watch_id === w.id); const busy = busyWatchId === w.id; const canManageWatch = currentUserId === w.owner_user_id; return <article key={w.id} onClick={() => setSelectedId(w.id)} className={`rounded-3xl border p-4 ${selected?.id === w.id ? 'border-[#2aa3ff]/70' : 'border-[color:var(--bd-15)]'} bg-[color:var(--card-bg)]/55`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{w.title}</h3><p className="mt-1 break-words text-sm leading-5 text-[color:var(--fg-65)]">{w.trigger_description}</p></div><span className="shrink-0 rounded-full bg-[#2aa3ff]/10 px-2.5 py-1 text-[10px] text-[#2aa3ff]">{c.statuses[w.status]}</span></div><p className="mt-3 text-xs text-[color:var(--fg-45)]">{c.lastChecked}: {friendlyAssistantTime(w.last_checked_at, language)}</p>{latest && <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{latest.headline}</p>}{canManageWatch && <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); setWatchPaused(w.id, w.status !== 'paused') }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{busy ? c.loading : (w.status === 'paused' ? c.resume : c.pause)}</button><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openEditor(w) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.edit}</button><button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); deleteWatch(w.id) }} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{busy ? c.deleting : c.delete}</button></div>}{canManageWatch && editingId === w.id && <div onClick={(e) => e.stopPropagation()} className="mt-3 space-y-3 rounded-2xl border border-[color:var(--bd-15)] p-3"><label className="block text-xs text-[color:var(--fg-55)]">{c.instruction}<textarea value={editingRequest} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} onChange={(e) => setEditingRequest(e.target.value)} className="mt-1 w-full rounded-xl border border-[color:var(--bd-15)] bg-transparent p-2 text-sm text-[color:var(--fg-90)] outline-none" /></label><div className="mt-2 flex gap-2"><button type="button" disabled={busy} onClick={() => editWatch(w.id)} className="rounded-full border border-[#2aa3ff] px-3 py-1.5 text-xs text-[#2aa3ff] disabled:opacity-50">{busy ? c.saving : c.save}</button><button type="button" disabled={busy} onClick={() => setEditingId(null)} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs disabled:opacity-50">{c.cancel}</button></div></div>}</article>})}</div>}</section>
 
     <section className="mt-6"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.updates}</h2><button type="button" disabled={busyUpdateId !== null || updates.every((u) => u.is_read)} onClick={markAllRead} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.markAllRead}</button></div>{updates.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyUpdates}</p> : <div className="mt-3 space-y-3">{updates.map((u) => <article key={u.id} className={`rounded-3xl border border-[color:var(--bd-15)] p-4 ${u.is_read ? 'opacity-70' : ''}`}><div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{u.headline}</h3>{!u.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2aa3ff]" />}</div><p className="mt-2 break-words text-sm leading-5 text-[color:var(--fg-70)]">{u.summary}</p><p className="mt-2 break-words text-xs text-[color:var(--fg-45)]">{friendlyAssistantTime(u.created_at, language)} · {watches.find((w) => w.id === u.watch_id)?.title}</p><div className="mt-3 flex flex-wrap gap-2">{sourceUrls(u.source_urls).map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[#2aa3ff]">{c.source} {i + 1}</a>)}<button type="button" disabled={busyUpdateId !== null} onClick={() => markUpdate(u.id, { is_read: !u.is_read })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{u.is_read ? c.markUnread : c.markRead}</button></div></article>)}</div>}</section>
 
