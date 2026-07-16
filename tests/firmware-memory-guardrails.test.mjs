@@ -76,3 +76,10 @@ test('behavior-defining constants and rendering code remain present', () => {
   assert.match(countdown, /getRotationStep4h/);
   for (const source of [reminders, surf, countdown]) assert.match(source, /render\(/);
 });
+
+test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {
+  assert.match(reminders, /static SmartReminderLayout g_smartLayoutScratchA;/);
+  assert.match(reminders, /static SmartReminderLayout g_smartLayoutScratchB;/);
+  assert.doesNotMatch(reminders, /\bSmartReminderLayout\s+(?![&*]|g_smartLayoutScratch)[A-Za-z_]\w*\s*(?:[;={])/);
+  assert.doesNotMatch(reminders, /SmartReminderLayout\s*\{\s*\}/);
+});
