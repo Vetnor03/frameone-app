@@ -19,23 +19,64 @@ test('device reminders route keeps manual reminder query independent and returns
 
 
 
-test('device reminders physical response maps selected items to the compact nine-field DTO only', () => {
+function physicalDtoKeys() {
   const dtoSection = route.slice(route.indexOf('function toPhysicalDeviceReminderItem'), route.indexOf('function isTimedOccurrenceAlreadyPassed'))
-  const returnedKeys = Array.from(dtoSection.matchAll(/^    ([a-z_]+): item\.[a-z_]+,/gm)).map((match) => match[1])
-  assert.deepEqual(returnedKeys, [
-    'reminder_id',
+  return Array.from(dtoSection.matchAll(/^    ([a-z_]+): (?:item\.[a-z_]+|normalizeReminderTime\(item\.[a-z_]+\)),/gm)).map((match) => match[1])
+}
+
+function compactLikeRoute(item) {
+  return Object.fromEntries(physicalDtoKeys().map((key) => [key, item[key]]))
+}
+
+test('device reminders physical response maps selected items to exactly the six frame fields', () => {
+  const dtoSection = route.slice(route.indexOf('function toPhysicalDeviceReminderItem'), route.indexOf('function isTimedOccurrenceAlreadyPassed'))
+  assert.deepEqual(physicalDtoKeys(), [
     'title',
     'occurrence_date',
     'display_date',
     'days_until',
     'is_overdue',
-    'repeat',
-    'due_time',
     'display_time',
   ])
-  for (const forbidden of ['raw', 'source', 'provider', 'external_id', 'url', 'area', 'integration']) {
+  assert.match(dtoSection, /display_time: normalizeReminderTime\(item\.display_time\)/)
+  for (const forbidden of ['reminder_id', 'repeat', 'due_time', 'raw', 'source', 'provider', 'external_id', 'url', 'description', 'location', 'area', 'candidate', 'debug', 'integration']) {
     assert.doesNotMatch(dtoSection, new RegExp(`\\b${forbidden}\\b`))
   }
+})
+
+test('nested provider and integration metadata cannot leak through physical compaction', () => {
+  const compact = compactLikeRoute({
+    title: '20:00 Test meeting', occurrence_date: '2026-07-16', display_date: 'Tomorrow',
+    days_until: 1, is_overdue: false, display_time: '20:00', reminder_id: 'secret',
+    raw: { url: 'https://secret.example', description: 'private', nested: { token: 'secret' } },
+    provider: 'teams', external_id: 'external-secret', location: { area: 'private' },
+  })
+  assert.deepEqual(Object.keys(compact), physicalDtoKeys())
+  assert.equal(JSON.stringify(compact).includes('secret'), false)
+})
+
+test('manual, Spond, Teams, waste and Local Events items all use the same compact DTO', () => {
+  for (const source of ['remind', 'spond', 'teams', 'waste', 'local-events']) {
+    const compact = compactLikeRoute({
+      title: `${source} item`, occurrence_date: '2026-07-16', display_date: 'Today',
+      days_until: 0, is_overdue: false, display_time: null, source, raw: { providerMetadata: true },
+    })
+    assert.deepEqual(Object.keys(compact), physicalDtoKeys())
+    assert.equal('source' in compact, false)
+    assert.equal('raw' in compact, false)
+  }
+})
+
+test('physical response is hard-capped at 10 items and remains below 4 KB at that cap', () => {
+  assert.match(route, /const DEFAULT_LIMIT = 10/)
+  assert.match(route, /const MAX_LIMIT = 10/)
+  assert.match(route, /return Math\.min\(MAX_LIMIT, Math\.floor\(n\)\)/)
+  const items = Array.from({ length: 10 }, (_, index) => compactLikeRoute({
+    title: `${String(index).padStart(2, '0')}:00 ${'Worst-case reminder title '.repeat(6)}`,
+    occurrence_date: '2026-12-31', display_date: '31.12.2026', days_until: 366,
+    is_overdue: false, display_time: '23:59', raw: { huge: 'x'.repeat(100_000) },
+  }))
+  assert.ok(Buffer.byteLength(JSON.stringify({ items }), 'utf8') < 4096)
 })
 
 test('device reminders diagnostics are compact and do not log private reminder content', () => {
@@ -61,7 +102,7 @@ test('device reminders sorting and two-date-group selection are unchanged before
   assert.match(feed, /const selectedGroupKeys: string\[\] = \[\][\s\S]*?if \(selectedGroupKeys\.length >= 2\) break/)
 })
 
-test('no firmware, AI Assistant, or frame-config files are modified by this reminder web fix', () => {
+test('the physical payload fix changes no unrelated modules', () => {
   const changedFiles = execSync('git diff --name-only HEAD', { encoding: 'utf8' })
     .split('\n')
     .map((file) => file.trim())
@@ -69,6 +110,8 @@ test('no firmware, AI Assistant, or frame-config files are modified by this remi
   assert.deepEqual(changedFiles.filter((file) => file.startsWith('frame/') || file.startsWith('public/firmware/')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('ai-assistant') || file.includes('interpret-ai-assistant')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('frame-config')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.endsWith('.sql') || file.includes('supabase/functions/')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.startsWith('app/') && /page\.(tsx|ts|jsx|js)$/.test(file)), [])
 })
 
 test('device reminders default to cached integration rows unless sync is explicitly requested', () => {
