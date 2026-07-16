@@ -17,6 +17,11 @@ function resetWithJitter(resetAt: string) {
   return new Date(base + jitterMinutes * MINUTES).toISOString()
 }
 
+function subscriptionRetryWithJitter() {
+  const jitterMinutes = Math.floor(Math.random() * 31) - 15
+  return new Date(Date.now() + (24 * 60 + jitterMinutes) * MINUTES).toISOString()
+}
+
 const LIMIT_REASONS = new Set([
   'daily_run_limit_reached',
   'monthly_run_limit_reached',
@@ -92,6 +97,13 @@ async function processJob(supabase: any, job: any) {
     }
     if (!reservation?.allowed) {
       const reason = String(reservation?.reason || 'monitoring_run_limit_reached')
+      if (reason === 'subscription_inactive') {
+        const nextCheckAt = subscriptionRetryWithJitter()
+        console.info('[monitoring-worker:subscription-blocked]', { watch_id: watch.id, reason })
+        await supabase.from('monitoring_watches').update({ next_check_at: nextCheckAt }).eq('id', watch.id)
+        await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: reason }).eq('id', job.id)
+        return { job_id: job.id, watch_id: watch.id, ok: true, blocked: true, reason, next_check_at: nextCheckAt }
+      }
       if (LIMIT_REASONS.has(reason)) {
         const nextCheckAt = resetWithJitter(String(reservation.next_reset_at))
         await supabase.from('monitoring_watches').update({ next_check_at: nextCheckAt, status: 'active' }).eq('id', watch.id)
