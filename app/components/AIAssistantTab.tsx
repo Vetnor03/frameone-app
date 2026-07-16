@@ -109,6 +109,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [hasCreatedWatch, setHasCreatedWatch] = useState<boolean | null>(null)
 
   const ownedOngoingWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
   const reachedWatchLimit = ownedOngoingWatchCount >= MAX_AI_ASSISTANT_WATCHES
@@ -118,15 +119,21 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const loadAssistant = useCallback(async () => {
     setLoading(true)
     try {
-      const [watchResult, updateResult] = await Promise.all([
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      const userId = userData.user?.id ?? null
+      if (!userId) throw new Error('not_authenticated')
+
+      const [watchResult, updateResult, onboardingResult] = await Promise.all([
         supabase.from('monitoring_watches').select('id,owner_user_id,original_request,title,normalized_goal,trigger_description,frequency_minutes,preferred_language,completion_condition,frame_id,show_on_frame,status,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
         supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,dismissed_from_frame,created_at').order('created_at', { ascending: false }).limit(40),
+        supabase.from('user_onboarding_state').select('has_created_watch').eq('user_id', userId).maybeSingle(),
       ])
       if (watchResult.error) throw watchResult.error
       if (updateResult.error) throw updateResult.error
-      const { data: userData, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-      setCurrentUserId(userData.user?.id ?? null)
+      if (onboardingResult.error) throw onboardingResult.error
+      setCurrentUserId(userId)
+      setHasCreatedWatch(onboardingResult.data?.has_created_watch === true)
       setWatches((watchResult.data ?? []) as unknown as AssistantWatch[])
       setUpdates((updateResult.data ?? []) as unknown as AssistantUpdate[])
       setError(null)
@@ -162,6 +169,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
         setError(c.friendlyError)
       }
     } else {
+      setHasCreatedWatch(true)
       setRequest('')
       setMessage(c.success)
       await loadAssistant()
@@ -251,7 +259,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[color:var(--fg-95)]">{c.heading}</h1>
       <p className="mt-3 text-sm leading-6 text-[color:var(--fg-70)]">{c.intro}</p>
       <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="mt-5 w-full resize-none rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)]/70 p-4 text-base leading-6 text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" />
-      <div className="mt-3 flex flex-wrap gap-2">{c.examples.map((ex) => <button key={ex} type="button" onClick={() => setRequest(ex)} className="max-w-full rounded-full border border-[color:var(--bd-15)] px-3 py-2 text-left text-[11px] leading-4 text-[color:var(--fg-70)] break-words">{ex}</button>)}</div>
+      {!loading && hasCreatedWatch === false && <div className="mt-3 flex flex-wrap gap-2">{c.examples.map((ex) => <button key={ex} type="button" onClick={() => setRequest(ex)} className="max-w-full rounded-full border border-[color:var(--bd-15)] px-3 py-2 text-left text-[11px] leading-4 text-[color:var(--fg-70)] break-words">{ex}</button>)}</div>}
       <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[color:var(--fg-55)]"><span>{c.limitCounter(ownedOngoingWatchCount)}</span>{reachedWatchLimit && <span className="text-right text-amber-300">{c.limitReached}</span>}</div>
       <button type="button" onClick={createWatch} disabled={creating || reachedWatchLimit} aria-disabled={creating || reachedWatchLimit} title={reachedWatchLimit ? c.limitReached : undefined} className="mt-3 h-12 w-full rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-sm font-semibold tracking-wide text-white disabled:cursor-not-allowed disabled:border-[color:var(--bd-20)] disabled:bg-[color:var(--fg-35)] disabled:opacity-60">{creating ? c.creating : c.button}</button>
       {message && <div className="mt-4 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 p-4 text-sm text-[color:var(--fg-85)]"><strong>{message}</strong><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.title}</div><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.trigger_description}</div><div className="mt-2 text-[color:var(--fg-70)]">{c.onlyRelevant}</div></div>}
