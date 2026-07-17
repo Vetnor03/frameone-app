@@ -8,12 +8,16 @@ Deno.serve(async (req) => {
   const allowlistRaw = Deno.env.get('RADAR_TWO_STAGE_OWNER_ALLOWLIST') || ''
   const allowlistedOwners = allowlistRaw.split(',').map((value) => value.trim()).filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
   const guardedConfigValid = allowlistRaw.trim() !== '' && allowlistedOwners.length === allowlistRaw.split(',').filter(Boolean).length
-  const discoveryHours = Math.max(1, Math.min(48, Number(Deno.env.get('RADAR_STRONG_SOURCE_DISCOVERY_HOURS') || 12)))
+  const discoveryHoursRaw = Number(Deno.env.get('RADAR_STRONG_SOURCE_DISCOVERY_HOURS') || 12)
+  const discoveryHoursValid = Number.isFinite(discoveryHoursRaw) && discoveryHoursRaw > 0
+  const discoveryHours = discoveryHoursValid ? Math.max(1, Math.min(48, discoveryHoursRaw)) : 12
   // Invalid guarded configuration deliberately uses the legacy enqueue (fail open).
-  const enqueueRpc = mode === 'guarded' && guardedConfigValid ? 'enqueue_due_guarded_monitoring_watches' : 'enqueue_due_monitoring_watches'
+  const enqueueRpc = mode === 'guarded' && guardedConfigValid && discoveryHoursValid ? 'enqueue_due_guarded_monitoring_watches' : 'enqueue_due_monitoring_watches'
   const enqueueArgs = enqueueRpc === 'enqueue_due_guarded_monitoring_watches'
     ? { max_count: max, p_allowlisted_owners: allowlistedOwners, p_discovery_hours: discoveryHours } : { max_count: max }
-  const { data, error } = await supabase.rpc(enqueueRpc, enqueueArgs)
+  let { data, error } = await supabase.rpc(enqueueRpc, enqueueArgs)
+  // A guarded decision failure must restore paid monitoring rather than stop the scheduler.
+  if (error && enqueueRpc === 'enqueue_due_guarded_monitoring_watches') ({ data, error } = await supabase.rpc('enqueue_due_monitoring_watches', { max_count: max }))
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 })
   // Shadow probes are an independent fail-soft sidecar. Normal enqueueing above
   // always happens first and its behavior is not conditional on probe results.

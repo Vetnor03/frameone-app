@@ -72,11 +72,27 @@ begin
   cross join lateral public.get_monitoring_watch_schedule_eligibility(w.id) e
   cross join lateral public.get_guarded_watch_decision(w.id,w.owner_user_id=any(p_allowlisted_owners),p_discovery_hours) d
   where e.eligible and w.next_check_at<=now() order by w.next_check_at limit greatest(1,least(max_count,1000)) for update of w skip locked),
- decisions as (select *,case when not can_gate then 'legacy_adaptive' when signal_id is not null then 'source_change' when discovery_due then 'fallback_discovery' else null end enqueue_reason from due),
+ decisions as (select *,case
+   when not can_gate and reason in ('missing_sources','sources_missing_stale_or_failing','eligibility_uncertain') then 'safety_fallback'
+   when not can_gate then 'legacy_adaptive'
+   when signal_id is not null then 'source_change' when discovery_due then 'fallback_discovery' else null end enqueue_reason from due),
  audited as (insert into public.monitoring_two_stage_audit(watch_id,event_type,reason,signal_id)
   select id,'paid_run_avoided','healthy_unchanged_source',signal_id from decisions where can_gate and enqueue_reason is null returning 1),
  ins as (insert into public.monitoring_queue(watch_id,enqueue_reason) select id,enqueue_reason from decisions where enqueue_reason is not null on conflict do nothing returning 1)
  select count(*) into n from ins; return n;
+end $$;
+
+-- Used when a post-baseline source change is known but its guarded decision is
+-- unavailable or unsafe. The paid queue remains idempotent and auditable.
+create or replace function public.enqueue_monitoring_safety_fallback(p_watch_id uuid,p_source_id uuid,p_probe_id uuid,p_reason text)
+returns uuid language plpgsql security definer set search_path=public as $$
+declare sid uuid;
+begin
+ perform pg_advisory_xact_lock(hashtextextended(p_watch_id::text||p_source_id::text,3));
+ select id into sid from public.monitoring_source_change_signals where watch_id=p_watch_id and source_id=p_source_id and consumed_at is null;
+ if sid is null then insert into public.monitoring_source_change_signals(watch_id,source_id,probe_id,reason) values(p_watch_id,p_source_id,p_probe_id,p_reason) returning id into sid; end if;
+ insert into public.monitoring_queue(watch_id,enqueue_reason) values(p_watch_id,'safety_fallback') on conflict do nothing;
+ return sid;
 end $$;
 
 create or replace function public.record_guarded_source_change(p_watch_id uuid,p_source_id uuid,p_probe_id uuid,p_reason text)
@@ -108,6 +124,6 @@ begin
  end loop; return total;
 end $$;
 
-revoke execute on function public.get_guarded_watch_decision(uuid,boolean,integer),public.enqueue_due_guarded_monitoring_watches(integer,uuid[],integer),public.record_guarded_source_change(uuid,uuid,uuid,text),public.consume_monitoring_source_signal(uuid,uuid),public.backfill_monitoring_watch_sources(uuid) from public,anon,authenticated;
-grant execute on function public.get_guarded_watch_decision(uuid,boolean,integer),public.enqueue_due_guarded_monitoring_watches(integer,uuid[],integer),public.record_guarded_source_change(uuid,uuid,uuid,text),public.consume_monitoring_source_signal(uuid,uuid),public.backfill_monitoring_watch_sources(uuid) to service_role;
+revoke execute on function public.get_guarded_watch_decision(uuid,boolean,integer),public.enqueue_due_guarded_monitoring_watches(integer,uuid[],integer),public.record_guarded_source_change(uuid,uuid,uuid,text),public.enqueue_monitoring_safety_fallback(uuid,uuid,uuid,text),public.consume_monitoring_source_signal(uuid,uuid),public.backfill_monitoring_watch_sources(uuid) from public,anon,authenticated;
+grant execute on function public.get_guarded_watch_decision(uuid,boolean,integer),public.enqueue_due_guarded_monitoring_watches(integer,uuid[],integer),public.record_guarded_source_change(uuid,uuid,uuid,text),public.enqueue_monitoring_safety_fallback(uuid,uuid,uuid,text),public.consume_monitoring_source_signal(uuid,uuid),public.backfill_monitoring_watch_sources(uuid) to service_role;
 notify pgrst,'reload schema';

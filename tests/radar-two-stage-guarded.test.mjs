@@ -12,3 +12,26 @@ test('guard gate has discovery and safe fallbacks',()=>{assert.match(migration,/
 test('backfill normalizes sources from history generically',()=>{assert.match(migration,/backfill_monitoring_watch_sources/);assert.match(migration,/monitoring_updates/);assert.match(migration,/discovered_sources/);assert.match(migration,/grounded_sources/);assert.match(migration,/register_monitoring_watch_sources/)})
 test('verification consumes signal and paid cap reservation remains canonical',()=>{assert.match(worker,/consume_monitoring_source_signal/);assert.match(worker,/run_reason: runReason/);assert.match(worker,/reserve_paid_monitoring_run/);assert.match(worker,/await runOpenAIWatch/);assert.match(worker,/last_full_discovery_at/)})
 test('audit separates avoided, verification, discovery and legacy reasons',()=>{for(const reason of ['paid_run_avoided','source_triggered_verification','fallback_discovery','legacy_adaptive'])assert.ok(migration.includes(reason))})
+test('mode is explicit and passed by every recordSuccess call',()=>{
+  assert.match(source,/function recordSuccess\(db:any,job:any,source:any,r:any,mode:string\)/)
+  const beforeDefinition=source.slice(0,source.indexOf('async function recordSuccess'))
+  const calls=[...beforeDefinition.matchAll(/recordSuccess\(([^\n]+)\)/g)]
+  assert.equal(calls.length,2); for(const call of calls) assert.match(call[1],/},mode$/)
+})
+test('failed paid runs preserve the last successful discovery timestamp',()=>{
+  const success=worker.slice(worker.indexOf('try {',worker.indexOf('runReason')),worker.indexOf('} catch',worker.indexOf('runReason')))
+  const failure=worker.slice(worker.indexOf('} catch',worker.indexOf('runReason')))
+  assert.match(success,/provider === 'openai'[^\n]*last_full_discovery_at/); assert.doesNotMatch(failure,/last_full_discovery_at/)
+})
+test('unsafe strong-source decisions are safety fallbacks, not legacy runs',()=>{
+  assert.match(migration,/reason in \('missing_sources','sources_missing_stale_or_failing','eligibility_uncertain'\) then 'safety_fallback'/)
+  assert.match(migration,/when not can_gate then 'legacy_adaptive'/)
+  assert.match(source,/enqueue_monitoring_safety_fallback/); assert.match(source,/guarded_decision_rpc_error/)
+  assert.match(migration,/values\(p_watch_id,'safety_fallback'\) on conflict do nothing/)
+})
+test('invalid discovery interval and guarded scheduler RPC errors fail open',()=>{
+  assert.match(scheduler,/Number\.isFinite\(discoveryHoursRaw\)/)
+  assert.match(scheduler,/guardedConfigValid && discoveryHoursValid/)
+  assert.match(scheduler,/error && enqueueRpc === 'enqueue_due_guarded_monitoring_watches'/)
+  assert.match(scheduler,/supabase\.rpc\('enqueue_due_monitoring_watches'/)
+})

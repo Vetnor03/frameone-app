@@ -186,7 +186,9 @@ async function processJob(supabase: any, job: any) {
     const nextCheckAt = currentEligibility?.use_instant_cadence
       ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString()
       : nextPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), last_full_discovery_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }).eq('id', watch.id)
+    const watchPatch: Record<string, unknown> = { last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }
+    if (provider === 'openai') watchPatch.last_full_discovery_at = completedAt.toISOString()
+    await supabase.from('monitoring_watches').update(watchPatch).eq('id', watch.id)
     await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate }
   } catch (err) {
@@ -199,7 +201,7 @@ async function processJob(supabase: any, job: any) {
     const { data: currentEligibility } = await supabase.rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id }).maybeSingle()
     const instantRetry = currentEligibility?.use_instant_cadence === true
     const nextCheckAt = instantRetry ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString() : errorPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), last_full_discovery_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
     if (instantRetry) await supabase.from('monitoring_queue').update({ completed_at: completedAt.toISOString(), last_error: message }).eq('id', job.id)
     else await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: false, error: message, retry_in_minutes: instantRetry ? 15 : backoffMinutes }
