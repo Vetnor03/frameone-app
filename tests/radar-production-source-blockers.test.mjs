@@ -33,15 +33,25 @@ test('string URL arrays become registry objects',()=>{
 test('backfill is deterministic and cannot manufacture repeated evidence',()=>{
  assert.doesNotMatch(migration,/backfill_monitoring_watch_sources[\s\S]*register_monitoring_watch_sources/)
  assert.match(migration,/count\(distinct evidence_id\) seen_count/)
+ assert.match(migration,/select u\.watch_id,'run:'\|\|u\.run_id/)
  assert.match(migration,/select r\.watch_id,'run:'\|\|r\.id,v->>'url'/)
- assert.match(migration,/seen_count=greatest\(monitoring_watch_sources\.seen_count,excluded\.seen_count\)/)
+ assert.match(migration,/seen_count=case[\s\S]*else excluded\.seen_count end,selected_count=excluded\.selected_count/)
  assert.match(migration,/where \(monitoring_watch_sources\.seen_count[\s\S]*is distinct from/)
 })
 
 test('renormalization preserves historical foreign keys and strongest state',()=>{
  for(const table of ['monitoring_source_probe_queue','monitoring_source_probes','monitoring_source_change_signals','monitoring_two_stage_audit']) assert.match(migration,new RegExp(`update public\\.${table}`))
  assert.match(migration,/pg_advisory_xact_lock/)
- assert.match(migration,/seen_count=k\.seen_count\+s\.seen_count/)
+ assert.match(migration,/seen_count=greatest\(k\.seen_count,s\.seen_count\),selected_count=greatest\(k\.selected_count,s\.selected_count\)/)
+})
+
+test('corrected counters govern exact URLs, eligibility, and stable detail promotion',()=>{
+ assert.match(migration,/source_role='exact_url' and seen_count<1/)
+ assert.match(migration,/source_role='stable_detail' and not public\.is_stable_grounded_detail\(s\)/)
+ assert.match(migration,/seen_count>=2 or selected_count>=2/)
+ const correction=migration.indexOf("set source_role='unknown'")
+ const promotion=migration.indexOf("set source_role='stable_detail'",correction)
+ assert.ok(correction>=0&&promotion>correction,'counter-based demotion must precede promotion')
 })
 
 test('country intent distinguishes none resolved and ambiguous with structured precedence',()=>{

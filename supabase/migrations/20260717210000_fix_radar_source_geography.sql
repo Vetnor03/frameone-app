@@ -104,7 +104,7 @@ begin
     update public.monitoring_source_change_signals set source_id=keeper.id where source_id=s.id;
     update public.monitoring_two_stage_audit set source_id=keeper.id where source_id=s.id;
     update public.monitoring_watch_sources k set
-      seen_count=k.seen_count+s.seen_count,selected_count=k.selected_count+s.selected_count,
+      seen_count=greatest(k.seen_count,s.seen_count),selected_count=greatest(k.selected_count,s.selected_count),
       source_role=case least(array_position(array['exact_url','official','feed','status','product','stable_detail','listing','article','unknown'],k.source_role),array_position(array['exact_url','official','feed','status','product','stable_detail','listing','article','unknown'],s.source_role)) when 1 then 'exact_url' when 2 then 'official' when 3 then 'feed' when 4 then 'status' when 5 then 'product' when 6 then 'stable_detail' when 7 then 'listing' when 8 then 'article' else 'unknown' end,
       probe_eligible=k.probe_eligible or s.probe_eligible,is_active=k.is_active or s.is_active,probe_priority=least(k.probe_priority,s.probe_priority),
       content_fingerprint=case when s.last_checked_at>k.last_checked_at then coalesce(s.content_fingerprint,k.content_fingerprint) else coalesce(k.content_fingerprint,s.content_fingerprint) end,
@@ -165,7 +165,7 @@ begin
  create temporary table if not exists monitoring_backfill_evidence(watch_id uuid,evidence_id text,url text,selected boolean) on commit drop;
  truncate monitoring_backfill_evidence;
  insert into monitoring_backfill_evidence
- select u.watch_id,'update:'||u.id,v->>'url',true from public.monitoring_updates u cross join lateral jsonb_array_elements(public.monitoring_source_objects(u.source_urls)) v where p_watch_id is null or u.watch_id=p_watch_id;
+ select u.watch_id,'run:'||u.run_id,v->>'url',true from public.monitoring_updates u cross join lateral jsonb_array_elements(public.monitoring_source_objects(u.source_urls)) v where p_watch_id is null or u.watch_id=p_watch_id;
  insert into monitoring_backfill_evidence
  select r.watch_id,'run:'||r.id,v->>'url',is_selected from public.monitoring_runs r
  cross join lateral (values
@@ -183,11 +183,14 @@ begin
    role:=case when position(h.norm in w.original_request)>0 then 'exact_url' when h.norm ~* '/(status|incidents?)(/|$)' then 'status' when h.norm ~* '/(feed|rss|atom)([./?]|$)' then 'feed' when h.norm ~* '/products?/' then 'product' when h.norm ~* '/(events?|listings?)(/|$)' then 'listing' when h.norm ~* '/(news|blog|articles?)/[^/]+$' then 'article' else 'unknown' end;
    method:=case when role='exact_url' then 'user_request' when h.selected_count>0 then 'openai_selected_source' when h.seen_count>=2 then 'repeated_source' else 'openai_search' end;
    insert into public.monitoring_watch_sources(watch_id,owner_user_id,url,normalized_url,domain,source_role,discovery_method,probe_priority,seen_count,selected_count,last_seen_in_ai_at,next_probe_at)
-   values(w.id,w.owner_user_id,h.url,h.norm,split_part(regexp_replace(h.norm,'^https?://','','i'),'/',1),role,method,case role when 'exact_url' then 0 when 'feed' then 10 when 'status' then 15 when 'product' then 40 when 'listing' then 50 when 'article' then 90 else 70 end,h.seen_count,h.selected_count,now(),now())
-   on conflict(watch_id,normalized_url) do update set seen_count=greatest(monitoring_watch_sources.seen_count,excluded.seen_count),selected_count=greatest(monitoring_watch_sources.selected_count,excluded.selected_count),source_role=case when monitoring_watch_sources.source_role in ('exact_url','official','stable_detail') then monitoring_watch_sources.source_role else excluded.source_role end,discovery_method=excluded.discovery_method
-   where (monitoring_watch_sources.seen_count,monitoring_watch_sources.selected_count,monitoring_watch_sources.source_role,monitoring_watch_sources.discovery_method) is distinct from (greatest(monitoring_watch_sources.seen_count,excluded.seen_count),greatest(monitoring_watch_sources.selected_count,excluded.selected_count),case when monitoring_watch_sources.source_role in ('exact_url','official','stable_detail') then monitoring_watch_sources.source_role else excluded.source_role end,excluded.discovery_method);
+   values(w.id,w.owner_user_id,h.url,h.norm,split_part(regexp_replace(h.norm,'^https?://','','i'),'/',1),role,method,case role when 'exact_url' then 0 when 'feed' then 10 when 'status' then 15 when 'product' then 40 when 'listing' then 50 when 'article' then 90 else 70 end,case when role='exact_url' then greatest(1,h.seen_count) else h.seen_count end,h.selected_count,now(),now())
+   on conflict(watch_id,normalized_url) do update set seen_count=case when monitoring_watch_sources.source_role='exact_url' or excluded.source_role='exact_url' then greatest(1,excluded.seen_count) else excluded.seen_count end,selected_count=excluded.selected_count,source_role=case when monitoring_watch_sources.source_role in ('exact_url','official') then monitoring_watch_sources.source_role else excluded.source_role end,discovery_method=excluded.discovery_method
+   where (monitoring_watch_sources.seen_count,monitoring_watch_sources.selected_count,monitoring_watch_sources.source_role,monitoring_watch_sources.discovery_method) is distinct from (case when monitoring_watch_sources.source_role='exact_url' or excluded.source_role='exact_url' then greatest(1,excluded.seen_count) else excluded.seen_count end,excluded.selected_count,case when monitoring_watch_sources.source_role in ('exact_url','official') then monitoring_watch_sources.source_role else excluded.source_role end,excluded.discovery_method);
    total:=total+1;
   end loop;
+  update public.monitoring_watch_sources set seen_count=1 where watch_id=w.id and source_role='exact_url' and seen_count<1;
+  -- Correct counters first, then revoke stale promotion/eligibility before considering promotion again.
+  update public.monitoring_watch_sources s set source_role='unknown' where s.watch_id=w.id and s.source_role='stable_detail' and not public.is_stable_grounded_detail(s);
   update public.monitoring_watch_sources set probe_eligible=(source_role='exact_url' or source_type in ('rss','atom','json','sitemap') or seen_count>=2 or selected_count>=2 or source_role in ('status','product','listing','official','feed')) where watch_id=w.id and disabled_reason is null and probe_eligible is distinct from (source_role='exact_url' or source_type in ('rss','atom','json','sitemap') or seen_count>=2 or selected_count>=2 or source_role in ('status','product','listing','official','feed'));
   update public.monitoring_watch_sources s set source_role='stable_detail' where s.watch_id=w.id and s.source_role='unknown' and public.is_stable_grounded_detail(s);
   perform public.rerank_monitoring_watch_sources(w.id,3);
