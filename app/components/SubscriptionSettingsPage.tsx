@@ -13,10 +13,10 @@ type SubscriptionEntitlements = {
 }
 
 const PLANS: Array<{ id: PreviewPlan; price: { en: string; no: string }; features: { en: string[]; no: string[] } }> = [
-  { id: 'trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['30 days', 'Up to 2 Watches', '1 Instant Watch', 'Instant checks every 15 minutes'], no: ['30 dager', 'Opptil 2 Watches', '1 Øyeblikkelig Watch', 'Øyeblikkelig sjekkes hvert 15. minutt'] } },
-  { id: 'basic', price: { en: 'Basic — $5/month', no: 'Basic — $5/måned' }, features: { en: ['Up to 3 Watches', 'No Instant Watches', 'Cost-efficient monitoring'], no: ['Opptil 3 Watches', 'Ingen Øyeblikkelige Watches', 'Kostnadseffektiv overvåking'] } },
-  { id: 'normal', price: { en: 'Normal — $10/month', no: 'Normal — $10/måned' }, features: { en: ['Up to 5 Watches', '1 Instant Watch', 'Instant checks every 15 minutes', 'Other Watches use cost-efficient monitoring'], no: ['Opptil 5 Watches', '1 Øyeblikkelig Watch', 'Øyeblikkelig sjekkes hvert 15. minutt', 'Andre Watches bruker kostnadseffektiv overvåking'] } },
-  { id: 'pro', price: { en: 'Pro — $20/month', no: 'Pro — $20/måned' }, features: { en: ['Up to 10 Watches', 'Up to 5 Instant Watches', 'Instant checks every 15 minutes', 'Other Watches use cost-efficient monitoring'], no: ['Opptil 10 Watches', 'Opptil 5 Øyeblikkelige Watches', 'Øyeblikkelig sjekkes hvert 15. minutt', 'Andre Watches bruker kostnadseffektiv overvåking'] } },
+  { id: 'trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['Up to 2 Watches', 'Radar on 1 Watch'], no: ['Opptil 2 følger', 'Radar på 1 følge'] } },
+  { id: 'basic', price: { en: 'Basic — 59 kr/month', no: 'Basic — 59 kr/måned' }, features: { en: ['Up to 3 Watches'], no: ['Opptil 3 følger'] } },
+  { id: 'normal', price: { en: 'Normal — 119 kr/month', no: 'Normal — 119 kr/måned' }, features: { en: ['Up to 5 Watches', 'Radar on 1 Watch'], no: ['Opptil 5 følger', 'Radar på 1 følge'] } },
+  { id: 'pro', price: { en: 'Pro — 229 kr/month', no: 'Pro — 229 kr/måned' }, features: { en: ['Up to 10 Watches', 'Radar on up to 5 Watches'], no: ['Opptil 10 følger', 'Radar på opptil 5 følger'] } },
 ]
 
 export default function SubscriptionSettingsPage({ language, onBack }: { language: AppLanguage; onBack: () => void }) {
@@ -86,6 +86,7 @@ export default function SubscriptionSettingsPage({ language, onBack }: { languag
       </div>
 
       <div className="space-y-3">
+        <p className="text-sm leading-5 text-[color:var(--fg-65)]">{isNo ? 'Radar følger ekstra godt med på utvalgte følger, slik at du holder deg oppdatert.' : 'Radar keeps a closer eye on selected Watches, so you stay up to speed.'}</p>
         {PLANS.map((plan) => {
           const selected = currentPlan === plan.id
           return <article key={plan.id} className={`rounded-2xl border p-4 transition ${selected ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-10)] bg-[color:var(--panel-05)]'}`}>
