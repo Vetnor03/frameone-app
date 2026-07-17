@@ -137,6 +137,9 @@ async function processJob(supabase: any, job: any) {
     run = insertedRun
   }
 
+  const runReason = job.enqueue_reason === 'source_change' ? 'source_triggered_verification' : job.enqueue_reason === 'fallback_discovery' ? 'fallback_discovery' : job.enqueue_reason === 'safety_fallback' ? 'safety_fallback' : 'legacy_adaptive'
+  await supabase.from('monitoring_runs').update({ run_reason: runReason }).eq('id', run.id)
+
   try {
     const { data: previousUpdates } = await supabase.from('monitoring_updates').select('headline,summary,event_at,fingerprint,source_urls,created_at').eq('watch_id', watch.id).order('created_at', { ascending: false }).limit(10)
     const result = provider === 'openai'
@@ -172,6 +175,8 @@ async function processJob(supabase: any, job: any) {
 
     const completedAt = new Date()
     await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: completedAt.toISOString(), response_id: result.response_id ?? null, raw_result: result.raw ?? result, usage: result.usage ?? {} }).eq('id', run.id)
+    const { data: consumedSignal } = await supabase.rpc('consume_monitoring_source_signal', { p_watch_id: watch.id, p_run_id: run.id })
+    if (runReason !== 'legacy_adaptive') await supabase.from('monitoring_two_stage_audit').insert({ watch_id: watch.id, event_type: runReason, reason: job.enqueue_reason, signal_id: consumedSignal || null })
     // Re-check after the attempt. Eligible Instant Watches use exactly the
     // server-side 15-minute cadence; all others retain adaptive scheduling.
     const { data: currentEligibility, error: currentEligibilityError } = await supabase
@@ -181,7 +186,7 @@ async function processJob(supabase: any, job: any) {
     const nextCheckAt = currentEligibility?.use_instant_cadence
       ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString()
       : nextPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }).eq('id', watch.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), last_full_discovery_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }).eq('id', watch.id)
     await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate }
   } catch (err) {
@@ -194,7 +199,7 @@ async function processJob(supabase: any, job: any) {
     const { data: currentEligibility } = await supabase.rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id }).maybeSingle()
     const instantRetry = currentEligibility?.use_instant_cadence === true
     const nextCheckAt = instantRetry ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString() : errorPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
+    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), last_full_discovery_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
     if (instantRetry) await supabase.from('monitoring_queue').update({ completed_at: completedAt.toISOString(), last_error: message }).eq('id', job.id)
     else await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: false, error: message, retry_in_minutes: instantRetry ? 15 : backoffMinutes }
