@@ -1230,6 +1230,11 @@ export default function HomePage() {
   const stickySettingsRef = useRef(false)
   const preferInstantScrollRef = useRef(false)
   const isLoadedRef = useRef(false)
+  const getTabScrollBehavior = useCallback((): ScrollBehavior => {
+    const instant = preferInstantScrollRef.current
+    preferInstantScrollRef.current = false
+    return instant ? 'auto' : 'smooth'
+  }, [])
 
   const disableLaunchSplash = searchParams?.get('nosplash') === '1'
 
@@ -2244,11 +2249,7 @@ async function handleSelectTab(k: TabKey) {
               tabs={tabs}
               activeTab={activeTab}
               onSelect={handleSelectTab}
-              getScrollBehavior={() => {
-                const instant = preferInstantScrollRef.current
-                preferInstantScrollRef.current = false
-                return instant ? 'auto' : 'smooth'
-              }}
+              getScrollBehavior={getTabScrollBehavior}
             />
 
             <div className="mt-6 flex-1 min-h-0">
