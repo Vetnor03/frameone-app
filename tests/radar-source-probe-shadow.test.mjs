@@ -49,8 +49,9 @@ test('bounded errors back off and permanent failures disable only source',()=>{
  assert.doesNotMatch(sourceWorker,/body[_:]|raw_body|response_body/)
 })
 test('shadow scheduler is fail-soft and cannot control paid work',()=>{
- assert.ok(scheduler.indexOf("enqueue_due_monitoring_watches")<scheduler.indexOf("RADAR_SOURCE_PROBE_MODE"))
- assert.match(scheduler,/RADAR_SOURCE_PROBE_MODE'\) === 'shadow'/); assert.match(scheduler,/source_probe_sidecar_failed/)
- assert.doesNotMatch(sourceWorker,/monitoring_queue|monitoring_runs|monitoring_updates|next_check_at/)
+ assert.match(scheduler,/mode === 'shadow' \|\| mode === 'guarded'/)
+ assert.match(scheduler,/mode === 'shadow'/); assert.match(scheduler,/source_probe_sidecar_failed/)
+ assert.doesNotMatch(sourceWorker,/monitoring_runs|monitoring_updates|next_check_at|runOpenAIWatch/)
+ assert.match(sourceWorker,/mode==='guarded'/)
  assert.ok(paidWorker.indexOf("supabase.rpc('reserve_paid_monitoring_run'")<paidWorker.indexOf('await runOpenAIWatch'))
 })
