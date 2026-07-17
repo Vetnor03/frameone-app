@@ -12,11 +12,19 @@ type SubscriptionEntitlements = {
   days_remaining_in_trial: number
 }
 
-const PLANS: Array<{ id: PreviewPlan; price: { en: string; no: string }; features: { en: string[]; no: string[] } }> = [
-  { id: 'trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['Up to 2 Watches', 'Radar on 1 Watch'], no: ['Opptil 2 følger', 'Radar på 1 følge'] } },
-  { id: 'basic', price: { en: 'Basic — 59 kr/month', no: 'Basic — 59 kr/måned' }, features: { en: ['Up to 3 Watches'], no: ['Opptil 3 følger'] } },
-  { id: 'normal', price: { en: 'Normal — 119 kr/month', no: 'Normal — 119 kr/måned' }, features: { en: ['Up to 5 Watches', 'Radar on 1 Watch'], no: ['Opptil 5 følger', 'Radar på 1 følge'] } },
-  { id: 'pro', price: { en: 'Pro — 229 kr/month', no: 'Pro — 229 kr/måned' }, features: { en: ['Up to 10 Watches', 'Radar on up to 5 Watches'], no: ['Opptil 10 følger', 'Radar på opptil 5 følger'] } },
+type Plan = {
+  id: PreviewPlan
+  name: string
+  price: { en: string; no: string }
+  priceSuffix?: { en: string; no: string }
+  features: { en: string[]; no: string[] }
+}
+
+const PLANS: Plan[] = [
+  { id: 'trial', name: 'Trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['Up to 2 Watches', 'Radar on 1 Watch'], no: ['Opptil 2 følger', 'Radar på 1 følge'] } },
+  { id: 'basic', name: 'Basic', price: { en: '59 kr', no: '59 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Up to 3 Watches', 'Standard monitoring'], no: ['Opptil 3 følger', 'Standard oppfølging'] } },
+  { id: 'normal', name: 'Normal', price: { en: '119 kr', no: '119 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Up to 5 Watches', 'Radar on 1 Watch'], no: ['Opptil 5 følger', 'Radar på 1 følge'] } },
+  { id: 'pro', name: 'Pro', price: { en: '229 kr', no: '229 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Up to 10 Watches', 'Radar on up to 5 Watches'], no: ['Opptil 10 følger', 'Radar på opptil 5 følger'] } },
 ]
 
 export default function SubscriptionSettingsPage({ language, onBack }: { language: AppLanguage; onBack: () => void }) {
@@ -66,39 +74,51 @@ export default function SubscriptionSettingsPage({ language, onBack }: { languag
   }
 
   const currentPlan: PreviewPlan | null = entitlements ? (entitlements.is_trial ? 'trial' : entitlements.effective_plan) : null
-  const currentTitle = PLANS.find((plan) => plan.id === currentPlan)?.price[language]
+  const currentPlanDetails = PLANS.find((plan) => plan.id === currentPlan)
+  const currentTitle = currentPlanDetails && (currentPlanDetails.id === 'trial' ? currentPlanDetails.price[language] : currentPlanDetails.name)
 
   return (
-    <section className="settings-scroll h-full overflow-y-auto pb-5" aria-labelledby="subscription-heading">
-      <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-[color:var(--fg-60)] hover:text-[color:var(--fg)]">
+    <section className="settings-scroll h-full overflow-x-hidden overflow-y-auto pb-5" aria-labelledby="subscription-heading">
+      <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 rounded-md text-sm text-[color:var(--fg-60)] outline-none transition hover:text-[color:var(--fg)] focus-visible:ring-2 focus-visible:ring-[#2aa3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)]">
         <span aria-hidden="true">←</span> {isNo ? 'Tilbake til Innstillinger' : 'Back to Settings'}
       </button>
 
-      <div className="mb-5 rounded-3xl border border-[#2aa3ff]/50 bg-[#2aa3ff]/10 p-5">
-        <div id="subscription-heading" className="text-[10px] uppercase tracking-[0.24em] text-[#2aa3ff]">{isNo ? 'Gjeldende abonnement' : 'Current plan'}</div>
-        <h2 className="mt-2 text-2xl font-medium text-[color:var(--fg)]">{loading ? (isNo ? 'Laster…' : 'Loading…') : currentTitle || (isNo ? 'Ikke tilgjengelig' : 'Unavailable')}</h2>
-        {entitlements?.is_trial && <p className="mt-2 text-sm text-[color:var(--fg-70)]">{isNo ? `${entitlements.days_remaining_in_trial} dager igjen av prøveperioden` : `${entitlements.days_remaining_in_trial} trial days remaining`}</p>}
+      <header className="mb-5">
+        <h2 id="subscription-heading" className="text-2xl font-semibold tracking-tight text-[color:var(--fg)]">{isNo ? 'Test abonnementer' : 'Test subscription plans'}</h2>
+        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Bytt plan for å teste grenser for følger og Radar. Ingen betaling gjennomføres.' : 'Switch plans to verify Watch and Radar limits. No payment is made.'}</p>
+      </header>
+
+      <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-[color:var(--panel-05)] px-4 py-3 ring-1 ring-inset ring-[color:var(--bd-10)]" aria-live="polite">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2aa3ff]">{isNo ? 'Testforhåndsvisning' : 'Testing preview'}</span>
+        <strong className="text-sm font-medium text-[color:var(--fg)]">{loading ? (isNo ? 'Laster…' : 'Loading…') : currentTitle || (isNo ? 'Ikke tilgjengelig' : 'Unavailable')}</strong>
+        {entitlements?.is_trial && <span className="text-xs text-[color:var(--fg-60)]">{isNo ? `${entitlements.days_remaining_in_trial} dager igjen` : `${entitlements.days_remaining_in_trial} days remaining`}</span>}
       </div>
 
-      <div className="mb-5 border-y border-[color:var(--bd-10)] py-3 text-xs leading-5 text-[color:var(--fg-60)]">
-        <strong className="block uppercase tracking-[0.16em] text-[color:var(--fg-80)]">{isNo ? 'Midlertidig utviklingsforhåndsvisning' : 'Temporary development preview'}</strong>
-        {isNo ? 'Bytt plan for testing. Dette gjennomfører ingen betaling.' : 'Switch plans for testing. No payment is made.'}
-      </div>
-
-      <div className="space-y-3">
-        <p className="text-sm leading-5 text-[color:var(--fg-65)]">{isNo ? 'Radar følger ekstra godt med på utvalgte følger, slik at du holder deg oppdatert.' : 'Radar keeps a closer eye on selected Watches, so you stay up to speed.'}</p>
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         {PLANS.map((plan) => {
           const selected = currentPlan === plan.id
-          return <article key={plan.id} className={`rounded-2xl border p-4 transition ${selected ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-10)] bg-[color:var(--panel-05)]'}`}>
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="font-medium text-[color:var(--fg)]">{plan.price[language]}</h3>
-              {selected && <span className="rounded-full bg-[#2aa3ff] px-2.5 py-1 text-[9px] uppercase tracking-widest text-white">{isNo ? 'Gjeldende' : 'Current'}</span>}
-            </div>
-            <ul className="mt-3 space-y-1.5 text-sm text-[color:var(--fg-70)]">{plan.features[language].map((feature) => <li key={feature}>• {feature}</li>)}</ul>
-            <button type="button" disabled={loading || !!switching || selected} onClick={() => switchPlan(plan.id)} className="mt-4 w-full rounded-xl border border-[color:var(--bd-20)] px-3 py-2.5 text-xs uppercase tracking-[0.14em] text-[color:var(--fg-70)] disabled:cursor-not-allowed disabled:opacity-45">
-              {switching === plan.id ? (isNo ? 'Bytter…' : 'Switching…') : selected ? (isNo ? 'Gjeldende plan' : 'Current plan') : (isNo ? 'Forhåndsvis denne planen' : 'Preview this plan')}
-            </button>
-          </article>
+          const popular = plan.id === 'normal'
+          const previewLabel = plan.id === 'trial'
+            ? (isNo ? 'Forhåndsvis prøveperiode' : 'Preview trial')
+            : `${isNo ? 'Forhåndsvis' : 'Preview'} ${plan.name}`
+          return (
+            <article key={plan.id} aria-current={selected ? 'true' : undefined} className={`flex min-w-0 flex-col rounded-2xl p-5 ring-1 ring-inset transition-colors ${selected ? 'bg-[#2aa3ff]/[0.07] ring-[#2aa3ff]/70' : 'bg-[color:var(--panel-05)] ring-[color:var(--bd-10)]'}`}>
+              <div className="flex min-h-6 items-start justify-between gap-2">
+                <h3 className="text-sm font-semibold text-[color:var(--fg)]">{plan.name}</h3>
+                {(selected || popular) && <span className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.11em] ${selected ? 'bg-[#2aa3ff] text-white' : 'bg-[#2aa3ff]/10 text-[#2aa3ff]'}`}>{selected ? (isNo ? 'Gjeldende' : 'Current') : (isNo ? 'Mest populær' : 'Most popular')}</span>}
+              </div>
+              <div className="mt-4 flex min-h-11 items-end gap-2">
+                <span className={`${plan.id === 'trial' ? 'text-2xl' : 'text-3xl'} font-semibold leading-none tracking-tight text-[color:var(--fg)]`}>{plan.price[language]}</span>
+                {plan.priceSuffix && <span className="pb-0.5 text-xs text-[color:var(--fg-60)]">{plan.priceSuffix[language]}</span>}
+              </div>
+              <ul className="mt-5 min-h-14 space-y-2 text-sm text-[color:var(--fg-70)]">
+                {plan.features[language].map((feature) => <li key={feature} className="flex gap-2"><span aria-hidden="true" className="text-[#2aa3ff]">✓</span><span>{feature}</span></li>)}
+              </ul>
+              <button type="button" disabled={loading || !!switching || selected} onClick={() => switchPlan(plan.id)} className={`mt-5 w-full rounded-xl px-3 py-2.5 text-xs font-semibold transition outline-none focus-visible:ring-2 focus-visible:ring-[#2aa3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)] disabled:cursor-not-allowed disabled:opacity-50 ${selected ? 'bg-[color:var(--bd-10)] text-[color:var(--fg-60)]' : 'bg-[#2aa3ff] text-white hover:bg-[#168fe5]'}`}>
+                {switching === plan.id ? (isNo ? 'Bytter…' : 'Switching…') : selected ? (isNo ? 'Gjeldende plan' : 'Current plan') : previewLabel}
+              </button>
+            </article>
+          )
         })}
       </div>
       {message && <p role="status" className="mt-4 text-sm text-[#2aa3ff]">{message}</p>}

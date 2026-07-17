@@ -25,23 +25,23 @@ test('canonical entitlements load for the authenticated user', () => {
 test('development switching uses the preview RPC and refreshes entitlements', () => {
   assert.match(subscription, /supabase\.rpc\('preview_ai_subscription_plan', \{ p_plan: plan \}\)/)
   assert.match(subscription, /if \(previewError\) throw previewError\s+await loadEntitlements\(\)/)
-  assert.match(subscription, /Temporary development preview/)
+  assert.match(subscription, /Testing preview/)
   assert.match(subscription, /No payment is made\./)
 })
 
 test('plans use Norwegian kroner and simplified English and Norwegian Radar copy', () => {
   for (const [plan, price] of [['Basic', 59], ['Normal', 119], ['Pro', 229]]) {
-    assert.match(subscription, new RegExp(`${plan} — ${price} kr/month`))
-    assert.match(subscription, new RegExp(`${plan} — ${price} kr/måned`))
+    assert.match(subscription, new RegExp(`name: '${plan}', price: \\{ en: '${price} kr', no: '${price} kr' \\}`))
   }
-  assert.match(subscription, /features: \{ en: \['Up to 3 Watches'\], no: \['Opptil 3 følger'\] \}/)
+  assert.match(subscription, /priceSuffix: \{ en: 'per month', no: 'per måned' \}/)
+  assert.match(subscription, /'Up to 3 Watches', 'Standard monitoring'/)
   assert.match(subscription, /'Up to 5 Watches', 'Radar on 1 Watch'/)
   assert.match(subscription, /'Up to 10 Watches', 'Radar on up to 5 Watches'/)
   assert.match(subscription, /'Opptil 5 følger', 'Radar på 1 følge'/)
   assert.match(subscription, /'Opptil 10 følger', 'Radar på opptil 5 følger'/)
   assert.doesNotMatch(subscription, /No Radar|Ingen Radar|\$\d|USD/)
-  assert.equal(subscription.match(/Radar keeps a closer eye on selected Watches, so you stay up to speed\./g)?.length, 1)
-  assert.equal(subscription.match(/Radar følger ekstra godt med på utvalgte følger, slik at du holder deg oppdatert\./g)?.length, 1)
+  assert.match(subscription, /Switch plans to verify Watch and Radar limits\. No payment is made\./)
+  assert.match(subscription, /Bytt plan for å teste grenser for følger og Radar\. Ingen betaling gjennomføres\./)
 })
 
 test('Subscription UI introduces no billing integration or real-payment claims', () => {
