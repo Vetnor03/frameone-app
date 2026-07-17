@@ -13,10 +13,10 @@ type SubscriptionEntitlements = {
 }
 
 const PLANS: Array<{ id: PreviewPlan; price: { en: string; no: string }; features: { en: string[]; no: string[] } }> = [
-  { id: 'trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['30 days', 'Up to 5 Watches', 'Cost-efficient monitoring', 'No Instant Watches'], no: ['30 dager', 'Opptil 5 Watches', 'Kostnadseffektiv overvåking', 'Ingen Instant Watches'] } },
-  { id: 'basic', price: { en: 'Basic — $5/month', no: 'Basic — $5/måned' }, features: { en: ['Up to 5 Watches', 'Cost-efficient monitoring', 'No Instant Watches'], no: ['Opptil 5 Watches', 'Kostnadseffektiv overvåking', 'Ingen Instant Watches'] } },
-  { id: 'normal', price: { en: 'Normal — $10/month', no: 'Normal — $10/måned' }, features: { en: ['Unlimited Watches', 'Cost-efficient monitoring', 'No Instant Watches'], no: ['Ubegrenset antall Watches', 'Kostnadseffektiv overvåking', 'Ingen Instant Watches'] } },
-  { id: 'pro', price: { en: 'Pro — $20/month', no: 'Pro — $20/måned' }, features: { en: ['Unlimited Watches', 'Up to 5 Instant Watches', 'Instant Watches checked every 15 minutes', 'Normal Watches retain cost-efficient monitoring'], no: ['Ubegrenset antall Watches', 'Opptil 5 Instant Watches', 'Instant Watches sjekkes hvert 15. minutt', 'Vanlige Watches beholder kostnadseffektiv overvåking'] } },
+  { id: 'trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['30 days', 'Up to 2 Watches', '1 Instant Watch', 'Instant checks every 15 minutes'], no: ['30 dager', 'Opptil 2 Watches', '1 Øyeblikkelig Watch', 'Øyeblikkelig sjekkes hvert 15. minutt'] } },
+  { id: 'basic', price: { en: 'Basic — $5/month', no: 'Basic — $5/måned' }, features: { en: ['Up to 3 Watches', 'No Instant Watches', 'Cost-efficient monitoring'], no: ['Opptil 3 Watches', 'Ingen Øyeblikkelige Watches', 'Kostnadseffektiv overvåking'] } },
+  { id: 'normal', price: { en: 'Normal — $10/month', no: 'Normal — $10/måned' }, features: { en: ['Up to 5 Watches', '1 Instant Watch', 'Instant checks every 15 minutes', 'Other Watches use cost-efficient monitoring'], no: ['Opptil 5 Watches', '1 Øyeblikkelig Watch', 'Øyeblikkelig sjekkes hvert 15. minutt', 'Andre Watches bruker kostnadseffektiv overvåking'] } },
+  { id: 'pro', price: { en: 'Pro — $20/month', no: 'Pro — $20/måned' }, features: { en: ['Up to 10 Watches', 'Up to 5 Instant Watches', 'Instant checks every 15 minutes', 'Other Watches use cost-efficient monitoring'], no: ['Opptil 10 Watches', 'Opptil 5 Øyeblikkelige Watches', 'Øyeblikkelig sjekkes hvert 15. minutt', 'Andre Watches bruker kostnadseffektiv overvåking'] } },
 ]
 
 export default function SubscriptionSettingsPage({ language, onBack }: { language: AppLanguage; onBack: () => void }) {
