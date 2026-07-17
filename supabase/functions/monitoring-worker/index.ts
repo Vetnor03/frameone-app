@@ -142,6 +142,18 @@ async function processJob(supabase: any, job: any) {
     const result = provider === 'openai'
       ? await runOpenAIWatch({ ...watch, previous_updates: previousUpdates ?? [] }, Deno.env.get('OPENAI_API_KEY')!, model)
       : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
+    // Registry capture is observation-only and deliberately fail-soft. It cannot
+    // enqueue, suppress, accelerate, or delay this paid monitoring run.
+    if (provider === 'openai') {
+      const { error: sourceError } = await supabase.rpc('register_monitoring_watch_sources', {
+        p_watch_id: watch.id,
+        p_discovered: result.discovered_sources ?? [],
+        p_selected: result.sources ?? [],
+        p_original_request: watch.original_request,
+        p_max_active: Math.max(1, Math.min(3, envInt('RADAR_MAX_ACTIVE_SOURCES_PER_WATCH', 3) ?? 3)),
+      })
+      if (sourceError) console.warn('[monitoring-worker:source-registry]', { watch_id: watch.id, code: sourceError.code })
+    }
     const status = result.status === 'change' && result.trigger_met ? 'change' : result.status
     let createdUpdate = false
     let effectiveStatus = status as 'no_change' | 'change' | 'uncertain'

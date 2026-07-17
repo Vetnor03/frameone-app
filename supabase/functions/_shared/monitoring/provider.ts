@@ -14,6 +14,8 @@ export type MonitoringProviderResult = {
   confidence: number
   fingerprint: string | null
   sources: MonitoringSource[]
+  /** Internal search inventory. Never use this field as user-facing evidence. */
+  discovered_sources: MonitoringSource[]
   suggested_next_check_minutes: number
   response_id?: string | null
   usage?: Record<string, unknown>
@@ -31,10 +33,12 @@ export function monitoringModelFromEnv(env: { get(name: string): string | undefi
 export function normalizeSourceUrl(url: string) {
   try {
     const parsed = new URL(url)
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return ''
     parsed.hash = ''
     parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, '')
-    const removable = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid']
-    for (const key of removable) parsed.searchParams.delete(key)
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (/^(utm_.+|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|ref_src|ref_url)$/i.test(key)) parsed.searchParams.delete(key)
+    }
     parsed.searchParams.sort()
     return parsed.toString().replace(/\/$/, '')
   } catch {
@@ -58,10 +62,10 @@ export function stableFingerprint(input: { fingerprint?: string | null; headline
 export function mockMonitoringResult(mode = 'no_change'): MonitoringProviderResult {
   if (mode === 'error') throw new Error('Mock monitoring provider error')
   if (mode === 'change') return {
-    status: 'change', trigger_met: true, headline: 'Mock watch update', summary: 'A deterministic mock development was found.', event_at: '2026-07-13T00:00:00.000Z', confidence: 0.92, fingerprint: 'mock-development-2026-07-13', sources: [{ url: 'https://example.com/mock-development', title: 'Mock development', published_at: '2026-07-13T00:00:00.000Z' }], suggested_next_check_minutes: 60,
+    status: 'change', trigger_met: true, headline: 'Mock watch update', summary: 'A deterministic mock development was found.', event_at: '2026-07-13T00:00:00.000Z', confidence: 0.92, fingerprint: 'mock-development-2026-07-13', sources: [{ url: 'https://example.com/mock-development', title: 'Mock development', published_at: '2026-07-13T00:00:00.000Z' }], discovered_sources: [{ url: 'https://example.com/mock-development', title: 'Mock development', published_at: '2026-07-13T00:00:00.000Z' }], suggested_next_check_minutes: 60,
   }
-  if (mode === 'uncertain') return { status: 'uncertain', trigger_met: false, headline: null, summary: 'Mock uncertain result.', event_at: null, confidence: 0.35, fingerprint: null, sources: [{ url: 'https://example.com/uncertain', title: 'Uncertain', published_at: null }], suggested_next_check_minutes: 120 }
-  return { status: 'no_change', trigger_met: false, headline: null, summary: null, event_at: null, confidence: 0, fingerprint: null, sources: [], suggested_next_check_minutes: 60 }
+  if (mode === 'uncertain') return { status: 'uncertain', trigger_met: false, headline: null, summary: 'Mock uncertain result.', event_at: null, confidence: 0.35, fingerprint: null, sources: [{ url: 'https://example.com/uncertain', title: 'Uncertain', published_at: null }], discovered_sources: [{ url: 'https://example.com/uncertain', title: 'Uncertain', published_at: null }], suggested_next_check_minutes: 120 }
+  return { status: 'no_change', trigger_met: false, headline: null, summary: null, event_at: null, confidence: 0, fingerprint: null, sources: [], discovered_sources: [], suggested_next_check_minutes: 60 }
 }
 
 export const monitoringJsonSchema = {
@@ -93,9 +97,9 @@ export function normalizeMonitoringResult(parsed: any, returnedSources: ToolSour
   const selected = selectedFromCitations.length > 0 || citationSources.length > 0 ? selectedFromCitations : selectGroundedSources(returnedSources, Array.isArray(parsed.sources) ? parsed.sources : [])
   const suggestedNext = Math.max(5, Math.min(10080, Number(parsed.suggested_next_check_minutes || 60)))
   if (parsed.status === 'change' && selected.length === 0) {
-    return { status: 'uncertain', trigger_met: false, headline: null, summary: 'source_grounding_failed', event_at: null, confidence: 0, fingerprint: null, sources: [], suggested_next_check_minutes: suggestedNext, raw: { diagnostic_reason: 'source_grounding_failed' } }
+    return { status: 'uncertain', trigger_met: false, headline: null, summary: 'source_grounding_failed', event_at: null, confidence: 0, fingerprint: null, sources: [], discovered_sources: returnedSources, suggested_next_check_minutes: suggestedNext, raw: { diagnostic_reason: 'source_grounding_failed' } }
   }
-  return { status: parsed.status, trigger_met: Boolean(parsed.trigger_met), headline: parsed.headline ? String(parsed.headline).slice(0, 180) : null, summary: parsed.summary ? String(parsed.summary).slice(0, 1200) : null, event_at: parsed.event_at || null, confidence: Math.max(0, Math.min(1, Number(parsed.confidence || 0))), fingerprint: parsed.fingerprint ? String(parsed.fingerprint).slice(0, 180) : null, sources: selected, suggested_next_check_minutes: suggestedNext }
+  return { status: parsed.status, trigger_met: Boolean(parsed.trigger_met), headline: parsed.headline ? String(parsed.headline).slice(0, 180) : null, summary: parsed.summary ? String(parsed.summary).slice(0, 1200) : null, event_at: parsed.event_at || null, confidence: Math.max(0, Math.min(1, Number(parsed.confidence || 0))), fingerprint: parsed.fingerprint ? String(parsed.fingerprint).slice(0, 180) : null, sources: selected, discovered_sources: returnedSources, suggested_next_check_minutes: suggestedNext }
 }
 
 function safeErrorBody(text: string) { return text.replace(/sk-[A-Za-z0-9_-]+/g, 'sk-REDACTED').slice(0, 500) }
