@@ -1,7 +1,8 @@
 # AI subscription foundation operations
 
-Apply `20260716180000_add_ai_subscription_foundation.sql` before deploying the
-updated `monitoring-worker` Edge Function. Replace `<USER_UUID>` below with an
+After the two deployed foundation migrations, apply
+`20260716213000_complete_instant_watch_plans.sql` before deploying the updated
+`monitoring-worker` Edge Function. Replace `<USER_UUID>` below with an
 `auth.users.id`. These manual assignments are development-only; there is no
 public plan selector or admin UI.
 
@@ -14,9 +15,10 @@ select count(*) as ongoing_watches
 from public.monitoring_watches
 where owner_user_id = '<USER_UUID>' and status in ('active', 'paused', 'error');
 
-select count(*) as active_instant_watches
+select count(*) as occupied_instant_watches
 from public.monitoring_watches
-where owner_user_id = '<USER_UUID>' and status = 'active' and is_instant;
+where owner_user_id = '<USER_UUID>'
+  and status in ('active', 'paused', 'error') and is_instant;
 ```
 
 ## Trialing Basic (fresh 30-day trial)
@@ -75,21 +77,35 @@ where user_id = '<USER_UUID>';
 
 ## Entitlement behavior
 
-An unexpired `trialing` row always receives Basic limits: five ongoing Watches
-and no Instant Watches. Active Basic has the same limits. Active Normal and Pro
-have unlimited ongoing Watches (represented as SQL `null`, never a large fake
-number). Only active Pro receives five active Instant slots and the future
-15-minute interval. Expired trials and every non-active state disable monitoring.
+Every total allowance is numeric, and Instant Watches are a subset of that total:
 
-## Follow-up: Instant scheduling contract
+| State | Total ongoing Watches | Instant Watches | Instant interval |
+| --- | ---: | ---: | ---: |
+| Unexpired Trial | 2 | 1 | 15 minutes |
+| Active Basic | 3 | 0 | Not available |
+| Active Normal | 5 | 1 | 15 minutes |
+| Active Pro | 10 | 5 | 15 minutes |
+| Expired/inactive | 0 | 0 | Not available |
 
-The Instant executor is intentionally **not** implemented here. The follow-up
-must schedule active Pro Instant Watches server-side every exactly **15 minutes**,
-independent of physical frame wake-ups. Frame/app reads reuse the latest stored
-result and must not initiate an OpenAI call. Workers must prevent concurrent work
-for one Watch; skip paused, completed, deleted, inactive-subscription, and expired
-trial Watches; retain rows/history after downgrade; and safely disable or treat
-old Instant flags as normal after a Pro downgrade. The maximum remains five
-ongoing Instant Watches per owner. Existing per-user/global paid-run caps remain
-mandatory, and non-Instant Watches retain the adaptive schedule. No five-minute
-or frame-wake-based Instant path may be introduced.
+Ongoing and occupied means `active`, `paused`, or `error`. Completed/deleted and
+non-owner shared Watches do not count. Downgrades keep Watches and history; the
+preview RPC retains the oldest eligible Instant flags by `created_at`, then UUID.
+
+## Instant scheduling and operations
+
+The database due selector, existing monitoring queue, and worker implement the
+15-minute cadence. Frame wakes and app reads only reuse stored results. Invoke
+`monitoring-scheduler` at least every 15 minutes (recommended cron expression:
+`*/15 * * * *`) with the existing `x-monitoring-secret` architecture, then let
+the existing worker consume the queue. Redeploy both `monitoring-scheduler` and
+`monitoring-worker` after applying the migration.
+
+The repository defaults preserve the paid-run caps at 20 OpenAI runs per user
+per day and 300 per user per month. Global daily/monthly defaults are disabled
+unless their environment variables are configured; database per-user overrides
+may lower or raise the two user caps. Thus the defaults stop one Instant Watch
+at 20 of a theoretical 96 daily checks, and stop five Pro Instant Watches at the
+same shared per-user daily cap of 20 out of 480. Operations must explicitly set
+appropriate per-user overrides/defaults (and review configured global caps and
+budget) before claiming full production cadence; the safety protections must not
+be removed silently.

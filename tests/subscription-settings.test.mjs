@@ -30,7 +30,7 @@ test('development switching uses the preview RPC and refreshes entitlements', ()
 })
 
 test('Pro advertises exactly five Instant Watches checked every 15 minutes', () => {
-  assert.match(subscription, /'Up to 5 Instant Watches', 'Instant Watches checked every 15 minutes'/)
+  assert.match(subscription, /'Up to 5 Instant Watches', 'Instant checks every 15 minutes'/)
   assert.doesNotMatch(subscription, /Up to (?!5\b)\d+ Instant Watches/)
 })
 
