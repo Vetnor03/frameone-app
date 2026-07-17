@@ -25,7 +25,7 @@ test('canonical entitlements load for the authenticated user', () => {
 test('development switching uses the preview RPC and refreshes entitlements', () => {
   assert.match(subscription, /supabase\.rpc\('preview_ai_subscription_plan', \{ p_plan: plan \}\)/)
   assert.match(subscription, /if \(previewError\) throw previewError\s+await loadEntitlements\(\)/)
-  assert.match(subscription, /Testing preview/)
+  assert.match(subscription, /Plan preview/)
   assert.match(subscription, /No payment is made\./)
 })
 
@@ -34,14 +34,14 @@ test('plans use Norwegian kroner and simplified English and Norwegian Radar copy
     assert.match(subscription, new RegExp(`name: '${plan}', price: \\{ en: '${price} kr', no: '${price} kr' \\}`))
   }
   assert.match(subscription, /priceSuffix: \{ en: 'per month', no: 'per måned' \}/)
-  assert.match(subscription, /'Up to 3 Watches', 'Standard monitoring'/)
-  assert.match(subscription, /'Up to 5 Watches', 'Radar on 1 Watch'/)
-  assert.match(subscription, /'Up to 10 Watches', 'Radar on up to 5 Watches'/)
-  assert.match(subscription, /'Opptil 5 følger', 'Radar på 1 følge'/)
-  assert.match(subscription, /'Opptil 10 følger', 'Radar på opptil 5 følger'/)
+  assert.match(subscription, /'Follow up to 2 things', 'Radar on 1 thing'/)
+  assert.match(subscription, /'Follow up to 5 things', 'Radar on up to 2 things'/)
+  assert.match(subscription, /'Follow up to 10 things', 'Radar on up to 5 things'/)
+  assert.match(subscription, /'Følg opptil 5 ting', 'Radar på opptil 2 ting'/)
+  assert.match(subscription, /'Følg opptil 10 ting', 'Radar på opptil 5 ting'/)
   assert.doesNotMatch(subscription, /No Radar|Ingen Radar|\$\d|USD/)
-  assert.match(subscription, /Switch plans to verify Watch and Radar limits\. No payment is made\./)
-  assert.match(subscription, /Bytt plan for å teste grenser for følger og Radar\. Ingen betaling gjennomføres\./)
+  assert.match(subscription, /Switch plans to test limits\. No payment is made\./)
+  assert.match(subscription, /Bytt plan for å teste grensene\. Ingen betaling gjennomføres\./)
 })
 
 test('Subscription UI introduces no billing integration or real-payment claims', () => {

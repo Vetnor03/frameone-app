@@ -19,17 +19,18 @@ test('current preview is identified, announced, and disabled', () => {
   assert.match(source, /selected \? \(isNo \? 'Gjeldende plan' : 'Current plan'\)/)
 })
 
-test('prices and Watch and Radar limits are unchanged', () => {
-  for (const value of ['59 kr', '119 kr', '229 kr', 'Up to 2 Watches', 'Up to 3 Watches', 'Up to 5 Watches', 'Up to 10 Watches', 'Radar on 1 Watch', 'Radar on up to 5 Watches']) {
+test('prices and final things and Radar limits are shown', () => {
+  for (const value of ['59 kr', '119 kr', '229 kr', 'Follow 1 thing', 'Follow up to 2 things', 'Follow up to 5 things', 'Follow up to 10 things', 'Radar on 1 thing', 'Radar on up to 2 things', 'Radar on up to 5 things']) {
     assert.match(source, new RegExp(value))
   }
 })
 
 test('English and Norwegian testing copy and preview actions are present', () => {
   for (const copy of [
-    'Test subscription plans', 'Test abonnementer',
-    'Switch plans to verify Watch and Radar limits. No payment is made.',
-    'Bytt plan for å teste grenser for følger og Radar. Ingen betaling gjennomføres.',
+    'Follow anything that matters to you', 'Følg med på det som betyr noe for deg',
+    'Plan preview', 'Planforhåndsvisning',
+    'Switch plans to test limits. No payment is made.',
+    'Bytt plan for å teste grensene. Ingen betaling gjennomføres.',
     'Preview trial', 'Forhåndsvis prøveperiode', 'Preview', 'Forhåndsvis',
     'Most popular', 'Mest populær',
   ]) assert.match(source, new RegExp(copy))
