@@ -156,6 +156,13 @@ async function processJob(supabase: any, job: any) {
         p_max_active: Math.max(1, Math.min(3, envInt('RADAR_MAX_ACTIVE_SOURCES_PER_WATCH', 3) ?? 3)),
       })
       if (sourceError) console.warn('[monitoring-worker:source-registry]', { watch_id: watch.id, code: sourceError.code })
+      else {
+        const { error: rankError } = await supabase.rpc('rerank_monitoring_watch_sources', {
+          p_watch_id: watch.id,
+          p_max_active: Math.max(1, Math.min(3, envInt('RADAR_MAX_ACTIVE_SOURCES_PER_WATCH', 3) ?? 3)),
+        })
+        if (rankError) console.warn('[monitoring-worker:source-ranking]', { watch_id: watch.id, code: rankError.code })
+      }
     }
     const status = result.status === 'change' && result.trigger_met ? 'change' : result.status
     let createdUpdate = false
