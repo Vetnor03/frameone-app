@@ -1868,7 +1868,6 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
   try {
     const renderCycleMs = renderCycleId ? new Date(renderCycleId).getTime() : Number.NaN
     const referenceMs = Number.isNaN(renderCycleMs) ? Date.now() : renderCycleMs
-    const sinceIso = new Date(referenceMs - 24 * 60 * 60 * 1000).toISOString()
     const { data: memberRows, error: memberError } = await supabase
       .from('device_members')
       .select('user_id')
@@ -1897,14 +1896,10 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, rend
 
     const { data, error } = await supabase
       .from('monitoring_updates')
-      .select('id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language)')
+      .select('id, watch_id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language)')
       .in('monitoring_watches.owner_user_id', memberUserIds)
-      .eq('is_read', false)
-      .eq('dismissed_from_frame', false)
-      .gt('created_at', sinceIso)
       .lte('created_at', new Date(referenceMs).toISOString())
       .order('created_at', { ascending: false })
-      .limit(limit + 25)
     if (error) throw error
 
     const updateCandidates = Array.isArray(data) ? data : []

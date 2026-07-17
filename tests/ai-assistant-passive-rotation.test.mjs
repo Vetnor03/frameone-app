@@ -12,6 +12,7 @@ const selector = readFileSync(new URL('../app/lib/device/aiAssistantFrame.ts', i
 function update(id, createdAt, extra = {}) {
   return {
     id,
+    watch_id: id,
     headline: `Headline ${id}`,
     summary: `Summary ${id}`,
     is_read: false,
@@ -82,9 +83,9 @@ test('marking read or discovering updates does not force an immediate physical r
 
 test('selection safely reconciles on the next normal render when selected item is ineligible', () => {
   const rows = [
-    update('read-now', '2026-07-14T10:00:00.000Z', { is_read: true }),
-    update('eligible-next', '2026-07-14T09:00:00.000Z'),
+    update('read-now', '2026-07-14T10:00:00.000Z', { watch_id: 'same-watch', is_read: true }),
+    update('eligible-next', '2026-07-14T09:00:00.000Z', { watch_id: 'same-watch' }),
   ]
   const selected = selectAiAssistantFrameItems(rows, { ...base, renderCycleId: '2026-07-14T12:00:00.000Z', previousSelectedId: 'read-now' })
-  assert.deepEqual(selected.items.map((x) => x.id), ['eligible-next'])
+  assert.deepEqual(selected.items.map((x) => x.id), [])
 })

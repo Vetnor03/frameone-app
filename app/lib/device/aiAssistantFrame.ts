@@ -4,6 +4,7 @@ export const AI_ASSISTANT_FRAME_LIMITS = { small: 1, medium: 1, large: 2, full: 
 
 export type AiAssistantFrameUpdate = {
   id: string
+  watch_id?: string
   headline: string
   created_at: string
   summary?: string | null
@@ -32,13 +33,23 @@ export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], opti
   const cutoffMs = referenceNow.getTime() - 24 * 60 * 60 * 1000
   const hasMembershipFilter = Array.isArray(options.memberUserIds)
   const memberUserIds = new Set((options.memberUserIds ?? []).map((id) => String(id).trim()).filter(Boolean))
-  const candidates = rows
+  const newestByWatch = new Map<string, AiAssistantFrameUpdate>()
+  const availableRows = rows
     .filter((row) => !hasMembershipFilter || memberUserIds.has(String(row.monitoring_watches?.owner_user_id ?? '').trim()))
+    .filter((row) => !Number.isNaN(candidateTimestamp(row)))
+    .filter((row) => Number.isNaN(renderCycleMs) || candidateTimestamp(row) <= renderCycleMs)
+
+  for (const row of availableRows) {
+    const watchId = String(row.watch_id || row.id)
+    const current = newestByWatch.get(watchId)
+    if (!current || candidateTimestamp(row) > candidateTimestamp(current)) newestByWatch.set(watchId, row)
+  }
+
+  const candidates = [...newestByWatch.values()]
     .filter((row) => row.is_read !== true)
     .filter((row) => row.dismissed_from_frame !== true)
     .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), summary: typeof row.summary === 'string' ? row.summary : null, created_at: String(row.created_at ?? ''), topicTitle: simplifyAiAssistantTopicTitle(row.monitoring_watches?.title, row.monitoring_watches?.preferred_language === 'no' ? 'no' : 'en') }))
     .filter((row) => row.id && row.headline && !Number.isNaN(candidateTimestamp(row)) && candidateTimestamp(row) > cutoffMs)
-    .filter((row) => Number.isNaN(renderCycleMs) || candidateTimestamp(row) <= renderCycleMs)
     .sort((a, b) => candidateTimestamp(b) - candidateTimestamp(a))
   const safeLimit = Math.max(0, Math.floor(options.limit))
   if (safeLimit <= 0 || candidates.length <= 1) return { items: candidates.slice(0, safeLimit), overflowCount: Math.max(0, candidates.length - safeLimit) }

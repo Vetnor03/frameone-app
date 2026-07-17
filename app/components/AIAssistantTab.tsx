@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { selectNewestUnreadUpdates } from '../lib/aiAssistantUpdates'
 
 type AppLanguage = 'en' | 'no'
 type AssistantWatchStatus = 'active' | 'paused' | 'completed' | 'error'
@@ -118,6 +119,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const reachedWatchLimit = !entitlements?.monitoring_enabled || (entitlements != null && ownedOngoingWatchCount >= entitlements.max_ongoing_watches)
   const selected = watches.find((w) => w.id === selectedId) ?? watches[0] ?? null
   const updatesByWatch = useMemo(() => updates.filter((u) => u.watch_id === selected?.id), [updates, selected?.id])
+  const inboxUpdates = useMemo(() => selectNewestUnreadUpdates(updates), [updates])
 
   const loadAssistant = useCallback(async () => {
     setLoading(true)
@@ -129,7 +131,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
 
       const [watchResult, updateResult, onboardingResult, entitlementResult] = await Promise.all([
         supabase.from('monitoring_watches').select('id,owner_user_id,original_request,title,normalized_goal,trigger_description,frequency_minutes,preferred_language,completion_condition,frame_id,show_on_frame,status,is_instant,last_checked_at,interpretation_status,created_at').order('created_at', { ascending: false }),
-        supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,dismissed_from_frame,created_at').order('created_at', { ascending: false }).limit(40),
+        supabase.from('monitoring_updates').select('id,watch_id,headline,summary,source_urls,is_read,dismissed_from_frame,created_at').order('created_at', { ascending: false }),
         supabase.from('user_onboarding_state').select('has_created_watch').eq('user_id', userId).maybeSingle(),
         supabase.rpc('get_ai_subscription_entitlements', { p_user_id: userId }).maybeSingle(),
       ])
@@ -255,18 +257,22 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   async function markUpdate(id: string, patch: { is_read: boolean }) {
     if (busyUpdateId) return
     setBusyUpdateId(id); setError(null); setMessage(null)
+    const previousUpdates = updates
+    setUpdates((current) => current.map((update) => update.id === id ? { ...update, ...patch } : update))
     const { error } = await supabase.from('monitoring_updates').update(patch).eq('id', id)
-    if (error) setError(c.friendlyError); else await loadAssistant()
+    if (error) { setUpdates(previousUpdates); setError(c.friendlyError) } else await loadAssistant()
     setBusyUpdateId(null)
   }
 
   async function markAllRead() {
     if (busyUpdateId) return
     setBusyUpdateId('all'); setError(null); setMessage(null)
-    const ids = updates.filter((u) => !u.is_read).map((u) => u.id)
+    const ids = inboxUpdates.map((u) => u.id)
     if (ids.length === 0) { setBusyUpdateId(null); return }
+    const previousUpdates = updates
+    setUpdates((current) => current.map((update) => ids.includes(update.id) ? { ...update, is_read: true } : update))
     const { error } = await supabase.from('monitoring_updates').update({ is_read: true }).in('id', ids)
-    if (error) setError(c.friendlyError); else await loadAssistant()
+    if (error) { setUpdates(previousUpdates); setError(c.friendlyError) } else await loadAssistant()
     setBusyUpdateId(null)
   }
 
@@ -319,7 +325,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       })}</div>}
     </section>
 
-    <section className="mt-6"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.updates}</h2><button type="button" disabled={busyUpdateId !== null || updates.every((u) => u.is_read)} onClick={markAllRead} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.markAllRead}</button></div>{updates.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyUpdates}</p> : <div className="mt-3 space-y-3">{updates.map((u) => <article key={u.id} className={`rounded-3xl border border-[color:var(--bd-15)] p-4 ${u.is_read ? 'opacity-70' : ''}`}><div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{u.headline}</h3>{!u.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2aa3ff]" />}</div><p className="mt-2 break-words text-sm leading-5 text-[color:var(--fg-70)]">{u.summary}</p><p className="mt-2 break-words text-xs text-[color:var(--fg-45)]">{friendlyAssistantTime(u.created_at, language)} · {watches.find((w) => w.id === u.watch_id)?.title}</p><div className="mt-3 flex flex-wrap gap-2">{sourceUrls(u.source_urls).map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[#2aa3ff]">{c.source} {i + 1}</a>)}<button type="button" disabled={busyUpdateId !== null} onClick={() => markUpdate(u.id, { is_read: !u.is_read })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{u.is_read ? c.markUnread : c.markRead}</button></div></article>)}</div>}</section>
+    <section className="mt-6"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.updates}</h2><button type="button" disabled={busyUpdateId !== null || inboxUpdates.length === 0} onClick={markAllRead} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.markAllRead}</button></div>{inboxUpdates.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyUpdates}</p> : <div className="mt-3 space-y-3">{inboxUpdates.map((u) => <article key={u.id} className={`rounded-3xl border border-[color:var(--bd-15)] p-4 ${u.is_read ? 'opacity-70' : ''}`}><div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{u.headline}</h3>{!u.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2aa3ff]" />}</div><p className="mt-2 break-words text-sm leading-5 text-[color:var(--fg-70)]">{u.summary}</p><p className="mt-2 break-words text-xs text-[color:var(--fg-45)]">{friendlyAssistantTime(u.created_at, language)} · {watches.find((w) => w.id === u.watch_id)?.title}</p><div className="mt-3 flex flex-wrap gap-2">{sourceUrls(u.source_urls).map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[#2aa3ff]">{c.source} {i + 1}</a>)}<button type="button" disabled={busyUpdateId !== null} onClick={() => markUpdate(u.id, { is_read: !u.is_read })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{u.is_read ? c.markUnread : c.markRead}</button></div></article>)}</div>}</section>
 
     {selected && <section className="mt-6 rounded-[2rem] border border-[color:var(--bd-15)] p-5"><h2 className="break-words text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{selected.title}</h2><p className="mt-3 break-words text-sm text-[color:var(--fg-65)]"><strong>{c.detailRequest}:</strong> {selected.original_request}</p><p className="mt-2 text-sm text-[color:var(--fg-65)]">{c.statuses[selected.status]} · {c.lastChecked}: {friendlyAssistantTime(selected.last_checked_at, language)}</p><h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.latest}</h3>{updatesByWatch[0] ? <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{updatesByWatch[0].headline} — {updatesByWatch[0].summary}</p> : <p className="mt-2 text-sm text-[color:var(--fg-50)]">{c.emptyUpdates}</p>}<h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.previous}</h3><div className="mt-2 space-y-2">{updatesByWatch.slice(1).map((u) => <p key={u.id} className="break-words text-sm text-[color:var(--fg-60)]">{u.headline}</p>)}</div></section>}
 

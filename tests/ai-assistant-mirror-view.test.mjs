@@ -11,6 +11,7 @@ function row(id, hoursAgo, extra = {}) {
   const now = new Date('2026-07-14T12:00:00.000Z')
   return {
     id,
+    watch_id: id,
     headline: `Headline ${id}`,
     summary: `Summary ${id}`,
     source_urls: ['https://example.com/source'],
@@ -118,9 +119,8 @@ test('AI Assistant mirror snapshot uses device members for shared-frame access w
   assert.match(detail, /monitoring_watches!inner\(owner_user_id, title, preferred_language\)/)
   assert.match(detail, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
   assert.doesNotMatch(detail, /eq\('show_on_frame', true\)|eq\('frame_id', frameId\)|eq\('monitoring_watches\.show_on_frame', true\)|eq\('monitoring_watches\.frame_id', frameId\)/)
-  assert.match(detail, /eq\('is_read', false\)/)
-  assert.match(detail, /eq\('dismissed_from_frame', false\)/)
-  assert.match(detail, /gt\('created_at', sinceIso\)/)
+  assert.doesNotMatch(detail, /eq\('is_read', false\)|eq\('dismissed_from_frame', false\)|gt\('created_at', sinceIso\)/)
+  assert.match(detail, /select\('id, watch_id, headline, summary, created_at/)
   assert.match(detail, /\[mirror-snapshot:ai-assistant-snapshot\]/)
   assert.match(detail, /frameMemberCount: memberUserIds\.length/)
   assert.match(detail, /activeAccessibleWatchCount: activeWatches\.length/)
@@ -144,7 +144,7 @@ test('AI Assistant mirror snapshot carries summary but not private watch request
     created_at: '2026-07-14T11:00:00.000Z',
     topicTitle: 'STAVANGER',
   })
-  assert.match(route, /select\('id, headline, summary, created_at/)
+  assert.match(route, /select\('id, watch_id, headline, summary, created_at/)
   assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|trigger_description|Skjer det noe kjekt/)
 })
 
