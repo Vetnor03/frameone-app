@@ -8137,7 +8137,7 @@ function FrameSetupFlow({
       <p>• {isNo ? 'Faner åpnes eller lukkes basert på modulene du har valgt.' : 'Tabs open or close depending on the modules selected for your frame.'}</p>
       <p>• {isNo ? 'Velg layout og endre moduler ved å trykke på cellen du vil redigere.' : 'Select a layout and change modules by clicking the cell you want to edit.'}</p>
       <p>• {isNo ? 'Snu telefonen sidelengs for å se et speil av den fysiske framen.' : 'Turn your phone sideways to see a mirror of what is displayed on the physical frame.'}</p>
-      <p>• {isNo ? 'Framen oppdateres automatisk når noe endres: omtrent hvert 15. minutt på batteri og hvert 5. minutt når den står til lading.' : 'Your frame refreshes automatically when changes are detected: about every 15 minutes on battery and every 5 minutes while plugged in.'}</p>
+      <p>• {isNo ? 'Framen oppdateres automatisk når noe endres.' : 'Your frame refreshes automatically when changes are detected.'}</p>
       <p>• {isNo ? 'I Innstillinger kan du dele enheten med familie ved å dele den genererte paringskoden.' : 'In Settings, you can share the device with family members by sharing the generated pair code.'}</p>
     </div>
     {error && <div className="mt-4 text-sm text-[color:var(--danger)]">{error}</div>}
