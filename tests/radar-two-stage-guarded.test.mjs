@@ -35,3 +35,26 @@ test('invalid discovery interval and guarded scheduler RPC errors fail open',()=
   assert.match(scheduler,/error && enqueueRpc === 'enqueue_due_guarded_monitoring_watches'/)
   assert.match(scheduler,/supabase\.rpc\('enqueue_due_monitoring_watches'/)
 })
+function stableDetail({url,selected=1,seen=2,fingerprint='sha256',role='unknown'}) {
+  const path=new URL(url).pathname
+  const detail=/^\/[^/?#]{2,}\/[^/?#]{2,}\/?$/.test(path)
+  const excluded=/(^|\/)(news|blog|articles?|search|results?|categor(?:y|ies)|tags?|collections?|login|sign-?in|cart|account|checkout|track(?:ing)?)(\/|$)/i.test(path)
+  return selected>=1&&(seen>=2||selected>=2)&&Boolean(fingerprint)&&detail&&!excluded&&!['article','feed'].includes(role)
+}
+test('repeated grounded HTML detail pages receive the generic stable role',()=>{
+  assert.equal(stableDetail({url:'https://retailer.example/maker/widget-combo'}),true)
+  assert.match(migration,/source_role:='stable_detail'/); assert.match(migration,/trg_promote_stable_monitoring_source/)
+  assert.match(migration,/selected_count>=1 and \(s\.seen_count>=2 or s\.selected_count>=2\)/)
+})
+test('home, category, search, tag, and news paths cannot become stable details',()=>{
+  for(const url of ['https://example.test/','https://example.test/category/widgets','https://example.test/search/widgets','https://example.test/tag/widgets','https://example.test/news/widget-launch','https://example.test/blog/widget-launch']) assert.equal(stableDetail({url}),false,url)
+})
+test('once-seen unknown pages cannot become stable details',()=>{
+  assert.equal(stableDetail({url:'https://retailer.example/maker/widget-combo',seen:1}),false)
+  assert.equal(stableDetail({url:'https://retailer.example/maker/widget-combo',fingerprint:''}),false)
+})
+test('backfill distinguishes grounded selections and upgrades existing unknown details',()=>{
+  assert.match(migration,/selected:=selected\|\|coalesce\(r\.raw_result->'sources'/)
+  assert.match(migration,/discovered\|\|selected,selected,w\.original_request/)
+  assert.match(migration,/source_role='stable_detail'[\s\S]*source_role='unknown'[\s\S]*is_stable_grounded_detail/)
+})

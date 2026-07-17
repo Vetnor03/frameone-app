@@ -10,6 +10,10 @@ alter table public.monitoring_runs add column if not exists run_reason text not 
   check(run_reason in ('legacy_adaptive','source_triggered_verification','fallback_discovery','safety_fallback'));
 alter table public.monitoring_watches add column if not exists last_full_discovery_at timestamptz;
 
+alter table public.monitoring_watch_sources drop constraint if exists monitoring_watch_sources_source_role_check;
+alter table public.monitoring_watch_sources add constraint monitoring_watch_sources_source_role_check
+  check(source_role in ('exact_url','official','listing','product','status','feed','article','stable_detail','unknown'));
+
 create table public.monitoring_source_change_signals (
  id uuid primary key default gen_random_uuid(), watch_id uuid not null references public.monitoring_watches(id) on delete cascade,
  source_id uuid not null references public.monitoring_watch_sources(id) on delete cascade,
@@ -32,16 +36,36 @@ create index monitoring_two_stage_audit_watch_created_idx on public.monitoring_t
 alter table public.monitoring_two_stage_audit enable row level security;
 revoke all on public.monitoring_two_stage_audit from public,anon,authenticated;
 
--- Conservative classification: an HTML page is strong only when its semantic role is
--- product/listing/status/official and it does not look like a one-off news/article URL.
+-- A grounded HTML detail page may not contain an English /product/ segment. Promote
+-- it only after repeated successful grounding and a baseline, with a deliberately
+-- narrow two-segment detail path and explicit broad/transactional exclusions.
+create or replace function public.is_stable_grounded_detail(s public.monitoring_watch_sources) returns boolean language sql stable as $$
+ select s.source_type='html' and s.selected_count>=1 and (s.seen_count>=2 or s.selected_count>=2)
+ and s.content_fingerprint is not null
+ and regexp_replace(s.normalized_url,'^https?://[^/]+','','i') ~ '^/[^/?#]{2,}/[^/?#]{2,}/?(?:[?#].*)?$'
+ and regexp_replace(s.normalized_url,'^https?://[^/]+','','i') !~* '(^|/)(news|blog|articles?|search|results?|categor(?:y|ies)|tags?|collections?|login|sign-?in|cart|account|checkout|track(?:ing)?)(/|$|[?#])'
+ and s.source_role not in ('article','feed')
+$$;
+
+create or replace function public.promote_stable_monitoring_source() returns trigger language plpgsql as $$
+begin
+ if new.source_role='unknown' and public.is_stable_grounded_detail(new) then new.source_role:='stable_detail'; end if;
+ return new;
+end $$;
+create trigger trg_promote_stable_monitoring_source before insert or update on public.monitoring_watch_sources
+for each row execute function public.promote_stable_monitoring_source();
+
+-- Conservative classification: ordinary HTML needs a semantic role; the generic
+-- stable_detail role additionally requires repeated grounding and a baseline.
 create or replace function public.is_guarded_strong_source(s public.monitoring_watch_sources) returns boolean language sql stable as $$
  select s.is_active and s.probe_eligible and s.disabled_reason is null
- and s.source_role in ('exact_url','feed','status','official','product','listing')
+ and s.consecutive_errors=0
+ and s.source_role in ('exact_url','feed','status','official','product','listing','stable_detail')
  and (s.source_type in ('rss','atom','json','sitemap') or
-      (s.source_type='html' and s.source_role in ('product','listing','status','official','exact_url')
+      (s.source_type='html' and s.source_role in ('product','listing','status','official','exact_url','stable_detail')
        and s.normalized_url !~* '/(news|blog|articles?)/[^/?]+/?$'))
 $$;
-revoke execute on function public.is_guarded_strong_source(public.monitoring_watch_sources) from public,anon,authenticated;
+revoke execute on function public.is_stable_grounded_detail(public.monitoring_watch_sources),public.is_guarded_strong_source(public.monitoring_watch_sources) from public,anon,authenticated;
 
 -- Fail-open decision used by both scheduler and source worker. can_gate=false means
 -- the caller must retain paid monitoring, never silently skip.
@@ -112,15 +136,18 @@ declare sid uuid; begin select id into sid from public.monitoring_source_change_
 
 -- Service-only, idempotent one-time backfill. It reuses the canonical normalizer/registry.
 create or replace function public.backfill_monitoring_watch_sources(p_watch_id uuid default null) returns integer language plpgsql security definer set search_path=public as $$
-declare w record; u record; r record; discovered jsonb; total int:=0;
+declare w record; u record; r record; discovered jsonb; selected jsonb; total int:=0;
 begin
  for w in select * from public.monitoring_watches where p_watch_id is null or id=p_watch_id loop
-  discovered:='[]'::jsonb;
-  for u in select jsonb_array_elements(coalesce(to_jsonb(mu.source_urls),'[]'::jsonb)) item from public.monitoring_updates mu where mu.watch_id=w.id loop discovered:=discovered||jsonb_build_array(case when jsonb_typeof(u.item)='string' then jsonb_build_object('url',u.item#>>'{}') else u.item end); end loop;
+  discovered:='[]'::jsonb; selected:='[]'::jsonb;
+  for u in select jsonb_array_elements(coalesce(to_jsonb(mu.source_urls),'[]'::jsonb)) item from public.monitoring_updates mu where mu.watch_id=w.id loop selected:=selected||jsonb_build_array(case when jsonb_typeof(u.item)='string' then jsonb_build_object('url',u.item#>>'{}') else u.item end); end loop;
   for r in select raw_result from public.monitoring_runs where watch_id=w.id and status in ('no_change','change','uncertain') loop
-   discovered:=discovered||coalesce(r.raw_result->'discovered_sources','[]')||coalesce(r.raw_result->'sources','[]')||coalesce(r.raw_result->'grounded_sources','[]');
+   discovered:=discovered||coalesce(r.raw_result->'discovered_sources','[]');
+   selected:=selected||coalesce(r.raw_result->'sources','[]')||coalesce(r.raw_result->'grounded_sources','[]');
   end loop;
-  total:=total+public.register_monitoring_watch_sources(w.id,discovered,'[]',w.original_request,3);
+  total:=total+public.register_monitoring_watch_sources(w.id,discovered||selected,selected,w.original_request,3);
+  update public.monitoring_watch_sources s set source_role='stable_detail'
+   where s.watch_id=w.id and s.source_role='unknown' and public.is_stable_grounded_detail(s);
  end loop; return total;
 end $$;
 
