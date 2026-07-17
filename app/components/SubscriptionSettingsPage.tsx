@@ -21,10 +21,10 @@ type Plan = {
 }
 
 const PLANS: Plan[] = [
-  { id: 'trial', name: 'Trial', price: { en: 'Free trial', no: 'Gratis prøveperiode' }, features: { en: ['Up to 2 Watches', 'Radar on 1 Watch'], no: ['Opptil 2 følger', 'Radar på 1 følge'] } },
-  { id: 'basic', name: 'Basic', price: { en: '59 kr', no: '59 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Up to 3 Watches', 'Standard monitoring'], no: ['Opptil 3 følger', 'Standard oppfølging'] } },
-  { id: 'normal', name: 'Normal', price: { en: '119 kr', no: '119 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Up to 5 Watches', 'Radar on 1 Watch'], no: ['Opptil 5 følger', 'Radar på 1 følge'] } },
-  { id: 'pro', name: 'Pro', price: { en: '229 kr', no: '229 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Up to 10 Watches', 'Radar on up to 5 Watches'], no: ['Opptil 10 følger', 'Radar på opptil 5 følger'] } },
+  { id: 'trial', name: 'Trial', price: { en: 'Free for 30 days', no: 'Gratis i 30 dager' }, features: { en: ['Follow 1 thing', 'Radar included'], no: ['Følg 1 ting', 'Radar inkludert'] } },
+  { id: 'basic', name: 'Basic', price: { en: '59 kr', no: '59 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Follow up to 2 things', 'Radar on 1 thing'], no: ['Følg opptil 2 ting', 'Radar på 1 ting'] } },
+  { id: 'normal', name: 'Normal', price: { en: '119 kr', no: '119 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Follow up to 5 things', 'Radar on up to 2 things'], no: ['Følg opptil 5 ting', 'Radar på opptil 2 ting'] } },
+  { id: 'pro', name: 'Pro', price: { en: '229 kr', no: '229 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Follow up to 10 things', 'Radar on up to 5 things'], no: ['Følg opptil 10 ting', 'Radar på opptil 5 ting'] } },
 ]
 
 export default function SubscriptionSettingsPage({ language, onBack }: { language: AppLanguage; onBack: () => void }) {
@@ -83,13 +83,15 @@ export default function SubscriptionSettingsPage({ language, onBack }: { languag
         <span aria-hidden="true">←</span> {isNo ? 'Tilbake til Innstillinger' : 'Back to Settings'}
       </button>
 
-      <header className="mb-5">
-        <h2 id="subscription-heading" className="text-2xl font-semibold tracking-tight text-[color:var(--fg)]">{isNo ? 'Test abonnementer' : 'Test subscription plans'}</h2>
-        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Bytt plan for å teste grenser for følger og Radar. Ingen betaling gjennomføres.' : 'Switch plans to verify Watch and Radar limits. No payment is made.'}</p>
+      <header className="mb-6 max-w-3xl">
+        <h2 id="subscription-heading" className="text-3xl font-semibold tracking-tight text-[color:var(--fg)]">{isNo ? 'Følg med på det som betyr noe for deg' : 'Follow anything that matters to you'}</h2>
+        <p className="mt-3 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Et produkt, en pris, en sak, et arrangement, en lansering – eller noe helt annet. RE:MIND følger med på viktige endringer og sier fra.' : 'A product, price, case, event, release—or something completely different. RE:MIND checks for meaningful changes and lets you know.'}</p>
+        <p className="mt-2 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Radar følger utvalgte ting tettere når tidspunktet er viktig.' : 'Radar checks selected things more closely when timing matters.'}</p>
       </header>
 
-      <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-[color:var(--panel-05)] px-4 py-3 ring-1 ring-inset ring-[color:var(--bd-10)]" aria-live="polite">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2aa3ff]">{isNo ? 'Testforhåndsvisning' : 'Testing preview'}</span>
+      <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-[color:var(--panel-05)] px-4 py-3" aria-live="polite">
+        <span className="text-xs font-semibold text-[#2aa3ff]">{isNo ? 'Planforhåndsvisning' : 'Plan preview'}</span>
+        <span className="text-xs text-[color:var(--fg-60)]">{isNo ? 'Bytt plan for å teste grensene. Ingen betaling gjennomføres.' : 'Switch plans to test limits. No payment is made.'}</span>
         <strong className="text-sm font-medium text-[color:var(--fg)]">{loading ? (isNo ? 'Laster…' : 'Loading…') : currentTitle || (isNo ? 'Ikke tilgjengelig' : 'Unavailable')}</strong>
         {entitlements?.is_trial && <span className="text-xs text-[color:var(--fg-60)]">{isNo ? `${entitlements.days_remaining_in_trial} dager igjen` : `${entitlements.days_remaining_in_trial} days remaining`}</span>}
       </div>
