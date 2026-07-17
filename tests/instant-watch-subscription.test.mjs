@@ -54,7 +54,7 @@ test('owned Radar toggles stay switchable off when slots are full and shared Wat
   assert.match(assistant, /disabled=\{busy \|\| \(!w\.is_instant && cannotEnableInstant\)\}/)
   assert.match(assistant, /\{canManageWatch && <div[\s\S]*role="switch"/)
   assert.match(assistant, /set_ai_assistant_watch_instant/)
-  assert.match(assistant, /Radar on \${count} of \${max}/)
+  assert.match(assistant, /usage: \(count: number, max: number\) => `\${count} of \${max}`/)
   assert.match(assistant, /Turn on Radar/)
   assert.match(assistant, /Turn off Radar/)
   assert.match(assistant, /Slå på Radar/)
@@ -73,8 +73,8 @@ test('cards have exact totals, Radar subsets, and no negative Basic allowance wo
 test('user-facing copy hides the old name, cadence, cost controls, and dollar subscription prices', () => {
   const userFacing = subscription + assistant
   assert.doesNotMatch(userFacing, /Instant Watch|Instant checks|Instant monitoring|Øyeblikkelig|every 15 minutes|15-minute checks|cost-efficient|kostnadseffektiv|\$(?:5|10|20)|USD/i)
-  assert.match(assistant, /All Radar slots are in use\./)
-  assert.match(assistant, /Alle Radar-plassene er i bruk\./)
+  assert.match(assistant, /Radar is already fully used on your plan\./)
+  assert.match(assistant, /Radar er allerede fullt brukt på abonnementet ditt\./)
   assert.match(assistant, /Radar is not available on this plan\./)
   assert.match(assistant, /Radar er ikke tilgjengelig med dette abonnementet\./)
 })
