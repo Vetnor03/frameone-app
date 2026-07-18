@@ -11,7 +11,7 @@ const main = assistant.slice(mainStart, subscriptionStart)
 const subscription = assistant.slice(subscriptionStart, followingStart)
 const followingHeader = assistant.slice(followingStart, followingBodyStart)
 
-test('main assistant card contains the label, heading, intro, textarea, and create button together', () => {
+test('main assistant card contains the label, heading, intro, textarea or upgrade state, and create path together', () => {
   assert.ok(mainStart > -1)
   assert.ok(subscriptionStart > mainStart)
   assert.match(main, /RE:MIND/)
@@ -20,7 +20,8 @@ test('main assistant card contains the label, heading, intro, textarea, and crea
   assert.match(main, /<textarea/)
   assert.match(main, /\{creating \? c\.creating : c\.button\}/)
   assert.match(main, /disabled=\{startFollowingDisabled\}/)
-  assert.doesNotMatch(main, /planLabel|ownedOngoingWatchCount|ownedInstantWatchCount|c\.usage/)
+  assert.match(main, /data-testid="assistant-full-plan-state"/)
+  assert.doesNotMatch(main, /planLabel|ownedInstantWatchCount|c\.usage/)
 })
 
 test('subscription card is outside and directly below the main assistant card', () => {
@@ -37,18 +38,18 @@ test('subscription card is outside and directly below the main assistant card', 
 test('trial countdown is localized, restrained, and only rendered for trials', () => {
   assert.match(assistant, /days === 1 \? '1 day left' : `\$\{days\} days left`/)
   assert.match(assistant, /days === 1 \? '1 dag igjen' : `\$\{days\} dager igjen`/)
-  assert.match(subscription, /entitlements\?\.is_trial && <span className=\{trialUrgency\}>\{c\.trialDays\(trialDays\)\}<\/span>/)
-  assert.match(assistant, /trialDays <= 1 \? 'font-semibold text-amber-400' : trialDays <= 3 \? 'text-amber-300' : 'text-\[color:var\(--fg-55\)\]'/)
+  assert.match(subscription, /entitlements\?\.is_trial && <span className=\{`\$\{trialUrgency\} shrink-0 whitespace-nowrap text-right`\}>\{c\.trialDays\(trialDays\)\}<\/span>/)
+  assert.match(assistant, /trialDays <= 1 \? 'font-semibold text-amber-500 dark:text-amber-300' : trialDays <= 3 \? 'text-amber-600 dark:text-amber-400' : 'text-\[color:var\(--fg-55\)\]'/)
   assert.doesNotMatch(subscription, /progressbar|meterWidth|style=\{\{ width/)
 })
 
-test('full capacity uses only a neutral compact badge and disables creation', () => {
-  assert.match(assistant, /fullPlan: 'Plan full'/)
-  assert.match(assistant, /fullPlan: 'Abonnement fullt'/)
-  assert.match(subscription, /planIsFull && <span className="rounded-full bg-\[#2aa3ff\]\/10/)
-  assert.match(main, /disabled=\{startFollowingDisabled\}/)
-  assert.doesNotMatch(assistant, /Your current plan is full\. Change plan to follow more things\.|Abonnementet ditt er fullt\. Bytt plan for å følge flere ting\./)
-  assert.doesNotMatch(main, /c\.fullPlan|amber|yellow/)
+test('full capacity moves the plan-limit state into the main card and removes the subscription badge', () => {
+  assert.match(assistant, /fullPlanTitle: 'You’re using your full plan'/)
+  assert.match(assistant, /fullPlanTitle: 'Du bruker hele abonnementet'/)
+  assert.match(main, /data-testid="assistant-full-plan-state"/)
+  assert.match(main, /data-testid="assistant-see-plans-button"/)
+  assert.doesNotMatch(subscription, /planIsFull|c\.fullPlan|Plan full|Abonnement fullt/)
+  assert.doesNotMatch(main, /amber|yellow/)
 })
 
 test('no progress bars are rendered and Following header stays simplified', () => {

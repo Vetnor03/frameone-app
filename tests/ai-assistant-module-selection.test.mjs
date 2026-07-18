@@ -20,7 +20,7 @@ test('AI Assistant navigation and pinning are driven by selected or pinned modul
   assert.match(home, /pinnedInactive = pinnedModuleTabs\.filter/)
   assert.match(home, /activeUnpinned = activeModules\.filter/)
   assert.match(home, /setPinnedModuleTabs\(\(prev\) => \{[\s\S]*markDirty\(\{ pinnedModuleTabs: nextPinned \}\)/)
-  assert.match(home, /activeTab === 'assistant' \? \(\s*<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\} \/>/)
+  assert.match(home, /activeTab === 'assistant' \? \(\s*<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
   assert.match(home, /if \(tabs\.some\(\(tab\) => tab\.key === activeTab\)\) return/)
 })
 

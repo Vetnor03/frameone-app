@@ -54,7 +54,7 @@ function assistantCopy(language: AppLanguage) {
     emptyTasks: 'Spør RE:MIND om å holde øye med noe, så vises det her.',
     emptyUpdates: 'Nye endringer og oppdateringer vises her.',
     statuses: { active: 'Følger med', paused: 'Satt på pause', error: 'Trenger oppmerksomhet', completed: 'Avsluttet' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne tingen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', following: 'Følges', usage: (count: number, max: number) => `${count} av ${max}`, trialDays: (days: number) => days === 1 ? '1 dag igjen' : `${days} dager igjen`, fullPlan: 'Abonnement fullt', subscriptionRequired: 'Abonnementet ditt tillater ikke aktiv overvåking akkurat nå.', trial: 'Gratis prøveperiode', plan: (name: string) => `${name}-abonnement`, thingCount: (count: number) => `${count} ${count === 1 ? 'ting' : 'ting'}`
+    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne tingen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', following: 'Følges', usage: (count: number, max: number) => `${count} av ${max}`, trialDays: (days: number) => days === 1 ? '1 dag igjen' : `${days} dager igjen`, fullPlan: 'Abonnement fullt', subscriptionRequired: 'Abonnementet ditt tillater ikke aktiv overvåking akkurat nå.', trial: 'Gratis prøveperiode', plan: (name: string) => `${name}-abonnement`, thingCount: (count: number) => `${count} ${count === 1 ? 'ting' : 'ting'}`, fullPlanTitle: 'Du bruker hele abonnementet', fullPlanBody: (count: number, max: number) => `Du følger nå ${count} av ${max} ting.`, trialUpgradeText: 'Oppgrader for å følge flere ting og fortsette å bruke Radar etter prøveperioden.', paidUpgradeText: 'Se abonnementer for å følge flere ting.', seePlans: 'Se abonnementer'
   } : {
     heading: 'AI Assistant',
     intro: 'Ask RE:MIND to keep an eye on something for you. New changes and updates are collected here.',
@@ -66,7 +66,7 @@ function assistantCopy(language: AppLanguage) {
     onlyRelevant: 'Only new and relevant changes are shown.',
     tasks: 'What RE:MIND is following', updates: 'Updates', instant: 'Radar', instantDescription: 'Radar keeps a closer eye on selected things, so you stay up to speed.', instantUnavailable: 'Radar is not available on this plan.', instantLimitReached: 'Radar is already fully used on your plan.', instantOwnerOnly: 'Only the owner can turn Radar on or off.', turnOnInstant: 'Turn on Radar', turnOffInstant: 'Turn off Radar', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
     statuses: { active: 'Following', paused: 'Paused', error: 'Needs attention', completed: 'Ended' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this thing? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', following: 'Following', usage: (count: number, max: number) => `${count} of ${max}`, trialDays: (days: number) => days === 1 ? '1 day left' : `${days} days left`, fullPlan: 'Plan full', subscriptionRequired: 'Your subscription does not currently allow active monitoring.', trial: 'Free trial', plan: (name: string) => `${name} plan`, thingCount: (count: number) => `${count} ${count === 1 ? 'thing' : 'things'}`
+    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this thing? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', following: 'Following', usage: (count: number, max: number) => `${count} of ${max}`, trialDays: (days: number) => days === 1 ? '1 day left' : `${days} days left`, fullPlan: 'Plan full', subscriptionRequired: 'Your subscription does not currently allow active monitoring.', trial: 'Free trial', plan: (name: string) => `${name} plan`, thingCount: (count: number) => `${count} ${count === 1 ? 'thing' : 'things'}`, fullPlanTitle: 'You’re using your full plan', fullPlanBody: (count: number, max: number) => `You’re currently following ${count} of ${max} things.`, trialUpgradeText: 'Upgrade to follow more things and keep using Radar after your trial.', paidUpgradeText: 'See plans to follow more things.', seePlans: 'See plans'
   }
 }
 
@@ -96,7 +96,7 @@ function sourceUrls(input: unknown): string[] {
   return input.map((x) => typeof x === 'string' ? x : (x && typeof x === 'object' && 'url' in x ? (x as { url?: unknown }).url : null)).filter((x): x is string => typeof x === 'string' && /^https?:\/\//i.test(x)).slice(0, 3)
 }
 
-export default function AIAssistantTab({ language, activeDeviceId }: { language: AppLanguage; activeDeviceId: string | null }) {
+export default function AIAssistantTab({ language, activeDeviceId, onOpenPlans }: { language: AppLanguage; activeDeviceId: string | null; onOpenPlans?: () => void }) {
   const c = assistantCopy(language)
   const [request, setRequest] = useState('')
   const [watches, setWatches] = useState<AssistantWatch[]>([])
@@ -117,7 +117,6 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const ownedOngoingWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
   const ownedInstantWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && w.is_instant && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
   const reachedWatchLimit = !entitlements?.monitoring_enabled || (entitlements != null && ownedOngoingWatchCount >= entitlements.max_ongoing_watches)
-  const planIsFull = entitlements != null && ownedOngoingWatchCount >= entitlements.max_ongoing_watches
   const selected = watches.find((w) => w.id === selectedId) ?? watches[0] ?? null
   const updatesByWatch = useMemo(() => updates.filter((u) => u.watch_id === selected?.id), [updates, selected?.id])
   const inboxUpdates = useMemo(() => selectNewestUnreadUpdates(updates), [updates])
@@ -285,7 +284,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const paidPlanName = entitlements ? `${entitlements.effective_plan[0].toUpperCase()}${entitlements.effective_plan.slice(1)}` : ''
   const planLabel = entitlements?.is_trial ? c.trial : entitlements ? c.plan(paidPlanName) : ''
   const trialDays = Math.max(0, Math.min(30, entitlements?.days_remaining_in_trial ?? 0))
-  const trialUrgency = trialDays <= 1 ? 'font-semibold text-amber-400' : trialDays <= 3 ? 'text-amber-300' : 'text-[color:var(--fg-55)]'
+  const trialUrgency = trialDays <= 1 ? 'font-semibold text-amber-500 dark:text-amber-300' : trialDays <= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-[color:var(--fg-55)]'
   const requestValidation = validateRequestText(request)
   const requestIsValid = requestValidation.error == null
   const startFollowingIsActive = creating || (requestIsValid && !reachedWatchLimit)
@@ -295,10 +294,17 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       <p className="text-[11px] tracking-[0.24em] text-[#2aa3ff]">RE:MIND</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[color:var(--fg-95)]">{c.heading}</h1>
       <p className="mt-3 text-sm leading-6 text-[color:var(--fg-70)]">{c.intro}</p>
-      <div data-testid="assistant-follow-input-container" className="mt-5 rounded-3xl border border-[color:var(--bd-20)] bg-[color:var(--card-bg)]/80 px-4 py-3 transition-colors duration-200 focus-within:border-[#2aa3ff]/75 focus-within:bg-[color:var(--card-bg)]">
-        <textarea aria-label={c.placeholder} value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-95)] outline-none placeholder:text-[color:var(--fg-40)]" />
-      </div>
-      <button type="button" onClick={createWatch} disabled={startFollowingDisabled} aria-disabled={startFollowingDisabled} data-state={startFollowingIsActive ? 'active' : 'muted'} className={`mt-3 h-12 w-full rounded-2xl border text-sm font-semibold tracking-wide shadow-none transition-colors duration-200 ease-out disabled:cursor-not-allowed ${startFollowingIsActive ? 'border-[#2aa3ff] bg-[#2aa3ff] text-white hover:bg-[#168fe8]' : 'border-[color:var(--bd-20)] bg-[color:var(--fg-20)] text-[color:var(--fg-55)] opacity-70'}`}>{creating ? c.creating : c.button}</button>
+      {!reachedWatchLimit ? <>
+        <div data-testid="assistant-follow-input-container" className="mt-5 rounded-3xl border border-[color:var(--bd-20)] bg-[color:var(--card-bg)]/80 px-4 py-3 transition-colors duration-200 focus-within:border-[#2aa3ff]/75 focus-within:bg-[color:var(--card-bg)]">
+          <textarea aria-label={c.placeholder} value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-95)] outline-none placeholder:text-[color:var(--fg-40)]" />
+        </div>
+        <button type="button" onClick={createWatch} disabled={startFollowingDisabled} aria-disabled={startFollowingDisabled} data-state={startFollowingIsActive ? 'active' : 'muted'} className={`mt-3 h-12 w-full rounded-2xl border text-sm font-semibold tracking-wide shadow-none transition-colors duration-200 ease-out disabled:cursor-not-allowed ${startFollowingIsActive ? 'border-[#2aa3ff] bg-[#2aa3ff] text-white hover:bg-[#168fe8]' : 'border-[color:var(--bd-20)] bg-[color:var(--fg-20)] text-[color:var(--fg-55)] opacity-70'}`}>{creating ? c.creating : c.button}</button>
+      </> : <div data-testid="assistant-full-plan-state" className="mt-5 rounded-3xl border border-[#2aa3ff]/20 bg-[#2aa3ff]/[0.06] p-4">
+        <h2 className="text-lg font-semibold tracking-tight text-[color:var(--fg-95)]">{c.fullPlanTitle}</h2>
+        <p className="mt-1 text-sm leading-6 text-[color:var(--fg-70)]">{entitlements ? c.fullPlanBody(ownedOngoingWatchCount, entitlements.max_ongoing_watches) : c.subscriptionRequired}</p>
+        <p className="mt-3 text-sm leading-6 text-[color:var(--fg-60)]">{entitlements?.is_trial ? c.trialUpgradeText : c.paidUpgradeText}</p>
+        <button type="button" data-testid="assistant-see-plans-button" onClick={onOpenPlans} className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-[#2aa3ff] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#168fe8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2aa3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--app-bg)]">{c.seePlans}</button>
+      </div>}
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
     </section>
     {message && <div className="mt-3 px-4 text-sm text-[color:var(--fg-65)]">{message}</div>}
@@ -307,13 +313,12 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       <div data-testid="assistant-subscription-top-row" className="flex items-start justify-between gap-3 text-xs">
         <div className="min-w-0 space-y-1">
           <span className="block truncate font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span>
-          {planIsFull && <span className="inline-flex rounded-full bg-[#2aa3ff]/10 px-2 py-0.5 font-medium text-[#2aa3ff]">{c.fullPlan}</span>}
         </div>
         {entitlements?.is_trial && <span className={`${trialUrgency} shrink-0 whitespace-nowrap text-right`}>{c.trialDays(trialDays)}</span>}
       </div>
-      {entitlements && <div data-testid="assistant-subscription-usage-row" className="mt-2.5 flex flex-wrap items-start gap-x-6 gap-y-2 text-xs">
-        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} data-testid={`assistant-subscription-${label.toLowerCase()}-group`} className="flex min-w-[7rem] flex-1 basis-[calc(50%-0.75rem)] flex-col gap-0.5"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-semibold tabular-nums text-[color:var(--fg-85)]">{c.usage(count, allowance)}</span></div>)}
-      </div>}
+      {entitlements && <><div className="mt-2.5 h-px bg-[color:var(--bd-10)]" /><div data-testid="assistant-subscription-usage-row" className="mt-2.5 space-y-2 text-xs">
+        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} data-testid={`assistant-subscription-${label.toLowerCase()}-group`} className="flex items-center justify-between gap-3"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-semibold tabular-nums text-[color:var(--fg-85)]">{c.usage(count, allowance)}</span></div>)}
+      </div></>}
     </section>
 
     <section className="mt-6">
