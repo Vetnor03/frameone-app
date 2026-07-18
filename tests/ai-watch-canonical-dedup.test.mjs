@@ -41,6 +41,32 @@ async function fakePipeline(watches, { staleRunning = false } = {}) {
   return { sharedRuns, discoveries, updates, results }
 }
 
+async function fakeAccountedPipeline(watches, { cached = false, providerName = 'openai', userLimit = 99, globalLimit = 99 } = {}) {
+  let discoveries = 0
+  let globalCalls = 0
+  const userCalls = new Map()
+  const reservations = []
+  let evidence = cached ? { developments: [], sources: [] } : null
+  const reserve = (type, userId, chargeUser) => {
+    if (globalCalls >= globalLimit) return false
+    if (chargeUser && (userCalls.get(userId) ?? 0) >= userLimit) return false
+    globalCalls++
+    if (chargeUser) userCalls.set(userId, (userCalls.get(userId) ?? 0) + 1)
+    reservations.push({ type, userId: chargeUser ? userId : null })
+    return true
+  }
+  for (const w of watches) {
+    if (providerName !== 'openai') continue
+    if (!evidence) {
+      if (!reserve('shared_discovery', w.user_id, false)) continue
+      discoveries++
+      evidence = { developments: [], sources: [] }
+    }
+    if (!reserve('watch_evaluation', w.user_id, true)) continue
+  }
+  return { discoveries, globalCalls, userCalls, reservations }
+}
+
 test('canonical search schema is private, keyed, cached, and stale/concurrency guarded', () => {
   assert.match(migration, /create table if not exists public\.monitoring_canonical_searches/)
   assert.match(migration, /canonical_key text not null unique/)
@@ -124,4 +150,32 @@ test('privacy: shared discovery stores neutral evidence, not user-specific reque
   assert.doesNotMatch(worker, /complete_monitoring_shared_run[\s\S]{0,180}original_request/)
   assert.doesNotMatch(worker, /complete_monitoring_shared_run[\s\S]{0,180}previous_updates/)
   assert.match(provider, /Evaluate already-discovered public evidence for one private RE:MIND watch/)
+})
+
+test('paid-call behavior: cached discovery still reserves every OpenAI evaluation', async () => {
+  const out = await fakeAccountedPipeline([{ user_id: 'a' }, { user_id: 'b' }], { cached: true })
+  assert.equal(out.discoveries, 0)
+  assert.deepEqual(out.reservations.map((r) => r.type), ['watch_evaluation', 'watch_evaluation'])
+  assert.equal(out.userCalls.get('a'), 1)
+  assert.equal(out.userCalls.get('b'), 1)
+})
+
+test('paid-call behavior: fresh discovery and evaluation are separate reservations', async () => {
+  const out = await fakeAccountedPipeline([{ user_id: 'a' }])
+  assert.equal(out.discoveries, 1)
+  assert.deepEqual(out.reservations, [
+    { type: 'shared_discovery', userId: null },
+    { type: 'watch_evaluation', userId: 'a' },
+  ])
+})
+
+test('paid-call behavior: hard limits prevent discovery and evaluation calls, while mock needs none', async () => {
+  const noGlobalBudget = await fakeAccountedPipeline([{ user_id: 'a' }], { globalLimit: 0 })
+  assert.equal(noGlobalBudget.globalCalls, 0)
+  assert.equal(noGlobalBudget.discoveries, 0)
+  const noUserBudget = await fakeAccountedPipeline([{ user_id: 'a' }], { cached: true, userLimit: 0 })
+  assert.equal(noUserBudget.globalCalls, 0)
+  const mock = await fakeAccountedPipeline([{ user_id: 'a' }], { providerName: 'mock' })
+  assert.equal(mock.globalCalls, 0)
+  assert.deepEqual(mock.reservations, [])
 })

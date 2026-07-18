@@ -37,6 +37,81 @@ create table if not exists public.monitoring_shared_runs (
   constraint monitoring_shared_runs_result_object check (jsonb_typeof(result) = 'object')
 );
 
+-- One row per actual paid Responses API invocation. This is deliberately
+-- separate from monitoring_runs: the latter represents one customer-visible
+-- watch check, while a check may use cached discovery or make two provider calls.
+create table if not exists public.monitoring_openai_calls (
+  id uuid primary key default gen_random_uuid(),
+  watch_id uuid references public.monitoring_watches(id) on delete set null,
+  owner_user_id uuid references auth.users(id) on delete set null,
+  call_type text not null check (call_type in ('shared_discovery','watch_evaluation')),
+  charge_user boolean not null,
+  model text not null,
+  status text not null default 'running' check (status in ('running','success','error')),
+  usage jsonb not null default '{}'::jsonb,
+  error_message text,
+  started_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+create index if not exists monitoring_openai_calls_global_usage_idx on public.monitoring_openai_calls(started_at, status);
+create index if not exists monitoring_openai_calls_user_usage_idx on public.monitoring_openai_calls(owner_user_id, started_at, status) where charge_user;
+alter table public.monitoring_openai_calls enable row level security;
+revoke all on public.monitoring_openai_calls from anon, authenticated;
+
+create or replace function public.reserve_monitoring_openai_call(
+  p_watch_id uuid, p_call_type text, p_model text, p_charge_user boolean,
+  p_default_daily_limit integer default 20, p_default_monthly_limit integer default 300,
+  p_global_daily_limit integer default null, p_global_monthly_limit integer default null
+) returns jsonb language plpgsql security definer set search_path=public as $$
+declare
+  w public.monitoring_watches;
+  call_row public.monitoring_openai_calls;
+  day_start timestamptz := date_trunc('day', now() at time zone 'utc') at time zone 'utc';
+  month_start timestamptz := date_trunc('month', now() at time zone 'utc') at time zone 'utc';
+  next_day timestamptz := (date_trunc('day', now() at time zone 'utc') + interval '1 day') at time zone 'utc';
+  next_month timestamptz := (date_trunc('month', now() at time zone 'utc') + interval '1 month') at time zone 'utc';
+  user_daily integer; user_monthly integer; global_daily integer; global_monthly integer;
+  daily_limit integer; monthly_limit integer;
+begin
+  if p_call_type not in ('shared_discovery','watch_evaluation') then return jsonb_build_object('allowed',false,'reason','invalid_call_type'); end if;
+  select * into w from public.monitoring_watches where id=p_watch_id;
+  if w.id is null then return jsonb_build_object('allowed',false,'reason','watch_not_found'); end if;
+  if not public.ai_monitoring_subscription_enabled(w.owner_user_id) then return jsonb_build_object('allowed',false,'reason','subscription_inactive'); end if;
+
+  perform pg_advisory_xact_lock(hashtext('monitoring-openai-calls-global'));
+  if p_charge_user then perform pg_advisory_xact_lock(hashtext('monitoring-openai-calls-user:'||w.owner_user_id::text)); end if;
+
+  select count(*) filter (where started_at>=day_start), count(*) filter (where started_at>=month_start)
+    into global_daily,global_monthly from public.monitoring_openai_calls where status in ('running','success','error');
+  if coalesce(p_global_daily_limit,0)>0 and global_daily>=p_global_daily_limit then return jsonb_build_object('allowed',false,'reason','global_daily_run_limit_reached','next_reset_at',next_day); end if;
+  if coalesce(p_global_monthly_limit,0)>0 and global_monthly>=p_global_monthly_limit then return jsonb_build_object('allowed',false,'reason','global_monthly_run_limit_reached','next_reset_at',next_month); end if;
+
+  if p_charge_user then
+    select coalesce(l.daily_run_limit,greatest(coalesce(p_default_daily_limit,20),0)), coalesce(l.monthly_run_limit,greatest(coalesce(p_default_monthly_limit,300),0))
+      into daily_limit,monthly_limit from (select w.owner_user_id) u left join public.monitoring_usage_limits l on l.owner_user_id=u.owner_user_id;
+    select count(*) filter (where started_at>=day_start), count(*) filter (where started_at>=month_start)
+      into user_daily,user_monthly from public.monitoring_openai_calls where owner_user_id=w.owner_user_id and charge_user and status in ('running','success','error');
+    if daily_limit is not null and user_daily>=daily_limit then return jsonb_build_object('allowed',false,'reason','daily_run_limit_reached','next_reset_at',next_day); end if;
+    if monthly_limit is not null and user_monthly>=monthly_limit then return jsonb_build_object('allowed',false,'reason','monthly_run_limit_reached','next_reset_at',next_month); end if;
+  end if;
+
+  insert into public.monitoring_openai_calls(watch_id,owner_user_id,call_type,charge_user,model)
+    values(p_watch_id,w.owner_user_id,p_call_type,p_charge_user,p_model) returning * into call_row;
+  return jsonb_build_object('allowed',true,'call_id',call_row.id);
+end $$;
+revoke execute on function public.reserve_monitoring_openai_call(uuid,text,text,boolean,integer,integer,integer,integer) from public,anon,authenticated;
+grant execute on function public.reserve_monitoring_openai_call(uuid,text,text,boolean,integer,integer,integer,integer) to service_role;
+
+create or replace function public.complete_monitoring_openai_call(p_call_id uuid,p_status text,p_usage jsonb default '{}'::jsonb,p_error_message text default null)
+returns void language plpgsql security definer set search_path=public as $$
+begin
+  if p_status not in ('success','error') then raise exception 'invalid_openai_call_status'; end if;
+  update public.monitoring_openai_calls set status=p_status,usage=coalesce(p_usage,'{}'::jsonb),error_message=p_error_message,completed_at=now()
+    where id=p_call_id and status='running';
+end $$;
+revoke execute on function public.complete_monitoring_openai_call(uuid,text,jsonb,text) from public,anon,authenticated;
+grant execute on function public.complete_monitoring_openai_call(uuid,text,jsonb,text) to service_role;
+
 create index if not exists monitoring_watches_canonical_active_idx on public.monitoring_watches (canonical_search_id, status) where canonical_search_id is not null;
 create index if not exists monitoring_shared_runs_fresh_idx on public.monitoring_shared_runs (canonical_search_id, completed_at desc) where status in ('no_change','change','uncertain');
 create unique index if not exists monitoring_shared_runs_one_running_idx on public.monitoring_shared_runs (canonical_search_id) where status = 'running';

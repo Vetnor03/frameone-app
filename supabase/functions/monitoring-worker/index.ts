@@ -94,6 +94,7 @@ async function processJob(supabase: any, job: any) {
 
   const provider = Deno.env.get('MONITORING_PROVIDER') || 'mock'
   const model = provider === 'openai' ? (monitoringModelFromEnv(Deno.env)) : 'mock'
+  const evaluationModel = provider === 'openai' ? (Deno.env.get('MONITORING_EVALUATION_MODEL') || model) : 'mock'
   const staleRunBefore = new Date(Date.now() - 30 * MINUTES).toISOString()
   await supabase.from('monitoring_runs').update({ status: 'error', completed_at: new Date().toISOString(), error_message: 'stale_running_run_recovered' }).eq('watch_id', watch.id).eq('status', 'running').lt('started_at', staleRunBefore)
 
@@ -123,11 +124,7 @@ async function processJob(supabase: any, job: any) {
   }
 
   let run: { id: string }
-  if (cachedEvidence) {
-    const { data: insertedRun, error: cacheRunError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider: 'cache', model: 'shared-canonical-cache', raw_result: { shared_discovery_cache: true, canonical_search_id: watch.canonical_search_id } }).select('id').single()
-    if (cacheRunError) throw cacheRunError
-    run = insertedRun
-  } else if (provider === 'openai') {
+  if (provider === 'openai') {
     const { data: reservation, error: reservationError } = await supabase.rpc('reserve_paid_monitoring_run', {
       p_watch_id: watch.id,
       p_provider: provider,
@@ -164,6 +161,7 @@ async function processJob(supabase: any, job: any) {
       throw new Error(reason)
     }
     run = { id: reservation.run_id }
+    if (cachedEvidence) await supabase.from('monitoring_runs').update({ raw_result: { shared_discovery_cache: true, canonical_search_id: watch.canonical_search_id } }).eq('id', run.id)
   } else {
     const { data: insertedRun, error: runError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider, model }).select('id').single()
     if (runError) {
@@ -179,17 +177,43 @@ async function processJob(supabase: any, job: any) {
   const runReason = job.enqueue_reason === 'source_change' ? 'source_triggered_verification' : job.enqueue_reason === 'fallback_discovery' ? 'fallback_discovery' : job.enqueue_reason === 'safety_fallback' ? 'safety_fallback' : 'legacy_adaptive'
   await supabase.from('monitoring_runs').update({ run_reason: runReason }).eq('id', run.id)
 
+  let discoveryCallId: string | null = null
+  let evaluationCallId: string | null = null
   try {
-    // Legacy hard-cost invariant: reserve_paid_monitoring_run remains before any paid OpenAI monitoring/evaluation call (formerly await runOpenAIWatch().
+    const reserveOpenAICall = async (callType: 'shared_discovery' | 'watch_evaluation', chargeUser: boolean, callModel: string) => {
+      const { data, error } = await supabase.rpc('reserve_monitoring_openai_call', {
+        p_watch_id: watch.id,
+        p_call_type: callType,
+        p_model: callModel,
+        p_charge_user: chargeUser,
+        p_default_daily_limit: envInt('MONITORING_DEFAULT_DAILY_RUN_LIMIT_PER_USER', 20),
+        p_default_monthly_limit: envInt('MONITORING_DEFAULT_MONTHLY_RUN_LIMIT_PER_USER', 300),
+        p_global_daily_limit: envInt('MONITORING_GLOBAL_DAILY_RUN_LIMIT', 0),
+        p_global_monthly_limit: envInt('MONITORING_GLOBAL_MONTHLY_RUN_LIMIT', 0),
+      })
+      if (error) throw error
+      if (!data?.allowed) throw new Error(String(data?.reason || 'openai_call_limit_reached'))
+      return String(data.call_id)
+    }
     const canonicalIntent = watch.canonical_intent || canonicalizeWatchIntent(watch)
-    const evidence = cachedEvidence ?? (sharedRun && canonicalIntent
-      ? (provider === 'openai' ? await runOpenAISharedDiscovery(canonicalIntent, Deno.env.get('OPENAI_API_KEY')!, model) : mockSharedDiscovery(canonicalIntent))
-      : null)
+    let evidence = cachedEvidence
+    if (!evidence && sharedRun && canonicalIntent) {
+      if (provider === 'openai') {
+        discoveryCallId = await reserveOpenAICall('shared_discovery', false, model)
+        evidence = await runOpenAISharedDiscovery(canonicalIntent, Deno.env.get('OPENAI_API_KEY')!, model)
+        await supabase.rpc('complete_monitoring_openai_call', { p_call_id: discoveryCallId, p_status: 'success', p_usage: evidence.usage ?? {}, p_error_message: null })
+        discoveryCallId = null
+      } else evidence = mockSharedDiscovery(canonicalIntent)
+    }
     if (sharedRun && evidence) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: 'no_change', p_result: evidence, p_response_id: evidence.response_id ?? null, p_raw_result: evidence.raw ?? evidence, p_usage: evidence.usage ?? {}, p_error_message: null })
     const { data: previousUpdates } = await supabase.from('monitoring_updates').select('headline,summary,event_at,fingerprint,source_urls,created_at').eq('watch_id', watch.id).order('created_at', { ascending: false }).limit(10)
-    const result = evidence
-      ? (provider === 'openai' ? await evaluateOpenAIWatchEvidence({ ...watch, previous_updates: previousUpdates ?? [] }, evidence, Deno.env.get('OPENAI_API_KEY')!, model) : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change'))
-      : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
+    let result = mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
+    if (evidence && provider === 'openai') {
+      evaluationCallId = await reserveOpenAICall('watch_evaluation', true, evaluationModel)
+      result = await evaluateOpenAIWatchEvidence({ ...watch, previous_updates: previousUpdates ?? [] }, evidence, Deno.env.get('OPENAI_API_KEY')!, evaluationModel)
+      await supabase.rpc('complete_monitoring_openai_call', { p_call_id: evaluationCallId, p_status: 'success', p_usage: result.usage ?? {}, p_error_message: null })
+      evaluationCallId = null
+    }
     // Registry capture is observation-only and deliberately fail-soft. It cannot
     // enqueue, suppress, accelerate, or delay this paid monitoring run.
     if (provider === 'openai' && evidence && !cachedEvidence) {
@@ -264,6 +288,8 @@ async function processJob(supabase: any, job: any) {
     return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate, push_queued: Boolean(createdUpdateId) }
   } catch (err) {
     const message = String(err?.message || err)
+    if (discoveryCallId) await supabase.rpc('complete_monitoring_openai_call', { p_call_id: discoveryCallId, p_status: 'error', p_usage: {}, p_error_message: message })
+    if (evaluationCallId) await supabase.rpc('complete_monitoring_openai_call', { p_call_id: evaluationCallId, p_status: 'error', p_usage: {}, p_error_message: message })
     const errorPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: 'error', attempts: job.attempts })
     // Legacy expression kept visible for regression tests: Math.pow(2, Math.min(job.attempts, 8)) * 5
     const backoffMinutes = errorPolicy.nextMinutes
