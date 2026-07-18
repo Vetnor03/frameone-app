@@ -86,13 +86,35 @@ test('one global notification preference controls delivery and no per-watch sett
 
 test('frontend only shows enabled after key, subscription, and preference API responses succeed', () => {
   assert.match(home, /if \(!keyRes\.ok\) throw new Error\('vapid_key_request_failed'\)/)
-  assert.match(home, /const subscriptionResponse = await fetch\('\/api\/notifications\/subscription'/)
-  assert.match(home, /if \(!subscriptionResponse\.ok\) throw new Error\('push_subscription_save_failed'\)/)
+  assert.match(home, /async function persistPushSubscription/)
+  assert.match(home, /const response = await fetch\('\/api\/notifications\/subscription'/)
+  assert.match(home, /if \(!response\.ok\) throw new Error\('push_subscription_save_failed'\)/)
   assert.match(home, /if \(!response\.ok\) throw new Error\('notification_preference_save_failed'\)/)
   assert.match(home, /await savePreference\(true, 'granted'\)/)
 })
 
 
+
+
+
+test('global account-on state re-registers granted current devices without prompting', () => {
+  assert.match(home, /const \[deviceReady, setDeviceReady\] = useState\(false\)/)
+  assert.match(home, /async function registerGrantedCurrentDevice\(\)/)
+  assert.match(home, /Notification\.permission !== 'granted'\) return false/)
+  assert.match(home, /const existing = await registration\.pushManager\.getSubscription\(\)/)
+  assert.match(home, /const subscription = existing \?\? await registration\.pushManager\.subscribe/)
+  assert.match(home, /await persistPushSubscription\(subscription\)/)
+  assert.match(home, /nextEnabled && supported && Notification\.permission === 'granted'[\s\S]*registerGrantedCurrentDevice\(\)\.catch/)
+  assert.doesNotMatch(home, /nextEnabled && supported[\s\S]{0,140}Notification\.requestPermission\(\)/)
+})
+
+test('account-on but unregistered devices are not shown as ready and need explicit action', () => {
+  assert.match(home, /On for account · enable this device/)
+  assert.match(home, /Notifications are on for your account, but this device is not ready yet\./)
+  assert.match(home, /Aktiver denne enheten/)
+  assert.match(home, /enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported'/)
+  assert.match(home, /onClick=\{enableNotifications\}/)
+})
 
 test('global switch works both ways without automatic permission prompts', () => {
   assert.match(home, /onClick=\{enabled \? disableNotifications : enableNotifications\}/)

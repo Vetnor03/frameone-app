@@ -7863,6 +7863,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
   const [permission, setPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [deviceReady, setDeviceReady] = useState(false)
 
   async function authHeaders() {
     const { data } = await supabase.auth.getSession()
@@ -7875,6 +7876,26 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
     if (!response.ok) throw new Error('notification_preference_save_failed')
     setEnabled(push_enabled)
     setPermission(permission_state)
+    if (!push_enabled) setDeviceReady(false)
+  }
+
+  async function persistPushSubscription(subscription: PushSubscription) {
+    const response = await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify(subscription) })
+    if (!response.ok) throw new Error('push_subscription_save_failed')
+  }
+
+  async function registerGrantedCurrentDevice() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return false
+    const keyRes = await fetch('/api/notifications/vapid-key')
+    if (!keyRes.ok) throw new Error('vapid_key_request_failed')
+    const { publicKey } = await keyRes.json()
+    if (!publicKey) throw new Error('missing_vapid_public_key')
+    const registration = await navigator.serviceWorker.register('/sw.js')
+    const existing = await registration.pushManager.getSubscription()
+    const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource })
+    await persistPushSubscription(subscription)
+    setDeviceReady(true)
+    return true
   }
 
   useEffect(() => {
@@ -7885,8 +7906,18 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
       const res = await fetch('/api/notifications/preference', { headers: await authHeaders() }).catch(() => null)
       const pref = res?.ok ? await res.json() : null
       if (!cancelled && pref) {
-        setEnabled(pref.push_enabled === true)
-        setPermission(supported ? (pref.permission_state || Notification.permission) : 'unsupported')
+        const nextEnabled = pref.push_enabled === true
+        const nextPermission = supported ? (pref.permission_state || Notification.permission) : 'unsupported'
+        setEnabled(nextEnabled)
+        setPermission(nextPermission)
+        if (nextEnabled && supported && Notification.permission === 'granted') {
+          registerGrantedCurrentDevice().catch((error) => {
+            console.warn('[notifications:device-reregister-failed]', { message: errorMessage(error) })
+            setDeviceReady(false)
+          })
+        } else {
+          setDeviceReady(false)
+        }
       }
     })()
     return () => { cancelled = true }
@@ -7914,14 +7945,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
         setMessage(isNo ? 'Varsler ble ikke aktivert.' : 'Notifications were not enabled.')
         return
       }
-      const keyRes = await fetch('/api/notifications/vapid-key')
-      if (!keyRes.ok) throw new Error('vapid_key_request_failed')
-      const { publicKey } = await keyRes.json()
-      if (!publicKey) throw new Error('missing_vapid_public_key')
-      const registration = await navigator.serviceWorker.register('/sw.js')
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) })
-      const subscriptionResponse = await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify(subscription) })
-      if (!subscriptionResponse.ok) throw new Error('push_subscription_save_failed')
+      await registerGrantedCurrentDevice()
       await savePreference(true, 'granted')
     } catch (error) {
       setMessage(errorMessage(error))
@@ -7941,7 +7965,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[color:var(--fg-70)]">{isNo ? 'Varsler' : 'Notifications'}</div>
-          <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (isNo ? 'På' : 'On') : (isNo ? 'Av' : 'Off')}</div>
+          <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (deviceReady ? (isNo ? 'På på denne enheten' : 'On on this device') : (isNo ? 'På for kontoen · aktiver denne enheten' : 'On for account · enable this device')) : (isNo ? 'Av' : 'Off')}</div>
         </div>
         <button type="button" disabled={busy} onClick={enabled ? disableNotifications : enableNotifications} className={`relative h-7 w-12 rounded-full transition ${enabled ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`} aria-label={isNo ? 'Varsler' : 'Notifications'}>
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? 'left-6' : 'left-1'}`} />
@@ -7952,6 +7976,13 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
           <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Ikke gå glipp av viktige oppdateringer' : 'Never miss an important update'}</div>
           <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Få et varsel når RE:MIND finner noe nytt for det du følger med på.' : 'Get a notification when RE:MIND finds something new for the things you follow.'}</p>
           <button type="button" disabled={busy} onClick={enableNotifications} className="mt-3 rounded-full bg-[color:var(--fg)] px-4 py-2 text-sm font-medium text-[color:var(--app-bg)]">{isNo ? 'Aktiver varsler' : 'Enable notifications'}</button>
+        </div>
+      )}
+      {enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported' && (
+        <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
+          <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Aktiver denne enheten' : 'Enable this device'}</div>
+          <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Varsler er på for kontoen, men denne enheten er ikke klar ennå.' : 'Notifications are on for your account, but this device is not ready yet.'}</p>
+          <button type="button" disabled={busy} onClick={enableNotifications} className="mt-3 rounded-full bg-[color:var(--fg)] px-4 py-2 text-sm font-medium text-[color:var(--app-bg)]">{isNo ? 'Aktiver denne enheten' : 'Enable this device'}</button>
         </div>
       )}
       {message && <div className="mt-2 text-xs text-[color:var(--fg-50)]">{message}</div>}
@@ -7999,6 +8030,7 @@ function PairFrameForm({
   const [code, setCode] = useState('')
   const [pairing, setPairing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [deviceReady, setDeviceReady] = useState(false)
   const [messageKind, setMessageKind] = useState<'ok' | 'error'>('ok')
   const t = tx(language)
 
