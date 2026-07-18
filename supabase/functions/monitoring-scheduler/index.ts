@@ -35,5 +35,18 @@ Deno.serve(async (req) => {
       sourceProbes = { mode, error: 'source_probe_sidecar_failed' }
     }
   }
-  return Response.json({ ok: true, enqueued: data ?? 0, source_probes: sourceProbes })
+  let pushRetries: Record<string, unknown> = { ok: false, skipped: true }
+  try {
+    const pushLimit = Math.max(1, Math.min(50, Number(Deno.env.get('PUSH_DELIVERY_BATCH_SIZE') || 10)))
+    const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-monitoring-update-push?limit=${pushLimit}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ limit: pushLimit }),
+    })
+    pushRetries = { ok: response.ok, status: response.status }
+  } catch (_error) {
+    console.warn('[monitoring-scheduler:push-retries]', { code: 'push_retry_sidecar_failed' })
+    pushRetries = { ok: false, error: 'push_retry_sidecar_failed' }
+  }
+  return Response.json({ ok: true, enqueued: data ?? 0, source_probes: sourceProbes, push_retries: pushRetries })
 })
