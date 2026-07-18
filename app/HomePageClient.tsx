@@ -7865,7 +7865,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
   const [message, setMessage] = useState<string | null>(null)
   const [deviceReady, setDeviceReady] = useState(false)
 
-  async function authHeaders() {
+  async function authHeaders(): Promise<Record<string, string>> {
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
     return token ? { authorization: `Bearer ${token}` } : {}
@@ -7907,7 +7907,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
       const pref = res?.ok ? await res.json() : null
       if (!cancelled && pref) {
         const nextEnabled = pref.push_enabled === true
-        const nextPermission = supported ? (pref.permission_state || Notification.permission) : 'unsupported'
+        const nextPermission = supported ? Notification.permission : 'unsupported'
         setEnabled(nextEnabled)
         setPermission(nextPermission)
         if (nextEnabled && supported && Notification.permission === 'granted') {
@@ -7930,18 +7930,18 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
     try {
       const supported = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
       if (!supported) {
-        await savePreference(false, 'unsupported')
+        await savePreference(enabled, 'unsupported')
         setMessage(isNo ? 'Varsler støttes ikke på denne enheten.' : 'Notifications are not supported on this device.')
         return
       }
       if (Notification.permission === 'denied') {
-        await savePreference(false, 'denied')
+        await savePreference(enabled, 'denied')
         setMessage(isNo ? 'Varsler er blokkert i nettleseren.' : 'Notifications are blocked in your browser.')
         return
       }
       const granted = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
       if (granted !== 'granted') {
-        await savePreference(false, granted === 'denied' ? 'denied' : 'default')
+        await savePreference(enabled, granted === 'denied' ? 'denied' : 'default')
         setMessage(isNo ? 'Varsler ble ikke aktivert.' : 'Notifications were not enabled.')
         return
       }

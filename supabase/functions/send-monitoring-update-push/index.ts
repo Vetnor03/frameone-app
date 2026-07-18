@@ -17,7 +17,7 @@ function nextAttempt(attempts: number) {
 
 async function processDelivery(db: any, delivery: any, maxAttempts: number) {
   const { data: pref } = await db.from('user_notification_preferences').select('push_enabled,permission_state').eq('user_id', delivery.user_id).maybeSingle()
-  if (!pref?.push_enabled || pref.permission_state !== 'granted') {
+  if (!pref?.push_enabled) {
     await db.from('monitoring_update_push_deliveries').update({ status: 'suppressed', last_error: 'notifications_disabled' }).eq('id', delivery.id)
     return { id: delivery.id, status: 'suppressed', sent: 0 }
   }

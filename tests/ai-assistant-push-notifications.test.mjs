@@ -71,7 +71,8 @@ test('delivery statuses distinguish sent, suppressed, no subscriptions, transien
   assert.match(sender, /if \(sent > 0\)[\s\S]*status: 'sent'/)
   assert.match(sender, /status: 'no_subscription'/)
   assert.match(sender, /status: terminal \? 'suppressed' : 'failed'/)
-  assert.match(sender, /!pref\?\.push_enabled \|\| pref\.permission_state !== 'granted'[\s\S]*status: 'suppressed'/)
+  assert.match(sender, /!pref\?\.push_enabled[\s\S]*status: 'suppressed'/)
+  assert.doesNotMatch(sender, /permission_state !== 'granted'/)
   assert.match(sender, /statusCode === 404 \|\| statusCode === 410[\s\S]*enabled: false/)
   assert.doesNotMatch(sender, /status: 'sent'[\s\S]*sent \? null : 'no_active_subscriptions'/)
 })
@@ -79,9 +80,25 @@ test('delivery statuses distinguish sent, suppressed, no subscriptions, transien
 test('one global notification preference controls delivery and no per-watch settings are introduced', () => {
   assert.match(migration, /create table if not exists public\.user_notification_preferences/)
   assert.match(migration, /push_enabled boolean not null default false/)
-  assert.match(sender, /!pref\?\.push_enabled \|\| pref\.permission_state !== 'granted'/)
+  assert.match(sender, /!pref\?\.push_enabled/)
+  assert.doesNotMatch(sender, /permission_state !== 'granted'/)
   assert.doesNotMatch(`${migration}\n${hardening}`, /monitoring_watches[\s\S]*notifications_enabled|radar[\s\S]*notifications_enabled|watch_notification/i)
   assert.doesNotMatch(home, /per-Watch notifications|Radar notifications|notifications_enabled/i)
+})
+
+
+
+test('authHeaders has a stable HeadersInit-compatible return type', () => {
+  assert.match(home, /async function authHeaders\(\): Promise<Record<string, string>>/)
+  assert.match(home, /headers: \{ 'content-type': 'application\/json', \.\.\.\(await authHeaders\(\)\) \}/)
+})
+
+test('device-local permission denial does not disable account-level notifications or sender delivery', () => {
+  assert.match(home, /await savePreference\(enabled, 'denied'\)/)
+  assert.match(home, /await savePreference\(enabled, granted === 'denied' \? 'denied' : 'default'\)/)
+  assert.match(home, /const nextPermission = supported \? Notification\.permission : 'unsupported'/)
+  assert.match(sender, /if \(!pref\?\.push_enabled\)/)
+  assert.doesNotMatch(sender, /permission_state !== 'granted'/)
 })
 
 test('frontend only shows enabled after key, subscription, and preference API responses succeed', () => {
