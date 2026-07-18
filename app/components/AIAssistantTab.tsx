@@ -298,19 +298,21 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
       <div data-testid="assistant-follow-input-container" className="mt-5 rounded-3xl border border-[color:var(--bd-20)] bg-[color:var(--card-bg)]/80 px-4 py-3 transition-colors duration-200 focus-within:border-[#2aa3ff]/75 focus-within:bg-[color:var(--card-bg)]">
         <textarea aria-label={c.placeholder} value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-95)] outline-none placeholder:text-[color:var(--fg-40)]" />
       </div>
-      <button type="button" onClick={createWatch} disabled={startFollowingDisabled} aria-disabled={startFollowingDisabled} className={`mt-3 h-12 w-full rounded-2xl border text-sm font-semibold tracking-wide transition-colors duration-200 disabled:cursor-not-allowed ${startFollowingIsActive ? 'border-[#2aa3ff] bg-[#2aa3ff] text-white' : 'border-[color:var(--bd-20)] bg-[color:var(--fg-20)] text-[color:var(--fg-55)] opacity-70'}`}>{creating ? c.creating : c.button}</button>
+      <button type="button" onClick={createWatch} disabled={startFollowingDisabled} aria-disabled={startFollowingDisabled} data-state={startFollowingIsActive ? 'active' : 'muted'} className={`mt-3 h-12 w-full rounded-2xl border text-sm font-semibold tracking-wide shadow-none transition-colors duration-200 ease-out disabled:cursor-not-allowed ${startFollowingIsActive ? 'border-[#2aa3ff] bg-[#2aa3ff] text-white hover:bg-[#168fe8]' : 'border-[color:var(--bd-20)] bg-[color:var(--fg-20)] text-[color:var(--fg-55)] opacity-70'}`}>{creating ? c.creating : c.button}</button>
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
     </section>
     {message && <div className="mt-3 px-4 text-sm text-[color:var(--fg-65)]">{message}</div>}
 
     <section data-testid="assistant-subscription-card" className="mt-3 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/40 px-3.5 py-2.5">
-      <div data-testid="assistant-subscription-top-row" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-        <span className="font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span>
-        {planIsFull && <span className="rounded-full bg-[#2aa3ff]/10 px-2 py-0.5 font-medium text-[#2aa3ff]">{c.fullPlan}</span>}
-        {entitlements?.is_trial && <span className={trialUrgency}>{c.trialDays(trialDays)}</span>}
+      <div data-testid="assistant-subscription-top-row" className="flex items-start justify-between gap-3 text-xs">
+        <div className="min-w-0 space-y-1">
+          <span className="block truncate font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span>
+          {planIsFull && <span className="inline-flex rounded-full bg-[#2aa3ff]/10 px-2 py-0.5 font-medium text-[#2aa3ff]">{c.fullPlan}</span>}
+        </div>
+        {entitlements?.is_trial && <span className={`${trialUrgency} shrink-0 whitespace-nowrap text-right`}>{c.trialDays(trialDays)}</span>}
       </div>
-      {entitlements && <div data-testid="assistant-subscription-usage-row" className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} data-testid={`assistant-subscription-${label.toLowerCase()}-group`} className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-medium tabular-nums text-[color:var(--fg-80)]">{c.usage(count, allowance)}</span></div>)}
+      {entitlements && <div data-testid="assistant-subscription-usage-row" className="mt-2.5 flex flex-wrap items-start gap-x-6 gap-y-2 text-xs">
+        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} data-testid={`assistant-subscription-${label.toLowerCase()}-group`} className="flex min-w-[7rem] flex-1 basis-[calc(50%-0.75rem)] flex-col gap-0.5"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-semibold tabular-nums text-[color:var(--fg-85)]">{c.usage(count, allowance)}</span></div>)}
       </div>}
     </section>
 
