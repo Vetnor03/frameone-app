@@ -8030,7 +8030,6 @@ function PairFrameForm({
   const [code, setCode] = useState('')
   const [pairing, setPairing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [deviceReady, setDeviceReady] = useState(false)
   const [messageKind, setMessageKind] = useState<'ok' | 'error'>('ok')
   const t = tx(language)
 

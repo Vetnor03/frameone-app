@@ -97,6 +97,15 @@ test('frontend only shows enabled after key, subscription, and preference API re
 
 
 
+
+
+test('deviceReady state is scoped only to NotificationsSetting, not PairFrameForm', () => {
+  const notificationBlock = home.slice(home.indexOf('function NotificationsSetting'), home.indexOf('function SettingRow'))
+  const pairFrameBlock = home.slice(home.indexOf('function PairFrameForm'), home.indexOf('function MyFramesSection'))
+  assert.match(notificationBlock, /const \[deviceReady, setDeviceReady\] = useState\(false\)/)
+  assert.doesNotMatch(pairFrameBlock, /deviceReady|setDeviceReady/)
+})
+
 test('global account-on state re-registers granted current devices without prompting', () => {
   assert.match(home, /const \[deviceReady, setDeviceReady\] = useState\(false\)/)
   assert.match(home, /async function registerGrantedCurrentDevice\(\)/)
