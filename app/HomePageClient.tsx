@@ -7965,7 +7965,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[color:var(--fg-70)]">{isNo ? 'Varsler' : 'Notifications'}</div>
-          <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (deviceReady ? (isNo ? 'På på denne enheten' : 'On on this device') : (isNo ? 'På for kontoen · aktiver denne enheten' : 'On for account · enable this device')) : (isNo ? 'Av' : 'Off')}</div>
+          <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (deviceReady ? (isNo ? 'På for denne enheten' : 'Turned on for this device') : (isNo ? 'På for kontoen · aktiver denne enheten' : 'On for account · enable this device')) : (isNo ? 'Av' : 'Off')}</div>
         </div>
         <button type="button" disabled={busy} onClick={enabled ? disableNotifications : enableNotifications} className={`relative h-7 w-12 rounded-full transition ${enabled ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`} aria-label={isNo ? 'Varsler' : 'Notifications'}>
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? 'left-6' : 'left-1'}`} />
