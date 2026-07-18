@@ -166,14 +166,18 @@ async function processJob(supabase: any, job: any) {
     }
     const status = result.status === 'change' && result.trigger_met ? 'change' : result.status
     let createdUpdate = false
+    let createdUpdateId: string | null = null
     let effectiveStatus = status as 'no_change' | 'change' | 'uncertain'
     let nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate: false, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
     if (status === 'change') {
       const fingerprint = stableFingerprint(result)
       if (fingerprint && result.headline && result.summary && result.sources.length > 0) {
-        const { error } = await supabase.from('monitoring_updates').insert({ watch_id: watch.id, run_id: run.id, headline: result.headline, summary: result.summary, event_at: result.event_at, confidence: result.confidence, fingerprint, source_urls: result.sources, is_read: false, dismissed_from_frame: false })
-        if (!error) createdUpdate = true
+        const { data: insertedUpdate, error } = await supabase.from('monitoring_updates').insert({ watch_id: watch.id, run_id: run.id, headline: result.headline, summary: result.summary, event_at: result.event_at, confidence: result.confidence, fingerprint, source_urls: result.sources, is_read: false, dismissed_from_frame: false }).select('id').single()
+        if (!error) {
+          createdUpdate = true
+          createdUpdateId = insertedUpdate?.id ?? null
+        }
         else if (!String(error.code).includes('23505')) throw error
       }
     }
@@ -197,7 +201,20 @@ async function processJob(supabase: any, job: any) {
     if (provider === 'openai') watchPatch.last_full_discovery_at = completedAt.toISOString()
     await supabase.from('monitoring_watches').update(watchPatch).eq('id', watch.id)
     await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
-    return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate }
+    if (createdUpdate && createdUpdateId) {
+      try {
+        await supabase.rpc('queue_monitoring_update_push', { p_monitoring_update_id: createdUpdateId })
+        const pushResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-monitoring-update-push`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ monitoring_update_id: createdUpdateId }),
+        })
+        if (!pushResponse.ok) console.warn('[monitoring-worker:push-fail-soft]', { update_id: createdUpdateId, status: pushResponse.status })
+      } catch (pushError) {
+        console.warn('[monitoring-worker:push-fail-soft]', { update_id: createdUpdateId, error: String((pushError as Error)?.message || pushError) })
+      }
+    }
+    return { job_id: job.id, watch_id: watch.id, ok: true, status, created_update: createdUpdate, push_queued: Boolean(createdUpdateId) }
   } catch (err) {
     const message = String(err?.message || err)
     const errorPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: 'error', attempts: job.attempts })
