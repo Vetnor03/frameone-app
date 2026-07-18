@@ -12,10 +12,10 @@ Deno.serve(async (req) => {
   const results=[]; for(const job of jobs||[]) results.push(await processJob(db,job,mode)); return Response.json({ok:true,mode,claimed:jobs?.length||0,results})
 })
 async function processJob(db:any,job:any,mode:string) {
-  const started=Date.now(); const complete=(patch:Record<string,unknown>)=>db.from('monitoring_source_probe_queue').update({completed_at:new Date().toISOString(),...patch}).eq('id',job.id)
+  const started=Date.now(); const complete=(completedAt:string,patch:Record<string,unknown>)=>db.from('monitoring_source_probe_queue').update({completed_at:completedAt,...patch}).eq('id',job.id)
   const {data:source}=await db.from('monitoring_watch_sources').select('*,monitoring_watches(*)').eq('id',job.source_id).maybeSingle()
   const watch=source?.monitoring_watches; const {data:eligibility}=watch?await db.rpc('get_monitoring_watch_schedule_eligibility',{p_watch_id:watch.id}).maybeSingle():{data:null}
-  if(!source||!watch||watch.status!=='active'||!watch.is_instant||!eligibility?.eligible||!eligibility?.use_instant_cadence||!source.is_active||!source.probe_eligible||source.disabled_reason) { await complete({last_error:'source_not_eligible'}); return {job_id:job.id,skipped:true} }
+  if(!source||!watch||watch.status!=='active'||!watch.is_instant||!eligibility?.eligible||!eligibility?.use_instant_cadence||!source.is_active||!source.probe_eligible||source.disabled_reason) { await complete(new Date().toISOString(),{last_error:'source_not_eligible'}); return {job_id:job.id,skipped:true} }
   const maxBytes=clamp(Number(Deno.env.get('RADAR_SOURCE_MAX_BYTES')||524288),1024,524288); const timeout=clamp(Number(Deno.env.get('RADAR_SOURCE_TIMEOUT_MS')||8000),1000,8000)
   let status:number|null=null,bytes=0,type:string|null=null,etag:string|null=null,lastModified:string|null=null
   try {
@@ -37,16 +37,19 @@ async function processJob(db:any,job:any,mode:string) {
   } catch(error) {
     const code=(error instanceof DOMException&&error.name==='AbortError')?'timeout':String((error as Error)?.message||'probe_error').replace(/[^a-z0-9_]/gi,'_').slice(0,80)
     const errors=source.consecutive_errors+1; const permanent=/^(permanent_http_404|permanent_http_410|unsupported_content_type|unsafe_redirect|blocked_)/.test(code); const disabled=permanent&&errors>=3?code:null
-    await db.from('monitoring_source_probes').insert({source_id:source.id,watch_id:watch.id,owner_user_id:source.owner_user_id,outcome:code.startsWith('blocked_')||code==='unsafe_redirect'?'blocked':code==='unsupported_content_type'?'unsupported':'error',http_status:status,change_detected:false,etag,last_modified:lastModified,content_type:type,bytes_read:bytes,duration_ms:Date.now()-started,signal_details:{},error_code:code})
-    await db.from('monitoring_watch_sources').update({last_checked_at:new Date().toISOString(),consecutive_errors:errors,next_probe_at:new Date(Date.now()+errorBackoffMinutes(errors)*60000).toISOString(),disabled_reason:disabled,is_active:disabled?false:source.is_active}).eq('id',source.id)
-    await complete({last_error:code}); return {job_id:job.id,ok:false,error_code:code}
+    const completedAt=new Date(); const completedAtIso=completedAt.toISOString()
+    await db.from('monitoring_source_probes').insert({source_id:source.id,watch_id:watch.id,owner_user_id:source.owner_user_id,outcome:code.startsWith('blocked_')||code==='unsafe_redirect'?'blocked':code==='unsupported_content_type'?'unsupported':'error',http_status:status,change_detected:false,etag,last_modified:lastModified,content_type:type,bytes_read:bytes,duration_ms:completedAt.getTime()-started,signal_details:{},error_code:code})
+    await db.from('monitoring_watch_sources').update({last_checked_at:completedAtIso,consecutive_errors:errors,next_probe_at:new Date(completedAt.getTime()+errorBackoffMinutes(errors)*60000).toISOString(),disabled_reason:disabled,is_active:disabled?false:source.is_active}).eq('id',source.id)
+    await db.rpc('touch_monitoring_watch_checked_at',{p_watch_id:watch.id,p_checked_at:completedAtIso})
+    await complete(completedAtIso,{last_error:code}); return {job_id:job.id,ok:false,error_code:code}
   }
 }
 function concat(chunks:Uint8Array[],size:number){const out=new Uint8Array(size);let p=0;for(const c of chunks){out.set(c,p);p+=c.length}return out}
 async function recordSuccess(db:any,job:any,source:any,r:any,mode:string) {
-  const now=new Date().toISOString(); const baseline=!source.content_fingerprint&&r.fingerprint; const outcome=baseline?'baseline_created':r.outcome; const changed=outcome==='changed'
+  const completedAt=new Date(); const now=completedAt.toISOString(); const baseline=!source.content_fingerprint&&r.fingerprint; const outcome=baseline?'baseline_created':r.outcome; const changed=outcome==='changed'
   const {data:probe}=await db.from('monitoring_source_probes').insert({source_id:source.id,watch_id:source.watch_id,owner_user_id:source.owner_user_id,outcome,http_status:r.status,change_detected:changed,previous_fingerprint:source.content_fingerprint,new_fingerprint:r.fingerprint,etag:r.etag,last_modified:r.lastModified,content_type:r.type,bytes_read:r.bytes,duration_ms:r.duration,signal_details:{source_type:r.sourceType}}).select('id').single()
-  await db.from('monitoring_watch_sources').update({etag:r.etag,last_modified:r.lastModified,content_type:r.type,content_length:r.bytes,content_fingerprint:r.fingerprint,source_type:r.sourceType,last_checked_at:now,last_changed_at:changed?now:source.last_changed_at,next_probe_at:new Date(Date.now()+15*60000).toISOString(),consecutive_errors:0,disabled_reason:null}).eq('id',source.id)
+  await db.from('monitoring_watch_sources').update({etag:r.etag,last_modified:r.lastModified,content_type:r.type,content_length:r.bytes,content_fingerprint:r.fingerprint,source_type:r.sourceType,last_checked_at:now,last_changed_at:changed?now:source.last_changed_at,next_probe_at:new Date(completedAt.getTime()+15*60000).toISOString(),consecutive_errors:0,disabled_reason:null}).eq('id',source.id)
+  await db.rpc('touch_monitoring_watch_checked_at',{p_watch_id:source.watch_id,p_checked_at:now})
   if(changed&&mode==='guarded'&&probe?.id){
     const allow=(Deno.env.get('RADAR_TWO_STAGE_OWNER_ALLOWLIST')||'').split(',').map(v=>v.trim()).includes(source.owner_user_id)
     if(allow){
