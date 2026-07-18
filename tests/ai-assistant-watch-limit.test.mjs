@@ -38,7 +38,8 @@ test('assistant disables creation at or above limit without clearing typed text'
 
 test('assistant localizes stable limit errors without logging request contents', () => {
   assert.match(assistant, /watch_limit_reached/)
-  assert.match(assistant, /setMessage\(c\.fullPlan\)/)
+  assert.match(assistant, /watch-limit-reached[\s\S]*?await loadAssistant\(\)/)
+  assert.doesNotMatch(assistant, /setMessage\(c\.fullPlan\)/)
   assert.match(assistant, /console\.warn\('\[ai-assistant:watch-limit-reached\]'/)
   for (const line of assistant.split('\n').filter((line) => line.includes('console.'))) assert.doesNotMatch(line, /validation\.clean|request[,}]/)
 })

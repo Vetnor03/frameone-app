@@ -15,8 +15,8 @@ test('AI Assistant uses consumer naming and is registered as selectable module',
   assert.match(home, /type ModuleKey = 'assistant' \| 'date'/)
   assert.match(home, /const prominentOption: ModuleKey = 'assistant'/)
   assert.match(assistant, /Be RE:MIND holde øye med noe for deg/)
-  assert.match(assistant, /Hva vil du at RE:MIND skal holde øye med\?/)
-  assert.match(assistant, /La RE:MIND følge med/)
+  assert.match(assistant, /Hva skal RE:MIND følge med på\?/)
+  assert.match(assistant, /Begynn å følge/)
   assert.doesNotMatch(assistant.match(/heading:[\s\S]*?const MAX_ASSISTANT_REQUEST_LENGTH/)?.[0] ?? '', /provider|GPT|cron|queue|fingerprint|confidence|JSON|API|run history|monitoring/i)
 })
 
@@ -44,7 +44,7 @@ test('browser uses narrow RPCs for edit delete pause resume and cannot mutate un
   const editBody = assistant.match(/async function editWatch[\s\S]*?async function setWatchPaused/)?.[0] ?? ''
   assert.doesNotMatch(editBody, /owner_user_id|show_on_frame|frequency_minutes|next_check_at|search_guidance|p_title|p_completion_condition|p_preferred_language/)
   assert.doesNotMatch(assistant, /select\('\*'\)/)
-  assert.doesNotMatch(assistant, /raw_result|usage|response_id|error_message|provider|model|fingerprint|confidence/)
+  assert.doesNotMatch(assistant, /raw_result|response_id|error_message|provider|model|fingerprint|confidence/)
 })
 
 test('mutation RPCs are owner-only and edit now changes only the request field', () => {
