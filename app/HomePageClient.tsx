@@ -7800,6 +7800,7 @@ function SettingsTab({
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.fontSizeRow} value={fontSizeValue} onClick={onOpenFontSize} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
+              <NotificationsSetting language={language} />
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
@@ -7824,6 +7825,112 @@ function SettingsTab({
         </div>
       </div>
     </>
+  )
+}
+
+
+function urlBase64ToUint8Array(base64: string) {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+  const raw = window.atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)))
+}
+
+function NotificationsSetting({ language }: { language: AppLanguage }) {
+  const isNo = language === 'no'
+  const [enabled, setEnabled] = useState(false)
+  const [permission, setPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  async function authHeaders() {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    return token ? { authorization: `Bearer ${token}` } : {}
+  }
+
+  async function savePreference(push_enabled: boolean, permission_state: typeof permission) {
+    await fetch('/api/notifications/preference', { method: 'PUT', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ push_enabled, permission_state }) })
+    setEnabled(push_enabled)
+    setPermission(permission_state)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
+      if (!supported) setPermission('unsupported')
+      const res = await fetch('/api/notifications/preference', { headers: await authHeaders() }).catch(() => null)
+      const pref = res?.ok ? await res.json() : null
+      if (!cancelled && pref) {
+        setEnabled(pref.push_enabled === true)
+        setPermission(supported ? (pref.permission_state || Notification.permission) : 'unsupported')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  async function enableNotifications() {
+    if (busy) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      const supported = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
+      if (!supported) {
+        await savePreference(false, 'unsupported')
+        setMessage(isNo ? 'Varsler støttes ikke på denne enheten.' : 'Notifications are not supported on this device.')
+        return
+      }
+      if (Notification.permission === 'denied') {
+        await savePreference(false, 'denied')
+        setMessage(isNo ? 'Varsler er blokkert i nettleseren.' : 'Notifications are blocked in your browser.')
+        return
+      }
+      const granted = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
+      if (granted !== 'granted') {
+        await savePreference(false, granted === 'denied' ? 'denied' : 'default')
+        setMessage(isNo ? 'Varsler ble ikke aktivert.' : 'Notifications were not enabled.')
+        return
+      }
+      const keyRes = await fetch('/api/notifications/vapid-key')
+      const { publicKey } = await keyRes.json()
+      if (!publicKey) throw new Error('missing_vapid_public_key')
+      const registration = await navigator.serviceWorker.register('/sw.js')
+      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) })
+      await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify(subscription) })
+      await savePreference(true, 'granted')
+    } catch (error) {
+      setMessage(errorMessage(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disableNotifications() {
+    setBusy(true)
+    setMessage(null)
+    try { await savePreference(false, permission) } catch (error) { setMessage(errorMessage(error)) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="border-b border-[color:var(--bd-10)] py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[color:var(--fg-70)]">{isNo ? 'Varsler' : 'Notifications'}</div>
+          <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (isNo ? 'På' : 'On') : (isNo ? 'Av' : 'Off')}</div>
+        </div>
+        <button type="button" disabled={busy} onClick={enabled ? disableNotifications : undefined} className={`relative h-7 w-12 rounded-full transition ${enabled ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`} aria-label={isNo ? 'Varsler' : 'Notifications'}>
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? 'left-6' : 'left-1'}`} />
+        </button>
+      </div>
+      {!enabled && permission !== 'denied' && permission !== 'unsupported' && (
+        <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
+          <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Ikke gå glipp av viktige oppdateringer' : 'Never miss an important update'}</div>
+          <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Få et varsel når RE:MIND finner noe nytt for det du følger med på.' : 'Get a notification when RE:MIND finds something new for the things you follow.'}</p>
+          <button type="button" disabled={busy} onClick={enableNotifications} className="mt-3 rounded-full bg-[color:var(--fg)] px-4 py-2 text-sm font-medium text-[color:var(--app-bg)]">{isNo ? 'Aktiver varsler' : 'Enable notifications'}</button>
+        </div>
+      )}
+      {message && <div className="mt-2 text-xs text-[color:var(--fg-50)]">{message}</div>}
+    </div>
   )
 }
 
