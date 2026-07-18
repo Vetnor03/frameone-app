@@ -29,7 +29,8 @@ test('assistant UI counts owner ongoing Watches against canonical entitlements',
 
 test('assistant disables creation at or above limit without clearing typed text', () => {
   assert.match(assistant, /if \(reachedWatchLimit\) \{ if \(!entitlements\?\.monitoring_enabled\) setError\(c\.subscriptionRequired\); return \}/)
-  assert.match(assistant, /disabled=\{creating \|\| reachedWatchLimit\}/)
+  assert.match(assistant, /const startFollowingDisabled = creating \|\| !requestIsValid \|\| reachedWatchLimit/)
+  assert.match(assistant, /disabled=\{startFollowingDisabled\}/)
   const guard = assistant.indexOf('if (reachedWatchLimit)')
   const rpc = assistant.indexOf("rpc('create_ai_assistant_watch'")
   assert.ok(guard > -1 && rpc > guard)

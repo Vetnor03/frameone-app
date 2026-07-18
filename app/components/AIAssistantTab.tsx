@@ -286,23 +286,32 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const planLabel = entitlements?.is_trial ? c.trial : entitlements ? c.plan(paidPlanName) : ''
   const trialDays = Math.max(0, Math.min(30, entitlements?.days_remaining_in_trial ?? 0))
   const trialUrgency = trialDays <= 1 ? 'font-semibold text-amber-400' : trialDays <= 3 ? 'text-amber-300' : 'text-[color:var(--fg-55)]'
+  const requestValidation = validateRequestText(request)
+  const requestIsValid = requestValidation.error == null
+  const startFollowingIsActive = creating || (requestIsValid && !reachedWatchLimit)
+  const startFollowingDisabled = creating || !requestIsValid || reachedWatchLimit
   return <div className="h-full overflow-y-auto overflow-x-hidden px-1 pb-8 tab-scroll">
     <section data-testid="assistant-main-card" className="rounded-[2rem] border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/55 p-5">
       <p className="text-[11px] tracking-[0.24em] text-[#2aa3ff]">RE:MIND</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[color:var(--fg-95)]">{c.heading}</h1>
       <p className="mt-3 text-sm leading-6 text-[color:var(--fg-70)]">{c.intro}</p>
-      <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="mt-5 w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-90)] outline-none placeholder:text-[color:var(--fg-45)]" />
-      <button type="button" onClick={createWatch} disabled={creating || reachedWatchLimit} aria-disabled={creating || reachedWatchLimit} className="mt-4 h-12 w-full rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-sm font-semibold tracking-wide text-white disabled:cursor-not-allowed disabled:border-[color:var(--bd-20)] disabled:bg-[color:var(--fg-35)] disabled:opacity-60">{creating ? c.creating : c.button}</button>
+      <div data-testid="assistant-follow-input-container" className="mt-5 rounded-3xl border border-[color:var(--bd-20)] bg-[color:var(--card-bg)]/80 px-4 py-3 transition-colors duration-200 focus-within:border-[#2aa3ff]/75 focus-within:bg-[color:var(--card-bg)]">
+        <textarea aria-label={c.placeholder} value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-95)] outline-none placeholder:text-[color:var(--fg-40)]" />
+      </div>
+      <button type="button" onClick={createWatch} disabled={startFollowingDisabled} aria-disabled={startFollowingDisabled} className={`mt-3 h-12 w-full rounded-2xl border text-sm font-semibold tracking-wide transition-colors duration-200 disabled:cursor-not-allowed ${startFollowingIsActive ? 'border-[#2aa3ff] bg-[#2aa3ff] text-white' : 'border-[color:var(--bd-20)] bg-[color:var(--fg-20)] text-[color:var(--fg-55)] opacity-70'}`}>{creating ? c.creating : c.button}</button>
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
     </section>
     {message && <div className="mt-3 px-4 text-sm text-[color:var(--fg-65)]">{message}</div>}
 
-    <section data-testid="assistant-subscription-card" className="mt-3 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/45 px-4 py-3">
-      <div className="flex items-center justify-between gap-3 text-xs"><span className="font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span><div className="flex items-center gap-2">{planIsFull && <span className="rounded-full bg-[#2aa3ff]/10 px-2 py-0.5 font-medium text-[#2aa3ff]">{c.fullPlan}</span>}{entitlements?.is_trial && <span className={trialUrgency}>{c.trialDays(trialDays)}</span>}</div></div>
-      {entitlements && <div className="mt-2 grid grid-cols-2 gap-4 text-xs">
-        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} className="flex items-baseline justify-between gap-2"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-medium tabular-nums text-[color:var(--fg-80)]">{c.usage(count, allowance)}</span></div>)}
+    <section data-testid="assistant-subscription-card" className="mt-3 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/40 px-3.5 py-2.5">
+      <div data-testid="assistant-subscription-top-row" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span>
+        {planIsFull && <span className="rounded-full bg-[#2aa3ff]/10 px-2 py-0.5 font-medium text-[#2aa3ff]">{c.fullPlan}</span>}
+        {entitlements?.is_trial && <span className={trialUrgency}>{c.trialDays(trialDays)}</span>}
       </div>
-      }
+      {entitlements && <div data-testid="assistant-subscription-usage-row" className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} data-testid={`assistant-subscription-${label.toLowerCase()}-group`} className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-medium tabular-nums text-[color:var(--fg-80)]">{c.usage(count, allowance)}</span></div>)}
+      </div>}
     </section>
 
     <section className="mt-6">
