@@ -28,6 +28,12 @@ type FrameSetupSelection = { purpose: SetupPurpose; sport?: SetupSport; modules:
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
+type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported'
+type NotificationState =
+  | { status: 'loading'; permission: null }
+  | { status: 'account-disabled' | 'device-disabled' | 'device-enabled'; permission: NotificationPermissionState }
+
+const loadingNotificationState: NotificationState = { status: 'loading', permission: null }
 
 const UI = {
   en: {
@@ -1102,6 +1108,7 @@ export default function HomePage() {
   const [frames, setFrames] = useState<MemberRow[]>([])
   const [authReady, setAuthReady] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [notificationState, setNotificationState] = useState<NotificationState>(loadingNotificationState)
   const [framesLoaded, setFramesLoaded] = useState(false)
   const [isFirstFramePairingComplete, setIsFirstFramePairingComplete] = useState(false)
   const [booting, setBooting] = useState(false)
@@ -1132,6 +1139,20 @@ export default function HomePage() {
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
   }, [physicalFrameSnapshot])
+
+  // Resolve this as soon as authentication is ready, rather than waiting for
+  // Settings to mount. Settings can then render the shared, already-known state.
+  useEffect(() => {
+    if (!userId) {
+      setNotificationState(loadingNotificationState)
+      return
+    }
+    let cancelled = false
+    loadNotificationState().then((state) => {
+      if (!cancelled) setNotificationState(state)
+    })
+    return () => { cancelled = true }
+  }, [userId])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -2289,6 +2310,8 @@ async function handleSelectTab(k: TabKey) {
                   onLogout={logout}
                   onGo={(path) => router.push(path)}
                   initialSubpage={settingsSubpage}
+                  notificationState={notificationState}
+                  onNotificationStateChange={setNotificationState}
                 />
               )}
 
@@ -7701,6 +7724,8 @@ function SettingsTab({
   onLogout,
   onGo,
   initialSubpage,
+  notificationState,
+  onNotificationStateChange,
 }: {
   language: AppLanguage
   theme: 'dark' | 'light'
@@ -7715,6 +7740,8 @@ function SettingsTab({
   onLogout: () => void
   onGo: (path: string) => void
   initialSubpage?: 'subscription' | null
+  notificationState: NotificationState
+  onNotificationStateChange: (state: NotificationState) => void
 }) {
   const from = '?from=settings'
   const t = tx(language)
@@ -7805,7 +7832,7 @@ function SettingsTab({
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.fontSizeRow} value={fontSizeValue} onClick={onOpenFontSize} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
-              <NotificationsSetting language={language} />
+              <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
@@ -7857,13 +7884,55 @@ function urlBase64ToUint8Array(base64: string) {
   return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)))
 }
 
-function NotificationsSetting({ language }: { language: AppLanguage }) {
+async function notificationAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { authorization: `Bearer ${token}` } : {}
+}
+
+async function persistCurrentPushSubscription(subscription: PushSubscription) {
+  const response = await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await notificationAuthHeaders()) }, body: JSON.stringify(subscription) })
+  if (!response.ok) throw new Error('push_subscription_save_failed')
+}
+
+async function registerGrantedCurrentDevice() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return false
+  const keyRes = await fetch('/api/notifications/vapid-key')
+  if (!keyRes.ok) throw new Error('vapid_key_request_failed')
+  const { publicKey } = await keyRes.json()
+  if (!publicKey) throw new Error('missing_vapid_public_key')
+  const registration = await navigator.serviceWorker.register('/sw.js')
+  const existing = await registration.pushManager.getSubscription()
+  const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource })
+  await persistCurrentPushSubscription(subscription)
+  return true
+}
+
+async function loadNotificationState(): Promise<NotificationState> {
+  const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
+  const res = await fetch('/api/notifications/preference', { headers: await notificationAuthHeaders() }).catch(() => null)
+  if (!res?.ok) return loadingNotificationState
+  const pref = await res.json()
+  const permission: NotificationPermissionState = supported ? Notification.permission : 'unsupported'
+  if (pref.push_enabled !== true) return { status: 'account-disabled', permission }
+  if (!supported || Notification.permission !== 'granted') return { status: 'device-disabled', permission }
+  try {
+    const ready = await registerGrantedCurrentDevice()
+    return ready ? { status: 'device-enabled', permission } : { status: 'device-disabled', permission }
+  } catch (error) {
+    console.warn('[notifications:device-reregister-failed]', { message: errorMessage(error) })
+    return loadingNotificationState
+  }
+}
+
+function NotificationsSetting({ language, state, onStateChange }: { language: AppLanguage; state: NotificationState; onStateChange: (state: NotificationState) => void }) {
   const isNo = language === 'no'
-  const [enabled, setEnabled] = useState(false)
-  const [permission, setPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [deviceReady, setDeviceReady] = useState(false)
+  const loading = state.status === 'loading'
+  const enabled = state.status === 'device-disabled' || state.status === 'device-enabled'
+  const deviceReady = state.status === 'device-enabled'
+  const permission = state.permission ?? 'default'
 
   async function authHeaders(): Promise<Record<string, string>> {
     const { data } = await supabase.auth.getSession()
@@ -7871,57 +7940,11 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
     return token ? { authorization: `Bearer ${token}` } : {}
   }
 
-  async function savePreference(push_enabled: boolean, permission_state: typeof permission) {
+  async function savePreference(push_enabled: boolean, permission_state: typeof permission, currentDeviceReady = deviceReady) {
     const response = await fetch('/api/notifications/preference', { method: 'PUT', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ push_enabled, permission_state }) })
     if (!response.ok) throw new Error('notification_preference_save_failed')
-    setEnabled(push_enabled)
-    setPermission(permission_state)
-    if (!push_enabled) setDeviceReady(false)
+    onStateChange({ status: push_enabled ? (currentDeviceReady ? 'device-enabled' : 'device-disabled') : 'account-disabled', permission: permission_state })
   }
-
-  async function persistPushSubscription(subscription: PushSubscription) {
-    const response = await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify(subscription) })
-    if (!response.ok) throw new Error('push_subscription_save_failed')
-  }
-
-  async function registerGrantedCurrentDevice() {
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return false
-    const keyRes = await fetch('/api/notifications/vapid-key')
-    if (!keyRes.ok) throw new Error('vapid_key_request_failed')
-    const { publicKey } = await keyRes.json()
-    if (!publicKey) throw new Error('missing_vapid_public_key')
-    const registration = await navigator.serviceWorker.register('/sw.js')
-    const existing = await registration.pushManager.getSubscription()
-    const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource })
-    await persistPushSubscription(subscription)
-    setDeviceReady(true)
-    return true
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
-      if (!supported) setPermission('unsupported')
-      const res = await fetch('/api/notifications/preference', { headers: await authHeaders() }).catch(() => null)
-      const pref = res?.ok ? await res.json() : null
-      if (!cancelled && pref) {
-        const nextEnabled = pref.push_enabled === true
-        const nextPermission = supported ? Notification.permission : 'unsupported'
-        setEnabled(nextEnabled)
-        setPermission(nextPermission)
-        if (nextEnabled && supported && Notification.permission === 'granted') {
-          registerGrantedCurrentDevice().catch((error) => {
-            console.warn('[notifications:device-reregister-failed]', { message: errorMessage(error) })
-            setDeviceReady(false)
-          })
-        } else {
-          setDeviceReady(false)
-        }
-      }
-    })()
-    return () => { cancelled = true }
-  }, [])
 
   async function enableNotifications() {
     if (busy) return
@@ -7946,7 +7969,7 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
         return
       }
       await registerGrantedCurrentDevice()
-      await savePreference(true, 'granted')
+      await savePreference(true, 'granted', true)
     } catch (error) {
       setMessage(errorMessage(error))
     } finally {
@@ -7965,20 +7988,20 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[color:var(--fg-70)]">{isNo ? 'Varsler' : 'Notifications'}</div>
-          <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (deviceReady ? (isNo ? 'På for denne enheten' : 'Turned on for this device') : (isNo ? 'På for kontoen · aktiver denne enheten' : 'On for account · enable this device')) : (isNo ? 'Av' : 'Off')}</div>
+          {loading ? <div className="mt-2 h-3 w-36 animate-pulse rounded bg-[color:var(--bd-10)]" aria-label={isNo ? 'Laster varslingsstatus' : 'Loading notification status'} /> : <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (deviceReady ? (isNo ? 'På for denne enheten' : 'Turned on for this device') : (isNo ? 'På for kontoen · aktiver denne enheten' : 'On for account · enable this device')) : (isNo ? 'Av' : 'Off')}</div>}
         </div>
-        <button type="button" disabled={busy} onClick={enabled ? disableNotifications : enableNotifications} className={`relative h-7 w-12 rounded-full transition ${enabled ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`} aria-label={isNo ? 'Varsler' : 'Notifications'}>
+        {loading ? <div className="h-7 w-12 animate-pulse rounded-full bg-[color:var(--bd-10)]" aria-hidden="true" /> : <button type="button" disabled={busy} onClick={enabled ? disableNotifications : enableNotifications} className={`relative h-7 w-12 rounded-full transition ${enabled ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`} aria-label={isNo ? 'Varsler' : 'Notifications'}>
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? 'left-6' : 'left-1'}`} />
-        </button>
+        </button>}
       </div>
-      {!enabled && permission !== 'denied' && permission !== 'unsupported' && (
+      {!loading && !enabled && permission !== 'denied' && permission !== 'unsupported' && (
         <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
           <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Ikke gå glipp av viktige oppdateringer' : 'Never miss an important update'}</div>
           <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Få et varsel når RE:MIND finner noe nytt for det du følger med på.' : 'Get a notification when RE:MIND finds something new for the things you follow.'}</p>
           <button type="button" disabled={busy} onClick={enableNotifications} className="mt-3 rounded-full bg-[color:var(--fg)] px-4 py-2 text-sm font-medium text-[color:var(--app-bg)]">{isNo ? 'Aktiver varsler' : 'Enable notifications'}</button>
         </div>
       )}
-      {enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported' && (
+      {!loading && enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported' && (
         <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
           <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Aktiver denne enheten' : 'Enable this device'}</div>
           <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Varsler er på for kontoen, men denne enheten er ikke klar ennå.' : 'Notifications are on for your account, but this device is not ready yet.'}</p>

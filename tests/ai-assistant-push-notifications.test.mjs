@@ -96,18 +96,18 @@ test('authHeaders has a stable HeadersInit-compatible return type', () => {
 test('device-local permission denial does not disable account-level notifications or sender delivery', () => {
   assert.match(home, /await savePreference\(enabled, 'denied'\)/)
   assert.match(home, /await savePreference\(enabled, granted === 'denied' \? 'denied' : 'default'\)/)
-  assert.match(home, /const nextPermission = supported \? Notification\.permission : 'unsupported'/)
+  assert.match(home, /const permission: NotificationPermissionState = supported \? Notification\.permission : 'unsupported'/)
   assert.match(sender, /if \(!pref\?\.push_enabled\)/)
   assert.doesNotMatch(sender, /permission_state !== 'granted'/)
 })
 
 test('frontend only shows enabled after key, subscription, and preference API responses succeed', () => {
   assert.match(home, /if \(!keyRes\.ok\) throw new Error\('vapid_key_request_failed'\)/)
-  assert.match(home, /async function persistPushSubscription/)
+  assert.match(home, /async function persistCurrentPushSubscription/)
   assert.match(home, /const response = await fetch\('\/api\/notifications\/subscription'/)
   assert.match(home, /if \(!response\.ok\) throw new Error\('push_subscription_save_failed'\)/)
   assert.match(home, /if \(!response\.ok\) throw new Error\('notification_preference_save_failed'\)/)
-  assert.match(home, /await savePreference\(true, 'granted'\)/)
+  assert.match(home, /await savePreference\(true, 'granted', true\)/)
 })
 
 
@@ -116,29 +116,32 @@ test('frontend only shows enabled after key, subscription, and preference API re
 
 
 
-test('deviceReady state is scoped only to NotificationsSetting, not PairFrameForm', () => {
+test('notification readiness uses shared tri-state rather than a false loading default', () => {
   const notificationBlock = home.slice(home.indexOf('function NotificationsSetting'), home.indexOf('function SettingRow'))
   const pairFrameBlock = home.slice(home.indexOf('function PairFrameForm'), home.indexOf('function MyFramesSection'))
-  assert.match(notificationBlock, /const \[deviceReady, setDeviceReady\] = useState\(false\)/)
-  assert.doesNotMatch(pairFrameBlock, /deviceReady|setDeviceReady/)
+  assert.match(home, /'loading'[\s\S]*'account-disabled' \| 'device-disabled' \| 'device-enabled'/)
+  assert.match(notificationBlock, /const loading = state\.status === 'loading'/)
+  assert.match(notificationBlock, /const deviceReady = state\.status === 'device-enabled'/)
+  assert.doesNotMatch(notificationBlock, /\[enabled, setEnabled\][\s\S]{0,30}useState\(false\)/)
+  assert.doesNotMatch(pairFrameBlock, /deviceReady/)
 })
 
 test('global account-on state re-registers granted current devices without prompting', () => {
-  assert.match(home, /const \[deviceReady, setDeviceReady\] = useState\(false\)/)
   assert.match(home, /async function registerGrantedCurrentDevice\(\)/)
   assert.match(home, /Notification\.permission !== 'granted'\) return false/)
   assert.match(home, /const existing = await registration\.pushManager\.getSubscription\(\)/)
   assert.match(home, /const subscription = existing \?\? await registration\.pushManager\.subscribe/)
-  assert.match(home, /await persistPushSubscription\(subscription\)/)
-  assert.match(home, /nextEnabled && supported && Notification\.permission === 'granted'[\s\S]*registerGrantedCurrentDevice\(\)\.catch/)
-  assert.doesNotMatch(home, /nextEnabled && supported[\s\S]{0,140}Notification\.requestPermission\(\)/)
+  assert.match(home, /await persistCurrentPushSubscription\(subscription\)/)
+  assert.match(home, /if \(!supported \|\| Notification\.permission !== 'granted'\) return \{ status: 'device-disabled', permission \}/)
+  assert.match(home, /const ready = await registerGrantedCurrentDevice\(\)/)
+  assert.doesNotMatch(home, /loadNotificationState[\s\S]{0,800}Notification\.requestPermission\(\)/)
 })
 
 test('account-on but unregistered devices are not shown as ready and need explicit action', () => {
   assert.match(home, /On for account · enable this device/)
   assert.match(home, /Notifications are on for your account, but this device is not ready yet\./)
   assert.match(home, /Aktiver denne enheten/)
-  assert.match(home, /enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported'/)
+  assert.match(home, /!loading && enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported'/)
   assert.match(home, /onClick=\{enableNotifications\}/)
 })
 
@@ -146,6 +149,15 @@ test('global switch works both ways without automatic permission prompts', () =>
   assert.match(home, /onClick=\{enabled \? disableNotifications : enableNotifications\}/)
   assert.match(home, /const granted = Notification\.permission === 'granted' \? 'granted' : await Notification\.requestPermission\(\)/)
   assert.match(home, /type="button" disabled=\{busy\}/)
+})
+
+test('settings prefetches notification state and renders a neutral cold-load skeleton', () => {
+  assert.match(home, /useEffect\(\(\) => \{[\s\S]*if \(!userId\)[\s\S]*loadNotificationState\(\)\.then[\s\S]*\}, \[userId\]\)/)
+  assert.match(home, /notificationState=\{notificationState\}/)
+  assert.match(home, /loading \? <div className="mt-2 h-3 w-36 animate-pulse/)
+  assert.match(home, /loading \? <div className="h-7 w-12 animate-pulse/)
+  assert.match(home, /!loading && !enabled/)
+  assert.match(home, /!loading && enabled && !deviceReady/)
 })
 
 test('logout unregisters only the current endpoint fail-soft without disabling global preferences', () => {
