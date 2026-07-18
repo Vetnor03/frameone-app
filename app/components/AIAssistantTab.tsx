@@ -43,9 +43,9 @@ function assistantCopy(language: AppLanguage) {
   return language === 'no' ? {
     heading: 'KI-assistent',
     intro: 'Be RE:MIND holde øye med noe for deg. Nye endringer og oppdateringer samles her.',
-    placeholder: 'Hva vil du at RE:MIND skal holde øye med?',
+    placeholder: 'Hva skal RE:MIND følge med på?',
     examples: ['Følg med på endringer i en sak jeg er interessert i', 'Si fra når noe jeg venter på blir tilgjengelig', 'Hold øye med prisendringer på noe jeg vurderer å kjøpe'],
-    button: 'La RE:MIND følge med',
+    button: 'Begynn å følge',
     creating: 'RE:MIND begynner å følge med…',
     success: 'RE:MIND følger nå med.',
     onlyRelevant: 'Bare nye og relevante endringer vises.',
@@ -54,19 +54,19 @@ function assistantCopy(language: AppLanguage) {
     emptyTasks: 'Spør RE:MIND om å holde øye med noe, så vises det her.',
     emptyUpdates: 'Nye endringer og oppdateringer vises her.',
     statuses: { active: 'Følger med', paused: 'Satt på pause', error: 'Trenger oppmerksomhet', completed: 'Avsluttet' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne tingen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', following: 'Følges', usage: (count: number, max: number) => `${count} av ${max}`, trialDays: (days: number) => days === 1 ? '1 dag igjen' : `${days} dager igjen`, fullPlan: 'Abonnementet ditt er fullt. Bytt plan for å følge flere ting.', subscriptionRequired: 'Abonnementet ditt tillater ikke aktiv overvåking akkurat nå.', trial: 'Gratis prøveperiode'
+    lastChecked: 'Sist sjekket', never: 'Ikke sjekket ennå', instruction: 'Instruksjon', saving: 'Lagrer…', deleting: 'Sletter…', confirmDelete: 'Slette denne tingen? Historikk som er knyttet til den blir også slettet.', markUnread: 'Marker ulest', markAllRead: 'Marker alle lest', pause: 'Pause', resume: 'Fortsett', edit: 'Endre', delete: 'Slett', save: 'Lagre', cancel: 'Avbryt', markRead: 'Marker lest', source: 'Kilde', needsText: 'Skriv hva RE:MIND skal følge med på.', tooLong: 'Gjør forespørselen litt kortere.', friendlyError: 'Beklager, noe gikk galt. Prøv igjen om litt.', detailRequest: 'Det du spurte om', latest: 'Siste nytt', previous: 'Tidligere oppdateringer', dev: 'Utvikling', loading: 'Laster…', following: 'Følges', usage: (count: number, max: number) => `${count} av ${max}`, trialDays: (days: number) => days === 1 ? '1 dag igjen' : `${days} dager igjen`, fullPlan: 'Abonnement fullt', subscriptionRequired: 'Abonnementet ditt tillater ikke aktiv overvåking akkurat nå.', trial: 'Gratis prøveperiode', plan: (name: string) => `${name}-abonnement`, thingCount: (count: number) => `${count} ${count === 1 ? 'ting' : 'ting'}`
   } : {
     heading: 'AI Assistant',
     intro: 'Ask RE:MIND to keep an eye on something for you. New changes and updates are collected here.',
-    placeholder: 'What would you like RE:MIND to keep an eye on?',
+    placeholder: 'What should RE:MIND follow?',
     examples: ['Keep track of changes to something I care about', 'Tell me when something I am waiting for becomes available', 'Keep an eye on price changes for something I am considering buying'],
-    button: 'Let RE:MIND follow along',
+    button: 'Start following',
     creating: 'RE:MIND is starting to follow along…',
     success: 'RE:MIND is now following along.',
     onlyRelevant: 'Only new and relevant changes are shown.',
     tasks: 'What RE:MIND is following', updates: 'Updates', instant: 'Radar', instantDescription: 'Radar keeps a closer eye on selected things, so you stay up to speed.', instantUnavailable: 'Radar is not available on this plan.', instantLimitReached: 'Radar is already fully used on your plan.', instantOwnerOnly: 'Only the owner can turn Radar on or off.', turnOnInstant: 'Turn on Radar', turnOffInstant: 'Turn off Radar', emptyTasks: 'Ask RE:MIND to keep an eye on something, and it appears here.', emptyUpdates: 'New changes and updates appear here.',
     statuses: { active: 'Following', paused: 'Paused', error: 'Needs attention', completed: 'Ended' } as Record<AssistantWatchStatus, string>,
-    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this thing? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', following: 'Following', usage: (count: number, max: number) => `${count} of ${max}`, trialDays: (days: number) => days === 1 ? '1 day left' : `${days} days left`, fullPlan: 'Your current plan is full. Change plan to follow more things.', subscriptionRequired: 'Your subscription does not currently allow active monitoring.', trial: 'Free trial'
+    lastChecked: 'Last checked', never: 'Not checked yet', instruction: 'Instruction', saving: 'Saving…', deleting: 'Deleting…', confirmDelete: 'Delete this thing? Its dependent history will also be deleted.', markUnread: 'Mark unread', markAllRead: 'Mark all read', pause: 'Pause', resume: 'Resume', edit: 'Edit', delete: 'Delete', save: 'Save', cancel: 'Cancel', markRead: 'Mark read', source: 'Source', needsText: 'Write what RE:MIND should keep an eye on.', tooLong: 'Please make the request a little shorter.', friendlyError: 'Sorry, something went wrong. Please try again soon.', detailRequest: 'Your request', latest: 'Latest update', previous: 'Previous updates', dev: 'Development', loading: 'Loading…', following: 'Following', usage: (count: number, max: number) => `${count} of ${max}`, trialDays: (days: number) => days === 1 ? '1 day left' : `${days} days left`, fullPlan: 'Plan full', subscriptionRequired: 'Your subscription does not currently allow active monitoring.', trial: 'Free trial', plan: (name: string) => `${name} plan`, thingCount: (count: number) => `${count} ${count === 1 ? 'thing' : 'things'}`
   }
 }
 
@@ -111,7 +111,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [hasCreatedWatch, setHasCreatedWatch] = useState<boolean | null>(null)
+  const [, setHasCreatedWatch] = useState<boolean | null>(null)
   const [entitlements, setEntitlements] = useState<AssistantEntitlements | null>(null)
 
   const ownedOngoingWatchCount = useMemo(() => watches.filter((w) => w.owner_user_id === currentUserId && ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)).length, [watches, currentUserId])
@@ -171,7 +171,7 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     if (error != null) {
       if (error.message === 'watch_limit_reached' || error.code === 'watch_limit_reached' || error.message?.includes('watch_limit_reached')) {
         console.warn('[ai-assistant:watch-limit-reached]', { code: error.code, message: error.message, ownedOngoingWatchCount })
-        setMessage(c.fullPlan)
+        await loadAssistant()
       } else if (error.message?.includes('subscription_required')) {
         setError(c.subscriptionRequired)
       } else {
@@ -282,37 +282,36 @@ export default function AIAssistantTab({ language, activeDeviceId }: { language:
     setEditingRequest(w.original_request)
   }
 
-  const planLabel = entitlements?.is_trial ? c.trial : entitlements ? `${entitlements.effective_plan[0].toUpperCase()}${entitlements.effective_plan.slice(1)}` : ''
+  const paidPlanName = entitlements ? `${entitlements.effective_plan[0].toUpperCase()}${entitlements.effective_plan.slice(1)}` : ''
+  const planLabel = entitlements?.is_trial ? c.trial : entitlements ? c.plan(paidPlanName) : ''
   const trialDays = Math.max(0, Math.min(30, entitlements?.days_remaining_in_trial ?? 0))
   const trialUrgency = trialDays <= 1 ? 'font-semibold text-amber-400' : trialDays <= 3 ? 'text-amber-300' : 'text-[color:var(--fg-55)]'
-  const meterWidth = (count: number, allowance: number) => allowance <= 0 ? 0 : Math.min(100, Math.max(0, count / allowance * 100))
-
-  return <div className="h-full overflow-y-auto pb-8 pr-1 tab-scroll">
-    <div className="rounded-[2rem] border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/70 p-5 shadow-sm">
+  return <div className="h-full overflow-y-auto overflow-x-hidden px-1 pb-8 tab-scroll">
+    <header className="px-4 pt-2">
       <p className="text-[11px] tracking-[0.24em] text-[#2aa3ff]">RE:MIND</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[color:var(--fg-95)]">{c.heading}</h1>
       <p className="mt-3 text-sm leading-6 text-[color:var(--fg-70)]">{c.intro}</p>
-      <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="mt-5 w-full resize-none rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)]/70 p-4 text-base leading-6 text-[color:var(--fg-90)] outline-none focus:border-[#2aa3ff]" />
-      {!loading && hasCreatedWatch === false && <div className="mt-3 flex flex-wrap gap-2">{c.examples.map((ex) => <button key={ex} type="button" onClick={() => setRequest(ex)} className="max-w-full rounded-full border border-[color:var(--bd-15)] px-3 py-2 text-left text-[11px] leading-4 text-[color:var(--fg-70)] break-words">{ex}</button>)}</div>}
-      <div data-testid="assistant-usage-summary" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)]/45 p-3">
-        <div className="flex items-center justify-between gap-3 text-xs"><span className="font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span>{entitlements?.is_trial && <span className={trialUrgency}>{c.trialDays(trialDays)}</span>}</div>
-        {entitlements?.is_trial && <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-[color:var(--fg-15)]" aria-hidden="true"><div className="h-full bg-[#2aa3ff]" style={{ width: `${meterWidth(30 - trialDays, 30)}%` }} /></div>}
-        {entitlements && <div className="mt-3 grid grid-cols-2 gap-4">
-          {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, entitlements.max_instant_watches]] as const).map(([label, count, allowance]) => <div key={label}>
-            <div className="flex items-baseline justify-between gap-2 text-xs"><span className="text-[color:var(--fg-60)]">{label}</span><span className="font-medium tabular-nums text-[color:var(--fg-85)]">{c.usage(count, allowance)}</span></div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[color:var(--fg-15)]" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={allowance} aria-valuenow={Math.min(count, allowance)}><div className="h-full bg-[#2aa3ff]" style={{ width: `${meterWidth(count, allowance)}%` }} /></div>
-          </div>)}
-        </div>}
+    </header>
+
+    <section data-testid="assistant-status-strip" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/55 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 text-xs"><span className="font-medium text-[color:var(--fg-85)]">{planLabel || c.loading}</span><div className="flex items-center gap-2">{planIsFull && <span className="rounded-full bg-[#2aa3ff]/10 px-2 py-0.5 font-medium text-[#2aa3ff]">{c.fullPlan}</span>}{entitlements?.is_trial && <span className={trialUrgency}>{c.trialDays(trialDays)}</span>}</div></div>
+      {entitlements && <div className="mt-2 grid grid-cols-2 gap-4 text-xs">
+        {([[c.following, ownedOngoingWatchCount, entitlements.max_ongoing_watches], [c.instant, ownedInstantWatchCount, Math.max(0, entitlements.max_instant_watches)]] as const).map(([label, count, allowance]) => <div key={label} className="flex items-baseline justify-between gap-2"><span className="text-[color:var(--fg-55)]">{label}</span><span className="font-medium tabular-nums text-[color:var(--fg-80)]">{c.usage(count, allowance)}</span></div>)}
       </div>
+      }
+    </section>
+
+    <section data-testid="assistant-composer" className="mt-4 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/55 p-4">
+      <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-90)] outline-none placeholder:text-[color:var(--fg-45)]" />
       <button type="button" onClick={createWatch} disabled={creating || reachedWatchLimit} aria-disabled={creating || reachedWatchLimit} className="mt-3 h-12 w-full rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-sm font-semibold tracking-wide text-white disabled:cursor-not-allowed disabled:border-[color:var(--bd-20)] disabled:bg-[color:var(--fg-35)] disabled:opacity-60">{creating ? c.creating : c.button}</button>
-      {planIsFull && <p className="mt-2 text-center text-xs text-[color:var(--fg-55)]">{c.fullPlan}</p>}
-      {message && <div className="mt-4 rounded-2xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 p-4 text-sm text-[color:var(--fg-85)]"><strong>{message}</strong><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.title}</div><div className="mt-1 break-words text-[color:var(--fg-65)]">{selected?.trigger_description}</div><div className="mt-2 text-[color:var(--fg-70)]">{c.onlyRelevant}</div></div>}
       {error && <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-300"><span>{error}</span><button type="button" onClick={loadAssistant} className="shrink-0 rounded-full border border-red-300/50 px-3 py-1 text-xs">Retry</button></div>}
-    </div>
+    </section>
+    {message && <div className="mt-3 px-4 text-sm text-[color:var(--fg-65)]">{message}</div>}
 
     <section className="mt-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.tasks}</h2>
+        <h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.following}</h2>
+        {!loading && <span className="text-xs text-[color:var(--fg-50)]">{c.thingCount(watches.length)}</span>}
       </div>
       {loading ? <p className="mt-4 text-sm text-[color:var(--fg-55)]">{c.loading}</p> : watches.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyTasks}</p> : <div className="mt-3 space-y-3">{watches.map((w) => {
         const latest = updates.find((u) => u.watch_id === w.id)

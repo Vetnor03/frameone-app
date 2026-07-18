@@ -5,12 +5,11 @@ import { readFileSync } from 'node:fs'
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20260716120000_add_watch_onboarding_state.sql', import.meta.url), 'utf8')
 
-test('Watch suggestions wait for durable onboarding state and hide immediately after creation', () => {
-  assert.match(assistant, /hasCreatedWatch, setHasCreatedWatch] = useState<boolean \| null>\(null\)/)
+test('Watch onboarding state remains durable after suggestions are removed from the focused composer', () => {
+  assert.match(assistant, /\[, setHasCreatedWatch\] = useState<boolean \| null>\(null\)/)
   assert.match(assistant, /from\('user_onboarding_state'\)\.select\('has_created_watch'\)/)
-  assert.match(assistant, /!loading && hasCreatedWatch === false/)
   assert.match(assistant, /else \{\s+setHasCreatedWatch\(true\)\s+setRequest\(''\)/)
-  assert.doesNotMatch(assistant, /watches\.length === 0 &&[^\n]*c\.examples/)
+  assert.doesNotMatch(assistant, /c\.examples\.map/)
 })
 
 test('Watch creation records onboarding state transactionally and deletion cannot reset it', () => {
