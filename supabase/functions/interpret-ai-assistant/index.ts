@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { monitoringModelFromEnv, OPENAI_RESPONSES_URL } from '../_shared/monitoring/provider.ts'
+import { canonicalizeWatchIntent, canonicalWatchKey, monitoringModelFromEnv, OPENAI_RESPONSES_URL } from '../_shared/monitoring/provider.ts'
 import { normalizeMonitoringClass, urgentUntilFrom } from '../_shared/monitoring/schedule.ts'
 
 const MINUTES = 60_000
@@ -84,7 +84,9 @@ async function processJob(service: any, job: any) {
       if ((count ?? 0) >= maxActive && watch.monitoring_class !== 'active' && watch.monitoring_class !== 'urgent') interpreted.monitoring_class = 'normal'
     }
     const finalMonitoringClass = normalizeMonitoringClass(interpreted.monitoring_class, job.request_snapshot)
-    const { error: rpcError } = await service.rpc('apply_ai_assistant_interpretation', { p_watch_id: watch.id, p_owner_user_id: watch.owner_user_id, p_request_snapshot: job.request_snapshot, p_title: interpreted.title, p_normalized_goal: interpreted.normalized_goal, p_trigger_description: interpreted.trigger_description, p_search_guidance: interpreted.search_guidance, p_frequency_minutes: interpreted.frequency_minutes, p_completion_condition: interpreted.completion_condition, p_preferred_language: interpreted.preferred_language, p_monitoring_class: finalMonitoringClass, p_urgent_until: finalMonitoringClass === 'urgent' ? urgentUntilFrom() : null })
+    const canonicalIntent = canonicalizeWatchIntent({ ...watch, ...interpreted, monitoring_class: finalMonitoringClass })
+    const canonicalKey = canonicalIntent ? await canonicalWatchKey(canonicalIntent) : null
+    const { error: rpcError } = await service.rpc('apply_ai_assistant_interpretation', { p_watch_id: watch.id, p_owner_user_id: watch.owner_user_id, p_request_snapshot: job.request_snapshot, p_title: interpreted.title, p_normalized_goal: interpreted.normalized_goal, p_trigger_description: interpreted.trigger_description, p_search_guidance: interpreted.search_guidance, p_frequency_minutes: interpreted.frequency_minutes, p_completion_condition: interpreted.completion_condition, p_preferred_language: interpreted.preferred_language, p_monitoring_class: finalMonitoringClass, p_urgent_until: finalMonitoringClass === 'urgent' ? urgentUntilFrom() : null, p_canonical_key: canonicalKey, p_canonical_intent: canonicalIntent })
     if (rpcError) throw rpcError
     await service.from('ai_assistant_interpretation_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: true, interpreted: true }

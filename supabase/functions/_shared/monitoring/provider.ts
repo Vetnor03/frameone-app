@@ -3,6 +3,76 @@ export type WatchStatus = 'no_change' | 'change' | 'uncertain' | 'error'
 export const DEFAULT_OPENAI_MONITORING_MODEL = 'gpt-4.1-mini'
 export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
+
+export type CanonicalWatchIntent = {
+  schema_version: number
+  topic: string
+  location: string | null
+  entities: string[]
+  intent: string
+  filters: string[]
+  time_horizon: string | null
+  update_requirements: string[]
+}
+
+function normalizeCanonicalText(value: unknown, max = 140) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(?:football)\b/g, 'soccer')
+    .replace(/\b(?:matches|games|fixtures|events)\b/g, 'match')
+    .replace(/[^a-z0-9æøå]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, max)
+}
+
+function canonicalArray(values: unknown, maxItems: number, maxLen = 100) {
+  const arr = Array.isArray(values) ? values : []
+  return [...new Set(arr.map((v) => normalizeCanonicalText(v, maxLen)).filter(Boolean))].sort().slice(0, maxItems)
+}
+
+function detectLocation(text: string) {
+  const m = text.match(/\b(?:in|near|around|within|i|nær|rundt)\s+([a-zæøå][a-zæøå .-]{1,60}?)(?:\s+(?:area|området|within|under|near|nær|this|denne|next|neste)|$|[,.])/i)
+  return normalizeCanonicalText(m?.[1] || '', 80) || null
+}
+
+function detectTimeHorizon(text: string) {
+  const t = text.toLowerCase()
+  const within = t.match(/(?:within|under|next|neste|kommende)\s+(\d+)?\s*(day|days|week|weeks|month|months|dag|dager|uke|uker|måned|måneder|km|kilometer)/i)
+  if (within) return normalizeCanonicalText(within[0], 60)
+  if (/\b(today|i dag)\b/i.test(t)) return 'today'
+  if (/\b(tomorrow|i morgen)\b/i.test(t)) return 'tomorrow'
+  if (/\b(this weekend|denne helgen)\b/i.test(t)) return 'this weekend'
+  return null
+}
+
+export function canonicalizeWatchIntent(watch: Record<string, unknown>): CanonicalWatchIntent | null {
+  const guidance = (watch.search_guidance && typeof watch.search_guidance === 'object') ? watch.search_guidance as Record<string, unknown> : {}
+  const source = [watch.normalized_goal, watch.trigger_description, ...(Array.isArray(guidance.queries) ? guidance.queries : [])].join(' ')
+  const topic = normalizeCanonicalText(watch.title || watch.normalized_goal || watch.original_request, 80)
+  const intent = normalizeCanonicalText(watch.trigger_description || watch.normalized_goal || watch.original_request, 180)
+  if (!topic || !intent) return null
+  return {
+    schema_version: 1,
+    topic,
+    location: detectLocation(source) || detectLocation(String(watch.original_request || '')),
+    entities: canonicalArray(guidance.source_priorities, 8),
+    intent,
+    filters: canonicalArray(guidance.must_not_trigger, 8),
+    time_horizon: detectTimeHorizon(source) || detectTimeHorizon(String(watch.original_request || '')),
+    update_requirements: canonicalArray([watch.completion_condition, watch.monitoring_class].filter(Boolean), 6),
+  }
+}
+
+export async function canonicalWatchKey(intent: CanonicalWatchIntent) {
+  const stable = JSON.stringify(intent, Object.keys(intent).sort())
+  const bytes = new TextEncoder().encode(stable)
+  const hash = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export type MonitoringSource = { url: string; title: string; published_at: string | null }
 export type CitationSource = { url: string; normalized_url: string; title: string; start_index: number | null; end_index: number | null }
 export type MonitoringProviderResult = {
