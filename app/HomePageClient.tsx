@@ -7849,7 +7849,8 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
   }
 
   async function savePreference(push_enabled: boolean, permission_state: typeof permission) {
-    await fetch('/api/notifications/preference', { method: 'PUT', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ push_enabled, permission_state }) })
+    const response = await fetch('/api/notifications/preference', { method: 'PUT', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ push_enabled, permission_state }) })
+    if (!response.ok) throw new Error('notification_preference_save_failed')
     setEnabled(push_enabled)
     setPermission(permission_state)
   }
@@ -7892,11 +7893,13 @@ function NotificationsSetting({ language }: { language: AppLanguage }) {
         return
       }
       const keyRes = await fetch('/api/notifications/vapid-key')
+      if (!keyRes.ok) throw new Error('vapid_key_request_failed')
       const { publicKey } = await keyRes.json()
       if (!publicKey) throw new Error('missing_vapid_public_key')
       const registration = await navigator.serviceWorker.register('/sw.js')
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) })
-      await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify(subscription) })
+      const subscriptionResponse = await fetch('/api/notifications/subscription', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify(subscription) })
+      if (!subscriptionResponse.ok) throw new Error('push_subscription_save_failed')
       await savePreference(true, 'granted')
     } catch (error) {
       setMessage(errorMessage(error))

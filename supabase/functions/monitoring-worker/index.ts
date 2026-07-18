@@ -204,11 +204,12 @@ async function processJob(supabase: any, job: any) {
     if (createdUpdate && createdUpdateId) {
       try {
         await supabase.rpc('queue_monitoring_update_push', { p_monitoring_update_id: createdUpdateId })
-        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-monitoring-update-push`, {
+        const pushResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-monitoring-update-push`, {
           method: 'POST',
           headers: { authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'content-type': 'application/json' },
           body: JSON.stringify({ monitoring_update_id: createdUpdateId }),
         })
+        if (!pushResponse.ok) console.warn('[monitoring-worker:push-fail-soft]', { update_id: createdUpdateId, status: pushResponse.status })
       } catch (pushError) {
         console.warn('[monitoring-worker:push-fail-soft]', { update_id: createdUpdateId, error: String((pushError as Error)?.message || pushError) })
       }
