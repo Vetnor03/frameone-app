@@ -25,6 +25,20 @@ function row(id, hoursAgo, extra = {}) {
 
 const options = { memberUserIds: ['member-a', 'member-b'], now: new Date('2026-07-14T12:00:00.000Z'), limit: 8 }
 
+test('AI Assistant customer-facing timestamps use localized 24-hour time without AM or PM', () => {
+  const formatterBlock = assistant.slice(assistant.indexOf('function friendlyAssistantTime'), assistant.indexOf('function sourceUrls'))
+  assert.match(formatterBlock, /dateStyle: 'medium'/)
+  assert.match(formatterBlock, /timeStyle: 'short'/)
+  assert.match(formatterBlock, /hour12: false/)
+  assert.doesNotMatch(formatterBlock, /hour12: true|AM|PM/)
+
+  const english = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', hour12: false }).format(new Date('2026-07-18T17:46:00.000Z'))
+  const norwegian = new Intl.DateTimeFormat('nb-NO', { dateStyle: 'medium', timeStyle: 'short', hour12: false }).format(new Date('2026-07-18T05:00:00.000Z'))
+  assert.match(english, /17:46/)
+  assert.match(norwegian, /05:00/)
+  assert.doesNotMatch(`${english} ${norwegian}`, /AM|PM/)
+})
+
 function mirrorSnapshotModules() {
   const match = route.match(/const MODULES = new Set\(\[([\s\S]*?)\]\)/)
   assert.ok(match, 'Mirror snapshot MODULES whitelist should be declared as a Set literal')
