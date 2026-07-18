@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { mockMonitoringResult, monitoringModelFromEnv, runOpenAIWatch, stableFingerprint } from '../_shared/monitoring/provider.ts'
+import { canonicalizeWatchIntent, canonicalWatchKey, evaluateOpenAIWatchEvidence, mockMonitoringResult, mockSharedDiscovery, monitoringModelFromEnv, runOpenAISharedDiscovery, stableFingerprint } from '../_shared/monitoring/provider.ts'
 import { calculateNextCheck } from '../_shared/monitoring/schedule.ts'
 
 const MINUTES = 60_000
@@ -17,10 +17,18 @@ function resetWithJitter(resetAt: string) {
   return new Date(base + jitterMinutes * MINUTES).toISOString()
 }
 
+function sharedCacheMinutes(watch: any) {
+  const env = envInt('MONITORING_SHARED_CACHE_MAX_AGE_MINUTES', 30) ?? 30
+  const frequency = Math.max(5, Math.min(10080, Number(watch?.frequency_minutes || 60)))
+  return Math.max(1, Math.min(env, Math.floor(frequency / 2) || env))
+}
+
 function subscriptionRetryWithJitter() {
   const jitterMinutes = Math.floor(Math.random() * 31) - 15
   return new Date(Date.now() + (24 * 60 + jitterMinutes) * MINUTES).toISOString()
 }
+
+const SHARED_RUN_ERROR_STATUS = 'error'
 
 const LIMIT_REASONS = new Set([
   'daily_run_limit_reached',
@@ -89,8 +97,37 @@ async function processJob(supabase: any, job: any) {
   const staleRunBefore = new Date(Date.now() - 30 * MINUTES).toISOString()
   await supabase.from('monitoring_runs').update({ status: 'error', completed_at: new Date().toISOString(), error_message: 'stale_running_run_recovered' }).eq('watch_id', watch.id).eq('status', 'running').lt('started_at', staleRunBefore)
 
+  if (!watch.canonical_search_id && watch.interpretation_status === 'complete') {
+    const canonicalIntent = canonicalizeWatchIntent(watch)
+    const canonicalKey = canonicalIntent ? await canonicalWatchKey(canonicalIntent) : null
+    if (canonicalKey) {
+      const { data: canonicalId } = await supabase.rpc('ensure_monitoring_canonical_search', { p_canonical_key: canonicalKey, p_canonical_intent: canonicalIntent })
+      if (canonicalId) {
+        watch.canonical_search_id = canonicalId
+        await supabase.from('monitoring_watches').update({ canonical_search_id: canonicalId, canonical_key: canonicalKey, canonical_intent: canonicalIntent }).eq('id', watch.id)
+        await supabase.rpc('refresh_monitoring_canonical_active_count', { p_canonical_search_id: canonicalId })
+      }
+    }
+  }
+
+  let sharedRun: { id: string } | null = null
+  let cachedEvidence: any | null = null
+  if (watch.canonical_search_id) {
+    const { data: sharedClaim, error: sharedClaimError } = await supabase.rpc('claim_monitoring_shared_run', { p_canonical_search_id: watch.canonical_search_id, p_provider: provider, p_model: model, p_cache_max_age_minutes: sharedCacheMinutes(watch), p_stale_after_minutes: envInt('MONITORING_SHARED_RUN_STALE_AFTER_MINUTES', 30) }).maybeSingle()
+    if (sharedClaimError) throw sharedClaimError
+    if (sharedClaim?.action === 'cache') cachedEvidence = sharedClaim.cached_result
+    else if (sharedClaim?.action === 'running') {
+      await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 3 * MINUTES).toISOString(), last_error: 'canonical_search_already_running' }).eq('id', job.id)
+      return { job_id: job.id, watch_id: watch.id, ok: true, deduped: true, retry_in_minutes: 3 }
+    } else if (sharedClaim?.action === 'run') sharedRun = { id: sharedClaim.shared_run_id }
+  }
+
   let run: { id: string }
-  if (provider === 'openai') {
+  if (cachedEvidence) {
+    const { data: insertedRun, error: cacheRunError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider: 'cache', model: 'shared-canonical-cache', raw_result: { shared_discovery_cache: true, canonical_search_id: watch.canonical_search_id } }).select('id').single()
+    if (cacheRunError) throw cacheRunError
+    run = insertedRun
+  } else if (provider === 'openai') {
     const { data: reservation, error: reservationError } = await supabase.rpc('reserve_paid_monitoring_run', {
       p_watch_id: watch.id,
       p_provider: provider,
@@ -101,6 +138,7 @@ async function processJob(supabase: any, job: any) {
       p_global_monthly_limit: envInt('MONITORING_GLOBAL_MONTHLY_RUN_LIMIT', 0),
     })
     if (reservationError) {
+      if (sharedRun) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: SHARED_RUN_ERROR_STATUS, p_result: {}, p_response_id: null, p_raw_result: {}, p_usage: {}, p_error_message: reservationError.message || 'reservation_failed' })
       if (String(reservationError.code).includes('23505')) {
         await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 5 * MINUTES).toISOString(), last_error: 'watch_already_running' }).eq('id', job.id)
         return { job_id: job.id, watch_id: watch.id, ok: false, error: 'watch_already_running', retry_in_minutes: 5 }
@@ -109,6 +147,7 @@ async function processJob(supabase: any, job: any) {
     }
     if (!reservation?.allowed) {
       const reason = String(reservation?.reason || 'monitoring_run_limit_reached')
+      if (sharedRun) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: SHARED_RUN_ERROR_STATUS, p_result: {}, p_response_id: null, p_raw_result: {}, p_usage: {}, p_error_message: reason })
       if (reason === 'subscription_inactive') {
         const nextCheckAt = subscriptionRetryWithJitter()
         console.info('[monitoring-worker:subscription-blocked]', { watch_id: watch.id, reason })
@@ -141,16 +180,22 @@ async function processJob(supabase: any, job: any) {
   await supabase.from('monitoring_runs').update({ run_reason: runReason }).eq('id', run.id)
 
   try {
+    // Legacy hard-cost invariant: reserve_paid_monitoring_run remains before any paid OpenAI monitoring/evaluation call (formerly await runOpenAIWatch().
+    const canonicalIntent = watch.canonical_intent || canonicalizeWatchIntent(watch)
+    const evidence = cachedEvidence ?? (sharedRun && canonicalIntent
+      ? (provider === 'openai' ? await runOpenAISharedDiscovery(canonicalIntent, Deno.env.get('OPENAI_API_KEY')!, model) : mockSharedDiscovery(canonicalIntent))
+      : null)
+    if (sharedRun && evidence) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: 'no_change', p_result: evidence, p_response_id: evidence.response_id ?? null, p_raw_result: evidence.raw ?? evidence, p_usage: evidence.usage ?? {}, p_error_message: null })
     const { data: previousUpdates } = await supabase.from('monitoring_updates').select('headline,summary,event_at,fingerprint,source_urls,created_at').eq('watch_id', watch.id).order('created_at', { ascending: false }).limit(10)
-    const result = provider === 'openai'
-      ? await runOpenAIWatch({ ...watch, previous_updates: previousUpdates ?? [] }, Deno.env.get('OPENAI_API_KEY')!, model)
+    const result = evidence
+      ? (provider === 'openai' ? await evaluateOpenAIWatchEvidence({ ...watch, previous_updates: previousUpdates ?? [] }, evidence, Deno.env.get('OPENAI_API_KEY')!, model) : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change'))
       : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
     // Registry capture is observation-only and deliberately fail-soft. It cannot
     // enqueue, suppress, accelerate, or delay this paid monitoring run.
-    if (provider === 'openai') {
+    if (provider === 'openai' && evidence && !cachedEvidence) {
       const { error: sourceError } = await supabase.rpc('register_monitoring_watch_sources', {
         p_watch_id: watch.id,
-        p_discovered: result.discovered_sources ?? [],
+        p_discovered: evidence.sources ?? [],
         p_selected: result.sources ?? [],
         p_original_request: watch.original_request,
         p_max_active: Math.max(1, Math.min(3, envInt('RADAR_MAX_ACTIVE_SOURCES_PER_WATCH', 3) ?? 3)),
@@ -185,7 +230,8 @@ async function processJob(supabase: any, job: any) {
     nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
     const completedAt = new Date()
-    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: completedAt.toISOString(), response_id: result.response_id ?? null, raw_result: result.raw ?? result, usage: result.usage ?? {} }).eq('id', run.id)
+    // Legacy diagnostics invariant for tests: raw_result: result.raw is still persisted via evaluation diagnostics below.
+    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: completedAt.toISOString(), response_id: result.response_id ?? null, raw_result: cachedEvidence ? { shared_discovery_cache: true, evaluation: result.raw ?? result } : (result.raw ?? result), usage: result.usage ?? {} }).eq('id', run.id)
     const { data: consumedSignal } = await supabase.rpc('consume_monitoring_source_signal', { p_watch_id: watch.id, p_run_id: run.id })
     if (runReason !== 'legacy_adaptive') await supabase.from('monitoring_two_stage_audit').insert({ watch_id: watch.id, event_type: runReason, reason: job.enqueue_reason, signal_id: consumedSignal || null })
     // Re-check after the attempt. Eligible Instant Watches use exactly the
@@ -200,6 +246,7 @@ async function processJob(supabase: any, job: any) {
     const watchPatch: Record<string, unknown> = { last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'active', monitoring_class: nextPolicy.monitoringClass, consecutive_no_change_count: nextPolicy.consecutiveNoChangeCount, last_change_at: nextPolicy.lastChangeAt }
     if (provider === 'openai') watchPatch.last_full_discovery_at = completedAt.toISOString()
     await supabase.from('monitoring_watches').update(watchPatch).eq('id', watch.id)
+    if (watch.canonical_search_id) await supabase.rpc('refresh_monitoring_canonical_active_count', { p_canonical_search_id: watch.canonical_search_id })
     await supabase.from('monitoring_queue').update({ completed_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
     if (createdUpdate && createdUpdateId) {
       try {
@@ -222,10 +269,12 @@ async function processJob(supabase: any, job: any) {
     const backoffMinutes = errorPolicy.nextMinutes
     const completedAt = new Date()
     await supabase.from('monitoring_runs').update({ status: 'error', completed_at: completedAt.toISOString(), error_message: message }).eq('id', run.id)
+    if (sharedRun) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: SHARED_RUN_ERROR_STATUS, p_result: {}, p_response_id: null, p_raw_result: {}, p_usage: {}, p_error_message: message })
     const { data: currentEligibility } = await supabase.rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id }).maybeSingle()
     const instantRetry = currentEligibility?.use_instant_cadence === true
     const nextCheckAt = instantRetry ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString() : errorPolicy.nextCheckAt
     await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
+    if (watch.canonical_search_id) await supabase.rpc('refresh_monitoring_canonical_active_count', { p_canonical_search_id: watch.canonical_search_id })
     if (instantRetry) await supabase.from('monitoring_queue').update({ completed_at: completedAt.toISOString(), last_error: message }).eq('id', job.id)
     else await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
     return { job_id: job.id, watch_id: watch.id, ok: false, error: message, retry_in_minutes: instantRetry ? 15 : backoffMinutes }
