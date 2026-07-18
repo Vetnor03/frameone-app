@@ -1228,6 +1228,7 @@ export default function HomePage() {
   }, [cellsByLayout, fontSize, language, layoutKey, modulesJson, physicalFrameSnapshot, theme])
 
   const stickySettingsRef = useRef(false)
+  const [settingsSubpage, setSettingsSubpage] = useState<'subscription' | null>(null)
   const preferInstantScrollRef = useRef(false)
   const isLoadedRef = useRef(false)
   const getTabScrollBehavior = useCallback((): ScrollBehavior => {
@@ -1243,6 +1244,7 @@ export default function HomePage() {
     if (tab === 'settings') {
       stickySettingsRef.current = true
       preferInstantScrollRef.current = true
+      setSettingsSubpage(searchParams?.get('subpage') === 'subscription' ? 'subscription' : null)
       setActiveTab('settings')
     }
   }, [searchParams])
@@ -2207,6 +2209,7 @@ async function handleSelectTab(k: TabKey) {
   preferInstantScrollRef.current = false
   stickySettingsRef.current = k === 'settings'
   setRemindersConnectScreenOpen(false)
+  if (k !== 'settings') setSettingsSubpage(null)
 
   setActiveTab(k)
 }
@@ -2280,6 +2283,7 @@ async function handleSelectTab(k: TabKey) {
                   onFramesChanged={handleFramesChanged}
                   onLogout={logout}
                   onGo={(path) => router.push(path)}
+                  initialSubpage={settingsSubpage}
                 />
               )}
 
@@ -2325,7 +2329,7 @@ async function handleSelectTab(k: TabKey) {
                   </div>
 
                   {activeTab === 'assistant' ? (
-                    <AIAssistantTab language={language} activeDeviceId={activeDeviceId} />
+                    <AIAssistantTab language={language} activeDeviceId={activeDeviceId} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
                   ) : activeTab === 'reminders' && remindersConnectScreenOpen ? (
                     <ConnectAppsScreen
                       language={language}
@@ -7691,6 +7695,7 @@ function SettingsTab({
   onFramesChanged,
   onLogout,
   onGo,
+  initialSubpage,
 }: {
   language: AppLanguage
   theme: 'dark' | 'light'
@@ -7704,6 +7709,7 @@ function SettingsTab({
   onFramesChanged: (frames: MemberRow[]) => void
   onLogout: () => void
   onGo: (path: string) => void
+  initialSubpage?: 'subscription' | null
 }) {
   const from = '?from=settings'
   const t = tx(language)
@@ -7711,7 +7717,7 @@ function SettingsTab({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
   const [showBottomFade, setShowBottomFade] = useState(false)
-  const [subpage, setSubpage] = useState<'subscription' | null>(null)
+  const [subpage, setSubpage] = useState<'subscription' | null>(initialSubpage ?? null)
 
   function updateFadeState() {
     const el = scrollRef.current
@@ -7731,6 +7737,10 @@ function SettingsTab({
     setShowTopFade(el.scrollTop > 2)
     setShowBottomFade(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
   }
+
+  useEffect(() => {
+    setSubpage(initialSubpage ?? null)
+  }, [initialSubpage])
 
   useEffect(() => {
     const el = scrollRef.current
