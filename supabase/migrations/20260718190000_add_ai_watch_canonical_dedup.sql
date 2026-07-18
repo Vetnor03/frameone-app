@@ -68,12 +68,16 @@ begin
   return v_id;
 end $$;
 
-create or replace function public.claim_monitoring_shared_run(p_canonical_search_id uuid, p_provider text, p_model text, p_cache_max_age_minutes integer default 30)
+create or replace function public.claim_monitoring_shared_run(p_canonical_search_id uuid, p_provider text, p_model text, p_cache_max_age_minutes integer default 30, p_stale_after_minutes integer default 30)
 returns table(action text, shared_run_id uuid, cached_result jsonb) language plpgsql security definer set search_path=public as $$
 declare cached public.monitoring_shared_runs; inserted_id uuid;
 begin
   if p_canonical_search_id is null then return query select 'skip'::text, null::uuid, null::jsonb; return; end if;
   perform pg_advisory_xact_lock(hashtextextended(p_canonical_search_id::text, 42));
+  update public.monitoring_shared_runs
+    set status='error', completed_at=now(), error_message='stale_shared_run_recovered'
+    where canonical_search_id=p_canonical_search_id and status='running'
+      and started_at < now() - make_interval(mins => greatest(1, coalesce(p_stale_after_minutes,30)));
   select * into cached from public.monitoring_shared_runs r
    where r.canonical_search_id=p_canonical_search_id and r.status in ('no_change','change','uncertain')
      and r.completed_at >= now() - make_interval(mins => greatest(0, coalesce(p_cache_max_age_minutes,30)))
@@ -121,8 +125,8 @@ revoke execute on function public.apply_ai_assistant_interpretation(uuid,uuid,te
 grant execute on function public.apply_ai_assistant_interpretation(uuid,uuid,text,text,text,text,jsonb,integer,text,text,text,timestamptz,text,jsonb) to service_role;
 revoke execute on function public.ensure_monitoring_canonical_search(text,jsonb) from public, anon, authenticated;
 grant execute on function public.ensure_monitoring_canonical_search(text,jsonb) to service_role;
-revoke execute on function public.claim_monitoring_shared_run(uuid,text,text,integer) from public, anon, authenticated;
-grant execute on function public.claim_monitoring_shared_run(uuid,text,text,integer) to service_role;
+revoke execute on function public.claim_monitoring_shared_run(uuid,text,text,integer,integer) from public, anon, authenticated;
+grant execute on function public.claim_monitoring_shared_run(uuid,text,text,integer,integer) to service_role;
 revoke execute on function public.complete_monitoring_shared_run(uuid,text,jsonb,text,jsonb,jsonb,text) from public, anon, authenticated;
 grant execute on function public.complete_monitoring_shared_run(uuid,text,jsonb,text,jsonb,jsonb,text) to service_role;
 revoke execute on function public.refresh_monitoring_canonical_active_count(uuid) from public, anon, authenticated;

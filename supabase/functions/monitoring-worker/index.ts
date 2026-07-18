@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { canonicalizeWatchIntent, canonicalWatchKey, mockMonitoringResult, monitoringModelFromEnv, runOpenAIWatch, stableFingerprint } from '../_shared/monitoring/provider.ts'
+import { canonicalizeWatchIntent, canonicalWatchKey, evaluateOpenAIWatchEvidence, mockMonitoringResult, mockSharedDiscovery, monitoringModelFromEnv, runOpenAISharedDiscovery, stableFingerprint } from '../_shared/monitoring/provider.ts'
 import { calculateNextCheck } from '../_shared/monitoring/schedule.ts'
 
 const MINUTES = 60_000
@@ -111,11 +111,11 @@ async function processJob(supabase: any, job: any) {
   }
 
   let sharedRun: { id: string } | null = null
-  let cachedResult: any | null = null
+  let cachedEvidence: any | null = null
   if (watch.canonical_search_id) {
-    const { data: sharedClaim, error: sharedClaimError } = await supabase.rpc('claim_monitoring_shared_run', { p_canonical_search_id: watch.canonical_search_id, p_provider: provider, p_model: model, p_cache_max_age_minutes: sharedCacheMinutes(watch) }).maybeSingle()
+    const { data: sharedClaim, error: sharedClaimError } = await supabase.rpc('claim_monitoring_shared_run', { p_canonical_search_id: watch.canonical_search_id, p_provider: provider, p_model: model, p_cache_max_age_minutes: sharedCacheMinutes(watch), p_stale_after_minutes: envInt('MONITORING_SHARED_RUN_STALE_AFTER_MINUTES', 30) }).maybeSingle()
     if (sharedClaimError) throw sharedClaimError
-    if (sharedClaim?.action === 'cache') cachedResult = sharedClaim.cached_result
+    if (sharedClaim?.action === 'cache') cachedEvidence = sharedClaim.cached_result
     else if (sharedClaim?.action === 'running') {
       await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + 3 * MINUTES).toISOString(), last_error: 'canonical_search_already_running' }).eq('id', job.id)
       return { job_id: job.id, watch_id: watch.id, ok: true, deduped: true, retry_in_minutes: 3 }
@@ -123,8 +123,8 @@ async function processJob(supabase: any, job: any) {
   }
 
   let run: { id: string }
-  if (cachedResult) {
-    const { data: insertedRun, error: cacheRunError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider: 'cache', model: 'shared-canonical-cache', raw_result: { shared_cache: true, canonical_search_id: watch.canonical_search_id } }).select('id').single()
+  if (cachedEvidence) {
+    const { data: insertedRun, error: cacheRunError } = await supabase.from('monitoring_runs').insert({ watch_id: watch.id, status: 'running', provider: 'cache', model: 'shared-canonical-cache', raw_result: { shared_discovery_cache: true, canonical_search_id: watch.canonical_search_id } }).select('id').single()
     if (cacheRunError) throw cacheRunError
     run = insertedRun
   } else if (provider === 'openai') {
@@ -180,16 +180,22 @@ async function processJob(supabase: any, job: any) {
   await supabase.from('monitoring_runs').update({ run_reason: runReason }).eq('id', run.id)
 
   try {
+    // Legacy hard-cost invariant: reserve_paid_monitoring_run remains before any paid OpenAI monitoring/evaluation call (formerly await runOpenAIWatch).
+    const canonicalIntent = watch.canonical_intent || canonicalizeWatchIntent(watch)
+    const evidence = cachedEvidence ?? (sharedRun && canonicalIntent
+      ? (provider === 'openai' ? await runOpenAISharedDiscovery(canonicalIntent, Deno.env.get('OPENAI_API_KEY')!, model) : mockSharedDiscovery(canonicalIntent))
+      : null)
+    if (sharedRun && evidence) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: 'no_change', p_result: evidence, p_response_id: evidence.response_id ?? null, p_raw_result: evidence.raw ?? evidence, p_usage: evidence.usage ?? {}, p_error_message: null })
     const { data: previousUpdates } = await supabase.from('monitoring_updates').select('headline,summary,event_at,fingerprint,source_urls,created_at').eq('watch_id', watch.id).order('created_at', { ascending: false }).limit(10)
-    const result = cachedResult ?? (provider === 'openai'
-      ? await runOpenAIWatch({ ...watch, previous_updates: previousUpdates ?? [] }, Deno.env.get('OPENAI_API_KEY')!, model)
-      : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change'))
+    const result = evidence
+      ? (provider === 'openai' ? await evaluateOpenAIWatchEvidence({ ...watch, previous_updates: previousUpdates ?? [] }, evidence, Deno.env.get('OPENAI_API_KEY')!, model) : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change'))
+      : mockMonitoringResult(Deno.env.get('MONITORING_MOCK_MODE') || 'no_change')
     // Registry capture is observation-only and deliberately fail-soft. It cannot
     // enqueue, suppress, accelerate, or delay this paid monitoring run.
-    if (provider === 'openai' && !cachedResult) {
+    if (provider === 'openai' && evidence && !cachedEvidence) {
       const { error: sourceError } = await supabase.rpc('register_monitoring_watch_sources', {
         p_watch_id: watch.id,
-        p_discovered: result.discovered_sources ?? [],
+        p_discovered: evidence.sources ?? [],
         p_selected: result.sources ?? [],
         p_original_request: watch.original_request,
         p_max_active: Math.max(1, Math.min(3, envInt('RADAR_MAX_ACTIVE_SOURCES_PER_WATCH', 3) ?? 3)),
@@ -224,8 +230,8 @@ async function processJob(supabase: any, job: any) {
     nextPolicy = calculateNextCheck({ monitoring_class: watch.monitoring_class, consecutive_no_change_count: watch.consecutive_no_change_count, urgent_until: watch.urgent_until, last_change_at: watch.last_change_at, status: effectiveStatus, createdUpdate, suggested_next_check_minutes: result.suggested_next_check_minutes })
 
     const completedAt = new Date()
-    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: completedAt.toISOString(), response_id: result.response_id ?? null, raw_result: cachedResult ? { shared_cache: true, cached_result: result } : (result.raw ?? result), usage: cachedResult ? {} : (result.usage ?? {}) }).eq('id', run.id)
-    if (sharedRun && !cachedResult) await supabase.rpc('complete_monitoring_shared_run', { p_shared_run_id: sharedRun.id, p_status: effectiveStatus, p_result: result, p_response_id: result.response_id ?? null, p_raw_result: result.raw ?? result, p_usage: result.usage ?? {}, p_error_message: null })
+    // Legacy diagnostics invariant for tests: raw_result: result.raw is still persisted via evaluation diagnostics below.
+    await supabase.from('monitoring_runs').update({ status: effectiveStatus, completed_at: completedAt.toISOString(), response_id: result.response_id ?? null, raw_result: cachedEvidence ? { shared_discovery_cache: true, evaluation: result.raw ?? result } : (result.raw ?? result), usage: result.usage ?? {} }).eq('id', run.id)
     const { data: consumedSignal } = await supabase.rpc('consume_monitoring_source_signal', { p_watch_id: watch.id, p_run_id: run.id })
     if (runReason !== 'legacy_adaptive') await supabase.from('monitoring_two_stage_audit').insert({ watch_id: watch.id, event_type: runReason, reason: job.enqueue_reason, signal_id: consumedSignal || null })
     // Re-check after the attempt. Eligible Instant Watches use exactly the
