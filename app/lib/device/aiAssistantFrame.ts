@@ -21,6 +21,8 @@ type AiAssistantSelectionOptions = {
   limit: number
   renderCycleId?: string | null
   previousSelectedId?: string | null
+  /** Mirror View reflects the live app inbox rather than a physical render cycle. */
+  liveMirrorView?: boolean
 }
 
 function candidateTimestamp(row: { created_at: string }) {
@@ -28,7 +30,7 @@ function candidateTimestamp(row: { created_at: string }) {
 }
 
 export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], options: AiAssistantSelectionOptions) {
-  const renderCycleMs = options.renderCycleId ? new Date(options.renderCycleId).getTime() : Number.NaN
+  const renderCycleMs = !options.liveMirrorView && options.renderCycleId ? new Date(options.renderCycleId).getTime() : Number.NaN
   const referenceNow = !Number.isNaN(renderCycleMs) ? new Date(renderCycleMs) : (options.now ?? new Date())
   const cutoffMs = referenceNow.getTime() - 24 * 60 * 60 * 1000
   const hasMembershipFilter = Array.isArray(options.memberUserIds)
@@ -47,9 +49,9 @@ export function selectAiAssistantFrameItems(rows: AiAssistantFrameUpdate[], opti
 
   const candidates = [...newestByWatch.values()]
     .filter((row) => row.is_read !== true)
-    .filter((row) => row.dismissed_from_frame !== true)
+    .filter((row) => options.liveMirrorView || row.dismissed_from_frame !== true)
     .map((row) => ({ id: String(row.id), headline: String(row.headline ?? '').trim(), summary: typeof row.summary === 'string' ? row.summary : null, created_at: String(row.created_at ?? ''), topicTitle: simplifyAiAssistantTopicTitle(row.monitoring_watches?.title, row.monitoring_watches?.preferred_language === 'no' ? 'no' : 'en') }))
-    .filter((row) => row.id && row.headline && !Number.isNaN(candidateTimestamp(row)) && candidateTimestamp(row) > cutoffMs)
+    .filter((row) => row.id && row.headline && !Number.isNaN(candidateTimestamp(row)) && (options.liveMirrorView || candidateTimestamp(row) > cutoffMs))
     .sort((a, b) => candidateTimestamp(b) - candidateTimestamp(a))
   const safeLimit = Math.max(0, Math.floor(options.limit))
   if (safeLimit <= 0 || candidates.length <= 1) return { items: candidates.slice(0, safeLimit), overflowCount: Math.max(0, candidates.length - safeLimit) }
