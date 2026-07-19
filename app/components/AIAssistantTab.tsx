@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { selectNewestUnreadUpdates } from '../lib/aiAssistantUpdates'
 
@@ -96,12 +96,17 @@ function sourceUrls(input: unknown): string[] {
   return input.map((x) => typeof x === 'string' ? x : (x && typeof x === 'object' && 'url' in x ? (x as { url?: unknown }).url : null)).filter((x): x is string => typeof x === 'string' && /^https?:\/\//i.test(x)).slice(0, 3)
 }
 
-export default function AIAssistantTab({ language, activeDeviceId, onOpenPlans }: { language: AppLanguage; activeDeviceId: string | null; onOpenPlans?: () => void }) {
+type AssistantDeepLink = { watchId: string; updateId: string | null }
+
+export default function AIAssistantTab({ language, activeDeviceId, deepLink, onDeepLinkHandled, onOpenPlans }: { language: AppLanguage; activeDeviceId: string | null; deepLink?: AssistantDeepLink | null; onDeepLinkHandled?: () => void; onOpenPlans?: () => void }) {
   const c = assistantCopy(language)
   const [request, setRequest] = useState('')
   const [watches, setWatches] = useState<AssistantWatch[]>([])
   const [updates, setUpdates] = useState<AssistantUpdate[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedUpdateId, setSelectedUpdateId] = useState<string | null>(null)
+  const watchCardRefs = useRef(new Map<string, HTMLElement>())
+  const handledDeepLinkRef = useRef<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingRequest, setEditingRequest] = useState('')
   const [busyUpdateId, setBusyUpdateId] = useState<string | null>(null)
@@ -119,6 +124,8 @@ export default function AIAssistantTab({ language, activeDeviceId, onOpenPlans }
   const reachedWatchLimit = !entitlements?.monitoring_enabled || (entitlements != null && ownedOngoingWatchCount >= entitlements.max_ongoing_watches)
   const selected = watches.find((w) => w.id === selectedId) ?? watches[0] ?? null
   const updatesByWatch = useMemo(() => updates.filter((u) => u.watch_id === selected?.id), [updates, selected?.id])
+  const selectedUpdate = updatesByWatch.find((u) => u.id === selectedUpdateId) ?? updatesByWatch[0] ?? null
+  const previousUpdates = selectedUpdate?.id === updatesByWatch[0]?.id ? updatesByWatch.slice(1) : updatesByWatch.filter((u) => u.id !== selectedUpdate?.id)
   const inboxUpdates = useMemo(() => selectNewestUnreadUpdates(updates), [updates])
 
   const loadAssistant = useCallback(async () => {
@@ -153,6 +160,22 @@ export default function AIAssistantTab({ language, activeDeviceId, onOpenPlans }
   }, [c.friendlyError])
 
   useEffect(() => { loadAssistant() }, [loadAssistant])
+
+  useEffect(() => {
+    if (loading || !deepLink) return
+    const key = `${deepLink.watchId}:${deepLink.updateId || ''}`
+    if (handledDeepLinkRef.current === key) return
+    handledDeepLinkRef.current = key
+    const watch = watches.find((candidate) => candidate.id === deepLink.watchId)
+    if (watch) {
+      const referencedUpdate = updates.find((update) => update.watch_id === watch.id && update.id === deepLink.updateId)
+      const latestUpdate = updates.find((update) => update.watch_id === watch.id)
+      setSelectedId(watch.id)
+      setSelectedUpdateId((referencedUpdate ?? latestUpdate)?.id ?? null)
+      window.requestAnimationFrame(() => watchCardRefs.current.get(watch.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+    }
+    onDeepLinkHandled?.()
+  }, [deepLink, loading, onDeepLinkHandled, updates, watches])
 
   function validateRequestText(value: string) {
     const clean = normalizeAssistantRequest(value)
@@ -332,7 +355,7 @@ export default function AIAssistantTab({ language, activeDeviceId, onOpenPlans }
         const canManageWatch = currentUserId === w.owner_user_id
         const instantSlotsFull = !!entitlements && ownedInstantWatchCount >= entitlements.max_instant_watches
         const cannotEnableInstant = !entitlements?.can_use_instant || instantSlotsFull || !ONGOING_ASSISTANT_WATCH_STATUSES.includes(w.status)
-        return <article key={w.id} onClick={() => setSelectedId(w.id)} className={`rounded-3xl border p-4 ${selected?.id === w.id ? 'border-[#2aa3ff]/70' : 'border-[color:var(--bd-15)]'} bg-[color:var(--card-bg)]/55`}>
+        return <article key={w.id} ref={(node) => { if (node) watchCardRefs.current.set(w.id, node); else watchCardRefs.current.delete(w.id) }} data-watch-id={w.id} aria-current={selected?.id === w.id ? 'true' : undefined} onClick={() => { setSelectedId(w.id); setSelectedUpdateId(updates.find((u) => u.watch_id === w.id)?.id ?? null) }} className={`rounded-3xl border p-4 transition ${selected?.id === w.id ? 'border-[#2aa3ff] bg-[#2aa3ff]/10 ring-2 ring-[#2aa3ff]/25' : 'border-[color:var(--bd-15)] bg-[color:var(--card-bg)]/55'}`}>
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{w.title}</h3>{w.is_instant && <span className="rounded-full bg-[#2aa3ff]/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#2aa3ff]">{c.instant}</span>}</div><p className="mt-1 break-words text-sm leading-5 text-[color:var(--fg-65)]">{w.trigger_description}</p></div><span className="shrink-0 rounded-full bg-[#2aa3ff]/10 px-2.5 py-1 text-[10px] text-[#2aa3ff]">{c.statuses[w.status]}</span></div>
           <p className="mt-3 text-xs text-[color:var(--fg-45)]">{c.lastChecked}: {friendlyAssistantTime(w.last_checked_at, language)}</p>
           {latest && <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{latest.headline}</p>}
@@ -348,7 +371,7 @@ export default function AIAssistantTab({ language, activeDeviceId, onOpenPlans }
 
     <section className="mt-6"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{c.updates}</h2><button type="button" disabled={busyUpdateId !== null || inboxUpdates.length === 0} onClick={markAllRead} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{c.markAllRead}</button></div>{inboxUpdates.length === 0 ? <p className="mt-4 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-5 text-sm text-[color:var(--fg-55)]">{c.emptyUpdates}</p> : <div className="mt-3 space-y-3">{inboxUpdates.map((u) => <article key={u.id} className={`rounded-3xl border border-[color:var(--bd-15)] p-4 ${u.is_read ? 'opacity-70' : ''}`}><div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-semibold text-[color:var(--fg-92)]">{u.headline}</h3>{!u.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2aa3ff]" />}</div><p className="mt-2 break-words text-sm leading-5 text-[color:var(--fg-70)]">{u.summary}</p><p className="mt-2 break-words text-xs text-[color:var(--fg-45)]">{friendlyAssistantTime(u.created_at, language)} · {watches.find((w) => w.id === u.watch_id)?.title}</p><div className="mt-3 flex flex-wrap gap-2">{sourceUrls(u.source_urls).map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[#2aa3ff]">{c.source} {i + 1}</a>)}<button type="button" disabled={busyUpdateId !== null} onClick={() => markUpdate(u.id, { is_read: !u.is_read })} className="rounded-full border border-[color:var(--bd-20)] px-3 py-1.5 text-xs text-[color:var(--fg-70)] disabled:opacity-50">{u.is_read ? c.markUnread : c.markRead}</button></div></article>)}</div>}</section>
 
-    {selected && <section className="mt-6 rounded-[2rem] border border-[color:var(--bd-15)] p-5"><h2 className="break-words text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{selected.title}</h2><p className="mt-3 break-words text-sm text-[color:var(--fg-65)]"><strong>{c.detailRequest}:</strong> {selected.original_request}</p><p className="mt-2 text-sm text-[color:var(--fg-65)]">{c.statuses[selected.status]} · {c.lastChecked}: {friendlyAssistantTime(selected.last_checked_at, language)}</p><h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.latest}</h3>{updatesByWatch[0] ? <p className="mt-2 break-words text-sm text-[color:var(--fg-70)]">{updatesByWatch[0].headline} — {updatesByWatch[0].summary}</p> : <p className="mt-2 text-sm text-[color:var(--fg-50)]">{c.emptyUpdates}</p>}<h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.previous}</h3><div className="mt-2 space-y-2">{updatesByWatch.slice(1).map((u) => <p key={u.id} className="break-words text-sm text-[color:var(--fg-60)]">{u.headline}</p>)}</div></section>}
+    {selected && <section data-testid="assistant-watch-detail" className="mt-6 rounded-[2rem] border border-[color:var(--bd-15)] p-5"><h2 className="break-words text-xs font-semibold tracking-[0.22em] text-[color:var(--fg-55)]">{selected.title}</h2><p className="mt-3 break-words text-sm text-[color:var(--fg-65)]"><strong>{c.detailRequest}:</strong> {selected.original_request}</p><p className="mt-2 text-sm text-[color:var(--fg-65)]">{c.statuses[selected.status]} · {c.lastChecked}: {friendlyAssistantTime(selected.last_checked_at, language)}</p><h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.latest}</h3>{selectedUpdate ? <p data-update-id={selectedUpdate.id} className="mt-2 break-words rounded-2xl bg-[#2aa3ff]/10 p-3 text-sm text-[color:var(--fg-70)]">{selectedUpdate.headline} — {selectedUpdate.summary}</p> : <p className="mt-2 text-sm text-[color:var(--fg-50)]">{c.emptyUpdates}</p>}<h3 className="mt-5 text-sm font-semibold text-[color:var(--fg-85)]">{c.previous}</h3><div className="mt-2 space-y-2">{previousUpdates.map((u) => <p key={u.id} className="break-words text-sm text-[color:var(--fg-60)]">{u.headline}</p>)}</div></section>}
 
     {process.env.NODE_ENV !== 'production' && <section className="mt-6 rounded-3xl border border-dashed border-[color:var(--bd-20)] p-4"><h2 className="text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{c.dev}</h2><div className="mt-3 grid grid-cols-2 gap-2">{['no change', 'new update', 'uncertain', 'error'].map((mode) => <button key={mode} onClick={() => setMessage(`Development result: ${mode}.`)} className="rounded-2xl border border-[color:var(--bd-15)] px-3 py-2 text-xs text-[color:var(--fg-65)]">{mode}</button>)}</div></section>}
   </div>
