@@ -58,11 +58,11 @@ test('a later genuine render cycle can advance from the previous selected update
   assert.deepEqual(next.items.map((x) => x.id), ['older'])
 })
 
-test('Mirror View and physical frame are tied to the same durable render marker', () => {
+test('Mirror View is independent from the physical frame durable render marker', () => {
   assert.match(statusRoute, /if \(did_render === true\)[\s\S]*payload\.last_render_at = nowIso/)
   assert.match(route, /last_render_at, last_refresh_at/)
-  assert.match(route, /aiAssistantDetail\(supabase, deviceId, statusRow\?\.last_render_at \?\? statusRow\?\.last_refresh_at \?\? null\)/)
-  assert.match(route, /renderCycleId/)
+  assert.match(route, /aiAssistantDetail\(supabase, deviceId\)/)
+  assert.doesNotMatch(route, /aiAssistantDetail\(supabase, deviceId, statusRow/)
 })
 
 test('browser time, Mirror polling time, and newly found updates after last render do not affect selection', () => {

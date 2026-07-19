@@ -107,6 +107,15 @@ test('AI Assistant frame selector excludes dismissed and read updates, and inclu
   assert.deepEqual(selected.items.map((x) => x.id), ['shared-authorized'])
 })
 
+test('AI Assistant live Mirror selector includes every current unread Update regardless of age or legacy frame dismissal', () => {
+  const selected = selectAiAssistantFrameItems([
+    row('old-unread', 72),
+    row('legacy-dismissed', 2, { dismissed_from_frame: true }),
+    row('read-hidden', 1, { is_read: true }),
+  ], { ...options, liveMirrorView: true })
+  assert.deepEqual(selected.items.map((x) => x.id), ['legacy-dismissed', 'old-unread'])
+})
+
 test('AI Assistant mirror snapshot parser accepts Assistant module cells', () => {
   assert.ok(mirrorSnapshotModules().includes('assistant'))
   assert.match(route, /parsed\.base === 'assistant'/)
@@ -132,6 +141,8 @@ test('AI Assistant mirror snapshot uses device members for shared-frame access w
   assert.match(detail, /from\('monitoring_watches'\)[\s\S]*in\('owner_user_id', memberUserIds\)[\s\S]*eq\('status', 'active'\)/)
   assert.match(detail, /monitoring_watches!inner\(owner_user_id, title, preferred_language\)/)
   assert.match(detail, /in\('monitoring_watches\.owner_user_id', memberUserIds\)/)
+  assert.match(detail, /liveMirrorView: true/)
+  assert.doesNotMatch(detail, /\.lte\('created_at'/)
   assert.doesNotMatch(detail, /eq\('show_on_frame', true\)|eq\('frame_id', frameId\)|eq\('monitoring_watches\.show_on_frame', true\)|eq\('monitoring_watches\.frame_id', frameId\)/)
   assert.doesNotMatch(detail, /eq\('is_read', false\)|eq\('dismissed_from_frame', false\)|gt\('created_at', sinceIso\)/)
   assert.match(detail, /select\('id, watch_id, headline, summary, created_at/)

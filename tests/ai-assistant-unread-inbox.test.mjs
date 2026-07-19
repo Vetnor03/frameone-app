@@ -51,6 +51,22 @@ test('frame applies newest-per-Watch before read and 24-hour eligibility filters
   assert.deepEqual(expiredNewest.items, [])
 })
 
+test('live Mirror View uses the same unread inbox state without physical-frame age or dismissal filters', () => {
+  const rows = [
+    update('old-unread', 'old-watch', '2026-07-10T12:00:00Z'),
+    { ...update('legacy-dismissed', 'dismissed-watch', '2026-07-17T12:00:00Z'), dismissed_from_frame: true },
+    update('read', 'read-watch', '2026-07-17T13:00:00Z', true),
+  ]
+  const selected = selectAiAssistantFrameItems(rows, {
+    memberUserIds: ['member'],
+    now: new Date('2026-07-17T14:00:00Z'),
+    renderCycleId: '2026-07-11T00:00:00Z',
+    liveMirrorView: true,
+    limit: 3,
+  })
+  assert.deepEqual(selected.items.map((row) => row.id), ['legacy-dismissed', 'old-unread'])
+})
+
 test('UI keeps full history while mark-all-read targets only visible inbox IDs', () => {
   assert.doesNotMatch(assistant, /limit\(40\)/)
   assert.match(assistant, /updatesByWatch\[0\]/)
