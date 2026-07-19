@@ -1101,6 +1101,7 @@ export default function HomePage() {
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
+  const [assistantDeepLink, setAssistantDeepLink] = useState<{ watchId: string; updateId: string | null } | null>(null)
   const [remindersConnectScreenOpen, setRemindersConnectScreenOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
 
@@ -1262,6 +1263,13 @@ export default function HomePage() {
 
   useEffect(() => {
     const tab = searchParams?.get('tab')
+    const watchId = searchParams?.get('watch')?.trim()
+    if ((tab === 'assistant' || tab === 'ai-assistant') && watchId) {
+      preferInstantScrollRef.current = true
+      setActiveTab('assistant')
+      setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
+      return
+    }
     if (tab === 'settings') {
       stickySettingsRef.current = true
       preferInstantScrollRef.current = true
@@ -1269,6 +1277,15 @@ export default function HomePage() {
       setActiveTab('settings')
     }
   }, [searchParams])
+
+  const finishAssistantDeepLink = useCallback(() => {
+    setAssistantDeepLink(null)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('tab')
+    url.searchParams.delete('watch')
+    url.searchParams.delete('update')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [])
 
   const dynamicTabs = useMemo(() => {
     const activeModules = Array.from(
@@ -2357,7 +2374,7 @@ async function handleSelectTab(k: TabKey) {
                   </div>
 
                   {activeTab === 'assistant' ? (
-                    <AIAssistantTab language={language} activeDeviceId={activeDeviceId} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
+                    <AIAssistantTab language={language} activeDeviceId={activeDeviceId} deepLink={assistantDeepLink} onDeepLinkHandled={finishAssistantDeepLink} onOpenPlans={() => { stickySettingsRef.current = true; preferInstantScrollRef.current = true; setSettingsSubpage('subscription'); setActiveTab('settings') }} />
                   ) : activeTab === 'reminders' && remindersConnectScreenOpen ? (
                     <ConnectAppsScreen
                       language={language}
