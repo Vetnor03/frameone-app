@@ -18,16 +18,18 @@ test('Watch notification deep link opens AI Assistant and is cleaned after handl
   assert.match(home, /onDeepLinkHandled=\{finishAssistantDeepLink\}/)
 })
 
-test('loaded matching Watch is selected, highlighted, and scrolled into view', () => {
+test('loaded matching Watch is selected and highlighted while its rendered update is scrolled into view', () => {
   assert.match(assistant, /if \(loading \|\| !deepLink\) return/)
   assert.match(assistant, /setSelectedId\(watch\.id\)/)
-  assert.match(assistant, /scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/)
   assert.match(assistant, /aria-current=\{selected\?\.id === w\.id/)
+  assert.match(assistant, /const target = selectedUpdateRef\.current \?\? watchDetailRef\.current/)
+  assert.match(assistant, /target\?\.scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/)
 })
 
 test('referenced update or newest Watch update is shown', () => {
   assert.match(assistant, /referencedUpdate \?\? latestUpdate/)
   assert.match(assistant, /data-update-id=\{selectedUpdate\.id\}/)
+  assert.match(assistant, /selectedUpdate\?\.id === updatesByWatch\[0\]\?\.id \? c\.latest : c\.selectedUpdate/)
 })
 
 test('notification click focuses an existing window and only opens when absent', () => {
