@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const sourceWorker=readFileSync(new URL('../supabase/functions/monitoring-source-worker/index.ts',import.meta.url),'utf8')
 const paidWorker=readFileSync(new URL('../supabase/functions/monitoring-worker/index.ts',import.meta.url),'utf8')
+const assistantUi=readFileSync(new URL('../app/components/AIAssistantTab.tsx',import.meta.url),'utf8')
+const scheduler=readFileSync(new URL('../supabase/functions/monitoring-scheduler/index.ts',import.meta.url),'utf8')
 const migration=readFileSync(new URL('../supabase/migrations/20260718120000_add_monitoring_watch_checked_at_touch.sql',import.meta.url),'utf8')
 const guardedMigration=readFileSync(new URL('../supabase/migrations/20260717180000_add_radar_two_stage_guarded.sql',import.meta.url),'utf8')
 
@@ -10,6 +12,23 @@ test('successful cheap source probe outcomes touch the parent watch last_checked
   for(const outcome of ['not_modified','unchanged','changed','baseline_created']) assert.ok(sourceWorker.includes(outcome),outcome)
   assert.match(sourceWorker,/await db\.from\('monitoring_watch_sources'\)\.update\([\s\S]*last_checked_at:now[\s\S]*\)\.eq\('id',source\.id\)/)
   assert.match(sourceWorker,/await db\.rpc\('touch_monitoring_watch_checked_at',\{p_watch_id:source\.watch_id,p_checked_at:now\}\)/)
+})
+
+test('each scheduler wake consumes the full evaluation queue after enqueueing due Watches',()=>{
+  const enqueueAt=scheduler.indexOf('supabase.rpc(enqueueRpc, enqueueArgs)')
+  const sourceProbeAt=scheduler.indexOf("/functions/v1/monitoring-source-worker")
+  const workerAt=scheduler.indexOf("/functions/v1/monitoring-worker")
+  assert.ok(enqueueAt >= 0 && workerAt > enqueueAt)
+  assert.ok(sourceProbeAt < 0 || workerAt > sourceProbeAt)
+  assert.match(scheduler,/monitoring-worker\?limit=\$\{workerBatch\}/)
+  assert.match(scheduler,/headers: \{ 'x-monitoring-secret': Deno\.env\.get\('MONITORING_WORKER_SECRET'\) \|\| '' \}/)
+  assert.match(scheduler,/monitoring_worker: monitoringWorker/)
+})
+
+test('worker invocation is fail-soft because the database queue is the retry boundary',()=>{
+  const workerBlock=scheduler.slice(scheduler.indexOf('// Enqueueing alone'),scheduler.indexOf('let pushRetries'))
+  assert.match(workerBlock,/try \{[\s\S]*await fetch\([\s\S]*\} catch \(_error\) \{/)
+  assert.doesNotMatch(workerBlock,/monitoring_queue[^\n]*(?:delete|completed_at)/)
 })
 
 test('HTTP 304 uses the success path that updates the watch timestamp',()=>{
@@ -22,9 +41,11 @@ test('changed cheap probe touches the watch before any guarded paid verification
   assert.match(sourceWorker,/record_guarded_source_change|enqueue_monitoring_safety_fallback/)
 })
 
-test('handled failed source probe attempt touches the parent watch with the same completion timestamp',()=>{
+test('failed source probe attempts do not claim that the parent watch was checked',()=>{
   assert.match(sourceWorker,/const completedAt=new Date\(\); const completedAtIso=completedAt\.toISOString\(\)/)
-  assert.match(sourceWorker,/last_checked_at:completedAtIso[\s\S]*db\.rpc\('touch_monitoring_watch_checked_at',\{p_watch_id:watch\.id,p_checked_at:completedAtIso\}\)[\s\S]*complete\(completedAtIso,\{last_error:code\}\)/)
+  const failedProbe=sourceWorker.slice(sourceWorker.indexOf('} catch(error) {'),sourceWorker.indexOf('function concat'))
+  assert.doesNotMatch(failedProbe,/touch_monitoring_watch_checked_at/)
+  assert.match(failedProbe,/complete\(completedAtIso,\{last_error:code\}\)/)
 })
 
 test('ineligible skipped jobs complete the queue but do not touch watch last_checked_at',()=>{
@@ -43,6 +64,19 @@ test('full AI run still updates last_checked_at and last_full_discovery_at remai
   assert.match(paidWorker,/last_checked_at: completedAt\.toISOString\(\)/)
   assert.match(paidWorker,/if \(provider === 'openai'\) watchPatch\.last_full_discovery_at = completedAt\.toISOString\(\)/)
   assert.doesNotMatch(sourceWorker,/last_full_discovery_at/)
+})
+
+test('failed full AI runs preserve the last successful evaluation timestamp',()=>{
+  const failedRun=paidWorker.slice(paidWorker.lastIndexOf('} catch (err) {'))
+  assert.doesNotMatch(failedRun,/last_checked_at:/)
+  assert.match(failedRun,/status: 'error'/)
+})
+
+test('Assistant Following UI selects and renders the Watch last_checked_at field',()=>{
+  assert.match(assistantUi,/monitoring_watches'\)\.select\('[^']*last_checked_at[^']*'\)/)
+  assert.match(assistantUi,/\{c\.lastChecked\}: \{friendlyAssistantTime\(w\.last_checked_at, language\)\}/)
+  assert.match(assistantUi,/\{c\.lastChecked\}: \{friendlyAssistantTime\(selected\.last_checked_at, language\)\}/)
+  assert.doesNotMatch(assistantUi,/\{c\.lastChecked\}[^\n]*(?:created_at|event_at|last_update_at)/)
 })
 
 test('paid run avoided behavior and two-stage savings are unchanged',()=>{
