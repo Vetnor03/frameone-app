@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 const sourceWorker=readFileSync(new URL('../supabase/functions/monitoring-source-worker/index.ts',import.meta.url),'utf8')
 const paidWorker=readFileSync(new URL('../supabase/functions/monitoring-worker/index.ts',import.meta.url),'utf8')
 const assistantUi=readFileSync(new URL('../app/components/AIAssistantTab.tsx',import.meta.url),'utf8')
+const scheduler=readFileSync(new URL('../supabase/functions/monitoring-scheduler/index.ts',import.meta.url),'utf8')
 const migration=readFileSync(new URL('../supabase/migrations/20260718120000_add_monitoring_watch_checked_at_touch.sql',import.meta.url),'utf8')
 const guardedMigration=readFileSync(new URL('../supabase/migrations/20260717180000_add_radar_two_stage_guarded.sql',import.meta.url),'utf8')
 
@@ -11,6 +12,23 @@ test('successful cheap source probe outcomes touch the parent watch last_checked
   for(const outcome of ['not_modified','unchanged','changed','baseline_created']) assert.ok(sourceWorker.includes(outcome),outcome)
   assert.match(sourceWorker,/await db\.from\('monitoring_watch_sources'\)\.update\([\s\S]*last_checked_at:now[\s\S]*\)\.eq\('id',source\.id\)/)
   assert.match(sourceWorker,/await db\.rpc\('touch_monitoring_watch_checked_at',\{p_watch_id:source\.watch_id,p_checked_at:now\}\)/)
+})
+
+test('each scheduler wake consumes the full evaluation queue after enqueueing due Watches',()=>{
+  const enqueueAt=scheduler.indexOf('supabase.rpc(enqueueRpc, enqueueArgs)')
+  const sourceProbeAt=scheduler.indexOf("/functions/v1/monitoring-source-worker")
+  const workerAt=scheduler.indexOf("/functions/v1/monitoring-worker")
+  assert.ok(enqueueAt >= 0 && workerAt > enqueueAt)
+  assert.ok(sourceProbeAt < 0 || workerAt > sourceProbeAt)
+  assert.match(scheduler,/monitoring-worker\?limit=\$\{workerBatch\}/)
+  assert.match(scheduler,/headers: \{ 'x-monitoring-secret': Deno\.env\.get\('MONITORING_WORKER_SECRET'\) \|\| '' \}/)
+  assert.match(scheduler,/monitoring_worker: monitoringWorker/)
+})
+
+test('worker invocation is fail-soft because the database queue is the retry boundary',()=>{
+  const workerBlock=scheduler.slice(scheduler.indexOf('// Enqueueing alone'),scheduler.indexOf('let pushRetries'))
+  assert.match(workerBlock,/try \{[\s\S]*await fetch\([\s\S]*\} catch \(_error\) \{/)
+  assert.doesNotMatch(workerBlock,/monitoring_queue[^\n]*(?:delete|completed_at)/)
 })
 
 test('HTTP 304 uses the success path that updates the watch timestamp',()=>{

@@ -96,9 +96,11 @@ preview RPC retains the oldest eligible Instant flags by `created_at`, then UUID
 The database due selector, existing monitoring queue, and worker implement the
 15-minute cadence. Frame wakes and app reads only reuse stored results. Invoke
 `monitoring-scheduler` at least every 15 minutes (recommended cron expression:
-`*/15 * * * *`) with the existing `x-monitoring-secret` architecture, then let
-the existing worker consume the queue. Redeploy both `monitoring-scheduler` and
-`monitoring-worker` after applying the migration.
+`*/15 * * * *`) with the existing `x-monitoring-secret` architecture. Each
+scheduler wake enqueues due Watches and invokes `monitoring-worker` to consume
+the durable queue; a failed worker invocation leaves the job open for the next
+wake. Redeploy both `monitoring-scheduler` and `monitoring-worker` after applying
+the migration.
 
 The repository defaults preserve the paid-run caps at 20 OpenAI runs per user
 per day and 300 per user per month. Global daily/monthly defaults are disabled

@@ -35,6 +35,22 @@ Deno.serve(async (req) => {
       sourceProbes = { mode, error: 'source_probe_sidecar_failed' }
     }
   }
+  // Enqueueing alone does not evaluate a Watch. Drive the durable queue on the
+  // same wake so a due Watch is actually checked even when there is no separate
+  // worker cron. The queue remains the retry boundary if this invocation fails.
+  let monitoringWorker: Record<string, unknown> = { ok: false }
+  try {
+    const workerBatch = Math.max(1, Math.min(50, Number(Deno.env.get('MONITORING_WORKER_BATCH_SIZE') || max)))
+    const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/monitoring-worker?limit=${workerBatch}`, {
+      method: 'POST',
+      headers: { 'x-monitoring-secret': Deno.env.get('MONITORING_WORKER_SECRET') || '' },
+    })
+    monitoringWorker = { ok: response.ok, status: response.status, batch: workerBatch }
+    if (!response.ok) console.warn('[monitoring-scheduler:monitoring-worker]', { code: 'monitoring_worker_failed', status: response.status })
+  } catch (_error) {
+    console.warn('[monitoring-scheduler:monitoring-worker]', { code: 'monitoring_worker_failed' })
+    monitoringWorker = { ok: false, error: 'monitoring_worker_failed' }
+  }
   let pushRetries: Record<string, unknown> = { ok: false, skipped: true }
   try {
     const pushLimit = Math.max(1, Math.min(50, Number(Deno.env.get('PUSH_DELIVERY_BATCH_SIZE') || 10)))
@@ -48,5 +64,5 @@ Deno.serve(async (req) => {
     console.warn('[monitoring-scheduler:push-retries]', { code: 'push_retry_sidecar_failed' })
     pushRetries = { ok: false, error: 'push_retry_sidecar_failed' }
   }
-  return Response.json({ ok: true, enqueued: data ?? 0, source_probes: sourceProbes, push_retries: pushRetries })
+  return Response.json({ ok: true, enqueued: data ?? 0, monitoring_worker: monitoringWorker, source_probes: sourceProbes, push_retries: pushRetries })
 })
