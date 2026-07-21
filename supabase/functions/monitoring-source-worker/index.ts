@@ -40,7 +40,6 @@ async function processJob(db:any,job:any,mode:string) {
     const completedAt=new Date(); const completedAtIso=completedAt.toISOString()
     await db.from('monitoring_source_probes').insert({source_id:source.id,watch_id:watch.id,owner_user_id:source.owner_user_id,outcome:code.startsWith('blocked_')||code==='unsafe_redirect'?'blocked':code==='unsupported_content_type'?'unsupported':'error',http_status:status,change_detected:false,etag,last_modified:lastModified,content_type:type,bytes_read:bytes,duration_ms:completedAt.getTime()-started,signal_details:{},error_code:code})
     await db.from('monitoring_watch_sources').update({last_checked_at:completedAtIso,consecutive_errors:errors,next_probe_at:new Date(completedAt.getTime()+errorBackoffMinutes(errors)*60000).toISOString(),disabled_reason:disabled,is_active:disabled?false:source.is_active}).eq('id',source.id)
-    await db.rpc('touch_monitoring_watch_checked_at',{p_watch_id:watch.id,p_checked_at:completedAtIso})
     await complete(completedAtIso,{last_error:code}); return {job_id:job.id,ok:false,error_code:code}
   }
 }

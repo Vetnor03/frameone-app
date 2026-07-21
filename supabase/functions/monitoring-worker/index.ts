@@ -299,7 +299,10 @@ async function processJob(supabase: any, job: any) {
     const { data: currentEligibility } = await supabase.rpc('get_monitoring_watch_schedule_eligibility', { p_watch_id: watch.id }).maybeSingle()
     const instantRetry = currentEligibility?.use_instant_cadence === true
     const nextCheckAt = instantRetry ? new Date(completedAt.getTime() + 15 * MINUTES).toISOString() : errorPolicy.nextCheckAt
-    await supabase.from('monitoring_watches').update({ last_checked_at: completedAt.toISOString(), next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
+    // A failed run was attempted, but did not successfully evaluate the Watch.
+    // Preserve last_checked_at so the user-facing value only advances after a
+    // completed evaluation (including a successful no-change evaluation).
+    await supabase.from('monitoring_watches').update({ next_check_at: nextCheckAt, status: 'error', monitoring_class: errorPolicy.monitoringClass }).eq('id', watch.id)
     if (watch.canonical_search_id) await supabase.rpc('refresh_monitoring_canonical_active_count', { p_canonical_search_id: watch.canonical_search_id })
     if (instantRetry) await supabase.from('monitoring_queue').update({ completed_at: completedAt.toISOString(), last_error: message }).eq('id', job.id)
     else await supabase.from('monitoring_queue').update({ claimed_at: null, claimed_by: null, run_after: new Date(Date.now() + backoffMinutes * MINUTES).toISOString(), last_error: message }).eq('id', job.id)
