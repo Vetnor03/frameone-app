@@ -61,7 +61,7 @@ export default function Configurator() {
         <div className="mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14">
           <div className="text-center">
             <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
-            <p className="mt-3 text-[16px] text-black/60">Find the combination that feels like yours.</p>
+            <p className="mt-3 text-[16px] text-black/60">Find the combination that feels like home.</p>
           </div>
 
           <div className="relative mt-7 md:mt-10">
