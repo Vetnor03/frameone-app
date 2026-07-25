@@ -281,7 +281,7 @@ export default async function ShopPage({
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pt-11">
-          <ShopReveal><section id="remind" className="relative grid overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] md:items-center md:gap-12 md:p-10">
+          <ShopReveal><section id="remind" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:p-10">
             <div className="relative z-10 max-w-[620px]">
               <p className="text-sm uppercase tracking-[0.09em]">RE:MIND</p>
               <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">RE:MIND</h2>
@@ -300,9 +300,6 @@ export default async function ShopPage({
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="relative z-10 flex w-full items-center">
-              <WaitlistForm />
             </div>
           </section></ShopReveal>
         </div>
