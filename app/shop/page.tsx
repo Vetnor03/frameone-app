@@ -309,7 +309,7 @@ export default async function ShopPage({
           </div>
         </section></ShopReveal>
 
-          <ShopReveal delayMs={50}><section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
+          <ShopReveal delayMs={50}><section id="mattes" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#eee9e4] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:min-h-[320px] md:p-10">
           <Image
             src="/shop/mattes-hero.png"
             alt=""
@@ -318,6 +318,10 @@ export default async function ShopPage({
             className="hidden scale-[1.02] object-contain object-right md:block"
             sizes="(min-width: 768px) 70vw, 100vw"
             priority
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 hidden bg-[linear-gradient(90deg,#f5f2ee_0%,#f5f2ee_34%,rgba(245,242,238,0.92)_39%,rgba(245,242,238,0.58)_46%,rgba(245,242,238,0)_54%)] md:block"
           />
           <div className="relative z-10 max-w-[520px]">
             <p className="text-sm uppercase tracking-[0.09em]">Mattes</p>
