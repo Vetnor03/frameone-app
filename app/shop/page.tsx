@@ -297,7 +297,7 @@ export default async function ShopPage({
                 type="button"
                 className="shop-button mt-8 w-full rounded bg-black px-8 py-3.5 text-sm font-medium tracking-wide text-white sm:w-fit"
               >
-                ADD TO CART
+                MAKE IT YOURS
               </button>
             </div>
           </section></ShopReveal>
