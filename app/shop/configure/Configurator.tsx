@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { addCartItem } from '../cart'
-import { combinationAt, combinationIndex, configurationTotal, cycleCombination } from '../configuratorLogic'
+import { combinationAt, combinationIndex, configurationTotal, cycleCombination, optionUpgrade } from '../configuratorLogic'
 import { formatNok, remindProduct, shopFrames, shopMattes } from '../productData'
 
 function PreviewLayer({ src, alt, layer }: { src: string; alt: string; layer: 'device' | 'matte' | 'frame' }) {
@@ -31,7 +31,9 @@ export default function Configurator() {
   const frameIndex = shopFrames.findIndex((item) => item.id === frame.id)
   const matteIndex = shopMattes.findIndex((item) => item.id === matte.id)
   const currentCombination = combinationIndex(frameIndex, matteIndex, shopMattes.length)
-  const total = configurationTotal(remindProduct.price, frame.price, matte.price)
+  const frameUpgrade = optionUpgrade(frame.price, shopFrames.map((item) => item.price))
+  const matteUpgrade = optionUpgrade(matte.price, shopMattes.map((item) => item.price))
+  const total = configurationTotal(remindProduct.price, frameUpgrade, matteUpgrade)
 
   function cycle(direction: 1 | -1) {
     const index = cycleCombination(currentCombination, direction, shopFrames.length * shopMattes.length)
@@ -49,6 +51,8 @@ export default function Configurator() {
       basePrice: remindProduct.price,
       frame: { id: frame.id, name: frame.name, price: frame.price },
       matte: { id: matte.id, name: matte.name, price: matte.price },
+      frameUpgrade,
+      matteUpgrade,
       quantity: 1,
       totalPrice: total,
     })
@@ -79,36 +83,35 @@ export default function Configurator() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1200px] px-6 py-10 md:py-14">
-        <div className="grid gap-7 border-b border-black/10 pb-10 md:grid-cols-2 md:gap-12">
+      <section className="mx-auto max-w-[1200px] px-6 py-10 md:py-14 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.75fr)] lg:gap-16 lg:py-16">
+        <div className="grid gap-7 border-b border-black/10 pb-10 md:grid-cols-2 md:gap-12 lg:grid-cols-1 lg:content-start lg:gap-14 lg:border-b-0 lg:pb-0 lg:pr-4">
           <label className="block text-xs font-medium tracking-[0.15em]">
             FRAME
             <span className="relative mt-3 block">
-              <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-28 text-lg tracking-normal outline-none focus-visible:border-black">
+              <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                 {shopFrames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
-              <span className="pointer-events-none absolute right-8 top-3 text-sm tracking-normal">+{formatNok(frame.price)}</span>
               <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
             </span>
           </label>
           <label className="block text-xs font-medium tracking-[0.15em]">
             MATTE
             <span className="relative mt-3 block">
-              <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-28 text-lg tracking-normal outline-none focus-visible:border-black">
+              <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                 {shopMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
-              <span className="pointer-events-none absolute right-8 top-3 text-sm tracking-normal">{matte.price === null ? 'Price pending' : `+${formatNok(matte.price)}`}</span>
               <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
             </span>
           </label>
         </div>
 
-        <div className="mx-auto mt-10 max-w-[620px]">
+        <div className="mx-auto mt-10 max-w-[620px] lg:sticky lg:top-8 lg:mt-0 lg:w-full lg:self-start lg:border-l lg:border-black/10 lg:py-1 lg:pl-12">
+          <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">YOUR RE:MIND</h2>
           <dl className="space-y-3 text-[15px]">
             <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price)}</dd></div>
-            <div className="flex justify-between gap-6"><dt>{frame.name}</dt><dd>{formatNok(frame.price)}</dd></div>
-            <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>{matte.price === null ? 'Price pending' : formatNok(matte.price)}</dd></div>
-            <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{total === null ? 'Pending matte price' : formatNok(total)}</dd></div>
+            {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frame.name}</dt><dd>+{formatNok(frameUpgrade)}</dd></div>}
+            {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade)}</dd></div>}
+            <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total)}</dd></div>
           </dl>
           <button type="button" onClick={addConfiguration} className="shop-button mt-9 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>
           <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : ''}</p>

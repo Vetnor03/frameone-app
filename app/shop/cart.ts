@@ -10,8 +10,10 @@ export type ConfiguredCartItem = {
   basePrice: number
   frame: Pick<ShopFrame, 'id' | 'name' | 'price'>
   matte: Pick<ShopMatte, 'id' | 'name' | 'price'>
+  frameUpgrade: number
+  matteUpgrade: number
   quantity: 1
-  totalPrice: number | null
+  totalPrice: number
 }
 
 export function readCart(): ConfiguredCartItem[] {
