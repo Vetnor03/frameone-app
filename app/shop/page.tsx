@@ -342,7 +342,7 @@ export default async function ShopPage({
               <br />
               your space and reduce glare.
             </p>
-            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href="#remind">Reserve Yours</a>
+            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href="#remind">Shop Mattes</a>
           </div>
         </section></ShopReveal>
 
