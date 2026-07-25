@@ -290,7 +290,7 @@ export default async function ShopPage({
                 sizes="(min-width: 1024px) 855px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
               />
             </div>
-            <div className="relative z-10 flex flex-col justify-center lg:absolute lg:inset-y-0 lg:right-6 lg:w-[260px] lg:items-start lg:pl-6">
+            <div className="relative z-10 flex flex-col justify-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[260px] lg:items-end">
               <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
               <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">2 229 NOK</p>
               <button
