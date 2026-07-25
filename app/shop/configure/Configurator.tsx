@@ -1,24 +1,73 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { addCartItem } from '../cart'
 import { combinationAt, combinationIndex, configurationTotal, cycleCombination, optionUpgrade } from '../configuratorLogic'
 import { displayOptions, formatNok, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
+import { calculateNormalizedTransform, getNormalizedImageMetadata, NORMALIZED_TARGETS, type LayerType, type NormalizedImageMetadata, type NormalizedTransform } from './imageNormalization'
 
-function PreviewLayer({ src, alt, layer }: { src: string; alt: string; layer: 'device' | 'matte' | 'frame' }) {
-  const [visible, setVisible] = useState(false)
+function NormalizedLayer({ src, alt, layer }: { src: string; alt: string; layer: LayerType }) {
+  const imageRef = useRef<HTMLImageElement>(null)
+  const metadataRef = useRef<NormalizedImageMetadata | null>(null)
+  const [transform, setTransform] = useState<NormalizedTransform | null>(null)
   const zIndex = layer === 'device' ? 10 : layer === 'matte' ? 20 : 30
+
+  const positionImage = useCallback(() => {
+    const image = imageRef.current
+    const preview = image?.parentElement
+    const metadata = metadataRef.current
+    if (!image || !preview || !metadata) return
+    setTransform(calculateNormalizedTransform(
+      metadata,
+      NORMALIZED_TARGETS[layer],
+      preview.clientWidth,
+      preview.clientHeight,
+    ))
+  }, [layer])
+
+  const analyzeImage = useCallback(async () => {
+    const image = imageRef.current
+    if (!image) return
+    try {
+      metadataRef.current = await getNormalizedImageMetadata(src, image)
+      positionImage()
+    } catch {
+      metadataRef.current = null
+      setTransform(null)
+    }
+  }, [positionImage, src])
+
+  useEffect(() => {
+    const preview = imageRef.current?.parentElement
+    if (!preview) return
+    const observer = new ResizeObserver(positionImage)
+    observer.observe(preview)
+    return () => observer.disconnect()
+  }, [positionImage])
+
   return (
-    // Plain img is intentional: missing future layer assets are hidden cleanly on error.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      onLoad={() => setVisible(true)}
-      onError={() => setVisible(false)}
-      className="absolute inset-0 h-full w-full object-contain transition-opacity duration-200"
-      style={{ zIndex, opacity: visible ? 1 : 0 }}
-    />
+    <span className="pointer-events-none absolute inset-0" style={{ zIndex }}>
+      {/* Intrinsic dimensions plus a uniform transform avoid both CSS stretching and
+          transparent-padding drift. The image stays hidden until scanning finishes. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        ref={imageRef}
+        src={src}
+        alt={alt}
+        onLoad={analyzeImage}
+        onError={() => setTransform(null)}
+        className="absolute left-0 top-0 max-w-none transition-opacity duration-150"
+        style={{
+          width: imageRef.current?.naturalWidth,
+          height: imageRef.current?.naturalHeight,
+          opacity: transform ? 1 : 0,
+          transform: transform
+            ? `translate3d(${transform.translateX}px, ${transform.translateY}px, 0) scale(${transform.scale})`
+            : undefined,
+          transformOrigin: '0 0',
+        }}
+      />
+    </span>
   )
 }
 
@@ -73,9 +122,9 @@ export default function Configurator() {
 
           <div className="relative mt-7 md:mt-10">
             <div className="relative mx-auto aspect-[16/9] w-full" aria-live="polite" aria-label={`${frame.name} frame with ${matte.name}`}>
-              <PreviewLayer key={display.id} src={display.previewSrc} alt="RE:MIND device preview" layer="device" />
-              <PreviewLayer key={matte.id} src={matte.configuratorPreviewSrc} alt="" layer="matte" />
-              <PreviewLayer key={frame.id} src={frame.configuratorPreviewSrc} alt="" layer="frame" />
+              <NormalizedLayer key={display.id} src={display.previewSrc} alt="RE:MIND device preview" layer="device" />
+              <NormalizedLayer key={matte.id} src={matte.configuratorPreviewSrc} alt="" layer="matte" />
+              <NormalizedLayer key={frame.id} src={frame.configuratorPreviewSrc} alt="" layer="frame" />
             </div>
             <button type="button" aria-label="Previous combination" onClick={() => cycle(-1)} className="absolute left-0 top-1/2 z-40 flex h-14 w-12 -translate-y-1/2 items-center justify-center text-5xl font-light text-black/55 outline-none focus-visible:ring-1 focus-visible:ring-black sm:left-3 md:h-20 md:w-16 md:text-6xl">‹</button>
             <button type="button" aria-label="Next combination" onClick={() => cycle(1)} className="absolute right-0 top-1/2 z-40 flex h-14 w-12 -translate-y-1/2 items-center justify-center text-5xl font-light text-black/55 outline-none focus-visible:ring-1 focus-visible:ring-black sm:right-3 md:h-20 md:w-16 md:text-6xl">›</button>
