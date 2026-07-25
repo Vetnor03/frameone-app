@@ -283,7 +283,7 @@ export default async function ShopPage({
           <ShopReveal><section id="remind" className="grid items-center gap-8 py-12 md:py-16 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] lg:gap-12">
             <div className="relative aspect-[16/10] w-full">
               <Image
-                src="/shop/remind-device.png"
+                src="/shop/remind-device-v2.png"
                 alt="RE:MIND device"
                 fill
                 className="object-contain"
