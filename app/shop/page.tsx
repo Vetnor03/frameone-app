@@ -158,35 +158,35 @@ export default async function ShopPage({
               <a href="#bundles" className="pb-1">Bundles</a>
               <a href="#about" className="pb-1">About</a>
             </nav>
-            <div className="hidden items-center gap-3">
-            <button
-              type="button"
-              aria-label="Open profile"
-              className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
-            >
-              <Image
-                src="/shop/icons/header/profile.png"
-                alt=""
-                aria-hidden
-                width={36}
-                height={36}
-                className="h-9 w-9 object-contain"
-              />
-            </button>
-            <button
-              type="button"
-              aria-label="Open waitlist"
-              className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
-            >
-              <Image
-                src="/shop/icons/header/cart.png"
-                alt=""
-                aria-hidden
-                width={44}
-                height={44}
-                className="h-11 w-11 object-contain"
-              />
-            </button>
+            <div className="hidden items-center gap-2 md:absolute md:right-0 md:flex">
+              <button
+                type="button"
+                aria-label="Open profile"
+                className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
+              >
+                <Image
+                  src="/shop/icons/header/profile.png"
+                  alt=""
+                  aria-hidden
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 object-contain"
+                />
+              </button>
+              <button
+                type="button"
+                aria-label="Open shopping cart"
+                className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
+              >
+                <Image
+                  src="/shop/icons/header/cart.png"
+                  alt=""
+                  aria-hidden
+                  width={44}
+                  height={44}
+                  className="h-11 w-11 object-contain"
+                />
+              </button>
             </div>
           </div>
           <div className="pt-4 md:hidden">
