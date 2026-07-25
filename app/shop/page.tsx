@@ -280,17 +280,17 @@ export default async function ShopPage({
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
-          <ShopReveal><section id="remind" className="grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[minmax(0,2.4fr)_minmax(240px,1fr)] lg:gap-16">
-            <div className="relative aspect-[16/10] w-full">
+          <ShopReveal><section id="remind" className="grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[minmax(0,3fr)_minmax(260px,0.9fr)] lg:gap-10">
+            <div className="relative aspect-[16/9] w-full">
               <Image
                 src="/shop/remind-device-v2.png"
                 alt="RE:MIND device"
                 fill
-                className="object-contain lg:scale-[1.12]"
-                sizes="(min-width: 1024px) 780px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
+                className="object-contain"
+                sizes="(min-width: 1024px) 855px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
               />
             </div>
-            <div className="flex flex-col justify-center lg:translate-y-1">
+            <div className="flex flex-col justify-center lg:items-start lg:pl-4">
               <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
               <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">2 229 NOK</p>
               <button
