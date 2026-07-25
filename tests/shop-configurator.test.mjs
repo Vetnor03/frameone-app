@@ -44,6 +44,30 @@ test('shop and configurator consume one shared frame source', () => {
   assert.equal((productData.match(/name: '(Midnight Black|Walnut Wood|Natural Oak|Cloud White)'/g) ?? []).length, 4)
 })
 
+test('final layered assets and their explicit catalogue order are preserved', () => {
+  const framePaths = ['Dark.png', 'Metal.png', 'Oak.png', 'Walnut.png', 'White.png', 'Custom_Friends.png', 'Custom_Grinch.png', 'Custom_Snoopy.png']
+  const mattePaths = ['Beige.png', 'Black.png', 'Black_White.png', 'Brown.png', 'Green.png', 'White.png', 'White_Black.png', 'Custom_Friends.png', 'Custom_Grinch.png', 'Custom_Snoopy.png']
+  const matteIds = ['beige', 'black', 'black-white', 'brown', 'green', 'white', 'white-black', 'custom-friends', 'custom-grinch', 'custom-snoopy']
+  assert.match(productData, /\/shop\/products\/frames\/\$\{filename\}/)
+  for (const path of framePaths) assert.match(productData, new RegExp(path.replace('.', '\\.')))
+  for (const path of mattePaths) assert.match(productData, new RegExp(path.replace('.', '\\.')))
+  assert.ok(framePaths.every((path, index) => index === 0 || productData.indexOf(path) > productData.indexOf(framePaths[index - 1])))
+  const mattes = productData.slice(productData.indexOf('export const shopMattes'))
+  assert.ok(matteIds.every((id, index) => index === 0 || mattes.indexOf(`['${id}'`) > mattes.indexOf(`['${matteIds[index - 1]}'`)))
+  assert.doesNotMatch(productData, /\/shop\/configurator\/(?:device|frames|mattes)/)
+})
+
+test('display is independent, defaults dark, and is persisted without entering price math', () => {
+  assert.match(productData, /id: 'dark'.*\/shop\/products\/device\/Dark\.png/)
+  assert.match(productData, /id: 'light'.*\/shop\/products\/device\/Light\.png/)
+  assert.match(configurator, /useState<DisplayMode>\('dark'\)/)
+  assert.match(configurator, /setSelectedDisplay\(item\.id\)/)
+  assert.match(configurator, /display: selectedDisplay/)
+  assert.match(cart, /display: DisplayMode/)
+  assert.doesNotMatch(logic, /display/i)
+  assert.doesNotMatch(configurator.slice(configurator.indexOf('function cycle'), configurator.indexOf('function addConfiguration')), /setSelectedDisplay/)
+})
+
 test('combination cycling is deterministic and wraps both ways', () => {
   const cycle = (current, direction, total) => (current + direction + total) % total
   assert.equal(cycle(7, 1, 8), 0)
@@ -65,7 +89,7 @@ test('pricing charges only upgrades over the cheapest included options', () => {
   assert.doesNotMatch(configurator, /Price pending|Pending matte price/)
 })
 
-test('cart persists structured frame and matte data', () => {
+test('cart persists structured display, frame, and matte data', () => {
   assert.match(cart, /frame: Pick<ShopFrame/)
   assert.match(cart, /matte: Pick<ShopMatte/)
   assert.match(cart, /window\.localStorage\.setItem/)
@@ -75,12 +99,7 @@ test('cart persists structured frame and matte data', () => {
   assert.match(configurator, /matteUpgrade,/)
 })
 
-test('placeholder layer paths exist only as code references', () => {
-  assert.match(productData, /\/shop\/configurator\/device\.png/)
-  for (const id of ['midnight-black', 'walnut-wood', 'natural-oak', 'cloud-white']) {
-    assert.match(productData, new RegExp(`/shop/configurator/frames/${id}\\.png`))
-  }
-
+test('configurator implementation contains no binary assets', () => {
   function files(path) {
     return readdirSync(path).flatMap((name) => {
       const entry = `${path}/${name}`
