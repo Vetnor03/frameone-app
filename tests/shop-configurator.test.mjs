@@ -57,10 +57,12 @@ test('direct selectors update only their selected dimension', () => {
   assert.match(configurator, /onChange=\{\(event\) => \{ setMatteId\(event\.target\.value\); setAdded\(false\) \}\}/)
 })
 
-test('pricing stays canonical and unresolved matte pricing is explicit', () => {
+test('pricing charges only upgrades over the cheapest included options', () => {
   assert.match(productData, /price: number \| null/)
-  assert.match(logic, /basePrice \+ framePrice \+ mattePrice/)
-  assert.match(logic, /mattePrice === null \? null/)
+  assert.match(logic, /selectedPrice - Math\.min/)
+  assert.match(logic, /selectedPrice === null\) return 0/)
+  assert.match(logic, /basePrice \+ frameUpgrade \+ matteUpgrade/)
+  assert.doesNotMatch(configurator, /Price pending|Pending matte price/)
 })
 
 test('cart persists structured frame and matte data', () => {
@@ -69,6 +71,8 @@ test('cart persists structured frame and matte data', () => {
   assert.match(cart, /window\.localStorage\.setItem/)
   assert.match(configurator, /frame: \{ id: frame\.id, name: frame\.name, price: frame\.price \}/)
   assert.match(configurator, /matte: \{ id: matte\.id, name: matte\.name, price: matte\.price \}/)
+  assert.match(configurator, /frameUpgrade,/)
+  assert.match(configurator, /matteUpgrade,/)
 })
 
 test('placeholder layer paths exist only as code references', () => {

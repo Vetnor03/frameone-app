@@ -15,6 +15,13 @@ export function combinationAt(index: number, frames: ShopFrame[], mattes: ShopMa
   }
 }
 
-export function configurationTotal(basePrice: number, framePrice: number, mattePrice: number | null) {
-  return mattePrice === null ? null : basePrice + framePrice + mattePrice
+export function optionUpgrade(selectedPrice: number | null, optionPrices: Array<number | null>) {
+  if (selectedPrice === null) return 0
+
+  const pricedOptions = optionPrices.filter((price): price is number => price !== null)
+  return selectedPrice - Math.min(...pricedOptions)
+}
+
+export function configurationTotal(basePrice: number, frameUpgrade: number, matteUpgrade: number) {
+  return basePrice + frameUpgrade + matteUpgrade
 }
