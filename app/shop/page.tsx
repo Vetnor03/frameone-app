@@ -280,6 +280,28 @@ export default async function ShopPage({
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
+          <ShopReveal><section id="remind" className="grid items-center gap-8 py-12 md:py-16 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] lg:gap-12">
+            <div className="relative aspect-[16/10] w-full">
+              <Image
+                src="/shop/remind-device.png"
+                alt="RE:MIND device"
+                fill
+                className="object-contain"
+                sizes="(min-width: 1024px) 750px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
+              />
+            </div>
+            <div className="flex flex-col justify-center lg:pl-2">
+              <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
+              <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">2 229 NOK</p>
+              <button
+                type="button"
+                className="shop-button mt-8 w-full rounded bg-black px-8 py-3.5 text-sm font-medium tracking-wide text-white sm:w-fit"
+              >
+                ADD TO CART
+              </button>
+            </div>
+          </section></ShopReveal>
+
           <ShopReveal><section id="frames" className="pt-11 pb-12 md:pt-10 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
@@ -431,7 +453,7 @@ export default async function ShopPage({
           <div><p className="mb-3 font-medium">SHOP</p><div className="space-y-1.5 leading-[1.4]"><a href="#frames" className="shop-footer-link block">Frames</a><a href="#mattes" className="shop-footer-link block">Mattes</a><a href="#accessories" className="shop-footer-link block">Accessories</a><a href="#bundles" className="shop-footer-link block">Bundles</a></div></div>
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><a href="#" className="shop-footer-link block">FAQ</a><a href="#" className="shop-footer-link block">Shipping</a><a href="#" className="shop-footer-link block">Returns</a><a href="#" className="shop-footer-link block">Warranty</a></div></div>
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><a href="#about" className="shop-footer-link block">About</a><a href="#" className="shop-footer-link block">Sustainability</a><a href="#" className="shop-footer-link block">Contact</a><a href="#" className="shop-footer-link block">Press</a></div></div>
-          <div id="remind"><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><WaitlistForm compact source="shop-footer" /></div>
+          <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><WaitlistForm compact source="shop-footer" /></div>
         </div>
         <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
           <p>© 2026 Re-mind. All rights reserved.</p>
