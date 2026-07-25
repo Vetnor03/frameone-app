@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { addCartItem } from '../cart'
 import { combinationAt, combinationIndex, configurationTotal, cycleCombination, optionUpgrade } from '../configuratorLogic'
-import { formatNok, remindProduct, shopFrames, shopMattes } from '../productData'
+import { displayOptions, formatNok, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
 
 function PreviewLayer({ src, alt, layer }: { src: string; alt: string; layer: 'device' | 'matte' | 'frame' }) {
   const [visible, setVisible] = useState(false)
@@ -25,9 +25,11 @@ function PreviewLayer({ src, alt, layer }: { src: string; alt: string; layer: 'd
 export default function Configurator() {
   const [frameId, setFrameId] = useState(shopFrames[0].id)
   const [matteId, setMatteId] = useState(shopMattes[0].id)
+  const [selectedDisplay, setSelectedDisplay] = useState<DisplayMode>('dark')
   const [added, setAdded] = useState(false)
   const frame = shopFrames.find((item) => item.id === frameId) ?? shopFrames[0]
   const matte = shopMattes.find((item) => item.id === matteId) ?? shopMattes[0]
+  const display = displayOptions.find((item) => item.id === selectedDisplay) ?? displayOptions[0]
   const frameIndex = shopFrames.findIndex((item) => item.id === frame.id)
   const matteIndex = shopMattes.findIndex((item) => item.id === matte.id)
   const currentCombination = combinationIndex(frameIndex, matteIndex, shopMattes.length)
@@ -49,6 +51,7 @@ export default function Configurator() {
       productId: 'remind',
       productName: 'RE:MIND',
       basePrice: remindProduct.price,
+      display: selectedDisplay,
       frame: { id: frame.id, name: frame.name, price: frame.price },
       matte: { id: matte.id, name: matte.name, price: matte.price },
       frameUpgrade,
@@ -70,10 +73,7 @@ export default function Configurator() {
 
           <div className="relative mt-7 md:mt-10">
             <div className="relative mx-auto aspect-[16/9] w-full" aria-live="polite" aria-label={`${frame.name} frame with ${matte.name}`}>
-              {/* Stable fallback remains beneath all future transparent layers. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={remindProduct.fallbackPreviewSrc} alt="RE:MIND device preview" className="absolute inset-0 h-full w-full object-contain" />
-              <PreviewLayer src={remindProduct.devicePreviewSrc} alt="" layer="device" />
+              <PreviewLayer key={display.id} src={display.previewSrc} alt="RE:MIND device preview" layer="device" />
               <PreviewLayer key={matte.id} src={matte.configuratorPreviewSrc} alt="" layer="matte" />
               <PreviewLayer key={frame.id} src={frame.configuratorPreviewSrc} alt="" layer="frame" />
             </div>
@@ -103,6 +103,22 @@ export default function Configurator() {
               <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
             </span>
           </label>
+          <fieldset className="block text-xs font-medium tracking-[0.15em]">
+            <legend>DISPLAY</legend>
+            <div className="mt-4 inline-flex rounded border border-black/20 p-0.5" aria-label="Display appearance">
+              {displayOptions.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={selectedDisplay === item.id}
+                  onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
+                  className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          </fieldset>
         </div>
 
         <div className="mx-auto mt-10 max-w-[620px] lg:sticky lg:top-8 lg:mt-0 lg:w-full lg:self-start lg:border-l lg:border-black/10 lg:py-1 lg:pl-12">

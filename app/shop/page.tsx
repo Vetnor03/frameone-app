@@ -50,7 +50,7 @@ export default async function ShopPage({
   const resolvedSearchParams = await searchParams
   const language = pickLang(resolvedSearchParams?.lang)
   const currency = pickCurrency()
-  const frameCardsLocalized = shopFrames
+  const frameCardsLocalized = shopFrames.filter((frame) => frame.imageSrc)
   const accessoriesLocalized = accessories
   const topShipping = formatNok(1000)
   const configureHref = `/shop/configure?lang=${language}&currency=${currency}`
@@ -187,7 +187,7 @@ export default async function ShopPage({
                 )}
                 <div className="px-3 pt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
-                  <span>{formatNok(card.price)}</span>
+                  {card.price !== null && <span>{formatNok(card.price)}</span>}
                 </div>
                 <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
                 <div className="mt-3 px-3 pb-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>

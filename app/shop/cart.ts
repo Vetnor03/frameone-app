@@ -1,4 +1,4 @@
-import type { ShopFrame, ShopMatte } from './productData'
+import type { DisplayMode, ShopFrame, ShopMatte } from './productData'
 
 export const SHOP_CART_KEY = 'remind-shop-cart-v1'
 export const SHOP_CART_CHANGED = 'remind-shop-cart-changed'
@@ -8,6 +8,7 @@ export type ConfiguredCartItem = {
   productId: 'remind'
   productName: 'RE:MIND'
   basePrice: number
+  display: DisplayMode
   frame: Pick<ShopFrame, 'id' | 'name' | 'price'>
   matte: Pick<ShopMatte, 'id' | 'name' | 'price'>
   frameUpgrade: number
