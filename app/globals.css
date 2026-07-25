@@ -317,6 +317,14 @@ a {
   animation-delay: var(--shop-reveal-delay, 0ms);
 }
 
+.shop-page .shop-warm-strip {
+  background-color: #f5f1ea;
+}
+
+.shop-page .shop-main-navigation {
+  border-bottom: 1px solid #ddd7cf;
+}
+
 .shop-page .shop-card,
 .shop-page .shop-button,
 .shop-page .shop-nav a,
