@@ -280,32 +280,6 @@ export default async function ShopPage({
       </section>
 
       <div className="bg-white">
-        <div className="mx-auto max-w-[1200px] px-6 pt-11">
-          <ShopReveal><section id="remind" className="relative overflow-hidden rounded-lg border border-black/10 bg-[#f8f7f5] p-8 shadow-[0_12px_26px_rgba(0,0,0,0.045)] md:p-10">
-            <div className="relative z-10 max-w-[620px]">
-              <p className="text-sm uppercase tracking-[0.09em]">RE:MIND</p>
-              <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">RE:MIND</h2>
-              <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
-                Re-mind gives you what matters,
-                <br />
-                beautifully displayed. Less screen time.
-                <br />
-                More presence.
-              </p>
-              <ul className="mt-6 grid gap-2 text-sm leading-[1.45] text-black/70 sm:grid-cols-2">
-                {['Family reminders', 'Calendar events', 'Weather forecasts', 'Work updates', 'School updates', 'Grocery lists'].map((item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <span className="text-black" aria-hidden>✓</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section></ShopReveal>
-        </div>
-      </div>
-
-      <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
           <ShopReveal><section id="frames" className="pt-11 pb-12 md:pt-10 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
@@ -454,7 +428,7 @@ export default async function ShopPage({
           <div><p className="mb-3 font-medium">SHOP</p><div className="space-y-1.5 leading-[1.4]"><a href="#frames" className="shop-footer-link block">Frames</a><a href="#mattes" className="shop-footer-link block">Mattes</a><a href="#accessories" className="shop-footer-link block">Accessories</a><a href="#bundles" className="shop-footer-link block">Bundles</a></div></div>
           <div><p className="mb-3 font-medium">SUPPORT</p><div className="space-y-1.5 leading-[1.4]"><a href="#" className="shop-footer-link block">FAQ</a><a href="#" className="shop-footer-link block">Shipping</a><a href="#" className="shop-footer-link block">Returns</a><a href="#" className="shop-footer-link block">Warranty</a></div></div>
           <div><p className="mb-3 font-medium">COMPANY</p><div className="space-y-1.5 leading-[1.4]"><a href="#about" className="shop-footer-link block">About</a><a href="#" className="shop-footer-link block">Sustainability</a><a href="#" className="shop-footer-link block">Contact</a><a href="#" className="shop-footer-link block">Press</a></div></div>
-          <div><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><WaitlistForm compact source="shop-footer" /></div>
+          <div id="remind"><p className="mb-3 font-medium">STAY IN THE LOOP</p><p className="max-w-[30ch] leading-[1.45] text-black/65">New frames, updates and ideas.</p><WaitlistForm compact source="shop-footer" /></div>
         </div>
         <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
           <p>© 2026 Re-mind. All rights reserved.</p>
