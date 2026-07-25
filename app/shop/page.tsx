@@ -20,7 +20,7 @@ type FrameCard = {
 
 const frameCards: FrameCard[] = [
   {
-    name: 'Black Frame',
+    name: 'Midnight Black',
     price: '349 NOK',
     subtitle: 'Matte aluminum',
     palette: ['#111214', '#252628', '#3c3d40'],
@@ -28,7 +28,7 @@ const frameCards: FrameCard[] = [
     imageSrc: '/shop/frames/midnight-black.png',
   },
   {
-    name: 'Walnut Frame',
+    name: 'Walnut Wood',
     price: '399 NOK',
     subtitle: 'Real walnut',
     palette: ['#5a3a2a', '#7a513c', '#946550'],
@@ -36,7 +36,7 @@ const frameCards: FrameCard[] = [
     imageSrc: '/shop/frames/walnut-wood.png',
   },
   {
-    name: 'Oak Frame',
+    name: 'Natural Oak',
     price: '399 NOK',
     subtitle: 'Real oak',
     palette: ['#b5824f', '#cb9b67', '#deb57e'],
@@ -44,7 +44,7 @@ const frameCards: FrameCard[] = [
     imageSrc: '/shop/frames/natural-oak.png',
   },
   {
-    name: 'White Frame',
+    name: 'Cloud White',
     price: '349 NOK',
     subtitle: 'Matte aluminum',
     palette: ['#e8e7e3', '#f2f2ee', '#dbdad5'],
