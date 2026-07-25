@@ -147,7 +147,7 @@ export default async function ShopPage({
         </div>
       </div>
 
-      <header className="border-b border-[#E5E1DB] bg-[#F7F4EF]">
+      <header className="shop-warm-strip shop-main-navigation">
         <div className="mx-auto max-w-[1200px] px-6 py-6 md:px-14">
           <div className="relative flex items-center justify-between md:justify-center">
             <a href="https://re-mind.no/shop" className="text-[29px] font-medium tracking-[0.28em] md:absolute md:left-0">RE:MIND</a>
@@ -255,7 +255,7 @@ export default async function ShopPage({
         </div>
       </div>
 
-      <section className="w-full border-y border-black/10 bg-[#F7F4EF]">
+      <section className="shop-warm-strip w-full border-y border-black/10">
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-6 px-6 py-9 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: ['Satisfying click.', 'Designed for ease.'] },
@@ -401,7 +401,7 @@ export default async function ShopPage({
         </div>
 
       <footer id="about" className="border-t border-black/10 bg-white">
-        <div className="border-b border-black/10 bg-[#F7F4EF]">
+        <div className="shop-warm-strip border-b border-black/10">
           <div className="mx-auto grid max-w-[1200px] gap-5 px-6 py-5 text-sm sm:grid-cols-3">
             {footerBenefits.map((item) => (
               <article key={item.title} className="flex items-center gap-4">
