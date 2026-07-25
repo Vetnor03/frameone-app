@@ -280,17 +280,17 @@ export default async function ShopPage({
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
-          <ShopReveal><section id="remind" className="grid items-center gap-8 py-12 md:py-16 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] lg:gap-12">
+          <ShopReveal><section id="remind" className="grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[minmax(0,2.4fr)_minmax(240px,1fr)] lg:gap-16">
             <div className="relative aspect-[16/10] w-full">
               <Image
                 src="/shop/remind-device-v2.png"
                 alt="RE:MIND device"
                 fill
-                className="object-contain"
-                sizes="(min-width: 1024px) 750px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
+                className="object-contain lg:scale-[1.12]"
+                sizes="(min-width: 1024px) 780px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
               />
             </div>
-            <div className="flex flex-col justify-center lg:pl-2">
+            <div className="flex flex-col justify-center lg:translate-y-1">
               <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
               <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">2 229 NOK</p>
               <button
@@ -302,7 +302,7 @@ export default async function ShopPage({
             </div>
           </section></ShopReveal>
 
-          <ShopReveal><section id="frames" className="pt-11 pb-12 md:pt-10 md:pb-9">
+          <ShopReveal><section id="frames" className="pt-8 pb-12 md:pt-7 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
             <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
