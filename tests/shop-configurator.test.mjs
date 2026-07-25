@@ -9,6 +9,7 @@ const productData = read('app/shop/productData.ts')
 const shopPage = read('app/shop/page.tsx')
 const logic = read('app/shop/configuratorLogic.ts')
 const cart = read('app/shop/cart.ts')
+const chrome = read('app/shop/ShopChrome.tsx')
 
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator \/>/)
@@ -16,6 +17,22 @@ test('configure route and both shop entry points are present', () => {
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}&currency=\$\{currency\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
+})
+
+test('shop and configurator share the complete storefront chrome', () => {
+  assert.match(shopPage, /<ShopHeader language=\{language\} currency=\{currency\}/)
+  assert.match(shopPage, /<ShopFooter language=\{language\} currency=\{currency\}/)
+  assert.match(page, /<ShopHeader language=\{language\} currency=\{currency\} \/>/)
+  assert.match(page, /<ShopFooter language=\{language\} currency=\{currency\} \/>/)
+  assert.match(chrome, /Open profile/)
+  assert.match(chrome, /FREE SHIPPING/)
+  assert.match(chrome, /STAY IN THE LOOP/)
+  assert.match(chrome, /ShopLocaleCurrencySelector/)
+})
+
+test('configure route uses normal document flow with horizontal clipping only', () => {
+  assert.match(page, /min-h-screen overflow-x-hidden/)
+  assert.doesNotMatch(page, /(?:^|\s)h-screen|overflow-y-(?:hidden|auto)/)
 })
 
 test('shop and configurator consume one shared frame source', () => {
