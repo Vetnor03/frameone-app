@@ -513,10 +513,10 @@ export default function LoginPage() {
         >
           <span className="text-xs font-semibold tracking-[0.2em] text-white/45">RE:MIND</span>
           <a
-            href="/waitlist"
+            href="https://re-mind.no/shop"
             className="rounded-full border border-white/14 px-3 py-1.5 text-xs font-medium tracking-[0.16em] text-white/65 transition hover:border-white/30 hover:text-white/85"
           >
-            EARLY ACCESS
+            SHOP
           </a>
         </header>
 
