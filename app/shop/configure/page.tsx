@@ -15,10 +15,18 @@ export default async function ConfigurePage({ searchParams }: { searchParams?: P
   const currency = 'NOK' as const
 
   return (
-    <main className="shop-page min-h-screen overflow-x-hidden bg-white text-[#141414]">
-      <ShopHeader language={language} currency={currency} />
-      <Configurator />
-      <ShopFooter language={language} currency={currency} />
+    <main
+      className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]"
+      style={{
+        marginTop: 'calc(env(safe-area-inset-top) * -1)',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
+    >
+      <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
+        <ShopHeader language={language} currency={currency} />
+        <Configurator />
+        <ShopFooter language={language} currency={currency} />
+      </div>
     </main>
   )
 }

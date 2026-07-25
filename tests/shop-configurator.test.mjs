@@ -14,6 +14,7 @@ const chrome = read('app/shop/ShopChrome.tsx')
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator \/>/)
   assert.match(configurator, /BUILD YOUR RE:MIND/)
+  assert.match(configurator, /Find the combination that feels like home\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}&currency=\$\{currency\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
@@ -30,9 +31,11 @@ test('shop and configurator share the complete storefront chrome', () => {
   assert.match(chrome, /ShopLocaleCurrencySelector/)
 })
 
-test('configure route uses normal document flow with horizontal clipping only', () => {
-  assert.match(page, /min-h-screen overflow-x-hidden/)
-  assert.doesNotMatch(page, /(?:^|\s)h-screen|overflow-y-(?:hidden|auto)/)
+test('shop and configure routes use the same page scroll container', () => {
+  const scrollContainer = /shop-page h-screen overflow-y-auto overflow-x-hidden/
+  assert.match(shopPage, scrollContainer)
+  assert.match(page, scrollContainer)
+  assert.match(page, /shop-shell w-full max-w-\[2560px\] mx-auto bg-white 2xl:max-w-\[1720px\]/)
 })
 
 test('shop and configurator consume one shared frame source', () => {
