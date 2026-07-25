@@ -280,24 +280,24 @@ export default async function ShopPage({
 
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
-          <ShopReveal><section id="remind" className="grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[minmax(0,3fr)_minmax(260px,0.9fr)] lg:gap-10">
-            <div className="relative aspect-[16/9] w-full">
+          <ShopReveal><section id="remind" className="grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[minmax(0,3fr)_minmax(260px,0.9fr)] lg:gap-6 lg:py-14">
+            <div className="relative aspect-[16/9] w-full overflow-visible">
               <Image
                 src="/shop/remind-device-v2.png"
                 alt="RE:MIND device"
                 fill
-                className="object-contain"
+                className="object-contain lg:scale-[1.22]"
                 sizes="(min-width: 1024px) 855px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
               />
             </div>
-            <div className="flex flex-col justify-center lg:items-start lg:pl-4">
+            <div className="flex flex-col justify-center lg:items-start lg:pl-6">
               <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
               <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">2 229 NOK</p>
               <button
                 type="button"
                 className="shop-button mt-8 w-full rounded bg-black px-8 py-3.5 text-sm font-medium tracking-wide text-white sm:w-fit"
               >
-                ADD TO CART
+                MAKE IT YOURS
               </button>
             </div>
           </section></ShopReveal>
