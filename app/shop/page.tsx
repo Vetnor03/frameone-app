@@ -2,56 +2,14 @@ import Image from 'next/image'
 import { ShopFadeImage, ShopMobileMenu, ShopReveal } from './ShopMotion'
 import ShopLocaleCurrencySelector from './ShopLocaleCurrencySelector'
 import WaitlistForm from './WaitlistForm'
+import ShopCartCount from './ShopCartCount'
+import { formatNok, shopFrames } from './productData'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Re-mind Shop',
   description: 'Official Re-mind storefront',
 }
-
-type FrameCard = {
-  name: string
-  price: string
-  subtitle: string
-  palette: [string, string, string]
-  swatches: string[]
-  imageSrc?: string
-}
-
-const frameCards: FrameCard[] = [
-  {
-    name: 'Midnight Black',
-    price: '349 NOK',
-    subtitle: 'Matte aluminum',
-    palette: ['#111214', '#252628', '#3c3d40'],
-    swatches: ['#111214', '#d5d5d5'],
-    imageSrc: '/shop/frames/midnight-black.png',
-  },
-  {
-    name: 'Walnut Wood',
-    price: '399 NOK',
-    subtitle: 'Real walnut',
-    palette: ['#5a3a2a', '#7a513c', '#946550'],
-    swatches: ['#6a4633', '#8a624a'],
-    imageSrc: '/shop/frames/walnut-wood.png',
-  },
-  {
-    name: 'Natural Oak',
-    price: '399 NOK',
-    subtitle: 'Real oak',
-    palette: ['#b5824f', '#cb9b67', '#deb57e'],
-    swatches: ['#bb8d5f', '#d8be9f'],
-    imageSrc: '/shop/frames/natural-oak.png',
-  },
-  {
-    name: 'Cloud White',
-    price: '349 NOK',
-    subtitle: 'Matte aluminum',
-    palette: ['#e8e7e3', '#f2f2ee', '#dbdad5'],
-    swatches: ['#f0f0ef', '#cfcfcf'],
-    imageSrc: '/shop/frames/cloud-white.png',
-  },
-]
 
 type AccessoryCard = {
   name: string
@@ -92,10 +50,6 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
 
 function pickLang(v?: string): 'en' | 'no' { return v === 'no' ? 'no' : 'en' }
 function pickCurrency(): 'NOK' { return 'NOK' }
-function formatNok(value: number) {
-  return `${value.toLocaleString('nb-NO').replace(/ /g, ' ')} NOK`
-}
-
 export default async function ShopPage({
   searchParams,
 }: {
@@ -104,9 +58,10 @@ export default async function ShopPage({
   const resolvedSearchParams = await searchParams
   const language = pickLang(resolvedSearchParams?.lang)
   const currency = pickCurrency()
-  const frameCardsLocalized = frameCards
+  const frameCardsLocalized = shopFrames
   const accessoriesLocalized = accessories
   const topShipping = formatNok(1000)
+  const configureHref = `/shop/configure?lang=${language}&currency=${currency}`
   const footerBenefits = [
     {
       title: 'FREE SHIPPING',
@@ -176,7 +131,7 @@ export default async function ShopPage({
               <button
                 type="button"
                 aria-label="Open shopping cart"
-                className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
+                className="shop-icon-button relative inline-flex items-center justify-center p-1 text-black/75"
               >
                 <Image
                   src="/shop/icons/header/cart.png"
@@ -186,6 +141,7 @@ export default async function ShopPage({
                   height={44}
                   className="h-11 w-11 object-contain"
                 />
+                <ShopCartCount />
               </button>
             </div>
           </div>
@@ -216,7 +172,7 @@ export default async function ShopPage({
                 <span className="md:block">at a glance,</span>{' '}
                 <span className="md:block">without checking your phone.</span>
               </p>
-              <a className="shop-button mt-7 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-8" href="#remind">SHOP FRAMES</a>
+              <a className="shop-button mt-7 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-8" href={configureHref}>SHOP FRAMES</a>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"
@@ -295,12 +251,12 @@ export default async function ShopPage({
                 <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
                 <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">2 229 NOK</p>
               </div>
-              <button
-                type="button"
+              <a
+                href={configureHref}
                 className="shop-button mt-8 w-full rounded bg-black px-8 py-3.5 text-sm font-medium tracking-wide text-white sm:w-fit"
               >
                 MAKE IT YOURS
-              </button>
+              </a>
             </div>
           </section></ShopReveal>
 
@@ -323,7 +279,7 @@ export default async function ShopPage({
                 )}
                 <div className="px-3 pt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
-                  <span>{card.price}</span>
+                  <span>{formatNok(card.price)}</span>
                 </div>
                 <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
                 <div className="mt-3 px-3 pb-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>

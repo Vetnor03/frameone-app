@@ -10,7 +10,7 @@ export default function ShopLocaleCurrencySelector({ language, currency }: Props
       value={`${language}-${currency.toLowerCase()}`}
       onChange={(event) => {
         const [nextLanguage, nextCurrency] = event.target.value.split('-')
-        window.location.href = `/shop?lang=${nextLanguage}&currency=${nextCurrency.toUpperCase()}`
+        window.location.href = `${window.location.pathname}?lang=${nextLanguage}&currency=${nextCurrency.toUpperCase()}`
       }}
     >
       <option value="en-nok">English (NOK)</option>
