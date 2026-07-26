@@ -76,13 +76,8 @@ const UI = {
     english: 'English',
     norwegian: 'Norwegian',
 
-    fontSizeTitle: 'FONT SIZE',
-    normal: 'NORMAL',
-    large: 'LARGE',
-
     themeRow: 'Theme',
     languageRow: 'Language',
-    fontSizeRow: 'Font size',
     subscription: 'Subscription',
     privacyPolicy: 'Privacy policy',
     termsAndConditions: 'Terms and conditions',
@@ -199,13 +194,8 @@ const UI = {
     english: 'Engelsk',
     norwegian: 'Norsk',
 
-    fontSizeTitle: 'SKRIFTSTØRRELSE',
-    normal: 'NORMAL',
-    large: 'STOR',
-
     themeRow: 'Tema',
     languageRow: 'Språk',
-    fontSizeRow: 'Skriftstørrelse',
     subscription: 'Abonnement',
     privacyPolicy: 'Personvern',
     termsAndConditions: 'Vilkår og betingelser',
@@ -1122,7 +1112,6 @@ export default function HomePage() {
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [fontSize, setFontSize] = useState<AppFontSize>('normal')
-  const [fontSizePickerOpen, setFontSizePickerOpen] = useState(false)
 
   const [cellsByLayout, setCellsByLayout] = useState<Record<LayoutKey, Record<number, ModuleKey | null>>>(
     makeEmptyCellsByLayout()
@@ -2316,10 +2305,8 @@ async function handleSelectTab(k: TabKey) {
                 <SettingsTab
                   language={language}
                   theme={theme}
-                  fontSize={fontSize}
                   onOpenTheme={() => setThemePickerOpen(true)}
                   onOpenLanguage={() => setLanguagePickerOpen(true)}
-                  onOpenFontSize={() => setFontSizePickerOpen(true)}
                   frames={frames}
                   activeDeviceId={activeDeviceId}
                   onSelectDevice={selectDevice}
@@ -2452,19 +2439,6 @@ async function handleSelectTab(k: TabKey) {
                   setLanguage(next)
                   setLanguagePickerOpen(false)
                   markDirty({ language: next })
-                }}
-              />
-            )}
-
-            {fontSizePickerOpen && (
-              <FontSizePickerModal
-                language={language}
-                current={fontSize}
-                onClose={() => setFontSizePickerOpen(false)}
-                onPick={(next) => {
-                  setFontSize(next)
-                  setFontSizePickerOpen(false)
-                  markDirty({ fontSize: next })
                 }}
               />
             )}
@@ -7680,60 +7654,11 @@ function LanguagePickerModal({
   )
 }
 
-function FontSizePickerModal({
-  current,
-  onClose,
-  onPick,
-  language,
-}: {
-  current: AppFontSize
-  onClose: () => void
-  onPick: (t: AppFontSize) => void
-  language: AppLanguage
-}) {
-  const t = tx(language)
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
-      <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] px-5 pt-5 pb-8">
-        <div className="flex items-center justify-between">
-          <div className="tracking-widest text-sm text-[color:var(--fg-70)]">{t.fontSizeTitle}</div>
-          <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
-            ✕
-          </button>
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onPick('normal')}
-            className={`h-12 rounded-2xl border tracking-widest ${
-              current === 'normal' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
-            }`}
-          >
-            {t.normal}
-          </button>
-
-          <button
-            onClick={() => onPick('large')}
-            className={`h-12 rounded-2xl border tracking-widest ${
-              current === 'large' ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-80)]'
-            }`}
-          >
-            {t.large}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function SettingsTab({
   language,
   theme,
-  fontSize,
   onOpenTheme,
   onOpenLanguage,
-  onOpenFontSize,
   frames,
   activeDeviceId,
   onSelectDevice,
@@ -7746,10 +7671,8 @@ function SettingsTab({
 }: {
   language: AppLanguage
   theme: 'dark' | 'light'
-  fontSize: AppFontSize
   onOpenTheme: () => void
   onOpenLanguage: () => void
-  onOpenFontSize: () => void
   frames: MemberRow[]
   activeDeviceId: string | null
   onSelectDevice: (id: string) => void
@@ -7812,14 +7735,13 @@ function SettingsTab({
       window.clearTimeout(t1)
       window.clearTimeout(t2)
     }
-  }, [frames.length, activeDeviceId, theme, language, fontSize])
+  }, [frames.length, activeDeviceId, theme, language])
 
   if (subpage === 'subscription') {
     return <SubscriptionSettingsPage language={language} onBack={() => setSubpage(null)} />
   }
 
   const languageValue = language === 'en' ? 'English' : 'Norsk'
-  const fontSizeValue = fontSize === 'large' ? (language === 'no' ? 'Stor' : 'Large') : (language === 'no' ? 'Normal' : 'Normal')
 
   return (
     <>
@@ -7847,7 +7769,6 @@ function SettingsTab({
             <div className="mt-2 space-y-2">
               <SettingRow label={t.themeRow} value={theme === 'dark' ? (language === 'no' ? 'Mørk' : 'Dark') : (language === 'no' ? 'Lys' : 'Light')} onClick={onOpenTheme} />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
-              <SettingRow label={t.fontSizeRow} value={fontSizeValue} onClick={onOpenFontSize} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
