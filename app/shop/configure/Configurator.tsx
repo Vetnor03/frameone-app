@@ -38,11 +38,11 @@ function FramePlaceholder({ frameId }: { frameId: string }) {
       aria-hidden="true"
       className="absolute inset-[8%] z-30 rounded-[0.35rem] shadow-[0_0.35rem_0.75rem_rgba(0,0,0,0.14),0_0_0_1px_rgba(0,0,0,0.22)]"
     >
-      <span className="absolute inset-x-0 top-0 h-[11%] rounded-t-[0.35rem] shadow-[inset_0_1px_rgba(255,255,255,0.18),inset_0_-0.3rem_0.5rem_rgba(0,0,0,0.14)] transition-colors duration-200" style={railAppearance} />
-      <span className="absolute inset-x-0 bottom-0 h-[11%] rounded-b-[0.35rem] shadow-[inset_0_-1px_rgba(0,0,0,0.28),inset_0_0.3rem_0.5rem_rgba(255,255,255,0.06)] transition-colors duration-200" style={railAppearance} />
-      <span className="absolute inset-y-0 left-0 w-[8%] rounded-l-[0.35rem] shadow-[inset_1px_0_rgba(255,255,255,0.14),inset_-0.3rem_0_0.5rem_rgba(0,0,0,0.14)] transition-colors duration-200" style={railAppearance} />
-      <span className="absolute inset-y-0 right-0 w-[8%] rounded-r-[0.35rem] shadow-[inset_-1px_0_rgba(0,0,0,0.28),inset_0.3rem_0_0.5rem_rgba(255,255,255,0.06)] transition-colors duration-200" style={railAppearance} />
-      <span className="absolute inset-x-[8%] inset-y-[11%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_0_0.4rem_rgba(0,0,0,0.3)]" />
+      <span className="absolute inset-x-0 top-0 h-[12%] rounded-t-[0.35rem] shadow-[inset_0_1px_rgba(255,255,255,0.18),inset_0_-0.3rem_0.5rem_rgba(0,0,0,0.14)] transition-colors duration-200" style={railAppearance} />
+      <span className="absolute inset-x-0 bottom-0 h-[12%] rounded-b-[0.35rem] shadow-[inset_0_-1px_rgba(0,0,0,0.28),inset_0_0.3rem_0.5rem_rgba(255,255,255,0.06)] transition-colors duration-200" style={railAppearance} />
+      <span className="absolute inset-y-0 left-0 w-[9%] rounded-l-[0.35rem] shadow-[inset_1px_0_rgba(255,255,255,0.14),inset_-0.3rem_0_0.5rem_rgba(0,0,0,0.14)] transition-colors duration-200" style={railAppearance} />
+      <span className="absolute inset-y-0 right-0 w-[9%] rounded-r-[0.35rem] shadow-[inset_-1px_0_rgba(0,0,0,0.28),inset_0.3rem_0_0.5rem_rgba(255,255,255,0.06)] transition-colors duration-200" style={railAppearance} />
+      <span className="absolute inset-x-[9%] inset-y-[12%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_0_0.4rem_rgba(0,0,0,0.3)]" />
     </span>
   )
 }
@@ -54,9 +54,9 @@ function MattePlaceholder({ matteId }: { matteId: string }) {
     <span aria-hidden="true" className="absolute inset-x-[13%] inset-y-[15.5%] z-20 rounded-[0.08rem]">
       <span className="absolute inset-x-0 top-0 h-[14.5%] rounded-t-[0.08rem]" style={appearance} />
       <span className="absolute inset-x-0 bottom-0 h-[14.5%] rounded-b-[0.08rem]" style={appearance} />
-      <span className="absolute inset-y-[14.5%] left-0 w-[5.75%]" style={appearance} />
-      <span className="absolute inset-y-[14.5%] right-0 w-[5.75%]" style={appearance} />
-      <span className="pointer-events-none absolute inset-x-[5.75%] inset-y-[14.5%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_0_0.2rem_rgba(0,0,0,0.16)]" />
+      <span className="absolute inset-y-[14.5%] left-0 w-[10.15%]" style={appearance} />
+      <span className="absolute inset-y-[14.5%] right-0 w-[10.15%]" style={appearance} />
+      <span className="pointer-events-none absolute inset-x-[10.15%] inset-y-[14.5%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_0_0.2rem_rgba(0,0,0,0.16)]" />
     </span>
   )
 }
@@ -66,7 +66,7 @@ function DevicePlaceholder({ display }: { display: DisplayMode }) {
   return (
     <span
       aria-hidden="true"
-      className="absolute inset-x-[17.25%] inset-y-[25.5%] z-10 flex items-center justify-center overflow-hidden rounded-[0.15rem] border border-black/20 shadow-[0_1px_0_rgba(255,255,255,0.12),0_0.2rem_0.5rem_rgba(0,0,0,0.18)]"
+      className="absolute inset-x-[20.5%] inset-y-[25.5%] z-10 flex items-center justify-center overflow-hidden rounded-[0.15rem] border border-black/20 shadow-[0_1px_0_rgba(255,255,255,0.12),0_0.2rem_0.5rem_rgba(0,0,0,0.18)]"
       style={{ background: light ? '#dddcd5' : '#242423', color: light ? '#292927' : '#f2f0e9' }}
     >
       <span className="text-[clamp(0.45rem,1.3vw,0.9rem)] font-medium tracking-[0.22em]">RE:MIND</span>
