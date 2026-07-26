@@ -39,6 +39,11 @@ test('shop and configure routes use the same page scroll container', () => {
   assert.match(page, /shop-shell w-full max-w-\[2560px\] mx-auto bg-white 2xl:max-w-\[1720px\]/)
 })
 
+test('desktop shop hero begins below the shared header without a negative offset', () => {
+  assert.match(shopPage, /<ShopHeader[\s\S]*<section className="relative py-10 md:min-h-\[585px\] md:py-0">/)
+  assert.doesNotMatch(shopPage, /md:-mt-/)
+})
+
 test('shop and configurator consume one shared frame source', () => {
   assert.match(shopPage, /import \{ formatNok, shopFrames \} from '\.\/productData'/)
   assert.match(configurator, /shopFrames, shopMattes/)

@@ -70,7 +70,7 @@ export default async function ShopPage({
       <div className="bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px]">
           <section className="relative py-10 md:min-h-[585px] md:py-0">
-            <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-3 md:-mt-6 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
+            <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-3 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
               <h1 className="max-w-[12.4ch] text-[38px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
                 <span className="block">Frames that</span>
                 <span className="block">fit your life.</span>
