@@ -1,30 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { addCartItem } from '../cart'
 import { combinationAt, combinationIndex, configurationTotal, cycleCombination, optionUpgrade } from '../configuratorLogic'
 import { displayOptions, formatNok, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
 import styles from './Configurator.module.css'
-
-type Direction = 1 | -1
-
-function useLayerTransition<T>(value: T, direction: Direction) {
-  const latestDirection = useRef(direction)
-  const currentValue = useRef(value)
-  latestDirection.current = direction
-  const [layers, setLayers] = useState<{ current: T; previous: T | null; version: number }>({ current: value, previous: null, version: 0 })
-
-  useEffect(() => {
-    if (Object.is(value, currentValue.current)) return
-    const previous = currentValue.current
-    currentValue.current = value
-    setLayers(({ version }) => ({ current: value, previous, version: version + 1 }))
-    const timer = window.setTimeout(() => setLayers((state) => ({ ...state, previous: null })), 440)
-    return () => window.clearTimeout(timer)
-  }, [value])
-
-  return { ...layers, direction: latestDirection.current }
-}
 
 const frameAppearances: Record<string, CSSProperties> = {
   'midnight-black': { background: '#181817' },
@@ -50,14 +30,13 @@ const matteAppearances: Record<string, CSSProperties> = {
   'custom-snoopy': { background: '#bdcbd2' },
 }
 
-function FramePlaceholder({ frameId, motion, direction }: { frameId: string; motion?: 'incoming' | 'outgoing'; direction?: Direction }) {
+function FramePlaceholder({ frameId }: { frameId: string }) {
   const railAppearance = frameAppearances[frameId]
 
   return (
     <span
       aria-hidden="true"
-      data-direction={direction}
-      className={`absolute inset-[8%] z-30 rounded-[0.35rem] shadow-[0_0.35rem_0.75rem_rgba(0,0,0,0.14),0_0_0_1px_rgba(0,0,0,0.22)] ${styles.layer} ${motion ? styles[motion] : ''}`}
+      className="absolute inset-[8%] z-30 rounded-[0.35rem] shadow-[0_0.35rem_0.75rem_rgba(0,0,0,0.14),0_0_0_1px_rgba(0,0,0,0.22)]"
     >
       <span className="absolute inset-x-0 top-0 h-[11%] rounded-t-[0.35rem] shadow-[inset_0_1px_rgba(255,255,255,0.18),inset_0_-0.3rem_0.5rem_rgba(0,0,0,0.14)] transition-colors duration-200" style={railAppearance} />
       <span className="absolute inset-x-0 bottom-0 h-[11%] rounded-b-[0.35rem] shadow-[inset_0_-1px_rgba(0,0,0,0.28),inset_0_0.3rem_0.5rem_rgba(255,255,255,0.06)] transition-colors duration-200" style={railAppearance} />
@@ -68,27 +47,26 @@ function FramePlaceholder({ frameId, motion, direction }: { frameId: string; mot
   )
 }
 
-function MattePlaceholder({ matteId, motion, direction }: { matteId: string; motion?: 'incoming' | 'outgoing'; direction?: Direction }) {
+function MattePlaceholder({ matteId }: { matteId: string }) {
   const appearance = matteAppearances[matteId]
 
   return (
-    <span aria-hidden="true" data-direction={direction} className={`absolute inset-x-[14.75%] inset-y-[17.25%] z-20 rounded-[0.08rem] ${styles.layer} ${motion ? styles[motion] : ''}`}>
-      <span className="absolute inset-x-0 top-0 h-[12.6%] rounded-t-[0.08rem]" style={appearance} />
-      <span className="absolute inset-x-0 bottom-0 h-[12.6%] rounded-b-[0.08rem]" style={appearance} />
-      <span className="absolute inset-y-[12.6%] left-0 w-[3.55%]" style={appearance} />
-      <span className="absolute inset-y-[12.6%] right-0 w-[3.55%]" style={appearance} />
-      <span className="pointer-events-none absolute inset-x-[3.55%] inset-y-[12.6%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_0_0.2rem_rgba(0,0,0,0.16)]" />
+    <span aria-hidden="true" className="absolute inset-x-[13%] inset-y-[15.5%] z-20 rounded-[0.08rem]">
+      <span className="absolute inset-x-0 top-0 h-[14.5%] rounded-t-[0.08rem]" style={appearance} />
+      <span className="absolute inset-x-0 bottom-0 h-[14.5%] rounded-b-[0.08rem]" style={appearance} />
+      <span className="absolute inset-y-[14.5%] left-0 w-[5.75%]" style={appearance} />
+      <span className="absolute inset-y-[14.5%] right-0 w-[5.75%]" style={appearance} />
+      <span className="pointer-events-none absolute inset-x-[5.75%] inset-y-[14.5%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_0_0.2rem_rgba(0,0,0,0.16)]" />
     </span>
   )
 }
 
-function DevicePlaceholder({ display, motion, direction }: { display: DisplayMode; motion?: 'incoming' | 'outgoing'; direction?: Direction }) {
+function DevicePlaceholder({ display }: { display: DisplayMode }) {
   const light = display === 'light'
   return (
     <span
       aria-hidden="true"
-      data-direction={direction}
-      className={`absolute inset-x-[17.25%] inset-y-[25.5%] z-10 flex items-center justify-center overflow-hidden rounded-[0.15rem] border border-black/20 shadow-[0_1px_0_rgba(255,255,255,0.12),0_0.2rem_0.5rem_rgba(0,0,0,0.18)] ${styles.layer} ${motion ? styles[motion] : ''}`}
+      className="absolute inset-x-[17.25%] inset-y-[25.5%] z-10 flex items-center justify-center overflow-hidden rounded-[0.15rem] border border-black/20 shadow-[0_1px_0_rgba(255,255,255,0.12),0_0.2rem_0.5rem_rgba(0,0,0,0.18)]"
       style={{ background: light ? '#dddcd5' : '#242423', color: light ? '#292927' : '#f2f0e9' }}
     >
       <span className="text-[clamp(0.45rem,1.3vw,0.9rem)] font-medium tracking-[0.22em]">RE:MIND</span>
@@ -100,7 +78,6 @@ export default function Configurator() {
   const [frameId, setFrameId] = useState(shopFrames[0].id)
   const [matteId, setMatteId] = useState(shopMattes[0].id)
   const [selectedDisplay, setSelectedDisplay] = useState<DisplayMode>('dark')
-  const [transitionDirection, setTransitionDirection] = useState<Direction>(1)
   const [added, setAdded] = useState(false)
   const frame = shopFrames.find((item) => item.id === frameId) ?? shopFrames[0]
   const matte = shopMattes.find((item) => item.id === matteId) ?? shopMattes[0]
@@ -111,14 +88,10 @@ export default function Configurator() {
   const frameUpgrade = optionUpgrade(frame.price, shopFrames.map((item) => item.price))
   const matteUpgrade = optionUpgrade(matte.price, shopMattes.map((item) => item.price))
   const total = configurationTotal(remindProduct.price, frameUpgrade, matteUpgrade)
-  const frameLayers = useLayerTransition(frame.id, transitionDirection)
-  const matteLayers = useLayerTransition(matte.id, transitionDirection)
-  const displayLayers = useLayerTransition(display.id, transitionDirection)
 
   function cycle(direction: 1 | -1) {
     const index = cycleCombination(currentCombination, direction, shopFrames.length * shopMattes.length)
     const next = combinationAt(index, shopFrames, shopMattes)
-    setTransitionDirection(direction)
     setFrameId(next.frame.id)
     setMatteId(next.matte.id)
     setAdded(false)
@@ -151,14 +124,11 @@ export default function Configurator() {
           </div>
 
           <div className="relative mt-7 md:mt-10">
-            <div className="relative mx-auto aspect-[16/9] w-full max-w-[960px] overflow-hidden" aria-live="polite" aria-label={`${frame.name} frame with ${matte.name} matte and ${display.name.toLowerCase()} display`}>
+            <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={`${frame.name} frame with ${matte.name} matte and ${display.name.toLowerCase()} display`}>
               <div className={styles.previewObject}>
-                <DevicePlaceholder key={`display-${displayLayers.version}`} display={displayLayers.current} motion={displayLayers.previous === null ? undefined : 'incoming'} direction={displayLayers.direction} />
-                {displayLayers.previous !== null && <DevicePlaceholder key={`old-display-${displayLayers.version}`} display={displayLayers.previous} motion="outgoing" direction={displayLayers.direction} />}
-                <MattePlaceholder key={`matte-${matteLayers.version}`} matteId={matteLayers.current} motion={matteLayers.previous === null ? undefined : 'incoming'} direction={matteLayers.direction} />
-                {matteLayers.previous !== null && <MattePlaceholder key={`old-matte-${matteLayers.version}`} matteId={matteLayers.previous} motion="outgoing" direction={matteLayers.direction} />}
-                <FramePlaceholder key={`frame-${frameLayers.version}`} frameId={frameLayers.current} motion={frameLayers.previous === null ? undefined : 'incoming'} direction={frameLayers.direction} />
-                {frameLayers.previous !== null && <FramePlaceholder key={`old-frame-${frameLayers.version}`} frameId={frameLayers.previous} motion="outgoing" direction={frameLayers.direction} />}
+                <DevicePlaceholder display={display.id} />
+                <MattePlaceholder matteId={matte.id} />
+                <FramePlaceholder frameId={frame.id} />
               </div>
             </div>
             <button type="button" aria-label="Previous combination" onClick={() => cycle(-1)} className="absolute left-0 top-1/2 z-40 flex h-14 w-12 -translate-y-1/2 items-center justify-center text-5xl font-light text-black/55 outline-none focus-visible:ring-1 focus-visible:ring-black sm:left-3 md:h-20 md:w-16 md:text-6xl">‹</button>
@@ -172,7 +142,7 @@ export default function Configurator() {
           <label className="block text-xs font-medium tracking-[0.15em]">
             FRAME
             <span className="relative mt-3 block">
-              <select value={frame.id} onChange={(event) => { setTransitionDirection(shopFrames.findIndex((item) => item.id === event.target.value) >= frameIndex ? 1 : -1); setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+              <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                 {shopFrames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
               <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
@@ -181,7 +151,7 @@ export default function Configurator() {
           <label className="block text-xs font-medium tracking-[0.15em]">
             MATTE
             <span className="relative mt-3 block">
-              <select value={matte.id} onChange={(event) => { setTransitionDirection(shopMattes.findIndex((item) => item.id === event.target.value) >= matteIndex ? 1 : -1); setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+              <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                 {shopMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
               <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
@@ -195,7 +165,7 @@ export default function Configurator() {
                   key={item.id}
                   type="button"
                   aria-pressed={selectedDisplay === item.id}
-                  onClick={() => { setTransitionDirection(displayOptions.findIndex((option) => option.id === item.id) >= displayOptions.findIndex((option) => option.id === selectedDisplay) ? 1 : -1); setSelectedDisplay(item.id); setAdded(false) }}
+                  onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
                   className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
                 >
                   {item.name}
