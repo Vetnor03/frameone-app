@@ -78,24 +78,24 @@ function ProductStory({ className = '' }: { className?: string }) {
   return (
     <section className={`${styles.productStory} ${className}`}>
       <div className={styles.storyIntro}>
-        <p className="text-xs font-medium tracking-[0.15em]">MADE TO FIT YOUR LIFE</p>
-        <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">Information that belongs in your home.</h2>
+        <p className="text-xs font-medium tracking-[0.15em]">BUILT TO LIVE WITH YOU</p>
+        <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">Made to stay. Easy to change.</h2>
         <p className="mt-4 max-w-[42rem] text-[15px] leading-7 text-black/60">
-          RE:MIND keeps the things you care about visible at a glance, without pulling you back into your phone. Choose the frame and matte that fit your room, your routines, and the way you want it to feel.
+          RE:MIND is a quiet e-paper display made for your home, not another glowing screen to manage. It arrives as a complete frame with the display, matte and frame you choose — ready to place, easy to update, and simple to restyle later.
         </p>
       </div>
       <dl className={styles.storyDetails}>
         <div>
-          <dt>LONG BATTERY LIFE</dt>
-          <dd>Designed to stay quietly in place for months at a time, with up to one year between charges.</dd>
+          <dt>READY FROM DAY ONE</dt>
+          <dd>Choose your frame and matte, add it to your home, and RE:MIND feels finished from the moment it arrives.</dd>
         </div>
         <div>
-          <dt>CLICK. SWAP. REPEAT.</dt>
-          <dd>Change frames and mattes whenever your room, season, or mood changes.</dd>
+          <dt>NO DAILY CHARGING</dt>
+          <dd>With up to one year of battery life, it can sit naturally on a shelf, desk, or wall without a cable always in sight.</dd>
         </div>
         <div>
-          <dt>MADE TO LAST</dt>
-          <dd>Interchangeable parts and considered materials help one product adapt over time, instead of being replaced.</dd>
+          <dt>NOT LOCKED TO ONE LOOK</dt>
+          <dd>Frames and mattes click on and off, so you can change the style later instead of replacing the product.</dd>
         </div>
       </dl>
     </section>
