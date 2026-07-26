@@ -86,6 +86,13 @@ test('configuration is changed only through the option lists', () => {
   assert.doesNotMatch(logic, /cycleCombination|combinationAt|combinationIndex/)
 })
 
+test('the combined configurator is seamless and precedes product copy on mobile', () => {
+  assert.doesNotMatch(configuratorStyles, /\.summaryCard\s*\{[^}]*border-top/s)
+  assert.ok(configurator.indexOf('<ProductStory className={styles.mobileStory} />') > configurator.indexOf('className={styles.purchaseColumn}'))
+  assert.match(configuratorStyles, /\.mobileStory\s*\{\s*display: none;/)
+  assert.match(configuratorStyles, /\.desktopStory\s*\{[\s\S]*grid-row: 3;/)
+})
+
 test('direct selectors update only their selected dimension', () => {
   assert.match(configurator, /setFrameId\(event\.target\.value\); setAdded\(false\)/)
   assert.match(configurator, /setMatteId\(event\.target\.value\); setAdded\(false\)/)
