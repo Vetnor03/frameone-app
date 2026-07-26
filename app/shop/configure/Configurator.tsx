@@ -121,6 +121,30 @@ export default function Configurator() {
               </div>
             </div>
           </div>
+
+          <div className={styles.productStory}>
+            <div className={styles.storyIntro}>
+              <p className="text-xs font-medium tracking-[0.15em]">MADE FOR MORE MOMENTS</p>
+              <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">Less screen time. More of what is right in front of you.</h2>
+              <p className="mt-4 max-w-[42rem] text-[15px] leading-7 text-black/60">
+                RE:MIND keeps the information you care about quietly in view, without pulling you into another glowing screen. It is designed to feel at home in your space—and in your life.
+              </p>
+            </div>
+            <dl className={styles.storyDetails}>
+              <div>
+                <dt>UP TO ONE YEAR</dt>
+                <dd>A single charge can last up to a year, and the rechargeable battery keeps disposable cells and cables out of sight.</dd>
+              </div>
+              <div>
+                <dt>CLICK. SWAP. REPEAT.</dt>
+                <dd>Mix frames and mattes to suit the room, the season, or your mood, with an easy and satisfying click.</dd>
+              </div>
+              <div>
+                <dt>THOUGHTFULLY MADE</dt>
+                <dd>Interchangeable parts and considered materials help one product adapt over time, instead of being replaced.</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </section>
 
@@ -146,18 +170,23 @@ export default function Configurator() {
           </label>
           <fieldset className={`block text-xs font-medium tracking-[0.15em] ${styles.displayControl}`}>
             <legend>DISPLAY</legend>
-            <div className="mt-4 inline-flex rounded border border-black/20 p-0.5" aria-label="Display appearance">
-              {displayOptions.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={selectedDisplay === item.id}
-                  onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
-                  className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
-                >
-                  {item.name}
-                </button>
-              ))}
+            <div className={styles.displayChoice}>
+              <div className="inline-flex shrink-0 rounded border border-black/20 p-0.5" aria-label="Display appearance">
+                {displayOptions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-pressed={selectedDisplay === item.id}
+                    onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
+                    className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+              <p className="max-w-[19rem] text-[13px] font-normal leading-5 tracking-normal text-black/55">
+                Try both looks while you build. Once RE:MIND is yours, you can choose and change its display theme in the app.
+              </p>
             </div>
           </fieldset>
         </div>

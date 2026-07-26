@@ -6,6 +6,52 @@
   filter: drop-shadow(0.7rem 0.9rem 0.7rem rgb(0 0 0 / 8%));
 }
 
+.displayChoice {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.productStory {
+  max-width: 760px;
+  margin: 1rem auto 0;
+  padding: 2.5rem 0 1rem;
+  border-top: 1px solid rgb(0 0 0 / 10%);
+}
+
+.storyDetails {
+  display: grid;
+  gap: 1.75rem;
+  margin-top: 2.5rem;
+}
+
+.storyDetails dt {
+  margin-bottom: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+}
+
+.storyDetails dd {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: rgb(0 0 0 / 60%);
+}
+
+@media (min-width: 640px) {
+  .storyDetails {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .displayChoice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* The configurator keeps its established stacked layout below this breakpoint. */
 @media (min-width: 1024px) {
   .desktopLayout {
@@ -37,6 +83,15 @@
     width: 100%;
     margin-top: 0;
     padding-top: clamp(1rem, 3vw, 2.5rem);
+  }
+
+  .productStory {
+    grid-column: 1;
+    grid-row: 3;
+    width: 100%;
+    max-width: 850px;
+    margin-top: 0;
+    padding-top: 3rem;
   }
 
   .previewArea > div {
