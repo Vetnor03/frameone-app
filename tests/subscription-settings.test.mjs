@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs'
 const settings = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const subscription = readFileSync(new URL('../app/components/SubscriptionSettingsPage.tsx', import.meta.url), 'utf8')
 
-test('Subscription is localized and appears between Font size and Privacy policy', () => {
+test('Subscription is localized and appears between Language and Privacy policy', () => {
   assert.match(settings, /subscription: 'Subscription'/)
   assert.match(settings, /subscription: 'Abonnement'/)
-  assert.match(settings, /SettingRow label=\{t\.fontSizeRow\}[\s\S]*SettingRow label=\{t\.subscription\}[\s\S]*SettingRow label=\{t\.privacyPolicy\}/)
+  assert.match(settings, /SettingRow label=\{t\.languageRow\}[\s\S]*SettingRow label=\{t\.subscription\}[\s\S]*SettingRow label=\{t\.privacyPolicy\}/)
+  assert.doesNotMatch(settings, /fontSizeRow|FontSizePickerModal|onOpenFontSize/)
 })
 
 test('Subscription row opens an in-app Settings subpage with a back action', () => {
