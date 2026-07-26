@@ -20,6 +20,10 @@
   border-top: 1px solid rgb(0 0 0 / 10%);
 }
 
+.desktopStory {
+  display: none;
+}
+
 .storyDetails {
   display: grid;
   gap: 1.75rem;
@@ -85,13 +89,28 @@
     padding-top: clamp(1rem, 3vw, 2.5rem);
   }
 
-  .productStory {
+  .mobileStory {
+    display: none;
+  }
+
+  .desktopStory {
+    display: block;
     grid-column: 1;
+    grid-column-end: -1;
     grid-row: 3;
     width: 100%;
-    max-width: 850px;
+    max-width: none;
     margin-top: 0;
     padding-top: 3rem;
+  }
+
+  .storyIntro h2 {
+    max-width: 68rem;
+  }
+
+  .storyDetails {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: clamp(2.5rem, 6vw, 6rem);
   }
 
   .previewArea > div {
