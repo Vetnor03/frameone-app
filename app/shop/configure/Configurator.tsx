@@ -150,7 +150,6 @@ export default function Configurator() {
             </div>
           </div>
 
-          <ProductStory className={styles.mobileStory} />
         </div>
       </section>
 
@@ -209,6 +208,7 @@ export default function Configurator() {
         </div>
       </section>
 
+      <ProductStory className={styles.mobileStory} />
       <ProductStory className={styles.desktopStory} />
     </div>
   )
