@@ -119,5 +119,8 @@ test('preview uses fixed, independent CSS placeholder layers', () => {
   assert.match(configurator, /aspect-\[16\/9\].*max-w-\[960px\]/)
   assert.match(configurator, /frameAppearances\[frameId\]/)
   assert.match(configurator, /matteAppearances\[matteId\]/)
+  assert.match(configurator, /FramePlaceholder[\s\S]*inset-\[8%\][\s\S]*inset-\[2\.25%\]/)
+  assert.match(configurator, /MattePlaceholder[\s\S]*inset-x-\[24%\] inset-y-\[25%\]/)
+  assert.match(configurator, /DevicePlaceholder[\s\S]*inset-x-\[28%\] inset-y-\[29%\]/)
   assert.doesNotMatch(configurator, /<img|previewSrc|configuratorPreviewSrc|NormalizedLayer/)
 })
