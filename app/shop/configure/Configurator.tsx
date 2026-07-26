@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from 'react'
 import { addCartItem } from '../cart'
-import { combinationAt, combinationIndex, configurationTotal, cycleCombination, optionUpgrade } from '../configuratorLogic'
+import { configurationTotal, optionUpgrade } from '../configuratorLogic'
 import { displayOptions, formatNok, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
 import styles from './Configurator.module.css'
 
@@ -82,20 +82,9 @@ export default function Configurator() {
   const frame = shopFrames.find((item) => item.id === frameId) ?? shopFrames[0]
   const matte = shopMattes.find((item) => item.id === matteId) ?? shopMattes[0]
   const display = displayOptions.find((item) => item.id === selectedDisplay) ?? displayOptions[0]
-  const frameIndex = shopFrames.findIndex((item) => item.id === frame.id)
-  const matteIndex = shopMattes.findIndex((item) => item.id === matte.id)
-  const currentCombination = combinationIndex(frameIndex, matteIndex, shopMattes.length)
   const frameUpgrade = optionUpgrade(frame.price, shopFrames.map((item) => item.price))
   const matteUpgrade = optionUpgrade(matte.price, shopMattes.map((item) => item.price))
   const total = configurationTotal(remindProduct.price, frameUpgrade, matteUpgrade)
-
-  function cycle(direction: 1 | -1) {
-    const index = cycleCombination(currentCombination, direction, shopFrames.length * shopMattes.length)
-    const next = combinationAt(index, shopFrames, shopMattes)
-    setFrameId(next.frame.id)
-    setMatteId(next.matte.id)
-    setAdded(false)
-  }
 
   function addConfiguration() {
     addCartItem({
@@ -131,8 +120,6 @@ export default function Configurator() {
                 <FramePlaceholder frameId={frame.id} />
               </div>
             </div>
-            <button type="button" aria-label="Previous combination" onClick={() => cycle(-1)} className="absolute left-0 top-1/2 z-40 flex h-14 w-12 -translate-y-1/2 items-center justify-center text-5xl font-light text-black/55 outline-none focus-visible:ring-1 focus-visible:ring-black sm:left-3 md:h-20 md:w-16 md:text-6xl">‹</button>
-            <button type="button" aria-label="Next combination" onClick={() => cycle(1)} className="absolute right-0 top-1/2 z-40 flex h-14 w-12 -translate-y-1/2 items-center justify-center text-5xl font-light text-black/55 outline-none focus-visible:ring-1 focus-visible:ring-black sm:right-3 md:h-20 md:w-16 md:text-6xl">›</button>
           </div>
         </div>
       </section>
