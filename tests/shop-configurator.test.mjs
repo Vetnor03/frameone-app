@@ -39,6 +39,13 @@ test('shop and configure routes use the same page scroll container', () => {
   assert.match(page, /shop-shell w-full max-w-\[2560px\] mx-auto bg-white 2xl:max-w-\[1720px\]/)
 })
 
+test('the configure content background is pure white at every breakpoint', () => {
+  assert.match(configurator, /bg-white \$\{styles\.previewSection\}/)
+  assert.doesNotMatch(configurator, /bg-\[#faf9f7\]/)
+  assert.match(configuratorStyles, /\.desktopLayout[\s\S]*background: #fff;/)
+  assert.doesNotMatch(configuratorStyles, /background: #faf9f7;/)
+})
+
 test('desktop shop hero begins below the shared header without a negative offset', () => {
   assert.match(shopPage, /<ShopHeader[\s\S]*<section className="relative py-10 md:min-h-\[585px\] md:py-0">/)
   assert.doesNotMatch(shopPage, /md:-mt-/)

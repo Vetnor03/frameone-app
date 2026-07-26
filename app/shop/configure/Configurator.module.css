@@ -67,7 +67,7 @@
     max-width: 1440px;
     margin: 0 auto;
     padding: 4rem clamp(2.5rem, 5vw, 5.5rem) 5rem;
-    background: #faf9f7;
+    background: #fff;
   }
 
   .previewSection,

@@ -133,7 +133,7 @@ export default function Configurator() {
 
   return (
     <div className={styles.desktopLayout}>
-      <section className={`border-b border-black/10 bg-[#faf9f7] ${styles.previewSection}`}>
+      <section className={`border-b border-black/10 bg-white ${styles.previewSection}`}>
         <div className={`mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14 ${styles.previewInner}`}>
           <div className={`text-center ${styles.heading}`}>
             <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
