@@ -1,7 +1,7 @@
 .previewObject {
   position: absolute;
   inset: 0;
-  transform: perspective(72rem) rotateY(-3.5deg) rotateX(1deg) rotateZ(-0.3deg) scale(0.94);
+  transform: scale(0.94);
   transform-origin: 50% 52%;
   transform-style: preserve-3d;
   filter: drop-shadow(0.7rem 0.9rem 0.7rem rgb(0 0 0 / 8%));

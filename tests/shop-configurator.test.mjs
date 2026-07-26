@@ -127,8 +127,9 @@ test('preview uses fixed, independent CSS placeholder layers', () => {
   assert.doesNotMatch(configurator, /<img|previewSrc|configuratorPreviewSrc|NormalizedLayer/)
 })
 
-test('preview has subtle perspective and depth-aware dimension-locked transitions', () => {
-  assert.match(configuratorStyles, /perspective\(72rem\) rotateY\(-3\.5deg\) rotateX\(1deg\)/)
+test('preview sits flat and keeps depth-aware dimension-locked transitions', () => {
+  assert.match(configuratorStyles, /transform: scale\(0\.94\)/)
+  assert.doesNotMatch(configuratorStyles, /perspective|rotate[XYZ]?\(/)
   assert.match(configurator, /FramePlaceholder[\s\S]*z-30/)
   assert.match(configurator, /MattePlaceholder[\s\S]*z-20/)
   assert.match(configurator, /DevicePlaceholder[\s\S]*z-10/)
