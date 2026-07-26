@@ -13,6 +13,32 @@
   margin-top: 1rem;
 }
 
+.purchaseCard {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 10%);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 82%);
+  box-shadow: 0 1rem 2.5rem rgb(24 20 16 / 5%);
+}
+
+.controlsCard,
+.summaryCard {
+  padding: clamp(1.5rem, 5vw, 2rem);
+}
+
+.controlsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.summaryCard {
+  border-top: 1px solid rgb(0 0 0 / 10%);
+}
+
 .productStory {
   max-width: 760px;
   margin: 1rem auto 0;
@@ -129,30 +155,17 @@
     padding: 0;
   }
 
-  .controlsCard,
-  .summaryCard {
+  .purchaseCard {
     width: 100%;
     max-width: none;
     margin: 0;
-    border: 1px solid rgb(0 0 0 / 10%);
-    border-radius: 0.5rem;
-    background: rgb(255 255 255 / 82%);
-    box-shadow: 0 1rem 2.5rem rgb(24 20 16 / 5%);
   }
 
   .controlsCard {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
     padding: 2rem;
   }
 
-  .displayControl {
-    order: -1;
-  }
-
   .summaryCard {
-    position: static;
     padding: 2rem;
   }
 }
