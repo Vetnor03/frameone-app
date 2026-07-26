@@ -66,15 +66,12 @@ test('display is independent, defaults dark, and is persisted without entering p
   assert.match(configurator, /display: selectedDisplay/)
   assert.match(cart, /display: DisplayMode/)
   assert.doesNotMatch(logic, /display/i)
-  assert.doesNotMatch(configurator.slice(configurator.indexOf('function cycle'), configurator.indexOf('function addConfiguration')), /setSelectedDisplay/)
 })
 
-test('combination cycling is deterministic and wraps both ways', () => {
-  const cycle = (current, direction, total) => (current + direction + total) % total
-  assert.equal(cycle(7, 1, 8), 0)
-  assert.equal(cycle(0, -1, 8), 7)
-  assert.match(logic, /frameIndex \* matteCount \+ matteIndex/)
-  assert.match(logic, /\(current \+ direction \+ total\) % total/)
+test('configuration is changed only through the option lists', () => {
+  assert.doesNotMatch(configurator, /Previous combination|Next combination/)
+  assert.doesNotMatch(configurator, /function cycle|cycleCombination|combinationAt|combinationIndex/)
+  assert.doesNotMatch(logic, /cycleCombination|combinationAt|combinationIndex/)
 })
 
 test('direct selectors update only their selected dimension', () => {
