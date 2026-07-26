@@ -69,7 +69,17 @@ function FramePlaceholder({ frameId, motion, direction }: { frameId: string; mot
 }
 
 function MattePlaceholder({ matteId, motion, direction }: { matteId: string; motion?: 'incoming' | 'outgoing'; direction?: Direction }) {
-  return <span aria-hidden="true" data-direction={direction} className={`absolute inset-x-[14.75%] inset-y-[17.25%] z-20 rounded-[0.08rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] ${styles.layer} ${motion ? styles[motion] : ''}`} style={matteAppearances[matteId]} />
+  const appearance = matteAppearances[matteId]
+
+  return (
+    <span aria-hidden="true" data-direction={direction} className={`absolute inset-x-[14.75%] inset-y-[17.25%] z-20 rounded-[0.08rem] ${styles.layer} ${motion ? styles[motion] : ''}`}>
+      <span className="absolute inset-x-0 top-0 h-[12.6%] rounded-t-[0.08rem]" style={appearance} />
+      <span className="absolute inset-x-0 bottom-0 h-[12.6%] rounded-b-[0.08rem]" style={appearance} />
+      <span className="absolute inset-y-[12.6%] left-0 w-[3.55%]" style={appearance} />
+      <span className="absolute inset-y-[12.6%] right-0 w-[3.55%]" style={appearance} />
+      <span className="pointer-events-none absolute inset-x-[3.55%] inset-y-[12.6%] rounded-[0.08rem] shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_0_0.2rem_rgba(0,0,0,0.16)]" />
+    </span>
+  )
 }
 
 function DevicePlaceholder({ display, motion, direction }: { display: DisplayMode; motion?: 'incoming' | 'outgoing'; direction?: Direction }) {
