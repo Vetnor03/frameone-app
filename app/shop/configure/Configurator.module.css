@@ -1,0 +1,55 @@
+.previewObject {
+  position: absolute;
+  inset: 0;
+  transform: perspective(72rem) rotateY(-3.5deg) rotateX(1deg) rotateZ(-0.3deg) scale(0.94);
+  transform-origin: 50% 52%;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0.7rem 0.9rem 0.7rem rgb(0 0 0 / 8%));
+}
+
+.layer {
+  will-change: transform, opacity;
+}
+
+.incoming[data-direction='1'] {
+  animation: layer-in-next 420ms cubic-bezier(0.22, 0.7, 0.25, 1) both;
+}
+
+.incoming[data-direction='-1'] {
+  animation: layer-in-previous 420ms cubic-bezier(0.22, 0.7, 0.25, 1) both;
+}
+
+.outgoing[data-direction='1'] {
+  animation: layer-out-next 420ms cubic-bezier(0.4, 0, 0.25, 1) both;
+}
+
+.outgoing[data-direction='-1'] {
+  animation: layer-out-previous 420ms cubic-bezier(0.4, 0, 0.25, 1) both;
+}
+
+@keyframes layer-in-next {
+  from { opacity: 0.35; transform: translateX(7%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes layer-out-next {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-7%); }
+}
+
+@keyframes layer-in-previous {
+  from { opacity: 0.35; transform: translateX(-7%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes layer-out-previous {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(7%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .incoming,
+  .outgoing {
+    animation-duration: 1ms;
+  }
+}
