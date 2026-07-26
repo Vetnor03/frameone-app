@@ -136,8 +136,8 @@ export default function Configurator() {
       <section className={`border-b border-black/10 bg-white ${styles.previewSection}`}>
         <div className={`mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14 ${styles.previewInner}`}>
           <div className={`text-center ${styles.heading}`}>
-            <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">STYLE YOUR FRAME</h1>
-            <p className="mt-3 text-[16px] text-black/60">Choose the frame and matte that feel right at home.</p>
+            <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
+            <p className="mt-3 text-[16px] text-black/60">Choose the display, frame and matte that feel right at home.</p>
           </div>
 
           <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
@@ -154,56 +154,58 @@ export default function Configurator() {
         </div>
       </section>
 
-      <section className={`mx-auto max-w-[1200px] px-6 py-10 md:py-14 ${styles.purchaseColumn}`}>
-        <div className={`grid gap-7 border-b border-black/10 pb-10 md:grid-cols-2 md:gap-12 ${styles.controlsCard}`}>
-          <label className="block text-xs font-medium tracking-[0.15em]">
-            FRAME
-            <span className="relative mt-3 block">
-              <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
-                {shopFrames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
-            </span>
-          </label>
-          <label className="block text-xs font-medium tracking-[0.15em]">
-            MATTE
-            <span className="relative mt-3 block">
-              <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
-                {shopMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
-            </span>
-          </label>
-          <fieldset className={`block text-xs font-medium tracking-[0.15em] ${styles.displayControl}`}>
-            <legend>DISPLAY</legend>
-            <div className={styles.displayChoice}>
-              <div className="inline-flex shrink-0 rounded border border-black/20 p-0.5" aria-label="Display appearance">
-                {displayOptions.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={selectedDisplay === item.id}
-                    onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
-                    className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
-                  >
-                    {item.name}
-                  </button>
-                ))}
+      <section className={`mx-auto max-w-[1200px] px-4 py-10 sm:px-6 md:py-14 ${styles.purchaseColumn}`}>
+        <div className={styles.purchaseCard}>
+          <div className={styles.controlsCard}>
+            <fieldset className="block text-xs font-medium tracking-[0.15em]">
+              <legend>DISPLAY</legend>
+              <div className={styles.displayChoice}>
+                <div className="inline-flex shrink-0 rounded border border-black/20 p-0.5" aria-label="Display appearance">
+                  {displayOptions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={selectedDisplay === item.id}
+                      onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
+                      className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          </fieldset>
-        </div>
+            </fieldset>
+            <label className="block text-xs font-medium tracking-[0.15em]">
+              FRAME
+              <span className="relative mt-3 block">
+                <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+                  {shopFrames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
+              </span>
+            </label>
+            <label className="block text-xs font-medium tracking-[0.15em]">
+              MATTE
+              <span className="relative mt-3 block">
+                <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+                  {shopMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
+              </span>
+            </label>
+          </div>
 
-        <div className={`mx-auto mt-10 max-w-[620px] ${styles.summaryCard}`}>
-          <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">YOUR RE:MIND</h2>
-          <dl className="space-y-3 text-[15px]">
-            <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price)}</dd></div>
-            {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frame.name}</dt><dd>+{formatNok(frameUpgrade)}</dd></div>}
-            {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade)}</dd></div>}
-            <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total)}</dd></div>
-          </dl>
-          <button type="button" onClick={addConfiguration} className="shop-button mt-9 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>
-          <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : ''}</p>
+          <div className={styles.summaryCard}>
+            <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">YOUR RE:MIND</h2>
+            <dl className="space-y-3 text-[15px]">
+              <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price)}</dd></div>
+              {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frame.name}</dt><dd>+{formatNok(frameUpgrade)}</dd></div>}
+              {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade)}</dd></div>}
+              <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total)}</dd></div>
+            </dl>
+            <button type="button" onClick={addConfiguration} className="shop-button mt-9 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>
+            <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : ''}</p>
+          </div>
         </div>
       </section>
 

@@ -14,8 +14,8 @@ const chrome = read('app/shop/ShopChrome.tsx')
 
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator \/>/)
-  assert.match(configurator, /STYLE YOUR FRAME/)
-  assert.match(configurator, /Choose the frame and matte that feel right at home\./)
+  assert.match(configurator, /BUILD YOUR RE:MIND/)
+  assert.match(configurator, /Choose the display, frame and matte that feel right at home\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}&currency=\$\{currency\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
