@@ -5,6 +5,7 @@ import test from 'node:test'
 const read = (path) => readFileSync(path, 'utf8')
 const page = read('app/shop/configure/page.tsx')
 const configurator = read('app/shop/configure/Configurator.tsx')
+const configuratorStyles = read('app/shop/configure/Configurator.module.css')
 const productData = read('app/shop/productData.ts')
 const shopPage = read('app/shop/page.tsx')
 const logic = read('app/shop/configuratorLogic.ts')
@@ -77,8 +78,8 @@ test('combination cycling is deterministic and wraps both ways', () => {
 })
 
 test('direct selectors update only their selected dimension', () => {
-  assert.match(configurator, /onChange=\{\(event\) => \{ setFrameId\(event\.target\.value\); setAdded\(false\) \}\}/)
-  assert.match(configurator, /onChange=\{\(event\) => \{ setMatteId\(event\.target\.value\); setAdded\(false\) \}\}/)
+  assert.match(configurator, /setFrameId\(event\.target\.value\); setAdded\(false\)/)
+  assert.match(configurator, /setMatteId\(event\.target\.value\); setAdded\(false\)/)
 })
 
 test('pricing charges only upgrades over the cheapest included options', () => {
@@ -113,9 +114,9 @@ test('preview uses fixed, independent CSS placeholder layers', () => {
   assert.match(configurator, /function FramePlaceholder/)
   assert.match(configurator, /function MattePlaceholder/)
   assert.match(configurator, /function DevicePlaceholder/)
-  assert.match(configurator, /<FramePlaceholder frameId=\{frame\.id\} \/>/)
-  assert.match(configurator, /<MattePlaceholder matteId=\{matte\.id\} \/>/)
-  assert.match(configurator, /<DevicePlaceholder display=\{display\.id\} \/>/)
+  assert.match(configurator, /<FramePlaceholder key=/)
+  assert.match(configurator, /<MattePlaceholder key=/)
+  assert.match(configurator, /<DevicePlaceholder key=/)
   assert.match(configurator, /aspect-\[16\/9\].*max-w-\[960px\]/)
   assert.match(configurator, /frameAppearances\[frameId\]/)
   assert.match(configurator, /matteAppearances\[matteId\]/)
@@ -124,4 +125,15 @@ test('preview uses fixed, independent CSS placeholder layers', () => {
   assert.match(configurator, /MattePlaceholder[\s\S]*inset-x-\[14\.75%\] inset-y-\[17\.25%\]/)
   assert.match(configurator, /DevicePlaceholder[\s\S]*inset-x-\[17\.25%\] inset-y-\[25\.5%\]/)
   assert.doesNotMatch(configurator, /<img|previewSrc|configuratorPreviewSrc|NormalizedLayer/)
+})
+
+test('preview has subtle perspective and depth-aware dimension-locked transitions', () => {
+  assert.match(configuratorStyles, /perspective\(72rem\) rotateY\(-3\.5deg\) rotateX\(1deg\)/)
+  assert.match(configurator, /FramePlaceholder[\s\S]*z-30/)
+  assert.match(configurator, /MattePlaceholder[\s\S]*z-20/)
+  assert.match(configurator, /DevicePlaceholder[\s\S]*z-10/)
+  assert.match(configurator, /aspect-\[16\/9\].*max-w-\[960px\] overflow-hidden/)
+  assert.match(configuratorStyles, /layer-in-next/)
+  assert.match(configuratorStyles, /layer-out-previous/)
+  assert.match(configuratorStyles, /prefers-reduced-motion/)
 })
