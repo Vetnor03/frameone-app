@@ -30,11 +30,19 @@ const matteAppearances: Record<string, CSSProperties> = {
 }
 
 function FramePlaceholder({ frameId }: { frameId: string }) {
-  return <span aria-hidden="true" className="absolute inset-[8%] rounded-[0.35rem] transition-colors duration-200" style={frameAppearances[frameId]} />
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute inset-[8%] rounded-[0.35rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12),inset_0_0_1.15rem_rgba(0,0,0,0.3),0_0.35rem_0.75rem_rgba(0,0,0,0.14)] transition-colors duration-200"
+      style={frameAppearances[frameId]}
+    >
+      <span className="absolute inset-[2.25%] rounded-[0.24rem] border border-black/25 bg-gradient-to-br from-white/10 via-transparent to-black/20" />
+    </span>
+  )
 }
 
 function MattePlaceholder({ matteId }: { matteId: string }) {
-  return <span aria-hidden="true" className="absolute inset-[12.5%] rounded-[0.15rem] transition-colors duration-200" style={matteAppearances[matteId]} />
+  return <span aria-hidden="true" className="absolute inset-x-[24%] inset-y-[25%] rounded-[0.1rem] shadow-[0_0_0_1px_rgba(0,0,0,0.1)] transition-colors duration-200" style={matteAppearances[matteId]} />
 }
 
 function DevicePlaceholder({ display }: { display: DisplayMode }) {
