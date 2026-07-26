@@ -78,23 +78,23 @@ function ProductStory({ className = '' }: { className?: string }) {
   return (
     <section className={`${styles.productStory} ${className}`}>
       <div className={styles.storyIntro}>
-        <p className="text-xs font-medium tracking-[0.15em]">MADE FOR MORE MOMENTS</p>
-        <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">Less screen time. More of what is right in front of you.</h2>
+        <p className="text-xs font-medium tracking-[0.15em]">MADE TO FIT YOUR LIFE</p>
+        <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">Information that belongs in your home.</h2>
         <p className="mt-4 max-w-[42rem] text-[15px] leading-7 text-black/60">
-          RE:MIND keeps the information you care about quietly in view, without pulling you into another glowing screen. It is designed to feel at home in your space—and in your life.
+          RE:MIND keeps the things you care about visible at a glance, without pulling you back into your phone. Choose the frame and matte that fit your room, your routines, and the way you want it to feel.
         </p>
       </div>
       <dl className={styles.storyDetails}>
         <div>
-          <dt>UP TO ONE YEAR</dt>
-          <dd>A single charge can last up to a year, and the rechargeable battery keeps disposable cells and cables out of sight.</dd>
+          <dt>LONG BATTERY LIFE</dt>
+          <dd>Designed to stay quietly in place for months at a time, with up to one year between charges.</dd>
         </div>
         <div>
           <dt>CLICK. SWAP. REPEAT.</dt>
-          <dd>Mix frames and mattes to suit the room, the season, or your mood, with an easy and satisfying click.</dd>
+          <dd>Change frames and mattes whenever your room, season, or mood changes.</dd>
         </div>
         <div>
-          <dt>THOUGHTFULLY MADE</dt>
+          <dt>MADE TO LAST</dt>
           <dd>Interchangeable parts and considered materials help one product adapt over time, instead of being replaced.</dd>
         </div>
       </dl>
