@@ -39,6 +39,13 @@ test('shop and configure routes use the same page scroll container', () => {
   assert.match(page, /shop-shell w-full max-w-\[2560px\] mx-auto bg-white 2xl:max-w-\[1720px\]/)
 })
 
+test('configure content uses the white shop background at every breakpoint', () => {
+  assert.match(configurator, /border-b border-black\/10 bg-white/)
+  assert.match(configuratorStyles, /\.desktopLayout[\s\S]*background: #fff;/)
+  assert.doesNotMatch(configurator, /bg-\[#faf9f7\]/)
+  assert.doesNotMatch(configuratorStyles, /background: #faf9f7;/)
+})
+
 test('shop and configurator consume one shared frame source', () => {
   assert.match(shopPage, /import \{ formatNok, shopFrames \} from '\.\/productData'/)
   assert.match(configurator, /shopFrames, shopMattes/)
