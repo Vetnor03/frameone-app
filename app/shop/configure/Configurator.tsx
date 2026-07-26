@@ -104,15 +104,15 @@ export default function Configurator() {
   }
 
   return (
-    <>
-      <section className="border-b border-black/10 bg-[#faf9f7]">
-        <div className="mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14">
-          <div className="text-center">
+    <div className={styles.desktopLayout}>
+      <section className={`border-b border-black/10 bg-[#faf9f7] ${styles.previewSection}`}>
+        <div className={`mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14 ${styles.previewInner}`}>
+          <div className={`text-center ${styles.heading}`}>
             <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
             <p className="mt-3 text-[16px] text-black/60">Find the combination that feels like home.</p>
           </div>
 
-          <div className="relative mt-7 md:mt-10">
+          <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
             <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={`${frame.name} frame with ${matte.name} matte and ${display.name.toLowerCase()} display`}>
               <div className={styles.previewObject}>
                 <DevicePlaceholder display={display.id} />
@@ -124,8 +124,8 @@ export default function Configurator() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1200px] px-6 py-10 md:py-14 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.75fr)] lg:gap-16 lg:py-16">
-        <div className="grid gap-7 border-b border-black/10 pb-10 md:grid-cols-2 md:gap-12 lg:grid-cols-1 lg:content-start lg:gap-14 lg:border-b-0 lg:pb-0 lg:pr-4">
+      <section className={`mx-auto max-w-[1200px] px-6 py-10 md:py-14 ${styles.purchaseColumn}`}>
+        <div className={`grid gap-7 border-b border-black/10 pb-10 md:grid-cols-2 md:gap-12 ${styles.controlsCard}`}>
           <label className="block text-xs font-medium tracking-[0.15em]">
             FRAME
             <span className="relative mt-3 block">
@@ -144,7 +144,7 @@ export default function Configurator() {
               <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
             </span>
           </label>
-          <fieldset className="block text-xs font-medium tracking-[0.15em]">
+          <fieldset className={`block text-xs font-medium tracking-[0.15em] ${styles.displayControl}`}>
             <legend>DISPLAY</legend>
             <div className="mt-4 inline-flex rounded border border-black/20 p-0.5" aria-label="Display appearance">
               {displayOptions.map((item) => (
@@ -162,7 +162,7 @@ export default function Configurator() {
           </fieldset>
         </div>
 
-        <div className="mx-auto mt-10 max-w-[620px] lg:sticky lg:top-8 lg:mt-0 lg:w-full lg:self-start lg:border-l lg:border-black/10 lg:py-1 lg:pl-12">
+        <div className={`mx-auto mt-10 max-w-[620px] ${styles.summaryCard}`}>
           <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">YOUR RE:MIND</h2>
           <dl className="space-y-3 text-[15px]">
             <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price)}</dd></div>
@@ -174,6 +174,6 @@ export default function Configurator() {
           <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : ''}</p>
         </div>
       </section>
-    </>
+    </div>
   )
 }
