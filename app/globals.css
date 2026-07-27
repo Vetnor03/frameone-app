@@ -308,7 +308,6 @@ a {
 .shop-page .shop-card,
 .shop-page .shop-button,
 .shop-page .shop-nav a,
-.shop-page .shop-nav-trigger,
 .shop-page .shop-fade-image,
 .shop-page button,
 .shop-page a {
@@ -332,9 +331,7 @@ a {
 }
 
 .shop-page .shop-nav a:hover,
-.shop-page .shop-nav a:focus-visible,
-.shop-page .shop-nav-trigger:hover,
-.shop-page .shop-nav-trigger:focus-visible {
+.shop-page .shop-nav a:focus-visible {
   transform: translateY(-1px);
   opacity: 0.88;
 }
@@ -349,7 +346,6 @@ a {
   .shop-page .shop-card,
   .shop-page .shop-button,
   .shop-page .shop-nav a,
-  .shop-page .shop-nav-trigger,
   .shop-page .shop-icon-button,
   .shop-page .shop-social-link,
   .shop-page .shop-footer-link,
@@ -369,7 +365,6 @@ a {
   .shop-page .shop-card,
   .shop-page .shop-button,
   .shop-page .shop-nav a,
-  .shop-page .shop-nav-trigger,
   .shop-page .shop-icon-button,
   .shop-page .shop-social-link,
   .shop-page .shop-footer-link,
@@ -387,8 +382,6 @@ a {
   .shop-page .shop-button:active,
   .shop-page .shop-nav a:hover,
   .shop-page .shop-nav a:active,
-  .shop-page .shop-nav-trigger:hover,
-  .shop-page .shop-nav-trigger:active,
   .shop-page .shop-icon-button:hover,
   .shop-page .shop-icon-button:active,
   .shop-page .shop-social-link:hover,
@@ -399,20 +392,6 @@ a {
     box-shadow: none;
     opacity: inherit;
   }
-}
-
-.shop-page .shop-mobile-nav {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  transform: translateY(-6px);
-  transition: max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease-out, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.shop-page .shop-mobile-nav.is-open {
-  max-height: 220px;
-  opacity: 1;
-  transform: translateY(0);
 }
 
 .shop-page .shop-fade-image {
@@ -439,8 +418,6 @@ a {
   .shop-page .shop-card,
   .shop-page .shop-button,
   .shop-page .shop-nav a,
-  .shop-page .shop-nav-trigger,
-  .shop-page .shop-mobile-nav,
   .shop-page .shop-fade-image,
   .shop-page button,
   .shop-page a {
@@ -449,10 +426,6 @@ a {
     transform: none !important;
   }
 
-  .shop-page .shop-mobile-nav {
-    max-height: none;
-    opacity: 1;
-  }
 
   .shop-page .shop-fade-image {
     opacity: 1;

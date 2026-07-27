@@ -36,6 +36,20 @@ test('shop and configurator share the complete storefront chrome', () => {
   assert.match(chrome, /ShopLanguageSelector/)
 })
 
+test('mobile shop navigation displays page links inline without a menu toggle', () => {
+  assert.match(chrome, /aria-label="Shop pages"/)
+  assert.match(chrome, /shop-nav flex items-center justify-between[\s\S]*md:hidden/)
+  assert.doesNotMatch(chrome, /ShopMobileMenu|shop-nav-trigger|>\s*Menu\s*</)
+
+  const mobileNavStart = chrome.indexOf('aria-label="Shop pages"')
+  const mobileNav = chrome.slice(mobileNavStart, chrome.indexOf('</nav>', mobileNavStart))
+  assert.match(mobileNav, /href="\/shop\/frames"/)
+  assert.match(mobileNav, /href="\/shop\/mattes"/)
+  assert.match(mobileNav, /href="\/shop#accessories"/)
+  assert.match(mobileNav, /href="\/shop#bundles"/)
+  assert.doesNotMatch(mobileNav, /href="\/shop#about"/)
+})
+
 test('footer selector changes language only and prices remain NOK', () => {
   assert.match(languageSelector, /aria-label="Language"/)
   assert.match(languageSelector, /<option value="en">English<\/option>/)
