@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { addCartItem, type BundleCartItem } from '../../cart'
 import { ConfigurationPlaceholder } from '../../configure/Configurator'
 import { displayOptions, formatNok, shopFrames, shopMattes, type DisplayMode } from '../../productData'
-import type { ShopBundle } from '../../bundleData'
+import { bundleRegularPrice, bundleSavings, type ShopBundle } from '../../bundleData'
 
 const frames = shopFrames.filter((item) => item.price !== null && !item.id.startsWith('custom-'))
 const mattes = shopMattes.filter((item) => item.price !== null && !item.id.startsWith('custom-'))
@@ -16,6 +16,10 @@ export default function BundleConfigurator({ bundle }: { bundle: ShopBundle }) {
   const [added, setAdded] = useState(false)
   const selectedFrames = frameIds.map((id) => frames.find((item) => item.id === id) ?? frames[0])
   const selectedMattes = matteIds.map((id) => mattes.find((item) => item.id === id) ?? mattes[0])
+  const framePrices = selectedFrames.map(({ price }) => price!)
+  const mattePrices = selectedMattes.map(({ price }) => price!)
+  const regularPrice = bundleRegularPrice(bundle, framePrices, mattePrices)
+  const saving = bundleSavings(bundle, framePrices, mattePrices)
 
   function update(items: string[], index: number, value: string, setter: (value: string[]) => void) { const next = [...items]; next[index] = value; setter(next); setAdded(false) }
   function addBundle() {
@@ -42,7 +46,7 @@ export default function BundleConfigurator({ bundle }: { bundle: ShopBundle }) {
         {frameIds.map((id, index) => <label key={`frame-${index}`} className="text-xs font-medium tracking-[.13em]">FRAME {index + 1}<select value={id} onChange={(e) => update(frameIds, index, e.target.value, setFrameIds)} className="mt-2 w-full border-b border-black/25 bg-transparent py-3 text-base font-normal tracking-normal">{frames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>)}
         {matteIds.map((id, index) => <label key={`matte-${index}`} className="text-xs font-medium tracking-[.13em]">MATTE {index + 1}<select value={id} onChange={(e) => update(matteIds, index, e.target.value, setMatteIds)} className="mt-2 w-full border-b border-black/25 bg-transparent py-3 text-base font-normal tracking-normal">{mattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>)}
       </div>
-      <div className="mt-8 border-t border-black/10 pt-6"><div className="flex items-end justify-between"><div><p className="text-sm text-black/45 line-through">Normally {formatNok(bundle.regularPrice)}</p><p className="mt-1 text-sm text-emerald-700">Bundle saving {formatNok(bundle.regularPrice - bundle.price)}</p></div><strong className="text-2xl font-medium">{formatNok(bundle.price)}</strong></div><button type="button" onClick={addBundle} className="shop-button mt-6 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[.08em] text-white">ADD BUNDLE TO CART</button><p role="status" className="mt-3 min-h-5 text-center text-sm text-black/60">{added ? 'Your bundle was added to cart.' : 'Every component is included in the bundle price.'}</p></div>
+      <div className="mt-8 border-t border-black/10 pt-6"><div className="flex items-end justify-between"><div><p className="text-sm text-black/45 line-through">Separately {formatNok(regularPrice)}</p><p className="mt-1 text-sm text-emerald-700">You save {formatNok(saving)}</p></div><strong className="text-2xl font-medium">{formatNok(bundle.price)}</strong></div><button type="button" onClick={addBundle} className="shop-button mt-6 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[.08em] text-white">ADD BUNDLE TO CART</button><p role="status" className="mt-3 min-h-5 text-center text-sm text-black/60">{added ? 'Your bundle was added to cart.' : 'Every component is included in the bundle price.'}</p></div>
     </div>
   </div>
 }

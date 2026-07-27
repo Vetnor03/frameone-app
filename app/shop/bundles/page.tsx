@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import BundleArtwork from './BundleArtwork'
-import { bundleSavings, shopBundles } from '../bundleData'
+import { bundleRegularPrice, bundleSavings, shopBundles } from '../bundleData'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import { formatNok } from '../productData'
 
@@ -22,7 +22,7 @@ export default function BundlesPage() {
             <div className="p-5 sm:p-6">
               <div className="flex items-start justify-between gap-5"><div><p className="text-[10px] font-medium uppercase tracking-[.15em] text-black/50">{bundle.eyebrow}</p><h2 className="mt-2 text-2xl font-medium">{bundle.name}</h2></div><span className="rounded-full bg-[#dfe9d8] px-3 py-1 text-xs font-medium text-[#29421f]">Save {formatNok(bundleSavings(bundle))}</span></div>
               <p className="mt-3 text-sm leading-6 text-black/60">{bundle.description}</p>
-              <div className="mt-5 flex items-end justify-between border-t border-black/10 pt-4"><p className="text-sm">{bundle.deviceCount ? `${bundle.deviceCount} device · ` : ''}{bundle.frameCount} frames · {bundle.matteCount} mattes</p><p><span className="mr-2 text-sm text-black/40 line-through">{formatNok(bundle.regularPrice)}</span><strong className="font-medium">{formatNok(bundle.price)}</strong></p></div>
+              <div className="mt-5 flex items-end justify-between border-t border-black/10 pt-4"><p className="text-sm">{bundle.deviceCount ? `${bundle.deviceCount} device · ` : ''}{bundle.frameCount} frames · {bundle.matteCount} mattes</p><p><span className="mr-2 text-sm text-black/40 line-through">{formatNok(bundleRegularPrice(bundle))}</span><strong className="font-medium">{formatNok(bundle.price)}</strong></p></div>
             </div>
           </a>)}
         </div>
