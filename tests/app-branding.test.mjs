@@ -5,12 +5,11 @@ import test from 'node:test'
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
 test('web install metadata consistently uses the RE:MIND brand and canonical logo', async () => {
-  const [layout, manifest, favicon, serviceWorker, splash] = await Promise.all([
+  const [layout, manifest, favicon, serviceWorker] = await Promise.all([
     read('app/layout.tsx'),
     read('app/manifest.ts'),
     read('app/favicon.ico/route.ts'),
     read('public/sw.js'),
-    read('app/HomePageClient.tsx'),
   ])
 
   assert.doesNotMatch(layout, /Re-mind/)
@@ -23,7 +22,23 @@ test('web install metadata consistently uses the RE:MIND brand and canonical log
   assert.match(favicon, /versionedIconPath\('\/r_Logo\.png'\)/)
   assert.match(serviceWorker, /icon: '\/r_Logo\.png'/)
   assert.match(serviceWorker, /badge: '\/r_Logo\.png'/)
-  assert.match(splash, /src="\/r_Logo\.png"/)
+})
+
+test('custom splash retains the animated RE:MIND wordmark independently of the app icon', async () => {
+  const [splash, styles] = await Promise.all([
+    read('app/HomePageClient.tsx'),
+    read('app/globals.css'),
+  ])
+
+  assert.doesNotMatch(splash, /src="\/r_Logo\.png"/)
+  assert.match(splash, /remind-logo-wordmark/)
+  assert.match(splash, />R<\/text>/)
+  assert.match(splash, />E<\/text>/)
+  assert.match(splash, />MIND<\/text>/)
+  assert.match(styles, /@keyframes remind-wordmark-expand/)
+  assert.match(styles, /@keyframes remind-colon-shift/)
+  assert.match(styles, /@keyframes remind-letter-reveal/)
+  assert.match(styles, /@keyframes remind-clip-open/)
 })
 
 test('iOS app icon catalog references the canonical logo without a generated asset', async () => {
