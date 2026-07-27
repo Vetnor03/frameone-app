@@ -75,6 +75,16 @@ function DevicePlaceholder({ display }: { display: DisplayMode }) {
   )
 }
 
+export function ConfigurationPlaceholder({ display, frameId, matteId }: { display: DisplayMode; frameId: string; matteId: string }) {
+  return (
+    <div className="relative aspect-[4/3] w-full" aria-hidden="true">
+      <DevicePlaceholder display={display} />
+      <MattePlaceholder matteId={matteId} />
+      <FramePlaceholder frameId={frameId} />
+    </div>
+  )
+}
+
 function ProductStory({ className = '' }: { className?: string }) {
   return (
     <section className={`${styles.productStory} ${className}`}>
@@ -148,9 +158,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
           <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
             <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={`${frame.name} frame with ${matte.name} matte and ${display.name.toLowerCase()} display`}>
               <div className={styles.previewObject}>
-                <DevicePlaceholder display={display.id} />
-                <MattePlaceholder matteId={matte.id} />
-                <FramePlaceholder frameId={frame.id} />
+                <ConfigurationPlaceholder display={display.id} frameId={frame.id} matteId={matte.id} />
               </div>
             </div>
           </div>

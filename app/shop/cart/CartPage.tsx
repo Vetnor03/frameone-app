@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isConfiguredCartItem, readCart, removeCartItem, SHOP_CART_CHANGED, updateCartItemQuantity } from '../cart'
 import type { CartItem } from '../cart'
 import { PlaceholderFigure } from '../CatalogPage'
+import { ConfigurationPlaceholder } from '../configure/Configurator'
 import { formatNok } from '../productData'
 
 const FREE_SHIPPING_THRESHOLD = 1000
@@ -65,13 +66,13 @@ export default function CartPage() {
               {items.map((item) => (
                 <article key={item.id} className="grid grid-cols-[100px_1fr] gap-5 border border-black/10 bg-white p-4 sm:grid-cols-[150px_1fr] sm:p-5">
                   <div className="flex aspect-square items-center justify-center overflow-hidden bg-[#f4f2ed]">
-                    {!isConfiguredCartItem(item) && item.productType === 'matte' ? (
-                      <PlaceholderFigure colors={item.colors ?? ['#f6f4ef', '#d9d5cf']} kind="mattes" />
+                    {isConfiguredCartItem(item) ? (
+                      <ConfigurationPlaceholder display={item.display} frameId={item.frame.id} matteId={item.matte.id} />
+                    ) : !item.imageSrc ? (
+                      <PlaceholderFigure colors={item.colors ?? ['#f6f4ef', '#d9d5cf']} kind={item.productType === 'matte' ? 'mattes' : 'frames'} />
                     ) : !isConfiguredCartItem(item) && item.imageSrc ? (
                       <Image src={item.imageSrc} alt={item.productName} width={300} height={300} className="h-full w-full object-cover" />
-                    ) : (
-                      <Image src="/shop/remind-device-v2.png" alt="RE:MIND display" width={300} height={300} className="h-full w-full object-contain p-2" />
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex min-w-0 flex-col sm:flex-row sm:justify-between sm:gap-6">
                     <div>
@@ -97,7 +98,7 @@ export default function CartPage() {
                   </div>
                 </article>
               ))}
-              <a href="/shop/configure" className="inline-block pt-2 text-sm underline underline-offset-4">Continue shopping</a>
+              <a href="/shop" className="inline-block pt-2 text-sm underline underline-offset-4">Continue shopping</a>
             </div>
 
             <aside className="border border-black/10 bg-white p-6 sm:p-7">
