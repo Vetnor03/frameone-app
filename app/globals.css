@@ -222,8 +222,8 @@ a {
 }
 
 .remind-logo-wordmark {
-  transform: translateX(116px);
-  animation: remind-wordmark-expand 700ms cubic-bezier(0.22, 1, 0.36, 1) 180ms forwards;
+  transform: translateX(132px);
+  animation: remind-wordmark-expand 560ms cubic-bezier(0.22, 1, 0.36, 1) 320ms forwards;
 }
 
 .remind-logo-letter {
@@ -242,29 +242,29 @@ a {
   letter-spacing: 0;
   opacity: 0;
   transform: translateX(-5px);
-  animation: remind-letter-reveal 430ms cubic-bezier(0.22, 1, 0.36, 1) 300ms forwards;
+  animation: remind-letter-reveal 330ms cubic-bezier(0.22, 1, 0.36, 1) 390ms forwards;
 }
 
 .remind-logo-mind {
   opacity: 0;
   transform: translateX(-8px);
-  animation: remind-letter-reveal 500ms cubic-bezier(0.22, 1, 0.36, 1) 390ms forwards;
+  animation: remind-letter-reveal 430ms cubic-bezier(0.22, 1, 0.36, 1) 450ms forwards;
 }
 
 .remind-logo-colon {
   fill: currentColor;
   transform: translateX(60px);
-  animation: remind-colon-shift 700ms cubic-bezier(0.22, 1, 0.36, 1) 180ms forwards;
+  animation: remind-colon-shift 560ms cubic-bezier(0.22, 1, 0.36, 1) 320ms forwards;
 }
 
 .remind-logo-e-clip {
   transform: translateX(-58px);
-  animation: remind-clip-open 430ms cubic-bezier(0.22, 1, 0.36, 1) 260ms forwards;
+  animation: remind-clip-open 350ms cubic-bezier(0.22, 1, 0.36, 1) 370ms forwards;
 }
 
 .remind-logo-mind-clip {
   transform: translateX(-218px);
-  animation: remind-clip-open 520ms cubic-bezier(0.22, 1, 0.36, 1) 340ms forwards;
+  animation: remind-clip-open 450ms cubic-bezier(0.22, 1, 0.36, 1) 430ms forwards;
 }
 
 @keyframes remind-wordmark-expand {
