@@ -6,9 +6,14 @@
    ========================= */
 :root {
   /* base */
-  --app-bg: #061b24;        /* your current background */
-  --sheet-bg: #071f2a;      /* your current modal/sheet bg */
-  --accent: #2aa3ff;
+  --app-bg: #07181f;
+  --sheet-bg: #0d242d;
+  --accent: #55b8ff;
+  --accent-rgb: 85, 184, 255;
+  --ambient-a: rgba(28, 132, 174, 0.22);
+  --ambient-b: rgba(75, 92, 197, 0.12);
+  --shell-bg: rgba(7, 24, 31, 0.72);
+  --shell-shadow: 0 32px 90px rgba(0, 0, 0, 0.34);
 
   /* text */
   --fg: rgba(255, 255, 255, 1);
@@ -17,9 +22,12 @@
   --fg-70: rgba(255, 255, 255, 0.7);
   --fg-60: rgba(255, 255, 255, 0.6);
   --fg-50: rgba(255, 255, 255, 0.5);
+  --fg-45: rgba(255, 255, 255, 0.45);
   --fg-40: rgba(255, 255, 255, 0.4);
   --fg-30: rgba(255, 255, 255, 0.3);
   --fg-15: rgba(255, 255, 255, 0.15);
+  --fg-95: rgba(255, 255, 255, 0.95);
+  --fg-35: rgba(255, 255, 255, 0.35);
 
   /* borders */
   --bd-40: rgba(255, 255, 255, 0.4);
@@ -47,10 +55,15 @@
    ========================= */
 html[data-theme="light"] {
   /* Softer premium light background */
-  --app-bg: #eef2f6;      /* soft blue-grey */
+  --app-bg: #f2f6f8;
   --sheet-bg: #ffffff;
 
-  --accent: #2aa3ff;
+  --accent: #087fc8;
+  --accent-rgb: 8, 127, 200;
+  --ambient-a: rgba(59, 156, 201, 0.18);
+  --ambient-b: rgba(115, 105, 196, 0.10);
+  --shell-bg: rgba(255, 255, 255, 0.72);
+  --shell-shadow: 0 28px 80px rgba(29, 61, 76, 0.15);
 
   /* Dark text ladder */
   --fg: rgba(15, 23, 42, 1);
@@ -59,9 +72,12 @@ html[data-theme="light"] {
   --fg-70: rgba(15, 23, 42, 0.7);
   --fg-60: rgba(15, 23, 42, 0.6);
   --fg-50: rgba(15, 23, 42, 0.5);
+  --fg-45: rgba(15, 23, 42, 0.45);
   --fg-40: rgba(15, 23, 42, 0.4);
   --fg-30: rgba(15, 23, 42, 0.3);
   --fg-15: rgba(15, 23, 42, 0.15);
+  --fg-95: rgba(15, 23, 42, 0.95);
+  --fg-35: rgba(15, 23, 42, 0.35);
 
   /* borders */
   --bd-40: rgba(15, 23, 42, 0.4);
@@ -106,6 +122,87 @@ body > div:first-child {
   width: 100%;
   background: var(--app-bg);
   overflow: hidden;
+}
+
+/* The controller gets depth from light rather than heavy chrome. Both themes use
+   the same spatial language while keeping their own contrast and atmosphere. */
+.app-canvas {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 12% 8%, var(--ambient-a), transparent 38%),
+    radial-gradient(circle at 92% 84%, var(--ambient-b), transparent 42%),
+    var(--app-bg) !important;
+}
+
+.app-canvas::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.45;
+  background-image: linear-gradient(rgba(var(--accent-rgb), 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.022) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent 75%);
+}
+
+.app-viewport {
+  background: var(--shell-bg);
+  border-inline: 1px solid var(--bd-10);
+  box-shadow: var(--shell-shadow);
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
+}
+
+.app-canvas .frame-preview {
+  overflow: hidden;
+  border: 1px solid var(--bd-15);
+  border-radius: 26px;
+  background: linear-gradient(145deg, var(--panel-10), var(--panel-05));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 18px 55px rgba(0,0,0,.12);
+}
+
+.app-canvas .frame-preview button {
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.app-canvas .frame-preview button:hover { background: rgba(var(--accent-rgb), .07); }
+.app-canvas .frame-preview button:active { transform: scale(.985); }
+
+.remind-app-shell button {
+  outline: none;
+}
+
+.remind-app-shell button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .2);
+}
+
+.remind-app-shell button[class*="rounded-2xl"],
+.remind-app-shell button[class*="rounded-xl"],
+.remind-app-shell button[class*="rounded-full"] {
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+@media (hover: hover) {
+  .remind-app-shell button[class*="rounded-2xl"]:not(:disabled):hover,
+  .remind-app-shell button[class*="rounded-xl"]:not(:disabled):hover,
+  .remind-app-shell button[class*="rounded-full"]:not(:disabled):hover {
+    border-color: rgba(var(--accent-rgb), .5);
+    background-color: rgba(var(--accent-rgb), .07);
+  }
+}
+
+.remind-app-shell button:active:not(:disabled) { transform: scale(.975); }
+
+html[data-theme="light"] .app-canvas .frame-preview {
+  background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(239,246,249,.72));
+  box-shadow: inset 0 1px 0 #fff, 0 20px 50px rgba(36, 75, 94, .12);
+}
+
+@media (max-width: 440px) {
+  .app-viewport { border-inline: 0; box-shadow: none; }
 }
 
 html[data-route-theme="shop"],

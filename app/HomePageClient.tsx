@@ -2268,8 +2268,8 @@ async function handleSelectTab(k: TabKey) {
   }
 
   return (
-    <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
-      <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
+    <main className={`app-canvas h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
+      <div className="app-viewport w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
         {shouldShowFirstFrameOnboarding && (
           <FirstFrameOnboarding
             language={language}
@@ -17430,7 +17430,7 @@ function WeatherLocationSheet({
 }
 
 function FramePreview({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`w-full h-full flex flex-col ${className}`}>{children}</div>
+  return <div className={`frame-preview w-full h-full flex flex-col ${className}`}>{children}</div>
 }
 function HLine() {
   return <div className="h-px bg-[color:var(--bd-15)]" />
