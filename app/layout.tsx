@@ -4,22 +4,18 @@ import "./globals.css";
 import { versionedIconPath } from "./lib/iconVersion";
 
 export const metadata: Metadata = {
-  title: "Re-mind",
-  description: "Re-mind controller",
+  title: "RE:MIND",
+  description: "RE:MIND controller",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [
-      { url: versionedIconPath("/favicon-32x32.png"), sizes: "32x32", type: "image/png" },
-      { url: versionedIconPath("/icon-192x192.png"), sizes: "192x192", type: "image/png" },
-      { url: versionedIconPath("/icon-512x512.png"), sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: versionedIconPath("/apple-touch-icon.png"), sizes: "180x180", type: "image/png" }],
+    icon: [{ url: versionedIconPath("/r_Logo.png"), type: "image/png" }],
+    apple: [{ url: versionedIconPath("/r_Logo.png"), type: "image/png" }],
   },
   themeColor: "#061b24",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Re-mind",
+    title: "RE:MIND",
   },
 };
 
