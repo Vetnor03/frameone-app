@@ -72,7 +72,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
               <a href="/shop/bundles" className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
                 Bundles
               </a>
-              <a href="/shop#about" className="pb-1">
+              <a href="/shop/about" className="pb-1">
                 About
               </a>
             </nav>
@@ -107,7 +107,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
             <a href="/shop/bundles" className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
               Bundles
             </a>
-            <a href="/shop#about" className="pb-1">
+            <a href="/shop/about" className="pb-1">
               About
             </a>
           </nav>
@@ -224,7 +224,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
         <div>
           <p className="mb-3 font-medium">COMPANY</p>
           <div className="space-y-1.5 leading-[1.4]">
-            <a href="/shop#about" className="shop-footer-link block">
+            <a href="/shop/about" className="shop-footer-link block">
               About
             </a>
             <a href="#" className="shop-footer-link block">
@@ -238,7 +238,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
             </a>
           </div>
         </div>
-        <div>
+        <div id="waitlist" className="scroll-mt-32">
           <p className="mb-3 font-medium">STAY IN THE LOOP</p>
           <p className="max-w-[30ch] leading-[1.45] text-black/65">
             New frames, updates and ideas.
