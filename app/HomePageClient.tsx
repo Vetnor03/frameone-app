@@ -7767,6 +7767,7 @@ function SettingsTab({
 
           <div ref={scrollRef} className="settings-scroll h-full overflow-y-auto pr-1 pb-4">
             <div className="mt-2 space-y-2">
+              <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
               <SettingRow label={t.themeRow} value={theme === 'dark' ? (language === 'no' ? 'Mørk' : 'Dark') : (language === 'no' ? 'Lys' : 'Light')} onClick={onOpenTheme} />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
@@ -7774,7 +7775,6 @@ function SettingsTab({
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
-              <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
             </div>
 
             <div className="mt-8">
