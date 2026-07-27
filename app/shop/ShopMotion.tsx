@@ -1,7 +1,7 @@
 'use client'
 
 import Image, { type ImageProps } from 'next/image'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 export function ShopReveal({ children, delayMs = 0, className = '' }: { children: ReactNode; delayMs?: number; className?: string }) {
   return (
@@ -23,28 +23,5 @@ export function ShopFadeImage({ className = '', onLoad, ...props }: ImageProps) 
         onLoad?.(event)
       }}
     />
-  )
-}
-
-export function ShopMobileMenu({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth >= 768) setOpen(false)
-    }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-
-  return (
-    <div className="md:hidden flex w-full flex-col items-start">
-      <button type="button" aria-expanded={open} aria-controls="shop-mobile-nav" onClick={() => setOpen((v) => !v)} className="shop-nav-trigger inline-flex items-center rounded border border-black/15 px-3 py-1.5 text-[11px] uppercase tracking-[0.11em] text-black/75">
-        Menu
-      </button>
-      <div id="shop-mobile-nav" className={`shop-mobile-nav w-full ${open ? 'is-open' : ''}`}>
-        <div className="pt-4 pb-1">{children}</div>
-      </div>
-    </div>
   )
 }

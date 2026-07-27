@@ -1,7 +1,6 @@
 import Image from "next/image";
 import ShopCartCount from "./ShopCartCount";
 import ShopLanguageSelector from "./ShopLanguageSelector";
-import { ShopMobileMenu } from "./ShopMotion";
 import WaitlistForm from "./WaitlistForm";
 import { formatNok } from "./productData";
 
@@ -98,27 +97,23 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
               </a>
             </div>
           </div>
-          <div className="pt-4 md:hidden">
-            <ShopMobileMenu>
-              <nav className="shop-nav flex flex-col items-start gap-3 text-left text-sm uppercase tracking-[0.09em]">
-                <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
-                  Frames
-                </a>
-                <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
-                  Mattes
-                </a>
-                <a href="/shop#accessories" className="pb-1">
-                  Accessories
-                </a>
-                <a href="/shop#bundles" className="pb-1">
-                  Bundles
-                </a>
-                <a href="/shop#about" className="pb-1">
-                  About
-                </a>
-              </nav>
-            </ShopMobileMenu>
-          </div>
+          <nav
+            aria-label="Shop pages"
+            className="shop-nav flex items-center justify-between gap-2 pt-5 text-[10px] uppercase tracking-[0.06em] md:hidden"
+          >
+            <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
+              Frames
+            </a>
+            <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
+              Mattes
+            </a>
+            <a href="/shop#accessories" className="pb-1">
+              Accessories
+            </a>
+            <a href="/shop#bundles" className="pb-1">
+              Bundles
+            </a>
+          </nav>
         </div>
       </header>
     </div>
