@@ -33,7 +33,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]" style={{ marginTop: 'calc(env(safe-area-inset-top) * -1)', paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="shop-shell mx-auto w-full max-w-[2560px] bg-white 2xl:max-w-[1720px]">
-        <ShopHeader language="en" currency="NOK" activeSection={kind} />
+        <ShopHeader language="en" activeSection={kind} />
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-14">
           <a href={`/shop/${kind}`} className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black">
             <span aria-hidden className="text-base transition-transform group-hover:-translate-x-0.5">←</span>
@@ -76,7 +76,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
             <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">Built to last</h2><p className="mt-2 text-sm leading-6 text-black/55">Durable materials chosen for everyday life at home.</p></div>
           </div>
         </section>
-        <ShopFooter language="en" currency="NOK" />
+        <ShopFooter language="en" />
       </div>
     </main>
   )

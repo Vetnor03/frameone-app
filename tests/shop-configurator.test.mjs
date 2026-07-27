@@ -13,26 +13,36 @@ const cart = read('app/shop/cart.ts')
 const chrome = read('app/shop/ShopChrome.tsx')
 const cartPage = read('app/shop/cart/CartPage.tsx')
 const cartRoute = read('app/shop/cart/page.tsx')
+const languageSelector = read('app/shop/ShopLanguageSelector.tsx')
 
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator initialFrameId=\{params\?\.frame\} initialMatteId=\{params\?\.matte\} \/>/)
   assert.match(configurator, /BUILD YOUR RE:MIND/)
   assert.match(configurator, /Choose the display, frame and matte that feel right at home\./)
-  assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}&currency=\$\{currency\}`/)
+  assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
 })
 
 test('shop and configurator share the complete storefront chrome', () => {
-  assert.match(shopPage, /<ShopHeader language=\{language\} currency=\{currency\}/)
-  assert.match(shopPage, /<ShopFooter language=\{language\} currency=\{currency\}/)
-  assert.match(page, /<ShopHeader language=\{language\} currency=\{currency\} \/>/)
-  assert.match(page, /<ShopFooter language=\{language\} currency=\{currency\} \/>/)
+  assert.match(shopPage, /<ShopHeader language=\{language\}/)
+  assert.match(shopPage, /<ShopFooter language=\{language\}/)
+  assert.match(page, /<ShopHeader language=\{language\} \/>/)
+  assert.match(page, /<ShopFooter language=\{language\} \/>/)
   assert.doesNotMatch(chrome, /Open profile|profile\.png/)
   assert.match(chrome, /href="\/shop\/cart"/)
   assert.match(chrome, /FREE SHIPPING/)
   assert.match(chrome, /STAY IN THE LOOP/)
-  assert.match(chrome, /ShopLocaleCurrencySelector/)
+  assert.match(chrome, /ShopLanguageSelector/)
+})
+
+test('footer selector changes language only and prices remain NOK', () => {
+  assert.match(languageSelector, /aria-label="Language"/)
+  assert.match(languageSelector, /<option value="en">English<\/option>/)
+  assert.match(languageSelector, /<option value="no">Norwegian<\/option>/)
+  assert.doesNotMatch(languageSelector, /NOK|English \(|Norwegian \(/)
+  assert.doesNotMatch(chrome, /currency/)
+  assert.doesNotMatch(shopPage, /currency/)
 })
 
 test('shop and configure routes use the same page scroll container', () => {
@@ -119,6 +129,12 @@ test('cart persists structured display, frame, and matte data', () => {
   assert.match(configurator, /matteUpgrade,/)
 })
 
+test('cart summary omits display appearance while retaining frame and matte', () => {
+  assert.doesNotMatch(cartPage, /<dt className="inline">Display:/)
+  assert.match(cartPage, /<dt className="inline">Frame:/)
+  assert.match(cartPage, /<dt className="inline">Matte:/)
+})
+
 test('cart combines identical configurations into one quantity', () => {
   assert.match(cart, /const matchingItem = items\.find/)
   assert.match(cart, /existing\.productId === item\.productId/)
@@ -130,7 +146,7 @@ test('cart combines identical configurations into one quantity', () => {
 
 test('cart route supports quantity, removal, discounts, totals, and checkout', () => {
   assert.match(cartRoute, /<CartPage \/>/)
-  assert.match(cartRoute, /<ShopHeader language="en" currency="NOK" \/>/)
+  assert.match(cartRoute, /<ShopHeader language="en" \/>/)
   assert.match(cartPage, /updateCartItemQuantity/)
   assert.match(cartPage, /removeCartItem/)
   assert.match(cartPage, /Discount code/)

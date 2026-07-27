@@ -39,12 +39,11 @@ export function PlaceholderFigure({ colors, kind }: Pick<CatalogItem, 'colors'> 
 
 export default function CatalogPage({ kind, title, intro, items }: CatalogPageProps) {
   const language = 'en' as const
-  const currency = 'NOK' as const
 
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]" style={{ marginTop: 'calc(env(safe-area-inset-top) * -1)', paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="shop-shell mx-auto w-full max-w-[2560px] bg-white 2xl:max-w-[1720px]">
-        <ShopHeader language={language} currency={currency} activeSection={kind} />
+        <ShopHeader language={language} activeSection={kind} />
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-10">
           <div className="mb-7 border-b border-black/10 pb-6">
             <a
@@ -81,7 +80,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
             ))}
           </div>
         </section>
-        <ShopFooter language={language} currency={currency} />
+        <ShopFooter language={language} />
       </div>
     </main>
   )

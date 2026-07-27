@@ -41,19 +41,17 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
 }
 
 function pickLang(v?: string): 'en' | 'no' { return v === 'no' ? 'no' : 'en' }
-function pickCurrency(): 'NOK' { return 'NOK' }
 export default async function ShopPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ lang?: string; currency?: string }>
+  searchParams?: Promise<{ lang?: string }>
 }) {
   const resolvedSearchParams = await searchParams
   const language = pickLang(resolvedSearchParams?.lang)
-  const currency = pickCurrency()
   const frameCardsLocalized = shopFrames.filter((frame) => frame.imageSrc)
   const accessoriesLocalized = accessories
   const topShipping = formatNok(1000)
-  const configureHref = `/shop/configure?lang=${language}&currency=${currency}`
+  const configureHref = `/shop/configure?lang=${language}`
 
 
   return (
@@ -65,7 +63,7 @@ export default async function ShopPage({
       }}
     >
       <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
-      <ShopHeader language={language} currency={currency} shippingThreshold={topShipping} />
+      <ShopHeader language={language} shippingThreshold={topShipping} />
 
       <div className="bg-[#faf9f7]">
         <div className="mx-auto max-w-[1200px]">
@@ -177,7 +175,7 @@ export default async function ShopPage({
             {frameCardsLocalized.map((card) => (
               <a
                 key={card.id}
-                href={`/shop/frames/${encodeURIComponent(card.id)}?lang=${language}&currency=${currency}`}
+                href={`/shop/frames/${encodeURIComponent(card.id)}?lang=${language}`}
                 className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
                 aria-label={`Choose ${card.name} frame`}
               >
@@ -271,7 +269,7 @@ export default async function ShopPage({
         </div>
         </div>
 
-      <ShopFooter language={language} currency={currency} shippingThreshold={topShipping} />
+      <ShopFooter language={language} shippingThreshold={topShipping} />
       </div>
     </main>
   )
