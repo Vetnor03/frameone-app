@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { addCartItem } from '../../cart'
+import { addCartItem, type BundleCartItem } from '../../cart'
 import { ConfigurationPlaceholder } from '../../configure/Configurator'
 import { displayOptions, formatNok, shopFrames, shopMattes, type DisplayMode } from '../../productData'
 import type { ShopBundle } from '../../bundleData'
@@ -19,7 +19,18 @@ export default function BundleConfigurator({ bundle }: { bundle: ShopBundle }) {
 
   function update(items: string[], index: number, value: string, setter: (value: string[]) => void) { const next = [...items]; next[index] = value; setter(next); setAdded(false) }
   function addBundle() {
-    addCartItem({ id: `bundle-${bundle.id}-${Date.now()}`, productId: `bundle-${bundle.id}`, productName: bundle.name, productType: 'bundle', display: bundle.deviceCount ? display : undefined, frames: selectedFrames.map(({ id, name }) => ({ id, name })), mattes: selectedMattes.map(({ id, name }) => ({ id, name })), quantity: 1, totalPrice: bundle.price })
+    const cartItem: BundleCartItem = {
+      id: `bundle-${bundle.id}-${Date.now()}`,
+      productId: `bundle-${bundle.id}`,
+      productName: bundle.name,
+      productType: 'bundle',
+      display: bundle.deviceCount ? display : undefined,
+      frames: selectedFrames.map(({ id, name }) => ({ id, name })),
+      mattes: selectedMattes.map(({ id, name }) => ({ id, name })),
+      quantity: 1,
+      totalPrice: bundle.price,
+    }
+    addCartItem(cartItem)
     setAdded(true)
   }
 

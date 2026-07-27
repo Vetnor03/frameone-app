@@ -47,7 +47,7 @@ export function isConfiguredCartItem(item: CartItem): item is ConfiguredCartItem
 }
 
 export function isBundleCartItem(item: CartItem): item is BundleCartItem {
-  return item.productType === 'bundle'
+  return 'productType' in item && item.productType === 'bundle'
 }
 
 export function readCart(): CartItem[] {
