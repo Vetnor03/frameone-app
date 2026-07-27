@@ -28,10 +28,26 @@ export type StandaloneCartItem = {
   totalPrice: number
 }
 
-export type CartItem = ConfiguredCartItem | StandaloneCartItem
+export type BundleCartItem = {
+  id: string
+  productId: `bundle-${string}`
+  productName: string
+  productType: 'bundle'
+  display?: DisplayMode
+  frames: Array<Pick<ShopFrame, 'id' | 'name'>>
+  mattes: Array<Pick<ShopMatte, 'id' | 'name'>>
+  quantity: number
+  totalPrice: number
+}
+
+export type CartItem = ConfiguredCartItem | StandaloneCartItem | BundleCartItem
 
 export function isConfiguredCartItem(item: CartItem): item is ConfiguredCartItem {
   return item.productId === 'remind'
+}
+
+export function isBundleCartItem(item: CartItem): item is BundleCartItem {
+  return 'productType' in item && item.productType === 'bundle'
 }
 
 export function readCart(): CartItem[] {
@@ -54,7 +70,14 @@ export function addCartItem(item: CartItem) {
         && existing.frame.id === item.frame.id
         && existing.matte.id === item.matte.id
     }
+    if (isBundleCartItem(existing) && isBundleCartItem(item)) {
+      return existing.productId === item.productId
+        && existing.display === item.display
+        && existing.frames.map((part) => part.id).join('|') === item.frames.map((part) => part.id).join('|')
+        && existing.mattes.map((part) => part.id).join('|') === item.mattes.map((part) => part.id).join('|')
+    }
     return !isConfiguredCartItem(existing) && !isConfiguredCartItem(item)
+      && !isBundleCartItem(existing) && !isBundleCartItem(item)
       && existing.productId === item.productId
       && existing.productType === item.productType
   })
