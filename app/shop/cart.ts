@@ -17,7 +17,23 @@ export type ConfiguredCartItem = {
   totalPrice: number
 }
 
-export function readCart(): ConfiguredCartItem[] {
+export type StandaloneCartItem = {
+  id: string
+  productId: string
+  productName: string
+  productType: 'frame' | 'matte'
+  imageSrc?: string
+  quantity: number
+  totalPrice: number
+}
+
+export type CartItem = ConfiguredCartItem | StandaloneCartItem
+
+export function isConfiguredCartItem(item: CartItem): item is ConfiguredCartItem {
+  return item.productId === 'remind'
+}
+
+export function readCart(): CartItem[] {
   if (typeof window === 'undefined') return []
   try {
     const value = JSON.parse(window.localStorage.getItem(SHOP_CART_KEY) ?? '[]')
@@ -29,14 +45,18 @@ export function readCart(): ConfiguredCartItem[] {
   }
 }
 
-export function addCartItem(item: ConfiguredCartItem) {
+export function addCartItem(item: CartItem) {
   const items = readCart()
-  const matchingItem = items.find((existing) =>
-    existing.productId === item.productId
-    && existing.display === item.display
-    && existing.frame.id === item.frame.id
-    && existing.matte.id === item.matte.id
-  )
+  const matchingItem = items.find((existing) => {
+    if (isConfiguredCartItem(existing) && isConfiguredCartItem(item)) {
+      return existing.display === item.display
+        && existing.frame.id === item.frame.id
+        && existing.matte.id === item.matte.id
+    }
+    return !isConfiguredCartItem(existing) && !isConfiguredCartItem(item)
+      && existing.productId === item.productId
+      && existing.productType === item.productType
+  })
 
   if (matchingItem) {
     const addedQuantity = Number.isFinite(item.quantity) ? Math.max(1, Math.floor(item.quantity)) : 1
@@ -47,7 +67,7 @@ export function addCartItem(item: ConfiguredCartItem) {
   writeCart([...items, item])
 }
 
-function writeCart(items: ConfiguredCartItem[]) {
+function writeCart(items: CartItem[]) {
   window.localStorage.setItem(SHOP_CART_KEY, JSON.stringify(items))
   window.dispatchEvent(new Event(SHOP_CART_CHANGED))
 }

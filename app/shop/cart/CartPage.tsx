@@ -2,14 +2,14 @@
 
 import Image from 'next/image'
 import { useEffect, useMemo, useState } from 'react'
-import { readCart, removeCartItem, SHOP_CART_CHANGED, updateCartItemQuantity } from '../cart'
-import type { ConfiguredCartItem } from '../cart'
+import { isConfiguredCartItem, readCart, removeCartItem, SHOP_CART_CHANGED, updateCartItemQuantity } from '../cart'
+import type { CartItem } from '../cart'
 import { formatNok } from '../productData'
 
 const FREE_SHIPPING_THRESHOLD = 1000
 
 export default function CartPage() {
-  const [items, setItems] = useState<ConfiguredCartItem[]>([])
+  const [items, setItems] = useState<CartItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [discountCode, setDiscountCode] = useState('')
   const [discountApplied, setDiscountApplied] = useState(false)
@@ -64,16 +64,18 @@ export default function CartPage() {
               {items.map((item) => (
                 <article key={item.id} className="grid grid-cols-[100px_1fr] gap-5 border border-black/10 bg-white p-4 sm:grid-cols-[150px_1fr] sm:p-5">
                   <div className="flex aspect-square items-center justify-center overflow-hidden bg-[#f4f2ed]">
-                    <Image src="/shop/remind-device-v2.png" alt="RE:MIND display" width={300} height={300} className="h-full w-full object-contain p-2" />
+                    {!isConfiguredCartItem(item) && item.imageSrc ? <Image src={item.imageSrc} alt={item.productName} width={300} height={300} className="h-full w-full object-cover" /> : <Image src="/shop/remind-device-v2.png" alt="RE:MIND display" width={300} height={300} className="h-full w-full object-contain p-2" />}
                   </div>
                   <div className="flex min-w-0 flex-col sm:flex-row sm:justify-between sm:gap-6">
                     <div>
                       <h2 className="font-medium tracking-[0.08em]">{item.productName}</h2>
-                      <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
-                        <div><dt className="inline">Display: </dt><dd className="inline capitalize">{item.display}</dd></div>
-                        <div><dt className="inline">Frame: </dt><dd className="inline">{item.frame.name}</dd></div>
-                        <div><dt className="inline">Matte: </dt><dd className="inline">{item.matte.name}</dd></div>
-                      </dl>
+                      {isConfiguredCartItem(item) ? (
+                        <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
+                          <div><dt className="inline">Display: </dt><dd className="inline capitalize">{item.display}</dd></div>
+                          <div><dt className="inline">Frame: </dt><dd className="inline">{item.frame.name}</dd></div>
+                          <div><dt className="inline">Matte: </dt><dd className="inline">{item.matte.name}</dd></div>
+                        </dl>
+                      ) : <p className="mt-2 text-sm capitalize text-black/55">Replacement {item.productType}</p>}
                       <div className="mt-5 flex items-center gap-3">
                         <span className="text-xs font-medium uppercase tracking-[0.08em]">Qty</span>
                         <div className="flex h-9 items-center border border-black/20" aria-label={`Quantity for ${item.productName}`}>

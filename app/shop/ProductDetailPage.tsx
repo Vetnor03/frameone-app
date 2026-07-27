@@ -1,5 +1,9 @@
+'use client'
+
 import Image from 'next/image'
+import { useState } from 'react'
 import { PlaceholderFigure, type CatalogItem } from './CatalogPage'
+import { addCartItem } from './cart'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import { formatNok } from './productData'
 
@@ -10,6 +14,20 @@ type ProductDetailPageProps = {
 
 export default function ProductDetailPage({ kind, item }: ProductDetailPageProps) {
   const singular = kind === 'frames' ? 'frame' : 'matte'
+  const [added, setAdded] = useState(false)
+
+  function addProductToCart() {
+    addCartItem({
+      id: `${singular}-${item.id}-${Date.now()}`,
+      productId: item.id,
+      productName: item.name,
+      productType: singular,
+      imageSrc: item.imageSrc,
+      quantity: 1,
+      totalPrice: item.price,
+    })
+    setAdded(true)
+  }
 
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]" style={{ marginTop: 'calc(env(safe-area-inset-top) * -1)', paddingTop: 'env(safe-area-inset-top)' }}>
@@ -44,10 +62,10 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
                 </div>
               </div>
 
-              <a href={`/shop/configure?${singular}=${encodeURIComponent(item.id)}`} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">
-                BUILD WITH THIS {singular.toUpperCase()}
-              </a>
-              <p className="mt-3 text-center text-xs leading-5 text-black/45">The RE:MIND display is sold separately. Choose this {singular} when building your complete set.</p>
+              <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">
+                ADD TO CART
+              </button>
+              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${item.name} added to cart.` : `The RE:MIND display is sold separately.`}</p>
             </div>
           </div>
 
