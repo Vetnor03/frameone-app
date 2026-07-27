@@ -14,6 +14,7 @@ const chrome = read('app/shop/ShopChrome.tsx')
 const cartPage = read('app/shop/cart/CartPage.tsx')
 const cartRoute = read('app/shop/cart/page.tsx')
 const languageSelector = read('app/shop/ShopLanguageSelector.tsx')
+const aboutPage = read('app/shop/about/page.tsx')
 
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator initialFrameId=\{params\?\.frame\} initialMatteId=\{params\?\.matte\} \/>/)
@@ -46,7 +47,16 @@ test('mobile shop navigation displays page links inline without a menu toggle', 
   assert.match(mobileNav, /href="\/shop\/frames"/)
   assert.match(mobileNav, /href="\/shop\/mattes"/)
   assert.match(mobileNav, /href="\/shop\/bundles"/)
-  assert.match(mobileNav, /href="\/shop#about"/)
+  assert.match(mobileNav, /href="\/shop\/about"/)
+})
+
+test('about navigation opens a dedicated founder story with a home link', () => {
+  assert.match(chrome, /href="\/shop\/about"/)
+  assert.match(aboutPage, /Back to home/)
+  assert.match(aboutPage, /href="\/shop"/)
+  assert.match(aboutPage, /Hi, I’m Vetle, founder of RE:MIND/)
+  assert.match(aboutPage, /The idea is simple:/)
+  assert.match(aboutPage, /Join the waitlist/)
 })
 
 test('accessories are omitted from the storefront until they are in inventory', () => {
