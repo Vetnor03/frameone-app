@@ -175,7 +175,12 @@ export default async function ShopPage({
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCardsLocalized.map((card) => (
-              <article key={card.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
+              <a
+                key={card.id}
+                href={`/shop/configure?frame=${encodeURIComponent(card.id)}&lang=${language}&currency=${currency}`}
+                className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                aria-label={`Choose ${card.name} frame`}
+              >
                 {card.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#faf9f7]">
                     <ShopFadeImage src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
@@ -191,7 +196,7 @@ export default async function ShopPage({
                 </div>
                 <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
                 <div className="mt-3 px-3 pb-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>
-              </article>
+              </a>
             ))}
           </div>
         </section></ShopReveal>

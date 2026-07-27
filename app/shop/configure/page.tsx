@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 function pickLang(value?: string): 'en' | 'no' { return value === 'no' ? 'no' : 'en' }
 
-export default async function ConfigurePage({ searchParams }: { searchParams?: Promise<{ lang?: string; currency?: string }> }) {
+export default async function ConfigurePage({ searchParams }: { searchParams?: Promise<{ lang?: string; currency?: string; frame?: string; matte?: string }> }) {
   const params = await searchParams
   const language = pickLang(params?.lang)
   const currency = 'NOK' as const
@@ -24,7 +24,7 @@ export default async function ConfigurePage({ searchParams }: { searchParams?: P
     >
       <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
         <ShopHeader language={language} currency={currency} />
-        <Configurator />
+        <Configurator initialFrameId={params?.frame} initialMatteId={params?.matte} />
         <ShopFooter language={language} currency={currency} />
       </div>
     </main>

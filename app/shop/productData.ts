@@ -61,6 +61,22 @@ export const shopFrames: ShopFrame[] = [
     configuratorPreviewSrc: '/shop/products/frames/White.png',
   },
   ...[
+    ['brushed-silver', 'Brushed Silver', 369, '#aeb1b2'],
+    ['charcoal-grey', 'Charcoal Grey', 349, '#3d4042'],
+    ['smoked-oak', 'Smoked Oak', 419, '#604b3b'],
+    ['honey-oak', 'Honey Oak', 399, '#b77c3d'],
+    ['espresso-wood', 'Espresso Wood', 419, '#30251f'],
+    ['sandstone', 'Sandstone', 369, '#c7b7a1'],
+    ['sage-green', 'Sage Green', 369, '#788372'],
+    ['deep-navy', 'Deep Navy', 369, '#24313d'],
+    ['terracotta', 'Terracotta', 369, '#9c5943'],
+    ['limited-birch', 'Limited Birch', 429, '#cfaa78'],
+  ].map(([id, name, price, color]) => ({
+    id: String(id), name: String(name), price: Number(price), subtitle: '',
+    palette: [String(color), String(color), String(color)] as [string, string, string],
+    swatches: [String(color)], imageSrc: '', configuratorPreviewSrc: '',
+  })),
+  ...[
     ['custom-friends', 'Custom Friends', 'Custom_Friends.png'],
     ['custom-grinch', 'Custom Grinch', 'Custom_Grinch.png'],
     ['custom-snoopy', 'Custom Snoopy', 'Custom_Snoopy.png'],
@@ -82,12 +98,27 @@ export const shopMattes: ShopMatte[] = [
   ['custom-friends', 'Custom Friends', 'Custom_Friends.png'],
   ['custom-grinch', 'Custom Grinch', 'Custom_Grinch.png'],
   ['custom-snoopy', 'Custom Snoopy', 'Custom_Snoopy.png'],
-].map(([id, name, filename]) => ({
+].map<ShopMatte>(([id, name, filename]) => ({
   id,
   name,
   price: null,
   configuratorPreviewSrc: `/shop/products/mattes/${filename}`,
-}))
+})).concat([
+  ['classic-white', 'Classic White', 149],
+  ['soft-black', 'Soft Black', 149],
+  ['warm-beige', 'Warm Beige', 149],
+  ['cocoa-brown', 'Cocoa Brown', 149],
+  ['sage-green', 'Sage Green', 159],
+  ['white---black', 'White / Black', 179],
+  ['black---white', 'Black / White', 179],
+  ['mist-grey', 'Mist Grey', 149],
+  ['dusty-blue', 'Dusty Blue', 159],
+  ['blush-pink', 'Blush Pink', 159],
+  ['ochre', 'Ochre', 159],
+  ['forest-green', 'Forest Green', 159],
+  ['burgundy', 'Burgundy', 159],
+  ['natural-linen', 'Natural Linen', 179],
+].map<ShopMatte>(([id, name, price]) => ({ id: String(id), name: String(name), price: Number(price), configuratorPreviewSrc: '' })))
 
 export function formatNok(value: number) {
   return `${value.toLocaleString('nb-NO').replace(/ /g, ' ')} NOK`

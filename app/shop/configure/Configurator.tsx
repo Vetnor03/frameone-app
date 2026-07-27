@@ -31,7 +31,8 @@ const matteAppearances: Record<string, CSSProperties> = {
 }
 
 function FramePlaceholder({ frameId }: { frameId: string }) {
-  const railAppearance = frameAppearances[frameId]
+  const frame = shopFrames.find((item) => item.id === frameId)
+  const railAppearance = frameAppearances[frameId] ?? { background: frame?.palette[0] ?? '#181817' }
 
   return (
     <span
@@ -48,7 +49,7 @@ function FramePlaceholder({ frameId }: { frameId: string }) {
 }
 
 function MattePlaceholder({ matteId }: { matteId: string }) {
-  const appearance = matteAppearances[matteId]
+  const appearance = matteAppearances[matteId] ?? { background: '#d8d2c8' }
 
   return (
     <span aria-hidden="true" className="absolute inset-x-[13%] inset-y-[15.5%] z-20 rounded-[0.08rem]">
@@ -102,9 +103,9 @@ function ProductStory({ className = '' }: { className?: string }) {
   )
 }
 
-export default function Configurator() {
-  const [frameId, setFrameId] = useState(shopFrames[0].id)
-  const [matteId, setMatteId] = useState(shopMattes[0].id)
+export default function Configurator({ initialFrameId, initialMatteId }: { initialFrameId?: string; initialMatteId?: string }) {
+  const [frameId, setFrameId] = useState(() => shopFrames.some((item) => item.id === initialFrameId) ? initialFrameId! : shopFrames[0].id)
+  const [matteId, setMatteId] = useState(() => shopMattes.some((item) => item.id === initialMatteId) ? initialMatteId! : shopMattes[0].id)
   const [selectedDisplay, setSelectedDisplay] = useState<DisplayMode>('dark')
   const [added, setAdded] = useState(false)
   const frame = shopFrames.find((item) => item.id === frameId) ?? shopFrames[0]
