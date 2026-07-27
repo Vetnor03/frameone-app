@@ -13,7 +13,7 @@ export type ConfiguredCartItem = {
   matte: Pick<ShopMatte, 'id' | 'name' | 'price'>
   frameUpgrade: number
   matteUpgrade: number
-  quantity: 1
+  quantity: number
   totalPrice: number
 }
 
@@ -21,7 +21,9 @@ export function readCart(): ConfiguredCartItem[] {
   if (typeof window === 'undefined') return []
   try {
     const value = JSON.parse(window.localStorage.getItem(SHOP_CART_KEY) ?? '[]')
-    return Array.isArray(value) ? value : []
+    return Array.isArray(value)
+      ? value.map((item) => ({ ...item, quantity: Number.isFinite(item?.quantity) && item.quantity > 0 ? Math.floor(item.quantity) : 1 }))
+      : []
   } catch {
     return []
   }
@@ -31,4 +33,18 @@ export function addCartItem(item: ConfiguredCartItem) {
   const next = [...readCart(), item]
   window.localStorage.setItem(SHOP_CART_KEY, JSON.stringify(next))
   window.dispatchEvent(new Event(SHOP_CART_CHANGED))
+}
+
+function writeCart(items: ConfiguredCartItem[]) {
+  window.localStorage.setItem(SHOP_CART_KEY, JSON.stringify(items))
+  window.dispatchEvent(new Event(SHOP_CART_CHANGED))
+}
+
+export function updateCartItemQuantity(id: string, quantity: number) {
+  const safeQuantity = Number.isFinite(quantity) ? Math.max(1, Math.min(99, Math.floor(quantity))) : 1
+  writeCart(readCart().map((item) => item.id === id ? { ...item, quantity: safeQuantity } : item))
+}
+
+export function removeCartItem(id: string) {
+  writeCart(readCart().filter((item) => item.id !== id))
 }

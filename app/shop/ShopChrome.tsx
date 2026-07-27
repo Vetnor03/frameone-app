@@ -81,23 +81,9 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
                 About
               </a>
             </nav>
-            <div className="hidden items-center gap-2 md:absolute md:right-0 md:flex">
-              <button
-                type="button"
-                aria-label="Open profile"
-                className="shop-icon-button inline-flex items-center justify-center p-1 text-black/75"
-              >
-                <Image
-                  src="/shop/icons/header/profile.png"
-                  alt=""
-                  aria-hidden
-                  width={36}
-                  height={36}
-                  className="h-9 w-9 object-contain"
-                />
-              </button>
-              <button
-                type="button"
+            <div className="absolute right-0 flex items-center md:right-0">
+              <a
+                href="/shop/cart"
                 aria-label="Open shopping cart"
                 className="shop-icon-button relative inline-flex items-center justify-center p-1 text-black/75"
               >
@@ -110,7 +96,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
                   className="h-11 w-11 object-contain"
                 />
                 <ShopCartCount />
-              </button>
+              </a>
             </div>
           </div>
           <div className="pt-4 md:hidden">
