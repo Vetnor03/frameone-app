@@ -2,6 +2,16 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { versionedIconPath } from "./lib/iconVersion";
+import { THEME_STORAGE_KEY } from "./lib/theme";
+
+const themeBootstrapScript = `
+  (function () {
+    var theme = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+    if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  })();
+`;
 
 export const metadata: Metadata = {
   title: "RE:MIND",
@@ -33,7 +43,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+      </head>
       <body className="antialiased">
         {children}
         <Analytics />

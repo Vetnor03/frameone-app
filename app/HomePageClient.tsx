@@ -16,6 +16,7 @@ import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, nor
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
+import { initialTheme, isAppTheme, persistTheme, storedTheme, type AppTheme } from './lib/theme'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -712,10 +713,6 @@ function errorMessage(error: unknown) {
 }
 
 
-function isTheme(value: unknown): value is 'dark' | 'light' {
-  return value === 'dark' || value === 'light'
-}
-
 function isLanguage(value: unknown): value is AppLanguage {
   return value === 'en' || value === 'no'
 }
@@ -779,7 +776,7 @@ function normalizePhysicalFrameSnapshot(settings: unknown, updatedAt: string | n
   )
 
   return {
-    theme: isTheme(json.theme) ? json.theme : 'dark',
+    theme: isAppTheme(json.theme) ? json.theme : 'dark',
     language: isLanguage(json.language) ? json.language : 'en',
     fontSize: isFontSize(json.fontSize) ? json.fontSize : 'normal',
     layoutKey,
@@ -1115,7 +1112,7 @@ export default function HomePage() {
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
 
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setTheme] = useState<AppTheme>(initialTheme)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -1758,7 +1755,12 @@ export default function HomePage() {
       !!data?.settings_json &&
       typeof data.settings_json === 'object' &&
       Object.keys(data.settings_json as Record<string, unknown>).length > 0
-    const nextTheme = (json.theme || 'dark') as 'dark' | 'light'
+    // The app theme is a user-level UI preference. The local value is available
+    // synchronously at launch; device settings provide migration for existing users.
+    const savedAppTheme = storedTheme()
+    const deviceTheme = isAppTheme(json.theme) ? json.theme : 'dark'
+    const nextTheme = savedAppTheme ?? deviceTheme
+    if (!savedAppTheme) persistTheme(nextTheme)
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
     const nextLayout = (json.layout || 'default') as LayoutKey
@@ -2259,7 +2261,7 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={mirrorSnapshot}
         fallbackLanguage={language}
-        theme={mirrorSnapshot?.theme ?? theme}
+        theme={theme}
         status={activeFrameStatus}
       />
     )
@@ -2432,6 +2434,7 @@ async function handleSelectTab(k: TabKey) {
                 current={theme}
                 onClose={() => setThemePickerOpen(false)}
                 onPick={(t) => {
+                  persistTheme(t)
                   setTheme(t)
                   setThemePickerOpen(false)
                   markDirty({ theme: t })
