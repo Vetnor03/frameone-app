@@ -40,7 +40,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
   const topShipping = shippingThreshold;
 
   return (
-    <>
+    <div className="sticky top-0 z-50">
       <div className="bg-[#0b0d10] text-[11px] text-white">
         <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-3 px-6 py-2 tracking-[0.02em] sm:gap-5">
           <span>
@@ -136,7 +136,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
           </div>
         </div>
       </header>
-    </>
+    </div>
   );
 }
 
