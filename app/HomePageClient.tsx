@@ -1059,7 +1059,7 @@ function ReMindSplash({ language }: { language: AppLanguage }) {
       aria-label={tx(language).loadingFrame}
     >
       <div className="remind-splash text-[color:var(--fg)]">
-        <svg className="remind-splash-logo" viewBox="0 0 400 100" aria-hidden="true">
+        <svg className="remind-splash-logo" viewBox="-29 0 400 100" aria-hidden="true">
           <defs>
             <clipPath id="remind-e-reveal">
               <rect className="remind-logo-e-clip" x="72" y="12" width="58" height="76" />

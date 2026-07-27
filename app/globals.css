@@ -222,7 +222,7 @@ a {
 }
 
 .remind-logo-wordmark {
-  transform: translateX(145px);
+  transform: translateX(116px);
   animation: remind-wordmark-expand 700ms cubic-bezier(0.22, 1, 0.36, 1) 180ms forwards;
 }
 
