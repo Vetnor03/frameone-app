@@ -187,7 +187,7 @@ export function ShopFooter({ language, currency, shippingThreshold = formatNok(1
         <div className="pr-4 lg:pr-10">
           <p className="mb-3 font-bold tracking-[0.2em]">RE:MIND</p>
           <p className="max-w-[34ch] leading-[1.55] text-black/65">
-            Re-mind gives you what matters,
+            RE:MIND gives you what matters,
             <br />
             beautifully displayed. Less screen time.
             <br />
@@ -272,7 +272,7 @@ export function ShopFooter({ language, currency, shippingThreshold = formatNok(1
         </div>
       </div>
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
-        <p>© 2026 Re-mind. All rights reserved.</p>
+        <p>© 2026 RE:MIND. All rights reserved.</p>
         <div className="flex items-center justify-center gap-6">
           <a href="/terms" className="shop-footer-link">
             Terms

@@ -5,8 +5,8 @@ import { formatNok, shopFrames } from './productData'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Re-mind Shop',
-  description: 'Official Re-mind storefront',
+  title: 'RE:MIND Shop',
+  description: 'Official RE:MIND storefront',
 }
 
 type AccessoryCard = {
@@ -99,7 +99,7 @@ export default async function ShopPage({
             <div className="relative mt-10 h-[360px] w-full overflow-hidden border-t border-black/10 md:hidden">
               <Image
                 src="/shop/hero-top.png"
-                alt="Re:mind frames on a cabinet"
+                alt="RE:MIND frames on a cabinet"
                 fill
                 priority
                 className="object-cover object-[78%_center]"
@@ -108,7 +108,7 @@ export default async function ShopPage({
             <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-full overflow-hidden md:block md:translate-x-[4%] md:z-0">
               <Image
                 src="/shop/hero-top.png"
-                alt="Re:mind frames on a cabinet"
+                alt="RE:MIND frames on a cabinet"
                 fill
                 priority
                 className="object-cover object-right"
@@ -125,7 +125,7 @@ export default async function ShopPage({
             { label: 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: ['Satisfying click.', 'Designed for ease.'] },
             { label: 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
             { label: 'Built to last', iconSrc: '/shop/icons/features/built-to-last.png', body: ['Sustainable design.', 'Made to be kept.'] },
-            { label: 'Made for Re:mind', iconSrc: '/shop/icons/features/made-for-remind.png', body: ['Perfect fit. Seamless', 'integration.'] },
+            { label: 'Made for RE:MIND', iconSrc: '/shop/icons/features/made-for-remind.png', body: ['Perfect fit. Seamless', 'integration.'] },
           ].map((item) => (
             <article key={item.label} className="flex items-start gap-3">
               <Image src={item.iconSrc} alt="" width={48} height={48} aria-hidden className="-mt-1 h-[48px] w-[48px] shrink-0 opacity-80" />

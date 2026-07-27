@@ -3,8 +3,8 @@ import { versionedIconPath } from './lib/iconVersion'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Re-mind',
-    short_name: 'Re-mind',
+    name: 'RE:MIND',
+    short_name: 'RE:MIND',
     start_url: '/', // ✅ let app decide based on auth
     display: 'standalone',
     orientation: 'portrait',
@@ -12,26 +12,14 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#061b24',
     icons: [
       {
-        src: versionedIconPath('/icon-192x192.png'),
-        sizes: '192x192',
+        src: versionedIconPath('/r_Logo.png'),
+        sizes: '856x856',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: versionedIconPath('/icon-512x512.png'),
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: versionedIconPath('/android-chrome-192x192.png'),
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'maskable',
-      },
-      {
-        src: versionedIconPath('/android-chrome-512x512.png'),
-        sizes: '512x512',
+        src: versionedIconPath('/r_Logo.png'),
+        sizes: '856x856',
         type: 'image/png',
         purpose: 'maskable',
       },
