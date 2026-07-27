@@ -26,6 +26,16 @@ test('frame and matte pages can add the selected standalone product to cart', ()
   assert.doesNotMatch(detail, /BUILD YOUR RE:MIND/)
 })
 
+test('standalone mattes keep their placeholder preview in the cart', () => {
+  const detail = read('app/shop/ProductDetailPage.tsx')
+  const cart = read('app/shop/cart.ts')
+  const cartPage = read('app/shop/cart/CartPage.tsx')
+
+  assert.match(detail, /colors: item\.colors/)
+  assert.match(cart, /colors\?: \[string, string\]/)
+  assert.match(cartPage, /<PlaceholderFigure colors=\{matteColors\} kind="mattes" \/>/)
+})
+
 test('build your frame page offers a back button', () => {
   const configurator = read('app/shop/configure/Configurator.tsx')
   assert.match(configurator, /href="\/shop"[\s\S]{0,400}Back/)

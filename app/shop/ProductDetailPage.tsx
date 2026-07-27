@@ -23,6 +23,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
       productName: item.name,
       productType: singular,
       imageSrc: item.imageSrc,
+      colors: item.colors,
       quantity: 1,
       totalPrice: item.price,
     })
