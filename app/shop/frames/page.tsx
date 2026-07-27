@@ -18,7 +18,10 @@ const frames: CatalogItem[] = [
   ['Deep Navy', 'Powder-coated aluminum', 369, ['#24313d', '#647789']],
   ['Terracotta', 'Powder-coated aluminum', 369, ['#9c5943', '#d7a18e']],
   ['Limited Birch', 'Real birch', 429, ['#cfaa78', '#edcf9e']],
-].map(([name, subtitle, price, colors, imageSrc]) => ({ name, subtitle, price, colors, imageSrc } as CatalogItem))
+].map(([name, subtitle, price, colors, imageSrc]) => ({
+  id: String(name).toLowerCase().replaceAll(' ', '-').replaceAll('/', '-'),
+  name, subtitle, price, colors, imageSrc,
+} as CatalogItem))
 
 export default function FramesPage() {
   return <CatalogPage kind="frames" title="All Frames" intro="Explore 14 interchangeable finishes, designed to fit your room and change in seconds." items={frames} />

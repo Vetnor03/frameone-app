@@ -18,7 +18,10 @@ const mattes: CatalogItem[] = [
   ['Forest Green', 'Deep natural green', 159, ['#344b3d', '#778c7d']],
   ['Burgundy', 'Rich wine red', 159, ['#633b42', '#a7797e']],
   ['Natural Linen', 'Textured linen look', 179, ['#cbbba2', '#e8dece']],
-].map(([name, subtitle, price, colors]) => ({ name, subtitle, price, colors } as CatalogItem))
+].map(([name, subtitle, price, colors]) => ({
+  id: String(name).toLowerCase().replaceAll(' ', '-').replaceAll('/', '-'),
+  name, subtitle, price, colors,
+} as CatalogItem))
 
 export default function MattesPage() {
   return <CatalogPage kind="mattes" title="All Mattes" intro="Choose from 14 tones and layered combinations to change the feel without changing the frame." items={mattes} />

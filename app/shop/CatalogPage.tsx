@@ -3,6 +3,7 @@ import { ShopFooter, ShopHeader } from './ShopChrome'
 import { formatNok } from './productData'
 
 export type CatalogItem = {
+  id: string
   name: string
   subtitle: string
   price: number
@@ -60,7 +61,12 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item, index) => (
-              <article key={item.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
+              <a
+                key={item.id}
+                href={`/shop/configure?${kind === 'frames' ? 'frame' : 'matte'}=${encodeURIComponent(item.id)}`}
+                className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                aria-label={`Choose ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}
+              >
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eeeae5]">
                   {item.imageSrc ? <Image src={item.imageSrc} alt={`${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`} fill className="object-cover" sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw" /> : <PlaceholderFigure colors={item.colors} kind={kind} />}
                   {!item.imageSrc && <span className="absolute bottom-2 right-2 text-[10px] uppercase tracking-[0.12em] text-black/45">Preview {String(index + 1).padStart(2, '0')}</span>}
@@ -71,7 +77,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
                 </div>
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{item.subtitle}</p>
                 <div className="mt-3 flex gap-2 px-3 pb-3">{item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</div>
-              </article>
+              </a>
             ))}
           </div>
         </section>
