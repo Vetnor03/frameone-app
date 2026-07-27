@@ -9,20 +9,6 @@ export const metadata: Metadata = {
   description: 'Official RE:MIND storefront',
 }
 
-type AccessoryCard = {
-  name: string
-  price: string
-  imageSrc?: string
-}
-
-const accessories: AccessoryCard[] = [
-  { name: 'Desk Stand', price: '199 NOK', imageSrc: '/shop/accessories/desk-stand.png' },
-  { name: 'Wall Mount', price: '149 NOK', imageSrc: '/shop/accessories/wall-mount.png' },
-  { name: 'Cleaning Kit', price: '79 NOK', imageSrc: '/shop/accessories/cleaning-kit.png' },
-  { name: 'Replacement Glass', price: '99 NOK', imageSrc: '/shop/accessories/replacement-glass.png' },
-]
-
-
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-sm bg-[#faf9f7]">
@@ -49,7 +35,6 @@ export default async function ShopPage({
   const resolvedSearchParams = await searchParams
   const language = pickLang(resolvedSearchParams?.lang)
   const frameCardsLocalized = shopFrames.filter((frame) => frame.imageSrc)
-  const accessoriesLocalized = accessories
   const topShipping = formatNok(1000)
   const configureHref = `/shop/configure?lang=${language}`
 
@@ -240,32 +225,6 @@ export default async function ShopPage({
           </div>
         </section></ShopReveal>
 
-          <ShopReveal delayMs={90}><section id="accessories" className="pt-11 pb-12 md:pt-9 md:pb-10">
-          <div className="mb-6">
-            <div className="flex flex-col items-start gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-              <h2 className="text-[24px] font-semibold uppercase leading-[1.08] tracking-[0.06em] whitespace-nowrap sm:text-[30px]">
-                COMPLETE THE EXPERIENCE
-              </h2>
-              <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all accessories →</a>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {accessoriesLocalized.map((item) => (
-              <article key={item.name} className="shop-card overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
-                {item.imageSrc ? (
-                  <div className="relative aspect-[4/3] overflow-hidden bg-[#ece9e4]">
-                    <ShopFadeImage src={item.imageSrc} alt={item.name} fill className="object-cover" />
-                  </div>
-                ) : (
-                  <div className="p-3">
-                    <div className="flex aspect-[16/9] items-center justify-center bg-[#ece9e4] text-5xl">▣</div>
-                  </div>
-                )}
-                <div className="px-3 py-3 flex items-start justify-between gap-3 text-lg leading-[1.25]"><h3 className="max-w-[16ch]">{item.name}</h3><span>{item.price}</span></div>
-              </article>
-            ))}
-          </div>
-          </section></ShopReveal>
         </div>
         </div>
 

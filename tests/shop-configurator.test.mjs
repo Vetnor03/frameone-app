@@ -45,9 +45,13 @@ test('mobile shop navigation displays page links inline without a menu toggle', 
   const mobileNav = chrome.slice(mobileNavStart, chrome.indexOf('</nav>', mobileNavStart))
   assert.match(mobileNav, /href="\/shop\/frames"/)
   assert.match(mobileNav, /href="\/shop\/mattes"/)
-  assert.match(mobileNav, /href="\/shop#accessories"/)
   assert.match(mobileNav, /href="\/shop#bundles"/)
-  assert.doesNotMatch(mobileNav, /href="\/shop#about"/)
+  assert.match(mobileNav, /href="\/shop#about"/)
+})
+
+test('accessories are omitted from the storefront until they are in inventory', () => {
+  assert.doesNotMatch(chrome, /accessor(?:y|ies)/i)
+  assert.doesNotMatch(shopPage, /accessor(?:y|ies)/i)
 })
 
 test('footer selector changes language only and prices remain NOK', () => {

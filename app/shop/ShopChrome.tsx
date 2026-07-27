@@ -69,9 +69,6 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
               <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
                 Mattes
               </a>
-              <a href="/shop#accessories" className="pb-1">
-                Accessories
-              </a>
               <a href="/shop#bundles" className="pb-1">
                 Bundles
               </a>
@@ -107,11 +104,11 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
             <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
               Mattes
             </a>
-            <a href="/shop#accessories" className="pb-1">
-              Accessories
-            </a>
             <a href="/shop#bundles" className="pb-1">
               Bundles
+            </a>
+            <a href="/shop#about" className="pb-1">
+              About
             </a>
           </nav>
         </div>
@@ -201,9 +198,6 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
             </a>
             <a href="/shop#mattes" className="shop-footer-link block">
               Mattes
-            </a>
-            <a href="/shop#accessories" className="shop-footer-link block">
-              Accessories
             </a>
             <a href="/shop#bundles" className="shop-footer-link block">
               Bundles
