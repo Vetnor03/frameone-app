@@ -23,6 +23,7 @@ export type StandaloneCartItem = {
   productName: string
   productType: 'frame' | 'matte'
   imageSrc?: string
+  colors?: [string, string]
   quantity: number
   totalPrice: number
 }
