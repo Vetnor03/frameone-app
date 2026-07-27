@@ -11,6 +11,8 @@ const shopPage = read('app/shop/page.tsx')
 const logic = read('app/shop/configuratorLogic.ts')
 const cart = read('app/shop/cart.ts')
 const chrome = read('app/shop/ShopChrome.tsx')
+const cartPage = read('app/shop/cart/CartPage.tsx')
+const cartRoute = read('app/shop/cart/page.tsx')
 
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator \/>/)
@@ -26,7 +28,8 @@ test('shop and configurator share the complete storefront chrome', () => {
   assert.match(shopPage, /<ShopFooter language=\{language\} currency=\{currency\}/)
   assert.match(page, /<ShopHeader language=\{language\} currency=\{currency\} \/>/)
   assert.match(page, /<ShopFooter language=\{language\} currency=\{currency\} \/>/)
-  assert.match(chrome, /Open profile/)
+  assert.doesNotMatch(chrome, /Open profile|profile\.png/)
+  assert.match(chrome, /href="\/shop\/cart"/)
   assert.match(chrome, /FREE SHIPPING/)
   assert.match(chrome, /STAY IN THE LOOP/)
   assert.match(chrome, /ShopLocaleCurrencySelector/)
@@ -114,6 +117,17 @@ test('cart persists structured display, frame, and matte data', () => {
   assert.match(configurator, /matte: \{ id: matte\.id, name: matte\.name, price: matte\.price \}/)
   assert.match(configurator, /frameUpgrade,/)
   assert.match(configurator, /matteUpgrade,/)
+})
+
+test('cart route supports quantity, removal, discounts, totals, and checkout', () => {
+  assert.match(cartRoute, /<CartPage \/>/)
+  assert.match(cartRoute, /<ShopHeader language="en" currency="NOK" \/>/)
+  assert.match(cartPage, /updateCartItemQuantity/)
+  assert.match(cartPage, /removeCartItem/)
+  assert.match(cartPage, /Discount code/)
+  assert.match(cartPage, /Order summary/)
+  assert.match(cartPage, /CHECKOUT/)
+  assert.match(cart, /SHOP_CART_CHANGED/)
 })
 
 test('configurator implementation contains no binary assets', () => {
