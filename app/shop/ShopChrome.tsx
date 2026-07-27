@@ -9,6 +9,7 @@ type ShopChromeProps = {
   language: "en" | "no";
   currency: "NOK";
   shippingThreshold?: string;
+  activeSection?: "frames" | "mattes";
 };
 
 const socialLinks = [
@@ -35,7 +36,7 @@ const socialLinks = [
   },
 ] as const;
 
-export function ShopHeader({ language, shippingThreshold = formatNok(1000) }: ShopChromeProps) {
+export function ShopHeader({ language, shippingThreshold = formatNok(1000), activeSection }: ShopChromeProps) {
   const topShipping = shippingThreshold;
 
   return (
@@ -64,10 +65,10 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000) }: Sh
               RE:MIND
             </a>
             <nav className="hidden items-center justify-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
-              <a href="/shop#frames" className="border-b-2 border-black pb-1">
+              <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
                 Frames
               </a>
-              <a href="/shop#mattes" className="pb-1">
+              <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
                 Mattes
               </a>
               <a href="/shop#accessories" className="pb-1">
@@ -115,10 +116,10 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000) }: Sh
           <div className="pt-4 md:hidden">
             <ShopMobileMenu>
               <nav className="shop-nav flex flex-col items-start gap-3 text-left text-sm uppercase tracking-[0.09em]">
-                <a href="/shop#frames" className="pb-1">
+                <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
                   Frames
                 </a>
-                <a href="/shop#mattes" className="pb-1">
+                <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
                   Mattes
                 </a>
                 <a href="/shop#accessories" className="pb-1">
