@@ -18,7 +18,7 @@ type CatalogPageProps = {
   items: CatalogItem[]
 }
 
-function PlaceholderFigure({ colors, kind }: Pick<CatalogItem, 'colors'> & { kind: CatalogPageProps['kind'] }) {
+export function PlaceholderFigure({ colors, kind }: Pick<CatalogItem, 'colors'> & { kind: CatalogPageProps['kind'] }) {
   if (kind === 'mattes') {
     return (
       <div className="relative h-full w-full bg-[#e8e3dd]">
@@ -63,7 +63,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
             {items.map((item, index) => (
               <a
                 key={item.id}
-                href={`/shop/configure?${kind === 'frames' ? 'frame' : 'matte'}=${encodeURIComponent(item.id)}`}
+                href={`/shop/${kind}/${encodeURIComponent(item.id)}`}
                 className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
                 aria-label={`Choose ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}
               >

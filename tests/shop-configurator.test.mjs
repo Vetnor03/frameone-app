@@ -15,7 +15,7 @@ const cartPage = read('app/shop/cart/CartPage.tsx')
 const cartRoute = read('app/shop/cart/page.tsx')
 
 test('configure route and both shop entry points are present', () => {
-  assert.match(page, /<Configurator \/>/)
+  assert.match(page, /<Configurator initialFrameId=\{params\?\.frame\} initialMatteId=\{params\?\.matte\} \/>/)
   assert.match(configurator, /BUILD YOUR RE:MIND/)
   assert.match(configurator, /Choose the display, frame and matte that feel right at home\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}&currency=\$\{currency\}`/)

@@ -177,7 +177,7 @@ export default async function ShopPage({
             {frameCardsLocalized.map((card) => (
               <a
                 key={card.id}
-                href={`/shop/configure?frame=${encodeURIComponent(card.id)}&lang=${language}&currency=${currency}`}
+                href={`/shop/frames/${encodeURIComponent(card.id)}?lang=${language}&currency=${currency}`}
                 className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
                 aria-label={`Choose ${card.name} frame`}
               >
