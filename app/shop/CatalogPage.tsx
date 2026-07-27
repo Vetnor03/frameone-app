@@ -44,10 +44,19 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]" style={{ marginTop: 'calc(env(safe-area-inset-top) * -1)', paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="shop-shell mx-auto w-full max-w-[2560px] bg-white 2xl:max-w-[1720px]">
         <ShopHeader language={language} currency={currency} activeSection={kind} />
-        <section className="mx-auto max-w-[1200px] px-6 py-12 md:py-16">
-          <div className="mb-9 border-b border-black/10 pb-8 md:flex md:items-end md:justify-between">
-            <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
-            <p className="mt-4 max-w-[37ch] text-base leading-relaxed text-black/60 md:mt-0 md:text-right">{intro}</p>
+        <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-10">
+          <div className="mb-7 border-b border-black/10 pb-6">
+            <a
+              href="/"
+              className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
+            >
+              <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
+              Back to home
+            </a>
+            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)] md:items-end md:gap-12">
+              <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
+              <p className="max-w-[48ch] text-base leading-relaxed text-black/60 md:justify-self-end">{intro}</p>
+            </div>
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item, index) => (
