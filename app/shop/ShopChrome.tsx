@@ -1,13 +1,12 @@
 import Image from "next/image";
 import ShopCartCount from "./ShopCartCount";
-import ShopLocaleCurrencySelector from "./ShopLocaleCurrencySelector";
+import ShopLanguageSelector from "./ShopLanguageSelector";
 import { ShopMobileMenu } from "./ShopMotion";
 import WaitlistForm from "./WaitlistForm";
 import { formatNok } from "./productData";
 
 type ShopChromeProps = {
   language: "en" | "no";
-  currency: "NOK";
   shippingThreshold?: string;
   activeSection?: "frames" | "mattes";
 };
@@ -126,7 +125,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
   );
 }
 
-export function ShopFooter({ language, currency, shippingThreshold = formatNok(1000) }: ShopChromeProps) {
+export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: ShopChromeProps) {
   const footerBenefits = [
     {
       title: "FREE SHIPPING",
@@ -272,7 +271,7 @@ export function ShopFooter({ language, currency, shippingThreshold = formatNok(1
           </a>
         </div>
         <div className="flex justify-start sm:justify-end">
-          <ShopLocaleCurrencySelector language={language} currency={currency} />
+          <ShopLanguageSelector language={language} />
         </div>
       </div>
     </footer>

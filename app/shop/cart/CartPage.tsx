@@ -79,7 +79,6 @@ export default function CartPage() {
                       <h2 className="font-medium tracking-[0.08em]">{item.productName}</h2>
                       {isConfiguredCartItem(item) ? (
                         <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
-                          <div><dt className="inline">Display: </dt><dd className="inline capitalize">{item.display}</dd></div>
                           <div><dt className="inline">Frame: </dt><dd className="inline">{item.frame.name}</dd></div>
                           <div><dt className="inline">Matte: </dt><dd className="inline">{item.matte.name}</dd></div>
                         </dl>
