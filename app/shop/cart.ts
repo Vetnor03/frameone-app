@@ -30,9 +30,21 @@ export function readCart(): ConfiguredCartItem[] {
 }
 
 export function addCartItem(item: ConfiguredCartItem) {
-  const next = [...readCart(), item]
-  window.localStorage.setItem(SHOP_CART_KEY, JSON.stringify(next))
-  window.dispatchEvent(new Event(SHOP_CART_CHANGED))
+  const items = readCart()
+  const matchingItem = items.find((existing) =>
+    existing.productId === item.productId
+    && existing.display === item.display
+    && existing.frame.id === item.frame.id
+    && existing.matte.id === item.matte.id
+  )
+
+  if (matchingItem) {
+    const addedQuantity = Number.isFinite(item.quantity) ? Math.max(1, Math.floor(item.quantity)) : 1
+    updateCartItemQuantity(matchingItem.id, matchingItem.quantity + addedQuantity)
+    return
+  }
+
+  writeCart([...items, item])
 }
 
 function writeCart(items: ConfiguredCartItem[]) {

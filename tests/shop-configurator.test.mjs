@@ -119,6 +119,15 @@ test('cart persists structured display, frame, and matte data', () => {
   assert.match(configurator, /matteUpgrade,/)
 })
 
+test('cart combines identical configurations into one quantity', () => {
+  assert.match(cart, /const matchingItem = items\.find/)
+  assert.match(cart, /existing\.productId === item\.productId/)
+  assert.match(cart, /existing\.display === item\.display/)
+  assert.match(cart, /existing\.frame\.id === item\.frame\.id/)
+  assert.match(cart, /existing\.matte\.id === item\.matte\.id/)
+  assert.match(cart, /updateCartItemQuantity\(matchingItem\.id, matchingItem\.quantity \+ addedQuantity\)/)
+})
+
 test('cart route supports quantity, removal, discounts, totals, and checkout', () => {
   assert.match(cartRoute, /<CartPage \/>/)
   assert.match(cartRoute, /<ShopHeader language="en" currency="NOK" \/>/)
