@@ -26,9 +26,13 @@ test('frame and matte pages can add the selected standalone product to cart', ()
   assert.doesNotMatch(detail, /BUILD YOUR RE:MIND/)
 })
 
-test('build your frame page offers a back button', () => {
+test('build your frame page links back home from the top-left navigation', () => {
   const configurator = read('app/shop/configure/Configurator.tsx')
-  assert.match(configurator, /href="\/shop"[\s\S]{0,400}Back/)
+  const styles = read('app/shop/configure/Configurator.module.css')
+
+  assert.match(configurator, /href="\/"[\s\S]{0,400}Back to home/)
+  assert.match(configurator, /styles\.backLink/)
+  assert.match(styles, /\.backLink\s*\{[\s\S]*?grid-column:\s*1 \/ -1;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*start;/)
 })
 
 test('the configurator can still initialize a selection from a product page', () => {

@@ -104,14 +104,20 @@
     display: contents;
   }
 
-  .heading {
+  .backLink {
     grid-column: 1 / -1;
     grid-row: 1;
+    justify-self: start;
+  }
+
+  .heading {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .previewArea {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 3;
     align-self: start;
     width: 100%;
     margin-top: 0;
@@ -126,7 +132,7 @@
     display: block;
     grid-column: 1;
     grid-column-end: -1;
-    grid-row: 3;
+    grid-row: 4;
     width: 100%;
     max-width: none;
     margin-top: 0;
@@ -148,7 +154,7 @@
 
   .purchaseColumn {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 3;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
