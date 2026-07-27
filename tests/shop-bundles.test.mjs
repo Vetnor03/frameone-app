@@ -33,6 +33,14 @@ test('bundle prices and savings follow the selected components separate prices',
   assert.match(configurator, /You save \{formatNok\(saving\)\}/)
 })
 
+test('bundle cards keep savings and currency amounts together on narrow screens', async () => {
+  const catalog = await read('app/shop/bundles/page.tsx')
+  assert.match(catalog, /flex flex-wrap items-start/)
+  assert.match(catalog, /shrink-0 whitespace-nowrap rounded-full/)
+  assert.match(catalog, /flex flex-col gap-3 border-t[^\n]+sm:flex-row/)
+  assert.match(catalog, /items-baseline gap-2 whitespace-nowrap/)
+})
+
 test('bundle configurator selects every component and stores one discounted cart item', async () => {
   const configurator = await read('app/shop/bundles/[id]/BundleConfigurator.tsx')
   const cart = await read('app/shop/cart.ts')
