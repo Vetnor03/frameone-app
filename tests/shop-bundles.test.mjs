@@ -13,6 +13,8 @@ test('bundle catalog offers four discounted configurations and dedicated detail 
   assert.match(data, /deviceCount: 0, frameCount: 2, matteCount: 1/)
   assert.match(catalog, /href={`\/shop\/bundles\/\${bundle\.id}`}/)
   assert.match(detail, /<BundleConfigurator bundle={bundle}/)
+  assert.match(detail, /const \{ id \} = await params/)
+  assert.doesNotMatch(detail, /find\(\(item\) => item\.id === \(await params\)/)
 })
 
 test('bundle configurator selects every component and stores one discounted cart item', async () => {
