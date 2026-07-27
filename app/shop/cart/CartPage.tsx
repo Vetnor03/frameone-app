@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useMemo, useState } from 'react'
-import { isConfiguredCartItem, readCart, removeCartItem, SHOP_CART_CHANGED, updateCartItemQuantity } from '../cart'
+import { isBundleCartItem, isConfiguredCartItem, readCart, removeCartItem, SHOP_CART_CHANGED, updateCartItemQuantity } from '../cart'
 import type { CartItem } from '../cart'
 import { PlaceholderFigure } from '../CatalogPage'
 import { ConfigurationPlaceholder } from '../configure/Configurator'
@@ -68,6 +68,8 @@ export default function CartPage() {
                   <div className="flex aspect-square items-center justify-center overflow-hidden bg-[#f4f2ed]">
                     {isConfiguredCartItem(item) ? (
                       <ConfigurationPlaceholder display={item.display} frameId={item.frame.id} matteId={item.matte.id} />
+                    ) : isBundleCartItem(item) ? (
+                      <ConfigurationPlaceholder display={item.display ?? 'dark'} frameId={item.frames[0].id} matteId={item.mattes[0].id} />
                     ) : !item.imageSrc ? (
                       <PlaceholderFigure colors={item.colors ?? ['#f6f4ef', '#d9d5cf']} kind={item.productType === 'matte' ? 'mattes' : 'frames'} />
                     ) : !isConfiguredCartItem(item) && item.imageSrc ? (
@@ -81,6 +83,11 @@ export default function CartPage() {
                         <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
                           <div><dt className="inline">Frame: </dt><dd className="inline">{item.frame.name}</dd></div>
                           <div><dt className="inline">Matte: </dt><dd className="inline">{item.matte.name}</dd></div>
+                        </dl>
+                      ) : isBundleCartItem(item) ? (
+                        <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
+                          <div><dt className="inline">Frames: </dt><dd className="inline">{item.frames.map((part) => part.name).join(', ')}</dd></div>
+                          <div><dt className="inline">Mattes: </dt><dd className="inline">{item.mattes.map((part) => part.name).join(', ')}</dd></div>
                         </dl>
                       ) : <p className="mt-2 text-sm capitalize text-black/55">Replacement {item.productType}</p>}
                       <div className="mt-5 flex items-center gap-3">

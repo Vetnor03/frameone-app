@@ -45,7 +45,7 @@ test('mobile shop navigation displays page links inline without a menu toggle', 
   const mobileNav = chrome.slice(mobileNavStart, chrome.indexOf('</nav>', mobileNavStart))
   assert.match(mobileNav, /href="\/shop\/frames"/)
   assert.match(mobileNav, /href="\/shop\/mattes"/)
-  assert.match(mobileNav, /href="\/shop#bundles"/)
+  assert.match(mobileNav, /href="\/shop\/bundles"/)
   assert.match(mobileNav, /href="\/shop#about"/)
 })
 

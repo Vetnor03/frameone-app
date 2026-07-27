@@ -7,7 +7,7 @@ import { formatNok } from "./productData";
 type ShopChromeProps = {
   language: "en" | "no";
   shippingThreshold?: string;
-  activeSection?: "frames" | "mattes";
+  activeSection?: "frames" | "mattes" | "bundles";
 };
 
 const socialLinks = [
@@ -69,7 +69,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
               <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
                 Mattes
               </a>
-              <a href="/shop#bundles" className="pb-1">
+              <a href="/shop/bundles" className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
                 Bundles
               </a>
               <a href="/shop#about" className="pb-1">
@@ -104,7 +104,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
             <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
               Mattes
             </a>
-            <a href="/shop#bundles" className="pb-1">
+            <a href="/shop/bundles" className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
               Bundles
             </a>
             <a href="/shop#about" className="pb-1">
@@ -199,7 +199,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
             <a href="/shop#mattes" className="shop-footer-link block">
               Mattes
             </a>
-            <a href="/shop#bundles" className="shop-footer-link block">
+            <a href="/shop/bundles" className="shop-footer-link block">
               Bundles
             </a>
           </div>
