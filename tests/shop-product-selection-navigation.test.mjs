@@ -26,13 +26,21 @@ test('frame and matte pages can add the selected standalone product to cart', ()
   assert.doesNotMatch(detail, /BUILD YOUR RE:MIND/)
 })
 
-test('build your frame page links back home from the top-left navigation', () => {
+test('shop back-to-home links return to the shop landing page', () => {
   const configurator = read('app/shop/configure/Configurator.tsx')
+  const catalog = read('app/shop/CatalogPage.tsx')
   const styles = read('app/shop/configure/Configurator.module.css')
 
-  assert.match(configurator, /href="\/"[\s\S]{0,400}Back to home/)
+  assert.match(configurator, /href="\/shop"[\s\S]{0,400}Back to home/)
+  assert.match(catalog, /href="\/shop"[\s\S]{0,400}Back to home/)
   assert.match(configurator, /styles\.backLink/)
   assert.match(styles, /\.backLink\s*\{[\s\S]*?grid-column:\s*1 \/ -1;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*start;/)
+})
+
+test('build your frame desktop content starts compactly below the shop header', () => {
+  const styles = read('app/shop/configure/Configurator.module.css')
+
+  assert.match(styles, /\.desktopLayout\s*\{[\s\S]*?row-gap:\s*2rem;[\s\S]*?padding:\s*2rem clamp\(2\.5rem, 5vw, 5\.5rem\) 5rem;/)
 })
 
 test('the configurator can still initialize a selection from a product page', () => {

@@ -92,10 +92,10 @@
     grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.72fr);
     grid-template-rows: auto auto;
     column-gap: clamp(3rem, 6vw, 6.5rem);
-    row-gap: 3rem;
+    row-gap: 2rem;
     max-width: 1440px;
     margin: 0 auto;
-    padding: 4rem clamp(2.5rem, 5vw, 5.5rem) 5rem;
+    padding: 2rem clamp(2.5rem, 5vw, 5.5rem) 5rem;
     background: #fff;
   }
 

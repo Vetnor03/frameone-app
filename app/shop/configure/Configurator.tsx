@@ -136,7 +136,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
     <div className={styles.desktopLayout}>
       <section className={`border-b border-black/10 bg-white ${styles.previewSection}`}>
         <div className={`mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14 ${styles.previewInner}`}>
-          <a href="/" className={`group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black ${styles.backLink}`}>
+          <a href="/shop" className={`group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black ${styles.backLink}`}>
             <span aria-hidden className="text-base transition-transform group-hover:-translate-x-0.5">←</span>
             Back to home
           </a>

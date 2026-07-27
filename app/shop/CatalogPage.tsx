@@ -48,7 +48,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-10">
           <div className="mb-7 border-b border-black/10 pb-6">
             <a
-              href="/"
+              href="/shop"
               className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
             >
               <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
