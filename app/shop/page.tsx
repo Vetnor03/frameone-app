@@ -171,7 +171,7 @@ export default async function ShopPage({
           <ShopReveal><section id="frames" className="pt-8 pb-12 md:pt-7 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
-            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="#">View all frames →</a>
+            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="/shop/frames">View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCardsLocalized.map((card) => (
@@ -233,7 +233,7 @@ export default async function ShopPage({
               <br />
               your space and reduce glare.
             </p>
-            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href="#remind">SHOP MATTES</a>
+            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href="/shop/mattes">SHOP MATTES</a>
           </div>
         </section></ShopReveal>
 
