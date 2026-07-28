@@ -20,7 +20,7 @@ const socialLinks = [
   },
   {
     name: "Facebook",
-    href: "#",
+    href: "https://www.facebook.com/share/17qNkCjSz6/?mibextid=wwXIfr",
     iconSrc: "/shop/icons/social/facebook.png",
     iconWidth: 1024,
     iconHeight: 1024,
