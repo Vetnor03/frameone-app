@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+
+test('shop footer opens every legal page in the shop presentation', () => {
+  const footer = read('app/shop/ShopChrome.tsx')
+
+  for (const page of ['terms', 'privacy', 'cookies']) {
+    assert.match(footer, new RegExp(`/${page}\\?from=shop&lang=`))
+  }
+})
+
+test('shop legal pages use shared shop styling and return home', () => {
+  const legalPage = read('app/components/ShopLegalPage.tsx')
+  const terms = read('app/terms/page.tsx')
+  const privacy = read('app/privacy/page.tsx')
+  const cookies = read('app/cookies/page.tsx')
+
+  assert.match(legalPage, /className="shop-page/)
+  assert.match(legalPage, /href="\/shop"/)
+  assert.match(legalPage, /Back to home/)
+  assert.match(terms, /from === 'shop'/)
+  assert.match(privacy, /from === 'shop'/)
+  assert.match(cookies, /from === 'shop'/)
+})
+
+test('cookies policy documents the browser technologies actually in use', () => {
+  const cookies = read('app/cookies/page.tsx')
+
+  assert.match(cookies, /Supabase/)
+  assert.match(cookies, /Vercel Web Analytics/)
+  assert.match(cookies, /Local storage/)
+  assert.match(cookies, /No advertising cookies/)
+  assert.doesNotMatch(cookies, /placeholder|Replace with your real policy/i)
+})
