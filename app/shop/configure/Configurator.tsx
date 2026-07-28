@@ -101,8 +101,8 @@ function ProductStory({ className = '' }: { className?: string }) {
           <dd>Choose your frame and matte, add it to your home, and RE:MIND feels finished from the moment it arrives.</dd>
         </div>
         <div>
-          <dt>NO DAILY CHARGING</dt>
-          <dd>With up to one year of battery life, it can sit naturally on a shelf, desk, or wall without a cable always in sight.</dd>
+          <dt>LONG BATTERY LIFE</dt>
+          <dd>Designed to live naturally on a shelf, desk or wall without a cable always in sight.</dd>
         </div>
         <div>
           <dt>NOT LOCKED TO ONE LOOK</dt>
