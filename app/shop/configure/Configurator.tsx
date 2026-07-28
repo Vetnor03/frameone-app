@@ -154,7 +154,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
           </a>
           <div className={`text-center ${styles.heading}`}>
             <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
-            <p className="mt-3 text-[16px] text-black/60">Choose the display appearance, included frame and included matte that feel right at home.</p>
+            <p className="mt-3 text-[16px] text-black/60">Choose a frame and matte to make RE:MIND feel at home in your space.</p>
           </div>
 
           <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
