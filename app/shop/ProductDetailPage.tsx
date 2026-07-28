@@ -16,7 +16,7 @@ type ProductDetailPageProps = {
 export default function ProductDetailPage({ kind, item }: ProductDetailPageProps) {
   const singular = kind === 'frames' ? 'frame' : 'matte'
   const [added, setAdded] = useState(false)
-  const comingSoon = kind === 'frames' && item.availability === 'coming-soon'
+  const comingSoon = item.availability === 'coming-soon'
 
   function addProductToCart() {
     if (comingSoon) return
@@ -54,7 +54,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
 
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">RE:MIND {singular}</p>
-              {kind === 'frames' && item.availability && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
+              {item.availability && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
               <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{item.name}</h1>
               <p className="mt-5 text-xl">{formatNok(item.price)}</p>
               <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{item.subtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
@@ -69,7 +69,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
 
               {comingSoon ? (
                 <div className="mt-8 flex items-center justify-between gap-4 border-y border-black/10 py-2">
-                  <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">Heart this frame to help choose what comes next.</p>
+                  <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">Heart this {singular} to help choose what comes next.</p>
                   <FrameFavouriteButton frameId={item.id} frameName={item.name} />
                 </div>
               ) : <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>}

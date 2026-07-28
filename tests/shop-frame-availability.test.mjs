@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(path, 'utf8')
 const products = read('app/shop/productData.ts')
+const catalogData = read('app/shop/catalogData.ts')
 const catalog = read('app/shop/CatalogPage.tsx')
 const detail = read('app/shop/ProductDetailPage.tsx')
 const favourite = read('app/shop/FrameFavouriteButton.tsx')
@@ -19,10 +20,12 @@ test('only the four launch frames are manually in stock', () => {
   assert.match(products, /'out-of-stock': 'OUT OF STOCK'/)
 })
 
-test('frame collection gives one explanation and accessible card hearts', () => {
+test('frame and matte collections show availability and accessible card hearts', () => {
   assert.match(catalog, /More styles are coming\./)
   assert.match(catalog, /Heart your favourites and help us choose what comes next\./)
-  assert.match(catalog, /const availability = kind === 'mattes' \? 'in-stock' : item\.availability/)
+  assert.match(catalogData, /availability: index < 4 \? 'in-stock' : 'coming-soon'/)
+  assert.match(catalog, /const comingSoon = item\.availability === 'coming-soon'/)
+  assert.match(catalog, /const availability = item\.availability/)
   assert.match(catalog, /frameAvailabilityLabels\[availability\]/)
   assert.match(catalog, /comingSoon \? 'pr-14' : ''/)
   assert.match(catalog, /<FrameFavouriteButton frameId=\{item\.id\}/)
