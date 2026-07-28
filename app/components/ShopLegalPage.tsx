@@ -11,7 +11,7 @@ type ShopLegalPageProps = {
 
 export default function ShopLegalPage({ title, updatedText, sections }: ShopLegalPageProps) {
   return (
-    <main className="shop-page min-h-screen bg-[#faf9f7] text-[#141414]">
+    <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-[#faf9f7] text-[#141414]">
       <div className="mx-auto w-full max-w-[1200px] px-6 pb-20 pt-7 md:px-14 md:pb-28 md:pt-10">
         <a
           href="/shop"
