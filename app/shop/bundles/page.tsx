@@ -3,8 +3,9 @@ import BundleArtwork from './BundleArtwork'
 import { bundleRegularPrice, bundleSavings, shopBundles } from '../bundleData'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import { formatNok } from '../productData'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = { title: 'Bundles | RE:MIND Shop', description: 'Save with curated RE:MIND device, frame and matte bundles.' }
+export const metadata: Metadata = shopMetadata({ title: 'Bundles | RE:MIND', description: 'Save with curated RE:MIND display, frame and matte bundles.', path: '/shop/bundles' })
 
 export default function BundlesPage() {
   return <main className="shop-page h-screen overflow-y-auto bg-white text-[#141414]">

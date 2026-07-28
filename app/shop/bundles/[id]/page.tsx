@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { shopBundles } from '../../bundleData'
 import { ShopFooter, ShopHeader } from '../../ShopChrome'
 import BundleConfigurator from './BundleConfigurator'
+import { shopMetadata } from '../../seo'
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -13,7 +14,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
   const bundle = shopBundles.find((item) => item.id === id)
-  return bundle ? { title: `${bundle.name} | RE:MIND Shop`, description: bundle.description } : {}
+  return bundle ? shopMetadata({ title: `${bundle.name} | RE:MIND`, description: bundle.description, path: `/shop/bundles/${bundle.id}` }) : {}
 }
 
 export default async function BundlePage({ params }: Props) {

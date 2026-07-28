@@ -2,11 +2,13 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
 import { ShopReveal } from '../ShopMotion'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: 'Sustainability | RE:MIND',
   description: 'How RE:MIND approaches thoughtful design, durable materials and a longer product life.',
-}
+  path: '/shop/sustainability',
+})
 
 const principles = [
   {

@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import ShopLegalPage from '../../components/ShopLegalPage'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: 'FAQ | RE:MIND',
   description: 'Answers to common questions about the RE:MIND display.',
-}
+  path: '/shop/faq',
+})
 
 const detailLinkClass = 'shop-footer-link font-medium text-black/80 underline decoration-black/25 underline-offset-4 hover:text-black'
 

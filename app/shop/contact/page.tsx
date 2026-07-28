@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: 'Contact | RE:MIND',
   description: 'Get in touch with the RE:MIND team in Stavanger, Norway.',
-}
+  path: '/shop/contact',
+})
 
 export default function ContactPage() {
   return (

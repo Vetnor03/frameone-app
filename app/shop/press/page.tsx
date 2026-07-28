@@ -1,11 +1,13 @@
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: 'Press | RE:MIND',
   description: 'RE:MIND company facts, logo and product imagery for press and media.',
-}
+  path: '/shop/press',
+})
 
 const pressImages = [
   { src: '/shop/remind-device-v2.png', alt: 'RE:MIND digital frame product view', label: 'RE:MIND device' },

@@ -3,11 +3,13 @@ import { ShopFooter, ShopHeader } from './ShopChrome'
 import { ShopFadeImage, ShopReveal } from './ShopMotion'
 import { formatNok, remindProduct, shopFrames } from './productData'
 import type { Metadata } from 'next'
+import { SHOP_DESCRIPTION, shopMetadata } from './seo'
 
-export const metadata: Metadata = {
-  title: 'RE:MIND Shop',
-  description: 'Official RE:MIND storefront',
-}
+export const metadata: Metadata = shopMetadata({
+  title: 'RE:MIND | What matters. Beautifully displayed.',
+  description: SHOP_DESCRIPTION,
+  path: '/shop',
+})
 
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
   return (
@@ -38,6 +40,23 @@ export default async function ShopPage({
   const topShipping = formatNok(1000)
   const configureHref = `/shop/configure?lang=${language}`
 
+  const productStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: remindProduct.name,
+    description: SHOP_DESCRIPTION,
+    image: 'https://re-mind.no/shop/remind-device-v2.png',
+    brand: { '@type': 'Brand', name: 'RE:MIND' },
+    offers: {
+      '@type': 'Offer',
+      url: 'https://re-mind.no/shop/configure',
+      priceCurrency: 'NOK',
+      price: remindProduct.price,
+      availability: 'https://schema.org/InStock',
+      itemCondition: 'https://schema.org/NewCondition',
+    },
+  }
+
 
   return (
     <main
@@ -47,6 +66,10 @@ export default async function ShopPage({
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productStructuredData).replace(/</g, '\\u003c') }}
+      />
       <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
       <ShopHeader language={language} shippingThreshold={topShipping} />
 

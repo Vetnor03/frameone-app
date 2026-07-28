@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
+import { shopMetadata } from '../seo'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import CartPage from './CartPage'
 
 export const metadata: Metadata = {
-  title: 'Your cart | RE:MIND',
-  description: 'Review your RE:MIND cart.',
+  ...shopMetadata({ title: 'Your Cart | RE:MIND', description: 'Review your RE:MIND cart.', path: '/shop/cart' }),
+  robots: { index: false, follow: false },
 }
 
 export default function ShopCartPage() {

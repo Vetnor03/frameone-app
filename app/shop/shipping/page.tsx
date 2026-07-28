@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import ShopLegalPage from '../../components/ShopLegalPage'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: 'Shipping | RE:MIND',
   description: 'Shipping information for RE:MIND orders.',
-}
+  path: '/shop/shipping',
+})
 
 export default function ShippingPage() {
   return (
