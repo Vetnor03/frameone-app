@@ -20,7 +20,7 @@ const faqPage = read('app/shop/faq/page.tsx')
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator initialFrameId=\{params\?\.frame\} initialMatteId=\{params\?\.matte\} \/>/)
   assert.match(configurator, /BUILD YOUR RE:MIND/)
-  assert.match(configurator, /Choose the display appearance, included frame and included matte that feel right at home\./)
+  assert.match(configurator, /Choose a frame and matte to make RE:MIND feel at home in your space\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
