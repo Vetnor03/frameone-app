@@ -20,7 +20,7 @@ const faqPage = read('app/shop/faq/page.tsx')
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator initialFrameId=\{params\?\.frame\} initialMatteId=\{params\?\.matte\} \/>/)
   assert.match(configurator, /BUILD YOUR RE:MIND/)
-  assert.match(configurator, /Choose the display finish, included frame and included matte that feel right at home\./)
+  assert.match(configurator, /Choose the display appearance, included frame and included matte that feel right at home\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
@@ -32,7 +32,7 @@ test('complete RE:MIND contents are clear before purchase and consistent with th
   assert.match(shopPage, includedComponents)
   assert.match(configurator, includedComponents)
   assert.match(configurator, /Premium choices may add to the total\. Additional frames and mattes are available separately\./)
-  assert.ok(configurator.indexOf('What’s included') < configurator.indexOf("'ADD TO CART'"))
+  assert.ok(configurator.indexOf('What’s included') < configurator.indexOf('>ADD TO CART<'))
   assert.match(faqPage, /A complete RE:MIND starts at 2 299 NOK/)
   assert.match(faqPage, /RE:MIND display, your selected frame, your selected matte, a charging cable and a setup guide/)
   assert.match(faqPage, /Premium frame or matte choices may add to the total/)
@@ -152,6 +152,7 @@ test('display is independent, defaults dark, and is persisted without entering p
   assert.match(configurator, /display: selectedDisplay/)
   assert.match(cart, /display: DisplayMode/)
   assert.doesNotMatch(logic, /display/i)
+  assert.match(configurator, /Dark and light modes are both included\. This only changes the preview; select the display mode in the app settings\./)
 })
 
 test('configuration is changed only through the option lists', () => {

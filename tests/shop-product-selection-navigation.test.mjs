@@ -59,6 +59,6 @@ test('the configurator can still initialize a selection from a product page', ()
 
   assert.match(page, /initialFrameId={params\?\.frame}/)
   assert.match(page, /initialMatteId={params\?\.matte}/)
-  assert.match(configurator, /shopFrames\.some\(\(item\) => item\.id === initialFrameId\)/)
+  assert.match(configurator, /purchasableFrames\.some\(\(item\) => item\.id === initialFrameId\)/)
   assert.match(configurator, /shopMattes\.some\(\(item\) => item\.id === initialMatteId\)/)
 })

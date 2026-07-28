@@ -54,7 +54,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
 
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">RE:MIND {singular}</p>
-              {item.availability && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
+              {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
               <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{item.name}</h1>
               <p className="mt-5 text-xl">{formatNok(item.price)}</p>
               <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{item.subtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
