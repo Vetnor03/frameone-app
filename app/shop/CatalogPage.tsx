@@ -16,7 +16,6 @@ export type CatalogItem = {
 type CatalogPageProps = {
   kind: 'frames' | 'mattes'
   title: string
-  intro: string
   items: CatalogItem[]
 }
 
@@ -39,7 +38,7 @@ export function PlaceholderFigure({ colors, kind }: Pick<CatalogItem, 'colors'> 
   )
 }
 
-export default function CatalogPage({ kind, title, intro, items }: CatalogPageProps) {
+export default function CatalogPage({ kind, title, items }: CatalogPageProps) {
   const language = 'en' as const
 
   return (
@@ -55,9 +54,8 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
               <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
               Back to home
             </a>
-            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)] md:items-end md:gap-12">
+            <div className="mt-5">
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
-              <p className="max-w-[48ch] text-base leading-relaxed text-black/60 md:justify-self-end">{intro}</p>
             </div>
             <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>
           </div>
