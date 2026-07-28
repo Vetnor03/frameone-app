@@ -37,6 +37,13 @@ test('shop and configurator share the complete storefront chrome', () => {
   assert.match(chrome, /ShopLanguageSelector/)
 })
 
+test('shop footer leads with a RE:MIND configurator link', () => {
+  const shopColumnStart = chrome.indexOf('<p className="mb-3 font-medium">SHOP</p>')
+  const shopColumn = chrome.slice(shopColumnStart, chrome.indexOf('</div>', shopColumnStart))
+  assert.match(shopColumn, /href="\/shop\/configure"[\s\S]*RE:MIND/)
+  assert.ok(shopColumn.indexOf('RE:MIND') < shopColumn.indexOf('Frames'))
+})
+
 test('mobile shop navigation displays page links inline without a menu toggle', () => {
   assert.match(chrome, /aria-label="Shop pages"/)
   assert.match(chrome, /shop-nav flex items-center justify-between[\s\S]*md:hidden/)
