@@ -8,8 +8,8 @@
 
 .displayChoice {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  align-items: flex-start;
+  flex-direction: column;
   margin-top: 1rem;
 }
 
@@ -75,13 +75,6 @@
 @media (min-width: 640px) {
   .storyDetails {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 480px) {
-  .displayChoice {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }
 
