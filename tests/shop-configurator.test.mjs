@@ -26,6 +26,10 @@ test('configure route and both shop entry points are present', () => {
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
 })
 
+test('display mode note is stacked below the toggle at every viewport size', () => {
+  assert.match(configuratorStyles, /\.displayChoice\s*\{[^}]*align-items: flex-start;[^}]*flex-direction: column;/s)
+})
+
 test('complete RE:MIND contents are clear before purchase and consistent with the FAQ', () => {
   const includedComponents = /RE:MIND display · Your frame · Your matte · Charging cable · Setup guide/
   assert.match(shopPage, /Complete RE:MIND from \{formatNok\(remindProduct\.price\)\}/)
