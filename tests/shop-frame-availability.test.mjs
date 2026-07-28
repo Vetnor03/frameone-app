@@ -20,11 +20,20 @@ test('only the four launch frames are manually in stock', () => {
   assert.match(products, /'out-of-stock': 'OUT OF STOCK'/)
 })
 
+test('only in-stock mattes appear in selectors that add products to cart', () => {
+  assert.match(products, /new Set\(\['classic-white', 'soft-black', 'warm-beige', 'cocoa-brown'\]\)/)
+  assert.match(products, /export function isMattePurchasable/)
+  assert.match(configurator, /const purchasableMattes = shopMattes\.filter\(isMattePurchasable\)/)
+  assert.match(configurator, /\{purchasableMattes\.map\(\(item\) => <option/)
+  assert.doesNotMatch(configurator, /\{shopMattes\.map\(\(item\) => <option/)
+  assert.match(bundle, /isMattePurchasable\(item\)/)
+})
+
 test('frame and matte collections show availability and accessible card hearts', () => {
   assert.match(catalog, /<p className="mt-5[^>]*><span[^>]*>More styles are coming\.<\/span> Heart your favourites and help us choose what comes next\.<\/p>/)
   assert.doesNotMatch(catalog, /kind === 'frames' && <p[^>]*>[^<]*<span[^>]*>More styles are coming\./)
   assert.match(catalog, /Heart your favourites and help us choose what comes next\./)
-  assert.match(catalogData, /availability: index < 4 \? 'in-stock' : 'coming-soon'/)
+  assert.match(catalogData, /availability: matteAvailability\(id\)/)
   assert.match(catalog, /const comingSoon = item\.availability === 'coming-soon'/)
   assert.match(catalog, /const availability = item\.availability/)
   assert.match(catalog, /frameAvailabilityLabels\[availability\]/)

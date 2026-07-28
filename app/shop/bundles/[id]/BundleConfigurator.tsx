@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { addCartItem, type BundleCartItem } from '../../cart'
 import { ConfigurationPlaceholder } from '../../configure/Configurator'
-import { displayOptions, formatNok, isFramePurchasable, shopFrames, shopMattes, type DisplayMode } from '../../productData'
+import { displayOptions, formatNok, isFramePurchasable, isMattePurchasable, shopFrames, shopMattes, type DisplayMode } from '../../productData'
 import { bundleRegularPrice, bundleSavings, type ShopBundle } from '../../bundleData'
 
 const frames = shopFrames.filter((item) => item.price !== null && !item.id.startsWith('custom-') && isFramePurchasable(item))
-const mattes = shopMattes.filter((item) => item.price !== null && !item.id.startsWith('custom-'))
+const mattes = shopMattes.filter((item) => item.price !== null && !item.id.startsWith('custom-') && isMattePurchasable(item))
 
 export default function BundleConfigurator({ bundle }: { bundle: ShopBundle }) {
   const [frameIds, setFrameIds] = useState(() => Array.from({ length: bundle.frameCount }, (_, i) => frames[i].id))

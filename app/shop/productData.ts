@@ -34,6 +34,17 @@ export type ShopMatte = {
   name: string
   price: number | null
   configuratorPreviewSrc: string
+  availability: FrameAvailability
+}
+
+const launchMatteIds = new Set(['classic-white', 'soft-black', 'warm-beige', 'cocoa-brown'])
+
+export function matteAvailability(id: string): FrameAvailability {
+  return launchMatteIds.has(id) ? 'in-stock' : 'coming-soon'
+}
+
+export function isMattePurchasable(matte: Pick<ShopMatte, 'availability'>) {
+  return matte.availability === 'in-stock' || matte.availability === 'low-stock'
 }
 
 export type DisplayMode = 'dark' | 'light'
@@ -128,6 +139,7 @@ export const shopMattes: ShopMatte[] = [
   name,
   price: null,
   configuratorPreviewSrc: `/shop/products/mattes/${filename}`,
+  availability: matteAvailability(id),
 })).concat([
   ['classic-white', 'Classic White', 149],
   ['soft-black', 'Soft Black', 149],
@@ -143,7 +155,13 @@ export const shopMattes: ShopMatte[] = [
   ['forest-green', 'Forest Green', 159],
   ['burgundy', 'Burgundy', 159],
   ['natural-linen', 'Natural Linen', 179],
-].map<ShopMatte>(([id, name, price]) => ({ id: String(id), name: String(name), price: Number(price), configuratorPreviewSrc: '' })))
+].map<ShopMatte>(([id, name, price]) => ({
+  id: String(id),
+  name: String(name),
+  price: Number(price),
+  configuratorPreviewSrc: '',
+  availability: matteAvailability(String(id)),
+})))
 
 export function formatNok(value: number) {
   return `${value.toLocaleString('nb-NO').replace(/ /g, ' ')} NOK`
