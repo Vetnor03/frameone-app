@@ -26,7 +26,7 @@ export const displayOptions: Array<{ id: DisplayMode; name: string; previewSrc: 
 export const remindProduct = {
   id: 'remind',
   name: 'RE:MIND',
-  price: 2229,
+  price: 2299,
 } as const
 
 export const shopFrames: ShopFrame[] = [
