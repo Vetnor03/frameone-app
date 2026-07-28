@@ -1,7 +1,7 @@
 import Image from "next/image";
 import ShopCartCount from "./ShopCartCount";
 import ShopLanguageSelector from "./ShopLanguageSelector";
-import WaitlistForm from "./WaitlistForm";
+import NewsletterForm from "./NewsletterForm";
 import { formatNok } from "./productData";
 
 type ShopChromeProps = {
@@ -246,7 +246,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
           <p className="max-w-[30ch] leading-[1.45] text-black/65">
             New frames, updates and ideas.
           </p>
-          <WaitlistForm compact source="shop-footer" />
+          <NewsletterForm />
         </div>
       </div>
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
