@@ -230,13 +230,13 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
             <a href="/shop/about" className="shop-footer-link block">
               About
             </a>
-            <a href="#" className="shop-footer-link block">
+            <a href="/shop/sustainability" className="shop-footer-link block">
               Sustainability
             </a>
-            <a href="#" className="shop-footer-link block">
+            <a href="/shop/contact" className="shop-footer-link block">
               Contact
             </a>
-            <a href="#" className="shop-footer-link block">
+            <a href="/shop/press" className="shop-footer-link block">
               Press
             </a>
           </div>
