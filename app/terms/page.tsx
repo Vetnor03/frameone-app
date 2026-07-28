@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import ShopLegalPage from '../components/ShopLegalPage'
 
 type AppLanguage = 'en' | 'no'
 
@@ -161,6 +162,10 @@ function TermsPageContent() {
             text: 'For any questions, contact us at support@re-mind.no',
           },
         ]
+
+  if (from === 'shop') {
+    return <ShopLegalPage title={pageTitle} updatedText={updatedText} sections={sections} />
+  }
 
   return (
     <main className="h-screen bg-[#061b24] text-white flex justify-center overflow-hidden">
