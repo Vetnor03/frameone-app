@@ -164,5 +164,6 @@ export const shopMattes: ShopMatte[] = [
 })))
 
 export function formatNok(value: number) {
-  return `${value.toLocaleString('nb-NO').replace(/ /g, ' ')} NOK`
+  const amount = value.toLocaleString('nb-NO').replace(/[\u00a0\u202f ]/g, '\u00a0')
+  return `${amount}\u00a0NOK`
 }

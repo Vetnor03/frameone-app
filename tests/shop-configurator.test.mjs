@@ -106,6 +106,12 @@ test('footer selector changes language only and prices remain NOK', () => {
   assert.doesNotMatch(shopPage, /currency/)
 })
 
+test('formatted NOK prices use non-breaking spaces to keep the amount and currency together', () => {
+  const productData = read('app/shop/productData.ts')
+  assert.match(productData, /replace\(\/\[\\u00a0\\u202f \]\/g, '\\u00a0'\)/)
+  assert.match(productData, /return `\$\{amount\}\\u00a0NOK`/)
+})
+
 test('shop and configure routes use the same page scroll container', () => {
   const scrollContainer = /shop-page h-screen overflow-y-auto overflow-x-hidden/
   assert.match(shopPage, scrollContainer)
