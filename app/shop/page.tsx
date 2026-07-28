@@ -128,7 +128,7 @@ export default async function ShopPage({
       <div className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 pb-14">
           <ShopReveal><section id="remind" className="relative grid items-center gap-8 py-10 md:py-12 lg:block lg:py-14">
-            <div className="relative z-0 aspect-[16/9] w-full overflow-visible lg:w-[calc(100%_-_260px)]">
+            <div className="relative z-0 aspect-[16/9] w-full overflow-visible lg:w-[calc(100%_-_320px)]">
               <Image
                 src="/shop/remind-device-v2.png"
                 alt="RE:MIND device"
@@ -137,10 +137,16 @@ export default async function ShopPage({
                 sizes="(min-width: 1024px) 855px, (min-width: 768px) calc(100vw - 48px), calc(100vw - 48px)"
               />
             </div>
-            <div className="relative z-10 flex flex-col justify-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[260px] lg:items-end">
-              <div className="lg:self-end">
+            <div className="relative z-10 flex flex-col items-center justify-center text-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[300px]">
+              <div>
                 <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
-                <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">{formatNok(remindProduct.price)}</p>
+                <p className="mt-5 text-[19px] leading-tight tracking-[0.02em]">Complete RE:MIND from {formatNok(remindProduct.price)}</p>
+                <div className="mt-5 max-w-[32rem] lg:max-w-[300px]">
+                  <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
+                  <p className="mt-2 text-[13px] leading-5 text-black/60">
+                    RE:MIND display · Your frame · Your matte · Charging cable · Setup guide
+                  </p>
+                </div>
               </div>
               <a
                 href={configureHref}
