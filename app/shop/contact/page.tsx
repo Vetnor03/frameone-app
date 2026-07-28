@@ -28,7 +28,7 @@ export default function ContactPage() {
         </div>
         <aside className="bg-[#e9dfd1] p-7 sm:p-10 md:p-14">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-black/45">RE:MIND</p>
-          <h2 className="mt-5 text-3xl font-medium tracking-[-0.035em]">Made in Stavanger.</h2>
+          <h2 className="mt-5 text-3xl font-medium tracking-[-0.035em]">Designed in Stavanger.</h2>
           <p className="mt-5 max-w-[35ch] text-[15px] leading-7 text-black/62">
             RE:MIND is an independent Norwegian project built around calmer technology for everyday life.
           </p>
