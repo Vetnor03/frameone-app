@@ -64,6 +64,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item) => {
               const comingSoon = kind === 'frames' && item.availability === 'coming-soon'
+              const availability = kind === 'mattes' ? 'in-stock' : item.availability
               return (
               <article
                 key={item.id}
@@ -78,9 +79,9 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
                   <span className="shrink-0">{formatNok(item.price)}</span>
                 </div>
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{item.subtitle}</p>
-                <div className="mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 pr-14">
+                <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${comingSoon ? 'pr-14' : ''}`}>
                   {item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}
-                  {kind === 'frames' && item.availability && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</span>}
+                  {availability && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[availability]}`}>{frameAvailabilityLabels[availability]}</span>}
                 </div>
                 </a>
                 {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={item.name} className="absolute bottom-1 right-1 z-10" />}
