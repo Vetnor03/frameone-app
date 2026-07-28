@@ -140,7 +140,13 @@ export default async function ShopPage({
             <div className="relative z-10 flex flex-col justify-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[260px] lg:items-end">
               <div className="lg:self-end">
                 <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
-                <p className="mt-5 text-[19px] leading-none tracking-[0.02em]">{formatNok(remindProduct.price)}</p>
+                <p className="mt-5 text-[19px] leading-tight tracking-[0.02em]">Complete RE:MIND from {formatNok(remindProduct.price)}</p>
+                <div className="mt-5 max-w-[32rem] lg:max-w-[260px]">
+                  <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
+                  <p className="mt-2 text-[13px] leading-5 text-black/60">
+                    RE:MIND display · Your frame · Your matte · Charging cable · Setup guide
+                  </p>
+                </div>
               </div>
               <a
                 href={configureHref}
