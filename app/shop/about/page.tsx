@@ -61,7 +61,10 @@ export default function AboutPage() {
                     <aside className="rounded-[24px] bg-[#f4ecdf] p-5 text-black/70 md:p-6">
                       <p className="font-medium text-[#171512]">Ask RE:MIND to keep an eye on anything.</p>
                       <p className="mt-2">
-                        Its AI can follow what matters to you and let you know when something changes.
+                        AI Follow can follow what matters to you and let you know when something changes.
+                      </p>
+                      <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.16em] text-black/45">
+                        30-day free trial · then subscription
                       </p>
                     </aside>
 
