@@ -22,7 +22,9 @@ test('only the four launch frames are manually in stock', () => {
 test('frame collection gives one explanation and accessible card hearts', () => {
   assert.match(catalog, /More styles are coming\./)
   assert.match(catalog, /Heart your favourites and help us choose what comes next\./)
-  assert.match(catalog, /frameAvailabilityLabels\[item\.availability\]/)
+  assert.match(catalog, /const availability = kind === 'mattes' \? 'in-stock' : item\.availability/)
+  assert.match(catalog, /frameAvailabilityLabels\[availability\]/)
+  assert.match(catalog, /comingSoon \? 'pr-14' : ''/)
   assert.match(catalog, /<FrameFavouriteButton frameId=\{item\.id\}/)
   assert.match(favourite, /min-h-11 min-w-11/)
   assert.match(favourite, /Remove \$\{frameName\} from favourites/)
