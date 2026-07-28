@@ -3,8 +3,10 @@ import ShopLegalPage from '../../components/ShopLegalPage'
 
 export const metadata: Metadata = {
   title: 'FAQ | RE:MIND',
-  description: 'Answers to common questions about the RE:MIND frame.',
+  description: 'Answers to common questions about the RE:MIND display.',
 }
+
+const detailLinkClass = 'shop-footer-link font-medium text-black/80 underline decoration-black/25 underline-offset-4 hover:text-black'
 
 export default function FaqPage() {
   return (
@@ -14,23 +16,99 @@ export default function FaqPage() {
       sections={[
         {
           title: 'What is RE:MIND?',
-          text: 'RE:MIND is a calm, connected display for the information that matters in everyday life. It brings reminders, weather, calendars and useful updates into view without asking you to open another app.',
+          text: 'RE:MIND is a low-power e-paper display for useful everyday information such as reminders, weather, events and other connected updates. It keeps what matters in view without behaving like a normal glowing screen.',
         },
         {
-          title: 'What is included?',
-          text: 'A complete RE:MIND starts at 2 299 NOK and includes the RE:MIND display, your selected frame, your selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total. Additional frames and mattes can be purchased separately later. Bundle contents are listed on each product page.',
+          title: 'What comes with RE:MIND?',
+          text: 'A complete RE:MIND starts at 2 299 NOK and includes the RE:MIND display, one selected frame, one selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total, and additional styles can be purchased separately later.',
         },
         {
-          title: 'How does setup work?',
-          text: 'Plug in your frame, follow the on-screen pairing instructions and connect it to Wi-Fi. You can then choose and arrange what appears on the display from the RE:MIND app.',
+          title: 'How do I set it up?',
+          text: 'During setup, connect RE:MIND to Wi-Fi and pair it with the RE:MIND app. The app guides you through choosing what appears on the display.',
         },
         {
-          title: 'Can I change the look?',
-          text: 'Yes. Frames and mattes are designed to be swapped, so you can refresh the look of RE:MIND as your room or style changes.',
+          title: 'Does RE:MIND need Wi-Fi?',
+          text: 'RE:MIND uses Wi-Fi to receive updated information. Its e-paper image remains visible without continuous power, so it does not behave like a normal glowing screen.',
+        },
+        {
+          title: 'How often does it update?',
+          text: 'RE:MIND updates periodically based on the information being displayed and how the product is configured.',
+        },
+        {
+          title: 'Do I need the app?',
+          text: 'The RE:MIND app is used to set up and manage the display, choose what appears on it and configure connected features. You do not need to keep the app open or constantly use it after setup.',
+        },
+        {
+          title: 'Can more than one person use the same RE:MIND?',
+          text: 'Yes. RE:MIND is designed to work well in shared homes, and multiple people can share and manage a display where supported by the app.',
+        },
+        {
+          title: 'Can I have more than one RE:MIND?',
+          text: 'Yes. The app is designed to support multiple RE:MIND displays.',
+        },
+        {
+          title: 'Can I change the frame or matte later?',
+          text: 'Yes. Frames and mattes are designed to be changed, so you can restyle RE:MIND without replacing the display. Additional styles can be purchased separately.',
+        },
+        {
+          title: 'Can RE:MIND be wall mounted?',
+          text: 'RE:MIND is designed to live naturally on a shelf, desk or wall. We will share final placement and mounting details before launch.',
+        },
+        {
+          title: 'Do I need to keep it plugged in?',
+          text: 'No. RE:MIND is battery powered and designed to spend most of its time unplugged. E-paper uses very little power, and RE:MIND is designed for long battery life.',
+        },
+        {
+          title: 'How do I charge it?',
+          text: 'Recharge RE:MIND using the included charging cable.',
+        },
+        {
+          title: 'What happens when the battery wears out?',
+          text: (
+            <>
+              Batteries naturally lose capacity over time. RE:MIND is intended to be kept rather than replaced, and our goal is to offer an affordable battery replacement service when an aging battery eventually needs replacing. Read more about our approach on the{' '}
+              <a className={detailLinkClass} href="/shop/sustainability">Sustainability page</a>.
+            </>
+          ),
+        },
+        {
+          title: 'Is a subscription required?',
+          text: 'Core RE:MIND features do not require a subscription. Some optional advanced or AI-powered features may be offered separately.',
+        },
+        {
+          title: 'What happens if something breaks?',
+          text: (
+            <>
+              Every RE:MIND is backed by our 5-year limited warranty. If something isn&apos;t working as it should, contact us and we&apos;ll help determine the right next step. See the{' '}
+              <a className={detailLinkClass} href="/shop/warranty">Warranty page</a> for details.
+            </>
+          ),
+        },
+        {
+          title: 'What is the return policy?',
+          text: (
+            <>
+              You have 30 days to request a return after receiving your order. See the{' '}
+              <a className={detailLinkClass} href="/shop/returns">Returns page</a> for details and instructions.
+            </>
+          ),
+        },
+        {
+          title: 'Where do you ship?',
+          text: (
+            <>
+              Available delivery options and costs are shown at checkout. For the latest delivery information, visit the{' '}
+              <a className={detailLinkClass} href="/shop/shipping">Shipping page</a>.
+            </>
+          ),
         },
         {
           title: 'Need more help?',
-          text: 'Send us a message through the contact page and include your order number when your question is about an existing order. We will help you find the right answer.',
+          text: (
+            <>
+              Send us a message through the <a className={detailLinkClass} href="/shop/contact">contact page</a>. If your question is about an existing order, please include your order number so we can help quickly.
+            </>
+          ),
         },
       ]}
     />
