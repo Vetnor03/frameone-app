@@ -72,8 +72,8 @@ export default function FaqPage() {
           ),
         },
         {
-          title: 'Is a subscription required?',
-          text: 'Core RE:MIND features do not require a subscription. Some optional advanced or AI-powered features may be offered separately.',
+          title: 'Does RE:MIND require a subscription?',
+          text: 'No. RE:MIND’s core features work without a subscription. AI Follow includes a 30-day free trial. After the trial, a paid subscription is required if you want to continue using AI Follow.',
         },
         {
           title: 'What happens if something breaks?',
