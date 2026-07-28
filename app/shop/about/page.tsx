@@ -51,7 +51,7 @@ export default function AboutPage() {
                     </p>
 
                     <p>
-                      Will it rain today? Should I bring an umbrella? What’s happening nearby this weekend? And, just as importantly: remember to put the bin out for collection.
+                      Will it rain today? Should I bring an umbrella? What’s happening nearby this weekend? And, just as importantly: remember which bin to put out for collection.
                     </p>
 
                     <p>
@@ -66,7 +66,7 @@ export default function AboutPage() {
                     </aside>
 
                     <p>
-                      Ask what’s happening in Stavanger this weekend. Keep watch for Coldplay concerts near Norway. Follow Haaland’s latest tweet, a change in the surf forecast, a price you’ve been waiting for, or something entirely your own.
+                      Notify me when this product is back in stock. Tell me when Coldplay announces a concert in Norway. Let me know if the surf forecast for Saturday improves, or when a flight I’m watching drops below my budget.
                     </p>
 
                     <p>
