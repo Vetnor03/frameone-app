@@ -30,18 +30,20 @@ test('display mode note is stacked below the toggle at every viewport size', () 
   assert.match(configuratorStyles, /\.displayChoice\s*\{[^}]*align-items: flex-start;[^}]*flex-direction: column;/s)
 })
 
-test('shop keeps the product summary minimal while purchase contents remain clear before checkout', () => {
+test('shop centers the complete product summary beside the device before checkout', () => {
   const includedComponents = /RE:MIND display · Your frame · Your matte · Charging cable · Setup guide/
-  assert.match(shopPage, />\{formatNok\(remindProduct\.price\)\}<\/p>/)
-  assert.doesNotMatch(shopPage, /What’s included/)
-  assert.doesNotMatch(shopPage, includedComponents)
+  assert.match(shopPage, /Complete RE:MIND from \{formatNok\(remindProduct\.price\)\}/)
+  assert.match(shopPage, /What’s included/)
+  assert.match(shopPage, includedComponents)
+  assert.match(shopPage, /flex flex-col items-center justify-center text-center/)
+  assert.match(shopPage, /lg:w-\[calc\(100%_-_320px\)\]/)
   assert.match(configurator, includedComponents)
   assert.match(configurator, /Premium choices may add to the total\. Additional frames and mattes are available separately\./)
   assert.ok(configurator.indexOf('What’s included') < configurator.indexOf('>ADD TO CART<'))
   assert.match(faqPage, /A complete RE:MIND starts at 2 299 NOK/)
-  assert.match(faqPage, /RE:MIND display, your selected frame, your selected matte, a charging cable and a setup guide/)
+  assert.match(faqPage, /RE:MIND display, one selected frame, one selected matte, a charging cable and a setup guide/)
   assert.match(faqPage, /Premium frame or matte choices may add to the total/)
-  assert.match(faqPage, /Additional frames and mattes can be purchased separately later/)
+  assert.match(faqPage, /additional styles can be purchased separately later/)
   assert.doesNotMatch(faqPage, /power cable/)
 })
 
