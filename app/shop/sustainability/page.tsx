@@ -22,7 +22,7 @@ const principles = [
   {
     number: '03',
     title: 'Useful by design',
-    text: 'The most sustainable product is one that keeps being useful. Software updates can add value over time, while interchangeable frames and mattes refresh the look without replacing the device.',
+    text: 'The most sustainable product is one that keeps being useful. Software updates can add value over time, while interchangeable frames and mattes refresh the look without replacing the device. RE:MIND is designed to stay in use. If an aging battery eventually needs replacing, our goal is to make replacing the battery a simple and affordable alternative to replacing the entire product.',
   },
 ]
 

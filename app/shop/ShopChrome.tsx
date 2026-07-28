@@ -49,7 +49,7 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
           <span className="h-3 w-px bg-white/35" aria-hidden />
           <span>30 day returns</span>
           <span className="h-3 w-px bg-white/35" aria-hidden />
-          <span>2 year warranty</span>
+          <span>5 year warranty</span>
         </div>
       </div>
 
@@ -138,7 +138,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
       iconAlt: "Circular arrows return icon",
     },
     {
-      title: "2 YEAR WARRANTY",
+      title: "5 YEAR WARRANTY",
       body: "Peace of mind",
       iconSrc: "/shop/icons/footer/warranty-2-year.png",
       iconAlt: "Shield warranty icon",

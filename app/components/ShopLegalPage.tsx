@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
+
 type LegalSection = {
   title: string
-  text: string
+  text: ReactNode
 }
 
 type ShopLegalPageProps = {
@@ -35,9 +37,9 @@ export default function ShopLegalPage({ title, updatedText, sections }: ShopLega
               <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-black/65">
                 {section.title}
               </h2>
-              <p className="max-w-[62ch] text-[15px] leading-7 text-black/70 sm:text-base">
+              <div className="max-w-[62ch] text-[15px] leading-7 text-black/70 sm:text-base">
                 {section.text}
-              </p>
+              </div>
             </section>
           ))}
         </div>
