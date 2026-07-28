@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import ShopLegalPage from '../../components/ShopLegalPage'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: '5 Year Warranty | RE:MIND',
   description: 'Details of the 5-year limited RE:MIND product warranty.',
-}
+  path: '/shop/warranty',
+})
 
 export default function WarrantyPage() {
   return (

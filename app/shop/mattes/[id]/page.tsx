@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import ProductDetailPage from '../../ProductDetailPage'
 import { matteCatalog } from '../../catalogData'
+import { shopMetadata } from '../../seo'
 
 type PageProps = { params: Promise<{ id: string }> }
 
@@ -12,7 +13,11 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
   const item = matteCatalog.find((candidate) => candidate.id === id)
-  return item ? { title: `${item.name} Matte | RE:MIND Shop`, description: item.subtitle } : {}
+  return item ? shopMetadata({
+    title: `${item.name} Matte | RE:MIND`,
+    description: `${item.subtitle}. An interchangeable matte designed for RE:MIND.`,
+    path: `/shop/mattes/${item.id}`,
+  }) : {}
 }
 
 export default async function MatteDetailRoute({ params }: PageProps) {

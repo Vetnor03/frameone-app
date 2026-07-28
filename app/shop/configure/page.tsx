@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import Configurator from './Configurator'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = shopMetadata({
   title: 'Build your RE:MIND',
-  description: 'Configure your RE:MIND frame and matte.',
-}
+  description: 'Choose a frame and matte to create a customizable RE:MIND e-paper display that feels at home in your space.',
+  path: '/shop/configure',
+})
 
 function pickLang(value?: string): 'en' | 'no' { return value === 'no' ? 'no' : 'en' }
 

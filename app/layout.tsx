@@ -14,6 +14,7 @@ const themeBootstrapScript = `
 `;
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://re-mind.no"),
   title: "RE:MIND",
   description: "RE:MIND controller",
   manifest: "/manifest.webmanifest",

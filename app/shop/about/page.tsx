@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import { ShopReveal } from '../ShopMotion'
+import { shopMetadata } from '../seo'
 
-export const metadata: Metadata = {
-  title: 'About RE:MIND',
+export const metadata: Metadata = shopMetadata({
+  title: 'About | RE:MIND',
   description: 'The story behind RE:MIND, a calm digital frame that keeps an eye on what matters to you.',
-}
+  path: '/shop/about',
+})
 
 export default function AboutPage() {
   return (
