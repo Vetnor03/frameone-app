@@ -61,7 +61,7 @@ export default function AboutPage() {
                     <aside className="rounded-[24px] bg-[#f4ecdf] p-5 text-black/70 md:p-6">
                       <p className="font-medium text-[#171512]">Ask RE:MIND to keep an eye on anything.</p>
                       <p className="mt-2">
-                        Its AI can follow what matters to you and let you know when something changes — with no limit to what you can ask it to watch.
+                        Its AI can follow what matters to you and let you know when something changes.
                       </p>
                     </aside>
 
