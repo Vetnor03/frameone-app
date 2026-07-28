@@ -79,7 +79,7 @@ export default function CatalogPage({ kind, title, items }: CatalogPageProps) {
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{item.subtitle}</p>
                 <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${comingSoon ? 'pr-14' : ''}`}>
                   {item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}
-                  {availability && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[availability]}`}>{frameAvailabilityLabels[availability]}</span>}
+                  {availability && availability !== 'in-stock' && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[availability]}`}>{frameAvailabilityLabels[availability]}</span>}
                 </div>
                 </a>
                 {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={item.name} className="absolute bottom-1 right-1 z-10" />}

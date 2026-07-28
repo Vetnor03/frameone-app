@@ -28,6 +28,8 @@ test('frame and matte collections show availability and accessible card hearts',
   assert.match(catalog, /const comingSoon = item\.availability === 'coming-soon'/)
   assert.match(catalog, /const availability = item\.availability/)
   assert.match(catalog, /frameAvailabilityLabels\[availability\]/)
+  assert.match(catalog, /availability !== 'in-stock'/)
+  assert.match(detail, /item\.availability !== 'in-stock'/)
   assert.match(catalog, /comingSoon \? 'pr-14' : ''/)
   assert.match(catalog, /<FrameFavouriteButton frameId=\{item\.id\}/)
   assert.match(favourite, /min-h-11 min-w-11/)
@@ -45,11 +47,13 @@ test('favourites persist per browser and server demand is private and deduplicat
   assert.doesNotMatch(catalog, /favourites?\s*\}/i)
 })
 
-test('coming-soon purchase paths are guarded while preview remains available', () => {
+test('coming-soon items stay out of add-to-cart selectors and purchase paths', () => {
   assert.match(detail, /if \(comingSoon\) return/)
   assert.match(detail, /Not yet available to purchase\./)
-  assert.match(configurator, /if \(!framePurchasable\) return/)
-  assert.match(configurator, /disabled=\{!framePurchasable\}/)
-  assert.match(configurator, /Preview this frame now, then choose an in-stock frame to purchase\./)
+  assert.match(configurator, /const purchasableFrames = shopFrames\.filter\(isFramePurchasable\)/)
+  assert.match(configurator, /\{purchasableFrames\.map\(\(item\) => <option/)
+  assert.doesNotMatch(configurator, /\{shopFrames\.map\(\(item\) => <option/)
+  assert.doesNotMatch(configurator, /IN STOCK|in-stock frame/)
   assert.match(bundle, /isFramePurchasable\(item\)/)
+  assert.match(bundle, /Dark and light modes are both included\. This only changes the preview; select the display mode in the app settings\./)
 })
