@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from 'react'
 import { addCartItem } from '../cart'
 import { configurationTotal, optionUpgrade } from '../configuratorLogic'
-import { displayOptions, formatNok, isFramePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
+import { displayOptions, formatNok, isFramePurchasable, isMattePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
 import styles from './Configurator.module.css'
 
 const frameAppearances: Record<string, CSSProperties> = {
@@ -31,6 +31,7 @@ const matteAppearances: Record<string, CSSProperties> = {
 }
 
 const purchasableFrames = shopFrames.filter(isFramePurchasable)
+const purchasableMattes = shopMattes.filter(isMattePurchasable)
 
 function FramePlaceholder({ frameId }: { frameId: string }) {
   const frame = shopFrames.find((item) => item.id === frameId)
@@ -117,14 +118,14 @@ function ProductStory({ className = '' }: { className?: string }) {
 
 export default function Configurator({ initialFrameId, initialMatteId }: { initialFrameId?: string; initialMatteId?: string }) {
   const [frameId, setFrameId] = useState(() => purchasableFrames.some((item) => item.id === initialFrameId) ? initialFrameId! : purchasableFrames[0].id)
-  const [matteId, setMatteId] = useState(() => shopMattes.some((item) => item.id === initialMatteId) ? initialMatteId! : shopMattes[0].id)
+  const [matteId, setMatteId] = useState(() => purchasableMattes.some((item) => item.id === initialMatteId) ? initialMatteId! : purchasableMattes[0].id)
   const [selectedDisplay, setSelectedDisplay] = useState<DisplayMode>('dark')
   const [added, setAdded] = useState(false)
   const frame = purchasableFrames.find((item) => item.id === frameId) ?? purchasableFrames[0]
-  const matte = shopMattes.find((item) => item.id === matteId) ?? shopMattes[0]
+  const matte = purchasableMattes.find((item) => item.id === matteId) ?? purchasableMattes[0]
   const display = displayOptions.find((item) => item.id === selectedDisplay) ?? displayOptions[0]
   const frameUpgrade = optionUpgrade(frame.price, purchasableFrames.map((item) => item.price))
-  const matteUpgrade = optionUpgrade(matte.price, shopMattes.map((item) => item.price))
+  const matteUpgrade = optionUpgrade(matte.price, purchasableMattes.map((item) => item.price))
   const total = configurationTotal(remindProduct.price, frameUpgrade, matteUpgrade)
 
   function addConfiguration() {
@@ -205,7 +206,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
               MATTE
               <span className="relative mt-3 block">
                 <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
-                  {shopMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  {purchasableMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
               </span>

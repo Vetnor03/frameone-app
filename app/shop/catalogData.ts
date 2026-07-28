@@ -1,5 +1,5 @@
 import type { CatalogItem } from './CatalogPage'
-import { frameAvailability } from './productData'
+import { frameAvailability, matteAvailability } from './productData'
 
 export const frameCatalog: CatalogItem[] = [
   ['Midnight Black', 'Matte aluminum', 349, ['#111214', '#d5d5d5'], '/shop/frames/midnight-black.png'],
@@ -36,8 +36,7 @@ export const matteCatalog: CatalogItem[] = [
   ['Forest Green', 'Deep natural green', 159, ['#344b3d', '#778c7d']],
   ['Burgundy', 'Rich wine red', 159, ['#633b42', '#a7797e']],
   ['Natural Linen', 'Textured linen look', 179, ['#cbbba2', '#e8dece']],
-].map(([name, subtitle, price, colors], index) => ({
-  id: String(name).toLowerCase().replaceAll(' ', '-').replaceAll('/', '-'),
-  name, subtitle, price, colors,
-  availability: index < 4 ? 'in-stock' : 'coming-soon',
-} as CatalogItem))
+].map(([name, subtitle, price, colors]) => {
+  const id = String(name).toLowerCase().replaceAll(' ', '-').replaceAll('/', '-')
+  return { id, name, subtitle, price, colors, availability: matteAvailability(id) } as CatalogItem
+})
