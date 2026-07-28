@@ -28,7 +28,7 @@ export default function PressPage() {
           </p>
           <dl className="mt-10 divide-y divide-white/12 text-sm">
             <div className="flex justify-between gap-6 py-4"><dt className="text-white/45">Founded</dt><dd>Stavanger, Norway</dd></div>
-            <div className="flex justify-between gap-6 py-4"><dt className="text-white/45">Founder</dt><dd>Vetle</dd></div>
+            <div className="flex justify-between gap-6 py-4"><dt className="text-white/45">Founder</dt><dd>Vetle Norstad</dd></div>
             <div className="flex justify-between gap-6 py-4"><dt className="text-white/45">Category</dt><dd>Calm technology</dd></div>
           </dl>
           <a href="mailto:support@re-mind.no?subject=Press%20enquiry" className="mt-9 inline-flex rounded-full bg-white px-6 py-3 text-sm font-medium text-black">
@@ -51,11 +51,11 @@ export default function PressPage() {
         </div>
 
         <div className="mt-8 grid gap-5 sm:grid-cols-2">
-          <a href="/AppIcon-1024.png" className="shop-card group rounded-[26px] border border-black/10 bg-white p-5" download>
+          <a href="/r_Logo.png" className="shop-card group rounded-[26px] border border-black/10 bg-white p-5" download>
             <div className="flex aspect-[1.55] items-center justify-center rounded-[18px] bg-[#e9dfd1] p-12">
-              <Image src="/AppIcon-1024.png" alt="RE:MIND logo" width={1024} height={1024} className="h-28 w-28 rounded-[24px] object-contain shadow-sm sm:h-32 sm:w-32" />
+              <Image src="/r_Logo.png" alt="R: logo" width={856} height={856} className="h-28 w-28 object-contain sm:h-32 sm:w-32" />
             </div>
-            <div className="flex items-center justify-between gap-4 px-1 pb-1 pt-5"><p className="font-medium">RE:MIND logo</p><span className="text-xs uppercase tracking-[0.14em] text-black/45">Download ↓</span></div>
+            <div className="flex items-center justify-between gap-4 px-1 pb-1 pt-5"><p className="font-medium">R: logo</p><span className="text-xs uppercase tracking-[0.14em] text-black/45">Download ↓</span></div>
           </a>
           {pressImages.map((asset) => (
             <a key={asset.src} href={asset.src} className="shop-card group rounded-[26px] border border-black/10 bg-white p-5" download>
