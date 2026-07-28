@@ -1,4 +1,4 @@
-import { remindProduct, shopFrames, shopMattes } from './productData'
+import { isFramePurchasable, remindProduct, shopFrames, shopMattes } from './productData'
 
 export type ShopBundle = {
   id: string
@@ -18,7 +18,7 @@ export const shopBundles: ShopBundle[] = [
   { id: 'style-library', name: 'The Style Library', eyebrow: 'Maximum flexibility', description: 'Three frames and three mattes to build a flexible collection around the RE:MIND you own.', deviceCount: 0, frameCount: 3, matteCount: 3, price: 1399, colors: ['#304238', '#a9744a', '#c6b8a5'] },
 ]
 
-const pricedFrames = shopFrames.filter((item): item is typeof item & { price: number } => item.price !== null && !item.id.startsWith('custom-'))
+const pricedFrames = shopFrames.filter((item): item is typeof item & { price: number } => item.price !== null && !item.id.startsWith('custom-') && isFramePurchasable(item))
 const pricedMattes = shopMattes.filter((item): item is typeof item & { price: number } => item.price !== null && !item.id.startsWith('custom-'))
 
 export function bundleRegularPrice(bundle: ShopBundle, framePrices?: number[], mattePrices?: number[]) {
