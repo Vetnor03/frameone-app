@@ -63,8 +63,8 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item) => {
-              const comingSoon = kind === 'frames' && item.availability === 'coming-soon'
-              const availability = kind === 'mattes' ? 'in-stock' : item.availability
+              const comingSoon = item.availability === 'coming-soon'
+              const availability = item.availability
               return (
               <article
                 key={item.id}
