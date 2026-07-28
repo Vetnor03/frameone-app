@@ -104,9 +104,16 @@ test('desktop shop hero begins below the shared header without a negative offset
 })
 
 test('shop and configurator consume one shared frame source', () => {
-  assert.match(shopPage, /import \{ formatNok, shopFrames \} from '\.\/productData'/)
+  assert.match(shopPage, /import \{ formatNok, remindProduct, shopFrames \} from '\.\/productData'/)
   assert.match(configurator, /shopFrames, shopMattes/)
   assert.equal((productData.match(/name: '(Midnight Black|Walnut Wood|Natural Oak|Cloud White)'/g) ?? []).length, 4)
+})
+
+test('RE:MIND base price has one shared shop source', () => {
+  assert.match(productData, /name: 'RE:MIND',[\s\S]*price: 2299,/)
+  assert.match(shopPage, /formatNok\(remindProduct\.price\)/)
+  assert.match(configurator, /configurationTotal\(remindProduct\.price, frameUpgrade, matteUpgrade\)/)
+  assert.match(configurator, /basePrice: remindProduct\.price/)
 })
 
 test('final layered assets and their explicit catalogue order are preserved', () => {
