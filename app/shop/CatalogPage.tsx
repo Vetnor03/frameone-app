@@ -59,7 +59,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
               <p className="max-w-[48ch] text-base leading-relaxed text-black/60 md:justify-self-end">{intro}</p>
             </div>
-            {kind === 'frames' && <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>}
+            <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item) => {

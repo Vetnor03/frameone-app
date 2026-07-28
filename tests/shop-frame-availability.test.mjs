@@ -21,7 +21,8 @@ test('only the four launch frames are manually in stock', () => {
 })
 
 test('frame and matte collections show availability and accessible card hearts', () => {
-  assert.match(catalog, /More styles are coming\./)
+  assert.match(catalog, /<p className="mt-5[^>]*><span[^>]*>More styles are coming\.<\/span> Heart your favourites and help us choose what comes next\.<\/p>/)
+  assert.doesNotMatch(catalog, /kind === 'frames' && <p[^>]*>[^<]*<span[^>]*>More styles are coming\./)
   assert.match(catalog, /Heart your favourites and help us choose what comes next\./)
   assert.match(catalogData, /availability: index < 4 \? 'in-stock' : 'coming-soon'/)
   assert.match(catalog, /const comingSoon = item\.availability === 'coming-soon'/)
