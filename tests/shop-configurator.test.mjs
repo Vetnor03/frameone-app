@@ -30,10 +30,11 @@ test('display mode note is stacked below the toggle at every viewport size', () 
   assert.match(configuratorStyles, /\.displayChoice\s*\{[^}]*align-items: flex-start;[^}]*flex-direction: column;/s)
 })
 
-test('complete RE:MIND contents are clear before purchase and consistent with the FAQ', () => {
+test('shop keeps the product summary minimal while purchase contents remain clear before checkout', () => {
   const includedComponents = /RE:MIND display · Your frame · Your matte · Charging cable · Setup guide/
-  assert.match(shopPage, /Complete RE:MIND from \{formatNok\(remindProduct\.price\)\}/)
-  assert.match(shopPage, includedComponents)
+  assert.match(shopPage, />\{formatNok\(remindProduct\.price\)\}<\/p>/)
+  assert.doesNotMatch(shopPage, /What’s included/)
+  assert.doesNotMatch(shopPage, includedComponents)
   assert.match(configurator, includedComponents)
   assert.match(configurator, /Premium choices may add to the total\. Additional frames and mattes are available separately\./)
   assert.ok(configurator.indexOf('What’s included') < configurator.indexOf('>ADD TO CART<'))
