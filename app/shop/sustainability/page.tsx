@@ -31,7 +31,7 @@ export default function SustainabilityPage() {
     <CompanyPageShell
       eyebrow="Our approach"
       title="Designed for a longer life."
-      intro="We are at the beginning of our journey, but our direction is clear: make fewer, better things that remain useful and feel at home for years."
+      intro="We are at the beginning of our journey, but our direction is clear: make fewer, better products that remain useful and feel at home for years."
     >
       <ShopReveal>
         <div className="relative min-h-[390px] overflow-hidden rounded-[30px] bg-[#ded9cc] md:min-h-[560px]">
@@ -45,7 +45,7 @@ export default function SustainabilityPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
           <p className="absolute bottom-7 left-7 max-w-[25ch] text-sm leading-6 text-white/90 md:bottom-10 md:left-10 md:text-base">
-            Calm technology should live well with the things you already own.
+            Calm technology should live well with what you already own.
           </p>
         </div>
       </ShopReveal>
