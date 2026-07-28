@@ -193,6 +193,9 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
         <div>
           <p className="mb-3 font-medium">SHOP</p>
           <div className="space-y-1.5 leading-[1.4]">
+            <a href="/shop/configure" className="shop-footer-link block">
+              RE:MIND
+            </a>
             <a href="/shop/frames" className="shop-footer-link block">
               Frames
             </a>
