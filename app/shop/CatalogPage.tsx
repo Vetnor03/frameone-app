@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { ShopFooter, ShopHeader } from './ShopChrome'
-import { formatNok } from './productData'
+import FrameFavouriteButton from './FrameFavouriteButton'
+import { formatNok, frameAvailabilityLabels, type FrameAvailability } from './productData'
 
 export type CatalogItem = {
   id: string
@@ -9,6 +10,7 @@ export type CatalogItem = {
   price: number
   colors: [string, string]
   imageSrc?: string
+  availability?: FrameAvailability
 }
 
 type CatalogPageProps = {
@@ -57,15 +59,17 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
               <p className="max-w-[48ch] text-base leading-relaxed text-black/60 md:justify-self-end">{intro}</p>
             </div>
+            {kind === 'frames' && <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>}
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
-            {items.map((item) => (
-              <a
+            {items.map((item) => {
+              const comingSoon = kind === 'frames' && item.availability === 'coming-soon'
+              return (
+              <article
                 key={item.id}
-                href={`/shop/${kind}/${encodeURIComponent(item.id)}`}
-                className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
-                aria-label={`Choose ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}
+                className="shop-card relative overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]"
               >
+                <a href={`/shop/${kind}/${encodeURIComponent(item.id)}`} className="block focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black" aria-label={`View ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}>
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eeeae5]">
                   {item.imageSrc ? <Image src={item.imageSrc} alt={`${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`} fill className="object-cover" sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw" /> : <PlaceholderFigure colors={item.colors} kind={kind} />}
                 </div>
@@ -74,9 +78,14 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
                   <span className="shrink-0">{formatNok(item.price)}</span>
                 </div>
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{item.subtitle}</p>
-                <div className="mt-3 flex gap-2 px-3 pb-3">{item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</div>
-              </a>
-            ))}
+                <div className="mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 pr-14">
+                  {item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}
+                  {kind === 'frames' && item.availability && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</span>}
+                </div>
+                </a>
+                {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={item.name} className="absolute bottom-1 right-1 z-10" />}
+              </article>
+            )})}
           </div>
         </section>
         <ShopFooter language={language} />

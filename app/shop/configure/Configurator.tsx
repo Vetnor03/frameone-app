@@ -3,7 +3,8 @@
 import { useState, type CSSProperties } from 'react'
 import { addCartItem } from '../cart'
 import { configurationTotal, optionUpgrade } from '../configuratorLogic'
-import { displayOptions, formatNok, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
+import FrameFavouriteButton from '../FrameFavouriteButton'
+import { displayOptions, formatNok, frameAvailabilityLabels, isFramePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
 import styles from './Configurator.module.css'
 
 const frameAppearances: Record<string, CSSProperties> = {
@@ -124,8 +125,10 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
   const frameUpgrade = optionUpgrade(frame.price, shopFrames.map((item) => item.price))
   const matteUpgrade = optionUpgrade(matte.price, shopMattes.map((item) => item.price))
   const total = configurationTotal(remindProduct.price, frameUpgrade, matteUpgrade)
+  const framePurchasable = isFramePurchasable(frame)
 
   function addConfiguration() {
+    if (!framePurchasable) return
     addCartItem({
       id: `remind-${frame.id}-${matte.id}-${Date.now()}`,
       productId: 'remind',
@@ -187,15 +190,21 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
                 </div>
               </div>
             </fieldset>
-            <label className="block text-xs font-medium tracking-[0.15em]">
-              FRAME
-              <span className="relative mt-3 block">
-                <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
-                  {shopFrames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </select>
-                <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
-              </span>
-            </label>
+            <div>
+              <label className="block text-xs font-medium tracking-[0.15em]">
+                FRAME
+                <span className="relative mt-3 block">
+                  <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+                    {shopFrames.map((item) => <option key={item.id} value={item.id}>{item.name} — {frameAvailabilityLabels[item.availability]}</option>)}
+                  </select>
+                  <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
+                </span>
+              </label>
+              <div className="mt-2 flex min-h-11 items-center justify-between gap-3 text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[frame.availability]}`}>
+                {frameAvailabilityLabels[frame.availability]}
+                {!framePurchasable && <FrameFavouriteButton frameId={frame.id} frameName={frame.name} />}
+              </div>
+            </div>
             <label className="block text-xs font-medium tracking-[0.15em]">
               MATTE
               <span className="relative mt-3 block">
@@ -215,8 +224,8 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
               {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade)}</dd></div>}
               <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total)}</dd></div>
             </dl>
-            <button type="button" onClick={addConfiguration} className="shop-button mt-9 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>
-            <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : ''}</p>
+            <button type="button" onClick={addConfiguration} disabled={!framePurchasable} className="shop-button mt-9 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white disabled:cursor-not-allowed disabled:bg-black/25">{framePurchasable ? 'ADD TO CART' : 'COMING SOON'}</button>
+            <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : !framePurchasable ? 'Preview this frame now, then choose an in-stock frame to purchase.' : ''}</p>
           </div>
         </div>
       </section>

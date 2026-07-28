@@ -7,6 +7,26 @@ export type ShopFrame = {
   swatches: string[]
   imageSrc: string
   configuratorPreviewSrc: string
+  availability: FrameAvailability
+}
+
+export type FrameAvailability = 'in-stock' | 'low-stock' | 'out-of-stock' | 'coming-soon'
+
+export const frameAvailabilityLabels: Record<FrameAvailability, string> = {
+  'in-stock': 'IN STOCK',
+  'low-stock': 'LOW STOCK',
+  'out-of-stock': 'OUT OF STOCK',
+  'coming-soon': 'COMING SOON',
+}
+
+const launchFrameIds = new Set(['midnight-black', 'cloud-white', 'natural-oak', 'walnut-wood'])
+
+export function frameAvailability(id: string): FrameAvailability {
+  return launchFrameIds.has(id) ? 'in-stock' : 'coming-soon'
+}
+
+export function isFramePurchasable(frame: Pick<ShopFrame, 'availability'>) {
+  return frame.availability === 'in-stock' || frame.availability === 'low-stock'
 }
 
 export type ShopMatte = {
@@ -84,7 +104,7 @@ export const shopFrames: ShopFrame[] = [
     id, name, price: null, subtitle: '', palette: ['#eee', '#ddd', '#ccc'] as [string, string, string], swatches: [], imageSrc: '',
     configuratorPreviewSrc: `/shop/products/frames/${filename}`,
   })),
-]
+].map((frame) => ({ ...frame, availability: frameAvailability(frame.id) }))
 
 // Matte prices have not been commercially defined, so they remain explicitly null.
 export const shopMattes: ShopMatte[] = [
