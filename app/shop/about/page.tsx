@@ -4,7 +4,7 @@ import { ShopReveal } from '../ShopMotion'
 
 export const metadata: Metadata = {
   title: 'About RE:MIND',
-  description: 'The story behind RE:MIND, a calm digital frame for everyday family life.',
+  description: 'The story behind RE:MIND, a calm digital frame that keeps an eye on what matters to you.',
 }
 
 export default function AboutPage() {
@@ -51,31 +51,28 @@ export default function AboutPage() {
                     </p>
 
                     <p>
-                      Will it rain today? Should I bring an umbrella? Are we running low on anything in the fridge? And, just as importantly: remember to put the bin out for collection.
+                      Will it rain today? Should I bring an umbrella? What’s happening nearby this weekend? And, just as importantly: remember to put the bin out for collection.
                     </p>
 
                     <p>
-                      Since then, RE:MIND has grown into a calm digital frame for families. It can display reminders, weather and calendars, and connect with services you already use.
+                      Since then, RE:MIND has grown into a calm digital frame for everyday life. It can display reminders, weather and calendars, connect with services you already use, and bring the information you care about into view.
                     </p>
 
                     <aside className="rounded-[24px] bg-[#f4ecdf] p-5 text-black/70 md:p-6">
-                      <p className="font-medium text-[#171512]">The idea is simple:</p>
+                      <p className="font-medium text-[#171512]">Ask RE:MIND to keep an eye on anything.</p>
                       <p className="mt-2">
-                        See what matters in everyday life, without the noise — whether Sander’s football practice has moved to 6:00 pm, or Mari needs to remember her swimwear for school tomorrow.
+                        Its AI can follow what matters to you and let you know when something changes — with no limit to what you can ask it to watch.
                       </p>
                     </aside>
 
                     <p>
-                      If RE:MIND sounds useful and you’d like to follow the journey, I’d be grateful if you joined the waitlist. You’ll receive occasional updates on our progress and launch date, plus an introductory offer as a thank-you for being here early.
+                      Ask what’s happening in Stavanger this weekend. Keep watch for Coldplay concerts near Norway. Follow Haaland’s latest tweet, a change in the surf forecast, a price you’ve been waiting for, or something entirely your own.
+                    </p>
+
+                    <p>
+                      You choose what deserves your attention. RE:MIND quietly does the looking, then puts the update where you can see it — without another feed to scroll through.
                     </p>
                   </div>
-
-                  <a
-                    href="/shop#waitlist"
-                    className="shop-button mt-8 inline-flex items-center justify-center rounded-full bg-[#171512] px-6 py-3 text-sm font-medium text-white shadow-[0_12px_28px_rgba(0,0,0,0.13)]"
-                  >
-                    Join the waitlist
-                  </a>
                 </div>
               </div>
             </article>

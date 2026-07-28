@@ -55,8 +55,10 @@ test('about navigation opens a dedicated founder story with a home link', () => 
   assert.match(aboutPage, /Back to home/)
   assert.match(aboutPage, /href="\/shop"/)
   assert.match(aboutPage, /Hi, I’m Vetle, founder of RE:MIND/)
-  assert.match(aboutPage, /The idea is simple:/)
-  assert.match(aboutPage, /Join the waitlist/)
+  assert.match(aboutPage, /Ask RE:MIND to keep an eye on anything\./)
+  assert.match(aboutPage, /no limit to what you can ask it to watch/)
+  assert.match(aboutPage, /what’s happening in Stavanger this weekend/)
+  assert.doesNotMatch(aboutPage, /waitlist/i)
 })
 
 test('accessories are omitted from the storefront until they are in inventory', () => {
