@@ -59,7 +59,7 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
             </div>
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
-            {items.map((item, index) => (
+            {items.map((item) => (
               <a
                 key={item.id}
                 href={`/shop/${kind}/${encodeURIComponent(item.id)}`}
@@ -68,7 +68,6 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
               >
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eeeae5]">
                   {item.imageSrc ? <Image src={item.imageSrc} alt={`${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`} fill className="object-cover" sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw" /> : <PlaceholderFigure colors={item.colors} kind={kind} />}
-                  {!item.imageSrc && <span className="absolute bottom-2 right-2 text-[10px] uppercase tracking-[0.12em] text-black/45">Preview {String(index + 1).padStart(2, '0')}</span>}
                 </div>
                 <div className="flex items-start justify-between gap-3 px-3 pt-3 text-lg leading-[1.25]">
                   <h2 className="max-w-[14ch] [text-wrap:balance]">{item.name}</h2>
