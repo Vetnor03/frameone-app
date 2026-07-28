@@ -13,6 +13,16 @@ test('shop product cards link to dedicated product pages', () => {
   assert.match(catalog, /encodeURIComponent\(item\.id\)/)
 })
 
+test('desktop and phone menus lead with RE:MIND linking to the frame builder', () => {
+  const chrome = read('app/shop/ShopChrome.tsx')
+  const configurePage = read('app/shop/configure/page.tsx')
+  const remindMenuLink = /<a href="\/shop\/configure" className=\{`pb-1 \$\{activeSection === "configure"[^>]*>[\s\S]*?RE:MIND[\s\S]*?<\/a>/g
+
+  assert.equal(chrome.match(remindMenuLink)?.length, 2)
+  assert.ok(chrome.indexOf('href="/shop/configure"') < chrome.indexOf('href="/shop/frames"'))
+  assert.match(configurePage, /<ShopHeader language=\{language\} activeSection="configure" \/>/)
+})
+
 test('frame and matte pages can add the selected standalone product to cart', () => {
   const detail = read('app/shop/ProductDetailPage.tsx')
   const framePage = read('app/shop/frames/[id]/page.tsx')

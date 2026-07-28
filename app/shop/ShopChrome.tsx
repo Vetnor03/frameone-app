@@ -7,7 +7,7 @@ import { formatNok } from "./productData";
 type ShopChromeProps = {
   language: "en" | "no";
   shippingThreshold?: string;
-  activeSection?: "frames" | "mattes" | "bundles";
+  activeSection?: "configure" | "frames" | "mattes" | "bundles";
 };
 
 const socialLinks = [
@@ -63,6 +63,9 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
               RE:MIND
             </a>
             <nav className="hidden items-center justify-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
+              <a href="/shop/configure" className={`pb-1 ${activeSection === "configure" ? "border-b-2 border-black" : ""}`}>
+                RE:MIND
+              </a>
               <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
                 Frames
               </a>
@@ -98,6 +101,9 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
             aria-label="Shop pages"
             className="shop-nav flex items-center justify-between gap-2 pt-5 text-[10px] uppercase tracking-[0.06em] md:hidden"
           >
+            <a href="/shop/configure" className={`pb-1 ${activeSection === "configure" ? "border-b-2 border-black" : ""}`}>
+              RE:MIND
+            </a>
             <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
               Frames
             </a>
