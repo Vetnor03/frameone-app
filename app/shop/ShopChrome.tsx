@@ -248,14 +248,14 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
       </div>
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
         <p>© 2026 RE:MIND. All rights reserved.</p>
-        <div className="flex items-center justify-center gap-6">
-          <a href={`/terms?from=shop&lang=${language}`} className="shop-footer-link">
+        <div className="tab-scroll flex min-w-0 items-center justify-start gap-6 overflow-x-auto whitespace-nowrap sm:justify-center">
+          <a href={`/terms?from=shop&lang=${language}`} className="shop-footer-link shrink-0">
             Terms
           </a>
-          <a href={`/privacy?from=shop&lang=${language}`} className="shop-footer-link">
+          <a href={`/privacy?from=shop&lang=${language}`} className="shop-footer-link shrink-0">
             Privacy
           </a>
-          <a href={`/cookies?from=shop&lang=${language}`} className="shop-footer-link">
+          <a href={`/cookies?from=shop&lang=${language}`} className="shop-footer-link shrink-0">
             Cookies
           </a>
         </div>

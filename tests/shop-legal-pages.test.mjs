@@ -12,6 +12,13 @@ test('shop footer opens every legal page in the shop presentation', () => {
   }
 })
 
+test('shop footer legal links can scroll instead of clipping on narrow screens', () => {
+  const footer = read('app/shop/ShopChrome.tsx')
+
+  assert.match(footer, /tab-scroll[^\"]*overflow-x-auto[^\"]*whitespace-nowrap/)
+  assert.equal((footer.match(/className="shop-footer-link shrink-0"/g) ?? []).length, 3)
+})
+
 test('shop legal pages use shared shop styling and return home', () => {
   const legalPage = read('app/components/ShopLegalPage.tsx')
   const terms = read('app/terms/page.tsx')
