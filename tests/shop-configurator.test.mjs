@@ -28,7 +28,7 @@ test('configure route and both shop entry points are present', () => {
 test('shop and configurator share the complete storefront chrome', () => {
   assert.match(shopPage, /<ShopHeader language=\{language\}/)
   assert.match(shopPage, /<ShopFooter language=\{language\}/)
-  assert.match(page, /<ShopHeader language=\{language\} \/>/)
+  assert.match(page, /<ShopHeader language=\{language\} activeSection="configure" \/>/)
   assert.match(page, /<ShopFooter language=\{language\} \/>/)
   assert.doesNotMatch(chrome, /Open profile|profile\.png/)
   assert.match(chrome, /href="\/shop\/cart"/)
@@ -51,6 +51,8 @@ test('mobile shop navigation displays page links inline without a menu toggle', 
 
   const mobileNavStart = chrome.indexOf('aria-label="Shop pages"')
   const mobileNav = chrome.slice(mobileNavStart, chrome.indexOf('</nav>', mobileNavStart))
+  assert.match(mobileNav, /href="\/shop\/configure"[\s\S]*RE:MIND/)
+  assert.ok(mobileNav.indexOf('href="/shop/configure"') < mobileNav.indexOf('href="/shop/frames"'))
   assert.match(mobileNav, /href="\/shop\/frames"/)
   assert.match(mobileNav, /href="\/shop\/mattes"/)
   assert.match(mobileNav, /href="\/shop\/bundles"/)
