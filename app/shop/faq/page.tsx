@@ -18,7 +18,7 @@ export default function FaqPage() {
         },
         {
           title: 'What is included?',
-          text: 'Your order includes the RE:MIND display, your selected frame and matte, a power cable and a simple setup guide. Bundle contents are listed on each product page.',
+          text: 'A complete RE:MIND starts at 2 299 NOK and includes the RE:MIND display, your selected frame, your selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total. Additional frames and mattes can be purchased separately later. Bundle contents are listed on each product page.',
         },
         {
           title: 'How does setup work?',

@@ -155,7 +155,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
           </a>
           <div className={`text-center ${styles.heading}`}>
             <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
-            <p className="mt-3 text-[16px] text-black/60">Choose the display, frame and matte that feel right at home.</p>
+            <p className="mt-3 text-[16px] text-black/60">Choose the display finish, included frame and included matte that feel right at home.</p>
           </div>
 
           <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
@@ -224,7 +224,12 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
               {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade)}</dd></div>}
               <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total)}</dd></div>
             </dl>
-            <button type="button" onClick={addConfiguration} disabled={!framePurchasable} className="shop-button mt-9 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white disabled:cursor-not-allowed disabled:bg-black/25">{framePurchasable ? 'ADD TO CART' : 'COMING SOON'}</button>
+            <div className="mt-7 border-t border-black/10 pt-5">
+              <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
+              <p className="mt-2 text-[13px] leading-5 text-black/60">RE:MIND display · Your frame · Your matte · Charging cable · Setup guide</p>
+              <p className="mt-2 text-xs leading-5 text-black/50">Premium choices may add to the total. Additional frames and mattes are available separately.</p>
+            </div>
+            <button type="button" onClick={addConfiguration} disabled={!framePurchasable} className="shop-button mt-6 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white disabled:cursor-not-allowed disabled:bg-black/25">{framePurchasable ? 'ADD TO CART' : 'COMING SOON'}</button>
             <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : !framePurchasable ? 'Preview this frame now, then choose an in-stock frame to purchase.' : ''}</p>
           </div>
         </div>

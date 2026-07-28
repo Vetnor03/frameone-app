@@ -15,14 +15,29 @@ const cartPage = read('app/shop/cart/CartPage.tsx')
 const cartRoute = read('app/shop/cart/page.tsx')
 const languageSelector = read('app/shop/ShopLanguageSelector.tsx')
 const aboutPage = read('app/shop/about/page.tsx')
+const faqPage = read('app/shop/faq/page.tsx')
 
 test('configure route and both shop entry points are present', () => {
   assert.match(page, /<Configurator initialFrameId=\{params\?\.frame\} initialMatteId=\{params\?\.matte\} \/>/)
   assert.match(configurator, /BUILD YOUR RE:MIND/)
-  assert.match(configurator, /Choose the display, frame and matte that feel right at home\./)
+  assert.match(configurator, /Choose the display finish, included frame and included matte that feel right at home\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}`/)
   assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
+})
+
+test('complete RE:MIND contents are clear before purchase and consistent with the FAQ', () => {
+  const includedComponents = /RE:MIND display · Your frame · Your matte · Charging cable · Setup guide/
+  assert.match(shopPage, /Complete RE:MIND from \{formatNok\(remindProduct\.price\)\}/)
+  assert.match(shopPage, includedComponents)
+  assert.match(configurator, includedComponents)
+  assert.match(configurator, /Premium choices may add to the total\. Additional frames and mattes are available separately\./)
+  assert.ok(configurator.indexOf('What’s included') < configurator.indexOf("'ADD TO CART'"))
+  assert.match(faqPage, /A complete RE:MIND starts at 2 299 NOK/)
+  assert.match(faqPage, /RE:MIND display, your selected frame, your selected matte, a charging cable and a setup guide/)
+  assert.match(faqPage, /Premium frame or matte choices may add to the total/)
+  assert.match(faqPage, /Additional frames and mattes can be purchased separately later/)
+  assert.doesNotMatch(faqPage, /power cable/)
 })
 
 test('shop and configurator share the complete storefront chrome', () => {
