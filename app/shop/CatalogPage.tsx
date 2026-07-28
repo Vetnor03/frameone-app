@@ -48,18 +48,16 @@ export default function CatalogPage({ kind, title, intro, items }: CatalogPagePr
         <ShopHeader language={language} activeSection={kind} />
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-10">
           <div className="mb-7 border-b border-black/10 pb-6">
-            <div className="md:flex md:items-start md:justify-between md:gap-12">
-              <a
-                href="/shop"
-                className="group inline-flex shrink-0 items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
-              >
-                <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
-                Back to home
-              </a>
-              <p className="mt-5 max-w-[44ch] border-l border-black/20 pl-4 text-sm leading-relaxed text-black/60 md:mt-0 md:pl-5 md:text-right md:text-[15px]">{intro}</p>
-            </div>
-            <div className="mt-7 md:mt-10">
+            <a
+              href="/shop"
+              className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
+            >
+              <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
+              Back to home
+            </a>
+            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)] md:items-end md:gap-12">
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
+              <p className="max-w-[48ch] text-base leading-relaxed text-black/60 md:justify-self-end">{intro}</p>
             </div>
             {kind === 'frames' && <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>}
           </div>
