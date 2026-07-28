@@ -49,7 +49,7 @@ export const remindProduct = {
   price: 2299,
 } as const
 
-export const shopFrames: ShopFrame[] = [
+const shopFrameDefinitions: Array<Omit<ShopFrame, 'availability'>> = [
   {
     id: 'midnight-black', name: 'Midnight Black', price: 349, subtitle: 'Matte aluminum',
     palette: ['#111214', '#252628', '#3c3d40'], swatches: ['#111214', '#d5d5d5'],
@@ -104,7 +104,12 @@ export const shopFrames: ShopFrame[] = [
     id, name, price: null, subtitle: '', palette: ['#eee', '#ddd', '#ccc'] as [string, string, string], swatches: [], imageSrc: '',
     configuratorPreviewSrc: `/shop/products/frames/${filename}`,
   })),
-].map((frame) => ({ ...frame, availability: frameAvailability(frame.id) }))
+]
+
+export const shopFrames: ShopFrame[] = shopFrameDefinitions.map((frame) => ({
+  ...frame,
+  availability: frameAvailability(frame.id),
+}))
 
 // Matte prices have not been commercially defined, so they remain explicitly null.
 export const shopMattes: ShopMatte[] = [
