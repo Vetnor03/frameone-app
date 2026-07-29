@@ -37,6 +37,9 @@ const socialLinks = [
 export function ShopHeader({ language, shippingThreshold = formatNok(1000, language), activeSection }: ShopChromeProps) {
   const topShipping = shippingThreshold;
   const shopHref = (path: string) => `${path}?lang=${language}`;
+  const navigationLabels = language === "no"
+    ? { frames: "Rammer", mattes: "Innlegg", bundles: "Pakker", about: "Om oss" }
+    : { frames: "Frames", mattes: "Mattes", bundles: "Bundles", about: "About" };
 
   return (
     <div className="sticky top-0 z-50">
@@ -68,16 +71,16 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000, langu
                 RE:MIND
               </a>
               <a href={shopHref("/shop/frames")} className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
-                Frames
+                {navigationLabels.frames}
               </a>
               <a href={shopHref("/shop/mattes")} className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
-                Mattes
+                {navigationLabels.mattes}
               </a>
               <a href={shopHref("/shop/bundles")} className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
-                Bundles
+                {navigationLabels.bundles}
               </a>
               <a href={shopHref("/shop/about")} className="pb-1">
-                About
+                {navigationLabels.about}
               </a>
             </nav>
             <div className="absolute right-0 flex items-center md:right-0">
@@ -106,16 +109,16 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000, langu
               RE:MIND
             </a>
             <a href={shopHref("/shop/frames")} className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
-              Frames
+              {navigationLabels.frames}
             </a>
             <a href={shopHref("/shop/mattes")} className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
-              Mattes
+              {navigationLabels.mattes}
             </a>
             <a href={shopHref("/shop/bundles")} className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
-              Bundles
+              {navigationLabels.bundles}
             </a>
             <a href={shopHref("/shop/about")} className="pb-1">
-              About
+              {navigationLabels.about}
             </a>
           </nav>
         </div>
@@ -126,6 +129,9 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000, langu
 
 export function ShopFooter({ language, shippingThreshold = formatNok(1000, language) }: ShopChromeProps) {
   const shopHref = (path: string) => `${path}?lang=${language}`;
+  const navigationLabels = language === "no"
+    ? { frames: "Rammer", mattes: "Innlegg", bundles: "Pakker", about: "Om oss" }
+    : { frames: "Frames", mattes: "Mattes", bundles: "Bundles", about: "About" };
   const footerBenefits = language === "no" ? [
     {
       title: "Gratis frakt",
@@ -224,13 +230,13 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
               RE:MIND
             </a>
             <a href={shopHref("/shop/frames")} className="shop-footer-link block">
-              Frames
+              {navigationLabels.frames}
             </a>
             <a href={shopHref("/shop/mattes")} className="shop-footer-link block">
-              Mattes
+              {navigationLabels.mattes}
             </a>
             <a href={shopHref("/shop/bundles")} className="shop-footer-link block">
-              Bundles
+              {navigationLabels.bundles}
             </a>
           </div>
         </div>
@@ -255,7 +261,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
           <p className="mb-3 font-medium">COMPANY</p>
           <div className="space-y-1.5 leading-[1.4]">
             <a href={shopHref("/shop/about")} className="shop-footer-link block">
-              About
+              {navigationLabels.about}
             </a>
             <a href={shopHref("/shop/sustainability")} className="shop-footer-link block">
               Sustainability
