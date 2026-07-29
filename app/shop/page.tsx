@@ -138,19 +138,17 @@ export default async function ShopPage({
       <section className="w-full border-y border-black/10 bg-[#faf9f7]">
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-6 px-6 py-9 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: ['Satisfying click.', 'Designed for ease.'] },
-            { label: 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: true },
-            { label: 'Built to last', iconSrc: '/shop/icons/features/built-to-last.png', body: ['Sustainable design.', 'Made to be kept.'] },
-            { label: 'Made for RE:MIND', iconSrc: '/shop/icons/features/made-for-remind.png', body: ['Perfect fit. Seamless', 'integration.'] },
+            { label: language === 'no' ? 'NYTT UTTRYKK PÅ SEKUNDER' : 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: language === 'no' ? 'Bytt ramme og innlegg når du vil.' : ['Satisfying click.', 'Designed for ease.'] },
+            { label: language === 'no' ? 'NØYE UTVALGTE MATERIALER' : 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: language === 'no' ? 'Ekte tre, aluminium og nøye utvalgte overflater.' : ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: language !== 'no' },
+            { label: language === 'no' ? 'LAGET FOR Å VARE' : 'Built to last', iconSrc: '/shop/icons/features/built-to-last.png', body: language === 'no' ? 'Gjennomtenkt design for mange år fremover.' : ['Sustainable design.', 'Made to be kept.'] },
+            { label: language === 'no' ? 'UTVIKLET FOR RE:MIND' : 'Made for RE:MIND', iconSrc: '/shop/icons/features/made-for-remind.png', body: language === 'no' ? 'Perfekt passform. Sømløs integrasjon.' : ['Perfect fit. Seamless', 'integration.'] },
           ].map((item) => (
             <article key={item.label} className="flex items-start gap-3">
               <Image src={item.iconSrc} alt="" width={48} height={48} aria-hidden className="-mt-1 h-[48px] w-[48px] shrink-0 opacity-80" />
               <div className="max-w-[21ch] leading-[1.4]">
                 <p className={`font-medium uppercase tracking-[0.08em] ${item.noWrap ? 'whitespace-nowrap' : ''}`}>{item.label}</p>
                 <p className="mt-1 text-black/60">
-                  {item.body[0]}
-                  <br />
-                  {item.body[1]}
+                  {typeof item.body === 'string' ? item.body : <>{item.body[0]}<br />{item.body[1]}</>}
                 </p>
               </div>
             </article>
