@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import type { Metadata, Viewport } from 'next'
 import ShopRouteEffects from './ShopRouteEffects'
+import ShopLocaleBridge from './ShopLocaleBridge'
 import { SHOP_DESCRIPTION, shopMetadata } from './seo'
 
 export const metadata: Metadata = shopMetadata({
@@ -17,6 +18,9 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <ShopRouteEffects />
+      <Suspense fallback={null}>
+        <ShopLocaleBridge />
+      </Suspense>
       {children}
     </>
   )
