@@ -1,12 +1,13 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { isBundleCartItem, isConfiguredCartItem, readCart, removeCartItem, SHOP_CART_CHANGED, updateCartItemQuantity } from '../cart'
 import type { CartItem } from '../cart'
 import { PlaceholderFigure } from '../CatalogPage'
 import { ConfigurationPlaceholder } from '../configure/Configurator'
 import { formatNok } from '../productData'
+import { SHOP_CURRENCY, trackShopEvent } from '../analytics'
 
 const FREE_SHIPPING_THRESHOLD = 1000
 
@@ -16,11 +17,21 @@ export default function CartPage() {
   const [discountCode, setDiscountCode] = useState('')
   const [discountApplied, setDiscountApplied] = useState(false)
   const [discountMessage, setDiscountMessage] = useState('')
+  const cartViewTracked = useRef(false)
 
   useEffect(() => {
     const update = () => {
-      setItems(readCart())
+      const cartItems = readCart()
+      setItems(cartItems)
       setLoaded(true)
+      if (!cartViewTracked.current) {
+        cartViewTracked.current = true
+        trackShopEvent('cart_view', {
+          item_count: cartItems.reduce((count, item) => count + item.quantity, 0),
+          cart_total: cartItems.reduce((sum, item) => sum + item.totalPrice * item.quantity, 0),
+          currency: SHOP_CURRENCY,
+        })
+      }
     }
     update()
     window.addEventListener(SHOP_CART_CHANGED, update)
