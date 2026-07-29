@@ -89,7 +89,7 @@ export default function CartPage({ language }: { language: ShopLocale }) {
                   </div>
                   <div className="flex min-w-0 flex-col sm:flex-row sm:justify-between sm:gap-6">
                     <div>
-                      <h2 className="font-medium tracking-[0.08em]">{item.productType === 'frame' ? frameDisplayName(item.productId, item.productName, language) : item.productName}</h2>
+                      <h2 className="font-medium tracking-[0.08em]">{'productType' in item && item.productType === 'frame' ? frameDisplayName(item.productId, item.productName, language) : item.productName}</h2>
                       {isConfiguredCartItem(item) ? (
                         <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
                           <div><dt className="inline">Frame: </dt><dd className="inline">{frameDisplayName(item.frame.id, item.frame.name, language)}</dd></div>
