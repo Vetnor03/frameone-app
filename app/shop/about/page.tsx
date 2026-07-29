@@ -41,13 +41,13 @@ export default function AboutPage() {
                   </h1>
                   <div className="mt-8 h-px w-full bg-black/15" aria-hidden />
                   <div className="mt-7 flex items-center gap-4">
-                    <div className="relative size-[68px] shrink-0 overflow-hidden rounded-full" aria-hidden>
+                    <div className="relative size-[76px] shrink-0 overflow-hidden rounded-full" aria-hidden>
                       <Image
                         src="/shop/headshot.jpg"
                         alt=""
                         fill
-                        sizes="68px"
-                        className="scale-[1.4] object-cover"
+                        sizes="76px"
+                        className="translate-y-[3%] scale-[1.18] object-cover"
                       />
                     </div>
                     <div className="min-w-0">
