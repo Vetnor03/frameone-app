@@ -22,8 +22,19 @@ test('configure route and both shop entry points are present', () => {
   assert.match(configurator, /BUILD YOUR RE:MIND/)
   assert.match(configurator, /Choose a frame and matte to make RE:MIND feel at home in your space\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}`/)
-  assert.match(shopPage, /href=\{configureHref\}>SHOP FRAMES/)
+  assert.match(shopPage, /href=\{configureHref\}>\{language === 'no' \? 'SE RAMMER' : 'SHOP FRAMES'\}/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
+})
+
+test('shop hero localizes only its Norwegian copy', () => {
+  assert.match(shopPage, /language === 'no' \? 'Designet for hverdagen\.' : 'Frames that'/)
+  assert.match(shopPage, /language === 'no' \? 'Skapt for hjemmet\.' : 'fit your life\.'/)
+  assert.match(shopPage, /Påminnelser, vær og det som skjer –/)
+  assert.match(shopPage, /samlet på ett sted, med mindre/)
+  assert.match(shopPage, /skjermtid\./)
+  assert.match(shopPage, /language === 'no' \? 'SE RAMMER' : 'SHOP FRAMES'/)
+  assert.match(shopPage, /Reminders, weather and events/)
+  assert.match(shopPage, /without checking your phone\./)
 })
 
 test('display mode note is stacked below the toggle at every viewport size', () => {
