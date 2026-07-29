@@ -171,11 +171,11 @@ export default async function ShopPage({
             <div className="relative z-10 flex flex-col items-center justify-center text-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[300px]">
               <div>
                 <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
-                <p className="mt-5 text-[19px] leading-tight tracking-[0.02em]">Complete RE:MIND from {formatNok(remindProduct.price, language)}</p>
+                <p className="mt-5 text-[19px] leading-tight tracking-[0.02em]">{language === 'no' ? 'Komplett fra' : 'Complete RE:MIND from'} {formatNok(remindProduct.price, language)}</p>
                 <div className="mt-5 max-w-[32rem] lg:max-w-[300px]">
-                  <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.15em]">{language === 'no' ? 'DETTE FØLGER MED' : 'What’s included'}</p>
                   <p className="mt-2 text-[13px] leading-5 text-black/60">
-                    RE:MIND display · Your frame · Your matte · Charging cable · Setup guide
+                    {language === 'no' ? 'RE:MIND · Valgfri ramme · Valgfritt innlegg · Ladekabel · Oppstartsveiledning' : 'RE:MIND display · Your frame · Your matte · Charging cable · Setup guide'}
                   </p>
                 </div>
               </div>
@@ -183,7 +183,7 @@ export default async function ShopPage({
                 href={configureHref}
                 className="shop-button mt-8 w-full rounded bg-black px-8 py-3.5 text-sm font-medium tracking-wide text-white sm:w-fit"
               >
-                MAKE IT YOURS
+                {language === 'no' ? 'TILPASS DIN STIL' : 'MAKE IT YOURS'}
               </a>
             </div>
           </section></ShopReveal>
