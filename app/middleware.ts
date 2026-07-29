@@ -52,6 +52,15 @@ function createSupabaseServerClient(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
 
+  const isShopExperience = pathname.startsWith('/shop') ||
+    (['/terms', '/privacy', '/cookies'].includes(pathname) && searchParams.get('from') === 'shop')
+  const savedShopLanguage = request.cookies.get('remind-shop-lang')?.value
+  if (isShopExperience && !searchParams.has('lang') && (savedShopLanguage === 'no' || savedShopLanguage === 'en')) {
+    const url = request.nextUrl.clone()
+    url.searchParams.set('lang', savedShopLanguage)
+    return NextResponse.redirect(url)
+  }
+
   if (shouldRedirectDesktopRootToShop(request)) {
     const url = request.nextUrl.clone()
     url.pathname = '/shop'
@@ -62,7 +71,8 @@ export async function middleware(request: NextRequest) {
   const isLogin = pathname === '/login'
   const isPublic =
     isLogin ||
-    pathname === '/shop' ||
+    pathname.startsWith('/shop') ||
+    (['/terms', '/privacy', '/cookies'].includes(pathname) && searchParams.get('from') === 'shop') ||
     pathname === '/waitlist' ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/favicon.ico' ||
