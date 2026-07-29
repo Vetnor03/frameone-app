@@ -48,9 +48,9 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000, langu
               : `Free shipping over ${topShipping}`}
           </span>
           <span className="h-3 w-px bg-white/35" aria-hidden />
-          <span>30 day returns</span>
+          <span>{language === "no" ? "30 dager åpent kjøp" : "30 day returns"}</span>
           <span className="h-3 w-px bg-white/35" aria-hidden />
-          <span>5 year warranty</span>
+          <span>{language === "no" ? "5 års garanti" : "5 year warranty"}</span>
         </div>
       </div>
 
@@ -126,7 +126,26 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000, langu
 
 export function ShopFooter({ language, shippingThreshold = formatNok(1000, language) }: ShopChromeProps) {
   const shopHref = (path: string) => `${path}?lang=${language}`;
-  const footerBenefits = [
+  const footerBenefits = language === "no" ? [
+    {
+      title: "Gratis frakt",
+      body: `For bestillinger over ${shippingThreshold}`,
+      iconSrc: "/shop/icons/footer/free-shipping.png",
+      iconAlt: "Delivery truck icon",
+    },
+    {
+      title: "30 dager åpent kjøp",
+      body: "Krever ingen begrunnelse",
+      iconSrc: "/shop/icons/footer/returns-30-day.png",
+      iconAlt: "Circular arrows return icon",
+    },
+    {
+      title: "5 års garanti",
+      body: "Ingen bekymringer",
+      iconSrc: "/shop/icons/footer/warranty-2-year.png",
+      iconAlt: "Shield warranty icon",
+    },
+  ] : [
     {
       title: "FREE SHIPPING",
       body: `On orders over ${shippingThreshold}`,

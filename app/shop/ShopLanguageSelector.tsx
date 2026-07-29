@@ -3,6 +3,10 @@
 type Props = { language: 'en' | 'no' }
 
 export default function ShopLanguageSelector({ language }: Props) {
+  const labels = language === 'no'
+    ? { en: 'Engelsk', no: 'Norsk' }
+    : { en: 'English', no: 'Norwegian' }
+
   return (
     <select
       aria-label="Language"
@@ -15,8 +19,8 @@ export default function ShopLanguageSelector({ language }: Props) {
         window.location.href = `${url.pathname}${url.search}${url.hash}`
       }}
     >
-      <option value="en">English</option>
-      <option value="no">Norwegian</option>
+      <option value="en">{labels.en}</option>
+      <option value="no">{labels.no}</option>
     </select>
   )
 }
