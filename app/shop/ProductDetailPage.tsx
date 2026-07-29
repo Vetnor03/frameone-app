@@ -6,14 +6,15 @@ import { PlaceholderFigure, type CatalogItem } from './CatalogPage'
 import { addCartItem } from './cart'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import FrameFavouriteButton from './FrameFavouriteButton'
-import { formatNok, frameAvailabilityLabels } from './productData'
+import { formatNok, frameAvailabilityLabels, type ShopLocale } from './productData'
 
 type ProductDetailPageProps = {
   kind: 'frames' | 'mattes'
   item: CatalogItem
+  language: ShopLocale
 }
 
-export default function ProductDetailPage({ kind, item }: ProductDetailPageProps) {
+export default function ProductDetailPage({ kind, item, language }: ProductDetailPageProps) {
   const singular = kind === 'frames' ? 'frame' : 'matte'
   const [added, setAdded] = useState(false)
   const comingSoon = item.availability === 'coming-soon'
@@ -36,9 +37,9 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]" style={{ marginTop: 'calc(env(safe-area-inset-top) * -1)', paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="shop-shell mx-auto w-full max-w-[2560px] bg-white 2xl:max-w-[1720px]">
-        <ShopHeader language="en" activeSection={kind} />
+        <ShopHeader language={language} activeSection={kind} />
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-14">
-          <a href={`/shop/${kind}`} className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black">
+          <a href={`/shop/${kind}?lang=${language}`} className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black">
             <span aria-hidden className="text-base transition-transform group-hover:-translate-x-0.5">←</span>
             All {kind}
           </a>
@@ -56,7 +57,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">RE:MIND {singular}</p>
               {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
               <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{item.name}</h1>
-              <p className="mt-5 text-xl">{formatNok(item.price)}</p>
+              <p className="mt-5 text-xl">{formatNok(item.price, language)}</p>
               <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{item.subtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
 
               <div className="mt-7 border-y border-black/10 py-5">
@@ -83,7 +84,7 @@ export default function ProductDetailPage({ kind, item }: ProductDetailPageProps
             <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">Built to last</h2><p className="mt-2 text-sm leading-6 text-black/55">Durable materials chosen for everyday life at home.</p></div>
           </div>
         </section>
-        <ShopFooter language="en" />
+        <ShopFooter language={language} />
       </div>
     </main>
   )

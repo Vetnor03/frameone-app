@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import { ShopReveal } from '../ShopMotion'
 import { shopMetadata } from '../seo'
+import { pickShopLocale } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'About | RE:MIND',
@@ -10,7 +11,8 @@ export const metadata: Metadata = shopMetadata({
   path: '/shop/about',
 })
 
-export default function AboutPage() {
+export default async function AboutPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
+  const language = pickShopLocale((await searchParams)?.lang)
   return (
     <main
       className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#171512]"
@@ -20,11 +22,11 @@ export default function AboutPage() {
       }}
     >
       <div className="shop-shell mx-auto w-full max-w-[2560px] bg-[#f6f3ed] 2xl:max-w-[1720px]">
-        <ShopHeader language="en" />
+        <ShopHeader language={language} />
 
         <section className="mx-auto w-full max-w-[1200px] px-6 pb-16 pt-7 md:px-14 md:pb-24 md:pt-10" aria-labelledby="about-title">
           <a
-            href="/shop"
+            href={`/shop?lang=${language}`}
             className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 transition-colors hover:text-black focus-visible:text-black"
           >
             <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
@@ -101,7 +103,7 @@ export default function AboutPage() {
           </ShopReveal>
         </section>
 
-        <ShopFooter language="en" />
+        <ShopFooter language={language} />
       </div>
     </main>
   )

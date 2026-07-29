@@ -25,7 +25,7 @@ export default async function ConfigurePage({ searchParams }: { searchParams?: P
     >
       <div className="shop-shell w-full max-w-[2560px] mx-auto bg-white 2xl:max-w-[1720px]">
         <ShopHeader language={language} activeSection="configure" />
-        <Configurator initialFrameId={params?.frame} initialMatteId={params?.matte} />
+        <Configurator initialFrameId={params?.frame} initialMatteId={params?.matte} language={language} />
         <ShopFooter language={language} />
       </div>
     </main>

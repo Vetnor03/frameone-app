@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import ShopLegalPage from '../../components/ShopLegalPage'
 import { shopMetadata } from '../seo'
+import { formatNok, pickShopLocale } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'FAQ | RE:MIND',
@@ -10,7 +11,8 @@ export const metadata: Metadata = shopMetadata({
 
 const detailLinkClass = 'shop-footer-link font-medium text-black/80 underline decoration-black/25 underline-offset-4 hover:text-black'
 
-export default function FaqPage() {
+export default async function FaqPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
+  const language = pickShopLocale((await searchParams)?.lang)
   return (
     <ShopLegalPage
       title="Frequently asked questions"
@@ -22,7 +24,7 @@ export default function FaqPage() {
         },
         {
           title: 'What comes with RE:MIND?',
-          text: 'A complete RE:MIND starts at 2 299 NOK and includes the RE:MIND display, one selected frame, one selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total, and additional styles can be purchased separately later.',
+          text: `A complete RE:MIND starts at ${formatNok(2299, language)} and includes the RE:MIND display, one selected frame, one selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total, and additional styles can be purchased separately later.`,
         },
         {
           title: 'How do I set it up?',

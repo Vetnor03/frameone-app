@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
 import { shopMetadata } from '../seo'
+import { pickShopLocale } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'Contact | RE:MIND',
@@ -8,9 +9,11 @@ export const metadata: Metadata = shopMetadata({
   path: '/shop/contact',
 })
 
-export default function ContactPage() {
+export default async function ContactPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
+  const language = pickShopLocale((await searchParams)?.lang)
   return (
     <CompanyPageShell
+      language={language}
       eyebrow="Contact"
       title="We would love to hear from you."
       intro="Questions about RE:MIND, an order or a possible collaboration? Send a note and it will reach our small team in Stavanger."

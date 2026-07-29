@@ -163,7 +163,13 @@ export const shopMattes: ShopMatte[] = [
   availability: matteAvailability(String(id)),
 })))
 
-export function formatNok(value: number) {
+export type ShopLocale = 'en' | 'no'
+
+export function pickShopLocale(value?: string): ShopLocale {
+  return value === 'no' ? 'no' : 'en'
+}
+
+export function formatNok(value: number, locale: ShopLocale = 'en') {
   const amount = value.toLocaleString('nb-NO').replace(/[\u00a0\u202f ]/g, '\u00a0')
-  return `${amount}\u00a0NOK`
+  return `${amount}\u00a0${locale === 'no' ? 'kr' : 'NOK'}`
 }

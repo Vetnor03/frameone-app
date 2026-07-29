@@ -2,6 +2,7 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
 import { shopMetadata } from '../seo'
+import { pickShopLocale } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'Press | RE:MIND',
@@ -15,9 +16,11 @@ const pressImages = [
   { src: '/shop/products/device/Dark.png', alt: 'RE:MIND device in its dark finish', label: 'Dark device' },
 ]
 
-export default function PressPage() {
+export default async function PressPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
+  const language = pickShopLocale((await searchParams)?.lang)
   return (
     <CompanyPageShell
+      language={language}
       eyebrow="Press room"
       title="Meet RE:MIND."
       intro="A calm digital frame from Stavanger, Norway—created to put useful information in view and help people spend less time reaching for their phones."

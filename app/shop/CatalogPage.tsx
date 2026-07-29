@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import FrameFavouriteButton from './FrameFavouriteButton'
-import { formatNok, frameAvailabilityLabels, type FrameAvailability } from './productData'
+import { formatNok, frameAvailabilityLabels, type FrameAvailability, type ShopLocale } from './productData'
 
 export type CatalogItem = {
   id: string
@@ -17,6 +17,7 @@ type CatalogPageProps = {
   kind: 'frames' | 'mattes'
   title: string
   items: CatalogItem[]
+  language: ShopLocale
 }
 
 export function PlaceholderFigure({ colors, kind }: Pick<CatalogItem, 'colors'> & { kind: CatalogPageProps['kind'] }) {
@@ -38,8 +39,7 @@ export function PlaceholderFigure({ colors, kind }: Pick<CatalogItem, 'colors'> 
   )
 }
 
-export default function CatalogPage({ kind, title, items }: CatalogPageProps) {
-  const language = 'en' as const
+export default function CatalogPage({ kind, title, items, language }: CatalogPageProps) {
 
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-white text-[#141414]" style={{ marginTop: 'calc(env(safe-area-inset-top) * -1)', paddingTop: 'env(safe-area-inset-top)' }}>
@@ -48,7 +48,7 @@ export default function CatalogPage({ kind, title, items }: CatalogPageProps) {
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-10">
           <div className="mb-7 border-b border-black/10 pb-6">
             <a
-              href="/shop"
+              href={`/shop?lang=${language}`}
               className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
             >
               <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
@@ -68,13 +68,13 @@ export default function CatalogPage({ kind, title, items }: CatalogPageProps) {
                 key={item.id}
                 className="shop-card relative overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]"
               >
-                <a href={`/shop/${kind}/${encodeURIComponent(item.id)}`} className="block focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black" aria-label={`View ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}>
+                <a href={`/shop/${kind}/${encodeURIComponent(item.id)}?lang=${language}`} className="block focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black" aria-label={`View ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}>
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eeeae5]">
                   {item.imageSrc ? <Image src={item.imageSrc} alt={`${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`} fill className="object-cover" sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw" /> : <PlaceholderFigure colors={item.colors} kind={kind} />}
                 </div>
                 <div className="flex items-start justify-between gap-3 px-3 pt-3 text-lg leading-[1.25]">
                   <h2 className="max-w-[14ch] [text-wrap:balance]">{item.name}</h2>
-                  <span className="shrink-0">{formatNok(item.price)}</span>
+                  <span className="shrink-0">{formatNok(item.price, language)}</span>
                 </div>
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{item.subtitle}</p>
                 <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${comingSoon ? 'pr-14' : ''}`}>

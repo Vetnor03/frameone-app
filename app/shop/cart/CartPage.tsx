@@ -6,12 +6,12 @@ import { isBundleCartItem, isConfiguredCartItem, readCart, removeCartItem, SHOP_
 import type { CartItem } from '../cart'
 import { PlaceholderFigure } from '../CatalogPage'
 import { ConfigurationPlaceholder } from '../configure/Configurator'
-import { formatNok } from '../productData'
+import { formatNok, type ShopLocale } from '../productData'
 import { SHOP_CURRENCY, trackShopEvent } from '../analytics'
 
 const FREE_SHIPPING_THRESHOLD = 1000
 
-export default function CartPage() {
+export default function CartPage({ language }: { language: ShopLocale }) {
   const [items, setItems] = useState<CartItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [discountCode, setDiscountCode] = useState('')
@@ -69,7 +69,7 @@ export default function CartPage() {
           <div className="mt-10 border border-black/10 bg-white px-6 py-16 text-center">
             <h2 className="text-xl font-medium">Your cart is empty</h2>
             <p className="mt-2 text-sm text-black/55">Build a RE:MIND that feels right at home.</p>
-            <a href="/shop/configure" className="shop-button mt-7 inline-block rounded-sm bg-black px-8 py-3 text-sm font-medium text-white">BUILD YOUR RE:MIND</a>
+            <a href={`/shop/configure?lang=${language}`} className="shop-button mt-7 inline-block rounded-sm bg-black px-8 py-3 text-sm font-medium text-white">BUILD YOUR RE:MIND</a>
           </div>
         ) : (
           <div className="mt-9 grid items-start gap-8 lg:grid-cols-[1fr_360px]">
@@ -111,11 +111,11 @@ export default function CartPage() {
                         <button type="button" className="ml-1 text-xs text-black/55 underline underline-offset-4 hover:text-black" onClick={() => removeCartItem(item.id)}>Remove</button>
                       </div>
                     </div>
-                    <p className="mt-5 whitespace-nowrap font-medium sm:mt-0">{formatNok(item.totalPrice * item.quantity)}</p>
+                    <p className="mt-5 whitespace-nowrap font-medium sm:mt-0">{formatNok(item.totalPrice * item.quantity, language)}</p>
                   </div>
                 </article>
               ))}
-              <a href="/shop" className="inline-block pt-2 text-sm underline underline-offset-4">Continue shopping</a>
+              <a href={`/shop?lang=${language}`} className="inline-block pt-2 text-sm underline underline-offset-4">Continue shopping</a>
             </div>
 
             <aside className="border border-black/10 bg-white p-6 sm:p-7">
@@ -129,11 +129,11 @@ export default function CartPage() {
                 {discountMessage && <p role="status" className={`mt-2 text-xs ${discountApplied ? 'text-emerald-700' : 'text-red-700'}`}>{discountMessage}</p>}
               </div>
               <dl className="space-y-3 border-b border-black/10 py-6 text-sm">
-                <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatNok(subtotal)}</dd></div>
-                {discount > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount</dt><dd>− {formatNok(discount)}</dd></div>}
-                <div className="flex justify-between"><dt>Shipping</dt><dd>{shipping === 0 ? 'Free' : formatNok(shipping)}</dd></div>
+                <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatNok(subtotal, language)}</dd></div>
+                {discount > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount</dt><dd>− {formatNok(discount, language)}</dd></div>}
+                <div className="flex justify-between"><dt>Shipping</dt><dd>{shipping === 0 ? 'Free' : formatNok(shipping, language)}</dd></div>
               </dl>
-              <div className="flex items-baseline justify-between py-6"><span className="font-medium">Total</span><strong className="text-xl font-medium">{formatNok(total)}</strong></div>
+              <div className="flex items-baseline justify-between py-6"><span className="font-medium">Total</span><strong className="text-xl font-medium">{formatNok(total, language)}</strong></div>
               <button type="button" className="shop-button w-full rounded-sm bg-black py-3.5 text-sm font-medium tracking-[0.06em] text-white">CHECKOUT</button>
               <p className="mt-4 text-center text-xs text-black/45">Taxes included. Secure checkout.</p>
             </aside>

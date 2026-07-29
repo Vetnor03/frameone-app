@@ -34,8 +34,9 @@ const socialLinks = [
   },
 ] as const;
 
-export function ShopHeader({ language, shippingThreshold = formatNok(1000), activeSection }: ShopChromeProps) {
+export function ShopHeader({ language, shippingThreshold = formatNok(1000, language), activeSection }: ShopChromeProps) {
   const topShipping = shippingThreshold;
+  const shopHref = (path: string) => `${path}?lang=${language}`;
 
   return (
     <div className="sticky top-0 z-50">
@@ -57,31 +58,31 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
         <div className="mx-auto max-w-[1200px] px-6 py-6 md:px-14">
           <div className="relative flex items-center justify-between md:justify-center">
             <a
-              href="https://re-mind.no/shop"
+              href={shopHref("/shop")}
               className="text-[29px] font-medium tracking-[0.28em] md:absolute md:left-0"
             >
               RE:MIND
             </a>
             <nav className="hidden items-center justify-center gap-10 text-sm uppercase tracking-[0.09em] md:flex shop-nav">
-              <a href="/shop/configure" className={`pb-1 ${activeSection === "configure" ? "border-b-2 border-black" : ""}`}>
+              <a href={shopHref("/shop/configure")} className={`pb-1 ${activeSection === "configure" ? "border-b-2 border-black" : ""}`}>
                 RE:MIND
               </a>
-              <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
+              <a href={shopHref("/shop/frames")} className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
                 Frames
               </a>
-              <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
+              <a href={shopHref("/shop/mattes")} className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
                 Mattes
               </a>
-              <a href="/shop/bundles" className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
+              <a href={shopHref("/shop/bundles")} className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
                 Bundles
               </a>
-              <a href="/shop/about" className="pb-1">
+              <a href={shopHref("/shop/about")} className="pb-1">
                 About
               </a>
             </nav>
             <div className="absolute right-0 flex items-center md:right-0">
               <a
-                href="/shop/cart"
+                href={shopHref("/shop/cart")}
                 aria-label="Open shopping cart"
                 className="shop-icon-button relative inline-flex items-center justify-center p-1 text-black/75"
               >
@@ -101,19 +102,19 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
             aria-label="Shop pages"
             className="shop-nav flex items-center justify-between gap-2 pt-5 text-[10px] uppercase tracking-[0.06em] md:hidden"
           >
-            <a href="/shop/configure" className={`pb-1 ${activeSection === "configure" ? "border-b-2 border-black" : ""}`}>
+            <a href={shopHref("/shop/configure")} className={`pb-1 ${activeSection === "configure" ? "border-b-2 border-black" : ""}`}>
               RE:MIND
             </a>
-            <a href="/shop/frames" className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
+            <a href={shopHref("/shop/frames")} className={`pb-1 ${activeSection === "frames" ? "border-b-2 border-black" : ""}`}>
               Frames
             </a>
-            <a href="/shop/mattes" className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
+            <a href={shopHref("/shop/mattes")} className={`pb-1 ${activeSection === "mattes" ? "border-b-2 border-black" : ""}`}>
               Mattes
             </a>
-            <a href="/shop/bundles" className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
+            <a href={shopHref("/shop/bundles")} className={`pb-1 ${activeSection === "bundles" ? "border-b-2 border-black" : ""}`}>
               Bundles
             </a>
-            <a href="/shop/about" className="pb-1">
+            <a href={shopHref("/shop/about")} className="pb-1">
               About
             </a>
           </nav>
@@ -123,7 +124,8 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000), acti
   );
 }
 
-export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: ShopChromeProps) {
+export function ShopFooter({ language, shippingThreshold = formatNok(1000, language) }: ShopChromeProps) {
+  const shopHref = (path: string) => `${path}?lang=${language}`;
   const footerBenefits = [
     {
       title: "FREE SHIPPING",
@@ -199,16 +201,16 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
         <div>
           <p className="mb-3 font-medium">SHOP</p>
           <div className="space-y-1.5 leading-[1.4]">
-            <a href="/shop/configure" className="shop-footer-link block">
+            <a href={shopHref("/shop/configure")} className="shop-footer-link block">
               RE:MIND
             </a>
-            <a href="/shop/frames" className="shop-footer-link block">
+            <a href={shopHref("/shop/frames")} className="shop-footer-link block">
               Frames
             </a>
-            <a href="/shop/mattes" className="shop-footer-link block">
+            <a href={shopHref("/shop/mattes")} className="shop-footer-link block">
               Mattes
             </a>
-            <a href="/shop/bundles" className="shop-footer-link block">
+            <a href={shopHref("/shop/bundles")} className="shop-footer-link block">
               Bundles
             </a>
           </div>
@@ -216,16 +218,16 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
         <div>
           <p className="mb-3 font-medium">SUPPORT</p>
           <div className="space-y-1.5 leading-[1.4]">
-            <a href="/shop/faq" className="shop-footer-link block">
+            <a href={shopHref("/shop/faq")} className="shop-footer-link block">
               FAQ
             </a>
-            <a href="/shop/shipping" className="shop-footer-link block">
+            <a href={shopHref("/shop/shipping")} className="shop-footer-link block">
               Shipping
             </a>
-            <a href="/shop/returns" className="shop-footer-link block">
+            <a href={shopHref("/shop/returns")} className="shop-footer-link block">
               Returns
             </a>
-            <a href="/shop/warranty" className="shop-footer-link block">
+            <a href={shopHref("/shop/warranty")} className="shop-footer-link block">
               Warranty
             </a>
           </div>
@@ -233,16 +235,16 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000) }: Sh
         <div>
           <p className="mb-3 font-medium">COMPANY</p>
           <div className="space-y-1.5 leading-[1.4]">
-            <a href="/shop/about" className="shop-footer-link block">
+            <a href={shopHref("/shop/about")} className="shop-footer-link block">
               About
             </a>
-            <a href="/shop/sustainability" className="shop-footer-link block">
+            <a href={shopHref("/shop/sustainability")} className="shop-footer-link block">
               Sustainability
             </a>
-            <a href="/shop/contact" className="shop-footer-link block">
+            <a href={shopHref("/shop/contact")} className="shop-footer-link block">
               Contact
             </a>
-            <a href="/shop/press" className="shop-footer-link block">
+            <a href={shopHref("/shop/press")} className="shop-footer-link block">
               Press
             </a>
           </div>

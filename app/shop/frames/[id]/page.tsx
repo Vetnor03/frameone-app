@@ -3,8 +3,9 @@ import { notFound } from 'next/navigation'
 import ProductDetailPage from '../../ProductDetailPage'
 import { frameCatalog } from '../../catalogData'
 import { shopMetadata } from '../../seo'
+import { pickShopLocale } from '../../productData'
 
-type PageProps = { params: Promise<{ id: string }> }
+type PageProps = { params: Promise<{ id: string }>; searchParams?: Promise<{ lang?: string }> }
 
 export function generateStaticParams() {
   return frameCatalog.map((item) => ({ id: item.id }))
@@ -20,9 +21,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }) : {}
 }
 
-export default async function FrameDetailRoute({ params }: PageProps) {
+export default async function FrameDetailRoute({ params, searchParams }: PageProps) {
   const { id } = await params
   const item = frameCatalog.find((candidate) => candidate.id === id)
   if (!item) notFound()
-  return <ProductDetailPage kind="frames" item={item} />
+  return <ProductDetailPage kind="frames" item={item} language={pickShopLocale((await searchParams)?.lang)} />
 }

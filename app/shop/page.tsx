@@ -37,7 +37,7 @@ export default async function ShopPage({
   const resolvedSearchParams = await searchParams
   const language = pickLang(resolvedSearchParams?.lang)
   const frameCardsLocalized = shopFrames.filter((frame) => frame.imageSrc)
-  const topShipping = formatNok(1000)
+  const topShipping = formatNok(1000, language)
   const configureHref = `/shop/configure?lang=${language}`
 
   const productStructuredData = {
@@ -163,7 +163,7 @@ export default async function ShopPage({
             <div className="relative z-10 flex flex-col items-center justify-center text-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[300px]">
               <div>
                 <h2 className="text-[30px] font-medium leading-none tracking-[0.12em] sm:text-[34px]">RE:MIND</h2>
-                <p className="mt-5 text-[19px] leading-tight tracking-[0.02em]">Complete RE:MIND from {formatNok(remindProduct.price)}</p>
+                <p className="mt-5 text-[19px] leading-tight tracking-[0.02em]">Complete RE:MIND from {formatNok(remindProduct.price, language)}</p>
                 <div className="mt-5 max-w-[32rem] lg:max-w-[300px]">
                   <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
                   <p className="mt-2 text-[13px] leading-5 text-black/60">
@@ -183,7 +183,7 @@ export default async function ShopPage({
           <ShopReveal><section id="frames" className="pt-8 pb-12 md:pt-7 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
             <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
-            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href="/shop/frames">View all frames →</a>
+            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href={`/shop/frames?lang=${language}`}>View all frames →</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCardsLocalized.map((card) => (
@@ -204,7 +204,7 @@ export default async function ShopPage({
                 )}
                 <div className="px-3 pt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
                   <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
-                  {card.price !== null && <span>{formatNok(card.price)}</span>}
+                  {card.price !== null && <span>{formatNok(card.price, language)}</span>}
                 </div>
                 <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
                 <div className="mt-3 px-3 pb-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>
@@ -250,7 +250,7 @@ export default async function ShopPage({
               <br />
               your space and reduce glare.
             </p>
-            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href="/shop/mattes">SHOP MATTES</a>
+            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href={`/shop/mattes?lang=${language}`}>SHOP MATTES</a>
           </div>
         </section></ShopReveal>
 

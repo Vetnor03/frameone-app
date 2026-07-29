@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from 'react'
 import { addCartItem } from '../cart'
 import { configurationTotal, optionUpgrade } from '../configuratorLogic'
-import { displayOptions, formatNok, isFramePurchasable, isMattePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
+import { displayOptions, formatNok, isFramePurchasable, isMattePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode, type ShopLocale } from '../productData'
 import styles from './Configurator.module.css'
 import { SHOP_CURRENCY, trackShopEvent } from '../analytics'
 
@@ -131,7 +131,7 @@ function ProductStory({ className = '' }: { className?: string }) {
   )
 }
 
-export default function Configurator({ initialFrameId, initialMatteId }: { initialFrameId?: string; initialMatteId?: string }) {
+export default function Configurator({ initialFrameId, initialMatteId, language }: { initialFrameId?: string; initialMatteId?: string; language: ShopLocale }) {
   const [frameId, setFrameId] = useState(() => purchasableFrames.some((item) => item.id === initialFrameId) ? initialFrameId! : purchasableFrames[0].id)
   const [matteId, setMatteId] = useState(() => purchasableMattes.some((item) => item.id === initialMatteId) ? initialMatteId! : purchasableMattes[0].id)
   const [selectedDisplay, setSelectedDisplay] = useState<DisplayMode>('dark')
@@ -201,7 +201,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
     <div className={styles.desktopLayout}>
       <section className={`border-b border-black/10 bg-white ${styles.previewSection}`}>
         <div className={`mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14 ${styles.previewInner}`}>
-          <a href="/shop" className={`group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black ${styles.backLink}`}>
+          <a href={`/shop?lang=${language}`} className={`group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black ${styles.backLink}`}>
             <span aria-hidden className="text-base transition-transform group-hover:-translate-x-0.5">←</span>
             Back to home
           </a>
@@ -268,10 +268,10 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
           <div className={styles.summaryCard}>
             <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">YOUR RE:MIND</h2>
             <dl className="space-y-3 text-[15px]">
-              <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price)}</dd></div>
-              {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frame.name}</dt><dd>+{formatNok(frameUpgrade)}</dd></div>}
-              {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade)}</dd></div>}
-              <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total)}</dd></div>
+              <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price, language)}</dd></div>
+              {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frame.name}</dt><dd>+{formatNok(frameUpgrade, language)}</dd></div>}
+              {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade, language)}</dd></div>}
+              <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total, language)}</dd></div>
             </dl>
             <div className="mt-7 border-t border-black/10 pt-5">
               <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
