@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import { ShopReveal } from '../ShopMotion'
 import { shopMetadata } from '../seo'
@@ -38,8 +39,24 @@ export default function AboutPage() {
                   <h1 id="about-title" className="mt-4 max-w-[8ch] text-[38px] font-medium leading-[1.02] tracking-[-0.045em] text-[#15120f] sm:text-[48px] lg:text-[56px]">
                     A little note
                   </h1>
-                  <div className="mt-8 h-px w-16 bg-black/20" aria-hidden />
-                  <p className="mt-5 text-sm leading-6 text-black/55">From Vetle,<br />founder of RE:MIND</p>
+                  <div className="mt-8 h-px w-full bg-black/15" aria-hidden />
+                  <div className="mt-7 flex items-center gap-4">
+                    <div className="relative size-[68px] shrink-0 overflow-hidden rounded-full" aria-hidden>
+                      <Image
+                        src="/shop/headshot.jpg"
+                        alt=""
+                        fill
+                        sizes="68px"
+                        className="scale-[1.4] object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[17px] leading-tight text-[#241e18]">From Vetle</p>
+                      <p className="mt-2 text-[9px] font-medium uppercase leading-tight tracking-[0.08em] text-[#a77c4f]">
+                        Founder of RE:MIND
+                      </p>
+                    </div>
+                  </div>
                 </header>
 
                 <div className="p-7 sm:p-10 lg:p-14">
