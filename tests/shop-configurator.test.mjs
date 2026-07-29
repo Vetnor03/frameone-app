@@ -186,6 +186,18 @@ test('direct selectors update only their selected dimension', () => {
   assert.match(configurator, /setMatteId\(event\.target\.value\); setAdded\(false\)/)
 })
 
+test('every purchasable matte has a distinct configurator preview appearance', () => {
+  const purchasableMatteIds = [
+    'classic-white', 'soft-black', 'warm-beige', 'cocoa-brown', 'sage-green',
+    'white---black', 'black---white', 'mist-grey', 'dusty-blue', 'blush-pink',
+    'ochre', 'forest-green', 'burgundy', 'natural-linen',
+  ]
+
+  for (const id of purchasableMatteIds) {
+    assert.match(configurator, new RegExp(`['"]?${id}['"]?: \\{ background:`))
+  }
+})
+
 test('pricing charges only upgrades over the cheapest included options', () => {
   assert.match(productData, /price: number \| null/)
   assert.match(logic, /selectedPrice - Math\.min/)

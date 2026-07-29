@@ -18,6 +18,20 @@ const frameAppearances: Record<string, CSSProperties> = {
 }
 
 const matteAppearances: Record<string, CSSProperties> = {
+  'classic-white': { background: '#f6f4ef' },
+  'soft-black': { background: '#242424' },
+  'warm-beige': { background: '#d8c7b4' },
+  'cocoa-brown': { background: '#62483b' },
+  'sage-green': { background: '#87927e' },
+  'white---black': { background: 'linear-gradient(135deg, #f4f2ed 0 50%, #282828 50%)' },
+  'black---white': { background: 'linear-gradient(135deg, #252525 0 50%, #f0eee9 50%)' },
+  'mist-grey': { background: '#b9bdbe' },
+  'dusty-blue': { background: '#7f929f' },
+  'blush-pink': { background: '#cdaaa4' },
+  ochre: { background: '#b8863e' },
+  'forest-green': { background: '#344b3d' },
+  burgundy: { background: '#633b42' },
+  'natural-linen': { background: 'linear-gradient(90deg, #cbbba2, #e8dece 48%, #cbbba2)' },
   beige: { background: '#eee5d3' },
   black: { background: '#292927' },
   'black-white': { background: 'linear-gradient(135deg, #30302e 0 50%, #f0eee7 50%)' },
