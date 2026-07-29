@@ -183,7 +183,7 @@ export default async function ShopPage({
                 href={configureHref}
                 className="shop-button mt-8 w-full rounded bg-black px-8 py-3.5 text-sm font-medium tracking-wide text-white sm:w-fit"
               >
-                {language === 'no' ? 'TILPASS DIN STIL' : 'MAKE IT YOURS'}
+                {language === 'no' ? 'VELG STIL' : 'MAKE IT YOURS'}
               </a>
             </div>
           </section></ShopReveal>
