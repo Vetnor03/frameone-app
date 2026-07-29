@@ -96,7 +96,7 @@ export default async function ShopPage({
                   </>
                 )}
               </p>
-              <a className="shop-button mt-7 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-8" href={configureHref}>{language === 'no' ? 'UTFORSK MULIGHETENE' : 'SHOP FRAMES'}</a>
+              <a className="shop-button mt-7 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-8" href={configureHref}>{language === 'no' ? 'FINN DIN STIL' : 'SHOP FRAMES'}</a>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"

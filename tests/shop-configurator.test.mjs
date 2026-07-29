@@ -22,7 +22,7 @@ test('configure route and both shop entry points are present', () => {
   assert.match(configurator, /BUILD YOUR RE:MIND/)
   assert.match(configurator, /Choose a frame and matte to make RE:MIND feel at home in your space\./)
   assert.match(shopPage, /const configureHref = `\/shop\/configure\?lang=\$\{language\}`/)
-  assert.match(shopPage, /href=\{configureHref\}>\{language === 'no' \? 'UTFORSK MULIGHETENE' : 'SHOP FRAMES'\}/)
+  assert.match(shopPage, /href=\{configureHref\}>\{language === 'no' \? 'FINN DIN STIL' : 'SHOP FRAMES'\}/)
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
 })
 
@@ -35,7 +35,7 @@ test('shop hero localizes only its Norwegian copy', () => {
   assert.match(shopPage, /Påminnelser, vær og det som skjer –/)
   assert.match(shopPage, /samlet på ett sted, med mindre/)
   assert.match(shopPage, /skjermtid\./)
-  assert.match(shopPage, /language === 'no' \? 'UTFORSK MULIGHETENE' : 'SHOP FRAMES'/)
+  assert.match(shopPage, /language === 'no' \? 'FINN DIN STIL' : 'SHOP FRAMES'/)
   assert.match(shopPage, /language === 'no' \? 'Tilpass på sekunder' : 'Swap in seconds'/)
   assert.match(shopPage, /language === 'no' \? 'Bytt ramme og uttrykk når du vil\.' : 'Satisfying click\. Designed for ease\.'/)
   assert.match(shopPage, /Reminders, weather and events/)
