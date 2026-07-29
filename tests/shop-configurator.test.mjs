@@ -30,7 +30,7 @@ test('shop hero localizes only its Norwegian copy', () => {
   assert.match(shopPage, /language === 'no' \? 'Designet for hjemmet\.' : 'Frames that'/)
   assert.match(shopPage, /language === 'no' \? 'max-w-\[18ch\]' : 'max-w-\[12\.4ch\]'/)
   assert.match(shopPage, /language === 'no' \? 'block max-w-\[12\.4ch\]' : 'block'/)
-  assert.match(shopPage, /language === 'no' \? 'mt-\[0\.22em\] block text-\[0\.76em\] font-normal leading-\[1\.08\] tracking-\[-0\.02em\] md:whitespace-nowrap' : 'block'/)
+  assert.match(shopPage, /language === 'no' \? 'mt-\[0\.22em\] block text-\[0\.71em\] font-normal leading-\[1\.08\] tracking-\[-0\.02em\] md:whitespace-nowrap' : 'block'/)
   assert.match(shopPage, /language === 'no' \? 'Skapt for hverdagen\.' : 'fit your life\.'/)
   assert.match(shopPage, /Påminnelser, vær og det som skjer –/)
   assert.match(shopPage, /samlet på ett sted, med mindre/)
