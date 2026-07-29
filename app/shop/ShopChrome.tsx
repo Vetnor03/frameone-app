@@ -198,11 +198,23 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
         <div className="pr-4 lg:pr-10">
           <p className="mb-3 font-bold tracking-[0.2em]">RE:MIND</p>
           <p className="max-w-[34ch] leading-[1.55] text-black/65">
-            RE:MIND gives you what matters,
-            <br />
-            beautifully displayed. Less screen time.
-            <br />
-            More presence.
+            {language === "no" ? (
+              <>
+                Det du trenger, når du trenger det.
+                <br />
+                Tilpasset deg og
+                <br />
+                din hverdag.
+              </>
+            ) : (
+              <>
+                RE:MIND gives you what matters,
+                <br />
+                beautifully displayed. Less screen time.
+                <br />
+                More presence.
+              </>
+            )}
           </p>
           <div className="mt-6 flex items-center gap-5">
             {socialLinks.map((item) => (
