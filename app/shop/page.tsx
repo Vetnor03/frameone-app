@@ -236,7 +236,7 @@ export default async function ShopPage({
             className="absolute inset-0 hidden bg-[linear-gradient(90deg,#f5f2ee_0%,#f5f2ee_34%,rgba(245,242,238,0.92)_39%,rgba(245,242,238,0.58)_46%,rgba(245,242,238,0)_54%)] md:block"
           />
           <div className="relative z-10 max-w-[520px]">
-            <p className="text-sm uppercase tracking-[0.09em]">{language === 'no' ? 'Innlegg' : 'Mattes'}</p>
+            <p className="text-sm uppercase tracking-[0.09em]">{language === 'no' ? 'INNLEGG' : 'Mattes'}</p>
             <div className="-mx-8 mt-4 overflow-hidden md:hidden">
               <Image
                 src="/shop/mattes-hero.png"
@@ -249,16 +249,12 @@ export default async function ShopPage({
               />
             </div>
             <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
-              {language === 'no' ? 'Endre uttrykket.' : 'Change the feel.'}
-              <br />
-              {language === 'no' ? 'Behold rammen.' : 'Not the frame.'}
+              {language === 'no' ? 'Gi rammen et nytt uttrykk.' : <>Change the feel.<br />Not the frame.</>}
             </h2>
             <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
-              {language === 'no' ? 'Velg innlegg som passer rommet ditt' : 'Choose the perfect matte to match'}
-              <br />
-              {language === 'no' ? 'og demper gjenskinn.' : 'your space and reduce glare.'}
+              {language === 'no' ? 'Et innlegg for hvert rom og hver stil.' : <>Choose the perfect matte to match<br />your space and reduce glare.</>}
             </p>
-            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href={`/shop/mattes?lang=${language}`}>{language === 'no' ? 'SE INNLEGG' : 'SHOP MATTES'}</a>
+            <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href={`/shop/mattes?lang=${language}`}>{language === 'no' ? 'SE UTVALGET' : 'SHOP MATTES'}</a>
           </div>
         </section></ShopReveal>
 
