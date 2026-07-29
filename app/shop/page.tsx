@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import { ShopFadeImage, ShopReveal } from './ShopMotion'
-import { formatNok, remindProduct, shopFrames } from './productData'
+import { formatNok, frameDisplayName, frameDisplaySubtitle, remindProduct, shopFrames } from './productData'
 import type { Metadata } from 'next'
 import { SHOP_DESCRIPTION, shopMetadata } from './seo'
 
@@ -190,8 +190,8 @@ export default async function ShopPage({
 
           <ShopReveal><section id="frames" className="pt-8 pb-12 md:pt-7 md:pb-9">
           <div className="mb-6 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-            <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">Popular Frames</h2>
-            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href={`/shop/frames?lang=${language}`}>View all frames →</a>
+            <h2 className="text-[30px] font-semibold uppercase leading-[1.08] tracking-[0.06em]">{language === 'no' ? 'POPULÆRE RAMMER' : 'Popular Frames'}</h2>
+            <a className="shrink-0 text-sm uppercase tracking-[0.08em]" href={`/shop/frames?lang=${language}`}>{language === 'no' ? 'SE ALLE →' : 'View all frames →'}</a>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {frameCardsLocalized.map((card) => (
@@ -199,11 +199,11 @@ export default async function ShopPage({
                 key={card.id}
                 href={`/shop/frames/${encodeURIComponent(card.id)}?lang=${language}`}
                 className="shop-card block overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
-                aria-label={`Choose ${card.name} frame`}
+                aria-label={`Choose ${frameDisplayName(card.id, card.name, language)} frame`}
               >
                 {card.imageSrc ? (
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#faf9f7]">
-                    <ShopFadeImage src={card.imageSrc} alt={`${card.name} frame`} fill className="object-cover" />
+                    <ShopFadeImage src={card.imageSrc} alt={`${frameDisplayName(card.id, card.name, language)} frame`} fill className="object-cover" />
                   </div>
                 ) : (
                   <div className="p-3">
@@ -211,10 +211,10 @@ export default async function ShopPage({
                   </div>
                 )}
                 <div className="px-3 pt-3 flex items-start justify-between gap-3 text-lg leading-[1.25]">
-                  <h3 className="max-w-[14ch] [text-wrap:balance]">{card.name}</h3>
+                  <h3 className="max-w-[14ch] [text-wrap:balance]">{frameDisplayName(card.id, card.name, language)}</h3>
                   {card.price !== null && <span>{formatNok(card.price, language)}</span>}
                 </div>
-                <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{card.subtitle}</p>
+                <p className="mt-1 max-w-[20ch] px-3 text-sm leading-[1.4] text-black/60">{frameDisplaySubtitle(card.id, card.subtitle, language)}</p>
                 <div className="mt-3 px-3 pb-3 flex gap-2">{card.swatches.map((swatch) => <span key={swatch} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: swatch }} />)}</div>
               </a>
             ))}

@@ -6,7 +6,7 @@ import { PlaceholderFigure, type CatalogItem } from './CatalogPage'
 import { addCartItem } from './cart'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import FrameFavouriteButton from './FrameFavouriteButton'
-import { formatNok, frameAvailabilityLabels, type ShopLocale } from './productData'
+import { formatNok, frameAvailabilityLabels, frameDisplayName, frameDisplaySubtitle, type ShopLocale } from './productData'
 
 type ProductDetailPageProps = {
   kind: 'frames' | 'mattes'
@@ -15,6 +15,8 @@ type ProductDetailPageProps = {
 }
 
 export default function ProductDetailPage({ kind, item, language }: ProductDetailPageProps) {
+  const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : item.name
+  const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : item.subtitle
   const singular = kind === 'frames' ? 'frame' : 'matte'
   const [added, setAdded] = useState(false)
   const comingSoon = item.availability === 'coming-soon'
@@ -47,7 +49,7 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
           <div className="mt-6 grid gap-8 md:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] md:items-center md:gap-14 lg:gap-20">
             <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-[#eeeae5] shadow-[0_14px_34px_rgba(0,0,0,0.08)]">
               {item.imageSrc ? (
-                <Image src={item.imageSrc} alt={`${item.name} ${singular}`} fill priority className="object-cover" sizes="(min-width: 768px) 55vw, 100vw" />
+                <Image src={item.imageSrc} alt={`${displayName} ${singular}`} fill priority className="object-cover" sizes="(min-width: 768px) 55vw, 100vw" />
               ) : (
                 <PlaceholderFigure colors={item.colors} kind={kind} />
               )}
@@ -56,15 +58,15 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">RE:MIND {singular}</p>
               {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
-              <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{item.name}</h1>
+              <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{displayName}</h1>
               <p className="mt-5 text-xl">{formatNok(item.price, language)}</p>
-              <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{item.subtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
+              <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{displaySubtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
 
               <div className="mt-7 border-y border-black/10 py-5">
                 <p className="text-xs font-medium uppercase tracking-[0.14em]">Finish</p>
                 <div className="mt-3 flex items-center gap-3">
                   {item.colors.map((color) => <span key={color} className="h-6 w-6 rounded-full border border-black/15" style={{ backgroundColor: color }} />)}
-                  <span className="text-sm text-black/55">{item.name}</span>
+                  <span className="text-sm text-black/55">{displayName}</span>
                 </div>
               </div>
 
@@ -74,7 +76,7 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
                   <FrameFavouriteButton frameId={item.id} frameName={item.name} />
                 </div>
               ) : <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>}
-              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${item.name} added to cart.` : comingSoon ? 'Not yet available to purchase.' : `The RE:MIND display is sold separately.`}</p>
+              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : comingSoon ? 'Not yet available to purchase.' : `The RE:MIND display is sold separately.`}</p>
             </div>
           </div>
 
