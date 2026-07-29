@@ -20,7 +20,7 @@ function PrivacyPageContent() {
   const sp = useSearchParams()
   const from = sp.get('from')
 
-  const [language, setLanguage] = useState<AppLanguage>(() => sp.get('lang') === 'no' ? 'no' : 'en')
+  const [language, setLanguage] = useState<AppLanguage>('en')
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
@@ -57,7 +57,6 @@ function PrivacyPageContent() {
   }, [])
 
   useEffect(() => {
-    if (from === 'shop') return
     let cancelled = false
 
     ;(async () => {
@@ -87,7 +86,7 @@ function PrivacyPageContent() {
     return () => {
       cancelled = true
     }
-  }, [from])
+  }, [])
 
   const pageTitle = language === 'no' ? 'PERSONVERN' : 'PRIVACY POLICY'
   const updatedText =
