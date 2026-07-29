@@ -139,7 +139,7 @@ export default async function ShopPage({
         <div className="mx-auto grid max-w-[1200px] gap-x-8 gap-y-6 px-6 py-9 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: language === 'no' ? 'NYTT UTTRYKK PÅ SEKUNDER' : 'Swap in seconds', iconSrc: '/shop/icons/features/swap-in-seconds.png', body: language === 'no' ? 'Bytt ramme og innlegg når du vil.' : ['Satisfying click.', 'Designed for ease.'] },
-            { label: language === 'no' ? 'NØYE UTVALGTE MATERIALER' : 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: language === 'no' ? 'Ekte tre, aluminium og nøye utvalgte overflater.' : ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: language !== 'no' },
+            { label: language === 'no' ? 'NØYE UTVALGTE MATERIALER' : 'Premium materials', iconSrc: '/shop/icons/features/premium-materials.png', body: language === 'no' ? 'Ekte tre, aluminium og gjennomførte overflater.' : ['Real wood, aluminium', 'and carefully selected finishes.'], noWrap: language !== 'no' },
             { label: language === 'no' ? 'LAGET FOR Å VARE' : 'Built to last', iconSrc: '/shop/icons/features/built-to-last.png', body: language === 'no' ? 'Gjennomtenkt design for mange år fremover.' : ['Sustainable design.', 'Made to be kept.'] },
             { label: language === 'no' ? 'UTVIKLET FOR RE:MIND' : 'Made for RE:MIND', iconSrc: '/shop/icons/features/made-for-remind.png', body: language === 'no' ? 'Perfekt passform. Sømløs integrasjon.' : ['Perfect fit. Seamless', 'integration.'] },
           ].map((item) => (
