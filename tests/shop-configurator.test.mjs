@@ -97,13 +97,38 @@ test('accessories are omitted from the storefront until they are in inventory', 
   assert.doesNotMatch(shopPage, /accessor(?:y|ies)/i)
 })
 
-test('footer selector changes language only and prices remain NOK', () => {
+test('footer selector localizes its labels for Norwegian without changing its English labels', () => {
   assert.match(languageSelector, /aria-label="Language"/)
-  assert.match(languageSelector, /<option value="en">English<\/option>/)
-  assert.match(languageSelector, /<option value="no">Norwegian<\/option>/)
+  assert.match(languageSelector, /language === 'no'/)
+  assert.match(languageSelector, /\{ en: 'Engelsk', no: 'Norsk' \}/)
+  assert.match(languageSelector, /\{ en: 'English', no: 'Norwegian' \}/)
+  assert.match(languageSelector, /<option value="en">\{labels\.en\}<\/option>/)
+  assert.match(languageSelector, /<option value="no">\{labels\.no\}<\/option>/)
   assert.doesNotMatch(languageSelector, /NOK|English \(|Norwegian \(/)
   assert.doesNotMatch(chrome, /currency/)
   assert.doesNotMatch(shopPage, /currency/)
+})
+
+test('shop chrome localizes the Norwegian shipping, returns, and warranty benefits', () => {
+  for (const copy of [
+    'Gratis frakt over',
+    '30 dager åpent kjøp',
+    '5 års garanti',
+    'Gratis frakt',
+    'For bestillinger over',
+    'Krever ingen begrunnelse',
+    'Ingen bekymringer',
+  ]) assert.match(chrome, new RegExp(copy))
+
+  for (const englishCopy of [
+    'Free shipping over',
+    '30 day returns',
+    '5 year warranty',
+    'FREE SHIPPING',
+    'On orders over',
+    'No questions asked',
+    'Peace of mind',
+  ]) assert.match(chrome, new RegExp(englishCopy))
 })
 
 test('formatted NOK prices use non-breaking spaces to keep the amount and currency together', () => {
