@@ -96,7 +96,7 @@ export default async function ShopPage({
                   </>
                 )}
               </p>
-              <a className="shop-button mt-7 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-8" href={configureHref}>{language === 'no' ? 'SE RAMMER' : 'SHOP FRAMES'}</a>
+              <a className="shop-button mt-7 w-fit rounded bg-black px-8 py-3 text-sm font-medium tracking-wide text-white md:mt-8" href={configureHref}>{language === 'no' ? 'UTFORSK MULIGHETENE' : 'SHOP FRAMES'}</a>
               <div className="mt-8 hidden items-start gap-3 text-sm leading-[1.45] md:flex">
                 <Image
                   src="/shop/icons/features/swap-in-seconds-hero.png"
@@ -107,8 +107,8 @@ export default async function ShopPage({
                   className="mt-0.5 h-7 w-7 shrink-0 opacity-80"
                 />
                 <div className="max-w-[30ch]">
-                  <p className="font-medium">Swap in seconds</p>
-                  <p className="text-black/60">Satisfying click. Designed for ease.</p>
+                  <p className="font-medium">{language === 'no' ? 'Tilpass på sekunder' : 'Swap in seconds'}</p>
+                  <p className="text-black/60">{language === 'no' ? 'Bytt ramme og uttrykk når du vil.' : 'Satisfying click. Designed for ease.'}</p>
                 </div>
               </div>
             </div>
