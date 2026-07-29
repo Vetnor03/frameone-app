@@ -22,3 +22,10 @@ test('Norwegian localization covers navigation, commerce, forms and legal conten
   assert.match(locale, /url\.searchParams\.set\('lang', 'no'\)/)
   assert.match(locale, /document\.documentElement\.lang = language === 'no' \? 'nb'/)
 })
+
+test('Norwegian dictionary does not contain duplicate source keys', () => {
+  const locale = read('app/shop/ShopLocaleBridge.tsx')
+  const dictionary = locale.split('const nb:', 2)[1].split('\n}', 1)[0]
+  const keys = [...dictionary.matchAll(/(?:^|[, ]+)(['"])(.*?)\1\s*:/gm)].map((match) => match[2])
+  assert.equal(new Set(keys).size, keys.length)
+})
