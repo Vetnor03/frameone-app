@@ -165,6 +165,21 @@ export const shopMattes: ShopMatte[] = [
 
 export type ShopLocale = 'en' | 'no'
 
+const norwegianFrameLabels: Record<string, { name: string; subtitle: string }> = {
+  'midnight-black': { name: 'Midnattsort', subtitle: 'Matt aluminium' },
+  'natural-oak': { name: 'Nordisk eik', subtitle: 'Ekte eik' },
+  'walnut-wood': { name: 'Mørk valnøtt', subtitle: 'Ekte valnøtt' },
+  'cloud-white': { name: 'Vinterhvit', subtitle: 'Matt aluminium' },
+}
+
+export function frameDisplayName(id: string, fallback: string, locale: ShopLocale) {
+  return locale === 'no' ? norwegianFrameLabels[id]?.name ?? fallback : fallback
+}
+
+export function frameDisplaySubtitle(id: string, fallback: string, locale: ShopLocale) {
+  return locale === 'no' ? norwegianFrameLabels[id]?.subtitle ?? fallback : fallback
+}
+
 export function pickShopLocale(value?: string): ShopLocale {
   return value === 'no' ? 'no' : 'en'
 }

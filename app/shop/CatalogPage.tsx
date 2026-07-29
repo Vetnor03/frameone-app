@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import FrameFavouriteButton from './FrameFavouriteButton'
-import { formatNok, frameAvailabilityLabels, type FrameAvailability, type ShopLocale } from './productData'
+import { formatNok, frameAvailabilityLabels, frameDisplayName, frameDisplaySubtitle, type FrameAvailability, type ShopLocale } from './productData'
 
 export type CatalogItem = {
   id: string
@@ -61,6 +61,8 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item) => {
+              const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : item.name
+              const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : item.subtitle
               const comingSoon = item.availability === 'coming-soon'
               const availability = item.availability
               return (
@@ -68,15 +70,15 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
                 key={item.id}
                 className="shop-card relative overflow-hidden rounded-lg border border-black/10 bg-[#faf9f7] shadow-[0_10px_22px_rgba(0,0,0,0.04)]"
               >
-                <a href={`/shop/${kind}/${encodeURIComponent(item.id)}?lang=${language}`} className="block focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black" aria-label={`View ${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`}>
+                <a href={`/shop/${kind}/${encodeURIComponent(item.id)}?lang=${language}`} className="block focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black" aria-label={`View ${displayName} ${kind === 'frames' ? 'frame' : 'matte'}`}>
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eeeae5]">
-                  {item.imageSrc ? <Image src={item.imageSrc} alt={`${item.name} ${kind === 'frames' ? 'frame' : 'matte'}`} fill className="object-cover" sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw" /> : <PlaceholderFigure colors={item.colors} kind={kind} />}
+                  {item.imageSrc ? <Image src={item.imageSrc} alt={`${displayName} ${kind === 'frames' ? 'frame' : 'matte'}`} fill className="object-cover" sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw" /> : <PlaceholderFigure colors={item.colors} kind={kind} />}
                 </div>
                 <div className="flex items-start justify-between gap-3 px-3 pt-3 text-lg leading-[1.25]">
-                  <h2 className="max-w-[14ch] [text-wrap:balance]">{item.name}</h2>
+                  <h2 className="max-w-[14ch] [text-wrap:balance]">{displayName}</h2>
                   <span className="shrink-0">{formatNok(item.price, language)}</span>
                 </div>
-                <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{item.subtitle}</p>
+                <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{displaySubtitle}</p>
                 <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${comingSoon ? 'pr-14' : ''}`}>
                   {item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}
                   {availability && availability !== 'in-stock' && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[availability]}`}>{frameAvailabilityLabels[availability]}</span>}

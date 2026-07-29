@@ -6,7 +6,7 @@ import { isBundleCartItem, isConfiguredCartItem, readCart, removeCartItem, SHOP_
 import type { CartItem } from '../cart'
 import { PlaceholderFigure } from '../CatalogPage'
 import { ConfigurationPlaceholder } from '../configure/Configurator'
-import { formatNok, type ShopLocale } from '../productData'
+import { formatNok, frameDisplayName, type ShopLocale } from '../productData'
 import { SHOP_CURRENCY, trackShopEvent } from '../analytics'
 
 const FREE_SHIPPING_THRESHOLD = 1000
@@ -89,15 +89,15 @@ export default function CartPage({ language }: { language: ShopLocale }) {
                   </div>
                   <div className="flex min-w-0 flex-col sm:flex-row sm:justify-between sm:gap-6">
                     <div>
-                      <h2 className="font-medium tracking-[0.08em]">{item.productName}</h2>
+                      <h2 className="font-medium tracking-[0.08em]">{'productType' in item && item.productType === 'frame' ? frameDisplayName(item.productId, item.productName, language) : item.productName}</h2>
                       {isConfiguredCartItem(item) ? (
                         <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
-                          <div><dt className="inline">Frame: </dt><dd className="inline">{item.frame.name}</dd></div>
+                          <div><dt className="inline">Frame: </dt><dd className="inline">{frameDisplayName(item.frame.id, item.frame.name, language)}</dd></div>
                           <div><dt className="inline">Matte: </dt><dd className="inline">{item.matte.name}</dd></div>
                         </dl>
                       ) : isBundleCartItem(item) ? (
                         <dl className="mt-2 space-y-0.5 text-sm leading-5 text-black/55">
-                          <div><dt className="inline">Frames: </dt><dd className="inline">{item.frames.map((part) => part.name).join(', ')}</dd></div>
+                          <div><dt className="inline">Frames: </dt><dd className="inline">{item.frames.map((part) => frameDisplayName(part.id, part.name, language)).join(', ')}</dd></div>
                           <div><dt className="inline">Mattes: </dt><dd className="inline">{item.mattes.map((part) => part.name).join(', ')}</dd></div>
                         </dl>
                       ) : <p className="mt-2 text-sm capitalize text-black/55">Replacement {item.productType}</p>}
