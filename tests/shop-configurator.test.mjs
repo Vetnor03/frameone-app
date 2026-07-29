@@ -28,6 +28,7 @@ test('configure route and both shop entry points are present', () => {
 
 test('shop hero localizes only its Norwegian copy', () => {
   assert.match(shopPage, /language === 'no' \? 'Designet for hjemmet\.' : 'Frames that'/)
+  assert.match(shopPage, /className=\{language === 'no' \? 'block text-\[0\.91em\]' : 'block'\}/)
   assert.match(shopPage, /language === 'no' \? 'Skapt for hverdagen\.' : 'fit your life\.'/)
   assert.match(shopPage, /Påminnelser, vær og det som skjer –/)
   assert.match(shopPage, /samlet på ett sted, med mindre/)

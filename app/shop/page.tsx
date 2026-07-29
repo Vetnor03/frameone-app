@@ -79,7 +79,7 @@ export default async function ShopPage({
             <div className="relative z-10 mx-auto flex max-w-[26rem] flex-col px-6 py-3 md:min-h-[585px] md:max-w-none md:justify-center md:py-8 md:pl-14 md:pr-10">
               <h1 className="max-w-[12.4ch] text-[38px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[48px] md:text-[56px]">
                 <span className="block">{language === 'no' ? 'Designet for hjemmet.' : 'Frames that'}</span>
-                <span className="block">{language === 'no' ? 'Skapt for hverdagen.' : 'fit your life.'}</span>
+                <span className={language === 'no' ? 'block text-[0.91em]' : 'block'}>{language === 'no' ? 'Skapt for hverdagen.' : 'fit your life.'}</span>
               </h1>
               <p className="mt-5 max-w-[27ch] text-[17px] leading-[1.45] text-black/65 md:mt-6 md:max-w-[31ch] md:text-[18px]">
                 {language === 'no' ? (
