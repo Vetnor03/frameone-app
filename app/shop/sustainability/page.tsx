@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import CompanyPageShell from '../CompanyPageShell'
 import { ShopReveal } from '../ShopMotion'
 import { shopMetadata } from '../seo'
+import { pickShopLocale } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'Sustainability | RE:MIND',
@@ -28,9 +29,11 @@ const principles = [
   },
 ]
 
-export default function SustainabilityPage() {
+export default async function SustainabilityPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
+  const language = pickShopLocale((await searchParams)?.lang)
   return (
     <CompanyPageShell
+      language={language}
       eyebrow="Our approach"
       title="Designed for a longer life."
       intro="We are at the beginning of our journey, but our direction is clear: make fewer, better products that remain useful and feel at home for years."

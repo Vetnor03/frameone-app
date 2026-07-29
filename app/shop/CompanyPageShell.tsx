@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react'
 import { ShopFooter, ShopHeader } from './ShopChrome'
+import type { ShopLocale } from './productData'
 
 type CompanyPageShellProps = {
   eyebrow: string
   title: string
   intro: string
   children: ReactNode
+  language: ShopLocale
 }
 
-export default function CompanyPageShell({ eyebrow, title, intro, children }: CompanyPageShellProps) {
+export default function CompanyPageShell({ eyebrow, title, intro, children, language }: CompanyPageShellProps) {
   return (
     <main
       className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#171512]"
@@ -18,11 +20,11 @@ export default function CompanyPageShell({ eyebrow, title, intro, children }: Co
       }}
     >
       <div className="shop-shell mx-auto w-full max-w-[2560px] bg-[#f6f3ed] 2xl:max-w-[1720px]">
-        <ShopHeader language="en" />
+        <ShopHeader language={language} />
 
         <section className="mx-auto w-full max-w-[1200px] px-6 pb-20 pt-8 md:px-14 md:pb-28 md:pt-12">
           <a
-            href="/shop"
+            href={`/shop?lang=${language}`}
             className="shop-footer-link inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60"
           >
             <span aria-hidden>←</span>
@@ -40,7 +42,7 @@ export default function CompanyPageShell({ eyebrow, title, intro, children }: Co
           {children}
         </section>
 
-        <ShopFooter language="en" />
+        <ShopFooter language={language} />
       </div>
     </main>
   )
