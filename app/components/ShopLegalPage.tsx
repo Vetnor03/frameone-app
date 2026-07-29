@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
+import ShopLocaleBridge from '../shop/ShopLocaleBridge'
 
 type LegalSection = {
   title: string
@@ -14,6 +15,7 @@ type ShopLegalPageProps = {
 export default function ShopLegalPage({ title, updatedText, sections }: ShopLegalPageProps) {
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-[#faf9f7] text-[#141414]">
+      <Suspense fallback={null}><ShopLocaleBridge /></Suspense>
       <div className="mx-auto w-full max-w-[1200px] px-6 pb-20 pt-7 md:px-14 md:pb-28 md:pt-10">
         <a
           href="/shop"
