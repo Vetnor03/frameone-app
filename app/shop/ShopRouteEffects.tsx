@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
+import { REMIND_BASE_PRICE, SHOP_CURRENCY, trackShopEvent } from './analytics'
 
 const SHOP_THEME_COLOR = '#f6f3ed'
 
@@ -9,6 +11,17 @@ type ShopRouteEffectsProps = {
 }
 
 export default function ShopRouteEffects({ routeTheme = 'shop' }: ShopRouteEffectsProps) {
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === '/shop') {
+      trackShopEvent('shop_view', {})
+      trackShopEvent('product_view', { product: 'RE:MIND', base_price: REMIND_BASE_PRICE, currency: SHOP_CURRENCY })
+    } else if (pathname === '/shop/configure') {
+      trackShopEvent('configurator_open', { product: 'RE:MIND' })
+    }
+  }, [pathname])
+
   useEffect(() => {
     const html = document.documentElement
     const body = document.body

@@ -5,6 +5,7 @@ import { addCartItem } from '../cart'
 import { configurationTotal, optionUpgrade } from '../configuratorLogic'
 import { displayOptions, formatNok, isFramePurchasable, isMattePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode } from '../productData'
 import styles from './Configurator.module.css'
+import { SHOP_CURRENCY, trackShopEvent } from '../analytics'
 
 const frameAppearances: Record<string, CSSProperties> = {
   'midnight-black': { background: '#181817' },
@@ -156,7 +157,44 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
       quantity: 1,
       totalPrice: total,
     })
+    trackShopEvent('add_to_cart', {
+      product: 'RE:MIND',
+      frame_id: frame.id,
+      frame_name: frame.name,
+      matte_id: matte.id,
+      matte_name: matte.name,
+      total_price: total,
+      currency: SHOP_CURRENCY,
+    })
     setAdded(true)
+  }
+
+  function selectFrame(nextFrameId: string) {
+    if (nextFrameId === frame.id) return
+    const nextFrame = purchasableFrames.find((item) => item.id === nextFrameId)
+    if (!nextFrame) return
+    setFrameId(nextFrame.id)
+    setAdded(false)
+    trackShopEvent('frame_selected', {
+      frame_id: nextFrame.id,
+      frame_name: nextFrame.name,
+      availability: nextFrame.availability,
+      price_delta: optionUpgrade(nextFrame.price, purchasableFrames.map((item) => item.price)),
+    })
+  }
+
+  function selectMatte(nextMatteId: string) {
+    if (nextMatteId === matte.id) return
+    const nextMatte = purchasableMattes.find((item) => item.id === nextMatteId)
+    if (!nextMatte) return
+    setMatteId(nextMatte.id)
+    setAdded(false)
+    trackShopEvent('matte_selected', {
+      matte_id: nextMatte.id,
+      matte_name: nextMatte.name,
+      availability: nextMatte.availability,
+      price_delta: optionUpgrade(nextMatte.price, purchasableMattes.map((item) => item.price)),
+    })
   }
 
   return (
@@ -209,7 +247,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
               <label className="block text-xs font-medium tracking-[0.15em]">
                 FRAME
                 <span className="relative mt-3 block">
-                  <select value={frame.id} onChange={(event) => { setFrameId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+                  <select value={frame.id} onChange={(event) => selectFrame(event.target.value)} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                     {purchasableFrames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                   </select>
                   <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
@@ -219,7 +257,7 @@ export default function Configurator({ initialFrameId, initialMatteId }: { initi
             <label className="block text-xs font-medium tracking-[0.15em]">
               MATTE
               <span className="relative mt-3 block">
-                <select value={matte.id} onChange={(event) => { setMatteId(event.target.value); setAdded(false) }} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
+                <select value={matte.id} onChange={(event) => selectMatte(event.target.value)} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                   {purchasableMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
