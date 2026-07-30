@@ -135,11 +135,15 @@ test('about navigation opens a dedicated founder story with a home link', () => 
 test('about page provides Norwegian founder copy without replacing the English copy', () => {
   assert.match(aboutPage, /isNorwegian \? 'TILBAKE TIL FORSIDEN' : 'Back to home'/)
   assert.match(aboutPage, /isNorwegian \? <>En liten<br \/>hilsen<\/> : 'A little note'/)
-  assert.match(aboutPage, /Hei, jeg heter Vetle og er grunnleggeren av RE:MIND – et lite prosjekt fra Stavanger\./)
+  assert.match(aboutPage, /Hei, jeg heter Vetle, grunnlegger av RE:MIND – et lite prosjekt fra Stavanger\./)
+  assert.match(aboutPage, /Jeg utviklet først RE:MIND for å se surfeforholdene på vei ut døren\. Etter hvert oppdaget jeg at det var flere ting jeg gjerne ville få med meg i farten – uten å måtte sjekke mobilen\./)
+  assert.match(aboutPage, /Blir det regn i dag\? Er et produkt jeg følger med på tilbake på lager\? Skjer det noe kjekt i nærheten denne helgen\? Hvilken søppeldunk skal settes ut til tømming i dag\?/)
+  assert.match(aboutPage, /Siden den gang har RE:MIND utviklet seg til en diskret digital ramme laget for hverdagen\. Den kan vise påminnelser, vær og kalender, kobles til tjenester du allerede bruker – og følge med på det som betyr noe for deg\./)
   assert.match(aboutPage, /La RE:MIND følge med for deg\./)
-  assert.match(aboutPage, /AI Follow følger med på det som betyr noe for deg, og gir beskjed når noe endrer seg\./)
+  assert.match(aboutPage, /AI Follow følger med på det du bryr deg om, og gir beskjed når noe endrer seg\./)
   assert.match(aboutPage, /30 DAGER GRATIS · DERETTER ABONNEMENT/)
-  assert.match(aboutPage, /Du velger hva som fortjener oppmerksomheten din\./)
+  assert.match(aboutPage, /Du velger hva som fortjener oppmerksomheten din\. RE:MIND følger med i bakgrunnen og viser deg oppdateringen når noe faktisk har endret seg – slik at du kan bruke tiden din på noe helt annet\./)
+  assert.doesNotMatch(aboutPage, /Gi meg beskjed når et produkt er tilbake på lager\./)
 })
 
 test('accessories are omitted from the storefront until they are in inventory', () => {
