@@ -18,6 +18,7 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
   const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : matteDisplayName(item.id, item.name, language)
   const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : matteDisplaySubtitle(item.id, item.subtitle, language)
   const singular = kind === 'frames' ? 'frame' : 'matte'
+  const isNorwegianFrame = kind === 'frames' && language === 'no'
   const [added, setAdded] = useState(false)
   const comingSoon = item.availability === 'coming-soon'
 
@@ -43,7 +44,7 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
         <section className="mx-auto max-w-[1200px] px-6 py-8 md:py-14">
           <a href={`/shop/${kind}?lang=${language}`} className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black">
             <span aria-hidden className="text-base transition-transform group-hover:-translate-x-0.5">←</span>
-            All {kind}
+            {isNorwegianFrame ? 'ALLE RAMMER' : `All ${kind}`}
           </a>
 
           <div className="mt-6 grid gap-8 md:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] md:items-center md:gap-14 lg:gap-20">
@@ -56,14 +57,14 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
             </div>
 
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">RE:MIND {singular}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">{isNorwegianFrame ? 'RAMME TIL RE:MIND' : `RE:MIND ${singular}`}</p>
               {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${availabilityDisplayLabel(item.availability, language)}`}>{availabilityDisplayLabel(item.availability, language)}</p>}
               <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{displayName}</h1>
               <p className="mt-5 text-xl">{formatNok(item.price, language)}</p>
-              <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{displaySubtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
+              <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{displaySubtitle}. {isNorwegianFrame ? 'Utviklet spesielt for RE:MIND og kan byttes på sekunder når du ønsker et nytt uttrykk.' : 'Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.'}</p>
 
               <div className="mt-7 border-y border-black/10 py-5">
-                <p className="text-xs font-medium uppercase tracking-[0.14em]">Finish</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em]">{isNorwegianFrame ? 'UTFØRELSE' : 'Finish'}</p>
                 <div className="mt-3 flex items-center gap-3">
                   {item.colors.map((color) => <span key={color} className="h-6 w-6 rounded-full border border-black/15" style={{ backgroundColor: color }} />)}
                   <span className="text-sm text-black/55">{displayName}</span>
@@ -75,15 +76,15 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
                   <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">Heart this {singular} to help choose what comes next.</p>
                   <FrameFavouriteButton frameId={item.id} frameName={item.name} />
                 </div>
-              ) : <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>}
-              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : comingSoon ? 'Not yet available to purchase.' : `The RE:MIND display is sold separately.`}</p>
+              ) : <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">{isNorwegianFrame ? 'LEGG I HANDLEKURV' : 'ADD TO CART'}</button>}
+              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : comingSoon ? 'Not yet available to purchase.' : isNorwegianFrame ? 'RE:MIND-enheten selges separat.' : `The RE:MIND display is sold separately.`}</p>
             </div>
           </div>
 
           <div className="mt-14 grid gap-6 border-t border-black/10 pt-9 sm:grid-cols-3 md:mt-20">
-            <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">Made for RE:MIND</h2><p className="mt-2 text-sm leading-6 text-black/55">A precise fit, designed as part of the original system.</p></div>
-            <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">Swap in seconds</h2><p className="mt-2 text-sm leading-6 text-black/55">Change the look without tools or replacing your display.</p></div>
-            <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">Built to last</h2><p className="mt-2 text-sm leading-6 text-black/55">Durable materials chosen for everyday life at home.</p></div>
+            <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">{isNorwegianFrame ? 'UTVIKLET FOR RE:MIND' : 'Made for RE:MIND'}</h2><p className="mt-2 text-sm leading-6 text-black/55">{isNorwegianFrame ? 'Presis passform, utviklet som en del av RE:MIND-systemet.' : 'A precise fit, designed as part of the original system.'}</p></div>
+            <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">{isNorwegianFrame ? 'BYTT PÅ SEKUNDER' : 'Swap in seconds'}</h2><p className="mt-2 text-sm leading-6 text-black/55">{isNorwegianFrame ? 'Bytt ramme og uttrykk på sekunder – helt uten verktøy.' : 'Change the look without tools or replacing your display.'}</p></div>
+            <div><h2 className="text-xs font-medium uppercase tracking-[0.14em]">{isNorwegianFrame ? 'LAGET FOR Å VARE' : 'Built to last'}</h2><p className="mt-2 text-sm leading-6 text-black/55">{isNorwegianFrame ? 'Holdbare materialer, valgt for å tåle hverdagen.' : 'Durable materials chosen for everyday life at home.'}</p></div>
           </div>
         </section>
         <ShopFooter language={language} />
