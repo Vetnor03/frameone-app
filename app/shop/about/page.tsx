@@ -65,38 +65,46 @@ export default async function AboutPage({ searchParams }: { searchParams?: Promi
                 <div className="p-7 sm:p-10 lg:p-14">
                   <div className="max-w-[720px] space-y-5 text-[16px] leading-[1.75] text-black/66 md:text-[18px]">
                     <p className="text-[20px] leading-[1.55] text-black/82 md:text-[22px]">
-                      {isNorwegian ? 'Hei, jeg heter Vetle og er grunnleggeren av RE:MIND – et lite prosjekt fra Stavanger.' : 'Hi, I’m Vetle, founder of RE:MIND — a small project from Stavanger, Norway.'}
+                      {isNorwegian ? 'Hei, jeg heter Vetle, grunnlegger av RE:MIND – et lite prosjekt fra Stavanger.' : 'Hi, I’m Vetle, founder of RE:MIND — a small project from Stavanger, Norway.'}
                     </p>
 
                     <p>
-                      {isNorwegian ? 'Jeg laget først RE:MIND for å kunne sjekke surfeforholdene på vei ut døren. Det tok ikke lang tid før jeg oppdaget at det var mye mer jeg ønsket å få med meg med et raskt blikk – uten å måtte ta frem mobilen.' : 'I first built RE:MIND so I could check the surf conditions on my way out the door. Before long, I realised there were more things I wanted to catch at a glance — without having to reach for my phone.'}
+                      {isNorwegian ? 'Jeg utviklet først RE:MIND for å se surfeforholdene på vei ut døren. Etter hvert oppdaget jeg at det var flere ting jeg gjerne ville få med meg i farten – uten å måtte sjekke mobilen.' : 'I first built RE:MIND so I could check the surf conditions on my way out the door. Before long, I realised there were more things I wanted to catch at a glance — without having to reach for my phone.'}
                     </p>
 
                     <p>
-                      {isNorwegian ? 'Kommer det til å regne i dag? Bør jeg ta med paraply? Hva skjer i nærheten denne helgen? Og minst like viktig: Hvilken søppeldunk skal settes ut til tømming?' : 'Will it rain today? Should I bring an umbrella? What’s happening nearby this weekend? And, just as importantly: remember which bin to put out for collection.'}
+                      {isNorwegian ? 'Blir det regn i dag? Er et produkt jeg følger med på tilbake på lager? Skjer det noe kjekt i nærheten denne helgen? Hvilken søppeldunk skal settes ut til tømming i dag?' : 'Will it rain today? Should I bring an umbrella? What’s happening nearby this weekend? And, just as importantly: remember which bin to put out for collection.'}
                     </p>
 
                     <p>
-                      {isNorwegian ? 'Siden den gang har RE:MIND utviklet seg til en diskret digital ramme laget for hverdagen. Den kan vise påminnelser, vær og kalender, kobles til tjenester du allerede bruker og samle informasjonen du bryr deg om på ett sted.' : 'Since then, RE:MIND has grown into a calm digital frame for everyday life. It can display reminders, weather and calendars, connect with services you already use, and bring the information you care about into view.'}
+                      {isNorwegian ? 'Siden den gang har RE:MIND utviklet seg til en diskret digital ramme laget for hverdagen. Den kan vise påminnelser, vær og kalender, kobles til tjenester du allerede bruker – og følge med på det som betyr noe for deg.' : 'Since then, RE:MIND has grown into a calm digital frame for everyday life. It can display reminders, weather and calendars, connect with services you already use, and bring the information you care about into view.'}
                     </p>
 
                     <aside className="rounded-[24px] bg-[#f4ecdf] p-5 text-black/70 md:p-6">
                       <p className="font-medium text-[#171512]">{isNorwegian ? 'La RE:MIND følge med for deg.' : 'Ask RE:MIND to keep an eye on anything.'}</p>
                       <p className="mt-2">
-                        {isNorwegian ? 'AI Follow følger med på det som betyr noe for deg, og gir beskjed når noe endrer seg.' : 'AI Follow can follow what matters to you and let you know when something changes.'}
+                        {isNorwegian ? 'AI Follow følger med på det du bryr deg om, og gir beskjed når noe endrer seg.' : 'AI Follow can follow what matters to you and let you know when something changes.'}
                       </p>
                       <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.16em] text-black/45">
                         {isNorwegian ? '30 DAGER GRATIS · DERETTER ABONNEMENT' : '30-day free trial · then subscription'}
                       </p>
                     </aside>
 
-                    <p>
-                      {isNorwegian ? 'Gi meg beskjed når et produkt er tilbake på lager. Si fra når Coldplay annonserer en konsert i Norge. Varsle meg hvis surfeforholdene på lørdag blir bedre, eller når prisen på en flyreise faller under budsjettet mitt.' : 'Notify me when this product is back in stock. Tell me when Coldplay announces a concert in Norway. Let me know if the surf forecast for Saturday improves, or when a flight I’m watching drops below my budget.'}
-                    </p>
+                    {isNorwegian ? (
+                      <p>
+                        Du velger hva som fortjener oppmerksomheten din. RE:MIND følger med i bakgrunnen og viser deg oppdateringen når noe faktisk har endret seg – slik at du kan bruke tiden din på noe helt annet.
+                      </p>
+                    ) : (
+                      <>
+                        <p>
+                          Notify me when this product is back in stock. Tell me when Coldplay announces a concert in Norway. Let me know if the surf forecast for Saturday improves, or when a flight I’m watching drops below my budget.
+                        </p>
 
-                    <p>
-                      {isNorwegian ? 'Du velger hva som fortjener oppmerksomheten din. RE:MIND følger stille med og viser oppdateringen der du ser den – uten at du må åpne mobilen og lete.' : 'You choose what deserves your attention. RE:MIND quietly does the looking, then puts the update where you can see it — without another feed to scroll through.'}
-                    </p>
+                        <p>
+                          You choose what deserves your attention. RE:MIND quietly does the looking, then puts the update where you can see it — without another feed to scroll through.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
