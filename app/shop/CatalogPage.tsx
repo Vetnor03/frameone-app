@@ -52,12 +52,12 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
               className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
             >
               <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
-              {kind === 'mattes' && language === 'no' ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
+              {language === 'no' ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
             </a>
             <div className="mt-5">
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
             </div>
-            {kind === 'mattes' && language === 'no'
+            {language === 'no'
               ? <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">Flere varianter er på vei.</span> Marker favorittene dine og hjelp oss velge hva vi tar inn i neste runde.</p>
               : <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>}
           </div>

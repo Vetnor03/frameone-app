@@ -6,6 +6,7 @@ const read = (path) => readFileSync(path, 'utf8')
 const products = read('app/shop/productData.ts')
 const catalogData = read('app/shop/catalogData.ts')
 const catalog = read('app/shop/CatalogPage.tsx')
+const framesPage = read('app/shop/frames/page.tsx')
 const detail = read('app/shop/ProductDetailPage.tsx')
 const favourite = read('app/shop/FrameFavouriteButton.tsx')
 const configurator = read('app/shop/configure/Configurator.tsx')
@@ -56,6 +57,35 @@ test('remaining Norwegian matte translations are used by shared shop displays', 
   assert.match(products, /'natural-linen': \{ name: 'Naturlig lin', subtitle: 'Strukturert linuttrykk' \}/)
   assert.match(products, /locale === 'no' \? norwegianMatteLabels\[id\]\?\.name \?\? fallback : fallback/)
   assert.match(products, /locale === 'no' \? norwegianMatteLabels\[id\]\?\.subtitle \?\? fallback : fallback/)
+})
+
+test('Norwegian frame catalog and shared frame displays use localized copy', () => {
+  assert.match(framesPage, /title=\{language === 'no' \? 'ALLE RAMMER' : 'All Frames'\}/)
+  assert.match(catalog, /\{language === 'no' \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
+  assert.match(catalog, /language === 'no'\s*\? <p[^>]*><span className="font-medium text-black\/65">Flere varianter er på vei\.<\/span> Marker favorittene dine og hjelp oss velge hva vi tar inn i neste runde\.<\/p>/)
+
+  const expectedLabels = [
+    ['midnight-black', 'Midnattsort', 'Matt aluminium'],
+    ['natural-oak', 'Nordisk eik', 'Ekte eik'],
+    ['walnut-wood', 'Mørk valnøtt', 'Ekte valnøtt'],
+    ['cloud-white', 'Vinterhvit', 'Matt aluminium'],
+    ['brushed-silver', 'Børstet sølv', 'Børstet aluminium'],
+    ['charcoal-grey', 'Antrasittgrå', 'Matt aluminium'],
+    ['smoked-oak', 'Røkt eik', 'Ekte eik'],
+    ['honey-oak', 'Honningeik', 'Ekte eik'],
+    ['espresso-wood', 'Espressobrun', 'Ekte ask'],
+    ['sandstone', 'Sandstein', 'Myk soft-touch overflate'],
+    ['sage-green', 'Salviegrønn', 'Pulverlakkert aluminium'],
+    ['deep-navy', 'Dyp marineblå', 'Pulverlakkert aluminium'],
+    ['terracotta', 'Terrakotta', 'Pulverlakkert aluminium'],
+    ['limited-birch', 'Eksklusiv bjørk', 'Ekte bjørk'],
+  ]
+  for (const [id, name, subtitle] of expectedLabels) {
+    assert.ok(products.includes(`'${id}': { name: '${name}', subtitle: '${subtitle}' }`))
+  }
+  assert.match(products, /locale === 'no' \? norwegianFrameLabels\[id\]\?\.name \?\? fallback : fallback/)
+  assert.match(products, /locale === 'no' \? norwegianFrameLabels\[id\]\?\.subtitle \?\? fallback : fallback/)
+  assert.match(products, /return `\$\{amount\}\\u00a0\$\{locale === 'no' \? 'kr' : 'NOK'\}`/)
 })
 
 test('favourites persist per browser and server demand is private and deduplicated', () => {
