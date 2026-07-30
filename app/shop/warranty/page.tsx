@@ -24,7 +24,7 @@ export default async function WarrantyPage({ searchParams }: { searchParams?: Pr
           title: isNorwegian ? 'LAGET FOR Å VARE' : 'Built to stay',
           text: (
             <div className="space-y-4">
-              <p>{isNorwegian ? 'Alle RE:MIND-enheter omfattes av vår begrensede 5-årsgaranti.' : 'Every RE:MIND display is backed by our 5-year limited warranty.'}</p>
+              <p>{isNorwegian ? 'Alle RE:MIND-enheter omfattes av vår 5-årsgaranti.' : 'Every RE:MIND display is backed by our 5-year limited warranty.'}</p>
               <p>{isNorwegian ? 'Dersom det oppstår en feil på RE:MIND som skyldes en produksjons- eller materialfeil ved normal bruk, hjelper vi deg med å finne en løsning.' : <>If your RE:MIND develops a fault caused by a manufacturing or material defect during normal use, we&apos;ll work with you to make it right.</>}</p>
             </div>
           ),
@@ -42,7 +42,7 @@ export default async function WarrantyPage({ searchParams }: { searchParams?: Pr
           title: isNorwegian ? 'DETTE DEKKES IKKE' : "What's not covered",
           text: (
             <div>
-              <p>{isNorwegian ? 'Denne frivillige garantien dekker ikke:' : 'The commercial warranty does not cover:'}</p>
+              <p>{isNorwegian ? 'Garantien dekker ikke:' : 'The commercial warranty does not cover:'}</p>
               <ul className="mt-4 list-disc space-y-1 pl-5">
                 <li>{isNorwegian ? 'Skader som følge av uhell eller fysisk påvirkning' : 'Accidental or physical damage'}</li>
                 <li>{isNorwegian ? 'Skader som skyldes feil bruk eller uforsvarlig håndtering' : 'Damage caused by misuse or improper handling'}</li>
@@ -60,7 +60,7 @@ export default async function WarrantyPage({ searchParams }: { searchParams?: Pr
           text: (
             <div className="space-y-4">
               <p className="font-medium text-black/80">{isNorwegian ? 'Laget for å vare lenge.' : 'Made to keep going.'}</p>
-              <p>{isNorwegian ? 'Batterier mister naturlig kapasitet over tid. Normal reduksjon i batterikapasitet regnes derfor ikke som en feil som dekkes av vår begrensede 5-årsgaranti.' : 'Batteries naturally lose capacity as they age. Normal battery degradation is therefore not considered a defect under our 5-year limited warranty.'}</p>
+              <p>{isNorwegian ? 'Batterier mister naturlig kapasitet over tid. Normal reduksjon i batterikapasitet regnes derfor ikke som en feil som dekkes av vår 5-årsgaranti.' : 'Batteries naturally lose capacity as they age. Normal battery degradation is therefore not considered a defect under our 5-year limited warranty.'}</p>
               <p>{isNorwegian ? 'Et batteri som eldes, bør likevel ikke bety at hele RE:MIND må byttes ut.' : <>But an aging battery shouldn&apos;t mean replacing your RE:MIND.</>}</p>
               <p>{isNorwegian ? 'Når batteriet til slutt når slutten av levetiden, er målet vårt å tilby batteribytte til en lav kostnad, slik at du kan fortsette å bruke din eksisterende RE:MIND fremfor å erstatte hele produktet.' : 'If the battery eventually reaches the end of its useful life, we intend to offer a low-cost battery replacement service so you can keep using your existing RE:MIND rather than replacing the entire product.'}</p>
               <p>{isNorwegian ? 'En unormalt tidlig batterifeil skiller seg fra vanlig aldring og kan være dekket av RE:MIND-garantien og/eller gjeldende lovfestede forbrukerrettigheter.' : 'A premature battery fault is different from normal battery aging and may be covered by the RE:MIND warranty and/or applicable statutory consumer rights.'}</p>
