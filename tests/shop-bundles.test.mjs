@@ -41,6 +41,29 @@ test('bundle cards keep savings and currency amounts together on narrow screens'
   assert.match(catalog, /items-baseline gap-2 whitespace-nowrap/)
 })
 
+test('bundle catalog localizes Norwegian copy without changing English copy', async () => {
+  const catalog = await read('app/shop/bundles/page.tsx')
+  const data = await read('app/shop/bundleData.ts')
+
+  for (const text of [
+    'Tilbake til forsiden',
+    'Gjør RE:MIND til din, til en bedre pris.',
+    'Komplettpakken',
+    'Rammepar',
+    'Stilkolleksjonen',
+    'Mest for pengene',
+    'To nye uttrykk',
+    'Mest valgfrihet',
+  ]) assert.match(catalog, new RegExp(text))
+
+  assert.match(catalog, /isNorwegian = language === 'no'/)
+  assert.match(catalog, /isNorwegian \? 'Spar' : 'Save'/)
+  assert.match(catalog, /matteCount === 1 \? 'matte' : 'mattes'/)
+  assert.match(data, /name: 'The Complete Home'/)
+  assert.match(data, /name: 'The Frame Pair'/)
+  assert.match(data, /name: 'The Style Library'/)
+})
+
 test('bundle configurator selects every component and stores one discounted cart item', async () => {
   const configurator = await read('app/shop/bundles/[id]/BundleConfigurator.tsx')
   const cart = await read('app/shop/cart.ts')
