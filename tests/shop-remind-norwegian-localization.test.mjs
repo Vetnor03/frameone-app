@@ -13,7 +13,7 @@ test('RE:MIND product section localizes only its Norwegian copy', () => {
 
 test('mattes promo uses Innlegg and localized copy only for Norwegian', () => {
   assert.match(shopPage, /language === 'no' \? 'INNLEGG' : 'Mattes'/)
-  assert.match(shopPage, /language === 'no' \? 'Gi rammen et nytt uttrykk\.' : <>Change the feel\.<br \/>Not the frame\.<\/>/)
+  assert.match(shopPage, /language === 'no' \? 'Gi RE:MIND et nytt uttrykk\.' : <>Change the feel\.<br \/>Not the frame\.<\/>/)
   assert.match(shopPage, /language === 'no' \? 'Et innlegg for hvert rom og hver stil\.' : <>Choose the perfect matte to match<br \/>your space and reduce glare\.<\/>/)
   assert.match(shopPage, /language === 'no' \? 'SE UTVALGET' : 'SHOP MATTES'/)
 })

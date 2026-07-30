@@ -249,7 +249,7 @@ export default async function ShopPage({
               />
             </div>
             <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
-              {language === 'no' ? 'Gi rammen et nytt uttrykk.' : <>Change the feel.<br />Not the frame.</>}
+              {language === 'no' ? 'Gi RE:MIND et nytt uttrykk.' : <>Change the feel.<br />Not the frame.</>}
             </h2>
             <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
               {language === 'no' ? 'Et innlegg for hvert rom og hver stil.' : <>Choose the perfect matte to match<br />your space and reduce glare.</>}
