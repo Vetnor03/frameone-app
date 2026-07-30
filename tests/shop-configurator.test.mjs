@@ -38,7 +38,7 @@ test('configurator uses the refined Norwegian copy without changing English', ()
     'RE:MIND er en diskret e-papirskjerm laget for hjemmet. Velg ramme og innlegg, og få den levert komplett – klar til å tilpasses årstidene eller når stilen din endrer seg.',
     'KLAR FRA FØRSTE STUND',
     'Velg ramme og innlegg. RE:MIND leveres ferdig og klar til å finne sin plass hjemme.',
-    'Laget for å stå på en hylle, et bord eller henge på veggen – uten fast kabel eller behov for et strømuttak.',
+    'Laget for å stå på en hylle, et bord eller henge på veggen – uten fast kabel eller behov for strømuttak.',
     'BYTT UTTRYKK, IKKE PRODUKT',
     'Rammer og innlegg byttes på sekunder med et enkelt klikk, slik at du kan fornye uttrykket når du vil.',
   ]) assert.ok(norwegianCopy.includes(text), `missing Norwegian copy: ${text}`)
