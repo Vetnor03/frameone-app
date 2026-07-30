@@ -31,6 +31,7 @@ test('only in-stock mattes appear in selectors that add products to cart', () =>
 
 test('frame and matte collections show availability and accessible card hearts', () => {
   assert.match(catalog, /<p className="mt-5[^>]*><span[^>]*>More styles are coming\.<\/span> Heart your favourites and help us choose what comes next\.<\/p>/)
+  assert.match(catalog, /<span className="font-medium text-black\/65">Flere varianter er på vei\.<\/span> Marker favorittene dine og hjelp oss velge hva vi tar inn i neste runde\./)
   assert.doesNotMatch(catalog, /kind === 'frames' && <p[^>]*>[^<]*<span[^>]*>More styles are coming\./)
   assert.match(catalog, /Heart your favourites and help us choose what comes next\./)
   assert.match(catalogData, /availability: matteAvailability\(id\)/)
@@ -40,10 +41,21 @@ test('frame and matte collections show availability and accessible card hearts',
   assert.match(catalog, /availability !== 'in-stock'/)
   assert.match(detail, /item\.availability !== 'in-stock'/)
   assert.match(catalog, /comingSoon \? 'pr-14' : ''/)
-  assert.match(catalog, /<FrameFavouriteButton frameId=\{item\.id\}/)
+  assert.match(catalog, /<FrameFavouriteButton frameId=\{item\.id\} frameName=\{displayName\}/)
   assert.match(favourite, /min-h-11 min-w-11/)
   assert.match(favourite, /Remove \$\{frameName\} from favourites/)
   assert.match(favourite, /Favourite \$\{frameName\}/)
+})
+
+test('remaining Norwegian matte translations are used by shared shop displays', () => {
+  assert.match(products, /'dusty-blue': \{ name: 'Støvblå', subtitle: 'Rolig, dempet blå' \}/)
+  assert.match(products, /'blush-pink': \{ name: 'Pudderrosa', subtitle: 'Myk, varm rosatone' \}/)
+  assert.match(products, /'ochre': \{ name: 'Oker', subtitle: 'Varm, gyllen tone' \}/)
+  assert.match(products, /'forest-green': \{ name: 'Skoggrønn', subtitle: 'Dyp, naturlig grønn' \}/)
+  assert.match(products, /'burgundy': \{ name: 'Burgunder', subtitle: 'Dyp vinrød' \}/)
+  assert.match(products, /'natural-linen': \{ name: 'Naturlig lin', subtitle: 'Strukturert linuttrykk' \}/)
+  assert.match(products, /locale === 'no' \? norwegianMatteLabels\[id\]\?\.name \?\? fallback : fallback/)
+  assert.match(products, /locale === 'no' \? norwegianMatteLabels\[id\]\?\.subtitle \?\? fallback : fallback/)
 })
 
 test('favourites persist per browser and server demand is private and deduplicated', () => {

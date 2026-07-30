@@ -189,6 +189,12 @@ const norwegianMatteLabels: Record<string, { name: string; subtitle?: string }> 
   'white---black': { name: 'Hvit / Sort', subtitle: 'Kontrast i to lag' },
   'black---white': { name: 'Sort / Hvit', subtitle: 'Kontrast i to lag' },
   'mist-grey': { name: 'Tåkegrå', subtitle: 'Kjølig, moderne grå' },
+  'dusty-blue': { name: 'Støvblå', subtitle: 'Rolig, dempet blå' },
+  'blush-pink': { name: 'Pudderrosa', subtitle: 'Myk, varm rosatone' },
+  'ochre': { name: 'Oker', subtitle: 'Varm, gyllen tone' },
+  'forest-green': { name: 'Skoggrønn', subtitle: 'Dyp, naturlig grønn' },
+  'burgundy': { name: 'Burgunder', subtitle: 'Dyp vinrød' },
+  'natural-linen': { name: 'Naturlig lin', subtitle: 'Strukturert linuttrykk' },
 }
 
 export function matteDisplayName(id: string, fallback: string, locale: ShopLocale) {
