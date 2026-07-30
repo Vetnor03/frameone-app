@@ -26,7 +26,8 @@ test('shop legal pages use shared shop styling and return home', () => {
   const cookies = read('app/cookies/page.tsx')
 
   assert.match(legalPage, /className="shop-page/)
-  assert.match(legalPage, /href="\/shop"/)
+  assert.match(legalPage, /backHref = '\/shop'/)
+  assert.match(legalPage, /href=\{backHref\}/)
   assert.match(legalPage, /Back to home/)
   assert.match(terms, /from === 'shop'/)
   assert.match(privacy, /from === 'shop'/)

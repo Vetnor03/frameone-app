@@ -9,18 +9,26 @@ type ShopLegalPageProps = {
   title: string
   updatedText: string
   sections: LegalSection[]
+  backHref?: string
+  backLabel?: string
 }
 
-export default function ShopLegalPage({ title, updatedText, sections }: ShopLegalPageProps) {
+export default function ShopLegalPage({
+  title,
+  updatedText,
+  sections,
+  backHref = '/shop',
+  backLabel = 'Back to home',
+}: ShopLegalPageProps) {
   return (
     <main className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-[#faf9f7] text-[#141414]">
       <div className="mx-auto w-full max-w-[1200px] px-6 pb-20 pt-7 md:px-14 md:pb-28 md:pt-10">
         <a
-          href="/shop"
+          href={backHref}
           className="shop-footer-link inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black"
         >
           <span aria-hidden>←</span>
-          Back to home
+          {backLabel}
         </a>
 
         <header className="mt-16 border-b border-black/10 pb-10 md:mt-24 md:pb-14">
