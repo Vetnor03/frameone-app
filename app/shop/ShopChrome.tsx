@@ -144,6 +144,10 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
     newsletterTitle: "HOLD DEG OPPDATERT",
     newsletterBody: "Nye rammer, oppdateringer og ideer.",
     emailPlaceholder: "Din e-post",
+    copyright: "© 2026 RE:MIND. Alle rettigheter forbeholdt.",
+    terms: "Vilkår",
+    privacy: "Personvern",
+    cookies: "Informasjonskapsler",
   } : {
     shop: "SHOP",
     support: "SUPPORT",
@@ -157,6 +161,10 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
     newsletterTitle: "STAY IN THE LOOP",
     newsletterBody: "New frames, updates and ideas.",
     emailPlaceholder: "Your email",
+    copyright: "© 2026 RE:MIND. All rights reserved.",
+    terms: "Terms",
+    privacy: "Privacy",
+    cookies: "Cookies",
   };
   const footerBenefits = language === "no" ? [
     {
@@ -317,20 +325,20 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
           <p className="max-w-[30ch] leading-[1.45] text-black/65">
             {footerLabels.newsletterBody}
           </p>
-          <NewsletterForm placeholder={footerLabels.emailPlaceholder} />
+          <NewsletterForm language={language} placeholder={footerLabels.emailPlaceholder} />
         </div>
       </div>
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">
-        <p>© 2026 RE:MIND. All rights reserved.</p>
+        <p>{footerLabels.copyright}</p>
         <div className="tab-scroll flex min-w-0 items-center justify-start gap-6 overflow-x-auto whitespace-nowrap sm:justify-center">
           <a href={`/terms?from=shop&lang=${language}`} className="shop-footer-link shrink-0">
-            Terms
+            {footerLabels.terms}
           </a>
           <a href={`/privacy?from=shop&lang=${language}`} className="shop-footer-link shrink-0">
-            Privacy
+            {footerLabels.privacy}
           </a>
           <a href={`/cookies?from=shop&lang=${language}`} className="shop-footer-link shrink-0">
-            Cookies
+            {footerLabels.cookies}
           </a>
         </div>
         <div className="flex justify-start sm:justify-end">

@@ -11,10 +11,11 @@ test('shop footer uses the dedicated newsletter signup flow', async () => {
     read('app/api/shop/newsletter/route.ts'),
   ])
 
-  assert.match(footer, /<NewsletterForm \/>/)
+  assert.match(footer, /<NewsletterForm language=\{language\} placeholder=\{footerLabels\.emailPlaceholder\} \/>/)
   assert.match(form, /fetch\('\/api\/shop\/newsletter'/)
   assert.match(route, /from\('newsletter_subscribers'\)/)
   assert.match(route, /sendNewsletterWelcomeEmail/)
+  assert.match(route, /alreadySubscribed: true/)
 })
 
 test('newsletter welcome email contains a tokenized unsubscribe button', async () => {
