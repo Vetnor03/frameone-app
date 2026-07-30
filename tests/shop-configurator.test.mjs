@@ -26,6 +26,29 @@ test('configure route and both shop entry points are present', () => {
   assert.match(shopPage, /href=\{configureHref\}[\s\S]{0,180}MAKE IT YOURS/)
 })
 
+test('configurator uses the refined Norwegian copy without changing English', () => {
+  const norwegianCopy = configurator.slice(configurator.indexOf('  no: {'), configurator.indexOf('\n  },\n} as const', configurator.indexOf('  no: {')))
+  const englishCopy = configurator.slice(configurator.indexOf('  en: {'), configurator.indexOf('  no: {'))
+
+  for (const text of [
+    'TILPASS DIN RE:MIND',
+    'Velg ramme og innlegg som passer stilen og hjemmet ditt.',
+    'SKAPT FOR HJEMMET. ENKEL Å TILPASSE.',
+    'RE:MIND er en diskret e-papirskjerm laget for hjemmet. Velg ramme og innlegg, og få den levert komplett – klar til å tilpasses årstidene eller når stilen din endrer seg.',
+    'KLAR FRA FØRSTE STUND',
+    'Velg ramme og innlegg. RE:MIND leveres ferdig og klar til å finne sin plass hjemme.',
+    'Laget for å stå på en hylle, et bord eller henge på veggen – uten fast kabel eller behov for et strømuttak i nærheten.',
+    'BYTT UTTRYKK, IKKE PRODUKT',
+    'Rammer og innlegg byttes på sekunder med et enkelt klikk, slik at du kan fornye uttrykket når du vil.',
+  ]) assert.ok(norwegianCopy.includes(text), `missing Norwegian copy: ${text}`)
+
+  assert.match(norwegianCopy, /frame: 'RAMME'/)
+  assert.match(norwegianCopy, /matte: 'INNLEGG'/)
+  assert.match(englishCopy, /title: 'BUILD YOUR RE:MIND'/)
+  assert.match(englishCopy, /storyTitle: 'Made to stay\. Easy to change\.'/)
+  assert.match(englishCopy, /NOT LOCKED TO ONE LOOK/)
+})
+
 test('shop hero localizes only its Norwegian copy', () => {
   assert.match(shopPage, /language === 'no' \? 'Designet for hjemmet\.' : 'Frames that'/)
   assert.match(shopPage, /language === 'no' \? 'max-w-\[18ch\]' : 'max-w-\[12\.4ch\]'/)
