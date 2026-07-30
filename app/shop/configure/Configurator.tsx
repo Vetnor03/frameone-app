@@ -103,35 +103,83 @@ export function ConfigurationPlaceholder({ display, frameId, matteId }: { displa
   )
 }
 
-function ProductStory({ className = '' }: { className?: string }) {
+const configuratorCopy = {
+  en: {
+    backToHome: 'Back to home',
+    title: 'BUILD YOUR RE:MIND',
+    subtitle: 'Choose a frame and matte to make RE:MIND feel at home in your space.',
+    display: 'DISPLAY',
+    displayNames: { dark: 'Dark', light: 'Light' },
+    displayAppearance: 'Display appearance',
+    displayNote: '* Dark and light modes are both included. This only changes the preview; select the display mode in the app settings.',
+    frame: 'FRAME',
+    matte: 'MATTE',
+    summary: 'YOUR RE:MIND',
+    total: 'TOTAL',
+    includedHeading: 'What’s included',
+    included: 'RE:MIND display · Your frame · Your matte · Charging cable · Setup guide',
+    premiumNote: 'Premium choices may add to the total. Additional frames and mattes are available separately.',
+    addToCart: 'ADD TO CART',
+    addedToCart: 'Configuration added to cart.',
+    previewLabel: (frame: string, matte: string, display: string) => `${frame} frame with ${matte} matte and ${display.toLowerCase()} display`,
+    storyEyebrow: 'BUILT TO LIVE WITH YOU',
+    storyTitle: 'Made to stay. Easy to change.',
+    storyBody: 'RE:MIND is a quiet e-paper display made for your home, not another glowing screen to manage. It arrives as a complete frame with the display, matte and frame you choose — ready to place, easy to update, and simple to restyle later.',
+    storyDetails: [
+      ['READY FROM DAY ONE', 'Choose your frame and matte, add it to your home, and RE:MIND feels finished from the moment it arrives.'],
+      ['LONG BATTERY LIFE', 'Designed to live naturally on a shelf, desk or wall without a cable always in sight.'],
+      ['NOT LOCKED TO ONE LOOK', 'Frames and mattes click on and off, so you can change the style later instead of replacing the product.'],
+    ],
+  },
+  no: {
+    backToHome: 'TILBAKE TIL FORSIDEN',
+    title: 'SETT SAMMEN DIN RE:MIND',
+    subtitle: 'Velg ramme og innlegg som passer hjemmet ditt.',
+    display: 'VISNING',
+    displayNames: { dark: 'Mørk', light: 'Lys' },
+    displayAppearance: 'Visningsutseende',
+    displayNote: 'Mørk og lys visning følger med. Dette endrer kun forhåndsvisningen. Visningsmodus velges i appinnstillingene.',
+    frame: 'RAMME',
+    matte: 'INNLEGG',
+    summary: 'DIN RE:MIND',
+    total: 'TOTALT',
+    includedHeading: 'DETTE FØLGER MED',
+    included: 'RE:MIND · Valgt ramme · Valgt innlegg · Ladekabel · Oppstartsveiledning',
+    premiumNote: 'Enkelte premiumvalg kan øke totalprisen. Ekstra rammer og innlegg kan kjøpes separat.',
+    addToCart: 'LEGG I HANDLEKURV',
+    addedToCart: 'Konfigurasjonen er lagt i handlekurven.',
+    previewLabel: (frame: string, matte: string, display: string) => `${frame} ramme med ${matte} innlegg og ${display.toLowerCase()} visning`,
+    storyEyebrow: 'LAGET FOR Å PASSE INN',
+    storyTitle: 'En del av hjemmet. Klar for nye uttrykk.',
+    storyBody: 'RE:MIND er en rolig e-papirskjerm laget for hjemmet – ikke enda en lysende skjerm som krever oppmerksomhet. Den leveres komplett med skjerm, ramme og innlegg du velger – klar til å settes på plass, enkel å oppdatere og lett å gi et nytt uttrykk senere.',
+    storyDetails: [
+      ['KLAR FRA FØRSTE DAG', 'Velg ramme og innlegg, finn plassen hjemme, og RE:MIND føles gjennomført fra første stund.'],
+      ['LANG BATTERITID', 'Designet for å stå naturlig på en hylle, et bord eller en vegg – uten en kabel som alltid er synlig.'],
+      ['FRIHET TIL Å ENDRE UTTRYKK', 'Rammer og innlegg klikkes enkelt av og på, slik at du kan endre uttrykket senere uten å bytte ut hele produktet.'],
+    ],
+  },
+} as const
+
+function ProductStory({ className = '', language }: { className?: string; language: ShopLocale }) {
+  const copy = configuratorCopy[language]
   return (
     <section className={`${styles.productStory} ${className}`}>
       <div className={styles.storyIntro}>
-        <p className="text-xs font-medium tracking-[0.15em]">BUILT TO LIVE WITH YOU</p>
-        <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">Made to stay. Easy to change.</h2>
+        <p className="text-xs font-medium tracking-[0.15em]">{copy.storyEyebrow}</p>
+        <h2 className="mt-4 text-[26px] font-medium leading-tight tracking-[0.04em] sm:text-[32px]">{copy.storyTitle}</h2>
         <p className="mt-4 max-w-[42rem] text-[15px] leading-7 text-black/60">
-          RE:MIND is a quiet e-paper display made for your home, not another glowing screen to manage. It arrives as a complete frame with the display, matte and frame you choose — ready to place, easy to update, and simple to restyle later.
+          {copy.storyBody}
         </p>
       </div>
       <dl className={styles.storyDetails}>
-        <div>
-          <dt>READY FROM DAY ONE</dt>
-          <dd>Choose your frame and matte, add it to your home, and RE:MIND feels finished from the moment it arrives.</dd>
-        </div>
-        <div>
-          <dt>LONG BATTERY LIFE</dt>
-          <dd>Designed to live naturally on a shelf, desk or wall without a cable always in sight.</dd>
-        </div>
-        <div>
-          <dt>NOT LOCKED TO ONE LOOK</dt>
-          <dd>Frames and mattes click on and off, so you can change the style later instead of replacing the product.</dd>
-        </div>
+        {copy.storyDetails.map(([title, body]) => <div key={title}><dt>{title}</dt><dd>{body}</dd></div>)}
       </dl>
     </section>
   )
 }
 
 export default function Configurator({ initialFrameId, initialMatteId, language }: { initialFrameId?: string; initialMatteId?: string; language: ShopLocale }) {
+  const copy = configuratorCopy[language]
   const [frameId, setFrameId] = useState(() => purchasableFrames.some((item) => item.id === initialFrameId) ? initialFrameId! : purchasableFrames[0].id)
   const [matteId, setMatteId] = useState(() => purchasableMattes.some((item) => item.id === initialMatteId) ? initialMatteId! : purchasableMattes[0].id)
   const [selectedDisplay, setSelectedDisplay] = useState<DisplayMode>('dark')
@@ -203,15 +251,15 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
         <div className={`mx-auto max-w-[1200px] px-4 pb-8 pt-10 sm:px-6 md:pb-12 md:pt-14 ${styles.previewInner}`}>
           <a href={`/shop?lang=${language}`} className={`group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black ${styles.backLink}`}>
             <span aria-hidden className="text-base transition-transform group-hover:-translate-x-0.5">←</span>
-            Back to home
+            {copy.backToHome}
           </a>
           <div className={`text-center ${styles.heading}`}>
-            <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">BUILD YOUR RE:MIND</h1>
-            <p className="mt-3 text-[16px] text-black/60">Choose a frame and matte to make RE:MIND feel at home in your space.</p>
+            <h1 className="text-[30px] font-medium tracking-[0.12em] sm:text-[38px]">{copy.title}</h1>
+            <p className="mt-3 text-[16px] text-black/60">{copy.subtitle}</p>
           </div>
 
           <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
-            <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={`${frameDisplayName(frame.id, frame.name, language)} frame with ${matteDisplayName(matte.id, matte.name, language)} matte and ${display.name.toLowerCase()} display`}>
+            <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={copy.previewLabel(frameDisplayName(frame.id, frame.name, language), matteDisplayName(matte.id, matte.name, language), copy.displayNames[display.id])}>
               <div className={styles.previewObject}>
                 <ConfigurationPlaceholder display={display.id} frameId={frame.id} matteId={matte.id} />
               </div>
@@ -225,9 +273,9 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
         <div className={styles.purchaseCard}>
           <div className={styles.controlsCard}>
             <fieldset className="block text-xs font-medium tracking-[0.15em]">
-              <legend>DISPLAY</legend>
+              <legend>{copy.display}</legend>
               <div className={styles.displayChoice}>
-                <div className="inline-flex shrink-0 rounded border border-black/20 p-0.5" aria-label="Display appearance">
+                <div className="inline-flex shrink-0 rounded border border-black/20 p-0.5" aria-label={copy.displayAppearance}>
                   {displayOptions.map((item) => (
                     <button
                       key={item.id}
@@ -236,16 +284,16 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
                       onClick={() => { setSelectedDisplay(item.id); setAdded(false) }}
                       className={`rounded px-5 py-2 text-sm tracking-normal transition-colors ${selectedDisplay === item.id ? 'bg-black text-white' : 'text-black/65 hover:text-black'}`}
                     >
-                      {item.name}
+                      {copy.displayNames[item.id]}
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 max-w-md text-[11px] font-normal leading-4 tracking-normal text-black/45">* Dark and light modes are both included. This only changes the preview; select the display mode in the app settings.</p>
+                <p className="mt-2 max-w-md text-[11px] font-normal leading-4 tracking-normal text-black/45">{copy.displayNote}</p>
               </div>
             </fieldset>
             <div>
               <label className="block text-xs font-medium tracking-[0.15em]">
-                FRAME
+                {copy.frame}
                 <span className="relative mt-3 block">
                   <select value={frame.id} onChange={(event) => selectFrame(event.target.value)} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                     {purchasableFrames.map((item) => <option key={item.id} value={item.id}>{frameDisplayName(item.id, item.name, language)}</option>)}
@@ -255,7 +303,7 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
               </label>
             </div>
             <label className="block text-xs font-medium tracking-[0.15em]">
-              MATTE
+              {copy.matte}
               <span className="relative mt-3 block">
                 <select value={matte.id} onChange={(event) => selectMatte(event.target.value)} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
                   {purchasableMattes.map((item) => <option key={item.id} value={item.id}>{matteDisplayName(item.id, item.name, language)}</option>)}
@@ -266,26 +314,26 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
           </div>
 
           <div className={styles.summaryCard}>
-            <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">YOUR RE:MIND</h2>
+            <h2 className="mb-6 text-xs font-medium tracking-[0.15em]">{copy.summary}</h2>
             <dl className="space-y-3 text-[15px]">
               <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price, language)}</dd></div>
               {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frameDisplayName(frame.id, frame.name, language)}</dt><dd>+{formatNok(frameUpgrade, language)}</dd></div>}
               {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matteDisplayName(matte.id, matte.name, language)}</dt><dd>+{formatNok(matteUpgrade, language)}</dd></div>}
-              <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total, language)}</dd></div>
+              <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>{copy.total}</dt><dd>{formatNok(total, language)}</dd></div>
             </dl>
             <div className="mt-7 border-t border-black/10 pt-5">
-              <p className="text-xs font-medium uppercase tracking-[0.15em]">What’s included</p>
-              <p className="mt-2 text-[13px] leading-5 text-black/60">RE:MIND display · Your frame · Your matte · Charging cable · Setup guide</p>
-              <p className="mt-2 text-xs leading-5 text-black/50">Premium choices may add to the total. Additional frames and mattes are available separately.</p>
+              <p className="text-xs font-medium uppercase tracking-[0.15em]">{copy.includedHeading}</p>
+              <p className="mt-2 text-[13px] leading-5 text-black/60">{copy.included}</p>
+              <p className="mt-2 text-xs leading-5 text-black/50">{copy.premiumNote}</p>
             </div>
-            <button type="button" onClick={addConfiguration} className="shop-button mt-6 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white">ADD TO CART</button>
-            <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? 'Configuration added to cart.' : ''}</p>
+            <button type="button" onClick={addConfiguration} className="shop-button mt-6 w-full rounded bg-black px-8 py-4 text-sm font-medium tracking-[0.08em] text-white">{copy.addToCart}</button>
+            <p className="mt-3 min-h-5 text-center text-sm text-black/60" role="status">{added ? copy.addedToCart : ''}</p>
           </div>
         </div>
       </section>
 
-      <ProductStory className={styles.mobileStory} />
-      <ProductStory className={styles.desktopStory} />
+      <ProductStory className={styles.mobileStory} language={language} />
+      <ProductStory className={styles.desktopStory} language={language} />
     </div>
   )
 }
