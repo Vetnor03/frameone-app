@@ -5,13 +5,20 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 
 type NewsletterResponse = {
+  alreadySubscribed?: boolean
   error?: string
 }
 
-export default function NewsletterForm({ placeholder = 'Your email' }: { placeholder?: string }) {
+type NewsletterFormProps = {
+  language?: 'en' | 'no'
+  placeholder?: string
+}
+
+export default function NewsletterForm({ language = 'en', placeholder = 'Your email' }: NewsletterFormProps) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const isNorwegian = language === 'no'
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,20 +39,30 @@ export default function NewsletterForm({ placeholder = 'Your email' }: { placeho
 
     if (!response?.ok) {
       setStatus('error')
-      setMessage(result?.error || 'Something went wrong. Please try again.')
+      setMessage(isNorwegian
+        ? response?.status === 400
+          ? 'Skriv inn en gyldig e-postadresse.'
+          : 'Noe gikk galt. Prøv igjen.'
+        : result?.error || 'Something went wrong. Please try again.')
       return
     }
 
     track('newsletter_signup', { source: 'shop-footer', page: window.location.pathname })
     setStatus('success')
-    setMessage('Thank you for joining our newsletter! Please check your inbox.')
+    setMessage(isNorwegian && result?.alreadySubscribed
+      ? 'Denne e-postadressen er allerede registrert.'
+      : isNorwegian
+        ? 'Takk! Du er på listen.'
+        : 'Thank you for joining our newsletter! Please check your inbox.')
     setEmail('')
   }
 
   return (
     <form onSubmit={handleSubmit} className="mt-3 w-full max-w-[320px] min-w-0">
       <div className="flex w-full max-w-full min-w-0 overflow-hidden rounded border border-black/15">
-        <label htmlFor="footer-newsletter-email" className="sr-only">Email address</label>
+        <label htmlFor="footer-newsletter-email" className="sr-only">
+          {isNorwegian ? 'E-postadresse' : 'Email address'}
+        </label>
         <input
           id="footer-newsletter-email"
           className="w-full min-w-0 max-w-full bg-white px-3 py-2 outline-none"
@@ -54,13 +71,17 @@ export default function NewsletterForm({ placeholder = 'Your email' }: { placeho
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          onInvalid={(event) => event.currentTarget.setCustomValidity(
+            isNorwegian ? 'Skriv inn en gyldig e-postadresse.' : '',
+          )}
+          onInput={(event) => event.currentTarget.setCustomValidity('')}
           disabled={status === 'submitting'}
           required
         />
         <button
           className="bg-black px-3 text-white disabled:opacity-60"
           type="submit"
-          aria-label="Sign up for the newsletter"
+          aria-label={isNorwegian ? 'Meld deg på nyhetsbrevet' : 'Sign up for the newsletter'}
           disabled={status === 'submitting'}
         >
           {status === 'submitting' ? '…' : '→'}

@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   }
 
   if (existing && !existing.unsubscribed_at) {
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, alreadySubscribed: true })
   }
 
   const unsubscribeToken = randomUUID()

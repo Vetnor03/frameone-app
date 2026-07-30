@@ -25,6 +25,7 @@ test('footer provides Norwegian labels while preserving the English copy', () =>
     'BUTIKK', 'HJELP', 'FAQ', 'Frakt', 'Retur', 'Garanti', 'OM RE:MIND', 'Om oss',
     'Bærekraft', 'Kontakt', 'Presse', 'HOLD DEG OPPDATERT',
     'Nye rammer, oppdateringer og ideer.', 'Din e-post',
+    '© 2026 RE:MIND. Alle rettigheter forbeholdt.', 'Vilkår', 'Personvern', 'Informasjonskapsler',
   ]) {
     assert.match(shopChrome, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
@@ -33,9 +34,16 @@ test('footer provides Norwegian labels while preserving the English copy', () =>
     'SHOP', 'SUPPORT', 'Shipping', 'Returns', 'Warranty', 'COMPANY', 'About',
     'Sustainability', 'Contact', 'Press', 'STAY IN THE LOOP',
     'New frames, updates and ideas.', 'Your email',
+    '© 2026 RE:MIND. All rights reserved.', 'Terms', 'Privacy', 'Cookies',
   ]) {
     assert.match(shopChrome, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
 
   assert.match(newsletterForm, /placeholder=\{placeholder\}/)
+  assert.match(newsletterForm, /'Takk! Du er på listen\.'/)
+  assert.match(newsletterForm, /'Denne e-postadressen er allerede registrert\.'/)
+  assert.match(newsletterForm, /'Noe gikk galt\. Prøv igjen\.'/)
+  assert.match(newsletterForm, /'Skriv inn en gyldig e-postadresse\.'/)
+  assert.match(newsletterForm, /'Thank you for joining our newsletter! Please check your inbox\.'/)
+  assert.match(newsletterForm, /'Something went wrong\. Please try again\.'/)
 })
