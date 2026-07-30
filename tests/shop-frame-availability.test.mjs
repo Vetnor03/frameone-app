@@ -88,6 +88,28 @@ test('Norwegian frame catalog and shared frame displays use localized copy', () 
   assert.match(products, /return `\$\{amount\}\\u00a0\$\{locale === 'no' \? 'kr' : 'NOK'\}`/)
 })
 
+test('Norwegian frame detail pages localize purchase and benefit copy without changing mattes', () => {
+  assert.match(detail, /const isNorwegianFrame = kind === 'frames' && language === 'no'/)
+  for (const translation of [
+    'ALLE RAMMER',
+    'RAMME TIL RE:MIND',
+    'Utviklet spesielt for RE:MIND og kan byttes på sekunder når du ønsker et nytt uttrykk.',
+    'UTFØRELSE',
+    'LEGG I HANDLEKURV',
+    'RE:MIND-enheten selges separat.',
+    'UTVIKLET FOR RE:MIND',
+    'Presis passform, utviklet som en del av RE:MIND-systemet.',
+    'BYTT PÅ SEKUNDER',
+    'Bytt ramme og uttrykk på sekunder – helt uten verktøy.',
+    'LAGET FOR Å VARE',
+    'Holdbare materialer, valgt for å tåle hverdagen.',
+  ]) {
+    assert.ok(detail.includes(translation), `missing Norwegian frame copy: ${translation}`)
+  }
+  assert.match(detail, /\{displaySubtitle\}\. \{isNorwegianFrame \? 'Utviklet spesielt/)
+  assert.match(detail, /isNorwegianFrame \? 'ALLE RAMMER' : `All \$\{kind\}`/)
+})
+
 test('favourites persist per browser and server demand is private and deduplicated', () => {
   assert.match(favourite, /window\.localStorage\.setItem\(STORAGE_KEY/)
   assert.match(favourite, /crypto\.randomUUID\(\)/)
