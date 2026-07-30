@@ -22,7 +22,7 @@ test('mattes promo uses Innlegg and localized copy only for Norwegian', () => {
 
 test('footer provides Norwegian labels while preserving the English copy', () => {
   for (const label of [
-    'BUTIKK', 'HJELP', 'FAQ', 'Frakt', 'Retur', 'Garanti', 'OM RE:MIND', 'Om oss',
+    'BUTIKK', 'HJELP', 'Spørsmål', 'Frakt', 'Retur', 'Garanti', 'OM RE:MIND', 'Om oss',
     'Bærekraft', 'Kontakt', 'Presse', 'HOLD DEG OPPDATERT',
     'Nye rammer, oppdateringer og ideer.', 'Din e-post',
     '© 2026 RE:MIND. Alle rettigheter forbeholdt.', 'Vilkår', 'Personvern', 'Informasjonskapsler',
@@ -31,7 +31,7 @@ test('footer provides Norwegian labels while preserving the English copy', () =>
   }
 
   for (const label of [
-    'SHOP', 'SUPPORT', 'Shipping', 'Returns', 'Warranty', 'COMPANY', 'About',
+    'SHOP', 'SUPPORT', 'FAQ', 'Shipping', 'Returns', 'Warranty', 'COMPANY', 'About',
     'Sustainability', 'Contact', 'Press', 'STAY IN THE LOOP',
     'New frames, updates and ideas.', 'Your email',
     '© 2026 RE:MIND. All rights reserved.', 'Terms', 'Privacy', 'Cookies',
