@@ -15,7 +15,7 @@ test('bundle catalog omits the redundant starter set and offers only genuine dis
   assert.match(data, /mattes\.slice\(1\)/)
   assert.match(data, /deviceCount: 1, frameCount: 2, matteCount: 2/)
   assert.match(data, /deviceCount: 0, frameCount: 2, matteCount: 1/)
-  assert.match(catalog, /href={`\/shop\/bundles\/\${bundle\.id}`}/)
+  assert.match(catalog, /href={`\/shop\/bundles\/\${bundle\.id}\?lang=\${language}`}/)
   assert.match(detail, /<BundleConfigurator bundle={bundle}/)
   assert.match(detail, /const \{ id \} = await params/)
   assert.doesNotMatch(detail, /find\(\(item\) => item\.id === \(await params\)/)
@@ -29,8 +29,10 @@ test('bundle prices and savings follow the selected components separate prices',
   assert.match(catalog, /bundleRegularPrice\(bundle\)/)
   assert.match(configurator, /bundleRegularPrice\(bundle, framePrices, mattePrices\)/)
   assert.match(configurator, /bundleSavings\(bundle, framePrices, mattePrices\)/)
-  assert.match(configurator, /Separately \{formatNok\(regularPrice\)\}/)
-  assert.match(configurator, /You save \{formatNok\(saving\)\}/)
+  assert.match(configurator, /'Kjøpt separat:' : 'Separately'/)
+  assert.match(configurator, /formatNok\(regularPrice, language\)/)
+  assert.match(configurator, /'Du sparer' : 'You save'/)
+  assert.match(configurator, /formatNok\(saving, language\)/)
 })
 
 test('bundle cards keep savings and currency amounts together on narrow screens', async () => {
@@ -76,4 +78,39 @@ test('bundle configurator selects every component and stores one discounted cart
   assert.match(cart, /productType: 'bundle'/)
   assert.match(cart, /frames: Array/)
   assert.match(cart, /mattes: Array/)
+})
+
+
+test('bundle detail pages localize all Norwegian configurator copy while preserving English', async () => {
+  const detail = await read('app/shop/bundles/[id]/page.tsx')
+  const configurator = await read('app/shop/bundles/[id]/BundleConfigurator.tsx')
+
+  for (const text of [
+    'ALLE PAKKER',
+    'Komplettpakken',
+    'Rammepar',
+    'Stilkolleksjonen',
+    'MEST FOR PENGENE',
+    'TO NYE UTTRYKK',
+    'MEST VALGFRIHET',
+    'Velg delene nedenfor og sett sammen pakken slik du vil.',
+  ]) assert.match(detail, new RegExp(text))
+
+  for (const text of [
+    'VISNING',
+    'Mørk',
+    'Lys',
+    'Mørk og lys visning følger med.',
+    'RAMME',
+    'INNLEGG',
+    'Kjøpt separat:',
+    'Du sparer',
+    'LEGG PAKKEN I HANDLEKURV',
+    'Alle valgte deler er inkludert i pakkeprisen.',
+  ]) assert.match(configurator, new RegExp(text))
+
+  assert.match(detail, /language === 'no'/)
+  assert.match(detail, /description: `\$\{bundle.description\} Choose each component below to make the bundle yours\.`/)
+  assert.match(configurator, /isNorwegian \? 'VISNING' : 'DISPLAY'/)
+  assert.match(configurator, /isNorwegian \? 'LEGG PAKKEN I HANDLEKURV' : 'ADD BUNDLE TO CART'/)
 })
