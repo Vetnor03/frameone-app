@@ -8,5 +8,5 @@ export const metadata: Metadata = shopMetadata({ title: 'Mattes | RE:MIND', desc
 
 export default async function MattesPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
   const language = pickShopLocale((await searchParams)?.lang)
-  return <CatalogPage kind="mattes" title="All Mattes" items={matteCatalog} language={language} />
+  return <CatalogPage kind="mattes" title={language === 'no' ? 'ALLE INNLEGG' : 'All Mattes'} items={matteCatalog} language={language} />
 }

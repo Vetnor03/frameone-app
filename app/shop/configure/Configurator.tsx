@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from 'react'
 import { addCartItem } from '../cart'
 import { configurationTotal, optionUpgrade } from '../configuratorLogic'
-import { displayOptions, formatNok, frameDisplayName, isFramePurchasable, isMattePurchasable, remindProduct, shopFrames, shopMattes, type DisplayMode, type ShopLocale } from '../productData'
+import { displayOptions, formatNok, frameDisplayName, isFramePurchasable, isMattePurchasable, matteDisplayName, remindProduct, shopFrames, shopMattes, type DisplayMode, type ShopLocale } from '../productData'
 import styles from './Configurator.module.css'
 import { SHOP_CURRENCY, trackShopEvent } from '../analytics'
 
@@ -211,7 +211,7 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
           </div>
 
           <div className={`relative mt-7 md:mt-10 ${styles.previewArea}`}>
-            <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={`${frameDisplayName(frame.id, frame.name, language)} frame with ${matte.name} matte and ${display.name.toLowerCase()} display`}>
+            <div className="relative mx-auto aspect-[4/3] w-full max-w-[760px] overflow-hidden" aria-live="polite" aria-label={`${frameDisplayName(frame.id, frame.name, language)} frame with ${matteDisplayName(matte.id, matte.name, language)} matte and ${display.name.toLowerCase()} display`}>
               <div className={styles.previewObject}>
                 <ConfigurationPlaceholder display={display.id} frameId={frame.id} matteId={matte.id} />
               </div>
@@ -258,7 +258,7 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
               MATTE
               <span className="relative mt-3 block">
                 <select value={matte.id} onChange={(event) => selectMatte(event.target.value)} className="w-full appearance-none border-b border-black/30 bg-transparent py-3 pr-10 text-lg tracking-normal outline-none focus-visible:border-black">
-                  {purchasableMattes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  {purchasableMattes.map((item) => <option key={item.id} value={item.id}>{matteDisplayName(item.id, item.name, language)}</option>)}
                 </select>
                 <span className="pointer-events-none absolute right-0 top-3 text-base">⌄</span>
               </span>
@@ -270,7 +270,7 @@ export default function Configurator({ initialFrameId, initialMatteId, language 
             <dl className="space-y-3 text-[15px]">
               <div className="flex justify-between gap-6"><dt>RE:MIND</dt><dd>{formatNok(remindProduct.price, language)}</dd></div>
               {frameUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{frameDisplayName(frame.id, frame.name, language)}</dt><dd>+{formatNok(frameUpgrade, language)}</dd></div>}
-              {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matte.name}</dt><dd>+{formatNok(matteUpgrade, language)}</dd></div>}
+              {matteUpgrade > 0 && <div className="flex justify-between gap-6"><dt>{matteDisplayName(matte.id, matte.name, language)}</dt><dd>+{formatNok(matteUpgrade, language)}</dd></div>}
               <div className="mt-5 flex justify-between gap-6 border-t border-black/20 pt-5 text-lg font-medium"><dt>TOTAL</dt><dd>{formatNok(total, language)}</dd></div>
             </dl>
             <div className="mt-7 border-t border-black/10 pt-5">

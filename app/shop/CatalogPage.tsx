@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import FrameFavouriteButton from './FrameFavouriteButton'
-import { formatNok, frameAvailabilityLabels, frameDisplayName, frameDisplaySubtitle, type FrameAvailability, type ShopLocale } from './productData'
+import { formatNok, frameAvailabilityLabels, frameDisplayName, frameDisplaySubtitle, matteDisplayName, matteDisplaySubtitle, type FrameAvailability, type ShopLocale } from './productData'
 
 export type CatalogItem = {
   id: string
@@ -52,19 +52,22 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
               className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60 hover:text-black focus-visible:text-black"
             >
               <span aria-hidden className="text-base leading-none transition-transform group-hover:-translate-x-0.5">←</span>
-              Back to home
+              {kind === 'mattes' && language === 'no' ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
             </a>
             <div className="mt-5">
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
             </div>
-            <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>
+            {kind === 'mattes' && language === 'no'
+              ? <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50">Flere varianter er på vei. Marker favorittene dine og hjelp oss velge hva vi tar inn i neste runde.</p>
+              : <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>}
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item) => {
-              const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : item.name
-              const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : item.subtitle
+              const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : matteDisplayName(item.id, item.name, language)
+              const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : matteDisplaySubtitle(item.id, item.subtitle, language)
               const comingSoon = item.availability === 'coming-soon'
               const availability = item.availability
+              const availabilityLabel = availability && language === 'no' && availability === 'coming-soon' ? 'KOMMER SNART' : availability ? frameAvailabilityLabels[availability] : ''
               return (
               <article
                 key={item.id}
@@ -81,7 +84,7 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{displaySubtitle}</p>
                 <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${comingSoon ? 'pr-14' : ''}`}>
                   {item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}
-                  {availability && availability !== 'in-stock' && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[availability]}`}>{frameAvailabilityLabels[availability]}</span>}
+                  {availability && availability !== 'in-stock' && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${availabilityLabel}`}>{availabilityLabel}</span>}
                 </div>
                 </a>
                 {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={item.name} className="absolute bottom-1 right-1 z-10" />}
