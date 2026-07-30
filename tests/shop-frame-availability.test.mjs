@@ -106,8 +106,8 @@ test('Norwegian frame detail pages localize purchase and benefit copy without ch
   ]) {
     assert.ok(detail.includes(translation), `missing Norwegian frame copy: ${translation}`)
   }
-  assert.match(detail, /\{displaySubtitle\}\. \{isNorwegianFrame \? 'Utviklet spesielt/)
-  assert.match(detail, /isNorwegianFrame \? 'ALLE RAMMER' : `All \$\{kind\}`/)
+  assert.match(detail, /\{displaySubtitle\}\. \{language === 'no' \? 'Utviklet spesielt/)
+  assert.match(detail, /isNorwegianFrame \? 'ALLE RAMMER' : isNorwegianMatte \? 'ALLE INNLEGG' : `All \$\{kind\}`/)
 })
 
 test('favourites persist per browser and server demand is private and deduplicated', () => {
@@ -129,4 +129,20 @@ test('coming-soon items stay out of add-to-cart selectors and purchase paths', (
   assert.doesNotMatch(configurator, /IN STOCK|in-stock frame/)
   assert.match(bundle, /isFramePurchasable\(item\)/)
   assert.match(bundle, /Dark and light modes are both included\. This only changes the preview; select the display mode in the app settings\./)
+})
+
+test('coming-soon detail copy is localized by product type without changing English', () => {
+  for (const copy of [
+    'MARKER DENNE RAMMEN SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.',
+    'MARKER DETTE INNLEGGET SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.',
+    'Kan ikke kjøpes ennå.',
+    'Heart this ${singular} to help choose what comes next.',
+    'Not yet available to purchase.',
+  ]) {
+    assert.ok(detail.includes(copy), `missing coming-soon detail copy: ${copy}`)
+  }
+  assert.match(detail, /language === 'no'\s*\? kind === 'frames'/)
+  assert.match(detail, /comingSoon \? language === 'no' \? 'Kan ikke kjøpes ennå\.' : 'Not yet available to purchase\.'/)
+  assert.match(detail, /language === 'no' \? 'Tilgjengelighet' : 'Availability'/)
+  assert.match(detail, /<FrameFavouriteButton frameId=\{item\.id\} frameName=\{item\.name\} \/>/)
 })

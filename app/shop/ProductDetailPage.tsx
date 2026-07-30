@@ -22,6 +22,11 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
   const isNorwegianMatte = kind === 'mattes' && language === 'no'
   const [added, setAdded] = useState(false)
   const comingSoon = item.availability === 'coming-soon'
+  const comingSoonFavouritePrompt = language === 'no'
+    ? kind === 'frames'
+      ? 'MARKER DENNE RAMMEN SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.'
+      : 'MARKER DETTE INNLEGGET SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.'
+    : `Heart this ${singular} to help choose what comes next.`
 
   function addProductToCart() {
     if (comingSoon) return
@@ -59,7 +64,7 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
 
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">{isNorwegianFrame ? 'RAMME TIL RE:MIND' : isNorwegianMatte ? 'INNLEGG TIL RE:MIND' : `RE:MIND ${singular}`}</p>
-              {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${availabilityDisplayLabel(item.availability, language)}`}>{availabilityDisplayLabel(item.availability, language)}</p>}
+              {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`${language === 'no' ? 'Tilgjengelighet' : 'Availability'}: ${availabilityDisplayLabel(item.availability, language)}`}>{availabilityDisplayLabel(item.availability, language)}</p>}
               <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{displayName}</h1>
               <p className="mt-5 text-xl">{formatNok(item.price, language)}</p>
               <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{displaySubtitle}. {language === 'no' ? 'Utviklet spesielt for RE:MIND og kan byttes på sekunder når du ønsker et nytt uttrykk.' : 'Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.'}</p>
@@ -74,11 +79,11 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
 
               {comingSoon ? (
                 <div className="mt-8 flex items-center justify-between gap-4 border-y border-black/10 py-2">
-                  <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">Heart this {singular} to help choose what comes next.</p>
+                  <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">{comingSoonFavouritePrompt}</p>
                   <FrameFavouriteButton frameId={item.id} frameName={item.name} />
                 </div>
               ) : <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">{language === 'no' ? 'LEGG I HANDLEKURV' : 'ADD TO CART'}</button>}
-              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : comingSoon ? 'Not yet available to purchase.' : language === 'no' ? 'RE:MIND-enheten selges separat.' : `The RE:MIND display is sold separately.`}</p>
+              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : comingSoon ? language === 'no' ? 'Kan ikke kjøpes ennå.' : 'Not yet available to purchase.' : language === 'no' ? 'RE:MIND-enheten selges separat.' : `The RE:MIND display is sold separately.`}</p>
             </div>
           </div>
 
