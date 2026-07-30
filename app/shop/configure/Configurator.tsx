@@ -154,7 +154,7 @@ const configuratorCopy = {
     storyBody: 'RE:MIND er en diskret e-papirskjerm laget for hjemmet. Velg ramme og innlegg, og få den levert komplett – klar til å tilpasses årstidene eller når stilen din endrer seg.',
     storyDetails: [
       ['KLAR FRA FØRSTE STUND', 'Velg ramme og innlegg. RE:MIND leveres ferdig og klar til å finne sin plass hjemme.'],
-      ['LANG BATTERITID', 'Laget for å stå på en hylle, et bord eller henge på veggen – uten fast kabel eller behov for et strømuttak.'],
+      ['LANG BATTERITID', 'Laget for å stå på en hylle, et bord eller henge på veggen – uten fast kabel eller behov for strømuttak.'],
       ['BYTT UTTRYKK, IKKE PRODUKT', 'Rammer og innlegg byttes på sekunder med et enkelt klikk, slik at du kan fornye uttrykket når du vil.'],
     ],
   },
