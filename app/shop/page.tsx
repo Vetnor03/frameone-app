@@ -249,10 +249,10 @@ export default async function ShopPage({
               />
             </div>
             <h2 className="mt-4 max-w-[14ch] text-[44px] leading-[1.05] tracking-[-0.02em] sm:text-[50px]">
-              {language === 'no' ? 'Gi RE:MIND et nytt uttrykk.' : <>Change the feel.<br />Not the frame.</>}
+              {language === 'no' ? 'Nytt uttrykk til rammen.' : <>Change the feel.<br />Not the frame.</>}
             </h2>
             <p className="mt-5 max-w-[33ch] text-[18px] leading-[1.45] text-black/70">
-              {language === 'no' ? 'Et innlegg for hvert rom og hver stil.' : <>Choose the perfect matte to match<br />your space and reduce glare.</>}
+              {language === 'no' ? 'Et innlegg for hvert rom, hver stil og hver årstid.' : <>Choose the perfect matte to match<br />your space and reduce glare.</>}
             </p>
             <a className="shop-button mt-7 inline-block rounded bg-black px-7 py-3 text-sm text-white md:mt-6" href={`/shop/mattes?lang=${language}`}>{language === 'no' ? 'SE UTVALGET' : 'SHOP MATTES'}</a>
           </div>
