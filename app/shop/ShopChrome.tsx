@@ -134,6 +134,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
   const footerLabels = language === "no" ? {
     shop: "BUTIKK",
     support: "HJELP",
+    faq: "Spørsmål",
     shipping: "Frakt",
     returns: "Retur",
     warranty: "Garanti",
@@ -151,6 +152,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
   } : {
     shop: "SHOP",
     support: "SUPPORT",
+    faq: "FAQ",
     shipping: "Shipping",
     returns: "Returns",
     warranty: "Warranty",
@@ -290,7 +292,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
           <p className="mb-3 font-medium">{footerLabels.support}</p>
           <div className="space-y-1.5 leading-[1.4]">
             <a href={shopHref("/shop/faq")} className="shop-footer-link block">
-              FAQ
+              {footerLabels.faq}
             </a>
             <a href={shopHref("/shop/shipping")} className="shop-footer-link block">
               {footerLabels.shipping}
