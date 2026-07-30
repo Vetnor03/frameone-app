@@ -180,6 +180,31 @@ export function frameDisplaySubtitle(id: string, fallback: string, locale: ShopL
   return locale === 'no' ? norwegianFrameLabels[id]?.subtitle ?? fallback : fallback
 }
 
+const norwegianMatteLabels: Record<string, { name: string; subtitle?: string }> = {
+  'classic-white': { name: 'Klassisk hvit', subtitle: 'Ren gallerihvit' },
+  'soft-black': { name: 'Dempet sort', subtitle: 'Dyp, matt sort' },
+  'warm-beige': { name: 'Varm beige', subtitle: 'Myk, nøytral tone' },
+  'cocoa-brown': { name: 'Kakaobrun', subtitle: 'Varm jordtone' },
+  'sage-green': { name: 'Salviegrønn', subtitle: 'Dempet, naturlig grønn' },
+  'white---black': { name: 'Hvit / Sort', subtitle: 'Kontrast i to lag' },
+  'black---white': { name: 'Sort / Hvit', subtitle: 'Kontrast i to lag' },
+  'mist-grey': { name: 'Tåkegrå', subtitle: 'Kjølig, moderne grå' },
+}
+
+export function matteDisplayName(id: string, fallback: string, locale: ShopLocale) {
+  return locale === 'no' ? norwegianMatteLabels[id]?.name ?? fallback : fallback
+}
+
+export function matteDisplaySubtitle(id: string, fallback: string, locale: ShopLocale) {
+  return locale === 'no' ? norwegianMatteLabels[id]?.subtitle ?? fallback : fallback
+}
+
+export function availabilityDisplayLabel(availability: FrameAvailability, locale: ShopLocale) {
+  return locale === 'no' && availability === 'coming-soon'
+    ? 'KOMMER SNART'
+    : frameAvailabilityLabels[availability]
+}
+
 export function pickShopLocale(value?: string): ShopLocale {
   return value === 'no' ? 'no' : 'en'
 }

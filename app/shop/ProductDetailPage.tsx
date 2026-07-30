@@ -6,7 +6,7 @@ import { PlaceholderFigure, type CatalogItem } from './CatalogPage'
 import { addCartItem } from './cart'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import FrameFavouriteButton from './FrameFavouriteButton'
-import { formatNok, frameAvailabilityLabels, frameDisplayName, frameDisplaySubtitle, type ShopLocale } from './productData'
+import { availabilityDisplayLabel, formatNok, frameDisplayName, frameDisplaySubtitle, matteDisplayName, matteDisplaySubtitle, type ShopLocale } from './productData'
 
 type ProductDetailPageProps = {
   kind: 'frames' | 'mattes'
@@ -15,8 +15,8 @@ type ProductDetailPageProps = {
 }
 
 export default function ProductDetailPage({ kind, item, language }: ProductDetailPageProps) {
-  const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : item.name
-  const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : item.subtitle
+  const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : matteDisplayName(item.id, item.name, language)
+  const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : matteDisplaySubtitle(item.id, item.subtitle, language)
   const singular = kind === 'frames' ? 'frame' : 'matte'
   const [added, setAdded] = useState(false)
   const comingSoon = item.availability === 'coming-soon'
@@ -57,7 +57,7 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
 
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/50">RE:MIND {singular}</p>
-              {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${frameAvailabilityLabels[item.availability]}`}>{frameAvailabilityLabels[item.availability]}</p>}
+              {item.availability && item.availability !== 'in-stock' && <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-black/50" aria-label={`Availability: ${availabilityDisplayLabel(item.availability, language)}`}>{availabilityDisplayLabel(item.availability, language)}</p>}
               <h1 className="mt-4 text-[38px] font-medium leading-[1.05] tracking-[0.04em] sm:text-[48px]">{displayName}</h1>
               <p className="mt-5 text-xl">{formatNok(item.price, language)}</p>
               <p className="mt-7 max-w-[42ch] text-[16px] leading-7 text-black/60">{displaySubtitle}. Designed exclusively for RE:MIND and made to swap in seconds whenever your space calls for a new look.</p>
