@@ -40,7 +40,6 @@ export function ShopHeader({ language, shippingThreshold = formatNok(1000, langu
   const navigationLabels = language === "no"
     ? { frames: "Rammer", mattes: "Innlegg", bundles: "Pakker", about: "Om oss" }
     : { frames: "Frames", mattes: "Mattes", bundles: "Bundles", about: "About" };
-
   return (
     <div className="sticky top-0 z-50">
       <div className="bg-[#0b0d10] text-[11px] text-white">
@@ -132,6 +131,33 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
   const navigationLabels = language === "no"
     ? { frames: "Rammer", mattes: "Innlegg", bundles: "Pakker", about: "Om oss" }
     : { frames: "Frames", mattes: "Mattes", bundles: "Bundles", about: "About" };
+  const footerLabels = language === "no" ? {
+    shop: "BUTIKK",
+    support: "HJELP",
+    shipping: "Frakt",
+    returns: "Retur",
+    warranty: "Garanti",
+    company: "OM RE:MIND",
+    sustainability: "Bærekraft",
+    contact: "Kontakt",
+    press: "Presse",
+    newsletterTitle: "HOLD DEG OPPDATERT",
+    newsletterBody: "Nye rammer, oppdateringer og ideer.",
+    emailPlaceholder: "Din e-post",
+  } : {
+    shop: "SHOP",
+    support: "SUPPORT",
+    shipping: "Shipping",
+    returns: "Returns",
+    warranty: "Warranty",
+    company: "COMPANY",
+    sustainability: "Sustainability",
+    contact: "Contact",
+    press: "Press",
+    newsletterTitle: "STAY IN THE LOOP",
+    newsletterBody: "New frames, updates and ideas.",
+    emailPlaceholder: "Your email",
+  };
   const footerBenefits = language === "no" ? [
     {
       title: "Gratis frakt",
@@ -236,7 +262,7 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
           </div>
         </div>
         <div>
-          <p className="mb-3 font-medium">SHOP</p>
+          <p className="mb-3 font-medium">{footerLabels.shop}</p>
           <div className="space-y-1.5 leading-[1.4]">
             <a href={shopHref("/shop/configure")} className="shop-footer-link block">
               RE:MIND
@@ -253,45 +279,45 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
           </div>
         </div>
         <div>
-          <p className="mb-3 font-medium">SUPPORT</p>
+          <p className="mb-3 font-medium">{footerLabels.support}</p>
           <div className="space-y-1.5 leading-[1.4]">
             <a href={shopHref("/shop/faq")} className="shop-footer-link block">
               FAQ
             </a>
             <a href={shopHref("/shop/shipping")} className="shop-footer-link block">
-              Shipping
+              {footerLabels.shipping}
             </a>
             <a href={shopHref("/shop/returns")} className="shop-footer-link block">
-              Returns
+              {footerLabels.returns}
             </a>
             <a href={shopHref("/shop/warranty")} className="shop-footer-link block">
-              Warranty
+              {footerLabels.warranty}
             </a>
           </div>
         </div>
         <div>
-          <p className="mb-3 font-medium">COMPANY</p>
+          <p className="mb-3 font-medium">{footerLabels.company}</p>
           <div className="space-y-1.5 leading-[1.4]">
             <a href={shopHref("/shop/about")} className="shop-footer-link block">
               {navigationLabels.about}
             </a>
             <a href={shopHref("/shop/sustainability")} className="shop-footer-link block">
-              Sustainability
+              {footerLabels.sustainability}
             </a>
             <a href={shopHref("/shop/contact")} className="shop-footer-link block">
-              Contact
+              {footerLabels.contact}
             </a>
             <a href={shopHref("/shop/press")} className="shop-footer-link block">
-              Press
+              {footerLabels.press}
             </a>
           </div>
         </div>
         <div id="waitlist" className="scroll-mt-32">
-          <p className="mb-3 font-medium">STAY IN THE LOOP</p>
+          <p className="mb-3 font-medium">{footerLabels.newsletterTitle}</p>
           <p className="max-w-[30ch] leading-[1.45] text-black/65">
-            New frames, updates and ideas.
+            {footerLabels.newsletterBody}
           </p>
-          <NewsletterForm />
+          <NewsletterForm placeholder={footerLabels.emailPlaceholder} />
         </div>
       </div>
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-3 border-t border-black/10 px-6 py-4 text-xs text-black/60 sm:grid-cols-3">

@@ -8,7 +8,7 @@ type NewsletterResponse = {
   error?: string
 }
 
-export default function NewsletterForm() {
+export default function NewsletterForm({ placeholder = 'Your email' }: { placeholder?: string }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -49,7 +49,7 @@ export default function NewsletterForm() {
         <input
           id="footer-newsletter-email"
           className="w-full min-w-0 max-w-full bg-white px-3 py-2 outline-none"
-          placeholder="Your email"
+          placeholder={placeholder}
           type="email"
           autoComplete="email"
           value={email}
