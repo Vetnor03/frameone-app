@@ -25,7 +25,7 @@ export default async function FaqPage({ searchParams }: { searchParams?: Promise
       sections={[
         {
           title: isNorwegian ? 'Hva er RE:MIND?' : 'What is RE:MIND?',
-          text: isNorwegian ? 'RE:MIND er en energieffektiv e-papirskjerm som viser nyttig informasjon i hverdagen, som påminnelser, vær, arrangementer og andre oppdateringer fra tilkoblede tjenester. Den holder det som betyr noe synlig – uten å være enda en vanlig, lysende skjerm.' : 'RE:MIND is a low-power e-paper display for useful everyday information such as reminders, weather, events and other connected updates. It keeps what matters in view without behaving like a normal glowing screen.',
+          text: isNorwegian ? 'RE:MIND er en diskret e-papirskjerm som samler det viktigste fra hverdagen på ett sted – som påminnelser, vær, arrangementer og oppdateringer fra tjenester du bruker. Informasjonen er alltid synlig, uten enda en lysende skjerm som krever oppmerksomheten din.' : 'RE:MIND is a low-power e-paper display for useful everyday information such as reminders, weather, events and other connected updates. It keeps what matters in view without behaving like a normal glowing screen.',
         },
         {
           title: isNorwegian ? 'Hva følger med RE:MIND?' : 'What comes with RE:MIND?',
@@ -33,7 +33,7 @@ export default async function FaqPage({ searchParams }: { searchParams?: Promise
         },
         {
           title: isNorwegian ? 'Hvordan setter jeg den opp?' : 'How do I set it up?',
-          text: isNorwegian ? 'Under oppsettet kobler du RE:MIND til Wi-Fi og parer den med RE:MIND-appen. Appen veileder deg gjennom valget av hva som skal vises på skjermen.' : 'During setup, connect RE:MIND to Wi-Fi and pair it with the RE:MIND app. The app guides you through choosing what appears on the display.',
+          text: isNorwegian ? 'Under oppsettet kobler du RE:MIND til Wi-Fi og parer den med RE:MIND-appen. Appen veileder deg gjennom oppstarten og de enkle valgene underveis.' : 'During setup, connect RE:MIND to Wi-Fi and pair it with the RE:MIND app. The app guides you through choosing what appears on the display.',
         },
         {
           title: isNorwegian ? 'Trenger RE:MIND Wi-Fi?' : 'Does RE:MIND need Wi-Fi?',
