@@ -8,5 +8,5 @@ export const metadata: Metadata = shopMetadata({ title: 'Frames | RE:MIND', desc
 
 export default async function FramesPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
   const language = pickShopLocale((await searchParams)?.lang)
-  return <CatalogPage kind="frames" title="All Frames" items={frameCatalog} language={language} />
+  return <CatalogPage kind="frames" title={language === 'no' ? 'ALLE RAMMER' : 'All Frames'} items={frameCatalog} language={language} />
 }

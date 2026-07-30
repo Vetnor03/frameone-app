@@ -170,6 +170,16 @@ const norwegianFrameLabels: Record<string, { name: string; subtitle: string }> =
   'natural-oak': { name: 'Nordisk eik', subtitle: 'Ekte eik' },
   'walnut-wood': { name: 'Mørk valnøtt', subtitle: 'Ekte valnøtt' },
   'cloud-white': { name: 'Vinterhvit', subtitle: 'Matt aluminium' },
+  'brushed-silver': { name: 'Børstet sølv', subtitle: 'Børstet aluminium' },
+  'charcoal-grey': { name: 'Antrasittgrå', subtitle: 'Matt aluminium' },
+  'smoked-oak': { name: 'Røkt eik', subtitle: 'Ekte eik' },
+  'honey-oak': { name: 'Honningeik', subtitle: 'Ekte eik' },
+  'espresso-wood': { name: 'Espressobrun', subtitle: 'Ekte ask' },
+  'sandstone': { name: 'Sandstein', subtitle: 'Myk soft-touch overflate' },
+  'sage-green': { name: 'Salviegrønn', subtitle: 'Pulverlakkert aluminium' },
+  'deep-navy': { name: 'Dyp marineblå', subtitle: 'Pulverlakkert aluminium' },
+  'terracotta': { name: 'Terrakotta', subtitle: 'Pulverlakkert aluminium' },
+  'limited-birch': { name: 'Eksklusiv bjørk', subtitle: 'Ekte bjørk' },
 }
 
 export function frameDisplayName(id: string, fallback: string, locale: ShopLocale) {
