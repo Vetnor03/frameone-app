@@ -202,9 +202,9 @@ export function ShopFooter({ language, shippingThreshold = formatNok(1000, langu
               <>
                 Det du trenger, når du trenger det.
                 <br />
-                Tilpasset deg og
+                Skapt for å passe inn i hjemmet
                 <br />
-                din hverdag.
+                og hverdagen din.
               </>
             ) : (
               <>
