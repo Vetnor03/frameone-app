@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const shopPage = readFileSync(new URL('../app/shop/page.tsx', import.meta.url), 'utf8')
+const shopChrome = readFileSync(new URL('../app/shop/ShopChrome.tsx', import.meta.url), 'utf8')
+const newsletterForm = readFileSync(new URL('../app/shop/NewsletterForm.tsx', import.meta.url), 'utf8')
 
 test('RE:MIND product section localizes only its Norwegian copy', () => {
   assert.match(shopPage, /language === 'no' \? 'Komplett fra' : 'Complete RE:MIND from'/)
@@ -16,4 +18,24 @@ test('mattes promo uses Innlegg and localized copy only for Norwegian', () => {
   assert.match(shopPage, /language === 'no' \? 'Nytt uttrykk til rammen\.' : <>Change the feel\.<br \/>Not the frame\.<\/>/)
   assert.match(shopPage, /language === 'no' \? 'Et innlegg for hvert rom, hver stil og hver årstid\.' : <>Choose the perfect matte to match<br \/>your space and reduce glare\.<\/>/)
   assert.match(shopPage, /language === 'no' \? 'SE UTVALGET' : 'SHOP MATTES'/)
+})
+
+test('footer provides Norwegian labels while preserving the English copy', () => {
+  for (const label of [
+    'BUTIKK', 'HJELP', 'FAQ', 'Frakt', 'Retur', 'Garanti', 'OM RE:MIND', 'Om oss',
+    'Bærekraft', 'Kontakt', 'Presse', 'HOLD DEG OPPDATERT',
+    'Nye rammer, oppdateringer og ideer.', 'Din e-post',
+  ]) {
+    assert.match(shopChrome, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+
+  for (const label of [
+    'SHOP', 'SUPPORT', 'Shipping', 'Returns', 'Warranty', 'COMPANY', 'About',
+    'Sustainability', 'Contact', 'Press', 'STAY IN THE LOOP',
+    'New frames, updates and ideas.', 'Your email',
+  ]) {
+    assert.match(shopChrome, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+
+  assert.match(newsletterForm, /placeholder=\{placeholder\}/)
 })
