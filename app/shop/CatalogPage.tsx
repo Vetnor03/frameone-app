@@ -58,7 +58,7 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
               <h1 className="text-[38px] font-medium uppercase leading-none tracking-[0.07em] md:text-[48px]">{title}</h1>
             </div>
             {kind === 'mattes' && language === 'no'
-              ? <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50">Flere varianter er på vei. Marker favorittene dine og hjelp oss velge hva vi tar inn i neste runde.</p>
+              ? <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">Flere varianter er på vei.</span> Marker favorittene dine og hjelp oss velge hva vi tar inn i neste runde.</p>
               : <p className="mt-5 text-xs uppercase leading-relaxed tracking-[0.13em] text-black/50"><span className="font-medium text-black/65">More styles are coming.</span> Heart your favourites and help us choose what comes next.</p>}
           </div>
           <div className="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
@@ -87,7 +87,7 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
                   {availability && availability !== 'in-stock' && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${availabilityLabel}`}>{availabilityLabel}</span>}
                 </div>
                 </a>
-                {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={item.name} className="absolute bottom-1 right-1 z-10" />}
+                {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={displayName} className="absolute bottom-1 right-1 z-10" />}
               </article>
             )})}
           </div>
