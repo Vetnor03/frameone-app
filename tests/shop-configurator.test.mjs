@@ -132,6 +132,16 @@ test('about navigation opens a dedicated founder story with a home link', () => 
   assert.doesNotMatch(aboutPage, /waitlist/i)
 })
 
+test('about page provides Norwegian founder copy without replacing the English copy', () => {
+  assert.match(aboutPage, /isNorwegian \? 'TILBAKE TIL FORSIDEN' : 'Back to home'/)
+  assert.match(aboutPage, /isNorwegian \? <>En liten<br \/>hilsen<\/> : 'A little note'/)
+  assert.match(aboutPage, /Hei, jeg heter Vetle og er grunnleggeren av RE:MIND – et lite prosjekt fra Stavanger\./)
+  assert.match(aboutPage, /La RE:MIND følge med for deg\./)
+  assert.match(aboutPage, /AI Follow følger med på det som betyr noe for deg, og gir beskjed når noe endrer seg\./)
+  assert.match(aboutPage, /30 DAGER GRATIS · DERETTER ABONNEMENT/)
+  assert.match(aboutPage, /Du velger hva som fortjener oppmerksomheten din\./)
+})
+
 test('accessories are omitted from the storefront until they are in inventory', () => {
   assert.doesNotMatch(chrome, /accessor(?:y|ies)/i)
   assert.doesNotMatch(shopPage, /accessor(?:y|ies)/i)
