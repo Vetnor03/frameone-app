@@ -103,7 +103,7 @@ function TermsPageContent() {
       ? [
           {
             title: 'BRUK AV APPEN',
-            text: 'Disse vilkårene gjelder for bruk av denne appen («appen»), som brukes til å konfigurere og administrere RE:MIND-enheten din. Ved å bruke appen godtar du at den kun skal brukes til det tiltenkte formålet.',
+            text: 'Disse vilkårene gjelder for bruk av RE:MIND-appen, som brukes til å konfigurere og administrere RE:MIND-enheten din. Ved å bruke appen godtar du at den kun skal brukes til det tiltenkte formålet.',
           },
           {
             title: 'BRUKERKONTO',
@@ -142,7 +142,7 @@ function TermsPageContent() {
       : [
           {
             title: 'USE OF THE APP',
-            text: 'These terms apply to the use of this app (“the App”), used to configure and manage your Frame device. You agree to use the App only for its intended purpose.',
+            text: 'These terms apply to the use of the RE:MIND app, which is used to configure and manage your RE:MIND device. You agree to use the app only for its intended purpose.',
           },
           {
             title: 'ACCOUNTS',
