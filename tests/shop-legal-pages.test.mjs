@@ -68,3 +68,15 @@ test('cookies policy documents the browser technologies actually in use', () => 
   assert.match(cookies, /No advertising cookies/)
   assert.doesNotMatch(cookies, /placeholder|Replace with your real policy/i)
 })
+
+test('cookies policy keeps English copy and fully localizes the Norwegian presentation', () => {
+  const cookies = read('app/cookies/page.tsx')
+
+  assert.match(cookies, /We use essential authentication cookies provided through Supabase/)
+  assert.match(cookies, /Vi bruker nødvendige informasjonskapsler for innlogging gjennom Supabase/)
+  assert.match(cookies, /title: 'INGEN INFORMASJONSKAPSLER FOR ANNONSERING'/)
+  assert.match(cookies, /title: 'ADMINISTRERING AV LAGREDE DATA'/)
+  assert.match(cookies, /href="mailto:support@re-mind\.no"/)
+  assert.match(cookies, /backHref=\{isNorwegian \? '\/shop\?lang=no' : '\/shop'\}/)
+  assert.match(cookies, /backLabel=\{isNorwegian \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
+})
