@@ -3,6 +3,7 @@ import { ShopFooter, ShopHeader } from './ShopChrome'
 import type { ShopLocale } from './productData'
 
 type CompanyPageShellProps = {
+  backLabel?: string
   eyebrow: string
   title: string
   intro: string
@@ -10,7 +11,7 @@ type CompanyPageShellProps = {
   language: ShopLocale
 }
 
-export default function CompanyPageShell({ eyebrow, title, intro, children, language }: CompanyPageShellProps) {
+export default function CompanyPageShell({ backLabel = 'Back to home', eyebrow, title, intro, children, language }: CompanyPageShellProps) {
   return (
     <main
       className="shop-page h-screen overflow-y-auto overflow-x-hidden bg-[#f6f3ed] text-[#171512]"
@@ -28,7 +29,7 @@ export default function CompanyPageShell({ eyebrow, title, intro, children, lang
             className="shop-footer-link inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-black/60"
           >
             <span aria-hidden>←</span>
-            Back to home
+            {backLabel}
           </a>
 
           <header className="max-w-[850px] pb-12 pt-12 md:pb-16 md:pt-20">
