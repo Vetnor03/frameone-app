@@ -29,7 +29,11 @@ test('one localized helper is reused for user-created free text', () => {
   const app = read('app/HomePageClient.tsx')
 
   assert.match(helper, /Do not enter passwords, payment information, national identification numbers, health information/)
+  assert.match(helper, /For your security and privacy, don’t share passwords, payment details, national ID numbers, health information/)
   assert.match(helper, /Ikke legg inn passord, betalingsinformasjon, fødselsnummer, helseopplysninger/)
-  assert.equal((assistant.match(/<SensitiveInformationHelper language=\{language\} \/>/g) ?? []).length, 2)
+  assert.match(helper, /Keep your information safe/)
+  assert.match(helper, /Ta vare på informasjonen din/)
+  assert.equal((assistant.match(/<SensitiveInformationHelper language=\{language\}(?: card)? \/>/g) ?? []).length, 2)
+  assert.equal((assistant.match(/<SensitiveInformationHelper language=\{language\} card \/>/g) ?? []).length, 1)
   assert.equal((app.match(/<SensitiveInformationHelper language=\{language\} \/>/g) ?? []).length, 3)
 })
