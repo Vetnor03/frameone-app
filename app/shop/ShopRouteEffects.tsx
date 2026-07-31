@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { REMIND_BASE_PRICE, SHOP_CURRENCY, trackShopEvent } from './analytics'
 import { ENGLISH_SHOP_TITLE, NORWEGIAN_SHOP_TITLE } from './title'
 
@@ -13,27 +13,32 @@ type ShopRouteEffectsProps = {
 
 export default function ShopRouteEffects({ routeTheme = 'shop' }: ShopRouteEffectsProps) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const language = searchParams.get('lang') === 'no' ? 'no' : 'en'
 
   useEffect(() => {
-    const html = document.documentElement
+    const syncTitle = () => {
+      const html = document.documentElement
+      const language = new URLSearchParams(window.location.search).get('lang') === 'no' ? 'no' : 'en'
 
-    if (language === 'no') {
-      if (document.title !== NORWEGIAN_SHOP_TITLE) {
-        html.dataset.shopPageTitle = document.title
+      if (language === 'no') {
+        if (document.title !== NORWEGIAN_SHOP_TITLE) {
+          html.dataset.shopPageTitle = document.title
+        }
+        document.title = NORWEGIAN_SHOP_TITLE
+        return
       }
-      document.title = NORWEGIAN_SHOP_TITLE
-      return
+
+      if (html.dataset.shopPageTitle) {
+        document.title = html.dataset.shopPageTitle
+        delete html.dataset.shopPageTitle
+      } else if (!document.title) {
+        document.title = ENGLISH_SHOP_TITLE
+      }
     }
 
-    if (html.dataset.shopPageTitle) {
-      document.title = html.dataset.shopPageTitle
-      delete html.dataset.shopPageTitle
-    } else if (!document.title) {
-      document.title = ENGLISH_SHOP_TITLE
-    }
-  }, [language, pathname])
+    syncTitle()
+    window.addEventListener('popstate', syncTitle)
+    return () => window.removeEventListener('popstate', syncTitle)
+  }, [pathname])
 
   useEffect(() => {
     if (pathname === '/shop') {

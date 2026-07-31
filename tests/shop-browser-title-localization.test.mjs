@@ -15,6 +15,8 @@ test('shop browser title follows the selected language without a page reload', (
   assert.match(layout, /new URLSearchParams\(location\.search\)\.get\('lang'\)==='no'/)
   assert.match(effects, /document\.title = NORWEGIAN_SHOP_TITLE/)
   assert.match(effects, /document\.title = html\.dataset\.shopPageTitle/)
+  assert.doesNotMatch(effects, /useSearchParams/)
+  assert.match(effects, /addEventListener\('popstate', syncTitle\)/)
   assert.match(selector, /router\.replace/)
   assert.doesNotMatch(selector, /window\.location\.href\s*=/)
 })
