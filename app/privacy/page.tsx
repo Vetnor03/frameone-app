@@ -96,7 +96,7 @@ function PrivacyPageContent() {
 
   const pageTitle = language === 'no' ? 'PERSONVERNERKLÆRING' : 'PRIVACY POLICY'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 10. april 2026' : 'Last updated: April 10, 2026'
+    language === 'no' ? 'Sist oppdatert: 31. juli 2026' : 'Last updated: July 31, 2026'
 
   const sections =
     language === 'no'
@@ -104,6 +104,20 @@ function PrivacyPageContent() {
           {
             title: 'OPPLYSNINGER VI SAMLER INN',
             text: 'Vi samler inn kontoinformasjon, som e-postadresse, enhetsdata som innstillinger og konfigurasjon, samt innhold du oppretter selv, som påminnelser og preferanser.',
+          },
+          {
+            title: 'INNHOLD DU OPPRETTER',
+            text: (
+              <>
+                RE:MIND kan behandle innhold du selv velger å legge inn, som påminnelser, preferanser og forespørsler til AI Follow, for å levere funksjonene du ber om. Ikke legg inn passord, betalingsinformasjon, fødselsnummer, helseopplysninger eller annen svært sensitiv eller konfidensiell informasjon.
+                <br /><br />
+                Legg bare inn personopplysninger om andre dersom du har rett til å gjøre det. Du kan slette innhold du har opprettet gjennom appen der denne funksjonen er tilgjengelig, eller kontakte oss for hjelp.
+              </>
+            ),
+          },
+          {
+            title: 'EKSTERN KI-BEHANDLING FOR AI FOLLOW',
+            text: 'Når du bruker AI Follow, sendes forespørselen din og behandlet innhold som mål, søkeveiledning og tidligere relevante oppdateringer til OpenAI, en leverandør av KI-modeller. Dette er nødvendig for å tolke hva du vil følge med på og vurdere om offentlig tilgjengelig informasjon samsvarer med forespørselen. Forespørslene til leverandøren er konfigurert med lagring av svar slått av.',
           },
           {
             title: 'HVORDAN OPPLYSNINGENE BRUKES',
@@ -154,6 +168,20 @@ function PrivacyPageContent() {
             text: 'We collect account information (email), device data (settings and configuration), and user-created content such as reminders and preferences.',
           },
           {
+            title: 'USER-CREATED CONTENT',
+            text: (
+              <>
+                RE:MIND may process content you choose to enter, such as reminders, preferences and AI Follow requests, to provide the features you ask for. Please do not enter passwords, payment information, national identification numbers, health information, or other highly sensitive or confidential information.
+                <br /><br />
+                Only provide personal data about other people when you have the right to do so. You can delete user-created content through the app where this functionality is available, or contact us for assistance.
+              </>
+            ),
+          },
+          {
+            title: 'EXTERNAL AI PROCESSING FOR AI FOLLOW',
+            text: 'When you use AI Follow, your request and processed content such as goals, search guidance and previous relevant updates are sent to OpenAI, an AI model provider. This is necessary to interpret what you want to follow and assess whether publicly available information matches your request. Requests to the provider are configured with response storage disabled.',
+          },
+          {
             title: 'HOW WE USE DATA',
             text: 'Your data is used to authenticate your account, sync with your Frame device, and provide core app functionality.',
           },
@@ -183,7 +211,7 @@ function PrivacyPageContent() {
           },
           {
             title: 'CONTACT',
-            text: 'For any privacy-related questions, contact support@re-mind.no',
+            text: <>For any privacy-related questions, contact <a href="mailto:support@re-mind.no">support@re-mind.no</a></>,
           },
         ]
 

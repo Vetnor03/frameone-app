@@ -96,7 +96,7 @@ function TermsPageContent() {
 
   const pageTitle = language === 'no' ? 'VILKÅR OG BETINGELSER' : 'TERMS & CONDITIONS'
   const updatedText =
-    language === 'no' ? 'Sist oppdatert: 10. april 2026' : 'Last updated: April 10, 2026'
+    language === 'no' ? 'Sist oppdatert: 31. juli 2026' : 'Last updated: July 31, 2026'
 
   const sections =
     language === 'no'
@@ -108,6 +108,16 @@ function TermsPageContent() {
           {
             title: 'BRUKERKONTO',
             text: 'Du er selv ansvarlig for å opprettholde tilgangen til brukerkontoen din og sørge for at opplysningene dine er korrekte.',
+          },
+          {
+            title: 'BRUKERINNHOLD OG SENSITIVE OPPLYSNINGER',
+            text: (
+              <>
+                Du er ansvarlig for innholdet du velger å legge inn i RE:MIND. Tjenesten er laget for vanlige påminnelser og informasjon fra hverdagen, og skal ikke brukes til å lagre passord, betalingsinformasjon, fødselsnummer, helseopplysninger eller annen svært sensitiv eller konfidensiell informasjon.
+                <br /><br />
+                Ikke legg inn personopplysninger om andre med mindre du har rett til å gjøre det. Vi bruker rimelige tekniske og organisatoriske tiltak for å beskytte opplysningene dine, men ingen digital tjeneste kan garantere fullstendig sikkerhet. Ingenting i disse vilkårene begrenser rettigheter eller ansvar som ikke lovlig kan fravikes.
+              </>
+            ),
           },
           {
             title: 'ENHET OG TILKOBLING',
@@ -149,6 +159,16 @@ function TermsPageContent() {
             text: 'You are responsible for maintaining access to your account and ensuring your information is accurate.',
           },
           {
+            title: 'USER CONTENT AND SENSITIVE INFORMATION',
+            text: (
+              <>
+                You are responsible for the content you choose to enter into RE:MIND. The service is intended for ordinary reminders and everyday information and should not be used to store passwords, payment information, national identification numbers, health information, or other highly sensitive or confidential information.
+                <br /><br />
+                Do not enter personal data about another person unless you have the right to do so. We use reasonable technical and organisational measures to protect your information, but no digital service can guarantee complete security. Nothing in these terms limits any rights or liability that cannot lawfully be excluded.
+              </>
+            ),
+          },
+          {
             title: 'DEVICE AND CONNECTIVITY',
             text: 'The App communicates with your Frame device and external services. We are not responsible for network issues, hardware problems, or third-party service interruptions.',
           },
@@ -170,7 +190,7 @@ function TermsPageContent() {
           },
           {
             title: 'CONTACT',
-            text: 'For any questions, contact us at support@re-mind.no',
+            text: <>For any questions, contact us at <a href="mailto:support@re-mind.no">support@re-mind.no</a></>,
           },
         ]
 
