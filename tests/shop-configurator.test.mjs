@@ -151,12 +151,15 @@ test('accessories are omitted from the storefront until they are in inventory', 
   assert.doesNotMatch(shopPage, /accessor(?:y|ies)/i)
 })
 
-test('footer selector displays language names in the language not currently selected', () => {
+test('footer selector handles its closed label separately from its dropdown labels', () => {
   assert.match(languageSelector, /aria-label="Language"/)
   assert.match(languageSelector, /language === 'no'/)
-  assert.match(languageSelector, /language === 'no'\s*\? \{ en: 'English', no: 'Norwegian' \}\s*: \{ en: 'Engelsk', no: 'Norsk' \}/)
-  assert.match(languageSelector, /<option value="en">\{labels\.en\}<\/option>/)
-  assert.match(languageSelector, /<option value="no">\{labels\.no\}<\/option>/)
+  assert.match(languageSelector, /const optionLabels = language === 'no'\s*\? \{ en: 'English', no: 'Norwegian' \}\s*: \{ en: 'Engelsk', no: 'Norsk' \}/)
+  assert.match(languageSelector, /const selectedLabel = language === 'no' \? 'Norsk' : 'English'/)
+  assert.match(languageSelector, /value=\{`selected-\$\{language\}`\}/)
+  assert.match(languageSelector, /<option value=\{`selected-\$\{language\}`\} hidden>\{selectedLabel\}<\/option>/)
+  assert.match(languageSelector, /<option value="en">\{optionLabels\.en\}<\/option>/)
+  assert.match(languageSelector, /<option value="no">\{optionLabels\.no\}<\/option>/)
   assert.doesNotMatch(languageSelector, /NOK|English \(|Norwegian \(/)
   assert.doesNotMatch(chrome, /currency/)
   assert.doesNotMatch(shopPage, /currency/)
