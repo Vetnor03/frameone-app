@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { NORWEGIAN_SHOP_TITLE } from './title'
+import { ENGLISH_SHOP_TITLE, NORWEGIAN_SHOP_TITLE } from './title'
 import { SHOP_LANGUAGE_COOKIE } from './language'
 
 type Props = { language: 'en' | 'no' }
@@ -24,10 +24,10 @@ export default function ShopLanguageSelector({ language }: Props) {
         const url = new URL(window.location.href)
         url.searchParams.set('lang', nextLanguage)
         url.searchParams.delete('currency')
-        if (nextLanguage === 'no') {
-          document.title = NORWEGIAN_SHOP_TITLE
-        } else if (document.documentElement.dataset.shopPageTitle) {
-          document.title = document.documentElement.dataset.shopPageTitle
+        const title = nextLanguage === 'no' ? NORWEGIAN_SHOP_TITLE : ENGLISH_SHOP_TITLE
+        document.title = title
+        for (const selector of ['meta[property="og:title"]', 'meta[name="twitter:title"]']) {
+          document.querySelector(selector)?.setAttribute('content', title)
         }
         router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false })
       }}

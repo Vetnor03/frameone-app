@@ -4,13 +4,21 @@ import { ShopFadeImage, ShopReveal } from './ShopMotion'
 import { formatNok, frameDisplayName, frameDisplaySubtitle, pickShopLocale, remindProduct, shopFrames } from './productData'
 import type { Metadata } from 'next'
 import { SHOP_DESCRIPTION, shopMetadata } from './seo'
-import { ENGLISH_SHOP_TITLE } from './title'
+import { ENGLISH_SHOP_TITLE, NORWEGIAN_SHOP_TITLE } from './title'
 
-export const metadata: Metadata = shopMetadata({
-  title: ENGLISH_SHOP_TITLE,
-  description: SHOP_DESCRIPTION,
-  path: '/shop',
-})
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams?: Promise<{ lang?: string }>
+}): Promise<Metadata> {
+  const language = pickShopLocale((await searchParams)?.lang)
+
+  return shopMetadata({
+    title: language === 'no' ? NORWEGIAN_SHOP_TITLE : ENGLISH_SHOP_TITLE,
+    description: SHOP_DESCRIPTION,
+    path: '/shop',
+  })
+}
 
 function CornerCrop({ palette }: { palette: [string, string, string] }) {
   return (
