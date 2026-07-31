@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { ShopFooter, ShopHeader } from './ShopChrome'
 import { ShopFadeImage, ShopReveal } from './ShopMotion'
-import { formatNok, frameDisplayName, frameDisplaySubtitle, remindProduct, shopFrames } from './productData'
+import { formatNok, frameDisplayName, frameDisplaySubtitle, pickShopLocale, remindProduct, shopFrames } from './productData'
 import type { Metadata } from 'next'
 import { SHOP_DESCRIPTION, shopMetadata } from './seo'
 import { ENGLISH_SHOP_TITLE } from './title'
@@ -29,14 +29,13 @@ function CornerCrop({ palette }: { palette: [string, string, string] }) {
   )
 }
 
-function pickLang(v?: string): 'en' | 'no' { return v === 'no' ? 'no' : 'en' }
 export default async function ShopPage({
   searchParams,
 }: {
   searchParams?: Promise<{ lang?: string }>
 }) {
   const resolvedSearchParams = await searchParams
-  const language = pickLang(resolvedSearchParams?.lang)
+  const language = pickShopLocale(resolvedSearchParams?.lang)
   const frameCardsLocalized = shopFrames.filter((frame) => frame.imageSrc)
   const topShipping = formatNok(1000, language)
   const configureHref = `/shop/configure?lang=${language}`
