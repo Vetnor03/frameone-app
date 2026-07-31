@@ -11,6 +11,7 @@ import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/c
 import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
+import SensitiveInformationHelper from './components/SensitiveInformationHelper'
 import SubscriptionSettingsPage from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
@@ -9978,6 +9979,7 @@ function CountdownDraftSheet({
               placeholder={t.eventTitle}
               className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
             />
+            <SensitiveInformationHelper language={language} />
           </div>
 
           <div className="mt-4">
@@ -12523,7 +12525,8 @@ function DinnerPlanSheet({
         </button>
       </div>
       {blocked ? <div className="mt-3 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER'}</div> : null}
-      <div className="mt-4 overflow-y-auto pr-1">
+      <SensitiveInformationHelper language={language} />
+      <div className="mt-3 overflow-y-auto pr-1">
         {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
           <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
           <input disabled={blocked} value={day.title} onChange={(e)=>setTitle(day.day,e.target.value)} placeholder={language === 'no' ? 'Hva er til middag?' : 'What is for dinner?'} className="mt-2 w-full h-10 rounded-xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-sm" />
@@ -13729,6 +13732,7 @@ async function completeReminderFromEditor() {
               placeholder={language === 'no' ? 'Tittel på påminnelse' : 'Reminder title'}
               className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
             />
+            <SensitiveInformationHelper language={language} />
           </div>
 
           <div className="mt-4">
