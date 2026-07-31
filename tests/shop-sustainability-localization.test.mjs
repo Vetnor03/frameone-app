@@ -8,15 +8,15 @@ const shell = readFileSync(new URL('../app/shop/CompanyPageShell.tsx', import.me
 test('Sustainability provides the requested Norwegian copy while retaining English', () => {
   for (const copy of [
     'SLIK TENKER VI',
-    'Designet for å vare lenger.',
+    'Designet for å vare lenge.',
     'Vi er fortsatt tidlig i reisen, men retningen er tydelig: færre og bedre produkter som forblir nyttige og passer inn i hjemmet i mange år.',
-    'Teknologi skal passe inn i hjemmet – ikke ta over.',
+    'Teknologi som passer naturlig inn i hjemmet.',
     'LAGET FOR Å BLI',
     'FÆRRE, VALGT MED OMTANKE',
     'NYTTIG OVER TID',
-    'FØLG OSS PÅ VEIEN',
-    'Fremgang fremfor løfter.',
-    'Vi skal fortsette å lære og dele tydeligere informasjon etter hvert som produksjonen vokser.',
+    'VI LÆRER UNDERVEIS',
+    'Mer handling. Mindre løfter.',
+    'Vi fortsetter å lære og deler mer om valgene våre etter hvert som produksjonen vokser. Har du spørsmål om materialer, emballasje eller produktets levetid, hører vi gjerne fra deg.',
   ]) assert.ok(page.includes(copy), `missing Norwegian copy: ${copy}`)
 
   for (const copy of [
