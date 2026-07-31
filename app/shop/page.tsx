@@ -4,9 +4,10 @@ import { ShopFadeImage, ShopReveal } from './ShopMotion'
 import { formatNok, frameDisplayName, frameDisplaySubtitle, remindProduct, shopFrames } from './productData'
 import type { Metadata } from 'next'
 import { SHOP_DESCRIPTION, shopMetadata } from './seo'
+import { ENGLISH_SHOP_TITLE } from './title'
 
 export const metadata: Metadata = shopMetadata({
-  title: 'RE:MIND | What matters. Beautifully displayed.',
+  title: ENGLISH_SHOP_TITLE,
   description: SHOP_DESCRIPTION,
   path: '/shop',
 })
