@@ -7,15 +7,16 @@ type Props = { language: 'en' | 'no' }
 
 export default function ShopLanguageSelector({ language }: Props) {
   const router = useRouter()
-  const labels = language === 'no'
+  const optionLabels = language === 'no'
     ? { en: 'English', no: 'Norwegian' }
     : { en: 'Engelsk', no: 'Norsk' }
+  const selectedLabel = language === 'no' ? 'Norsk' : 'English'
 
   return (
     <select
       aria-label="Language"
       className="bg-transparent pr-4 text-right text-xs text-black/70 outline-none"
-      value={language}
+      value={`selected-${language}`}
       onChange={(event) => {
         const nextLanguage = event.target.value
         const url = new URL(window.location.href)
@@ -29,8 +30,9 @@ export default function ShopLanguageSelector({ language }: Props) {
         router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false })
       }}
     >
-      <option value="en">{labels.en}</option>
-      <option value="no">{labels.no}</option>
+      <option value={`selected-${language}`} hidden>{selectedLabel}</option>
+      <option value="en">{optionLabels.en}</option>
+      <option value="no">{optionLabels.no}</option>
     </select>
   )
 }
