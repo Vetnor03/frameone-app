@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Configurator from './Configurator'
 import { ShopFooter, ShopHeader } from '../ShopChrome'
 import { shopMetadata } from '../seo'
+import { pickShopLocale } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'Build your RE:MIND',
@@ -9,11 +10,9 @@ export const metadata: Metadata = shopMetadata({
   path: '/shop/configure',
 })
 
-function pickLang(value?: string): 'en' | 'no' { return value === 'no' ? 'no' : 'en' }
-
 export default async function ConfigurePage({ searchParams }: { searchParams?: Promise<{ lang?: string; frame?: string; matte?: string }> }) {
   const params = await searchParams
-  const language = pickLang(params?.lang)
+  const language = pickShopLocale(params?.lang)
 
   return (
     <main

@@ -1,3 +1,5 @@
+import { pickShopLocale, type ShopLocale } from './language'
+
 export type ShopFrame = {
   id: string
   name: string
@@ -163,7 +165,7 @@ export const shopMattes: ShopMatte[] = [
   availability: matteAvailability(String(id)),
 })))
 
-export type ShopLocale = 'en' | 'no'
+export type { ShopLocale } from './language'
 
 const norwegianFrameLabels: Record<string, { name: string; subtitle: string }> = {
   'midnight-black': { name: 'Midnattsort', subtitle: 'Matt aluminium' },
@@ -221,9 +223,7 @@ export function availabilityDisplayLabel(availability: FrameAvailability, locale
     : frameAvailabilityLabels[availability]
 }
 
-export function pickShopLocale(value?: string): ShopLocale {
-  return value === 'no' ? 'no' : 'en'
-}
+export { pickShopLocale }
 
 export function formatNok(value: number, locale: ShopLocale = 'en') {
   const amount = value.toLocaleString('nb-NO').replace(/[\u00a0\u202f ]/g, '\u00a0')

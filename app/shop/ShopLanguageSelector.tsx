@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { NORWEGIAN_SHOP_TITLE } from './title'
+import { SHOP_LANGUAGE_COOKIE } from './language'
 
 type Props = { language: 'en' | 'no' }
 
@@ -19,6 +20,7 @@ export default function ShopLanguageSelector({ language }: Props) {
       value={`selected-${language}`}
       onChange={(event) => {
         const nextLanguage = event.target.value
+        document.cookie = `${SHOP_LANGUAGE_COOKIE}=${nextLanguage}; Path=/; Max-Age=31536000; SameSite=Lax`
         const url = new URL(window.location.href)
         url.searchParams.set('lang', nextLanguage)
         url.searchParams.delete('currency')

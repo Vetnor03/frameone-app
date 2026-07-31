@@ -1,6 +1,7 @@
 // middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { isShopLocale, SHOP_LANGUAGE_COOKIE } from './shop/language'
 
 
 function isDesktopUserAgent(userAgent: string | null) {
@@ -52,6 +53,27 @@ function createSupabaseServerClient(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
 
+  if (pathname === '/shop' || pathname.startsWith('/shop/')) {
+    const requestedLanguage = searchParams.get('lang')
+    const savedLanguage = request.cookies.get(SHOP_LANGUAGE_COOKIE)?.value
+
+    if (!isShopLocale(requestedLanguage)) {
+      const url = request.nextUrl.clone()
+      url.searchParams.set('lang', isShopLocale(savedLanguage) ? savedLanguage : 'no')
+      return NextResponse.redirect(url)
+    }
+
+    if (savedLanguage !== requestedLanguage) {
+      const response = NextResponse.next({ request })
+      response.cookies.set(SHOP_LANGUAGE_COOKIE, requestedLanguage, {
+        maxAge: 60 * 60 * 24 * 365,
+        path: '/',
+        sameSite: 'lax',
+      })
+      return response
+    }
+  }
+
   if (shouldRedirectDesktopRootToShop(request)) {
     const url = request.nextUrl.clone()
     url.pathname = '/shop'
@@ -63,6 +85,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     isLogin ||
     pathname === '/shop' ||
+    pathname.startsWith('/shop/') ||
     pathname === '/waitlist' ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/favicon.ico' ||
