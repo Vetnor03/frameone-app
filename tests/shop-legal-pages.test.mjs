@@ -46,6 +46,19 @@ test('terms page keeps English copy and fully localizes the Norwegian shop prese
   assert.match(terms, /backLabel=\{language === 'no' \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
 })
 
+test('privacy page keeps English copy and fully localizes the Norwegian shop presentation', () => {
+  const privacy = read('app/privacy/page.tsx')
+
+  assert.match(privacy, /Your data is used to authenticate your account, sync with your Frame device, and provide core app functionality\./)
+  assert.match(privacy, /Opplysningene brukes til å bekrefte brukerkontoen din, synkronisere med RE:MIND-enheten og levere appens grunnleggende funksjoner\./)
+  assert.match(privacy, /title: 'OPPLYSNINGER VI SAMLER INN'/)
+  assert.match(privacy, /title: 'DELING AV OPPLYSNINGER'/)
+  assert.match(privacy, /href="https:\/\/www\.datatilsynet\.no\/"/)
+  assert.match(privacy, /href="mailto:support@re-mind\.no"/)
+  assert.match(privacy, /backHref=\{language === 'no' \? '\/shop\?lang=no' : '\/shop'\}/)
+  assert.match(privacy, /backLabel=\{language === 'no' \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
+})
+
 test('cookies policy documents the browser technologies actually in use', () => {
   const cookies = read('app/cookies/page.tsx')
 

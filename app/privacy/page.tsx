@@ -19,8 +19,9 @@ function PrivacyPageContent() {
   const router = useRouter()
   const sp = useSearchParams()
   const from = sp.get('from')
+  const queryLanguage = sp.get('lang')
 
-  const [language, setLanguage] = useState<AppLanguage>('en')
+  const [language, setLanguage] = useState<AppLanguage>(queryLanguage === 'no' ? 'no' : 'en')
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
@@ -57,6 +58,11 @@ function PrivacyPageContent() {
   }, [])
 
   useEffect(() => {
+    if (queryLanguage === 'no' || queryLanguage === 'en') {
+      setLanguage(queryLanguage)
+      return
+    }
+
     let cancelled = false
 
     ;(async () => {
@@ -86,9 +92,9 @@ function PrivacyPageContent() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [queryLanguage])
 
-  const pageTitle = language === 'no' ? 'PERSONVERN' : 'PRIVACY POLICY'
+  const pageTitle = language === 'no' ? 'PERSONVERNERKLÆRING' : 'PRIVACY POLICY'
   const updatedText =
     language === 'no' ? 'Sist oppdatert: 10. april 2026' : 'Last updated: April 10, 2026'
 
@@ -96,40 +102,50 @@ function PrivacyPageContent() {
     language === 'no'
       ? [
           {
-            title: 'HVA VI SAMLER INN',
-            text: 'Vi samler inn kontoinformasjon (e-post), enhetsdata (innstillinger og konfigurasjon) og innhold du selv oppretter, som påminnelser og preferanser.',
+            title: 'OPPLYSNINGER VI SAMLER INN',
+            text: 'Vi samler inn kontoinformasjon, som e-postadresse, enhetsdata som innstillinger og konfigurasjon, samt innhold du oppretter selv, som påminnelser og preferanser.',
           },
           {
-            title: 'HVORDAN VI BRUKER DATA',
-            text: 'Dataene dine brukes til å autentisere kontoen din, synkronisere med Frame-enheten din og levere appens kjernefunksjoner.',
+            title: 'HVORDAN OPPLYSNINGENE BRUKES',
+            text: 'Opplysningene brukes til å bekrefte brukerkontoen din, synkronisere med RE:MIND-enheten og levere appens grunnleggende funksjoner.',
           },
           {
-            title: 'RETTSLIG GRUNNLAG',
-            text: 'Vi behandler dataene dine for å levere tjenesten (avtale) og for å vedlikeholde og forbedre appen (berettiget interesse).',
+            title: 'BEHANDLINGSGRUNNLAG',
+            text: 'Vi behandler personopplysningene dine for å levere tjenesten og oppfylle avtalen med deg, samt for å vedlikeholde og forbedre RE:MIND-appen basert på vår berettigede interesse.',
           },
           {
             title: 'LAGRING',
-            text: 'Data lagres sikkert ved hjelp av Supabase. Vi tar rimelige forholdsregler for å beskytte informasjonen din.',
+            text: 'Opplysningene lagres ved hjelp av Supabase. Vi gjennomfører rimelige tekniske og organisatoriske tiltak for å beskytte informasjonen din.',
           },
           {
-            title: 'OPPBEVARINGSTID',
-            text: 'Vi oppbevarer dataene dine så lenge kontoen din er aktiv. Du kan når som helst be om sletting.',
+            title: 'LAGRINGSTID',
+            text: 'Vi lagrer opplysningene så lenge kontoen din er aktiv. Du kan når som helst be om at opplysningene slettes.',
           },
           {
             title: 'INFORMASJONSKAPSLER',
-            text: 'Vi bruker kun nødvendige informasjonskapsler for innlogging og grunnleggende funksjonalitet. Vi bruker ikke sporings- eller annonseringskapsler.',
+            text: 'Vi bruker kun nødvendige informasjonskapsler for innlogging og grunnleggende funksjonalitet. Vi bruker ikke informasjonskapsler til sporing eller annonsering.',
           },
           {
-            title: 'DELING',
-            text: 'Vi selger ikke dataene dine. Data deles kun med infrastrukturelle tjenesteleverandører når det er nødvendig for å drifte tjenesten.',
+            title: 'DELING AV OPPLYSNINGER',
+            text: 'Vi selger ikke personopplysningene dine. Opplysninger deles bare med leverandører av teknisk infrastruktur når det er nødvendig for å levere tjenesten.',
           },
           {
             title: 'DINE RETTIGHETER',
-            text: 'Du kan be om innsyn, retting eller sletting av dataene dine. Du kan også kontakte Datatilsynet ved behov.',
+            text: (
+              <>
+                Du kan be om innsyn i, retting eller sletting av personopplysningene dine. Du kan også{' '}
+                kontakte <a href="https://www.datatilsynet.no/">Datatilsynet</a> dersom det er nødvendig.
+              </>
+            ),
           },
           {
             title: 'KONTAKT',
-            text: 'For spørsmål om personvern, kontakt support@re-mind.no',
+            text: (
+              <>
+                Har du spørsmål om personvern, kan du kontakte oss på{' '}
+                <a href="mailto:support@re-mind.no">support@re-mind.no</a>
+              </>
+            ),
           },
         ]
       : [
@@ -172,7 +188,15 @@ function PrivacyPageContent() {
         ]
 
   if (from === 'shop') {
-    return <ShopLegalPage title={pageTitle} updatedText={updatedText} sections={sections} />
+    return (
+      <ShopLegalPage
+        title={pageTitle}
+        updatedText={updatedText}
+        sections={sections}
+        backHref={language === 'no' ? '/shop?lang=no' : '/shop'}
+        backLabel={language === 'no' ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
+      />
+    )
   }
 
   return (
