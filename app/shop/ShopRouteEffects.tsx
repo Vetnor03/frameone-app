@@ -16,22 +16,12 @@ export default function ShopRouteEffects({ routeTheme = 'shop' }: ShopRouteEffec
 
   useEffect(() => {
     const syncTitle = () => {
-      const html = document.documentElement
-      const language = new URLSearchParams(window.location.search).get('lang') === 'no' ? 'no' : 'en'
+      const language = new URLSearchParams(window.location.search).get('lang') === 'en' ? 'en' : 'no'
+      const title = language === 'no' ? NORWEGIAN_SHOP_TITLE : ENGLISH_SHOP_TITLE
 
-      if (language === 'no') {
-        if (document.title !== NORWEGIAN_SHOP_TITLE) {
-          html.dataset.shopPageTitle = document.title
-        }
-        document.title = NORWEGIAN_SHOP_TITLE
-        return
-      }
-
-      if (html.dataset.shopPageTitle) {
-        document.title = html.dataset.shopPageTitle
-        delete html.dataset.shopPageTitle
-      } else if (!document.title) {
-        document.title = ENGLISH_SHOP_TITLE
+      document.title = title
+      for (const selector of ['meta[property="og:title"]', 'meta[name="twitter:title"]']) {
+        document.querySelector(selector)?.setAttribute('content', title)
       }
     }
 

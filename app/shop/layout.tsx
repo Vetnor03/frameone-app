@@ -5,7 +5,7 @@ import { SHOP_DESCRIPTION, shopMetadata } from './seo'
 import { ENGLISH_SHOP_TITLE, NORWEGIAN_SHOP_TITLE } from './title'
 
 export const metadata: Metadata = shopMetadata({
-  title: ENGLISH_SHOP_TITLE,
+  title: NORWEGIAN_SHOP_TITLE,
   description: SHOP_DESCRIPTION,
   path: '/shop',
 })
@@ -19,7 +19,7 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
     <>
       <script
         dangerouslySetInnerHTML={{
-          __html: `(function(){var e=document.documentElement;if(new URLSearchParams(location.search).get('lang')==='no'){e.dataset.shopPageTitle=document.title;document.title=${JSON.stringify(NORWEGIAN_SHOP_TITLE)}})()`,
+          __html: `(function(){var l=new URLSearchParams(location.search).get('lang');document.title=l==='en'?${JSON.stringify(ENGLISH_SHOP_TITLE)}:${JSON.stringify(NORWEGIAN_SHOP_TITLE)}})()`,
         }}
       />
       <ShopRouteEffects />
