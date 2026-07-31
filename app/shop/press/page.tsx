@@ -25,7 +25,7 @@ export default async function PressPage({ searchParams }: { searchParams?: Promi
       backLabel={isNorwegian ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
       eyebrow={isNorwegian ? 'PRESSE' : 'Press room'}
       title={isNorwegian ? 'Møt RE:MIND.' : 'Meet RE:MIND.'}
-      intro={isNorwegian ? 'En rolig digital ramme fra Stavanger – utviklet for å gjøre nyttig informasjon synlig og redusere behovet for å ta frem mobilen.' : 'A calm digital frame from Stavanger, Norway—created to put useful information in view and help people spend less time reaching for their phones.'}
+      intro={isNorwegian ? 'En digital ramme fra Stavanger – utviklet for å samle nyttig informasjon på ett sted, i et format som passer naturlig inn i hjemmet.' : 'A calm digital frame from Stavanger, Norway—created to put useful information in view and help people spend less time reaching for their phones.'}
     >
       <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <article className="rounded-[30px] bg-[#171b19] p-7 text-white sm:p-10 md:p-12">
