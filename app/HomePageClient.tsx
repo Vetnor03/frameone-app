@@ -8259,6 +8259,7 @@ function FrameSetupFlow({
             <label className="block">
               <span className="text-xs uppercase tracking-[0.22em] text-[color:var(--fg-50)]">{isNo ? 'Hendelse' : 'Event'}</span>
               <input value={countdownTitle} onChange={(e) => setCountdownTitle(e.target.value)} placeholder={isNo ? 'Sommerferie' : 'Summer vacation'} className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 outline-none focus:border-[#2aa3ff]" />
+              <SensitiveInformationHelper language={language} />
             </label>
             <label className="block">
               <span className="text-xs uppercase tracking-[0.22em] text-[color:var(--fg-50)]">{isNo ? 'Dato' : 'Date'}</span>
@@ -12383,6 +12384,7 @@ function GroceriesDraftSheet({
           placeholder={tx(language).groceriesInputPlaceholder}
           className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
         />
+        <SensitiveInformationHelper language={language} />
 
         <div className="mt-4 flex items-center justify-center gap-3">
           <button onClick={() => setQuantity((v) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
@@ -12618,6 +12620,7 @@ function DinnerPlanAddItemSheet({
     <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh] px-5 pt-5 pb-6">
       <div className="flex items-center justify-between"><div className="tracking-widest text-sm text-[color:var(--fg-70)]">{language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}</div><button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">✕</button></div>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(language).groceriesInputPlaceholder} className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none" />
+      <SensitiveInformationHelper language={language} />
       <div className="mt-4 flex items-center justify-center gap-3">
           <button onClick={() => setQuantity((v: number) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
         <div className="w-10 text-center text-[color:var(--fg-85)]">{quantity}</div>
