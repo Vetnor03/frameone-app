@@ -56,7 +56,7 @@ export default async function SustainabilityPage({ searchParams }: { searchParam
       language={language}
       backLabel={isNorwegian ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
       eyebrow={isNorwegian ? 'SLIK TENKER VI' : 'Our approach'}
-      title={isNorwegian ? 'Designet for å vare lenger.' : 'Designed for a longer life.'}
+      title={isNorwegian ? 'Designet for å vare lenge.' : 'Designed for a longer life.'}
       intro={isNorwegian ? 'Vi er fortsatt tidlig i reisen, men retningen er tydelig: færre og bedre produkter som forblir nyttige og passer inn i hjemmet i mange år.' : 'We are at the beginning of our journey, but our direction is clear: make fewer, better products that remain useful and feel at home for years.'}
     >
       <ShopReveal>
@@ -71,7 +71,7 @@ export default async function SustainabilityPage({ searchParams }: { searchParam
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
           <p className="absolute bottom-7 left-7 max-w-[25ch] text-sm leading-6 text-white/90 md:bottom-10 md:left-10 md:text-base">
-            {isNorwegian ? 'Teknologi skal passe inn i hjemmet – ikke ta over.' : 'Calm technology should live well with what you already own.'}
+            {isNorwegian ? 'Teknologi som passer naturlig inn i hjemmet.' : 'Calm technology should live well with what you already own.'}
           </p>
         </div>
       </ShopReveal>
@@ -88,11 +88,11 @@ export default async function SustainabilityPage({ searchParams }: { searchParam
 
       <aside className="mt-8 rounded-[30px] bg-[#23352d] px-7 py-10 text-[#f8f5ee] sm:px-10 md:flex md:items-center md:justify-between md:gap-12 md:px-14 md:py-14">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-white/50">{isNorwegian ? 'FØLG OSS PÅ VEIEN' : 'Keep us accountable'}</p>
-          <h2 className="mt-3 text-3xl font-medium tracking-[-0.035em]">{isNorwegian ? 'Fremgang fremfor løfter.' : 'Progress over promises.'}</h2>
+          <p className="text-xs uppercase tracking-[0.2em] text-white/50">{isNorwegian ? 'VI LÆRER UNDERVEIS' : 'Keep us accountable'}</p>
+          <h2 className="mt-3 text-3xl font-medium tracking-[-0.035em]">{isNorwegian ? 'Mer handling. Mindre løfter.' : 'Progress over promises.'}</h2>
         </div>
         <p className="mt-5 max-w-[500px] text-[15px] leading-7 text-white/68 md:mt-0">
-          {isNorwegian ? 'Vi skal fortsette å lære og dele tydeligere informasjon etter hvert som produksjonen vokser. Har du spørsmål om materialer, emballasje eller produktets levetid? Vi vil gjerne høre fra deg.' : 'We will keep learning and share clearer information as our production grows. Have a question about materials, packaging or product life? We would like to hear it.'}
+          {isNorwegian ? 'Vi fortsetter å lære og deler mer om valgene våre etter hvert som produksjonen vokser. Har du spørsmål om materialer, emballasje eller produktets levetid, hører vi gjerne fra deg.' : 'We will keep learning and share clearer information as our production grows. Have a question about materials, packaging or product life? We would like to hear it.'}
         </p>
       </aside>
     </CompanyPageShell>
