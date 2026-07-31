@@ -34,6 +34,18 @@ test('shop legal pages use shared shop styling and return home', () => {
   assert.match(cookies, /from === 'shop'/)
 })
 
+test('terms page keeps English copy and fully localizes the Norwegian shop presentation', () => {
+  const terms = read('app/terms/page.tsx')
+
+  assert.match(terms, /These terms apply to the use of this app \(“the App”\), used to configure and manage your Frame device\./)
+  assert.match(terms, /Disse vilkårene gjelder for bruk av denne appen \(«appen»\), som brukes til å konfigurere og administrere RE:MIND-enheten din\./)
+  assert.match(terms, /title: 'BRUKERKONTO'/)
+  assert.match(terms, /title: 'GJELDENDE LOV'/)
+  assert.match(terms, /href="mailto:support@re-mind\.no"/)
+  assert.match(terms, /backHref=\{language === 'no' \? '\/shop\?lang=no' : '\/shop'\}/)
+  assert.match(terms, /backLabel=\{language === 'no' \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
+})
+
 test('cookies policy documents the browser technologies actually in use', () => {
   const cookies = read('app/cookies/page.tsx')
 

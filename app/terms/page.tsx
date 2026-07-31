@@ -19,8 +19,9 @@ function TermsPageContent() {
   const router = useRouter()
   const sp = useSearchParams()
   const from = sp.get('from')
+  const queryLanguage = sp.get('lang')
 
-  const [language, setLanguage] = useState<AppLanguage>('en')
+  const [language, setLanguage] = useState<AppLanguage>(queryLanguage === 'no' ? 'no' : 'en')
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const [showTopFade, setShowTopFade] = useState(false)
@@ -57,6 +58,11 @@ function TermsPageContent() {
   }, [])
 
   useEffect(() => {
+    if (queryLanguage === 'no' || queryLanguage === 'en') {
+      setLanguage(queryLanguage)
+      return
+    }
+
     let cancelled = false
 
     ;(async () => {
@@ -86,7 +92,7 @@ function TermsPageContent() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [queryLanguage])
 
   const pageTitle = language === 'no' ? 'VILKÅR OG BETINGELSER' : 'TERMS & CONDITIONS'
   const updatedText =
@@ -97,35 +103,40 @@ function TermsPageContent() {
       ? [
           {
             title: 'BRUK AV APPEN',
-            text: 'Disse vilkårene gjelder for bruk av denne appen (“appen”), som brukes til å konfigurere og administrere Frame-enheten din. Du samtykker i å bruke appen kun til det den er ment for.',
+            text: 'Disse vilkårene gjelder for bruk av denne appen («appen»), som brukes til å konfigurere og administrere RE:MIND-enheten din. Ved å bruke appen godtar du at den kun skal brukes til det tiltenkte formålet.',
           },
           {
-            title: 'KONTOER',
-            text: 'Du er ansvarlig for å opprettholde tilgang til kontoen din og for å sikre at informasjonen din er korrekt.',
+            title: 'BRUKERKONTO',
+            text: 'Du er selv ansvarlig for å opprettholde tilgangen til brukerkontoen din og sørge for at opplysningene dine er korrekte.',
           },
           {
             title: 'ENHET OG TILKOBLING',
-            text: 'Appen kommuniserer med Frame-enheten din og eksterne tjenester. Vi er ikke ansvarlige for nettverksproblemer, maskinvarefeil eller avbrudd i tredjepartstjenester.',
+            text: 'Appen kommuniserer med RE:MIND-enheten din og eksterne tjenester. Vi er ikke ansvarlige for nettverksproblemer, maskinvarefeil eller avbrudd i tjenester fra tredjeparter.',
           },
           {
             title: 'TILGJENGELIGHET',
-            text: 'Appen leveres “som den er”, uten garantier for uavbrutt eller feilfri drift.',
+            text: 'Appen leveres «som den er», uten garanti for uavbrutt eller feilfri drift.',
           },
           {
             title: 'ANSVAR',
-            text: 'Så langt loven tillater det, er vi ikke ansvarlige for indirekte eller følgeskader, inkludert tap av data eller problemer med enheten.',
+            text: 'I den utstrekning loven tillater det, er vi ikke ansvarlige for indirekte tap eller følgeskader, inkludert tap av data eller problemer med enheten.',
           },
           {
             title: 'ENDRINGER',
-            text: 'Vi kan oppdatere disse vilkårene når som helst. Fortsatt bruk av appen betyr at du godtar de oppdaterte vilkårene.',
+            text: 'Vi kan oppdatere disse vilkårene når det er nødvendig. Ved fortsatt bruk av appen godtar du de oppdaterte vilkårene.',
           },
           {
-            title: 'LOVVALG',
-            text: 'Disse vilkårene er underlagt norsk lov.',
+            title: 'GJELDENDE LOV',
+            text: 'Disse vilkårene reguleres av norsk lov.',
           },
           {
             title: 'KONTAKT',
-            text: 'For spørsmål, kontakt oss på support@re-mind.no',
+            text: (
+              <>
+                Har du spørsmål, kan du kontakte oss på{' '}
+                <a href="mailto:support@re-mind.no">support@re-mind.no</a>
+              </>
+            ),
           },
         ]
       : [
@@ -164,7 +175,15 @@ function TermsPageContent() {
         ]
 
   if (from === 'shop') {
-    return <ShopLegalPage title={pageTitle} updatedText={updatedText} sections={sections} />
+    return (
+      <ShopLegalPage
+        title={pageTitle}
+        updatedText={updatedText}
+        sections={sections}
+        backHref={language === 'no' ? '/shop?lang=no' : '/shop'}
+        backLabel={language === 'no' ? 'TILBAKE TIL FORSIDEN' : 'Back to home'}
+      />
+    )
   }
 
   return (
