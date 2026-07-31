@@ -93,8 +93,8 @@ export default async function ShopPage({
                 {language === 'no' ? (
                   <>
                     <span className="md:block">Påminnelser, vær og det som skjer –</span>{' '}
-                    <span className="md:block">samlet på ett sted, med mindre</span>{' '}
-                    <span className="md:block">skjermtid.</span>
+                    <span className="md:block">samlet på ett sted, akkurat der du</span>{' '}
+                    <span className="md:block">trenger det.</span>
                   </>
                 ) : (
                   <>
