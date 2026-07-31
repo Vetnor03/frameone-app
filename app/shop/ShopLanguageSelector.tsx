@@ -8,8 +8,8 @@ type Props = { language: 'en' | 'no' }
 export default function ShopLanguageSelector({ language }: Props) {
   const router = useRouter()
   const labels = language === 'no'
-    ? { en: 'Engelsk', no: 'Norsk' }
-    : { en: 'English', no: 'Norwegian' }
+    ? { en: 'English', no: 'Norwegian' }
+    : { en: 'Engelsk', no: 'Norsk' }
 
   return (
     <select

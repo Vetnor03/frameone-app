@@ -151,11 +151,10 @@ test('accessories are omitted from the storefront until they are in inventory', 
   assert.doesNotMatch(shopPage, /accessor(?:y|ies)/i)
 })
 
-test('footer selector localizes its labels for Norwegian without changing its English labels', () => {
+test('footer selector displays language names in the language not currently selected', () => {
   assert.match(languageSelector, /aria-label="Language"/)
   assert.match(languageSelector, /language === 'no'/)
-  assert.match(languageSelector, /\{ en: 'Engelsk', no: 'Norsk' \}/)
-  assert.match(languageSelector, /\{ en: 'English', no: 'Norwegian' \}/)
+  assert.match(languageSelector, /language === 'no'\s*\? \{ en: 'English', no: 'Norwegian' \}\s*: \{ en: 'Engelsk', no: 'Norsk' \}/)
   assert.match(languageSelector, /<option value="en">\{labels\.en\}<\/option>/)
   assert.match(languageSelector, /<option value="no">\{labels\.no\}<\/option>/)
   assert.doesNotMatch(languageSelector, /NOK|English \(|Norwegian \(/)
