@@ -336,7 +336,7 @@ export default function AIAssistantTab({ language, activeDeviceId, deepLink, onD
       {!reachedWatchLimit ? <>
         <div data-testid="assistant-follow-input-container" className="mt-5 rounded-3xl border border-[color:var(--bd-20)] bg-[color:var(--card-bg)]/80 px-4 py-3 transition-colors duration-200 focus-within:border-[#2aa3ff]/75 focus-within:bg-[color:var(--card-bg)]">
           <textarea aria-label={c.placeholder} value={request} onChange={(e) => setRequest(e.target.value)} maxLength={MAX_ASSISTANT_REQUEST_LENGTH + 1} placeholder={c.placeholder} rows={4} className="w-full resize-none bg-transparent text-base leading-6 text-[color:var(--fg-95)] outline-none placeholder:text-[color:var(--fg-40)]" />
-          <SensitiveInformationHelper language={language} card />
+          <SensitiveInformationHelper language={language} />
         </div>
         <button type="button" onClick={createWatch} disabled={startFollowingDisabled} aria-disabled={startFollowingDisabled} data-state={startFollowingIsActive ? 'active' : 'muted'} className={`mt-3 h-12 w-full rounded-2xl border text-sm font-semibold tracking-wide shadow-none transition-colors duration-200 ease-out disabled:cursor-not-allowed ${startFollowingIsActive ? 'border-[#2aa3ff] bg-[#2aa3ff] text-white hover:bg-[#168fe8]' : 'border-[color:var(--bd-20)] bg-[color:var(--fg-20)] text-[color:var(--fg-55)] opacity-70'}`}>{creating ? c.creating : c.button}</button>
       </> : <div data-testid="assistant-full-plan-state" className="mt-5 rounded-3xl border border-[#2aa3ff]/20 bg-[#2aa3ff]/[0.06] p-4">
