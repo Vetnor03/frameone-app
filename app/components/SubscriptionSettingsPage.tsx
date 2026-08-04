@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 type AppLanguage = 'en' | 'no'
-type PreviewPlan = 'trial' | 'basic' | 'normal' | 'pro'
+export type PreviewPlan = 'trial' | 'basic' | 'normal' | 'pro'
 type SubscriptionEntitlements = {
   effective_plan: 'basic' | 'normal' | 'pro'
   effective_status: string
@@ -12,7 +12,7 @@ type SubscriptionEntitlements = {
   days_remaining_in_trial: number
 }
 
-type Plan = {
+export type SubscriptionPlan = {
   id: PreviewPlan
   name: string
   price: { en: string; no: string }
@@ -20,7 +20,7 @@ type Plan = {
   features: { en: string[]; no: string[] }
 }
 
-const PLANS: Plan[] = [
+export const AI_FOLLOW_PLANS: SubscriptionPlan[] = [
   { id: 'trial', name: 'Trial', price: { en: 'Free for 30 days', no: 'Gratis i 30 dager' }, features: { en: ['Follow 1 thing', 'Radar included'], no: ['Følg 1 ting', 'Radar inkludert'] } },
   { id: 'basic', name: 'Basic', price: { en: '59 kr', no: '59 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Follow up to 2 things', 'Radar on 1 thing'], no: ['Følg opptil 2 ting', 'Radar på 1 ting'] } },
   { id: 'normal', name: 'Normal', price: { en: '119 kr', no: '119 kr' }, priceSuffix: { en: 'per month', no: 'per måned' }, features: { en: ['Follow up to 5 things', 'Radar on up to 2 things'], no: ['Følg opptil 5 ting', 'Radar på opptil 2 ting'] } },
@@ -74,7 +74,7 @@ export default function SubscriptionSettingsPage({ language, onBack }: { languag
   }
 
   const currentPlan: PreviewPlan | null = entitlements ? (entitlements.is_trial ? 'trial' : entitlements.effective_plan) : null
-  const currentPlanDetails = PLANS.find((plan) => plan.id === currentPlan)
+  const currentPlanDetails = AI_FOLLOW_PLANS.find((plan) => plan.id === currentPlan)
   const currentTitle = currentPlanDetails && (currentPlanDetails.id === 'trial' ? currentPlanDetails.price[language] : currentPlanDetails.name)
 
   return (
@@ -97,7 +97,7 @@ export default function SubscriptionSettingsPage({ language, onBack }: { languag
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-        {PLANS.map((plan) => {
+        {AI_FOLLOW_PLANS.map((plan) => {
           const selected = currentPlan === plan.id
           const popular = plan.id === 'normal'
           const previewLabel = plan.id === 'trial'

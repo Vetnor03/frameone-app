@@ -12,7 +12,7 @@ import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased }
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
-import SubscriptionSettingsPage from './components/SubscriptionSettingsPage'
+import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
@@ -24,9 +24,8 @@ type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'coun
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
-type SetupPurpose = 'family' | 'sport' | 'custom'
-type SetupSport = 'surf' | 'soccer'
-type FrameSetupSelection = { purpose: SetupPurpose; sport?: SetupSport; modules: Record<string, any>; countdownEvent?: { title: string; date: string } | null }
+type SetupPurpose = 'normal' | 'custom'
+type FrameSetupSelection = { purpose: SetupPurpose; modules: Record<string, any> }
 
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
@@ -1997,10 +1996,9 @@ export default function HomePage() {
     let nextModules = mergeReusableUserModules({ ...modulesJson }, selection.modules)
     let nextPinnedTabs = pinnedModuleTabs
 
-    if (selection.purpose !== 'custom') {
+    if (selection.purpose === 'normal') {
       nextLayout = 'pyramid'
-      const sportModule: ModuleKey | null = selection.purpose === 'sport' ? (selection.sport === 'soccer' ? 'soccer' : 'surf') : 'countdown'
-      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: sportModule, 3: 'weather' }
+      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'assistant', 3: 'weather' }
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
       nextPinnedTabs = Array.from(new Set((Object.values(presetCells).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date')))
       layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, presetCells)
@@ -2026,25 +2024,6 @@ export default function HomePage() {
     })
     if (error) throw error
     if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
-
-    if (selection.countdownEvent?.title && selection.countdownEvent.date) {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const userId = sessionData.session?.user?.id
-      if (!userId) throw new Error(language === 'no' ? 'Ikke logget inn' : 'Not logged in')
-
-      const { error: countdownError } = await supabase
-        .from('countdown_events')
-        .insert({
-          device_id: activeDeviceId,
-          title: selection.countdownEvent.title,
-          target_date: selection.countdownEvent.date,
-          pinned: true,
-          created_by_user_id: userId,
-          updated_by_user_id: userId,
-        })
-
-      if (countdownError) throw countdownError
-    }
 
     layoutModuleMemoryRef.current = nextLayoutModuleMemory
     setLayoutKey(nextLayout)
@@ -2282,6 +2261,7 @@ async function handleSelectTab(k: TabKey) {
         {setupDeviceId && activeDeviceId === setupDeviceId && (
           <FrameSetupFlow
             language={language}
+            activeDeviceId={activeDeviceId}
             onComplete={completeFrameSetup}
           />
         )}
@@ -8072,107 +8052,82 @@ function PairFrameForm({
 
 function FrameSetupFlow({
   language,
+  activeDeviceId,
   onComplete,
 }: {
   language: AppLanguage
+  activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const [step, setStep] = useState<'purpose' | 'sport' | 'modules' | 'countdown' | 'manual'>('purpose')
-  const [purpose, setPurpose] = useState<SetupPurpose | null>(null)
-  const [sport, setSport] = useState<SetupSport | null>(null)
+  type SetupStep = 'paired' | 'purpose' | 'modules' | 'manual' | 'ai-intro' | 'plans' | 'follow'
+  type Entitlements = { monitoring_enabled: boolean; effective_status: string; is_trial: boolean }
+
+  const [step, setStep] = useState<SetupStep>('purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose>('normal')
   const [modules, setModules] = useState<Record<string, any>>({})
   const [moduleIndex, setModuleIndex] = useState(0)
-  const [countdownTitle, setCountdownTitle] = useState('')
-  const [countdownDate, setCountdownDate] = useState(toLocalYmd(new Date()))
   const [saving, setSaving] = useState(false)
+  const [billingPlan, setBillingPlan] = useState<PreviewPlan | null>(null)
+  const [entitlements, setEntitlements] = useState<Entitlements | null>(null)
+  const [entitlementsLoading, setEntitlementsLoading] = useState(true)
+  const [followRequest, setFollowRequest] = useState('')
+  const [createdRequestCount, setCreatedRequestCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const isNo = language === 'no'
+  const requiredModules = purpose === 'normal' ? ['reminders', 'weather'] : []
 
-  const requiredModules = useMemo(() => {
-    if (purpose === 'family') return ['reminders', 'countdown', 'weather']
-    if (purpose === 'sport') return ['reminders', 'countdown', sport, 'weather'].filter(Boolean) as string[]
-    return []
-  }, [purpose, sport])
+  const loadEntitlements = useCallback(async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError) throw authError
+    if (!authData.user) throw new Error('not_authenticated')
+    const { data, error: entitlementError } = await supabase.rpc('get_ai_subscription_entitlements', { p_user_id: authData.user.id }).maybeSingle()
+    if (entitlementError) throw entitlementError
+    const current = data as Entitlements
+    setEntitlements(current)
+    return current
+  }, [])
 
-  function goManual() {
-    setStep('manual')
-  }
-
-  function continueFromPurpose(nextPurpose: SetupPurpose) {
-    setPurpose(nextPurpose)
-    if (nextPurpose === 'custom') goManual()
-    else if (nextPurpose === 'sport') setStep('sport')
-    else {
-      setModuleIndex(0)
-      setStep('modules')
-    }
-  }
-
-  function continueFromSport(nextSport: SetupSport) {
-    setSport(nextSport)
-    setModuleIndex(0)
-    setStep('modules')
-  }
+  useEffect(() => {
+    let active = true
+    loadEntitlements().catch(() => {
+      if (active) setError(isNo ? 'Kunne ikke kontrollere AI Follow-abonnementet.' : 'Could not check your AI Follow subscription.')
+    }).finally(() => { if (active) setEntitlementsLoading(false) })
+    return () => { active = false }
+  }, [isNo, loadEntitlements])
 
   function setupModuleComplete(moduleKey: string) {
-    if (moduleKey === 'surf') {
-      const cfg = modules.surf?.[0]
-      return !!String(cfg?.spot || cfg?.spotId || '').trim()
-    }
+    if (moduleKey !== 'weather') return true
+    const cfg = modules.weather?.[0]
+    return Number.isFinite(Number(cfg?.lat)) && Number.isFinite(Number(cfg?.lon))
+  }
 
-    if (moduleKey === 'weather') {
-      const cfg = modules.weather?.[0]
-      return Number.isFinite(Number(cfg?.lat)) && Number.isFinite(Number(cfg?.lon))
-    }
-
-    if (moduleKey === 'soccer') {
-      const cfg = modules.soccer?.[0]
-      return !!String(cfg?.teamName || cfg?.teamId || '').trim()
-    }
-
-    return true
+  function continueFromPurpose() {
+    setError(null)
+    if (purpose === 'custom') setStep('manual')
+    else { setModuleIndex(0); setStep('modules') }
   }
 
   function nextModule() {
     const current = requiredModules[moduleIndex]
     if (!setupModuleComplete(current)) {
-      setError(
-        current === 'surf'
-          ? (isNo ? 'Velg et surfspot før du fortsetter.' : 'Choose a surf spot before continuing.')
-          : current === 'weather'
-            ? (isNo ? 'Velg et værsted før du fortsetter.' : 'Choose a weather location before continuing.')
-            : current === 'soccer'
-              ? (isNo ? 'Velg et lag før du fortsetter.' : 'Choose a team before continuing.')
-              : null
-      )
+      setError(isNo ? 'Velg et værsted før du fortsetter.' : 'Choose a weather location before continuing.')
       return
     }
-
     setError(null)
-    if (moduleIndex + 1 >= requiredModules.length) goManual()
-    else setModuleIndex((idx) => idx + 1)
+    if (moduleIndex + 1 >= requiredModules.length) setStep('manual')
+    else setModuleIndex((index) => index + 1)
   }
 
   function goBack() {
+    if (saving || billingPlan) return
     setError(null)
-    if (step === 'sport') {
-      setSport(null)
-      setStep('purpose')
-      return
-    }
-    if (step === 'modules') {
-      if (moduleIndex > 0) setModuleIndex((idx) => idx - 1)
-      else setStep(purpose === 'sport' ? 'sport' : 'purpose')
-      return
-    }
-    if (step === 'manual') {
-      if (requiredModules.length > 0) {
-        setModuleIndex(requiredModules.length - 1)
-        setStep('modules')
-      } else {
-        setStep('purpose')
-      }
-    }
+    if (step === 'purpose') setStep('paired')
+    else if (step === 'paired') setStep('purpose')
+    else if (step === 'modules') moduleIndex > 0 ? setModuleIndex((index) => index - 1) : setStep('purpose')
+    else if (step === 'manual') requiredModules.length ? (setModuleIndex(requiredModules.length - 1), setStep('modules')) : setStep('purpose')
+    else if (step === 'ai-intro') setStep('manual')
+    else if (step === 'plans') setStep('ai-intro')
+    else if (step === 'follow') setStep(entitlements?.monitoring_enabled ? 'ai-intro' : 'plans')
   }
 
   async function finish() {
@@ -8180,119 +8135,81 @@ function FrameSetupFlow({
     try {
       setSaving(true)
       setError(null)
-      await onComplete({
-        purpose: purpose || 'custom',
-        sport: sport || undefined,
-        modules,
-        countdownEvent: countdownTitle.trim() && countdownDate ? { title: countdownTitle.trim(), date: countdownDate } : null,
-      })
-    } catch (e) {
-      setError(errorMessage(e))
-    } finally {
-      setSaving(false)
-    }
+      await onComplete({ purpose, modules })
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setSaving(false) }
   }
 
-  const setupStepIndex = step === 'purpose' ? 0 : step === 'sport' ? 1 : step === 'modules' ? 2 + moduleIndex : 2 + requiredModules.length
-  const setupStepTotal = Math.max(3, 3 + requiredModules.length)
-  const canGoBack = step !== 'purpose' && !saving
+  async function openAiFollow() {
+    setError(null)
+    setEntitlementsLoading(true)
+    try {
+      const current = await loadEntitlements()
+      setStep(current.monitoring_enabled ? 'follow' : 'ai-intro')
+    } catch { setStep('ai-intro') }
+    finally { setEntitlementsLoading(false) }
+  }
 
+  async function selectPlan(plan: PreviewPlan) {
+    if (billingPlan) return
+    setBillingPlan(plan); setError(null)
+    try {
+      const { error: planError } = await supabase.rpc('preview_ai_subscription_plan', { p_plan: plan })
+      if (planError) throw planError
+      const confirmed = await loadEntitlements()
+      if (!confirmed.monitoring_enabled) throw new Error('entitlement_not_confirmed')
+      setStep('follow')
+    } catch (e) {
+      const message = errorMessage(e)
+      setError(message.includes('trial') ? (isNo ? 'Prøveperioden er ikke tilgjengelig. Du kan velge et abonnement eller hoppe over.' : 'The trial is not available. You can choose a plan or skip for now.') : (isNo ? 'Kunne ikke bekrefte abonnementet. Prøv igjen, gå tilbake eller hopp over.' : 'Could not confirm the subscription. Try again, go back, or skip for now.'))
+    } finally { setBillingPlan(null) }
+  }
+
+  async function createFollowRequest() {
+    const clean = followRequest.trim().replace(/\\s+/g, ' ')
+    if (saving) return
+    if (clean.length < 4) { setError(isNo ? 'Skriv litt mer om hva AI Follow skal følge.' : 'Tell AI Follow a little more about what to track.'); return }
+    if (clean.length > 500) { setError(isNo ? 'Gjør forespørselen litt kortere.' : 'Please make the request a little shorter.'); return }
+    setSaving(true); setError(null)
+    try {
+      const { error: creationError } = await supabase.rpc('create_ai_assistant_watch', { p_original_request: clean, p_frame_id: activeDeviceId })
+      if (creationError) throw creationError
+      setCreatedRequestCount((count) => count + 1)
+      setFollowRequest('')
+    } catch { setError(isNo ? 'Kunne ikke opprette forespørselen. Prøv igjen, gå tilbake eller hopp over.' : 'Could not create the request. Try again, go back, or skip for now.') }
+    finally { setSaving(false) }
+  }
+
+  const stepOrder: SetupStep[] = ['paired', 'purpose', 'modules', 'manual', 'ai-intro', 'plans', 'follow']
   const shell = (children: React.ReactNode) => (
-    <div className="absolute inset-0 z-40 flex items-center justify-center px-5 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
-      <div className="flex max-h-[90vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="absolute inset-0 z-40 flex items-center justify-center px-3 sm:px-5 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
+      <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <button onClick={goBack} disabled={!canGoBack} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-60)] disabled:opacity-0">
-              ← {isNo ? 'Tilbake' : 'Back'}
-            </button>
-            <button onClick={goManual} disabled={saving} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)] hover:text-[color:var(--fg-80)] disabled:opacity-50">
-              {isNo ? 'Hopp over' : 'Skip'}
-            </button>
+            <button type="button" onClick={goBack} disabled={saving || !!billingPlan} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-60)] disabled:opacity-50">← {isNo ? 'Tilbake' : 'Back'}</button>
+            {(step === 'ai-intro' || step === 'plans' || step === 'follow') && <button type="button" onClick={finish} disabled={saving || !!billingPlan} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)] disabled:opacity-50">{isNo ? 'Hopp over foreløpig' : 'Skip for now'}</button>}
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]">
-            <div className="h-full rounded-full bg-[#2aa3ff] transition-all" style={{ width: `${Math.min(100, ((setupStepIndex + 1) / setupStepTotal) * 100)}%` }} />
-          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff] transition-all" style={{ width: `${((stepOrder.indexOf(step) + 1) / stepOrder.length) * 100}%` }} /></div>
         </div>
-        <div className="overflow-auto p-6">
-          {children}
-        </div>
+        <div className="overflow-y-auto overflow-x-hidden p-5 sm:p-6">{children}</div>
       </div>
     </div>
   )
 
-  if (step === 'purpose') return shell(<>
-    <div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div>
-    <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Hva skal framen brukes til?' : 'Choose frame purpose'}</h1>
-    <div className="mt-6 space-y-3">
-      {(['family', 'sport', 'custom'] as SetupPurpose[]).map((key) => (
-        <button key={key} onClick={() => continueFromPurpose(key)} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] px-4 py-4 text-left text-sm uppercase tracking-[0.18em] hover:border-[#2aa3ff]">
-          {key === 'family' ? (isNo ? 'Familie' : 'Family') : key === 'sport' ? 'Sport' : 'Custom'}
-        </button>
-      ))}
-    </div>
-  </>)
+  if (step === 'paired') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Framen er koblet til' : 'Your frame is paired'}</h1><p className="mt-3 text-sm leading-6 text-[color:var(--fg-60)]">{isNo ? 'Tilkoblingen er lagret. Fortsett for å velge oppsett – vi parer ikke framen på nytt.' : 'The connection is saved. Continue to choose a setup—we will not pair the frame again.'}</p><button onClick={() => setStep('purpose')} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
 
-  if (step === 'sport') return shell(<>
-    <h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg sport' : 'Choose sport'}</h1>
-    <div className="mt-6 grid grid-cols-2 gap-3">
-      <button onClick={() => continueFromSport('surf')} className="h-24 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] uppercase tracking-[0.18em] hover:border-[#2aa3ff]">Surf</button>
-      <button onClick={() => continueFromSport('soccer')} className="h-24 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] uppercase tracking-[0.18em] hover:border-[#2aa3ff]">Soccer</button>
-    </div>
-  </>)
+  if (step === 'purpose') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{(['normal', 'custom'] as SetupPurpose[]).map((key) => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left transition ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)] bg-[color:var(--app-bg)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : (isNo ? 'Tilpasset' : 'Custom')}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, AI Follow og Vær.' : 'Date, Reminders, AI Follow, and Weather.') : (isNo ? 'Velg moduler og layout selv.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={continueFromPurpose} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
 
-  if (step === 'modules') {
-    const current = requiredModules[moduleIndex]
-    return shell(<>
-      <div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div>
-      <h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : current === 'soccer' ? (isNo ? 'Velg lag' : 'Choose a team') : current === 'surf' ? (isNo ? 'Velg surfspot' : 'Choose surf spot') : current === 'countdown' ? (isNo ? 'Legg til nedtelling' : 'Add a countdown') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1>
-      <div className="mt-6 space-y-3 overflow-auto pr-1">
-        {current === 'reminders' && (
-          <div className="h-[430px]">
-            <ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup />
-          </div>
-        )}
-        {current === 'countdown' && (
-          <div className="space-y-4 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--app-bg)] p-4">
-            <p className="text-sm leading-6 text-[color:var(--fg-60)]">
-              {isNo ? 'Start med én viktig dato. Du kan legge til flere senere fra nedtelling-fanen.' : 'Start with one important date. You can add more later from the countdown tab.'}
-            </p>
-            <label className="block">
-              <span className="text-xs uppercase tracking-[0.22em] text-[color:var(--fg-50)]">{isNo ? 'Hendelse' : 'Event'}</span>
-              <input value={countdownTitle} onChange={(e) => setCountdownTitle(e.target.value)} placeholder={isNo ? 'Sommerferie' : 'Summer vacation'} className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 outline-none focus:border-[#2aa3ff]" />
-              <SensitiveInformationHelper language={language} />
-            </label>
-            <label className="block">
-              <span className="text-xs uppercase tracking-[0.22em] text-[color:var(--fg-50)]">{isNo ? 'Dato' : 'Date'}</span>
-              <input type="date" value={countdownDate} onChange={(e) => setCountdownDate(e.target.value)} className="mt-2 w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--panel-05)] px-4 py-3 outline-none focus:border-[#2aa3ff]" />
-            </label>
-          </div>
-        )}
-        {current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || 'Not set'} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((m) => ({ ...m, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}
-        {current === 'soccer' && <SoccerTeamRow language={language} id={1} title={tx(language).soccerTeam} teamName={modules.soccer?.[0]?.teamName || 'Not set'} teamId={modules.soccer?.[0]?.teamId || ''} competitionName={modules.soccer?.[0]?.competitionName || ''} onPicked={(picked) => setModules((m) => ({ ...m, soccer: [{ id: 1, ...picked }] }))} />}
-        {current === 'surf' && <>
-          <SurfSpotRow language={language} id={1} title="Spot" spotLabel={modules.surf?.[0]?.spot || 'Not set'} spotId={modules.surf?.[0]?.spotId || ''} fuelPenalty={modules.surf?.[0]?.fuelPenalty} onPicked={(picked) => setModules((m) => ({ ...m, surf: [{ id: 1, ...picked, fuelPenalty: m.surf?.[0]?.fuelPenalty }] }))} />
-          <input placeholder={isNo ? 'Hjemmeadresse (valgfritt)' : 'Home address (optional)'} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] px-4 py-3 outline-none" onChange={(e) => setModules((m) => ({ ...m, surf: [{ id: 1, ...(m.surf?.[0] || {}), fuelPenalty: { enabled: true, homeAddress: e.target.value } }] }))} />
-        </>}
-      </div>
-      {error && <div className="mt-4 rounded-2xl border border-[color:var(--danger)] bg-[color:var(--panel-05)] px-4 py-3 text-sm text-[color:var(--danger)]">{error}</div>}
-      <button onClick={nextModule} disabled={!setupModuleComplete(current)} className="mt-6 h-12 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white text-sm uppercase tracking-[0.2em] disabled:cursor-not-allowed disabled:opacity-50">{isNo ? 'Neste' : 'Next'}</button>
-    </>)
-  }
+  if (step === 'modules') { const current = requiredModules[moduleIndex]; return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1><div className="mt-6 space-y-3">{current === 'reminders' && <div className="h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup /></div>}{current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Ikke valgt' : 'Not set')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((value) => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={nextModule} disabled={!setupModuleComplete(current)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{isNo ? 'Fortsett' : 'Continue'}</button></>) }
 
-  return shell(<>
-    <h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Slik fungerer appen' : 'How the app works'}</h1>
-    <div className="mt-5 max-h-[52vh] space-y-4 overflow-auto pr-1 text-sm leading-6 text-[color:var(--fg-70)]">
-      <p>• {isNo ? 'Faner åpnes eller lukkes basert på modulene du har valgt.' : 'Tabs open or close depending on the modules selected for your frame.'}</p>
-      <p>• {isNo ? 'Velg layout og endre moduler ved å trykke på cellen du vil redigere.' : 'Select a layout and change modules by clicking the cell you want to edit.'}</p>
-      <p>• {isNo ? 'Snu telefonen sidelengs for å se et speil av den fysiske framen.' : 'Turn your phone sideways to see a mirror of what is displayed on the physical frame.'}</p>
-      <p>• {isNo ? 'Framen oppdateres automatisk når noe endres.' : 'Your frame refreshes automatically when changes are detected.'}</p>
-      <p>• {isNo ? 'I Innstillinger kan du dele enheten med familie ved å dele den genererte paringskoden.' : 'In Settings, you can share the device with family members by sharing the generated pair code.'}</p>
-    </div>
-    {error && <div className="mt-4 text-sm text-[color:var(--danger)]">{error}</div>}
-    <button onClick={finish} disabled={saving} className="mt-6 h-14 rounded-2xl border border-[#2aa3ff] bg-[#2aa3ff] text-white text-sm uppercase tracking-[0.2em] disabled:opacity-50">{saving ? tx(language).saving : (isNo ? 'Fullfør oppsett' : 'Complete setup')}</button>
-  </>)
+  if (step === 'manual') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Slik fungerer appen' : 'How the app works'}</h1><div className="mt-5 space-y-4 text-sm leading-6 text-[color:var(--fg-70)]"><p>• {isNo ? 'Faner følger modulene du har valgt.' : 'Tabs follow the modules selected for your frame.'}</p><p>• {isNo ? 'Du kan velge layout og endre moduler ved å trykke på en celle.' : 'Choose a layout and change modules by tapping a cell.'}</p><p>• {isNo ? 'Framen oppdateres automatisk når noe endres.' : 'Your frame refreshes automatically when something changes.'}</p></div><button onClick={openAiFollow} disabled={entitlementsLoading} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{entitlementsLoading ? (isNo ? 'Laster…' : 'Loading…') : (isNo ? 'Fortsett' : 'Continue')}</button></>)
+
+  if (step === 'ai-intro') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-3xl font-medium tracking-[-0.04em]">AI Follow</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'La RE:MIND følge med på det som betyr noe for deg. Følg priser, produkter, flyreiser, tilgjengelighet, værforhold, nyheter, lanseringer og mer. Når noe viktig endrer seg, kan AI Follow vise det direkte på framen.' : 'Let RE:MIND keep track of the things that matter to you. Follow prices, products, flights, availability, weather conditions, news, releases, and more. When something important changes, AI Follow can surface it directly on your frame.'}</p><div className="mt-5 space-y-2">{(isNo ? ['Flyreiser til Norge er nå innenfor budsjettet ditt', 'Dette produktet er på lager igjen', 'I morgen blir det ideelle surfeforhold', 'Prisen har falt under målet ditt'] : ['Flights to Norway are now within your budget', 'This product is back in stock', 'Tomorrow has ideal surf conditions', 'The price has dropped below your target']).map((example) => <div key={example} className="rounded-xl border border-[color:var(--bd-10)] bg-[color:var(--app-bg)] px-3 py-2.5 text-xs text-[color:var(--fg-65)]">{example}</div>)}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<div className="mt-6 space-y-2"><button onClick={() => selectPlan('trial')} disabled={!!billingPlan} className="h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm text-white disabled:opacity-50">{isNo ? 'Start én måned gratis' : 'Start one-month free trial'}</button><button onClick={() => setStep('plans')} disabled={!!billingPlan} className="h-12 w-full rounded-2xl border border-[color:var(--bd-15)] text-sm">{isNo ? 'Velg abonnement' : 'Choose subscription'}</button></div></>)
+
+  if (step === 'plans') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg abonnement' : 'Choose subscription'}</h1><p className="mt-2 text-sm leading-6 text-[color:var(--fg-60)]">{isNo ? 'Velg planen som passer deg. Abonnementet regnes først som aktivt når det er bekreftet.' : 'Choose the plan that fits. Your subscription is only active after it is confirmed.'}</p><div className="mt-5 space-y-3">{AI_FOLLOW_PLANS.filter((plan) => plan.id !== 'trial').map((plan) => <button key={plan.id} onClick={() => selectPlan(plan.id)} disabled={!!billingPlan} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] p-4 text-left disabled:opacity-50"><span className="flex justify-between gap-3"><strong>{plan.name}</strong><span>{plan.price[language]} {plan.priceSuffix?.[language]}</span></span><span className="mt-2 block text-xs text-[color:var(--fg-60)]">{plan.features[language].join(' · ')}</span></button>)}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}</>)
+
+  return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Hva vil du at AI Follow skal følge?' : 'What would you like AI Follow to track?'}</h1><p className="mt-2 text-sm leading-6 text-[color:var(--fg-60)]">{isNo ? 'Skriv med egne ord. Du kan legge til flere forespørsler én om gangen.' : 'Write it in your own words. You can add more requests one at a time.'}</p><textarea value={followRequest} onChange={(event) => setFollowRequest(event.target.value)} maxLength={500} rows={4} placeholder={isNo ? 'Flyreiser fra Stavanger til Tokyo under 5 000 kr' : 'Flights from Stavanger to Tokyo below 5,000 kr'} className="mt-5 w-full resize-none rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] p-4 text-sm outline-none focus:border-[#2aa3ff]"/><SensitiveInformationHelper language={language}/>{createdRequestCount > 0 && <p role="status" className="mt-3 text-sm text-[#2aa3ff]">{isNo ? `${createdRequestCount} forespørsel${createdRequestCount === 1 ? '' : 'er'} lagt til` : `${createdRequestCount} request${createdRequestCount === 1 ? '' : 's'} added`}</p>}{error && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{error}</p>}<div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2"><button onClick={createFollowRequest} disabled={saving || !followRequest.trim()} className="h-12 rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff] disabled:opacity-50">{saving ? (isNo ? 'Legger til…' : 'Adding…') : (isNo ? 'Legg til' : 'Add request')}</button><button onClick={finish} disabled={saving} className="h-12 rounded-2xl bg-[#2aa3ff] text-sm text-white disabled:opacity-50">{isNo ? 'Fortsett' : 'Continue'}</button></div></>)
 }
-
 function FirstFrameOnboarding({
   language,
   frames,
