@@ -93,9 +93,11 @@ static Max17048Reading readMax17048() {
   reading.ok = true;
   reading.rawVCell = rawVCell;
   reading.rawSoc = rawSoc;
-  // MAX17048 datasheet: VCELL register uses 78.125 uV per LSB after right-shifting
-  // the 12-bit reading; SOC is an 8.8 fixed-point percentage value.
-  reading.volts = static_cast<float>(rawVCell >> 4) * 0.000078125f;
+  // MAX17048 datasheet: VCELL is a 12-bit value left-justified in the
+  // 16-bit register. Convert either as raw * 78.125 uV or (raw >> 4) * 1.25 mV.
+  // SOC is an 8.8 fixed-point percentage value, but Alfred V1.0 hardware wires
+  // MAX17048 VDD to +3V3 instead of BAT, so voltage and SOC are diagnostic-only.
+  reading.volts = static_cast<float>(rawVCell) * 0.000078125f;
   reading.percent = static_cast<float>(rawSoc) / 256.0f;
   return reading;
 }
@@ -113,6 +115,8 @@ static void printStartupDiagnostics() {
   Serial.println("RE:MIND Alfred Stage 1");
   Serial.println("Safe hardware diagnostics");
   Serial.println("E-paper power: DISABLED");
+  Serial.println("WARNING: Alfred V1.0 MAX17048 VDD is connected to +3V3.");
+  Serial.println("Fuel-gauge voltage and SOC do not represent the battery.");
   Serial.println("================================");
   Serial.printf("Chip model: %s\n", ESP.getChipModel());
   Serial.printf("Chip revision: %u\n", ESP.getChipRevision());
@@ -163,8 +167,8 @@ void setup() {
     Serial.printf("MAX17048 detected address: 0x%02X\n", MAX17048_ADDR);
     lastBattery = readMax17048();
     if (lastBattery.ok) {
-      Serial.printf("MAX17048 raw VCELL: 0x%04X, voltage: %.3f V\n", lastBattery.rawVCell, lastBattery.volts);
-      Serial.printf("MAX17048 raw SOC: 0x%04X, state of charge: %.2f %%\n", lastBattery.rawSoc, lastBattery.percent);
+      Serial.printf("MAX17048 raw VCELL: 0x%04X, corrected converted voltage: %.3f V (+3V3 rail, not battery)\n", lastBattery.rawVCell, lastBattery.volts);
+      Serial.printf("MAX17048 raw SOC: 0x%04X, state of charge: %.2f %% (invalid on Alfred V1.0)\n", lastBattery.rawSoc, lastBattery.percent);
     } else {
       Serial.println("MAX17048 read failed safely; no configuration writes were attempted.");
     }
@@ -188,9 +192,14 @@ void loop() {
     Serial.print(" MAX17048=");
     Serial.print(lastBattery.ok ? "ok" : (max17048Present ? "read_fail" : "not_detected"));
     if (lastBattery.ok) {
-      Serial.print(" voltage_V=");
+      Serial.print(" raw_vcell=0x");
+      if (lastBattery.rawVCell < 0x1000) Serial.print('0');
+      if (lastBattery.rawVCell < 0x0100) Serial.print('0');
+      if (lastBattery.rawVCell < 0x0010) Serial.print('0');
+      Serial.print(lastBattery.rawVCell, HEX);
+      Serial.print(" corrected_voltage_V=");
       Serial.print(lastBattery.volts, 3);
-      Serial.print(" soc_pct=");
+      Serial.print(" soc_pct_invalid=");
       Serial.print(lastBattery.percent, 2);
     }
     Serial.print(" BQ_PGOOD_N=");
