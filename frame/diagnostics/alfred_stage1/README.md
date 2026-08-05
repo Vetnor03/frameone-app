@@ -28,7 +28,7 @@ Leave the physical e-paper panel disconnected for Stage 1. The diagnostic does n
 
 ## 5. Optional later test with battery
 
-After the USB-only test passes, repeat with a known-safe single-cell Li-ion/LiPo battery connected. The MAX17048 may then report battery voltage and state of charge if it responds on I2C address `0x36`.
+After the USB-only test passes, repeat with a known-safe single-cell Li-ion/LiPo battery connected. On Alfred V1.0, the MAX17048 can respond on I2C address `0x36`, but its voltage and state-of-charge values are invalid because the fuel gauge is wired to sense +3V3 instead of BAT.
 
 ## 6. Exact Arduino IDE settings
 
@@ -67,7 +67,14 @@ E-paper power: DISABLED
 ================================
 ```
 
-The sketch then prints chip, flash, PSRAM, reset, SDK, MAC, GPIO12 / EPD_PWR state, charger raw states, I2C setup, I2C scan results, and MAX17048 read-only diagnostics. Runtime status lines print about every two seconds.
+The sketch then prints chip, flash, PSRAM, reset, SDK, MAC, GPIO12 / EPD_PWR state, charger raw states, I2C setup, I2C scan results, and MAX17048 read-only diagnostics. Runtime status lines print about every two seconds. The startup banner also prints this explicit hardware warning:
+
+```text
+WARNING: Alfred V1.0 MAX17048 VDD is connected to +3V3.
+Fuel-gauge voltage and SOC do not represent the battery.
+```
+
+When the MAX17048 responds, Stage 1 continues to print raw VCELL plus the corrected converted voltage for confirmation, but that voltage is the sensed +3V3 rail on Alfred V1.0, not the battery connector voltage.
 
 ## 9. Charger pin raw states
 
@@ -98,6 +105,18 @@ Pass Stage 1 only if all required safety checks pass:
 - The sketch keeps running whether or not the MAX17048 is detected.
 - Charger pins are printed as raw HIGH/LOW states.
 - No display communication occurs.
+
+## MAX17048 Alfred V1.0 hardware issue
+
+Stage 1 confirmed that Alfred V1.0 connects MAX17048 VDD to `+3V3`, while a direct multimeter measurement at the battery connector showed 4.03 V and the board +3V3 rail measured approximately 3.35-3.36 V. A raw VCELL register value of `0xA830` converts to approximately 3.364 V using the MAX17048 conversion (`raw * 78.125e-6`, equivalently `(raw >> 4) * 0.00125`), confirming that the fuel gauge senses the +3V3 rail.
+
+Per the official MAX17048/MAX17049 datasheet:
+
+- For MAX17048, VDD is both the power-supply input and the one-cell voltage-sense input and should connect to the positive battery terminal (`BAT`).
+- CELL is not internally connected on MAX17048; CELL is used as the voltage-sense input on MAX17049.
+- VDD should be bypassed to GND with 0.1 µF; the Alfred V1.0 schematic appears to omit this capacitor.
+
+Battery voltage and SOC readings on Alfred V1.0 must therefore be treated as invalid until hardware rework. The corrected hardware revision is: MAX17048 VDD to `BAT`, 0.1 µF VDD-to-GND capacitor close to the IC, and I2C pull-ups left on `+3V3`.
 
 ## 11. Stop immediately if anything becomes hot
 

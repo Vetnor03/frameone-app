@@ -100,12 +100,16 @@ Source of truth: the supplied one-sheet `Schematic.pdf` screenshots in the task 
 ## MAX17048 fuel gauge
 
 - U5 is `MAX17048`.
-- CELL pin 2 connects to `BAT`.
-- VDD pin 3 connects to `+3V3`; GND pin 4 connects to GND.
+- Alfred V1.0 hardware issue: MAX17048 VDD pin 3 is incorrectly connected to `+3V3`; GND pin 4 connects to GND.
+- The official MAX17048/MAX17049 datasheet defines VDD as the power-supply input and, for MAX17048, the voltage-sense input that must connect to the positive battery terminal. VDD should connect to `BAT`, not `+3V3`.
+- CELL pin 2 connects to `BAT` in the Alfred V1.0 schematic, but the official datasheet states CELL is not internally connected on MAX17048; CELL is the voltage-sense input only on MAX17049.
+- The Alfred V1.0 schematic appears to omit the datasheet-recommended 0.1 µF VDD-to-GND bypass capacitor for the MAX17048.
+- Because VDD senses `+3V3`, MAX17048 battery voltage and SOC readings on Alfred V1.0 must be treated as invalid until hardware rework. A raw VCELL value of `0xA830` converts to approximately 3.364 V, matching the board +3V3 rail rather than the measured 4.03 V battery connector.
+- Correct hardware revision: connect MAX17048 VDD to `BAT`, add a 0.1 µF capacitor from VDD to GND placed close to U5, and keep I2C pull-ups R14/R15 on `+3V3` for ESP32-S3 logic compatibility.
 - SCL pin 7 connects to `I2C_SCL` / GPIO8; SDA pin 8 connects to `I2C_SDA` / GPIO9.
-- R14 and R15 are 4.7k pullups from SCL/SDA to +3V3.
+- R14 and R15 are 4.7k pullups from SCL/SDA to +3V3 and should remain on +3V3 in the corrected revision.
 - ALRT pin 5 appears unconnected; CTG pin 1 no-connect; QSTR pin 6 tied to GND.
-- Expected I2C address is UNRESOLVED from schematic alone because the schematic does not encode the address. Stage 1 should scan the bus and then the implementation can cite the MAX17048 datasheet for the canonical address.
+- Expected I2C address is `0x36` per MAX17048 firmware diagnostics and datasheet-backed implementation; Stage 1 still scans the bus before reading that address.
 
 ## E-paper communication
 
