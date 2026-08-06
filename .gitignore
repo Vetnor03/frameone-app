@@ -4,3 +4,5 @@ out/
 tsconfig.tsbuildinfo
 .env*.local
 
+# Local credentials for the standalone Alfred Stage 3 diagnostic.
+frame/diagnostics/alfred_stage3/AlfredStage3Secrets.h
