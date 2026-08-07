@@ -9,3 +9,6 @@ frame/diagnostics/alfred_stage3/AlfredStage3Secrets.h
 
 # Local credentials for the standalone Alfred Stage 6 diagnostic.
 frame/diagnostics/alfred_stage6/AlfredStage6Secrets.h
+
+# Local credentials for the standalone Alfred Stage 7 diagnostic.
+frame/diagnostics/alfred_stage7/AlfredStage7Secrets.h
