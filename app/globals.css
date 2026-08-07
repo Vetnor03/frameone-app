@@ -46,37 +46,132 @@
    LIGHT THEME OVERRIDES
    ========================= */
 html[data-theme="light"] {
-  /* Softer premium light background */
-  --app-bg: #eef2f6;      /* soft blue-grey */
+  /* RE:MIND light is a warm, architectural palette rather than an inversion. */
+  --app-bg: #f5f6f8;
   --sheet-bg: #ffffff;
 
-  --accent: #2aa3ff;
+  --accent: #168de2;
+  --card-bg: #ffffff;
 
   /* Dark text ladder */
-  --fg: rgba(15, 23, 42, 1);
-  --fg-90: rgba(15, 23, 42, 0.9);
-  --fg-80: rgba(15, 23, 42, 0.8);
-  --fg-70: rgba(15, 23, 42, 0.7);
-  --fg-60: rgba(15, 23, 42, 0.6);
-  --fg-50: rgba(15, 23, 42, 0.5);
-  --fg-40: rgba(15, 23, 42, 0.4);
-  --fg-30: rgba(15, 23, 42, 0.3);
-  --fg-15: rgba(15, 23, 42, 0.15);
+  --fg: #1d252c;
+  --fg-95: rgba(29, 37, 44, 0.95);
+  --fg-92: rgba(29, 37, 44, 0.92);
+  --fg-90: rgba(29, 37, 44, 0.9);
+  --fg-85: rgba(29, 37, 44, 0.85);
+  --fg-80: rgba(29, 37, 44, 0.8);
+  --fg-75: rgba(29, 37, 44, 0.75);
+  --fg-70: rgba(29, 37, 44, 0.68);
+  --fg-65: rgba(29, 37, 44, 0.62);
+  --fg-60: rgba(29, 37, 44, 0.58);
+  --fg-55: rgba(29, 37, 44, 0.52);
+  --fg-50: rgba(29, 37, 44, 0.47);
+  --fg-45: rgba(29, 37, 44, 0.42);
+  --fg-40: rgba(29, 37, 44, 0.37);
+  --fg-35: rgba(29, 37, 44, 0.32);
+  --fg-30: rgba(29, 37, 44, 0.27);
+  --fg-25: rgba(29, 37, 44, 0.22);
+  --fg-20: rgba(29, 37, 44, 0.18);
+  --fg-15: rgba(29, 37, 44, 0.14);
 
   /* borders */
-  --bd-40: rgba(15, 23, 42, 0.4);
-  --bd-30: rgba(15, 23, 42, 0.3);
-  --bd-20: rgba(15, 23, 42, 0.2);
-  --bd-15: rgba(15, 23, 42, 0.15);
-  --bd-10: rgba(15, 23, 42, 0.10);
+  --bd-40: rgba(0, 0, 0, 0.12);
+  --bd-30: rgba(0, 0, 0, 0.1);
+  --bd-20: rgba(0, 0, 0, 0.08);
+  --bd-15: rgba(0, 0, 0, 0.07);
+  --bd-10: rgba(0, 0, 0, 0.06);
 
   /* surfaces */
-  --panel-05: rgba(15, 23, 42, 0.05);
-  --panel-10: rgba(15, 23, 42, 0.08);
-  --panel-20: rgba(15, 23, 42, 0.15);
+  --panel-02: #fdfdfe;
+  --panel-03: #fafafb;
+  --panel-05: #fafafb;
+  --panel-08: #f5f6f8;
+  --panel-10: #f0f1f3;
+  --panel-20: #e7e9ec;
 
   --overlay-55: rgba(0, 0, 0, 0.45);
-  --toast-bg: rgba(15, 23, 42, 0.08);
+  --toast-bg: rgba(255, 255, 255, 0.94);
+
+  --danger: #b75b5b;
+  --danger-bd: rgba(183, 91, 91, 0.12);
+  --danger-bg: #fff7f6;
+}
+
+/* =========================
+   RE:MIND LIGHT MATERIAL SYSTEM
+   Dark mode intentionally remains entirely token-compatible and untouched.
+   ========================= */
+html[data-theme="light"] .remind-app {
+  background: var(--app-bg);
+  color: var(--fg);
+  font-synthesis-weight: none;
+}
+
+/* Primary panels float above the canvas; hairlines are reserved for structure. */
+html[data-theme="light"] .remind-app :is(section, article, div)[class*="rounded-"][class*="border"][class*="bg-[color:var(--panel-05)]"],
+html[data-theme="light"] .remind-app :is(section, article, div)[class*="rounded-"][class*="border"][class*="bg-[color:var(--card-bg)]"] {
+  border-color: rgba(0, 0, 0, 0.025);
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(24, 32, 40, 0.05), 0 1px 2px rgba(24, 32, 40, 0.025);
+}
+
+/* Nested and low-priority surfaces stay quiet instead of becoming card stacks. */
+html[data-theme="light"] .remind-app :is(section, article, div)[class*="rounded-"][class*="bg-[color:var(--panel-02)]"],
+html[data-theme="light"] .remind-app :is(section, article, div)[class*="rounded-"][class*="bg-[color:var(--panel-03)]"] {
+  border-color: transparent;
+  background-color: #fafafb;
+  box-shadow: none;
+}
+
+/* Soft, Notes-like controls with a focus treatment that appears only in use. */
+html[data-theme="light"] .remind-app :is(input, textarea, select) {
+  border-color: transparent !important;
+  background-color: #f3f4f6 !important;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+html[data-theme="light"] .remind-app :is(input, textarea, select):focus {
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(42, 163, 255, 0.16), inset 0 0 0 1px rgba(42, 163, 255, 0.7);
+}
+
+html[data-theme="light"] .remind-app :is(input, textarea)::placeholder {
+  color: rgba(29, 37, 44, 0.38);
+}
+
+/* Outlined utility actions become calm secondary controls. Blue actions remain blue. */
+html[data-theme="light"] .remind-app button[class*="border-"]:not([class*="border-[#2aa3ff]"]):not([class*="bg-[#2aa3ff]"]) {
+  border-color: transparent;
+  background-color: #f0f1f3;
+}
+
+html[data-theme="light"] .remind-app button[class*="border-[#2aa3ff]"] {
+  border-color: #2aa3ff;
+  background-color: #2aa3ff !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(42, 163, 255, 0.2);
+}
+
+html[data-theme="light"] .remind-app button:focus-visible,
+html[data-theme="light"] .remind-app a:focus-visible {
+  outline: 3px solid rgba(42, 163, 255, 0.2);
+  outline-offset: 2px;
+}
+
+/* Destructive and warning content supports the task instead of dominating it. */
+html[data-theme="light"] .remind-app [class*="danger-bg"],
+html[data-theme="light"] .remind-app [class*="bg-amber-"],
+html[data-theme="light"] .remind-app [class*="bg-red-"] {
+  box-shadow: none;
+  filter: saturate(0.72);
+}
+
+/* Modal sheets are the strongest surface in the hierarchy. */
+html[data-theme="light"] .remind-app [class*="backdrop-blur"][class*="rounded-"] {
+  border-color: rgba(0, 0, 0, 0.035);
+  background-color: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 24px 70px rgba(24, 32, 40, 0.14), 0 2px 8px rgba(24, 32, 40, 0.05);
 }
 
 /* Base document */

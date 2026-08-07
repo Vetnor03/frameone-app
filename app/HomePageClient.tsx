@@ -1154,7 +1154,7 @@ export default function HomePage() {
     document.documentElement.style.colorScheme = theme
 
     const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null
-    if (meta) meta.content = theme === 'dark' ? '#061b24' : '#eef2f6'
+    if (meta) meta.content = theme === 'dark' ? '#061b24' : '#f5f6f8'
   }, [theme])
 
   useEffect(() => {
@@ -2248,7 +2248,7 @@ async function handleSelectTab(k: TabKey) {
   }
 
   return (
-    <main className={`h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
+    <main className={`remind-app h-screen overflow-hidden ${appText} flex justify-center`} style={{ background: appBg }}>
       <div className="w-full max-w-[420px] h-full px-5 pt-10 pb-6 flex flex-col relative">
         {shouldShowFirstFrameOnboarding && (
           <FirstFrameOnboarding
@@ -7047,7 +7047,7 @@ function LandscapeFrameMirror({
 }) {
   const language = snapshot?.language ?? fallbackLanguage
   const isDark = theme === 'dark'
-  const background = isDark ? '#061b24' : '#eef2f6'
+  const background = isDark ? '#061b24' : '#f5f6f8'
   const frameBackground = background
   const textColor = isDark ? '#eef8ff' : '#07141c'
   const mutedColor = isDark ? 'rgba(238,248,255,0.58)' : 'rgba(7,20,28,0.58)'
@@ -7055,7 +7055,7 @@ function LandscapeFrameMirror({
   const batteryPercent = normalizeBatteryPercent(status?.battery_percent)
   const isCharging = status?.is_usb_present === true || status?.is_charging === true
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
-  const inverseColor = isDark ? '#07141c' : '#eef2f6'
+  const inverseColor = isDark ? '#07141c' : '#f5f6f8'
   const mirrorStyle: React.CSSProperties & Record<'--fg' | '--fg-50' | '--bd-15' | '--mirror-bg' | '--mirror-bg-inverse' | '--mirror-fg-inverse', string> = {
     background,
     color: textColor,
