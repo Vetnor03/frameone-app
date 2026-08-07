@@ -7760,7 +7760,7 @@ function SettingsTab({
           )}
 
           <div ref={scrollRef} className="settings-scroll h-full overflow-y-auto pr-1 pb-4">
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 divide-y divide-[color:var(--bd-10)]">
               <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
               <SettingRow label={t.themeRow} value={theme === 'dark' ? (language === 'no' ? 'Mørk' : 'Dark') : (language === 'no' ? 'Lys' : 'Light')} onClick={onOpenTheme} />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
@@ -7783,8 +7783,7 @@ function SettingsTab({
           </div>
         </div>
 
-        <div className="shrink-0 pt-3 pb-[6px]">
-          <div className="border-t border-[color:var(--bd-10)] mb-2" />
+        <div className="shrink-0 border-t border-[color:var(--bd-10)] pb-[6px] pt-1">
           <SettingRow label={t.logout} value="" onClick={onLogout} variant="danger" />
         </div>
       </div>
@@ -7916,7 +7915,7 @@ function NotificationsSetting({ language, state, onStateChange }: { language: Ap
   }
 
   return (
-    <div className="border-b border-[color:var(--bd-10)] py-4">
+    <div className="py-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[color:var(--fg-70)]">{isNo ? 'Varsler' : 'Notifications'}</div>
@@ -7927,14 +7926,14 @@ function NotificationsSetting({ language, state, onStateChange }: { language: Ap
         </button>}
       </div>
       {!loading && !enabled && permission !== 'denied' && permission !== 'unsupported' && (
-        <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
+        <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
           <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Ikke gå glipp av viktige oppdateringer' : 'Never miss an important update'}</div>
           <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Få et varsel når RE:MIND finner noe nytt for det du følger med på.' : 'Get a notification when RE:MIND finds something new for the things you follow.'}</p>
           <button type="button" disabled={busy} onClick={enableNotifications} className="mt-3 rounded-full bg-[color:var(--fg)] px-4 py-2 text-sm font-medium text-[color:var(--app-bg)]">{isNo ? 'Aktiver varsler' : 'Enable notifications'}</button>
         </div>
       )}
       {!loading && enabled && !deviceReady && permission !== 'denied' && permission !== 'unsupported' && (
-        <div className="mt-3 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-3">
+        <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">
           <div className="font-medium text-[color:var(--fg)]">{isNo ? 'Aktiver denne enheten' : 'Enable this device'}</div>
           <p className="mt-1 text-sm text-[color:var(--fg-60)]">{isNo ? 'Varsler er på for kontoen, men denne enheten er ikke klar ennå.' : 'Notifications are on for your account, but this device is not ready yet.'}</p>
           <button type="button" disabled={busy} onClick={enableNotifications} className="mt-3 rounded-full bg-[color:var(--fg)] px-4 py-2 text-sm font-medium text-[color:var(--app-bg)]">{isNo ? 'Aktiver denne enheten' : 'Enable this device'}</button>
@@ -7959,10 +7958,9 @@ function SettingRow({
   const isDanger = variant === 'danger'
   return (
     <button
+      data-settings-row
       onClick={onClick}
-      className={`w-full flex items-center justify-between py-4 text-left transition ${
-        isDanger ? 'border-b border-[color:var(--danger-bd)] hover:bg-[color:var(--danger-bg)]' : 'border-b border-[color:var(--bd-10)] hover:bg-[color:var(--panel-05)]'
-      }`}
+      className="flex w-full items-center justify-between bg-transparent py-[18px] text-left"
       disabled={!onClick}
     >
       <div className={isDanger ? 'text-[color:var(--danger)]' : 'text-[color:var(--fg-70)]'}>{label}</div>

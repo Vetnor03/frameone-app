@@ -20,6 +20,11 @@ test('AI Follow uses one unboxed hero followed by a divided plan section', () =>
   assert.doesNotMatch(assistant, /assistant-main-card" className="[^"]*(?:rounded|bg-|border)/)
 })
 
+test('AI Follow composer has exactly one visible input surface', () => {
+  assert.match(assistant, /assistant-follow-input-container" className="[^"]*bg-\[color:var\(--input-bg\)\]/)
+  assert.match(assistant, /<textarea data-assistant-composer[\s\S]*?className="[^"]*bg-transparent/)
+})
+
 test('following requests remain elevated content-object cards', () => {
   assert.match(assistant, /<article key=\{w\.id\}[\s\S]*rounded-3xl border p-4 transition/)
   assert.match(assistant, /border-\[#2aa3ff\] bg-\[#2aa3ff\]\/10 ring-2/)

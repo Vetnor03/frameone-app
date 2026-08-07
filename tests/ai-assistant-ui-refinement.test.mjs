@@ -8,9 +8,10 @@ const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url),
 
 test('available following capacity shows the normal composer', () => {
   assert.match(assistant, /\{!reachedWatchLimit \? <>[\s\S]*data-testid="assistant-follow-input-container"/)
-  assert.match(assistant, /assistant-follow-input-container" className="[^"]*rounded-3xl[^"]*border border-transparent[^"]*bg-\[color:var\(--panel-08\)\]/)
+  assert.match(assistant, /assistant-follow-input-container" className="[^"]*rounded-3xl[^"]*border border-transparent[^"]*bg-\[color:var\(--input-bg\)\]/)
   assert.match(assistant, /focus-within:shadow-\[0_0_0_3px_rgba\(42,163,255,0\.16\)\]/)
-  assert.match(assistant, /<textarea aria-label=\{c\.placeholder\}[\s\S]*rows=\{4\}/)
+  assert.match(assistant, /<textarea data-assistant-composer/)
+  assert.match(assistant, /<textarea data-assistant-composer[\s\S]*?aria-label=\{c\.placeholder\}[\s\S]*?rows=\{4\}/)
 })
 
 test('full following capacity hides composer and shows premium upgrade state', () => {
