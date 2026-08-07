@@ -6,3 +6,6 @@ tsconfig.tsbuildinfo
 
 # Local credentials for the standalone Alfred Stage 3 diagnostic.
 frame/diagnostics/alfred_stage3/AlfredStage3Secrets.h
+
+# Local credentials for the standalone Alfred Stage 6 diagnostic.
+frame/diagnostics/alfred_stage6/AlfredStage6Secrets.h
