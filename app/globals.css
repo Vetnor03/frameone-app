@@ -13,10 +13,15 @@
   /* text */
   --fg: rgba(255, 255, 255, 1);
   --fg-90: rgba(255, 255, 255, 0.9);
+  --fg-95: rgba(255, 255, 255, 0.95);
+  --fg-92: rgba(255, 255, 255, 0.92);
+  --fg-85: rgba(255, 255, 255, 0.85);
   --fg-80: rgba(255, 255, 255, 0.8);
   --fg-70: rgba(255, 255, 255, 0.7);
   --fg-60: rgba(255, 255, 255, 0.6);
   --fg-50: rgba(255, 255, 255, 0.5);
+  --fg-55: rgba(255, 255, 255, 0.55);
+  --fg-65: rgba(255, 255, 255, 0.65);
   --fg-40: rgba(255, 255, 255, 0.4);
   --fg-30: rgba(255, 255, 255, 0.3);
   --fg-15: rgba(255, 255, 255, 0.15);
@@ -30,8 +35,12 @@
 
   /* surfaces */
   --panel-05: rgba(255, 255, 255, 0.05);
+  --panel-02: rgba(255, 255, 255, 0.02);
+  --panel-03: rgba(255, 255, 255, 0.03);
+  --panel-08: rgba(255, 255, 255, 0.08);
   --panel-10: rgba(255, 255, 255, 0.10);
   --panel-20: rgba(255, 255, 255, 0.20);
+  --card-bg: #0b2733;
 
   --overlay-55: rgba(0, 0, 0, 0.55);
   --toast-bg: rgba(0, 0, 0, 0.35);
@@ -141,12 +150,12 @@ html[data-theme="light"] .remind-app :is(input, textarea)::placeholder {
 }
 
 /* Outlined utility actions become calm secondary controls. Blue actions remain blue. */
-html[data-theme="light"] .remind-app button[class*="border-"]:not([class*="border-[#2aa3ff]"]):not([class*="bg-[#2aa3ff]"]) {
+html[data-theme="light"] .remind-app button[class*="border-"]:not([data-nav-tab]):not([class*="border-[#2aa3ff]"]):not([class*="bg-[#2aa3ff]"]) {
   border-color: transparent;
   background-color: #f0f1f3;
 }
 
-html[data-theme="light"] .remind-app button[class*="border-[#2aa3ff]"] {
+html[data-theme="light"] .remind-app button[class*="border-[#2aa3ff]"]:not([data-nav-tab]) {
   border-color: #2aa3ff;
   background-color: #2aa3ff !important;
   color: #ffffff !important;

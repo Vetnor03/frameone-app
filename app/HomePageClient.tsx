@@ -3173,14 +3173,16 @@ function TabBar({
           return (
             <button
               key={t.key}
+              data-nav-tab
+              aria-current={isActive ? 'page' : undefined}
               ref={(node) => {
                 btnRefs.current[String(t.key)] = node
               }}
               onClick={() => onSelect(t.key)}
-              className={`pb-2 whitespace-nowrap leading-none transition-[color,font-size,font-weight] duration-150 ${
+              className={`pb-2 whitespace-nowrap border-b-2 leading-none transition-[color,border-color,font-size,font-weight] duration-150 ${
                 isActive
                   ? 'text-[#2aa3ff] border-b-2 border-[#2aa3ff] text-[15px] font-semibold'
-                  : 'text-[color:var(--fg-70)] text-[13px] font-normal'
+                  : 'border-transparent text-[color:var(--fg-70)] text-[13px] font-normal'
               }`}
             >
               <span>{t.label}</span>

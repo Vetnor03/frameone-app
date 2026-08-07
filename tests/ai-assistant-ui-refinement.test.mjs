@@ -8,8 +8,8 @@ const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url),
 
 test('available following capacity shows the normal composer', () => {
   assert.match(assistant, /\{!reachedWatchLimit \? <>[\s\S]*data-testid="assistant-follow-input-container"/)
-  assert.match(assistant, /assistant-follow-input-container" className="[^"]*rounded-3xl[^"]*border border-\[color:var\(--bd-20\)\][^"]*bg-\[color:var\(--card-bg\)\]\/80/)
-  assert.match(assistant, /focus-within:border-\[#2aa3ff\]\/75/)
+  assert.match(assistant, /assistant-follow-input-container" className="[^"]*rounded-3xl[^"]*border border-transparent[^"]*bg-\[color:var\(--panel-08\)\]/)
+  assert.match(assistant, /focus-within:shadow-\[0_0_0_3px_rgba\(42,163,255,0\.16\)\]/)
   assert.match(assistant, /<textarea aria-label=\{c\.placeholder\}[\s\S]*rows=\{4\}/)
 })
 
@@ -43,7 +43,7 @@ test('Start following keeps validation-driven active blue and muted disabled sta
   assert.match(assistant, /const requestIsValid = requestValidation\.error == null/)
   assert.match(assistant, /const startFollowingIsActive = creating \|\| \(requestIsValid && !reachedWatchLimit\)/)
   assert.match(assistant, /const startFollowingDisabled = creating \|\| !requestIsValid \|\| reachedWatchLimit/)
-  assert.match(assistant, /startFollowingIsActive \? 'border-\[#2aa3ff\] bg-\[#2aa3ff\] text-white hover:bg-\[#168fe8\]' : 'border-\[color:var\(--bd-20\)\] bg-\[color:var\(--fg-20\)\] text-\[color:var\(--fg-55\)\] opacity-70'/)
+  assert.match(assistant, /startFollowingIsActive \? 'border-\[#2aa3ff\] bg-\[#2aa3ff\] text-white hover:bg-\[#168fe8\]' : 'border-transparent bg-\[color:var\(--panel-10\)\] text-\[color:var\(--fg-55\)\] opacity-70'/)
 
   const active = { creating: false, requestIsValid: true, reachedWatchLimit: false }
   const invalid = { creating: false, requestIsValid: false, reachedWatchLimit: false }
@@ -55,11 +55,12 @@ test('Start following keeps validation-driven active blue and muted disabled sta
   assert.equal(activeStyle(invalid), false)
 })
 
-test('subscription status card is compact, shows usage, and removes Plan full badge', () => {
-  assert.match(assistant, /data-testid="assistant-subscription-top-row" className="flex items-start justify-between gap-3 text-xs"/)
+test('subscription status is a divided settings section, shows usage, and removes Plan full badge', () => {
+  assert.match(assistant, /data-testid="assistant-subscription-card" className="border-y border-\[color:var\(--bd-10\)\] py-4"/)
+  assert.match(assistant, /data-testid="assistant-subscription-top-row" className="flex items-center justify-between gap-3 border-b border-\[color:var\(--bd-10\)\] pb-3 text-sm"/)
   assert.match(assistant, /\{planLabel \|\| c\.loading\}/)
-  assert.match(assistant, /data-testid="assistant-subscription-usage-row" className="mt-2\.5 space-y-2 text-xs"/)
-  assert.match(assistant, /className="flex items-center justify-between gap-3"/)
+  assert.match(assistant, /data-testid="assistant-subscription-usage-row" className="divide-y divide-\[color:var\(--bd-10\)\] text-sm"/)
+  assert.match(assistant, /className="flex items-center justify-between gap-3 py-3 last:pb-0"/)
   assert.match(assistant, /font-semibold tabular-nums text-\[color:var\(--fg-85\)\]/)
   assert.match(assistant, /\[\[c\.following, ownedOngoingWatchCount, entitlements\.max_ongoing_watches\], \[c\.instant, ownedInstantWatchCount, Math\.max\(0, entitlements\.max_instant_watches\)\]\]/)
   assert.doesNotMatch(assistant, /\{planIsFull && <span/)
