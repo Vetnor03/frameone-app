@@ -34,6 +34,8 @@ test('one localized helper is reused for user-created free text', () => {
   assert.match(helper, /Ta vare på opplysningene dine/)
   assert.match(helper, /<aside/)
   assert.match(helper, /rounded-2xl border/)
+  assert.match(helper, /border-\[#2aa3ff\]\/15 bg-\[#2aa3ff\]\/\[0\.07\]/)
+  assert.doesNotMatch(helper, /bg-\[#17344b\]/)
   assert.equal((assistant.match(/<SensitiveInformationHelper language=\{language\} \/>/g) ?? []).length, 2)
   assert.equal((app.match(/<SensitiveInformationHelper language=\{language\}\s*\/>/g) ?? []).length, 4)
 
