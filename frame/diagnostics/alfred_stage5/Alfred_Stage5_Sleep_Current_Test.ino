@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <driver/adc.h>
 #include <driver/gpio.h>
 #include <esp_bt.h>
 #include <esp_err.h>
@@ -88,9 +87,6 @@ bool disableRadiosAndSleepPeripherals() {
     reportEspResult("Bluetooth controller deinit", btDeinitResult);
     if (btDeinitResult != ESP_OK) ok = false;
   }
-
-  adc_power_off();  // Arduino-ESP32/ESP-IDF exposes no result for this call.
-  Serial.println("ADC power: OFF requested (API has no return value)");
 
   const esp_err_t rtcPeriphResult =
       esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
