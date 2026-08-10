@@ -18,7 +18,7 @@ const englishSections = [
   },
   {
     title: 'Local storage',
-    text: 'The shop stores your cart in your browser so it remains available as you move between pages. The app may also remember preferences such as your selected theme and active device. Local storage is not a cookie and stays on your device until you clear it or the app replaces it.',
+    text: 'The shop stores your cart in your browser so it remains available as you move between pages. The app may also cache preferences such as your selected theme and active device for faster startup; your app theme is saved to your account so it follows you across devices. Local storage is not a cookie and stays on your device until you clear it or the app replaces it.',
   },
   {
     title: 'No advertising cookies',

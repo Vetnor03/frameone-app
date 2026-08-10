@@ -1,4 +1,4 @@
-export const THEME_STORAGE_KEY = 'remind-theme'
+export const THEME_STORAGE_KEY = 'remind-app-theme'
 
 export type AppTheme = 'dark' | 'light'
 
@@ -17,7 +17,7 @@ export function initialTheme(): AppTheme {
   if (typeof document !== 'undefined' && isAppTheme(document.documentElement.dataset.theme)) {
     return document.documentElement.dataset.theme
   }
-  return storedTheme() ?? 'dark'
+  return storedTheme() ?? 'light'
 }
 
 export function persistTheme(theme: AppTheme) {

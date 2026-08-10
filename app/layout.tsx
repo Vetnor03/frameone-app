@@ -7,7 +7,7 @@ import { THEME_STORAGE_KEY } from "./lib/theme";
 const themeBootstrapScript = `
   (function () {
     var theme = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
-    if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+    if (theme !== 'light' && theme !== 'dark') theme = 'light';
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   })();
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     icon: [{ url: versionedIconPath("/r_Logo.png"), type: "image/png" }],
     apple: [{ url: versionedIconPath("/r_Logo.png"), type: "image/png" }],
   },
-  themeColor: "#061b24",
+  themeColor: "#f5f6f8",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
