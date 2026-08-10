@@ -9,6 +9,7 @@
 #include "FrameConfig.h"
 #include "Layout.h"
 #include "UpdateChecker.h"
+#include "LiveUpdate.h"
 #include "DisplayCore.h"
 #include "Theme.h"
 #include "TimeSync.h"
@@ -26,6 +27,8 @@
 #include <Preferences.h>
 #include <time.h>
 #include <esp_sleep.h>
+#include <esp_wifi.h>
+#include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
 static const char* FW_VER = "v2.5.7";
@@ -33,14 +36,17 @@ static const char* FW_VER = "v2.5.7";
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 
-// 15 minutes quick check
-static const uint64_t QUICK_WAKE_US = 900ULL * 1000000ULL;
-
-// While plugged in, check every 5 minutes
-static const uint64_t PLUGGED_WAKE_US = 300ULL * 1000000ULL;
+// Cheap live-update discovery wake. The normal full sync has its own RTC clock.
+static const uint32_t PROBE_WAKE_SECONDS = 120;
+static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
+static const uint32_t NORMAL_SYNC_SECONDS = 900;
+static const uint32_t INTERACTIVE_POLL_MS = 1500;
 
 // 3 hours refresh: 12 * 15min = 180min
 static const uint16_t WAKES_PER_REFRESH = 12;
+
+// Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
+RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
 
 // Debug / power sense pin for PWR_SENS_E1 -> GPIO39
 #ifndef PWR_SENSE_DEBUG_PIN
@@ -177,7 +183,8 @@ static void goToSleepForUs(uint64_t us, bool usbPresent) {
 }
 
 static void goToSleep(bool usbPresent) {
-  goToSleepForUs(usbPresent ? PLUGGED_WAKE_US : QUICK_WAKE_US, usbPresent);
+  Serial.println("LiveUpdate: sleep");
+  goToSleepForUs(PROBE_WAKE_US, usbPresent);
 }
 
 static void goToShelfSleep(bool usbPresent) {
@@ -515,6 +522,129 @@ static void runOtaCheckIfDue() {
   FirmwareUpdater::loop();
 }
 
+static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebug& pwr) {
+  ModuleDate::setConfig(&g_cfg);
+  ModuleWeather::setConfig(&g_cfg);
+  ModuleSurf::setConfig(&g_cfg);
+  ModuleReminders::setConfig(&g_cfg);
+  ModuleSoccer::setConfig(&g_cfg);
+  ModuleStocks::setConfig(&g_cfg);
+  ModuleReminders::preload();
+
+  ensureDisplay();
+  Theme::set(g_cfg.theme);
+  resetTextStateForDashboard();
+
+  // GxEPD2's paged update is synchronous: returning from drawWithContent means
+  // the BUSY-controlled physical panel update has completed.
+  Layout::drawWithContent(g_cfg.layout, g_cfg);
+  postDeviceStatus(batt, pwr, true);
+  return true;
+}
+
+static bool fetchAndRenderExplicit(
+  const BatteryState& batt,
+  const PowerSenseDebug& pwr,
+  uint64_t revision
+) {
+  FrameConfigApi::FetchResult result =
+    FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+  if (result != FrameConfigApi::FETCH_OK) {
+    Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\n", revision);
+    return false;
+  }
+
+  if (!renderLoadedDashboard(batt, pwr)) return false;
+  LiveUpdate::saveRenderedAwaitingAck(revision);
+  Serial.printf("LiveUpdate: revision %" PRIu64 " physically displayed\n", revision);
+  return true;
+}
+
+static bool retryRenderedAck(uint64_t backendDisplayed) {
+  uint64_t rendered = LiveUpdate::getRenderedAwaitingAck();
+  if (rendered == 0) return true;
+  if (backendDisplayed >= rendered) {
+    LiveUpdate::clearRenderedAwaitingAckThrough(backendDisplayed);
+    return true;
+  }
+
+  if (LiveUpdate::acknowledge(DeviceIdentity::getToken(), rendered)) {
+    LiveUpdate::clearRenderedAwaitingAckThrough(rendered);
+    Serial.printf("LiveUpdate: ACK %" PRIu64 " success\n", rendered);
+    return true;
+  }
+
+  Serial.printf("LiveUpdate: ACK %" PRIu64 " failed, retrying without redraw\n", rendered);
+  return false;
+}
+
+static void runInteractiveMode(
+  const BatteryState& batt,
+  const PowerSenseDebug& pwr,
+  LiveUpdateState state
+) {
+  Serial.println("LiveUpdate: entering interactive mode");
+  WiFi.setSleep(true);
+  esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+
+  bool lastActive = state.appActive;
+  uint64_t lastRequested = state.requestedRevision;
+  uint64_t lastDisplayed = state.displayedRevision;
+  uint8_t inactiveAckFailures = 0;
+
+  while (WiFi.status() == WL_CONNECTED) {
+    uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
+    if (retryRenderedAck(state.displayedRevision)) {
+      inactiveAckFailures = 0;
+      if (awaitingAck > state.displayedRevision) state.displayedRevision = awaitingAck;
+    } else if (!state.appActive && ++inactiveAckFailures >= 3) {
+      Serial.println("LiveUpdate: deferring ACK retry to next probe wake");
+      return;
+    }
+
+    uint64_t rendered = LiveUpdate::getRenderedAwaitingAck();
+    if (state.requestedRevision > state.displayedRevision &&
+        state.requestedRevision > rendered) {
+      const uint64_t revisionToDisplay = state.requestedRevision;
+      Serial.printf("LiveUpdate: revision %" PRIu64 " pending\n", revisionToDisplay);
+      if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return;
+      if (retryRenderedAck(state.displayedRevision)) {
+        state.displayedRevision = revisionToDisplay;
+      } else if (!state.appActive) {
+        inactiveAckFailures++;
+      }
+    }
+
+    rendered = LiveUpdate::getRenderedAwaitingAck();
+    if (!state.appActive &&
+        state.requestedRevision <= state.displayedRevision &&
+        rendered == 0) {
+      Serial.println("LiveUpdate: activity expired");
+      return;
+    }
+
+    delay(INTERACTIVE_POLL_MS);
+    LiveUpdateState next{};
+    if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
+      Serial.println("LiveUpdate: interactive probe failed");
+      return;
+    }
+
+    if (next.appActive != lastActive ||
+        next.requestedRevision != lastRequested ||
+        next.displayedRevision != lastDisplayed) {
+      Serial.printf(
+        "LiveUpdate: probe active=%d requested=%" PRIu64 " displayed=%" PRIu64 "\n",
+        next.appActive, next.requestedRevision, next.displayedRevision
+      );
+      lastActive = next.appActive;
+      lastRequested = next.requestedRevision;
+      lastDisplayed = next.displayedRevision;
+    }
+    state = next;
+  }
+}
+
 // --------------------------------------
 // Setup
 // --------------------------------------
@@ -546,6 +676,23 @@ void setup() {
     Serial.print(", now=");
     Serial.print(pwrEarly.usbPresent ? "plugged" : "battery");
     Serial.println(")");
+  }
+
+  const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+  if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
+    normalSyncElapsedSeconds += PROBE_WAKE_SECONDS;
+  }
+  bool normalSyncDue =
+    wakeCause != ESP_SLEEP_WAKEUP_TIMER ||
+    normalSyncElapsedSeconds >= NORMAL_SYNC_SECONDS ||
+    chargerStateChanged;
+  if (normalSyncDue) {
+    if (normalSyncElapsedSeconds >= NORMAL_SYNC_SECONDS) {
+      normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS;
+    } else {
+      normalSyncElapsedSeconds = 0;
+    }
+    Serial.println("LiveUpdate: normal sync due");
   }
 
 
@@ -620,14 +767,17 @@ void setup() {
     prefs.end();
   }
 
-  UpdateChecker::noteWake();
-
   bool reconnectedViaProvisioning = false;
   bool setupFlowRefreshByCharger = false;
   SetupStep activeSetupStep = SETUP_STEP_NONE;
   const bool isCompletingWifiSetup =
     WiFiManagerV2::hasCreds() && !DeviceIdentity::hasToken();
   if (!WiFiManagerV2::connectSaved(12000)) {
+    if (!normalSyncDue && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
+      Serial.println("LiveUpdate: Wi-Fi unavailable on probe wake");
+      goToSleep(pwrEarly.usbPresent);
+      return;
+    }
     activeSetupStep = SETUP_STEP_WIFI;
     if (chargerStateChanged) {
       Serial.println("🔄 Charger change on Wi-Fi setup screen -> restart Wi-Fi setup flow and redraw");
@@ -661,6 +811,37 @@ void setup() {
 
   activeSetupStep = SETUP_STEP_NONE;
 
+  LiveUpdateState liveState{};
+  const bool liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
+  if (liveProbeOk) {
+    Serial.printf(
+      "LiveUpdate: probe active=%d requested=%" PRIu64 " displayed=%" PRIu64 "\n",
+      liveState.appActive, liveState.requestedRevision, liveState.displayedRevision
+    );
+    uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
+    if (retryRenderedAck(liveState.displayedRevision) &&
+        awaitingAck > liveState.displayedRevision) {
+      liveState.displayedRevision = awaitingAck;
+    }
+  } else {
+    Serial.println("LiveUpdate: probe failed");
+  }
+
+  const uint64_t locallyRendered = LiveUpdate::getRenderedAwaitingAck();
+  const bool explicitRevisionPending =
+    liveProbeOk &&
+    liveState.requestedRevision > liveState.displayedRevision &&
+    liveState.requestedRevision > locallyRendered;
+
+  if (!normalSyncDue && !explicitRevisionPending && !(liveProbeOk && liveState.appActive)) {
+    goToSleep(pwrEarly.usbPresent);
+    return;
+  }
+
+  // Only full scheduled checks advance the legacy 12-wake (three-hour)
+  // physical-refresh counter. Two-minute probe wakes never touch it.
+  if (normalSyncDue) UpdateChecker::noteWake();
+
   // ---------------- Battery / Power sense ----------------
   PowerSenseDebug pwr = readPowerSenseDebug();
   BatteryState batt = BatteryManager::readAndUpdate(pwr.usbPresent);
@@ -669,7 +850,13 @@ void setup() {
   logPowerSenseDebug(batt, pwr);
   DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
 
-  runOtaCheckIfDue();
+  if (!normalSyncDue) {
+    runInteractiveMode(batt, pwr, liveState);
+    goToSleep(pwr.usbPresent);
+    return;
+  }
+
+  if (normalSyncDue) runOtaCheckIfDue();
 
   String updatedAt;
   String reminderSig;
@@ -762,7 +949,8 @@ void setup() {
     usbChanged ||
     batteryJumpChanged ||
     reconnectedViaProvisioning ||
-    setupFlowRefreshByCharger;
+    setupFlowRefreshByCharger ||
+    explicitRevisionPending;
 
   // ---------------- No redraw ----------------
   if (!shouldRender) {
@@ -770,6 +958,9 @@ void setup() {
 
     postDeviceStatus(batt, pwr, false);
     UpdateChecker::saveBatteryPercent(batt.percent);
+    if (liveProbeOk && liveState.appActive) {
+      runInteractiveMode(batt, pwr, liveState);
+    }
     goToSleep(pwr.usbPresent);
     return;
   }
@@ -794,23 +985,23 @@ void setup() {
     DisplayCore::forceNextFullRefresh(true);
   }
 
-  ModuleDate::setConfig(&g_cfg);
-  ModuleWeather::setConfig(&g_cfg);
-  ModuleSurf::setConfig(&g_cfg);
-  ModuleReminders::setConfig(&g_cfg);
-  ModuleSoccer::setConfig(&g_cfg);
-  ModuleStocks::setConfig(&g_cfg);
+  if (!renderLoadedDashboard(batt, pwr)) {
+    goToSleep(pwr.usbPresent);
+    return;
+  }
 
-  ModuleReminders::preload();
-
-  ensureDisplay();
-
-  Theme::set(g_cfg.theme);
-  resetTextStateForDashboard();
-
-  Layout::drawWithContent(g_cfg.layout, g_cfg);
-
-  postDeviceStatus(batt, pwr, true);
+  // A scheduled render fetched the latest frame state, so it also physically
+  // satisfies the revision observed by the wake probe.
+  if (liveProbeOk && liveState.requestedRevision > liveState.displayedRevision) {
+    LiveUpdate::saveRenderedAwaitingAck(liveState.requestedRevision);
+    Serial.printf(
+      "LiveUpdate: revision %" PRIu64 " physically displayed by normal sync\n",
+      liveState.requestedRevision
+    );
+    if (retryRenderedAck(liveState.displayedRevision)) {
+      liveState.displayedRevision = liveState.requestedRevision;
+    }
+  }
 
   UpdateChecker::saveApplied(updatedAt);
   if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);
@@ -823,6 +1014,9 @@ void setup() {
   }
 
   Serial.println("✅ Applied");
+  if (liveProbeOk && liveState.appActive) {
+    runInteractiveMode(batt, pwr, liveState);
+  }
   goToSleep(pwr.usbPresent);
 }
 
