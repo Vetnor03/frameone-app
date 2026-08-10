@@ -29,7 +29,7 @@ test('explicit Update saves before requesting and locks duplicate clicks', () =>
   assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestDeviceUpdate(supabase, deviceId)'))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdateInProgress\}/)
+  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdateInProgress \|\| !manualUpdateReady\}/)
   assert.ok(flow.indexOf("phase: 'manual_waiting'") < flow.indexOf('persistSettings(deviceId)'))
 })
 
@@ -39,7 +39,7 @@ test('reconciliation waits for the exact returned revision and has a three-minut
   assert.match(home, /requestedRevision = await requestDeviceUpdate/)
   assert.match(home, /status\.displayedRevision >= requestedRevision/)
   assert.match(home, /window\.setInterval\(reconcile, 3_000\)/)
-  assert.match(home, /phase: 'manual_failed'/)
+  assert.match(home, /Date\.now\(\) >= existing\.requestedAt \+ DEVICE_UPDATE_TIMEOUT_MS[\s\S]*phase: 'manual_failed'/)
 })
 
 test('frame/tab/auth changes invalidate stale Update operations', () => {
@@ -47,6 +47,7 @@ test('frame/tab/auth changes invalidate stale Update operations', () => {
   assert.match(home, /activeDeviceIdRef\.current !== deviceId/)
   assert.match(home, /loadManualUpdateRecords/)
   assert.match(home, /persistManualUpdateRecords/)
+  assert.match(home, /reconciledManualDevices/)
 })
 
 test('network errors retain durable state and request failures are visible', () => {
@@ -54,4 +55,5 @@ test('network errors retain durable state and request failures are visible', () 
   assert.match(manual, /Update saved\. RE:MIND has not confirmed the display refresh yet\./)
   assert.match(home, /Settings were saved, but the update could not be started\./)
   assert.match(manual, /window\.localStorage\.setItem/)
+  assert.match(home, /manualUpdatePhase !== 'manual_failed'/)
 })

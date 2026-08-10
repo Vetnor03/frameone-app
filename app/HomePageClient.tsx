@@ -1152,6 +1152,7 @@ export default function HomePage() {
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
   const [manualUpdateRecords, setManualUpdateRecords] = useState<ManualUpdateRecords>(loadManualUpdateRecords)
+  const [reconciledManualDevices, setReconciledManualDevices] = useState<Record<string, boolean>>({})
   const updateActionInFlightRef = useRef(false)
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
@@ -1159,6 +1160,7 @@ export default function HomePage() {
   const manualUpdate = activeDeviceId ? manualUpdateRecords[activeDeviceId] ?? null : null
   const manualUpdatePhase: ManualUpdatePhase = manualUpdate?.phase ?? 'idle'
   const manualUpdateInProgress = isManualUpdateActive(manualUpdatePhase)
+  const manualUpdateReady = !manualUpdate || manualUpdatePhase === 'manual_failed' || reconciledManualDevices[manualUpdate.deviceId] === true
 
   const storeManualUpdate = useCallback((record: ManualUpdateRecord) => {
     setManualUpdateRecords((current) => {
@@ -1249,6 +1251,7 @@ export default function HomePage() {
           requestedRevision,
           lastProbeAt,
         })
+        setReconciledManualDevices((current) => current[deviceId] ? current : { ...current, [deviceId]: true })
       } catch {
         // A local record remains visually authoritative through transient offline periods.
       }
@@ -2418,6 +2421,7 @@ export default function HomePage() {
     // Enter and persist manual mode before any async save/request work. This
     // guarantees the scheduled-refresh copy cannot flash after the click.
     const requestedAt = Date.now()
+    setReconciledManualDevices((current) => ({ ...current, [deviceId]: true }))
     storeManualUpdate({
       deviceId,
       phase: 'manual_waiting',
@@ -2624,10 +2628,12 @@ async function handleSelectTab(k: TabKey) {
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
                   }`}
                   style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!activeDeviceId || persisting || manualUpdateInProgress}
+                  disabled={!activeDeviceId || persisting || manualUpdateInProgress || !manualUpdateReady}
                 >
                   {persisting
                     ? tx(language).saving
+                    : !manualUpdateReady
+                      ? tx(language).loadingFrame
                     : manualUpdateInProgress
                       ? 'Updating RE:MIND…'
                       : manualUpdatePhase === 'manual_complete'
@@ -2636,7 +2642,9 @@ async function handleSelectTab(k: TabKey) {
                 </button>
 
                 <div className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {manualUpdatePhase !== 'idle'
+                  {!manualUpdateReady
+                    ? null
+                    : manualUpdatePhase !== 'idle' && manualUpdatePhase !== 'manual_failed'
                     ? formatManualUpdatePhase(manualUpdatePhase, language) ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
                     : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
