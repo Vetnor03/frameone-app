@@ -1144,6 +1144,7 @@ export default function HomePage() {
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'requesting' | 'updating' | 'updated' | 'unconfirmed'>('idle')
+  const [explicitUpdateEstimate, setExplicitUpdateEstimate] = useState<{ displayAt: number | null; instant: boolean } | null>(null)
   const updateActionInFlightRef = useRef(false)
   const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
@@ -1190,6 +1191,7 @@ export default function HomePage() {
     updateOperationRef.current = null
     updateActionInFlightRef.current = false
     setExplicitUpdateStatus('idle')
+    setExplicitUpdateEstimate(null)
   }, [activeDeviceId, activeTab, userId])
 
   // Resolve this as soon as authentication is ready, rather than waiting for
@@ -1647,6 +1649,24 @@ export default function HomePage() {
     return language === 'no'
       ? `Oppdatering om ${remainingMin} minutt${remainingMin === 1 ? '' : 'er'}`
       : `Update in ${remainingMin} minute${remainingMin === 1 ? '' : 's'}`
+  }
+
+  function formatExplicitUpdateEstimate() {
+    if (!explicitUpdateEstimate) return null
+    if (explicitUpdateEstimate.instant) {
+      return language === 'no' ? 'Oppdatering om mindre enn 15 sekunder' : 'Update in less than 15 seconds'
+    }
+
+    if (explicitUpdateEstimate.displayAt != null) {
+      const remainingSec = Math.max(1, Math.ceil((explicitUpdateEstimate.displayAt - Date.now()) / 1000))
+      if (remainingSec < 60) {
+        return language === 'no'
+          ? `Oppdatering om ${remainingSec} sekund${remainingSec === 1 ? '' : 'er'}`
+          : `Update in ${remainingSec} second${remainingSec === 1 ? '' : 's'}`
+      }
+    }
+
+    return language === 'no' ? 'Oppdatering om mindre enn 2 minutter' : 'Update in less than 2 minutes'
   }
 
   const nextUpdateText = showNextUpdateAfterSave ? formatNextUpdate(activeFrameStatus) : null
@@ -2316,6 +2336,7 @@ export default function HomePage() {
     updateActionInFlightRef.current = true
     const operationId = ++updateOperationIdRef.current
     setExplicitUpdateStatus('idle')
+    setExplicitUpdateEstimate(null)
 
     const saved = await persistSettings(deviceId)
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
@@ -2330,6 +2351,8 @@ export default function HomePage() {
 
       updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
       setExplicitUpdateStatus('updating')
+      setExplicitUpdateEstimate({ displayAt: null, instant: false })
+      const requestedAt = Date.now()
       const deadline = Date.now() + DEVICE_UPDATE_TIMEOUT_MS
 
       while (Date.now() < deadline) {
@@ -2337,14 +2360,23 @@ export default function HomePage() {
         if (!operation || operation.id !== operationId || activeDeviceIdRef.current !== deviceId) return
 
         try {
-          const displayedRevision = await getDeviceUpdateStatus(supabase, deviceId)
-          if (revisionHasBeenDisplayed(displayedRevision, operation.requestedRevision)) {
+          const updateStatus = await getDeviceUpdateStatus(supabase, deviceId)
+          if (revisionHasBeenDisplayed(updateStatus.displayedRevision, operation.requestedRevision)) {
             if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
               updateOperationRef.current = null
+              setExplicitUpdateEstimate(null)
               setExplicitUpdateStatus('updated')
             }
             return
           }
+
+          const lastProbeAt = getTimeMs(updateStatus.lastProbeAt)
+          setExplicitUpdateEstimate((current) => {
+            if (current?.instant || current?.displayAt != null || lastProbeAt == null) return current
+            if (lastProbeAt >= requestedAt - 15_000) return { displayAt: lastProbeAt + 15_000, instant: true }
+            const displayAt = lastProbeAt + 120_000 + 15_000
+            return displayAt > Date.now() ? { displayAt, instant: false } : current
+          })
         } catch {
           // Transient network/offline failures keep waiting until the bounded deadline.
         }
@@ -2354,12 +2386,14 @@ export default function HomePage() {
 
       if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
         updateOperationRef.current = null
+        setExplicitUpdateEstimate(null)
         setExplicitUpdateStatus('unconfirmed')
       }
     } catch {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
         alert(language === 'no' ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.' : 'Settings were saved, but the update could not be started.')
         setExplicitUpdateStatus('unconfirmed')
+        setExplicitUpdateEstimate(null)
       }
     } finally {
       if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
@@ -2559,7 +2593,9 @@ async function handleSelectTab(k: TabKey) {
                     ? (language === 'no'
                         ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
                         : 'Update saved. RE:MIND has not confirmed the display refresh yet.')
-                    : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
+                    : explicitUpdateStatus === 'updating'
+                      ? formatExplicitUpdateEstimate()
+                      : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
               </div>
             )}
