@@ -17,7 +17,7 @@ import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, nor
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
-import { initialTheme, isAppTheme, persistTheme, storedTheme, type AppTheme } from './lib/theme'
+import { initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
   DEVICE_UPDATE_POLL_MS,
@@ -79,6 +79,8 @@ const UI = {
     clearCell: 'CLEAR CELL',
 
     themeTitle: 'THEME',
+    appThemeTab: 'APP',
+    frameThemeTab: 'FRAME',
     dark: 'DARK',
     light: 'LIGHT',
 
@@ -197,6 +199,8 @@ const UI = {
     clearCell: 'TØM FELT',
 
     themeTitle: 'TEMA',
+    appThemeTab: 'APP',
+    frameThemeTab: 'RAMME',
     dark: 'MØRK',
     light: 'LYS',
 
@@ -1121,7 +1125,8 @@ export default function HomePage() {
   const [shouldRenderApp, setShouldRenderApp] = useState(false)
   const [setupDeviceId, setSetupDeviceId] = useState<string | null>(null)
 
-  const [theme, setTheme] = useState<AppTheme>(initialTheme)
+  const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
+  const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -1202,12 +1207,48 @@ export default function HomePage() {
   }, [userId])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
-    document.documentElement.style.colorScheme = theme
+    document.documentElement.dataset.theme = appTheme
+    document.documentElement.style.colorScheme = appTheme
 
     const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null
-    if (meta) meta.content = theme === 'dark' ? '#061b24' : '#f5f6f8'
-  }, [theme])
+    if (meta) meta.content = appTheme === 'dark' ? '#061b24' : '#f5f6f8'
+  }, [appTheme])
+
+  useEffect(() => {
+    if (!userId) return
+
+    let cancelled = false
+
+    async function loadAccountAppTheme() {
+      const { data, error } = await supabase
+        .from('user_app_preferences')
+        .select('app_theme')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (error) {
+        console.warn('[app-theme:account-load-failed]', { message: error.message })
+        return
+      }
+
+      const accountTheme: AppTheme = isAppTheme(data?.app_theme) ? data.app_theme : 'light'
+
+      if (!data) {
+        const { error: insertError } = await supabase
+          .from('user_app_preferences')
+          .upsert({ user_id: userId, app_theme: accountTheme }, { onConflict: 'user_id' })
+        if (insertError) console.warn('[app-theme:account-migration-failed]', { message: insertError.message })
+      }
+
+      if (cancelled) return
+      persistTheme(accountTheme)
+      setAppTheme(accountTheme)
+    }
+
+    void loadAccountAppTheme()
+    return () => { cancelled = true }
+  }, [userId])
 
   useEffect(() => {
     if (!activeDeviceId) return
@@ -1283,7 +1324,7 @@ export default function HomePage() {
     const currentCells = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
 
     return {
-      theme,
+      theme: frameTheme,
       language,
       fontSize,
       layoutKey,
@@ -1293,7 +1334,7 @@ export default function HomePage() {
       updatedAt: null,
       renderAt: null,
     }
-  }, [cellsByLayout, fontSize, language, layoutKey, modulesJson, physicalFrameSnapshot, theme])
+  }, [cellsByLayout, fontSize, frameTheme, language, layoutKey, modulesJson, physicalFrameSnapshot])
 
   const stickySettingsRef = useRef(false)
   const [settingsSubpage, setSettingsSubpage] = useState<'subscription' | null>(null)
@@ -1373,7 +1414,7 @@ export default function HomePage() {
 
   const savedStateRef = useRef<string>('')
   const savedFrameStateRef = useRef<{
-    theme: 'dark' | 'light'
+    frameTheme: 'dark' | 'light'
     language: AppLanguage
     fontSize: AppFontSize
     layoutKey: LayoutKey
@@ -1382,7 +1423,7 @@ export default function HomePage() {
   const layoutModuleMemoryRef = useRef<(ModuleKey | null)[]>([])
 
   function serializeComparableState(args: {
-    theme: 'dark' | 'light'
+    frameTheme: 'dark' | 'light'
     language: AppLanguage
     fontSize: AppFontSize
     layoutKey: LayoutKey
@@ -1393,7 +1434,7 @@ export default function HomePage() {
     const normalizedModules = normalizeModulesForSave(args.modulesJson)
 
     return JSON.stringify({
-      theme: args.theme,
+      theme: args.frameTheme,
       language: args.language,
       fontSize: args.fontSize,
       layout: args.layoutKey,
@@ -1405,7 +1446,7 @@ export default function HomePage() {
 
   const dirtyFrameRef = useRef<number | null>(null)
   const pendingDirtyStateRef = useRef<{
-    theme?: 'dark' | 'light'
+    frameTheme?: 'dark' | 'light'
     language?: AppLanguage
     fontSize?: AppFontSize
     layoutKey?: LayoutKey
@@ -1415,7 +1456,7 @@ export default function HomePage() {
   } | null>(null)
 
   function refreshDirtyState(next?: {
-    theme?: 'dark' | 'light'
+    frameTheme?: 'dark' | 'light'
     language?: AppLanguage
     fontSize?: AppFontSize
     layoutKey?: LayoutKey
@@ -1424,7 +1465,7 @@ export default function HomePage() {
     pinnedModuleTabs?: ModuleKey[]
   }) {
     const serialized = serializeComparableState({
-      theme: next?.theme ?? theme,
+      frameTheme: next?.frameTheme ?? frameTheme,
       language: next?.language ?? language,
       fontSize: next?.fontSize ?? fontSize,
       layoutKey: next?.layoutKey ?? layoutKey,
@@ -1442,7 +1483,7 @@ export default function HomePage() {
   }
 
   function markDirty(next?: {
-    theme?: 'dark' | 'light'
+    frameTheme?: 'dark' | 'light'
     language?: AppLanguage
     fontSize?: AppFontSize
     layoutKey?: LayoutKey
@@ -1810,12 +1851,9 @@ export default function HomePage() {
       !!data?.settings_json &&
       typeof data.settings_json === 'object' &&
       Object.keys(data.settings_json as Record<string, unknown>).length > 0
-    // The app theme is a user-level UI preference. The local value is available
-    // synchronously at launch; device settings provide migration for existing users.
-    const savedAppTheme = storedTheme()
-    const deviceTheme = isAppTheme(json.theme) ? json.theme : 'dark'
-    const nextTheme = savedAppTheme ?? deviceTheme
-    if (!savedAppTheme) persistTheme(nextTheme)
+    // `theme` remains the frame setting for backwards compatibility, so an
+    // existing physical frame never changes appearance during migration.
+    const nextFrameTheme = isAppTheme(json.theme) ? json.theme : 'dark'
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
     const nextLayout = (json.layout || 'default') as LayoutKey
@@ -1843,7 +1881,7 @@ export default function HomePage() {
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
       : []
 
-    setTheme(nextTheme)
+    setFrameTheme(nextFrameTheme)
     setLanguage(nextLanguage)
     setFontSize(nextFontSize)
     setCellsByLayout(nextCellsByLayout)
@@ -1852,7 +1890,7 @@ export default function HomePage() {
     setPinnedModuleTabs(nextPinnedTabs)
 
     savedStateRef.current = serializeComparableState({
-      theme: nextTheme,
+      frameTheme: nextFrameTheme,
       language: nextLanguage,
       fontSize: nextFontSize,
       layoutKey: nextLayout,
@@ -1861,7 +1899,7 @@ export default function HomePage() {
       pinnedModuleTabs: nextPinnedTabs,
     })
     savedFrameStateRef.current = {
-      theme: nextTheme,
+      frameTheme: nextFrameTheme,
       language: nextLanguage,
       fontSize: nextFontSize,
       layoutKey: nextLayout,
@@ -1879,7 +1917,7 @@ export default function HomePage() {
 
     if (!hasSavedSettings) {
       const initialSettingsJson: SettingsJson = {
-        theme: nextTheme,
+        theme: nextFrameTheme,
         language: nextLanguage,
         fontSize: nextFontSize,
         layout: 'default',
@@ -2063,7 +2101,7 @@ export default function HomePage() {
     const currentCellsForLayout = nextCellsByLayout[nextLayout] || emptyCellsFor(nextLayout)
     const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(layoutModuleMemoryRef.current, nextLayout, currentCellsForLayout)
     const settingsJson: SettingsJson = {
-      theme,
+      theme: frameTheme,
       language,
       fontSize,
       layout: nextLayout,
@@ -2085,7 +2123,7 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setModulesJson(nextModules)
     setPinnedModuleTabs(nextPinnedTabs)
-    savedStateRef.current = serializeComparableState({ theme, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
+    savedStateRef.current = serializeComparableState({ frameTheme, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
     setDirty(false)
     setSetupDeviceId(null)
     setActiveTab('frame')
@@ -2206,7 +2244,7 @@ export default function HomePage() {
       )
 
       const settingsJson: SettingsJson = {
-        theme,
+        theme: frameTheme,
         language,
         fontSize,
         layout: layoutKey,
@@ -2241,7 +2279,7 @@ export default function HomePage() {
       setModulesJson(modulesForSave)
 
       savedStateRef.current = serializeComparableState({
-        theme,
+        frameTheme,
         language,
         fontSize,
         layoutKey,
@@ -2250,7 +2288,7 @@ export default function HomePage() {
         pinnedModuleTabs,
       })
       savedFrameStateRef.current = {
-        theme,
+        frameTheme,
         language,
         fontSize,
         layoutKey,
@@ -2357,7 +2395,7 @@ async function handleSelectTab(k: TabKey) {
       <LandscapeFrameMirror
         snapshot={mirrorSnapshot}
         fallbackLanguage={language}
-        theme={theme}
+        theme={appTheme}
         status={activeFrameStatus}
       />
     )
@@ -2411,7 +2449,8 @@ async function handleSelectTab(k: TabKey) {
               {activeTab === 'settings' && (
                 <SettingsTab
                   language={language}
-                  theme={theme}
+                  appTheme={appTheme}
+                  frameTheme={frameTheme}
                   onOpenTheme={() => setThemePickerOpen(true)}
                   onOpenLanguage={() => setLanguagePickerOpen(true)}
                   frames={frames}
@@ -2540,13 +2579,24 @@ async function handleSelectTab(k: TabKey) {
             {themePickerOpen && (
               <ThemePickerModal
                 language={language}
-                current={theme}
+                appTheme={appTheme}
+                frameTheme={frameTheme}
                 onClose={() => setThemePickerOpen(false)}
-                onPick={(t) => {
+                onPickApp={(t) => {
                   persistTheme(t)
-                  setTheme(t)
-                  setThemePickerOpen(false)
-                  markDirty({ theme: t })
+                  setAppTheme(t)
+                  if (userId) {
+                    void supabase
+                      .from('user_app_preferences')
+                      .upsert({ user_id: userId, app_theme: t }, { onConflict: 'user_id' })
+                      .then(({ error }) => {
+                        if (error) console.warn('[app-theme:account-save-failed]', { message: error.message })
+                      })
+                  }
+                }}
+                onPickFrame={(t) => {
+                  setFrameTheme(t)
+                  markDirty({ frameTheme: t })
                 }}
               />
             )}
@@ -7685,17 +7735,24 @@ function PickerModal({
 }
 
 function ThemePickerModal({
-  current,
+  appTheme,
+  frameTheme,
   onClose,
-  onPick,
+  onPickApp,
+  onPickFrame,
   language,
 }: {
-  current: 'dark' | 'light'
+  appTheme: AppTheme
+  frameTheme: AppTheme
   onClose: () => void
-  onPick: (t: 'dark' | 'light') => void
+  onPickApp: (theme: AppTheme) => void
+  onPickFrame: (theme: AppTheme) => void
   language: AppLanguage
 }) {
   const t = tx(language)
+  const [activeThemeTab, setActiveThemeTab] = useState<'app' | 'frame'>('app')
+  const current = activeThemeTab === 'app' ? appTheme : frameTheme
+  const onPick = activeThemeTab === 'app' ? onPickApp : onPickFrame
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
@@ -7705,6 +7762,25 @@ function ThemePickerModal({
           <button onClick={onClose} className="text-[color:var(--fg-60)] text-xl">
             ✕
           </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 border-b border-[color:var(--bd-10)]" role="tablist" aria-label={t.themeTitle}>
+          {(['app', 'frame'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeThemeTab === tab}
+              onClick={() => setActiveThemeTab(tab)}
+              className={`h-10 border-b-2 text-xs tracking-widest ${
+                activeThemeTab === tab
+                  ? 'border-[#2aa3ff] text-[#2aa3ff]'
+                  : 'border-transparent text-[color:var(--fg-60)]'
+              }`}
+            >
+              {tab === 'app' ? t.appThemeTab : t.frameThemeTab}
+            </button>
+          ))}
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
@@ -7778,7 +7854,8 @@ function LanguagePickerModal({
 
 function SettingsTab({
   language,
-  theme,
+  appTheme,
+  frameTheme,
   onOpenTheme,
   onOpenLanguage,
   frames,
@@ -7792,7 +7869,8 @@ function SettingsTab({
   onNotificationStateChange,
 }: {
   language: AppLanguage
-  theme: 'dark' | 'light'
+  appTheme: AppTheme
+  frameTheme: AppTheme
   onOpenTheme: () => void
   onOpenLanguage: () => void
   frames: MemberRow[]
@@ -7857,7 +7935,7 @@ function SettingsTab({
       window.clearTimeout(t1)
       window.clearTimeout(t2)
     }
-  }, [frames.length, activeDeviceId, theme, language])
+  }, [frames.length, activeDeviceId, appTheme, frameTheme, language])
 
   if (subpage === 'subscription') {
     return <SubscriptionSettingsPage language={language} onBack={() => setSubpage(null)} />
@@ -7890,7 +7968,11 @@ function SettingsTab({
           <div ref={scrollRef} className="settings-scroll h-full overflow-y-auto pr-1 pb-4">
             <div className="mt-2 divide-y divide-[color:var(--bd-10)]">
               <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
-              <SettingRow label={t.themeRow} value={theme === 'dark' ? (language === 'no' ? 'Mørk' : 'Dark') : (language === 'no' ? 'Lys' : 'Light')} onClick={onOpenTheme} />
+              <SettingRow
+                label={t.themeRow}
+                value={`${t.appThemeTab}: ${appTheme === 'dark' ? t.dark : t.light} · ${t.frameThemeTab}: ${frameTheme === 'dark' ? t.dark : t.light}`}
+                onClick={onOpenTheme}
+              />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
