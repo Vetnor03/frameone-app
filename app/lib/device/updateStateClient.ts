@@ -58,7 +58,10 @@ export async function getDeviceUpdateStatus(supabase: SupabaseClient, deviceId: 
   if (!response.ok || !Number.isSafeInteger(displayedRevision) || displayedRevision < 0) {
     throw new Error('update_status_failed')
   }
-  return displayedRevision
+  return {
+    displayedRevision,
+    lastProbeAt: typeof body?.last_probe_at === 'string' ? body.last_probe_at : null,
+  }
 }
 
 export function revisionHasBeenDisplayed(displayedRevision: number, requestedRevision: number) {

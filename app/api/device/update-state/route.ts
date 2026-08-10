@@ -12,6 +12,13 @@ export async function GET(req: Request) {
   const auth = await authenticatePhysicalDevice(req, deviceId)
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
+  const probedAt = new Date().toISOString()
+  const { error: probeError } = await auth.supabase
+    .from('device_update_state')
+    .update({ last_probe_at: probedAt })
+    .eq('device_id', deviceId)
+  if (probeError) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
+
   const { data, error } = await auth.supabase
     .from('device_update_state')
     .select('app_active_until, requested_revision, displayed_revision')

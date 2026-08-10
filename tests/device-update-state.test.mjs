@@ -10,6 +10,9 @@ const deviceState = readFileSync(new URL('../app/api/device/update-state/route.t
 const appStatus = readFileSync(new URL('../app/api/device/update-state/status/route.ts', import.meta.url), 'utf8')
 const legacyStatus = readFileSync(new URL('../app/api/device/status/route.ts', import.meta.url), 'utf8')
 const legacyRefresh = readFileSync(new URL('../app/api/device/refresh/route.ts', import.meta.url), 'utf8')
+const probeMigration = readFileSync(new URL('../supabase/migrations/20260810120000_track_device_update_probes.sql', import.meta.url), 'utf8')
+const updateClient = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
+const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
 test('app operations authenticate a user and require device membership', () => {
   assert.match(auth, /supabase\.auth\.getUser\(token\)/)
@@ -83,6 +86,22 @@ test('status and probe GET routes explicitly disable caching', () => {
     assert.match(route, /revalidate = 0/)
     assert.match(route, /'Cache-Control': 'private, no-store, max-age=0'/)
   }
+})
+
+test('physical probes provide a real wake-cycle anchor for the app estimate', () => {
+  assert.match(probeMigration, /add column if not exists last_probe_at timestamptz/)
+  assert.match(deviceState, /update\(\{ last_probe_at: probedAt \}\)/)
+  assert.match(appStatus, /last_probe_at/)
+  assert.match(updateClient, /lastProbeAt:/)
+})
+
+test('explicit update copy estimates physical display completion without a button-based countdown', () => {
+  assert.match(home, /Update in less than 2 minutes/)
+  assert.match(home, /Update in less than 15 seconds/)
+  assert.match(home, /lastProbeAt \+ 120_000 \+ 15_000/)
+  assert.match(home, /remainingSec < 60/)
+  assert.match(home, /setExplicitUpdateEstimate\(null\)[\s\S]*setExplicitUpdateStatus\('updated'\)/)
+  assert.doesNotMatch(home, /requestedAt \+ 120_000/)
 })
 
 test('API errors do not expose database messages and device IDs are bounded', () => {
