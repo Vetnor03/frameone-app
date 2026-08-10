@@ -12,6 +12,8 @@ const legacyStatus = readFileSync(new URL('../app/api/device/status/route.ts', i
 const legacyRefresh = readFileSync(new URL('../app/api/device/refresh/route.ts', import.meta.url), 'utf8')
 const probeMigration = readFileSync(new URL('../supabase/migrations/20260810120000_track_device_update_probes.sql', import.meta.url), 'utf8')
 const updateClient = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
+const manualState = readFileSync(new URL('../app/lib/device/manualUpdateState.ts', import.meta.url), 'utf8')
+const requestedAtMigration = readFileSync(new URL('../supabase/migrations/20260810130000_track_device_update_requested_at.sql', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 
 test('app operations authenticate a user and require device membership', () => {
@@ -95,13 +97,17 @@ test('physical probes provide a real wake-cycle anchor for the app estimate', ()
   assert.match(updateClient, /lastProbeAt:/)
 })
 
-test('explicit update copy estimates physical display completion without a button-based countdown', () => {
-  assert.match(home, /Update in less than 2 minutes/)
-  assert.match(home, /Update in less than 15 seconds/)
-  assert.match(home, /lastProbeAt \+ 120_000 \+ 15_000/)
-  assert.match(home, /remainingSec < 60/)
-  assert.match(home, /setExplicitUpdateEstimate\(null\)[\s\S]*setExplicitUpdateStatus\('updated'\)/)
-  assert.doesNotMatch(home, /requestedAt \+ 120_000/)
+test('manual update state is durable, coarse, monotonic, and device-acknowledged', () => {
+  for (const copy of ['less than 2 minutes', 'less than 1 minute', 'less than 30 seconds', 'less than 15 seconds']) {
+    assert.match(manualState, new RegExp(copy))
+  }
+  assert.match(manualState, /phaseRank\[candidate\] > phaseRank\[current\]/)
+  assert.match(manualState, /lastProbeAt >= requestedAt/)
+  assert.match(home, /window\.setInterval\(tick, 5_000\)/)
+  assert.match(home, /manualUpdatePhase !== 'idle'[\s\S]*formatManualUpdatePhase[\s\S]*: nextUpdateText/)
+  assert.doesNotMatch(manualState, /second\$\{|remainingSec/)
+  assert.match(requestedAtMigration, /requested_at = clock_timestamp\(\)/)
+  assert.match(appStatus, /requested_at/)
 })
 
 test('API errors do not expose database messages and device IDs are bounded', () => {

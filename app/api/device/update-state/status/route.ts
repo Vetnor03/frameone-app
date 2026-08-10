@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await auth.supabase
     .from('device_update_state')
-    .select('app_active_until, requested_revision, displayed_revision, last_displayed_at, last_probe_at')
+    .select('app_active_until, requested_revision, requested_at, displayed_revision, last_displayed_at, last_probe_at')
     .eq('device_id', deviceId)
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     {
       app_active_until: data?.app_active_until ?? null,
       requested_revision: data?.requested_revision ?? 0,
+      requested_at: data?.requested_at ?? null,
       displayed_revision: data?.displayed_revision ?? 0,
       last_displayed_at: data?.last_displayed_at ?? null,
       last_probe_at: data?.last_probe_at ?? null,

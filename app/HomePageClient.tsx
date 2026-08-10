@@ -20,13 +20,21 @@ import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPla
 import { initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
-  DEVICE_UPDATE_POLL_MS,
   DEVICE_UPDATE_TIMEOUT_MS,
   getDeviceUpdateStatus,
   requestDeviceUpdate,
-  revisionHasBeenDisplayed,
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
+import {
+  deriveManualUpdatePhase,
+  formatManualUpdatePhase,
+  isManualUpdateActive,
+  loadManualUpdateRecords,
+  persistManualUpdateRecords,
+  type ManualUpdatePhase,
+  type ManualUpdateRecord,
+  type ManualUpdateRecords,
+} from './lib/device/manualUpdateState'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -1143,13 +1151,22 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
-  const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'requesting' | 'updating' | 'updated' | 'unconfirmed'>('idle')
-  const [explicitUpdateEstimate, setExplicitUpdateEstimate] = useState<{ displayAt: number | null; instant: boolean } | null>(null)
+  const [manualUpdateRecords, setManualUpdateRecords] = useState<ManualUpdateRecords>(loadManualUpdateRecords)
   const updateActionInFlightRef = useRef(false)
-  const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
   activeDeviceIdRef.current = activeDeviceId
+  const manualUpdate = activeDeviceId ? manualUpdateRecords[activeDeviceId] ?? null : null
+  const manualUpdatePhase: ManualUpdatePhase = manualUpdate?.phase ?? 'idle'
+  const manualUpdateInProgress = isManualUpdateActive(manualUpdatePhase)
+
+  const storeManualUpdate = useCallback((record: ManualUpdateRecord) => {
+    setManualUpdateRecords((current) => {
+      const next = { ...current, [record.deviceId]: record }
+      persistManualUpdateRecords(next)
+      return next
+    })
+  }, [])
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
   useEffect(() => {
@@ -1188,11 +1205,95 @@ export default function HomePage() {
 
   useEffect(() => {
     updateOperationIdRef.current += 1
-    updateOperationRef.current = null
     updateActionInFlightRef.current = false
-    setExplicitUpdateStatus('idle')
-    setExplicitUpdateEstimate(null)
   }, [activeDeviceId, activeTab, userId])
+
+  // Manual updates are device-scoped and authoritative-status driven. This
+  // effect survives Layout remounts via localStorage, reconciles immediately on
+  // foreground, and keeps listening for a physical probe/display acknowledgement.
+  useEffect(() => {
+    if (!activeDeviceId || !userId) return
+    const deviceId = activeDeviceId
+    let cancelled = false
+    let pollTimer: number | null = null
+    let ticker: number | null = null
+
+    const updateRecord = (record: ManualUpdateRecord) => {
+      if (!cancelled) storeManualUpdate(record)
+    }
+
+    const reconcile = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return
+      try {
+        const status = await getDeviceUpdateStatus(supabase, deviceId)
+        if (cancelled) return
+        const existing = manualUpdateRecords[deviceId]
+        const backendPending = status.requestedRevision > status.displayedRevision
+        if (!existing && !backendPending) return
+
+        const backendRequestedAt = getTimeMs(status.requestedAt)
+        const requestedAt = backendRequestedAt ?? existing?.requestedAt ?? Date.now()
+        const backendMatchesProvisional = !!existing && existing.requestedRevision == null &&
+          backendRequestedAt != null && backendRequestedAt >= existing.requestedAt - 5_000
+        const requestedRevision = existing?.requestedRevision ??
+          (backendPending || backendMatchesProvisional ? status.requestedRevision : null)
+        if (requestedRevision == null) return
+        const completed = status.displayedRevision >= requestedRevision
+        const lastProbeAt = getTimeMs(status.lastProbeAt)
+        const currentPhase = existing?.phase ?? 'manual_waiting'
+        const phase = deriveManualUpdatePhase(currentPhase, Date.now(), requestedAt, lastProbeAt, completed)
+        updateRecord({
+          deviceId,
+          phase: phase === 'idle' ? 'manual_waiting' : phase,
+          requestedAt,
+          requestedRevision,
+          lastProbeAt,
+        })
+      } catch {
+        // A local record remains visually authoritative through transient offline periods.
+      }
+    }
+
+    const tick = () => {
+      const existing = manualUpdateRecords[deviceId]
+      if (!existing || !isManualUpdateActive(existing.phase)) return
+      if (Date.now() >= existing.requestedAt + DEVICE_UPDATE_TIMEOUT_MS) {
+        updateRecord({ ...existing, phase: 'manual_failed' })
+        return
+      }
+      const phase = deriveManualUpdatePhase(
+        existing.phase,
+        Date.now(),
+        existing.requestedAt,
+        existing.lastProbeAt,
+        false
+      )
+      if (phase !== existing.phase) updateRecord({ ...existing, phase })
+    }
+
+    const start = () => {
+      void reconcile()
+      if (pollTimer == null) pollTimer = window.setInterval(reconcile, 3_000)
+      if (ticker == null) ticker = window.setInterval(tick, 5_000)
+    }
+    const stop = () => {
+      if (pollTimer != null) window.clearInterval(pollTimer)
+      if (ticker != null) window.clearInterval(ticker)
+      pollTimer = null
+      ticker = null
+    }
+    const handleVisibility = () => document.visibilityState === 'visible' ? start() : stop()
+
+    if (document.visibilityState === 'visible') start()
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('focus', reconcile)
+    return () => {
+      cancelled = true
+      stop()
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('focus', reconcile)
+    }
+  }, [activeDeviceId, userId, manualUpdateRecords, storeManualUpdate])
 
   // Resolve this as soon as authentication is ready, rather than waiting for
   // Settings to mount. Settings can then render the shared, already-known state.
@@ -1480,7 +1581,6 @@ export default function HomePage() {
     setDirty(nextDirty)
     if (nextDirty) {
       setShowNextUpdateAfterSave(false)
-      if (!updateActionInFlightRef.current) setExplicitUpdateStatus('idle')
     }
   }
 
@@ -1649,24 +1749,6 @@ export default function HomePage() {
     return language === 'no'
       ? `Oppdatering om ${remainingMin} minutt${remainingMin === 1 ? '' : 'er'}`
       : `Update in ${remainingMin} minute${remainingMin === 1 ? '' : 's'}`
-  }
-
-  function formatExplicitUpdateEstimate() {
-    if (!explicitUpdateEstimate) return null
-    if (explicitUpdateEstimate.instant) {
-      return language === 'no' ? 'Oppdatering om mindre enn 15 sekunder' : 'Update in less than 15 seconds'
-    }
-
-    if (explicitUpdateEstimate.displayAt != null) {
-      const remainingSec = Math.max(1, Math.ceil((explicitUpdateEstimate.displayAt - Date.now()) / 1000))
-      if (remainingSec < 60) {
-        return language === 'no'
-          ? `Oppdatering om ${remainingSec} sekund${remainingSec === 1 ? '' : 'er'}`
-          : `Update in ${remainingSec} second${remainingSec === 1 ? '' : 's'}`
-      }
-    }
-
-    return language === 'no' ? 'Oppdatering om mindre enn 2 minutter' : 'Update in less than 2 minutes'
   }
 
   const nextUpdateText = showNextUpdateAfterSave ? formatNextUpdate(activeFrameStatus) : null
@@ -2333,67 +2415,34 @@ export default function HomePage() {
     const deviceId = activeDeviceId
     if (!deviceId || updateActionInFlightRef.current) return
 
+    // Enter and persist manual mode before any async save/request work. This
+    // guarantees the scheduled-refresh copy cannot flash after the click.
+    const requestedAt = Date.now()
+    storeManualUpdate({
+      deviceId,
+      phase: 'manual_waiting',
+      requestedAt,
+      requestedRevision: null,
+      lastProbeAt: null,
+    })
     updateActionInFlightRef.current = true
     const operationId = ++updateOperationIdRef.current
-    setExplicitUpdateStatus('idle')
-    setExplicitUpdateEstimate(null)
 
     const saved = await persistSettings(deviceId)
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
+      storeManualUpdate({ deviceId, phase: 'manual_failed', requestedAt, requestedRevision: null, lastProbeAt: null })
       updateActionInFlightRef.current = false
       return
     }
 
     try {
-      setExplicitUpdateStatus('requesting')
       const requestedRevision = await requestDeviceUpdate(supabase, deviceId)
       if (activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) return
-
-      updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
-      setExplicitUpdateStatus('updating')
-      setExplicitUpdateEstimate({ displayAt: null, instant: false })
-      const requestedAt = Date.now()
-      const deadline = Date.now() + DEVICE_UPDATE_TIMEOUT_MS
-
-      while (Date.now() < deadline) {
-        const operation = updateOperationRef.current
-        if (!operation || operation.id !== operationId || activeDeviceIdRef.current !== deviceId) return
-
-        try {
-          const updateStatus = await getDeviceUpdateStatus(supabase, deviceId)
-          if (revisionHasBeenDisplayed(updateStatus.displayedRevision, operation.requestedRevision)) {
-            if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
-              updateOperationRef.current = null
-              setExplicitUpdateEstimate(null)
-              setExplicitUpdateStatus('updated')
-            }
-            return
-          }
-
-          const lastProbeAt = getTimeMs(updateStatus.lastProbeAt)
-          setExplicitUpdateEstimate((current) => {
-            if (current?.instant || current?.displayAt != null || lastProbeAt == null) return current
-            if (lastProbeAt >= requestedAt - 15_000) return { displayAt: lastProbeAt + 15_000, instant: true }
-            const displayAt = lastProbeAt + 120_000 + 15_000
-            return displayAt > Date.now() ? { displayAt, instant: false } : current
-          })
-        } catch {
-          // Transient network/offline failures keep waiting until the bounded deadline.
-        }
-
-        await new Promise((resolve) => window.setTimeout(resolve, DEVICE_UPDATE_POLL_MS))
-      }
-
-      if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
-        updateOperationRef.current = null
-        setExplicitUpdateEstimate(null)
-        setExplicitUpdateStatus('unconfirmed')
-      }
+      storeManualUpdate({ deviceId, phase: 'manual_waiting', requestedAt, requestedRevision, lastProbeAt: null })
     } catch {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
         alert(language === 'no' ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.' : 'Settings were saved, but the update could not be started.')
-        setExplicitUpdateStatus('unconfirmed')
-        setExplicitUpdateEstimate(null)
+        storeManualUpdate({ deviceId, phase: 'manual_failed', requestedAt, requestedRevision: null, lastProbeAt: null })
       }
     } finally {
       if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
@@ -2575,27 +2624,21 @@ async function handleSelectTab(k: TabKey) {
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
                   }`}
                   style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!activeDeviceId || persisting || explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'}
+                  disabled={!activeDeviceId || persisting || manualUpdateInProgress}
                 >
                   {persisting
                     ? tx(language).saving
-                    : explicitUpdateStatus === 'requesting'
-                      ? tx(language).saving
-                    : explicitUpdateStatus === 'updating'
+                    : manualUpdateInProgress
                       ? 'Updating RE:MIND…'
-                      : explicitUpdateStatus === 'updated'
+                      : manualUpdatePhase === 'manual_complete'
                         ? tx(language).updated
                         : tx(language).update}
                 </button>
 
                 <div className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {explicitUpdateStatus === 'unconfirmed'
-                    ? (language === 'no'
-                        ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
-                        : 'Update saved. RE:MIND has not confirmed the display refresh yet.')
-                    : explicitUpdateStatus === 'updating'
-                      ? formatExplicitUpdateEstimate()
-                      : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
+                  {manualUpdatePhase !== 'idle'
+                    ? formatManualUpdatePhase(manualUpdatePhase, language) ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
+                    : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
               </div>
             )}
