@@ -18,6 +18,15 @@ import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 import { initialTheme, isAppTheme, persistTheme, storedTheme, type AppTheme } from './lib/theme'
+import {
+  DEVICE_ACTIVITY_HEARTBEAT_MS,
+  DEVICE_UPDATE_POLL_MS,
+  DEVICE_UPDATE_TIMEOUT_MS,
+  getDeviceUpdateStatus,
+  requestDeviceUpdate,
+  revisionHasBeenDisplayed,
+  sendDeviceActivity,
+} from './lib/device/updateStateClient'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -1129,11 +1138,54 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
+  const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'requesting' | 'updating' | 'updated' | 'unconfirmed'>('idle')
+  const updateActionInFlightRef = useRef(false)
+  const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
+  const updateOperationIdRef = useRef(0)
+  const activeDeviceIdRef = useRef(activeDeviceId)
+  activeDeviceIdRef.current = activeDeviceId
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
 
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
   }, [physicalFrameSnapshot])
+
+  useEffect(() => {
+    if (!activeDeviceId || !userId || activeTab !== 'frame') return
+
+    let heartbeatTimer: number | null = null
+    let cancelled = false
+
+    const heartbeat = () => {
+      if (cancelled || document.visibilityState !== 'visible') return
+      void sendDeviceActivity(supabase, activeDeviceId).catch(() => undefined)
+    }
+    const start = () => {
+      if (document.visibilityState !== 'visible' || heartbeatTimer != null) return
+      heartbeat()
+      heartbeatTimer = window.setInterval(heartbeat, DEVICE_ACTIVITY_HEARTBEAT_MS)
+    }
+    const stop = () => {
+      if (heartbeatTimer != null) window.clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+    const handleVisibilityChange = () => document.visibilityState === 'visible' ? start() : stop()
+
+    start()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      cancelled = true
+      stop()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [activeDeviceId, activeTab, userId])
+
+  useEffect(() => {
+    updateOperationIdRef.current += 1
+    updateOperationRef.current = null
+    updateActionInFlightRef.current = false
+    setExplicitUpdateStatus('idle')
+  }, [activeDeviceId, activeTab, userId])
 
   // Resolve this as soon as authentication is ready, rather than waiting for
   // Settings to mount. Settings can then render the shared, already-known state.
@@ -1383,7 +1435,10 @@ export default function HomePage() {
 
     const nextDirty = serialized !== savedStateRef.current
     setDirty(nextDirty)
-    if (nextDirty) setShowNextUpdateAfterSave(false)
+    if (nextDirty) {
+      setShowNextUpdateAfterSave(false)
+      if (!updateActionInFlightRef.current) setExplicitUpdateStatus('idle')
+    }
   }
 
   function markDirty(next?: {
@@ -2135,8 +2190,8 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function persistSettings() {
-    if (!activeDeviceId) return false
+  async function persistSettings(deviceId = activeDeviceId) {
+    if (!deviceId) return false
     if (persisting) return false
 
     try {
@@ -2162,12 +2217,16 @@ export default function HomePage() {
       }
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
-        p_device_id: activeDeviceId,
+        p_device_id: deviceId,
         p_settings: settingsJson,
       })
 
       if (error) throw error
       if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
+
+      // A frame switch may finish loading while this save is in flight. The save
+      // still belongs to its captured device, so never apply its UI state to the new frame.
+      if (activeDeviceIdRef.current !== deviceId) return true
 
       const savedCellsForLayout = { ...currentCellsForLayout }
 
@@ -2201,7 +2260,7 @@ export default function HomePage() {
       setDirty(false)
       pendingFrameConfigUpdatedAtRef.current = new Date().toISOString()
       setShowNextUpdateAfterSave(true)
-      await refreshPhysicalFrameState(activeDeviceId, { forceSnapshot: true })
+      await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
 
       return true
     } catch (e: any) {
@@ -2209,6 +2268,63 @@ export default function HomePage() {
       return false
     } finally {
       setPersisting(false)
+    }
+  }
+
+  async function handleExplicitUpdate() {
+    const deviceId = activeDeviceId
+    if (!deviceId || updateActionInFlightRef.current) return
+
+    updateActionInFlightRef.current = true
+    const operationId = ++updateOperationIdRef.current
+    setExplicitUpdateStatus('idle')
+
+    const saved = await persistSettings(deviceId)
+    if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
+      updateActionInFlightRef.current = false
+      return
+    }
+
+    try {
+      setExplicitUpdateStatus('requesting')
+      const requestedRevision = await requestDeviceUpdate(supabase, deviceId)
+      if (activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) return
+
+      updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
+      setExplicitUpdateStatus('updating')
+      const deadline = Date.now() + DEVICE_UPDATE_TIMEOUT_MS
+
+      while (Date.now() < deadline) {
+        const operation = updateOperationRef.current
+        if (!operation || operation.id !== operationId || activeDeviceIdRef.current !== deviceId) return
+
+        try {
+          const displayedRevision = await getDeviceUpdateStatus(supabase, deviceId)
+          if (revisionHasBeenDisplayed(displayedRevision, operation.requestedRevision)) {
+            if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
+              updateOperationRef.current = null
+              setExplicitUpdateStatus('updated')
+            }
+            return
+          }
+        } catch {
+          // Transient network/offline failures keep waiting until the bounded deadline.
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, DEVICE_UPDATE_POLL_MS))
+      }
+
+      if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
+        updateOperationRef.current = null
+        setExplicitUpdateStatus('unconfirmed')
+      }
+    } catch {
+      if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
+        alert(language === 'no' ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.' : 'Settings were saved, but the update could not be started.')
+        setExplicitUpdateStatus('unconfirmed')
+      }
+    } finally {
+      if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
     }
   }
 
@@ -2379,20 +2495,32 @@ async function handleSelectTab(k: TabKey) {
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
                 <button
-                  onClick={() => persistSettings()}
+                  onClick={handleExplicitUpdate}
                   className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
                     dirty
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
                   }`}
                   style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!dirty || persisting}
+                  disabled={!activeDeviceId || persisting || explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'}
                 >
-                  {persisting ? tx(language).saving : tx(language).update}
+                  {persisting
+                    ? tx(language).saving
+                    : explicitUpdateStatus === 'requesting'
+                      ? tx(language).saving
+                    : explicitUpdateStatus === 'updating'
+                      ? 'Updating RE:MIND…'
+                      : explicitUpdateStatus === 'updated'
+                        ? tx(language).updated
+                        : tx(language).update}
                 </button>
 
-                <div className="mt-6 h-[16px] text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
+                <div className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
+                  {explicitUpdateStatus === 'unconfirmed'
+                    ? (language === 'no'
+                        ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
+                        : 'Update saved. RE:MIND has not confirmed the display refresh yet.')
+                    : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
                 </div>
               </div>
             )}
