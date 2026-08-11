@@ -22,11 +22,13 @@ import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
   DEVICE_UPDATE_POLL_MS,
   DEVICE_UPDATE_TIMEOUT_MS,
+  DEVICE_UPDATE_UNCONFIRMED_POLL_MS,
   getDeviceUpdateStatus,
   requestDeviceUpdate,
   revisionHasBeenDisplayed,
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
+import { clearManualUpdate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -1145,12 +1147,24 @@ export default function HomePage() {
   const [persisting, setPersisting] = useState(false)
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'requesting' | 'updating' | 'updated' | 'unconfirmed'>('idle')
   const [explicitUpdateEstimate, setExplicitUpdateEstimate] = useState<{ displayAt: number | null; instant: boolean } | null>(null)
+  const [manualUpdateStateResolved, setManualUpdateStateResolved] = useState(false)
+  const [manualReconcileTick, setManualReconcileTick] = useState(0)
   const updateActionInFlightRef = useRef(false)
   const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
   activeDeviceIdRef.current = activeDeviceId
   const [pinnedModuleTabs, setPinnedModuleTabs] = useState<ModuleKey[]>([])
+
+  function restoreManualUpdateState(deviceId: string | null) {
+    const persisted = deviceId && typeof window !== 'undefined'
+      ? readManualUpdate(window.localStorage, deviceId)
+      : null
+    setExplicitUpdateStatus(persisted?.phase ?? 'idle')
+    setExplicitUpdateEstimate(persisted?.estimate ?? null)
+    setManualUpdateStateResolved(Boolean(persisted))
+    return persisted
+  }
 
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
@@ -1190,9 +1204,96 @@ export default function HomePage() {
     updateOperationIdRef.current += 1
     updateOperationRef.current = null
     updateActionInFlightRef.current = false
-    setExplicitUpdateStatus('idle')
-    setExplicitUpdateEstimate(null)
-  }, [activeDeviceId, activeTab, userId])
+    restoreManualUpdateState(activeDeviceId)
+  }, [activeDeviceId, userId])
+
+  useEffect(() => {
+    if (!activeDeviceId || !userId || typeof window === 'undefined' || updateActionInFlightRef.current) return
+    const persisted = readManualUpdate(window.localStorage, activeDeviceId)
+
+    let cancelled = false
+    const deviceId = activeDeviceId
+    const operationId = ++updateOperationIdRef.current
+    updateActionInFlightRef.current = true
+
+    ;(async () => {
+      let update = persisted
+      if (!update) {
+        try {
+          const backend = await getDeviceUpdateStatus(supabase, deviceId)
+          if (backend.requestedRevision <= backend.displayedRevision) {
+            setExplicitUpdateStatus('idle')
+            setManualUpdateStateResolved(true)
+            return
+          }
+          const requestedAt = getTimeMs(backend.requestedAt) ?? Date.now()
+          update = {
+            phase: 'updating',
+            requestId: `recovered-${backend.requestedRevision}`,
+            requestedRevision: backend.requestedRevision,
+            requestedAt,
+            deadline: requestedAt + DEVICE_UPDATE_TIMEOUT_MS,
+            estimate: { displayAt: null, instant: false },
+          }
+          writeManualUpdate(window.localStorage, deviceId, update)
+          setExplicitUpdateStatus('updating')
+          setExplicitUpdateEstimate(update.estimate)
+          setManualUpdateStateResolved(true)
+        } catch {
+          // Backend state is not positively known, so scheduled copy stays gated.
+          return
+        }
+      }
+      while (!cancelled) {
+        try {
+          const backend = await getDeviceUpdateStatus(supabase, deviceId)
+          // A persisted `requesting` phase may have been written before the
+          // request reached the backend. Only adopt the backend revision when
+          // it is genuinely pending; an older already-displayed revision does
+          // not prove this manual update completed.
+          const requestedRevision: number | null = update.requestedRevision
+            ?? (backend.requestedRevision > backend.displayedRevision ? backend.requestedRevision : null)
+          if (requestedRevision != null && requestedRevision > 0 && revisionHasBeenDisplayed(backend.displayedRevision, requestedRevision)) {
+            clearManualUpdate(window.localStorage, deviceId)
+            setExplicitUpdateEstimate(null)
+            setExplicitUpdateStatus('updated')
+            return
+          }
+          if (requestedRevision != null && requestedRevision > 0 && update.requestedRevision == null) {
+            update = { ...update, phase: 'updating', requestedRevision }
+            writeManualUpdate(window.localStorage, deviceId, update)
+            setExplicitUpdateStatus('updating')
+          }
+          const lastProbeAt = getTimeMs(backend.lastProbeAt)
+          if (!update.estimate.instant && update.estimate.displayAt == null && lastProbeAt != null) {
+            const estimate: { displayAt: number | null; instant: boolean } = lastProbeAt >= update.requestedAt - 15_000
+              ? { displayAt: lastProbeAt + 15_000, instant: true }
+              : { displayAt: lastProbeAt + 135_000, instant: false }
+            update = { ...update, estimate }
+            writeManualUpdate(window.localStorage, deviceId, update)
+            setExplicitUpdateEstimate(estimate)
+          }
+        } catch {
+          // Keep the persisted manual presentation during transient reconciliation failures.
+        }
+        const timedOut = Date.now() >= update.deadline
+        if (timedOut && update.phase !== 'unconfirmed') {
+          update = { ...update, phase: 'unconfirmed' }
+          writeManualUpdate(window.localStorage, deviceId, update)
+          setExplicitUpdateEstimate(null)
+          setExplicitUpdateStatus('unconfirmed')
+        }
+        await new Promise((resolve) => window.setTimeout(
+          resolve,
+          timedOut ? DEVICE_UPDATE_UNCONFIRMED_POLL_MS : DEVICE_UPDATE_POLL_MS
+        ))
+      }
+    })().finally(() => {
+      if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
+    })
+
+    return () => { cancelled = true }
+  }, [activeDeviceId, userId, manualReconcileTick])
 
   // Resolve this as soon as authentication is ready, rather than waiting for
   // Settings to mount. Settings can then render the shared, already-known state.
@@ -1671,8 +1772,10 @@ export default function HomePage() {
 
   const nextUpdateText = showNextUpdateAfterSave ? formatNextUpdate(activeFrameStatus) : null
   const manualUpdateInProgress = explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'
+  const manualUpdatePending = manualUpdateInProgress || explicitUpdateStatus === 'unconfirmed'
   const manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'
-  const updateStatusText = explicitUpdateStatus === 'unconfirmed'
+  const scheduledPresentation = nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
+  const manualPresentation = explicitUpdateStatus === 'unconfirmed'
     ? (language === 'no'
         ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
         : 'Update saved. RE:MIND has not confirmed the display refresh yet.')
@@ -1680,7 +1783,12 @@ export default function HomePage() {
       ? formatExplicitUpdateEstimate()
       : manualUpdatePresentationActive
         ? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
-        : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
+        : (language === 'no' ? 'Sjekker oppdateringsstatus…' : 'Checking update status…')
+  const updateStatusText = selectUpdatePresentation(
+    manualUpdatePresentationActive || !manualUpdateStateResolved,
+    manualPresentation,
+    scheduledPresentation
+  )
 
   useEffect(() => {
     if (!showNextUpdateAfterSave || !activeDeviceId) return
@@ -2050,6 +2158,7 @@ export default function HomePage() {
       const savedExists = saved && list.some((x) => x.device_id === saved)
       const selected = savedExists ? saved! : (list[0]?.device_id ?? null)
 
+      restoreManualUpdateState(selected)
       setActiveDeviceId(selected)
       setPhysicalFrameSnapshot(null)
       physicalFrameSnapshotRef.current = null
@@ -2084,6 +2193,8 @@ export default function HomePage() {
 
   async function selectDevice(id: string) {
     isLoadedRef.current = false
+    setManualUpdateStateResolved(false)
+    restoreManualUpdateState(id)
     setActiveDeviceId(id)
     setPhysicalFrameSnapshot(null)
     physicalFrameSnapshotRef.current = null
@@ -2342,10 +2453,18 @@ export default function HomePage() {
 
   async function handleExplicitUpdate() {
     const deviceId = activeDeviceId
-    if (!deviceId || updateActionInFlightRef.current) return
+    if (!deviceId || updateActionInFlightRef.current || explicitUpdateStatus === 'unconfirmed') return
 
     updateActionInFlightRef.current = true
     const operationId = ++updateOperationIdRef.current
+    const requestedAt = Date.now()
+    const deadline = requestedAt + DEVICE_UPDATE_TIMEOUT_MS
+    const requestId = crypto.randomUUID()
+    const persistedRequest: PersistedManualUpdate = {
+      phase: 'requesting', requestId, requestedRevision: null, requestedAt, deadline,
+      estimate: { displayAt: null, instant: false },
+    }
+    writeManualUpdate(window.localStorage, deviceId, persistedRequest)
     // Claim presentation precedence synchronously with the click. Saving is the
     // first phase of this manual update, not a scheduled-refresh state.
     setExplicitUpdateStatus('requesting')
@@ -2354,6 +2473,7 @@ export default function HomePage() {
     const saved = await persistSettings(deviceId)
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
+        clearManualUpdate(window.localStorage, deviceId)
         setExplicitUpdateStatus('idle')
         setExplicitUpdateEstimate(null)
       }
@@ -2363,13 +2483,13 @@ export default function HomePage() {
 
     try {
       setExplicitUpdateStatus('requesting')
-      const requestedRevision = await requestDeviceUpdate(supabase, deviceId)
+      const requestedRevision = await requestDeviceUpdate(supabase, deviceId, requestId)
       if (activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) return
 
       updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
       setExplicitUpdateStatus('updating')
-      const requestedAt = Date.now()
-      const deadline = Date.now() + DEVICE_UPDATE_TIMEOUT_MS
+      let persistedUpdate: PersistedManualUpdate = { ...persistedRequest, phase: 'updating', requestedRevision }
+      writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
 
       while (Date.now() < deadline) {
         const operation = updateOperationRef.current
@@ -2380,6 +2500,7 @@ export default function HomePage() {
           if (revisionHasBeenDisplayed(updateStatus.displayedRevision, operation.requestedRevision)) {
             if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
               updateOperationRef.current = null
+              clearManualUpdate(window.localStorage, deviceId)
               setExplicitUpdateEstimate(null)
               setExplicitUpdateStatus('updated')
             }
@@ -2389,9 +2510,18 @@ export default function HomePage() {
           const lastProbeAt = getTimeMs(updateStatus.lastProbeAt)
           setExplicitUpdateEstimate((current) => {
             if (current?.instant || current?.displayAt != null || lastProbeAt == null) return current
-            if (lastProbeAt >= requestedAt - 15_000) return { displayAt: lastProbeAt + 15_000, instant: true }
+            if (lastProbeAt >= requestedAt - 15_000) {
+              const estimate = { displayAt: lastProbeAt + 15_000, instant: true }
+              persistedUpdate = { ...persistedUpdate, estimate }
+              writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
+              return estimate
+            }
             const displayAt = lastProbeAt + 120_000 + 15_000
-            return displayAt > Date.now() ? { displayAt, instant: false } : current
+            if (displayAt <= Date.now()) return current
+            const estimate = { displayAt, instant: false }
+            persistedUpdate = { ...persistedUpdate, estimate }
+            writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
+            return estimate
           })
         } catch {
           // Transient network/offline failures keep waiting until the bounded deadline.
@@ -2402,14 +2532,21 @@ export default function HomePage() {
 
       if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
         updateOperationRef.current = null
+        const unconfirmed = { ...persistedUpdate, phase: 'unconfirmed' as const }
+        writeManualUpdate(window.localStorage, deviceId, unconfirmed)
         setExplicitUpdateEstimate(null)
         setExplicitUpdateStatus('unconfirmed')
       }
     } catch {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
+        // The POST may have committed even if its response was lost. Keep the
+        // operation for authoritative status reconciliation instead of treating
+        // a client/network failure as backend cancellation.
+        writeManualUpdate(window.localStorage, deviceId, { ...persistedRequest, phase: 'unconfirmed' })
         alert(language === 'no' ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.' : 'Settings were saved, but the update could not be started.')
         setExplicitUpdateStatus('unconfirmed')
         setExplicitUpdateEstimate(null)
+        setManualReconcileTick((value) => value + 1)
       }
     } finally {
       if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
@@ -2437,6 +2574,9 @@ async function handleSelectTab(k: TabKey) {
   setRemindersConnectScreenOpen(false)
   if (k !== 'settings') setSettingsSubpage(null)
 
+  // Re-read device-scoped state in the navigation event, before React is
+  // allowed to mount the Frame subtree and consider scheduled presentation.
+  if (k === 'frame') restoreManualUpdateState(activeDeviceId)
   setActiveTab(k)
 }
 
@@ -2591,7 +2731,7 @@ async function handleSelectTab(k: TabKey) {
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
                   }`}
                   style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!activeDeviceId || persisting || explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'}
+                  disabled={!activeDeviceId || persisting || manualUpdatePending}
                 >
                   {persisting
                     ? tx(language).saving
