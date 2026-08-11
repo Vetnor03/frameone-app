@@ -51,7 +51,7 @@ test('manual update survives tab navigation and always wins presentation until c
 })
 
 test('accepted backend operation outlives Frame unmount and remount does not request twice', () => {
-  const migration = readFileSync(new URL('../supabase/migrations/20260811120000_make_device_updates_durable.sql', import.meta.url), 'utf8')
+  const migration = readFileSync(new URL('../supabase/migrations/20260811130000_add_device_update_request_ledger.sql', import.meta.url), 'utf8')
   const requestRoute = readFileSync(new URL('../app/api/device/update-state/request/route.ts', import.meta.url), 'utf8')
   const firmware = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', import.meta.url), 'utf8')
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
@@ -59,9 +59,15 @@ test('accepted backend operation outlives Frame unmount and remount does not req
   // The accepted request is a durable revision. Repeating the same operation
   // identifier (for example after an ambiguous response) returns that revision
   // instead of incrementing it a second time.
-  assert.match(migration, /when device_update_state\.request_id = excluded\.request_id[\s\S]*then device_update_state\.requested_revision/)
-  assert.match(migration, /requested_at = case[\s\S]*then device_update_state\.requested_at/)
+  assert.match(migration, /primary key \(device_id, request_id\)/)
+  assert.match(migration, /from public\.device_update_state[\s\S]*for update/)
+  assert.match(migration, /select requested_revision into result[\s\S]*from public\.device_update_requests/)
+  assert.match(migration, /if result is not null then[\s\S]*return result/)
+  assert.match(migration, /set requested_revision = requested_revision \+ 1,[\s\S]*requested_at = clock_timestamp\(\)/)
   assert.match(requestRoute, /p_request_id: requestId/)
+  const handler = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('async function logout'))
+  assert.equal(handler.match(/crypto\.randomUUID\(\)/g)?.length, 1)
+  assert.match(handler, /const requestId = crypto\.randomUUID\(\)[\s\S]*requestDeviceUpdate\(supabase, deviceId, requestId\)/)
 
   // Device execution depends on the backend revision, not an app component or
   // active browser heartbeat. A sleeping device still renders pending work.
@@ -76,6 +82,7 @@ test('accepted backend operation outlives Frame unmount and remount does not req
   assert.match(reconcile, /getDeviceUpdateStatus/)
   assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending\}/)
   assert.match(home, /explicitUpdateStatus === 'unconfirmed'\) return/)
+  assert.match(home, /timedOut \? DEVICE_UPDATE_UNCONFIRMED_POLL_MS : DEVICE_UPDATE_POLL_MS/)
 })
 
 test('Frame navigation restores before selection and never resets on activeTab changes', () => {

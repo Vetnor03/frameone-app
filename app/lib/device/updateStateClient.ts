@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export const DEVICE_ACTIVITY_HEARTBEAT_MS = 45_000
 export const DEVICE_UPDATE_POLL_MS = 1_000
 export const DEVICE_UPDATE_TIMEOUT_MS = 3 * 60_000
+export const DEVICE_UPDATE_UNCONFIRMED_POLL_MS = 15_000
 
 async function accessToken(supabase: SupabaseClient) {
   const { data } = await supabase.auth.getSession()

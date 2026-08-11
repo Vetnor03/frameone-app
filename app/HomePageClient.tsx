@@ -22,6 +22,7 @@ import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
   DEVICE_UPDATE_POLL_MS,
   DEVICE_UPDATE_TIMEOUT_MS,
+  DEVICE_UPDATE_UNCONFIRMED_POLL_MS,
   getDeviceUpdateStatus,
   requestDeviceUpdate,
   revisionHasBeenDisplayed,
@@ -1243,7 +1244,7 @@ export default function HomePage() {
           return
         }
       }
-      while (!cancelled && Date.now() < update.deadline) {
+      while (!cancelled) {
         try {
           const backend = await getDeviceUpdateStatus(supabase, deviceId)
           // A persisted `requesting` phase may have been written before the
@@ -1275,13 +1276,17 @@ export default function HomePage() {
         } catch {
           // Keep the persisted manual presentation during transient reconciliation failures.
         }
-        await new Promise((resolve) => window.setTimeout(resolve, DEVICE_UPDATE_POLL_MS))
-      }
-      if (!cancelled) {
-        const unconfirmed = { ...update, phase: 'unconfirmed' as const }
-        writeManualUpdate(window.localStorage, deviceId, unconfirmed)
-        setExplicitUpdateEstimate(null)
-        setExplicitUpdateStatus('unconfirmed')
+        const timedOut = Date.now() >= update.deadline
+        if (timedOut && update.phase !== 'unconfirmed') {
+          update = { ...update, phase: 'unconfirmed' }
+          writeManualUpdate(window.localStorage, deviceId, update)
+          setExplicitUpdateEstimate(null)
+          setExplicitUpdateStatus('unconfirmed')
+        }
+        await new Promise((resolve) => window.setTimeout(
+          resolve,
+          timedOut ? DEVICE_UPDATE_UNCONFIRMED_POLL_MS : DEVICE_UPDATE_POLL_MS
+        ))
       }
     })().finally(() => {
       if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
