@@ -106,7 +106,7 @@ test('explicit update copy estimates physical display completion without a butto
 
 test('manual update presentation takes precedence from saving through completion', () => {
   const handler = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('\n\n  async function logout'))
-  const presentation = home.slice(home.indexOf('const nextUpdateText'), home.indexOf('\n\n  useEffect', home.indexOf('const nextUpdateText')))
+  const presentation = home.slice(home.indexOf('const manualUpdateInProgress'), home.indexOf('\n\n  useEffect', home.indexOf('const manualUpdateInProgress')))
 
   // The click enters the manual state before the first awaited save, so the
   // render committed for SAVING can never use the scheduled countdown branch.
@@ -117,8 +117,24 @@ test('manual update presentation takes precedence from saving through completion
   // (completion) all remain on the manual presentation side of one branch.
   assert.match(presentation, /manualUpdateInProgress = explicitUpdateStatus === 'requesting' \|\| explicitUpdateStatus === 'updating'/)
   assert.match(presentation, /manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'/)
-  assert.match(presentation, /scheduledPresentation = nextUpdateText[\s\S]*manualUpdateInProgress[\s\S]*formatExplicitUpdateEstimate\(\)[\s\S]*manualUpdatePresentationActive[\s\S]*lastUpdatedAt/)
-  assert.match(presentation, /selectUpdatePresentation\([\s\S]*manualUpdatePresentationActive \|\| !manualUpdateStateResolved[\s\S]*manualPresentation,[\s\S]*scheduledPresentation/)
+  assert.match(presentation, /idleFreshnessPresentation = lastPhysicalDisplayUpdatedAt[\s\S]*manualUpdateInProgress[\s\S]*formatExplicitUpdateEstimate\(\)[\s\S]*manualUpdatePresentationActive[\s\S]*idleFreshnessPresentation/)
+  assert.match(presentation, /selectUpdatePresentation\([\s\S]*manualUpdatePresentationActive \|\| !manualUpdateStateResolved[\s\S]*manualPresentation,[\s\S]*idleFreshnessPresentation/)
+})
+
+test('idle copy ages the last confirmed physical display render and never predicts a refresh', () => {
+  assert.match(home, /setLastPhysicalDisplayUpdatedAt\(renderIso\)/)
+  assert.match(home, /formatRelative\(lastPhysicalDisplayUpdatedAt\)/)
+  assert.match(home, /activeTab !== 'frame'[\s\S]*setInterval\(\(\) => setNextUpdateTick/)
+  assert.doesNotMatch(home, /function formatNextUpdate/)
+  assert.doesNotMatch(home, /scheduledPresentation|nextUpdateText/)
+  assert.doesNotMatch(home, /setLastPhysicalDisplayUpdatedAt\(new Date\(\)\.toISOString\(\)\)/)
+})
+
+test('confirmed manual completion adopts the authoritative device ACK timestamp', () => {
+  assert.match(appStatus, /last_displayed_at:/)
+  assert.match(updateClient, /lastDisplayedAt: typeof body\?\.last_displayed_at/)
+  assert.match(home, /revisionHasBeenDisplayed[\s\S]*backend\.lastDisplayedAt[\s\S]*setLastPhysicalDisplayUpdatedAt/)
+  assert.match(home, /revisionHasBeenDisplayed[\s\S]*updateStatus\.lastDisplayedAt[\s\S]*setLastPhysicalDisplayUpdatedAt/)
 })
 
 test('API errors do not expose database messages and device IDs are bounded', () => {
