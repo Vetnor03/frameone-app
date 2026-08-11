@@ -1670,6 +1670,17 @@ export default function HomePage() {
   }
 
   const nextUpdateText = showNextUpdateAfterSave ? formatNextUpdate(activeFrameStatus) : null
+  const manualUpdateInProgress = explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'
+  const manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'
+  const updateStatusText = explicitUpdateStatus === 'unconfirmed'
+    ? (language === 'no'
+        ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
+        : 'Update saved. RE:MIND has not confirmed the display refresh yet.')
+    : manualUpdateInProgress
+      ? formatExplicitUpdateEstimate()
+      : manualUpdatePresentationActive
+        ? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
+        : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
 
   useEffect(() => {
     if (!showNextUpdateAfterSave || !activeDeviceId) return
@@ -2335,11 +2346,17 @@ export default function HomePage() {
 
     updateActionInFlightRef.current = true
     const operationId = ++updateOperationIdRef.current
-    setExplicitUpdateStatus('idle')
-    setExplicitUpdateEstimate(null)
+    // Claim presentation precedence synchronously with the click. Saving is the
+    // first phase of this manual update, not a scheduled-refresh state.
+    setExplicitUpdateStatus('requesting')
+    setExplicitUpdateEstimate({ displayAt: null, instant: false })
 
     const saved = await persistSettings(deviceId)
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
+      if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
+        setExplicitUpdateStatus('idle')
+        setExplicitUpdateEstimate(null)
+      }
       updateActionInFlightRef.current = false
       return
     }
@@ -2351,7 +2368,6 @@ export default function HomePage() {
 
       updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
       setExplicitUpdateStatus('updating')
-      setExplicitUpdateEstimate({ displayAt: null, instant: false })
       const requestedAt = Date.now()
       const deadline = Date.now() + DEVICE_UPDATE_TIMEOUT_MS
 
@@ -2579,9 +2595,7 @@ async function handleSelectTab(k: TabKey) {
                 >
                   {persisting
                     ? tx(language).saving
-                    : explicitUpdateStatus === 'requesting'
-                      ? tx(language).saving
-                    : explicitUpdateStatus === 'updating'
+                    : manualUpdateInProgress
                       ? 'Updating RE:MIND…'
                       : explicitUpdateStatus === 'updated'
                         ? tx(language).updated
@@ -2589,13 +2603,7 @@ async function handleSelectTab(k: TabKey) {
                 </button>
 
                 <div className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {explicitUpdateStatus === 'unconfirmed'
-                    ? (language === 'no'
-                        ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
-                        : 'Update saved. RE:MIND has not confirmed the display refresh yet.')
-                    : explicitUpdateStatus === 'updating'
-                      ? formatExplicitUpdateEstimate()
-                      : nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')}
+                  {updateStatusText}
                 </div>
               </div>
             )}
