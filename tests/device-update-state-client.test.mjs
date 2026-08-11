@@ -31,14 +31,14 @@ test('explicit Update saves before requesting and locks duplicate clicks', () =>
   assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending\}/)
 })
 
-test('polling waits for the exact returned revision and has a three-minute bound', () => {
+test('backend acknowledgement remains diagnostic and does not control visible completion', () => {
   assert.match(client, /DEVICE_UPDATE_POLL_MS = 1_000/)
   assert.match(client, /DEVICE_UPDATE_TIMEOUT_MS = 3 \* 60_000/)
   assert.match(client, /return displayedRevision >= requestedRevision/)
   assert.match(home, /requestedRevision = await requestDeviceUpdate/)
   assert.match(home, /revisionHasBeenDisplayed\(updateStatus\.displayedRevision, operation\.requestedRevision\)/)
-  assert.match(home, /setExplicitUpdateStatus\('updated'\)/)
-  assert.match(home, /setExplicitUpdateStatus\('unconfirmed'\)/)
+  assert.match(home, /revisionHasBeenDisplayed/)
+  assert.doesNotMatch(home, /setExplicitUpdateStatus\('updated'\)|setExplicitUpdateStatus\('unconfirmed'\)/)
 })
 
 test('frame/tab/auth changes invalidate stale Update operations', () => {
@@ -51,6 +51,6 @@ test('frame/tab/auth changes invalidate stale Update operations', () => {
 
 test('network errors remain non-destructive until timeout', () => {
   assert.match(home, /Transient network\/offline failures keep waiting until the bounded deadline/)
-  assert.match(home, /Update saved\. RE:MIND has not confirmed the display refresh yet\./)
+  assert.doesNotMatch(home, /not confirmed|unconfirmed/i)
   assert.match(home, /Settings were saved, but the update could not be started\./)
 })

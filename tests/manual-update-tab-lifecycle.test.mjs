@@ -5,6 +5,7 @@ import {
   clearManualUpdate,
   readManualUpdate,
   selectUpdatePresentation,
+  manualUpdateEstimate,
   writeManualUpdate,
 } from '../app/lib/device/manualUpdateState.ts'
 
@@ -28,7 +29,7 @@ test('manual update survives tab navigation and always wins presentation until c
   assert.equal(selectUpdatePresentation(false, 'manual', scheduled), scheduled)
   writeManualUpdate(storage, deviceId, {
     phase: 'updating', requestId: 'request-7', requestedRevision: 7, requestedAt: now,
-    deadline: now + 180_000, estimate: { displayAt: null, instant: false },
+    deadline: now + 180_000,
   })
 
   // Navigate away and synchronously restore before the Frame subtree mounts.
@@ -37,14 +38,14 @@ test('manual update survives tab navigation and always wins presentation until c
   states.push(selectUpdatePresentation(Boolean(restored), 'Update in less than 2 minutes', scheduled))
 
   // Reconciliation progresses through every estimate without exposing scheduled copy.
-  states.push(selectUpdatePresentation(true, 'Update in 59 seconds', scheduled))
-  states.push(selectUpdatePresentation(true, 'Update in 29 seconds', scheduled))
+  states.push(selectUpdatePresentation(true, 'Update in less than 1 minute', scheduled))
+  states.push(selectUpdatePresentation(true, 'Update in less than 30 seconds', scheduled))
   states.push(selectUpdatePresentation(true, 'Update in less than 15 seconds', scheduled))
   clearManualUpdate(storage, deviceId)
   states.push(selectUpdatePresentation(true, 'Updated just now', scheduled))
 
   assert.deepEqual(states, [
-    'Update in less than 2 minutes', 'Update in 59 seconds', 'Update in 29 seconds',
+    'Update in less than 2 minutes', 'Update in less than 1 minute', 'Update in less than 30 seconds',
     'Update in less than 15 seconds', 'Updated just now',
   ])
   assert.doesNotMatch(states.join('\n'), /Update in 12 minutes/)
@@ -81,8 +82,7 @@ test('accepted backend operation outlives Frame unmount and remount does not req
   assert.doesNotMatch(reconcile, /activeTab/)
   assert.match(reconcile, /getDeviceUpdateStatus/)
   assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending\}/)
-  assert.match(home, /explicitUpdateStatus === 'unconfirmed'\) return/)
-  assert.match(home, /timedOut \? DEVICE_UPDATE_UNCONFIRMED_POLL_MS : DEVICE_UPDATE_POLL_MS/)
+  assert.doesNotMatch(home, /unconfirmed|DEVICE_UPDATE_UNCONFIRMED_POLL_MS/)
 })
 
 test('Frame navigation restores before selection and never resets on activeTab changes', () => {
@@ -92,4 +92,13 @@ test('Frame navigation restores before selection and never resets on activeTab c
   const reset = home.slice(home.indexOf('updateOperationIdRef.current += 1'), home.indexOf('// Resolve this'))
   assert.doesNotMatch(reset, /\[activeDeviceId, activeTab, userId\]/)
   assert.match(home, /selectUpdatePresentation\(\s*manualUpdatePresentationActive \|\| !manualUpdateStateResolved/)
+})
+
+test('coarse estimate is derived from elapsed wall-clock time and expires at two minutes', () => {
+  const start = 5_000_000
+  assert.equal(manualUpdateEstimate(start, start), 'under2')
+  assert.equal(manualUpdateEstimate(start, start + 60_000), 'under1')
+  assert.equal(manualUpdateEstimate(start, start + 90_000), 'under30')
+  assert.equal(manualUpdateEstimate(start, start + 105_000), 'under15')
+  assert.equal(manualUpdateEstimate(start, start + 120_000), null)
 })
