@@ -1,7 +1,8 @@
 export type ManualUpdateEstimate = { displayAt: number | null; instant: boolean }
 
 export type PersistedManualUpdate = {
-  phase: 'requesting' | 'updating'
+  phase: 'requesting' | 'updating' | 'unconfirmed'
+  requestId: string
   requestedRevision: number | null
   requestedAt: number
   deadline: number
@@ -16,19 +17,18 @@ export function manualUpdateStorageKey(deviceId: string) {
   return `${KEY_PREFIX}${deviceId}`
 }
 
-export function readManualUpdate(storage: StorageLike, deviceId: string, now = Date.now()): PersistedManualUpdate | null {
+export function readManualUpdate(storage: StorageLike, deviceId: string): PersistedManualUpdate | null {
   try {
     const value = JSON.parse(storage.getItem(manualUpdateStorageKey(deviceId)) || 'null') as Partial<PersistedManualUpdate> | null
-    if (!value || (value.phase !== 'requesting' && value.phase !== 'updating')) return null
-    if (!Number.isFinite(value.requestedAt) || !Number.isFinite(value.deadline) || value.deadline! <= now) {
-      storage.removeItem(manualUpdateStorageKey(deviceId))
-      return null
-    }
+    if (!value || !['requesting', 'updating', 'unconfirmed'].includes(value.phase || '')) return null
+    if (typeof value.requestId !== 'string' || value.requestId.length < 8) return null
+    if (!Number.isFinite(value.requestedAt) || !Number.isFinite(value.deadline)) return null
     const revision = value.requestedRevision
     if (value.phase === 'updating' && (!Number.isSafeInteger(revision) || revision! < 0)) return null
     const estimate = value.estimate
     return {
       phase: value.phase,
+      requestId: value.requestId,
       requestedRevision: revision == null ? null : revision,
       requestedAt: value.requestedAt!,
       deadline: value.deadline!,

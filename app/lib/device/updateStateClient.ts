@@ -36,11 +36,11 @@ export async function sendDeviceActivity(supabase: SupabaseClient, deviceId: str
   if (!response.ok) throw new Error('activity_failed')
 }
 
-export async function requestDeviceUpdate(supabase: SupabaseClient, deviceId: string) {
+export async function requestDeviceUpdate(supabase: SupabaseClient, deviceId: string, requestId: string) {
   const response = await authenticatedFetch(supabase, '/api/device/update-state/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_id: deviceId }),
+    body: JSON.stringify({ device_id: deviceId, request_id: requestId }),
   })
   const body = await response.json().catch(() => null)
   const revision = Number(body?.requested_revision)
@@ -61,6 +61,7 @@ export async function getDeviceUpdateStatus(supabase: SupabaseClient, deviceId: 
   }
   return {
     requestedRevision,
+    requestedAt: typeof body?.requested_at === 'string' ? body.requested_at : null,
     displayedRevision,
     lastProbeAt: typeof body?.last_probe_at === 'string' ? body.last_probe_at : null,
   }

@@ -19,16 +19,16 @@ test('activity, request, and status use the selected device and bearer session',
   assert.match(client, /supabase\.auth\.getSession\(\)/)
   assert.match(client, /Authorization: `Bearer \$\{token\}`/)
   assert.match(client, /activity[\s\S]*JSON\.stringify\(\{ device_id: deviceId \}\)/)
-  assert.match(client, /request[\s\S]*JSON\.stringify\(\{ device_id: deviceId \}\)/)
+  assert.match(client, /request[\s\S]*JSON\.stringify\(\{ device_id: deviceId, request_id: requestId \}\)/)
   assert.match(client, /status\?device_id=\$\{encodeURIComponent\(deviceId\)\}/)
 })
 
 test('explicit Update saves before requesting and locks duplicate clicks', () => {
   const flow = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('async function logout'))
-  assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestDeviceUpdate(supabase, deviceId)'))
+  assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestDeviceUpdate(supabase, deviceId, requestId)'))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| explicitUpdateStatus === 'requesting' \|\| explicitUpdateStatus === 'updating'\}/)
+  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending\}/)
 })
 
 test('polling waits for the exact returned revision and has a three-minute bound', () => {
