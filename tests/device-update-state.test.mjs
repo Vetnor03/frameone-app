@@ -95,13 +95,13 @@ test('physical probes provide a real wake-cycle anchor for the app estimate', ()
   assert.match(updateClient, /lastProbeAt:/)
 })
 
-test('explicit update copy estimates physical display completion without a button-based countdown', () => {
+test('explicit update uses four coarse elapsed phases without exact seconds', () => {
   assert.match(home, /Update in less than 2 minutes/)
+  assert.match(home, /Update in less than 1 minute/)
+  assert.match(home, /Update in less than 30 seconds/)
   assert.match(home, /Update in less than 15 seconds/)
-  assert.match(home, /lastProbeAt \+ 120_000 \+ 15_000/)
-  assert.match(home, /remainingSec < 60/)
-  assert.match(home, /setExplicitUpdateEstimate\(null\)[\s\S]*setExplicitUpdateStatus\('updated'\)/)
-  assert.doesNotMatch(home, /requestedAt \+ 120_000/)
+  assert.doesNotMatch(home, /remainingSec|Update in \$\{remainingSec\}/)
+  assert.doesNotMatch(home, /not confirmed|unconfirmed/i)
 })
 
 test('manual update presentation takes precedence from saving through completion', () => {
@@ -111,7 +111,7 @@ test('manual update presentation takes precedence from saving through completion
   // The click enters the manual state before the first awaited save, so the
   // render committed for SAVING can never use the scheduled countdown branch.
   assert.ok(handler.indexOf("setExplicitUpdateStatus('requesting')") < handler.indexOf('await persistSettings(deviceId)'))
-  assert.match(handler, /setExplicitUpdateEstimate\(\{ displayAt: null, instant: false \}\)[\s\S]*await persistSettings/)
+  assert.match(handler, /setManualUpdateRequestedAt\(requestedAt\)[\s\S]*await persistSettings/)
 
   // Requesting (save/wait), updating (awake/download/display), and updated
   // (completion) all remain on the manual presentation side of one branch.
@@ -130,7 +130,7 @@ test('idle copy ages the last confirmed physical display render and never predic
   assert.doesNotMatch(home, /setLastPhysicalDisplayUpdatedAt\(new Date\(\)\.toISOString\(\)\)/)
 })
 
-test('confirmed manual completion adopts the authoritative device ACK timestamp', () => {
+test('backend acknowledgement remains available for internal freshness reconciliation', () => {
   assert.match(appStatus, /last_displayed_at:/)
   assert.match(updateClient, /lastDisplayedAt: typeof body\?\.last_displayed_at/)
   assert.match(home, /revisionHasBeenDisplayed[\s\S]*backend\.lastDisplayedAt[\s\S]*setLastPhysicalDisplayUpdatedAt/)
