@@ -36,7 +36,7 @@ test('polling waits for the exact returned revision and has a three-minute bound
   assert.match(client, /DEVICE_UPDATE_TIMEOUT_MS = 3 \* 60_000/)
   assert.match(client, /return displayedRevision >= requestedRevision/)
   assert.match(home, /requestedRevision = await requestDeviceUpdate/)
-  assert.match(home, /revisionHasBeenDisplayed\(displayedRevision, operation\.requestedRevision\)/)
+  assert.match(home, /revisionHasBeenDisplayed\(updateStatus\.displayedRevision, operation\.requestedRevision\)/)
   assert.match(home, /setExplicitUpdateStatus\('updated'\)/)
   assert.match(home, /setExplicitUpdateStatus\('unconfirmed'\)/)
 })

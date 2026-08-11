@@ -54,11 +54,13 @@ export async function getDeviceUpdateStatus(supabase: SupabaseClient, deviceId: 
     `/api/device/update-state/status?device_id=${encodeURIComponent(deviceId)}`
   )
   const body = await response.json().catch(() => null)
+  const requestedRevision = Number(body?.requested_revision)
   const displayedRevision = Number(body?.displayed_revision)
-  if (!response.ok || !Number.isSafeInteger(displayedRevision) || displayedRevision < 0) {
+  if (!response.ok || !Number.isSafeInteger(requestedRevision) || requestedRevision < 0 || !Number.isSafeInteger(displayedRevision) || displayedRevision < 0) {
     throw new Error('update_status_failed')
   }
   return {
+    requestedRevision,
     displayedRevision,
     lastProbeAt: typeof body?.last_probe_at === 'string' ? body.last_probe_at : null,
   }

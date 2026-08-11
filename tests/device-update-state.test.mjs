@@ -117,8 +117,8 @@ test('manual update presentation takes precedence from saving through completion
   // (completion) all remain on the manual presentation side of one branch.
   assert.match(presentation, /manualUpdateInProgress = explicitUpdateStatus === 'requesting' \|\| explicitUpdateStatus === 'updating'/)
   assert.match(presentation, /manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'/)
-  assert.match(presentation, /manualUpdateInProgress[\s\S]*formatExplicitUpdateEstimate\(\)[\s\S]*manualUpdatePresentationActive[\s\S]*lastUpdatedAt[\s\S]*nextUpdateText/)
-  assert.doesNotMatch(presentation, /manualUpdateInProgress[\s\S]*nextUpdateText[\s\S]*formatExplicitUpdateEstimate\(\)/)
+  assert.match(presentation, /scheduledPresentation = nextUpdateText[\s\S]*manualUpdateInProgress[\s\S]*formatExplicitUpdateEstimate\(\)[\s\S]*manualUpdatePresentationActive[\s\S]*lastUpdatedAt/)
+  assert.match(presentation, /selectUpdatePresentation\([\s\S]*manualUpdatePresentationActive \|\| !manualUpdateStateResolved[\s\S]*manualPresentation,[\s\S]*scheduledPresentation/)
 })
 
 test('API errors do not expose database messages and device IDs are bounded', () => {
