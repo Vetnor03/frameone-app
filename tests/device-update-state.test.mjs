@@ -104,6 +104,23 @@ test('explicit update copy estimates physical display completion without a butto
   assert.doesNotMatch(home, /requestedAt \+ 120_000/)
 })
 
+test('manual update presentation takes precedence from saving through completion', () => {
+  const handler = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('\n\n  async function logout'))
+  const presentation = home.slice(home.indexOf('const nextUpdateText'), home.indexOf('\n\n  useEffect', home.indexOf('const nextUpdateText')))
+
+  // The click enters the manual state before the first awaited save, so the
+  // render committed for SAVING can never use the scheduled countdown branch.
+  assert.ok(handler.indexOf("setExplicitUpdateStatus('requesting')") < handler.indexOf('await persistSettings(deviceId)'))
+  assert.match(handler, /setExplicitUpdateEstimate\(\{ displayAt: null, instant: false \}\)[\s\S]*await persistSettings/)
+
+  // Requesting (save/wait), updating (awake/download/display), and updated
+  // (completion) all remain on the manual presentation side of one branch.
+  assert.match(presentation, /manualUpdateInProgress = explicitUpdateStatus === 'requesting' \|\| explicitUpdateStatus === 'updating'/)
+  assert.match(presentation, /manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'/)
+  assert.match(presentation, /manualUpdateInProgress[\s\S]*formatExplicitUpdateEstimate\(\)[\s\S]*manualUpdatePresentationActive[\s\S]*lastUpdatedAt[\s\S]*nextUpdateText/)
+  assert.doesNotMatch(presentation, /manualUpdateInProgress[\s\S]*nextUpdateText[\s\S]*formatExplicitUpdateEstimate\(\)/)
+})
+
 test('API errors do not expose database messages and device IDs are bounded', () => {
   for (const route of [activity, request, deviceState, appStatus]) {
     assert.doesNotMatch(route, /error\.message/)
