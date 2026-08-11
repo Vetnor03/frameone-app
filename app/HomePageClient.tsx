@@ -1099,14 +1099,13 @@ export default function HomePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
+  const [lastPhysicalDisplayUpdatedAt, setLastPhysicalDisplayUpdatedAt] = useState<string | null>(null)
   const [showNextUpdateAfterSave, setShowNextUpdateAfterSave] = useState(false)
   const [, setNextUpdateTick] = useState(0)
   const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
   const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
   const physicalFrameRenderAtRef = useRef<string | null>(null)
   const physicalFrameSnapshotSignatureRef = useRef<string | null>(null)
-  const nextUpdateRefreshInFlightRef = useRef(false)
   const pendingFrameConfigUpdatedAtRef = useRef<string | null>(null)
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
 
@@ -1255,6 +1254,7 @@ export default function HomePage() {
             ?? (backend.requestedRevision > backend.displayedRevision ? backend.requestedRevision : null)
           if (requestedRevision != null && requestedRevision > 0 && revisionHasBeenDisplayed(backend.displayedRevision, requestedRevision)) {
             clearManualUpdate(window.localStorage, deviceId)
+            if (backend.lastDisplayedAt) setLastPhysicalDisplayUpdatedAt(backend.lastDisplayedAt)
             setExplicitUpdateEstimate(null)
             setExplicitUpdateStatus('updated')
             return
@@ -1720,38 +1720,6 @@ export default function HomePage() {
     return `${prefix} ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
-  function frameCheckIntervalMs(frame: MemberRow | null) {
-    const isPluggedIn = frame?.is_usb_present === true || frame?.is_charging === true
-    return isPluggedIn ? 5 * 60 * 1000 : 15 * 60 * 1000
-  }
-
-  function formatNextUpdate(frame: MemberRow | null) {
-    const lastCheckIso = frame?.last_seen_at || frame?.last_render_at || physicalFrameRenderAtRef.current
-    if (!lastCheckIso) return null
-
-    const lastCheckAt = new Date(lastCheckIso).getTime()
-    if (!Number.isFinite(lastCheckAt)) return null
-
-    const nextCheckAt = lastCheckAt + frameCheckIntervalMs(frame)
-    const remainingMs = nextCheckAt - Date.now()
-
-    if (remainingMs <= 0) {
-      return language === 'no' ? 'Oppdaterer nå' : 'Updating now'
-    }
-
-    const remainingSec = Math.ceil(remainingMs / 1000)
-    if (remainingSec < 60) {
-      return language === 'no'
-        ? `Oppdatering om ${remainingSec} sekund${remainingSec === 1 ? '' : 'er'}`
-        : `Update in ${remainingSec} second${remainingSec === 1 ? '' : 's'}`
-    }
-
-    const remainingMin = Math.ceil(remainingSec / 60)
-    return language === 'no'
-      ? `Oppdatering om ${remainingMin} minutt${remainingMin === 1 ? '' : 'er'}`
-      : `Update in ${remainingMin} minute${remainingMin === 1 ? '' : 's'}`
-  }
-
   function formatExplicitUpdateEstimate() {
     if (!explicitUpdateEstimate) return null
     if (explicitUpdateEstimate.instant) {
@@ -1770,11 +1738,12 @@ export default function HomePage() {
     return language === 'no' ? 'Oppdatering om mindre enn 2 minutter' : 'Update in less than 2 minutes'
   }
 
-  const nextUpdateText = showNextUpdateAfterSave ? formatNextUpdate(activeFrameStatus) : null
   const manualUpdateInProgress = explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'
   const manualUpdatePending = manualUpdateInProgress || explicitUpdateStatus === 'unconfirmed'
   const manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'
-  const scheduledPresentation = nextUpdateText ?? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
+  const idleFreshnessPresentation = lastPhysicalDisplayUpdatedAt
+    ? formatRelative(lastPhysicalDisplayUpdatedAt)
+    : (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
   const manualPresentation = explicitUpdateStatus === 'unconfirmed'
     ? (language === 'no'
         ? 'Oppdateringen er lagret. RE:MIND har ikke bekreftet skjermoppdateringen ennå.'
@@ -1782,46 +1751,27 @@ export default function HomePage() {
     : manualUpdateInProgress
       ? formatExplicitUpdateEstimate()
       : manualUpdatePresentationActive
-        ? lastUpdatedAt ?? (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
+        ? idleFreshnessPresentation
         : (language === 'no' ? 'Sjekker oppdateringsstatus…' : 'Checking update status…')
   const updateStatusText = selectUpdatePresentation(
     manualUpdatePresentationActive || !manualUpdateStateResolved,
     manualPresentation,
-    scheduledPresentation
+    idleFreshnessPresentation
   )
 
   useEffect(() => {
-    if (!showNextUpdateAfterSave || !activeDeviceId) return
-
-    const timer = window.setInterval(() => {
-      setNextUpdateTick((value) => value + 1)
-
-      const frame = frames.find((item) => item.device_id === activeDeviceId) ?? null
-      const lastCheckIso = frame?.last_seen_at || frame?.last_render_at || physicalFrameRenderAtRef.current
-      const lastCheckAt = lastCheckIso ? new Date(lastCheckIso).getTime() : NaN
-      if (
-        Number.isFinite(lastCheckAt) &&
-        Date.now() >= lastCheckAt + frameCheckIntervalMs(frame) &&
-        !nextUpdateRefreshInFlightRef.current
-      ) {
-        nextUpdateRefreshInFlightRef.current = true
-        refreshPhysicalFrameState(activeDeviceId, { forceSnapshot: true })
-          .finally(() => {
-            nextUpdateRefreshInFlightRef.current = false
-          })
-      }
-    }, 1000)
+    if (!activeDeviceId || activeTab !== 'frame') return
+    // Relative freshness includes seconds, so keep it aging even when no
+    // backend/device data changes while the user remains on the Frame page.
+    const timer = window.setInterval(() => setNextUpdateTick((value) => value + 1), 1000)
 
     return () => window.clearInterval(timer)
-    // refreshPhysicalFrameState is intentionally omitted so this countdown follows the selected frame/status.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDeviceId, frames, showNextUpdateAfterSave])
+  }, [activeDeviceId, activeTab])
 
   async function loadDeviceStatus(deviceId: string): Promise<string | null> {
     try {
       const resp = await fetch(`/api/device/status?device_id=${encodeURIComponent(deviceId)}`, { cache: 'no-store' })
       if (!resp.ok) {
-        setLastUpdatedAt(null)
         return null
       }
 
@@ -1840,7 +1790,7 @@ export default function HomePage() {
       setFrames((current) =>
         current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
       )
-      setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+      if (renderIso) setLastPhysicalDisplayUpdatedAt(renderIso)
       if (
         pendingFrameConfigUpdatedAtRef.current &&
         !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
@@ -1850,7 +1800,6 @@ export default function HomePage() {
       }
       return renderIso || null
     } catch {
-      setLastUpdatedAt(null)
       return null
     }
   }
@@ -1871,7 +1820,7 @@ export default function HomePage() {
     setFrames((current) =>
       current.map((frame) => (frame.device_id === deviceId ? { ...frame, ...status } : frame))
     )
-    setLastUpdatedAt(renderIso ? formatRelative(renderIso) : null)
+    if (renderIso) setLastPhysicalDisplayUpdatedAt(renderIso)
     if (
       pendingFrameConfigUpdatedAtRef.current &&
       !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
@@ -2160,6 +2109,7 @@ export default function HomePage() {
 
       restoreManualUpdateState(selected)
       setActiveDeviceId(selected)
+      setLastPhysicalDisplayUpdatedAt(null)
       setPhysicalFrameSnapshot(null)
       physicalFrameSnapshotRef.current = null
       physicalFrameRenderAtRef.current = null
@@ -2196,6 +2146,7 @@ export default function HomePage() {
     setManualUpdateStateResolved(false)
     restoreManualUpdateState(id)
     setActiveDeviceId(id)
+    setLastPhysicalDisplayUpdatedAt(null)
     setPhysicalFrameSnapshot(null)
     physicalFrameSnapshotRef.current = null
     physicalFrameRenderAtRef.current = null
@@ -2501,6 +2452,7 @@ export default function HomePage() {
             if (updateOperationRef.current?.id === operationId && activeDeviceIdRef.current === deviceId) {
               updateOperationRef.current = null
               clearManualUpdate(window.localStorage, deviceId)
+              if (updateStatus.lastDisplayedAt) setLastPhysicalDisplayUpdatedAt(updateStatus.lastDisplayedAt)
               setExplicitUpdateEstimate(null)
               setExplicitUpdateStatus('updated')
             }
