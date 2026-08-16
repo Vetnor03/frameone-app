@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -24,8 +24,22 @@ test('web install metadata consistently uses the RE:MIND brand and canonical log
   assert.match(middleware, /LEGACY_BROWSER_ICON_PATH\.test\(pathname\)/)
   assert.match(middleware, /versionedIconPath\('\/AppLogo\.png'\)/)
   assert.match(middleware, /pathname === '\/AppLogo\.png'/)
+  for (const legacyMatcher of [
+    '/favicon.svg',
+    '/favicon-:size.png',
+    '/apple-touch-icon.png',
+    '/apple-touch-icon-:size.png',
+    '/android-chrome-:size.png',
+    '/icon-:size.png',
+  ]) {
+    assert.ok(middleware.includes(`'${legacyMatcher}'`), `${legacyMatcher} must reach the redirect middleware`)
+  }
   assert.match(serviceWorker, /icon: '\/AppLogo\.png'/)
   assert.match(serviceWorker, /badge: '\/AppLogo\.png'/)
+
+  for (const obsoleteIcon of ['public/favicon.ico', 'public/favicon.svg', 'public/remind-icon.svg']) {
+    await assert.rejects(access(new URL(`../${obsoleteIcon}`, import.meta.url)))
+  }
 })
 
 test('custom splash retains the animated RE:MIND wordmark independently of the app icon', async () => {

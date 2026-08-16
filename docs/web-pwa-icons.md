@@ -14,8 +14,11 @@ changes.
 
 Middleware also redirects conventional legacy favicon, Apple touch, Android
 Chrome, and numbered icon URLs to the versioned `/AppLogo.png`. This prevents
-browser caches and automatic icon discovery from continuing to serve the old
-static files while leaving those binary assets untouched.
+browser caches and automatic icon discovery from continuing to serve old static
+PNG files. The matcher explicitly includes these PNG/SVG aliases because normal
+static images bypass middleware. The obsolete public `favicon.ico` and SVG icon
+files were removed, so `/favicon.ico` is owned by its redirect route and no
+legacy fallback file can compete with it.
 
 Do not use this app-icon setup to replace logos rendered in pages, splash UI, or
 the public shop. Those are separate branding surfaces. No generated web PNG
