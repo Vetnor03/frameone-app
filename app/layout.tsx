@@ -8,6 +8,9 @@ const themeBootstrapScript = `
   (function () {
     var theme = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
     if (theme !== 'light' && theme !== 'dark') theme = 'light';
+    // Login is always an unauthenticated, pre-preference surface. Do not let a
+    // preference left by a previous session darken the next user's sign-in.
+    if (location.pathname === '/login') theme = 'light';
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   })();

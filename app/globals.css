@@ -2,9 +2,9 @@
 @import "tailwindcss";
 
 /* =========================
-   Theme tokens (DEFAULT: DARK)
+   Theme tokens (EXPLICIT DARK)
    ========================= */
-:root {
+html[data-theme="dark"] {
   /* base */
   --app-bg: #061b24;        /* your current background */
   --sheet-bg: #071f2a;      /* your current modal/sheet bg */
@@ -22,6 +22,8 @@
   --fg-50: rgba(255, 255, 255, 0.5);
   --fg-55: rgba(255, 255, 255, 0.55);
   --fg-65: rgba(255, 255, 255, 0.65);
+  --fg-45: rgba(255, 255, 255, 0.45);
+  --fg-35: rgba(255, 255, 255, 0.35);
   --fg-40: rgba(255, 255, 255, 0.4);
   --fg-30: rgba(255, 255, 255, 0.3);
   --fg-15: rgba(255, 255, 255, 0.15);
@@ -55,6 +57,7 @@
 /* =========================
    LIGHT THEME OVERRIDES
    ========================= */
+:root,
 html[data-theme="light"] {
   /* RE:MIND light is a warm, architectural palette rather than an inversion. */
   --app-bg: #f5f6f8;
