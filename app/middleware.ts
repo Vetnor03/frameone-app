@@ -130,5 +130,18 @@ export async function middleware(request: NextRequest) {
 
 // Match all routes except static assets handled by Next
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Static image requests are normally excluded above. These conventional
+    // browser icon paths must still reach LEGACY_BROWSER_ICON_PATH before the
+    // similarly named files in public/ can be selected.
+    '/favicon.svg',
+    '/favicon-:size.png',
+    '/apple-touch-icon.png',
+    '/apple-touch-icon-precomposed.png',
+    '/apple-touch-icon-:size.png',
+    '/apple-touch-icon-:size-precomposed.png',
+    '/android-chrome-:size.png',
+    '/icon-:size.png',
+  ],
 }
