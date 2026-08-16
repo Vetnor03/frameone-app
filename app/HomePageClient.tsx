@@ -13392,8 +13392,8 @@ const sortedReminders = useMemo(() => {
         }
       `}</style>
 
-      <div className="h-full flex flex-col min-h-0">
-        <div className="mt-4 max-[420px]:mt-3 flex-1 min-h-0 flex flex-col">
+      <div className="h-full overflow-y-auto no-scrollbar">
+        <div className="mt-4 max-[420px]:mt-3">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
               <div className="text-[color:var(--fg-90)] text-sm font-semibold capitalize">
@@ -13514,8 +13514,8 @@ const sortedReminders = useMemo(() => {
             })}
           </div>
 
-          <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3 flex-1 min-h-0">
-            <div className="h-full overflow-y-auto no-scrollbar pr-1">
+          <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3">
+            <div className="pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
               ) : loading ? (
