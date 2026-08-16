@@ -16,6 +16,11 @@ const pressImages = [
   { src: '/shop/products/device/Dark.png', alt: 'RE:MIND device in its dark finish', norwegianAlt: 'RE:MIND-enhet i mørk utførelse', label: 'Dark device', norwegianLabel: 'Mørk RE:MIND' },
 ]
 
+const pressLogos = [
+  { src: '/AppLogo.png', alt: 'RE:MIND app icon', norwegianAlt: 'RE:MIND-appikon', label: 'App icon', norwegianLabel: 'Appikon' },
+  { src: '/Logo.png', alt: 'RE:MIND logo', norwegianAlt: 'RE:MIND-logo', label: 'RE:MIND logo', norwegianLabel: 'RE:MIND-logo' },
+]
+
 export default async function PressPage({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
   const language = pickShopLocale((await searchParams)?.lang)
   const isNorwegian = language === 'no'
@@ -58,12 +63,14 @@ export default async function PressPage({ searchParams }: { searchParams?: Promi
         </div>
 
         <div className="mt-8 grid gap-5 sm:grid-cols-2">
-          <a href="/r_Logo.png" className="shop-card group rounded-[26px] border border-black/10 bg-white p-5" download>
-            <div className="flex aspect-[1.55] items-center justify-center rounded-[18px] bg-[#e9dfd1] p-12">
-              <Image src="/r_Logo.png" alt={isNorwegian ? 'R:-logo' : 'R: logo'} width={856} height={856} className="h-28 w-28 object-contain sm:h-32 sm:w-32" />
-            </div>
-            <div className="flex items-center justify-between gap-4 px-1 pb-1 pt-5"><p className="font-medium">{isNorwegian ? 'R:-logo' : 'R: logo'}</p><span className="text-xs uppercase tracking-[0.14em] text-black/45">{isNorwegian ? 'LAST NED ↓' : 'Download ↓'}</span></div>
-          </a>
+          {pressLogos.map((asset) => (
+            <a key={asset.src} href={asset.src} className="shop-card group rounded-[26px] border border-black/10 bg-white p-5" download>
+              <div className="flex aspect-[1.55] items-center justify-center overflow-hidden rounded-[18px] bg-[#e9dfd1] p-7 sm:p-9">
+                <Image src={asset.src} alt={isNorwegian ? asset.norwegianAlt : asset.alt} width={1254} height={1254} className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.025]" />
+              </div>
+              <div className="flex items-center justify-between gap-4 px-1 pb-1 pt-5"><p className="font-medium">{isNorwegian ? asset.norwegianLabel : asset.label}</p><span className="text-xs uppercase tracking-[0.14em] text-black/45">{isNorwegian ? 'LAST NED ↓' : 'Download ↓'}</span></div>
+            </a>
+          ))}
           {pressImages.map((asset) => (
             <a key={asset.src} href={asset.src} className="shop-card group rounded-[26px] border border-black/10 bg-white p-5" download>
               <div className="relative aspect-[1.55] overflow-hidden rounded-[18px] bg-[#f0ede7]">
