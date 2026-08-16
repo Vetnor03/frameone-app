@@ -275,19 +275,19 @@ function HomeScreenGuideSteps({ section }: { section: HomeScreenGuideSection }) 
       {section.steps.map((item, index) => (
         <div key={`${section.id}-${item.label}`} className="contents">
           <article className="flex min-w-0 flex-col items-center text-center">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#2aa3ff]/25 text-[0.6rem] font-semibold text-white/45">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#2aa3ff]/25 text-[0.6rem] font-semibold text-[color:var(--fg-45)]">
               {item.label}
             </span>
             <div className="mt-2.5 flex h-9 items-center justify-center text-[#5fa7d8]/90">{item.icon}</div>
-            <h3 className="mt-2.5 text-[0.66rem] font-semibold tracking-[0.18em] text-white/55">{item.title}</h3>
-            <p className="mt-1.5 max-w-[7.1rem] text-[0.61rem] font-medium leading-snug text-white/35">
+            <h3 className="mt-2.5 text-[0.66rem] font-semibold tracking-[0.18em] text-[color:var(--fg-55)]">{item.title}</h3>
+            <p className="mt-1.5 max-w-[7.1rem] text-[0.61rem] font-medium leading-snug text-[color:var(--fg-35)]">
               {item.helper}
             </p>
           </article>
 
           {index < section.steps.length - 1 ? (
             <div className="pt-[3.8rem]" aria-hidden="true">
-              <span className="block h-px w-5 border-t border-dotted border-white/14" />
+              <span className="block h-px w-5 border-t border-dotted border-[color:var(--bd-15)]" />
             </div>
           ) : null}
         </div>
@@ -308,19 +308,19 @@ function HomeScreenGuidePlatform({
   const contentId = `home-screen-guide-${section.id}`
 
   return (
-    <div className="border-b border-white/10">
+    <div className="border-b border-[color:var(--bd-10)]">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-4 py-3 text-left text-white/45"
+        className="flex w-full items-center justify-between gap-4 py-3 text-left text-[color:var(--fg-45)]"
         aria-expanded={expanded}
         aria-controls={contentId}
         onClick={onToggle}
       >
         <span className="flex items-center gap-2.5">
-          <span className="text-white/35">{section.platformIcon}</span>
-          <span className="text-[0.63rem] font-semibold tracking-[0.22em] text-white/45">{section.title}</span>
+          <span className="text-[color:var(--fg-35)]">{section.platformIcon}</span>
+          <span className="text-[0.63rem] font-semibold tracking-[0.22em] text-[color:var(--fg-45)]">{section.title}</span>
         </span>
-        <span className="text-white/35">
+        <span className="text-[color:var(--fg-35)]">
           <ChevronIcon isOpen={expanded} />
         </span>
       </button>
@@ -342,17 +342,17 @@ function HomeScreenGuide() {
 
   return (
     <section aria-label="Add to home screen guide" className="mt-9 text-center">
-      <div className="flex w-full items-center gap-3 py-2.5 text-left text-white/45">
+      <div className="flex w-full items-center gap-3 py-2.5 text-left text-[color:var(--fg-45)]">
         <span className="text-[#5fa7d8]/80">
           <InfoIcon />
         </span>
-        <span className="text-[0.64rem] font-semibold tracking-[0.22em] text-white/50">TIP</span>
-        <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-white/35">
+        <span className="text-[0.64rem] font-semibold tracking-[0.22em] text-[color:var(--fg-50)]">TIP</span>
+        <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-[color:var(--fg-35)]">
           Add the app to your home screen for a better experience.
         </span>
       </div>
 
-      <div className="mt-2 border-t border-white/10">
+      <div className="mt-2 border-t border-[color:var(--bd-10)]">
         {homeScreenGuideSections.map((section) => (
           <HomeScreenGuidePlatform
             key={section.id}
@@ -505,16 +505,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-y-auto bg-[#061b24] px-5 text-white">
+    <main className="remind-app min-h-screen overflow-y-auto bg-[color:var(--app-bg)] px-5 text-[color:var(--fg)]">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col">
         <header
           className="flex items-center justify-between pb-6 pt-5"
           style={{ paddingTop: 'max(env(safe-area-inset-top), 1.25rem)' }}
         >
-          <span className="text-xs font-semibold tracking-[0.2em] text-white/45">RE:MIND</span>
+          <span className="text-xs font-semibold tracking-[0.2em] text-[color:var(--fg-45)]">RE:MIND</span>
           <a
             href="https://re-mind.no/shop"
-            className="rounded-full border border-white/14 px-3 py-1.5 text-xs font-medium tracking-[0.16em] text-white/65 transition hover:border-white/30 hover:text-white/85"
+            className="rounded-full border border-[color:var(--bd-15)] px-3 py-1.5 text-xs font-medium tracking-[0.16em] text-[color:var(--fg-65)] transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg-85)]"
           >
             SHOP
           </a>
@@ -525,15 +525,15 @@ export default function LoginPage() {
 
           {step === 'email' ? (
             <div className="relative">
-              <p className="mt-2 text-center text-sm text-white/50">We’ll send you an 8-digit code</p>
-              <p className="mt-1 text-center text-xs text-white/35">Use the email with the code to log in.</p>
+              <p className="mt-2 text-center text-sm text-[color:var(--fg-50)]">We’ll send you an 8-digit code</p>
+              <p className="mt-1 text-center text-xs text-[color:var(--fg-35)]">Use the email with the code to log in.</p>
 
             <input
               type="email"
               placeholder="you@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 outline-none"
+              className="mt-8 h-12 w-full rounded-xl border border-[color:var(--bd-20)] bg-[color:var(--input-bg)] px-4 outline-none"
               autoComplete="email"
             />
 
@@ -553,10 +553,10 @@ export default function LoginPage() {
             </div>
           ) : (
             <>
-              <p className="mt-2 text-center text-sm text-white/50">
+              <p className="mt-2 text-center text-sm text-[color:var(--fg-50)]">
                 Enter the code we sent to
                 <br />
-                <span className="text-white/80">{email}</span>
+                <span className="text-[color:var(--fg-80)]">{email}</span>
               </p>
 
               <input
@@ -567,7 +567,7 @@ export default function LoginPage() {
                   setCode(e.target.value.replace(/\D/g, '').slice(0, OTP_LENGTH))
                   if (verifyError) setVerifyError('')
                 }}
-                className="mt-8 h-12 w-full rounded-xl border border-white/20 bg-transparent px-4 text-center tracking-widest outline-none"
+                className="mt-8 h-12 w-full rounded-xl border border-[color:var(--bd-20)] bg-[color:var(--input-bg)] px-4 text-center tracking-widest outline-none"
                 autoComplete="one-time-code"
               />
 
@@ -575,7 +575,7 @@ export default function LoginPage() {
                 <>
                   <p className="mt-4 text-center text-xs text-[#ff8b8b]">{verifyError}</p>
                   {isDebugVerifyBannerEnabled && verifyDiagnostic ? (
-                    <p className="mt-1 text-center text-[10px] tracking-wide text-white/45">
+                    <p className="mt-1 text-center text-[10px] tracking-wide text-[color:var(--fg-45)]">
                       debug: {verifyDiagnostic}
                     </p>
                   ) : null}
@@ -596,7 +596,7 @@ export default function LoginPage() {
                   setVerifyError('')
                   setStep('email')
                 }}
-                className="mt-3 h-12 w-full rounded-xl border border-white/15 text-white/60 tracking-widest"
+                className="mt-3 h-12 w-full rounded-xl border border-[color:var(--bd-15)] text-[color:var(--fg-60)] tracking-widest"
               >
                 BACK
               </button>
