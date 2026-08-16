@@ -3,8 +3,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'RE:MIND'
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
-    icon: '/r_Logo.png',
-    badge: '/r_Logo.png',
+    icon: '/AppLogo.png',
+    badge: '/AppLogo.png',
     data: { url: data.url || '/' },
     tag: data.tag || undefined,
   }))

@@ -1,15 +1,22 @@
-# iOS App Icon
+# iOS app icon
 
-The iOS app icon source image is the uploaded PNG at:
+The external app-icon source artwork is:
 
 ```text
-ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+public/AppLogo.png
 ```
 
-Do not redraw, redesign, regenerate, or replace it with generated derivatives when updating the app icon.
+Apple's asset catalog requires a 1024-by-1024 PNG, while the source artwork is
+1254-by-1254. Add a resized copy manually at the following path without
+redesigning, cropping, or otherwise altering the logo:
 
-## Asset catalog configuration
+```text
+ios/App/Assets.xcassets/AppIcon.appiconset/AppLogo-1024.png
+```
 
-`ios/App/Assets.xcassets/AppIcon.appiconset/Contents.json` is intentionally configured with a single iOS universal app icon entry that points directly to `AppIcon-1024.png`. Xcode/asset catalog tooling should derive the required iOS app icon renditions from that source during the iOS build.
+`ios/App/Assets.xcassets/AppIcon.appiconset/Contents.json` is configured to use
+that file as the single universal iOS app icon. The derived platform renditions
+are produced by Xcode; no additional generated PNG sizes should be committed.
 
-There is no repository script for generating iPhone/iPad icon PNG variants from SVG. If the app icon changes, replace `AppIcon-1024.png` itself and keep `Contents.json` pointed at that same file.
+This asset is only for the installed app icon. It must not be reused to replace
+logos inside the app or its splash experience.
