@@ -5,10 +5,11 @@ import test from 'node:test'
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
 test('web install metadata consistently uses the RE:MIND brand and canonical logo', async () => {
-  const [layout, manifest, favicon, serviceWorker] = await Promise.all([
+  const [layout, manifest, favicon, middleware, serviceWorker] = await Promise.all([
     read('app/layout.tsx'),
     read('app/manifest.ts'),
     read('app/favicon.ico/route.ts'),
+    read('app/middleware.ts'),
     read('public/sw.js'),
   ])
 
@@ -20,6 +21,9 @@ test('web install metadata consistently uses the RE:MIND brand and canonical log
   assert.match(manifest, /short_name: 'RE:MIND'/)
   assert.equal(manifest.match(/versionedIconPath\('\/AppLogo\.png'\)/g)?.length, 2)
   assert.match(favicon, /versionedIconPath\('\/AppLogo\.png'\)/)
+  assert.match(middleware, /LEGACY_BROWSER_ICON_PATH\.test\(pathname\)/)
+  assert.match(middleware, /versionedIconPath\('\/AppLogo\.png'\)/)
+  assert.match(middleware, /pathname === '\/AppLogo\.png'/)
   assert.match(serviceWorker, /icon: '\/AppLogo\.png'/)
   assert.match(serviceWorker, /badge: '\/AppLogo\.png'/)
 })
