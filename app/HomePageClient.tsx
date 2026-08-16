@@ -13393,7 +13393,7 @@ const sortedReminders = useMemo(() => {
       `}</style>
 
       <div className="absolute inset-0 overflow-y-auto no-scrollbar">
-        <div className="mt-4 pb-24 max-[420px]:mt-3">
+        <div className="box-border flex min-h-full flex-col pt-4 max-[420px]:pt-3">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
               <div className="text-[color:var(--fg-90)] text-sm font-semibold capitalize">
@@ -13514,7 +13514,7 @@ const sortedReminders = useMemo(() => {
             })}
           </div>
 
-          <div className="mt-2 max-[420px]:mt-1.5 relative rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 py-3.5 max-[420px]:py-3">
+          <div className="mt-2 max-[420px]:mt-1.5 relative flex-1 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-3.5 max-[420px]:px-3 pt-3.5 max-[420px]:pt-3 pb-24">
             <div className="pr-1">
               {!activeDeviceId ? (
                 <div className="text-sm text-[color:var(--fg-50)]">{language === 'no' ? 'Velg et frame først' : 'Select a frame first'}</div>
@@ -13611,7 +13611,7 @@ const sortedReminders = useMemo(() => {
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center bg-[color:var(--app-bg)] py-5">
+      <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center py-5">
         <button
           onClick={() => {
             setEditingReminder({
