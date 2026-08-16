@@ -13612,16 +13612,6 @@ const sortedReminders = useMemo(() => {
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center py-5">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 -top-8 bottom-0 -z-10 backdrop-blur-[8px]"
-          style={{
-            background:
-              'linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--app-bg) 18%, transparent) 42%, color-mix(in srgb, var(--app-bg) 72%, transparent) 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 38%, black 100%)',
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 38%, black 100%)',
-          }}
-        />
         <button
           onClick={() => {
             setEditingReminder({
