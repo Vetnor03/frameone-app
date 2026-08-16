@@ -25,7 +25,6 @@ test('Press Room provides the requested Norwegian copy while retaining English',
     'Appikon',
     'RE:MIND-logo',
     'RE:MIND-enhet',
-    'Nordisk eik',
     'Mørk RE:MIND',
     'LAST NED ↓',
   ]) assert.ok(page.includes(copy), `missing Norwegian copy: ${copy}`)
@@ -53,5 +52,6 @@ test('Press Room preserves navigation, contact and asset download behavior', () 
   assert.match(page, /src: '\/AppLogo\.png'/)
   assert.match(page, /src: '\/Logo\.png'/)
   assert.doesNotMatch(page, /r_Logo\.png|R:-logo|R: logo/)
+  assert.doesNotMatch(page, /products\/frames\/Oak\.png|Nordisk eik|Natural oak frame/)
   assert.match(page, /href=\{asset\.src\}[^>]*download/)
 })

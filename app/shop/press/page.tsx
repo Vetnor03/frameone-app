@@ -12,7 +12,6 @@ export const metadata: Metadata = shopMetadata({
 
 const pressImages = [
   { src: '/shop/remind-device-v2.png', alt: 'RE:MIND digital frame product view', norwegianAlt: 'RE:MIND digital ramme sett forfra', label: 'RE:MIND device', norwegianLabel: 'RE:MIND-enhet' },
-  { src: '/shop/products/frames/Oak.png', alt: 'RE:MIND frame in natural oak', norwegianAlt: 'RE:MIND-ramme i nordisk eik', label: 'Natural oak frame', norwegianLabel: 'Nordisk eik' },
   { src: '/shop/products/device/Dark.png', alt: 'RE:MIND device in its dark finish', norwegianAlt: 'RE:MIND-enhet i mørk utførelse', label: 'Dark device', norwegianLabel: 'Mørk RE:MIND' },
 ]
 
