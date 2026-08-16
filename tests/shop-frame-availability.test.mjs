@@ -16,7 +16,7 @@ const migration = read('supabase/migrations/20260728150000_add_shop_frame_intere
 
 test('only the four launch frames are manually in stock', () => {
   assert.match(products, /new Set\(\['midnight-black', 'cloud-white', 'natural-oak', 'walnut-wood'\]\)/)
-  assert.match(products, /return launchFrameIds\.has\(id\) \? 'in-stock' : 'coming-soon'/)
+  assert.match(products, /return launchFrameIds\.has\(id\) \? 'in-stock' : 'exploring'/)
   assert.match(products, /'low-stock': 'LOW STOCK'/)
   assert.match(products, /'out-of-stock': 'OUT OF STOCK'/)
 })
@@ -36,12 +36,12 @@ test('frame and matte collections show availability and accessible card hearts',
   assert.doesNotMatch(catalog, /kind === 'frames' && <p[^>]*>[^<]*<span[^>]*>More styles are coming\./)
   assert.match(catalog, /Heart your favourites and help us choose what comes next\./)
   assert.match(catalogData, /availability: matteAvailability\(id\)/)
-  assert.match(catalog, /const comingSoon = item\.availability === 'coming-soon'/)
+  assert.match(catalog, /const exploring = item\.availability === 'exploring'/)
   assert.match(catalog, /const availability = item\.availability/)
   assert.match(catalog, /frameAvailabilityLabels\[availability\]/)
   assert.match(catalog, /availability !== 'in-stock'/)
   assert.match(detail, /item\.availability !== 'in-stock'/)
-  assert.match(catalog, /comingSoon \? 'pr-14' : ''/)
+  assert.match(catalog, /exploring \? 'pr-14' : ''/)
   assert.match(catalog, /<FrameFavouriteButton frameId=\{item\.id\} frameName=\{displayName\}/)
   assert.match(favourite, /min-h-11 min-w-11/)
   assert.match(favourite, /Remove \$\{frameName\} from favourites/)
@@ -120,8 +120,8 @@ test('favourites persist per browser and server demand is private and deduplicat
   assert.doesNotMatch(catalog, /favourites?\s*\}/i)
 })
 
-test('coming-soon items stay out of add-to-cart selectors and purchase paths', () => {
-  assert.match(detail, /if \(comingSoon\) return/)
+test('exploring items stay out of add-to-cart selectors and purchase paths', () => {
+  assert.match(detail, /if \(exploring\) return/)
   assert.match(detail, /Not yet available to purchase\./)
   assert.match(configurator, /const purchasableFrames = shopFrames\.filter\(isFramePurchasable\)/)
   assert.match(configurator, /\{purchasableFrames\.map\(\(item\) => <option/)
@@ -131,7 +131,7 @@ test('coming-soon items stay out of add-to-cart selectors and purchase paths', (
   assert.match(bundle, /Dark and light modes are both included\. This only changes the preview; select the display mode in the app settings\./)
 })
 
-test('coming-soon detail copy is localized by product type without changing English', () => {
+test('exploring detail copy is localized by product type without changing English', () => {
   for (const copy of [
     'MARKER DENNE RAMMEN SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.',
     'MARKER DETTE INNLEGGET SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.',
@@ -139,10 +139,10 @@ test('coming-soon detail copy is localized by product type without changing Engl
     'Heart this ${singular} to help choose what comes next.',
     'Not yet available to purchase.',
   ]) {
-    assert.ok(detail.includes(copy), `missing coming-soon detail copy: ${copy}`)
+    assert.ok(detail.includes(copy), `missing exploring detail copy: ${copy}`)
   }
   assert.match(detail, /language === 'no'\s*\? kind === 'frames'/)
-  assert.match(detail, /comingSoon \? language === 'no' \? 'Kan ikke kjøpes ennå\.' : 'Not yet available to purchase\.'/)
+  assert.match(detail, /exploring \? language === 'no' \? 'Kan ikke kjøpes ennå\.' : 'Not yet available to purchase\.'/)
   assert.match(detail, /language === 'no' \? 'Tilgjengelighet' : 'Availability'/)
   assert.match(detail, /<FrameFavouriteButton frameId=\{item\.id\} frameName=\{item\.name\} \/>/)
 })

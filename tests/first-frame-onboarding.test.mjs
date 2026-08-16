@@ -48,3 +48,17 @@ test('back from preset selection shows paired state without repeating the pairin
   assert.match(setup, /vi parer ikke framen på nytt/)
   assert.doesNotMatch(setup, /claimPairCodeAndLoadFrames/)
 })
+
+test('reminder onboarding only renders available, connectable integrations', () => {
+  assert.match(home, /const visibleApps = startup \? apps\.filter\(\(app\) => app\.connectable && app\.status === 'available'\) : apps/)
+  assert.match(frameSetupSource(), /ConnectAppsScreen[\s\S]*?activeDeviceId=\{activeDeviceId\}[\s\S]*?startup/)
+})
+
+test('normal reminder settings retain unavailable integrations with explicit lifecycle statuses', () => {
+  assert.match(home, /type IntegrationStatus = 'available' \| 'exploring' \| 'planned' \| 'in-development'/)
+  assert.match(home, /We're exploring a Vigilo connection/)
+  assert.match(home, /We're exploring a Transponder connection/)
+  assert.match(home, /We're exploring waste collection reminders/)
+  assert.match(home, /integrationStatusLabel\(app\.status\)/)
+  assert.doesNotMatch(home, /coming[ -]soon/i)
+})

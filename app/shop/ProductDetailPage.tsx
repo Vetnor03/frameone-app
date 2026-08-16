@@ -21,15 +21,15 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
   const isNorwegianFrame = kind === 'frames' && language === 'no'
   const isNorwegianMatte = kind === 'mattes' && language === 'no'
   const [added, setAdded] = useState(false)
-  const comingSoon = item.availability === 'coming-soon'
-  const comingSoonFavouritePrompt = language === 'no'
+  const exploring = item.availability === 'exploring'
+  const exploringFavouritePrompt = language === 'no'
     ? kind === 'frames'
       ? 'MARKER DENNE RAMMEN SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.'
       : 'MARKER DETTE INNLEGGET SOM FAVORITT OG HJELP OSS VELGE HVA VI TAR INN I NESTE RUNDE.'
     : `Heart this ${singular} to help choose what comes next.`
 
   function addProductToCart() {
-    if (comingSoon) return
+    if (exploring) return
     addCartItem({
       id: `${singular}-${item.id}-${Date.now()}`,
       productId: item.id,
@@ -77,13 +77,13 @@ export default function ProductDetailPage({ kind, item, language }: ProductDetai
                 </div>
               </div>
 
-              {comingSoon ? (
+              {exploring ? (
                 <div className="mt-8 flex items-center justify-between gap-4 border-y border-black/10 py-2">
-                  <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">{comingSoonFavouritePrompt}</p>
+                  <p className="text-xs uppercase leading-5 tracking-[0.12em] text-black/55">{exploringFavouritePrompt}</p>
                   <FrameFavouriteButton frameId={item.id} frameName={item.name} />
                 </div>
               ) : <button type="button" onClick={addProductToCart} className="shop-button mt-8 block w-full rounded bg-black px-8 py-4 text-center text-sm font-medium tracking-[0.08em] text-white">{language === 'no' ? 'LEGG I HANDLEKURV' : 'ADD TO CART'}</button>}
-              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : comingSoon ? language === 'no' ? 'Kan ikke kjøpes ennå.' : 'Not yet available to purchase.' : language === 'no' ? 'RE:MIND-enheten selges separat.' : `The RE:MIND display is sold separately.`}</p>
+              <p className="mt-3 min-h-5 text-center text-xs leading-5 text-black/45" role="status">{added ? `${displayName} added to cart.` : exploring ? language === 'no' ? 'Kan ikke kjøpes ennå.' : 'Not yet available to purchase.' : language === 'no' ? 'RE:MIND-enheten selges separat.' : `The RE:MIND display is sold separately.`}</p>
             </div>
           </div>
 

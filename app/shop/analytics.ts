@@ -5,7 +5,7 @@ import { track } from '@vercel/analytics'
 export const SHOP_CURRENCY = 'NOK' as const
 export const REMIND_BASE_PRICE = 2299 as const
 
-type Availability = 'in-stock' | 'low-stock' | 'out-of-stock' | 'coming-soon'
+type Availability = 'in-stock' | 'low-stock' | 'out-of-stock' | 'exploring'
 
 export type ShopAnalyticsEvents = {
   shop_view: Record<string, never>

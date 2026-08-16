@@ -2977,7 +2977,16 @@ function ConnectAppsScreen({
   useEffect(() => {
     fetchLocalEventsStatus()
   }, [activeDeviceId])
-  const apps: Array<{ key: ConnectAppKey; name: string; description: string; comingSoon?: boolean }> = [
+  type IntegrationStatus = 'available' | 'exploring' | 'planned' | 'in-development'
+  type ConnectApp = {
+    key: ConnectAppKey
+    name: string
+    description: string
+    status: IntegrationStatus
+    connectable: boolean
+  }
+
+  const apps: ConnectApp[] = [
     {
       key: 'spond',
       name: 'Spond',
@@ -2985,12 +2994,16 @@ function ConnectAppsScreen({
         language === 'no'
           ? 'Vis Spond-meldinger på framen din'
           : 'Show Spond messages on your frame',
+      status: 'available',
+      connectable: true,
     },
     {
       key: 'teams',
       name: 'Teams',
       description:
         language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
+      status: 'available',
+      connectable: true,
     },
     {
       key: 'local-events',
@@ -2999,34 +3012,39 @@ function ConnectAppsScreen({
         language === 'no'
           ? 'Velg nærområdet ditt for lokale arrangementer'
           : 'Choose your local area for nearby events',
+      status: 'available',
+      connectable: true,
     },
     {
       key: 'vigilo',
       name: 'Vigilo',
       description:
-        language === 'no' ? 'Vigilo-tilkobling kommer snart' : 'Vigilo connection coming soon',
-      comingSoon: true,
+        language === 'no' ? 'Vi utforsker en Vigilo-tilkobling' : "We're exploring a Vigilo connection",
+      status: 'exploring',
+      connectable: false,
     },
     {
       key: 'transponder',
       name: 'Transponder',
       description:
         language === 'no'
-          ? 'Transponder-tilkobling kommer snart'
-          : 'Transponder connection coming soon',
-      comingSoon: true,
+          ? 'Vi utforsker en Transponder-tilkobling'
+          : "We're exploring a Transponder connection",
+      status: 'exploring',
+      connectable: false,
     },
     {
       key: 'waste',
       name: language === 'no' ? 'Renovasjon' : 'Waste collection',
       description:
-        language === 'no' ? 'Renovasjonsvarsler kommer snart' : 'Waste collection reminders coming soon',
-      comingSoon: true,
+        language === 'no' ? 'Vi utforsker renovasjonsvarsler' : "We're exploring waste collection reminders",
+      status: 'exploring',
+      connectable: false,
     },
   ]
 
-  function getAppConnected(app: { key: ConnectAppKey; comingSoon?: boolean }) {
-    if (app.comingSoon) return false
+  function getAppConnected(app: ConnectApp) {
+    if (!app.connectable) return false
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
@@ -3034,9 +3052,15 @@ function ConnectAppsScreen({
     return connectAppIsConnected(modulesJson, app.key)
   }
 
-  const sortedApps = apps
+  const visibleApps = startup ? apps.filter((app) => app.connectable && app.status === 'available') : apps
+  const sortedApps = visibleApps
     .map((app, index) => ({ app, index, connected: getAppConnected(app) }))
     .sort((a, b) => Number(b.connected) - Number(a.connected) || a.index - b.index)
+
+  function integrationStatusLabel(status: Exclude<IntegrationStatus, 'available'>) {
+    if (status === 'in-development') return 'IN DEVELOPMENT'
+    return status.toUpperCase()
+  }
 
   const renderLocalEventsModal = () => {
     const area = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
@@ -3102,8 +3126,8 @@ function ConnectAppsScreen({
         {startup && (
           <p className="mt-3 px-1 text-xs leading-5 text-[color:var(--fg-50)]">
             {language === 'no'
-              ? 'Koble til tjenestene du bruker nå, eller se hvilke integrasjoner som kommer snart – inkludert renovasjonsvarsler.'
-              : 'Connect the services you use now, or preview coming-soon integrations — including waste collection reminders.'}
+              ? 'Koble til tjenestene du bruker nå.'
+              : 'Connect the services you use now.'}
           </p>
         )}
 
@@ -3125,9 +3149,9 @@ function ConnectAppsScreen({
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{description}</div>
                   </div>
 
-                  {app.comingSoon ? (
-                    <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
-                      {language === 'no' ? 'KOMMER SNART' : 'COMING SOON'}
+                  {app.status !== 'available' ? (
+                    <span className="shrink-0 min-h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[10px] tracking-widest text-[#2aa3ff] inline-flex items-center whitespace-nowrap">
+                      {integrationStatusLabel(app.status)}
                     </span>
                   ) : connected ? (
                     app.key === 'local-events' ? (
@@ -8471,7 +8495,7 @@ function FrameSetupFlow({
 
   if (step === 'purpose') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{(['normal', 'custom'] as SetupPurpose[]).map((key) => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left transition ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)] bg-[color:var(--app-bg)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : (isNo ? 'Tilpasset' : 'Custom')}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, AI Follow og Vær.' : 'Date, Reminders, AI Follow, and Weather.') : (isNo ? 'Velg moduler og layout selv.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={continueFromPurpose} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
 
-  if (step === 'modules') { const current = requiredModules[moduleIndex]; return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1><div className="mt-6 space-y-3">{current === 'reminders' && <div className="h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup /></div>}{current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Ikke valgt' : 'Not set')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((value) => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={nextModule} disabled={!setupModuleComplete(current)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{isNo ? 'Fortsett' : 'Continue'}</button></>) }
+  if (step === 'modules') { const current = requiredModules[moduleIndex]; return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1><div className="mt-6 space-y-3">{current === 'reminders' && <div className="h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup /></div>}{current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Ikke valgt' : 'Not set')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((value) => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={nextModule} disabled={!setupModuleComplete(current)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{isNo ? 'Fortsett' : 'Continue'}</button></>) }
 
   if (step === 'manual') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Slik fungerer appen' : 'How the app works'}</h1><div className="mt-5 space-y-4 text-sm leading-6 text-[color:var(--fg-70)]"><p>• {isNo ? 'Faner følger modulene du har valgt.' : 'Tabs follow the modules selected for your frame.'}</p><p>• {isNo ? 'Du kan velge layout og endre moduler ved å trykke på en celle.' : 'Choose a layout and change modules by tapping a cell.'}</p><p>• {isNo ? 'Framen oppdateres automatisk når noe endres.' : 'Your frame refreshes automatically when something changes.'}</p></div><button onClick={openAiFollow} disabled={entitlementsLoading} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{entitlementsLoading ? (isNo ? 'Laster…' : 'Loading…') : (isNo ? 'Fortsett' : 'Continue')}</button></>)
 

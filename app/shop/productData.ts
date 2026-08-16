@@ -12,19 +12,19 @@ export type ShopFrame = {
   availability: FrameAvailability
 }
 
-export type FrameAvailability = 'in-stock' | 'low-stock' | 'out-of-stock' | 'coming-soon'
+export type FrameAvailability = 'in-stock' | 'low-stock' | 'out-of-stock' | 'exploring'
 
 export const frameAvailabilityLabels: Record<FrameAvailability, string> = {
   'in-stock': 'IN STOCK',
   'low-stock': 'LOW STOCK',
   'out-of-stock': 'OUT OF STOCK',
-  'coming-soon': 'COMING SOON',
+  'exploring': 'EXPLORING',
 }
 
 const launchFrameIds = new Set(['midnight-black', 'cloud-white', 'natural-oak', 'walnut-wood'])
 
 export function frameAvailability(id: string): FrameAvailability {
-  return launchFrameIds.has(id) ? 'in-stock' : 'coming-soon'
+  return launchFrameIds.has(id) ? 'in-stock' : 'exploring'
 }
 
 export function isFramePurchasable(frame: Pick<ShopFrame, 'availability'>) {
@@ -42,7 +42,7 @@ export type ShopMatte = {
 const launchMatteIds = new Set(['classic-white', 'soft-black', 'warm-beige', 'cocoa-brown'])
 
 export function matteAvailability(id: string): FrameAvailability {
-  return launchMatteIds.has(id) ? 'in-stock' : 'coming-soon'
+  return launchMatteIds.has(id) ? 'in-stock' : 'exploring'
 }
 
 export function isMattePurchasable(matte: Pick<ShopMatte, 'availability'>) {
@@ -218,8 +218,8 @@ export function matteDisplaySubtitle(id: string, fallback: string, locale: ShopL
 }
 
 export function availabilityDisplayLabel(availability: FrameAvailability, locale: ShopLocale) {
-  return locale === 'no' && availability === 'coming-soon'
-    ? 'KOMMER SNART'
+  return locale === 'no' && availability === 'exploring'
+    ? 'EXPLORING'
     : frameAvailabilityLabels[availability]
 }
 

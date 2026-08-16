@@ -6,7 +6,7 @@ const visitorPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const frame = shopFrames.find((item) => item.id === body?.frameId && item.availability === 'coming-soon')
+  const frame = shopFrames.find((item) => item.id === body?.frameId && item.availability === 'exploring')
   if (!frame || typeof body?.visitorId !== 'string' || !visitorPattern.test(body.visitorId) || typeof body?.favourite !== 'boolean') {
     return NextResponse.json({ error: 'Invalid frame interest request.' }, { status: 400 })
   }

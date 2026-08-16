@@ -65,9 +65,9 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
             {items.map((item) => {
               const displayName = kind === 'frames' ? frameDisplayName(item.id, item.name, language) : matteDisplayName(item.id, item.name, language)
               const displaySubtitle = kind === 'frames' ? frameDisplaySubtitle(item.id, item.subtitle, language) : matteDisplaySubtitle(item.id, item.subtitle, language)
-              const comingSoon = item.availability === 'coming-soon'
+              const exploring = item.availability === 'exploring'
               const availability = item.availability
-              const availabilityLabel = availability && language === 'no' && availability === 'coming-soon' ? 'KOMMER SNART' : availability ? frameAvailabilityLabels[availability] : ''
+              const availabilityLabel = availability && language === 'no' && availability === 'exploring' ? 'EXPLORING' : availability ? frameAvailabilityLabels[availability] : ''
               return (
               <article
                 key={item.id}
@@ -82,12 +82,12 @@ export default function CatalogPage({ kind, title, items, language }: CatalogPag
                   <span className="shrink-0">{formatNok(item.price, language)}</span>
                 </div>
                 <p className="mt-1 px-3 text-sm leading-[1.4] text-black/60">{displaySubtitle}</p>
-                <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${comingSoon ? 'pr-14' : ''}`}>
+                <div className={`mt-3 flex min-h-11 items-center gap-2 px-3 pb-3 ${exploring ? 'pr-14' : ''}`}>
                   {item.colors.map((color) => <span key={color} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}
                   {availability && availability !== 'in-stock' && <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.14em] text-black/50" aria-label={`Availability: ${availabilityLabel}`}>{availabilityLabel}</span>}
                 </div>
                 </a>
-                {comingSoon && <FrameFavouriteButton frameId={item.id} frameName={displayName} className="absolute bottom-1 right-1 z-10" />}
+                {exploring && <FrameFavouriteButton frameId={item.id} frameName={displayName} className="absolute bottom-1 right-1 z-10" />}
               </article>
             )})}
           </div>
