@@ -22,7 +22,8 @@ test('Press Room provides the requested Norwegian copy while retaining English',
     'PRESSEMATERIELL',
     'Logo og produktbilder',
     'Bruk gjerne disse bildene når du skriver om RE:MIND. Sørg for at logoen er tydelig, og ikke endre proporsjonene.',
-    'R:-logo',
+    'Appikon',
+    'RE:MIND-logo',
     'RE:MIND-enhet',
     'Nordisk eik',
     'Mørk RE:MIND',
@@ -39,6 +40,8 @@ test('Press Room provides the requested Norwegian copy while retaining English',
     'Contact press team',
     'Media assets',
     'Logo & product pictures',
+    'App icon',
+    'RE:MIND logo',
     'Download ↓',
   ]) assert.ok(page.includes(copy), `missing original English copy: ${copy}`)
 })
@@ -47,6 +50,8 @@ test('Press Room preserves navigation, contact and asset download behavior', () 
   assert.match(page, /backLabel=\{isNorwegian \? 'TILBAKE TIL FORSIDEN' : 'Back to home'\}/)
   assert.match(shell, /href=\{`\/shop\?lang=\$\{language\}`\}/)
   assert.match(page, /href="mailto:support@re-mind\.no\?subject=Press%20enquiry"/)
-  assert.match(page, /href="\/r_Logo\.png"[^>]*download/)
+  assert.match(page, /src: '\/AppLogo\.png'/)
+  assert.match(page, /src: '\/Logo\.png'/)
+  assert.doesNotMatch(page, /r_Logo\.png|R:-logo|R: logo/)
   assert.match(page, /href=\{asset\.src\}[^>]*download/)
 })
