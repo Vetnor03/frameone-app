@@ -1,8 +1,10 @@
 // middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { versionedIconPath } from './lib/iconVersion'
 import { isShopLocale, SHOP_LANGUAGE_COOKIE } from './shop/language'
 
+const LEGACY_BROWSER_ICON_PATH = /^\/(?:apple-touch-icon(?:-\d+x\d+)?(?:-precomposed)?|android-chrome-\d+x\d+|favicon(?:-\d+x\d+)?|icon-\d+x\d+)\.(?:ico|png|svg)$/
 
 function isDesktopUserAgent(userAgent: string | null) {
   if (!userAgent) return false
@@ -53,6 +55,12 @@ function createSupabaseServerClient(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
 
+  // Browsers may revisit conventional icon URLs long after their HTML metadata
+  // has changed. Keep those legacy entry points pinned to the canonical artwork.
+  if (LEGACY_BROWSER_ICON_PATH.test(pathname)) {
+    return NextResponse.redirect(new URL(versionedIconPath('/AppLogo.png'), request.url), 308)
+  }
+
   if (pathname === '/shop' || pathname.startsWith('/shop/')) {
     const requestedLanguage = searchParams.get('lang')
     const savedLanguage = request.cookies.get(SHOP_LANGUAGE_COOKIE)?.value
@@ -88,7 +96,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/shop/') ||
     pathname === '/waitlist' ||
     pathname === '/manifest.webmanifest' ||
-    pathname === '/favicon.ico' ||
+    pathname === '/AppLogo.png' ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api')
 
