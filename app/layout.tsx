@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description: "RE:MIND controller",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: versionedIconPath("/r_Logo.png"), type: "image/png" }],
-    apple: [{ url: versionedIconPath("/r_Logo.png"), type: "image/png" }],
+    icon: [{ url: versionedIconPath("/AppLogo.png"), type: "image/png" }],
+    apple: [{ url: versionedIconPath("/AppLogo.png"), type: "image/png" }],
   },
   themeColor: "#f5f6f8",
   appleWebApp: {
