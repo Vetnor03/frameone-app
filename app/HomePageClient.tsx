@@ -13392,7 +13392,7 @@ const sortedReminders = useMemo(() => {
         }
       `}</style>
 
-      <div className="h-full overflow-y-auto no-scrollbar">
+      <div className="absolute inset-0 overflow-y-auto no-scrollbar">
         <div className="mt-4 max-[420px]:mt-3">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
