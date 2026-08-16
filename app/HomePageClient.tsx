@@ -13393,7 +13393,7 @@ const sortedReminders = useMemo(() => {
       `}</style>
 
       <div className="absolute inset-0 overflow-y-auto no-scrollbar">
-        <div className="mt-4 pb-24 max-[420px]:mt-3">
+        <div className="mt-4 pb-[calc(116px+env(safe-area-inset-bottom))] max-[420px]:mt-3">
           <div className="shrink-0">
             <div className="flex items-center justify-between px-1">
               <div className="text-[color:var(--fg-90)] text-sm font-semibold capitalize">
@@ -13611,7 +13611,7 @@ const sortedReminders = useMemo(() => {
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center bg-[color:var(--app-bg)] py-5">
+      <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-[420px] flex-col items-center bg-[color:var(--panel-05)] px-5 pt-5 pb-[max(20px,calc(env(safe-area-inset-bottom)+10px))]">
         <button
           onClick={() => {
             setEditingReminder({
