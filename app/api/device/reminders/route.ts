@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
 import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
 
 export const runtime = 'nodejs'
 
@@ -618,7 +619,20 @@ export async function GET(req: Request) {
         return true
       })
     const selectedItems = selectReminderDisplayGroups(allItems, limit)
-    const physicalItems = selectedItems.map(toPhysicalDeviceReminderItem)
+    const optimizedTitles = await optimizeFrameContent(
+      selectedItems.map((item, index) => ({
+        id: String(index),
+        title: item.title,
+        source: item.source,
+        displayDate: item.display_date,
+        displayTime: item.display_time,
+      }))
+    )
+    const optimizedTitleByIndex = new Map(optimizedTitles.map((item) => [Number(item.id), item.title]))
+    const physicalItems = selectedItems.map((item, index) => toPhysicalDeviceReminderItem({
+      ...item,
+      title: optimizedTitleByIndex.get(index) || item.title,
+    }))
     const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems }), 'utf8')
 
     console.info('[device/reminders] compact response', {
@@ -626,6 +640,7 @@ export async function GET(req: Request) {
       selected_item_count: physicalItems.length,
       compact_json_byte_size: compactJsonByteSize,
       includes_local_events: selectedItems.some((item) => item.source === 'local-events'),
+      ai_optimized: Boolean(process.env.OPENAI_API_KEY) && String(process.env.FRAME_AI_OPTIMIZATION_ENABLED || '').toLowerCase() !== 'false',
     })
 
     return NextResponse.json({ items: physicalItems })
