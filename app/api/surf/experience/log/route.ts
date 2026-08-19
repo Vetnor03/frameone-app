@@ -1,5 +1,5 @@
 // app/api/surf/experience/log/route.ts
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { findSpotByLabel, SURF_SPOTS } from '@/app/lib/surf/spots'
 import { correctedHeightForSwellSelection, pickBestSwell, selectedSwellFromPick } from '@/app/lib/surf/swellSelection'
@@ -357,7 +357,7 @@ export async function POST(req: Request) {
 
       if (error) throw error
       if (!updated) return NextResponse.json({ error: 'Experience not found' }, { status: 404 })
-      if (commentChanged && comment) await analyzeAndStore(updated.id)
+      if (commentChanged && comment) after(() => analyzeAndStore(updated.id))
 
       return NextResponse.json({
         ok: true,
@@ -416,7 +416,7 @@ export async function POST(req: Request) {
       .single()
 
     if (error) throw error
-    await analyzeAndStore(inserted.id)
+    if (comment) after(() => analyzeAndStore(inserted.id))
 
     return NextResponse.json({
       ok: true,

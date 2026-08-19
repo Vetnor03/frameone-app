@@ -4,7 +4,7 @@ export const SURF_COMMENT_MAX_LENGTH = 500
 
 export const SURF_COMMENT_DRIVER_DIMENSIONS = [
   'wave_height', 'wave_period', 'swell_direction', 'wind_speed',
-  'wind_direction', 'multi_swell', 'tide',
+  'wind_direction', 'multi_swell',
 ] as const
 
 export type SurfCommentDriverDimension = typeof SURF_COMMENT_DRIVER_DIMENSIONS[number]

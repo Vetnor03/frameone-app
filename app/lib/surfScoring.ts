@@ -1711,11 +1711,15 @@ function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: st
     if (analysis?.confidence >= SURF_COMMENT_MIN_CONFIDENCE && Array.isArray(analysis.drivers)) {
       for (const driver of analysis.drivers) if (typeof driver?.dimension === 'string' && Number.isFinite(driver.strength) && driver.strength >= 0 && driver.strength <= 1) extras[driver.dimension] = Math.max(extras[driver.dimension] ?? 0, driver.strength)
     }
-    const dimensions: Array<[string, number]> = [['wave_height', heightSimilarity], ['wave_period', periodSimilarity], ['swell_direction', swellDirectionSimilarity], ['wind_speed', windSpeedSimilarity], ['wind_direction', windDirectionSimilarity], ['multi_swell', multiSwellSimilarity]]
-    const extraTotal = dimensions.reduce((sum, [name]) => sum + (extras[name] ?? 0), 0)
-    let similarity = extraTotal === 0
-      ? Math.pow(heightSimilarity * periodSimilarity * swellDirectionSimilarity * windSpeedSimilarity * windDirectionSimilarity, 0.2) * multiSwellSimilarity
-      : Math.exp(dimensions.reduce((sum, [name, value]) => sum + (1 + (extras[name] ?? 0)) * Math.log(Math.max(value, 0.000001)), 0) / dimensions.reduce((sum, [name]) => sum + 1 + (extras[name] ?? 0), 0))
+    const dimensions: Array<[string, number]> = [['wave_height', heightSimilarity], ['wave_period', periodSimilarity], ['swell_direction', swellDirectionSimilarity], ['wind_speed', windSpeedSimilarity], ['wind_direction', windDirectionSimilarity]]
+    const dimensionExtraTotal = dimensions.reduce((sum, [name]) => sum + (extras[name] ?? 0), 0)
+    const extraTotal = dimensionExtraTotal + (extras.multi_swell ?? 0)
+    const conditionSimilarity = dimensionExtraTotal === 0
+      ? Math.pow(heightSimilarity * periodSimilarity * swellDirectionSimilarity * windSpeedSimilarity * windDirectionSimilarity, 0.2)
+      : Math.exp(dimensions.reduce((sum, [name, value]) => sum + (1 + (extras[name] ?? 0)) * Math.log(Math.max(value, 0.000001)), 0) / (5 + dimensionExtraTotal))
+    // Keep the PR #1050 multi-swell penalty outside the condition geometric mean.
+    // Only an explicit multi_swell driver may strengthen it; unrelated drivers cannot dilute it.
+    let similarity = conditionSimilarity * Math.pow(multiSwellSimilarity, 1 + (extras.multi_swell ?? 0))
     if (extraTotal > 0) aiDriverWeightedSampleCount++
     if (similarity < 0.58) continue
     const at = Date.parse(record.logged_at ?? record.created_at ?? '')
