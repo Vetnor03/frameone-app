@@ -5,6 +5,7 @@ import { scoreSurf, normalizeCustomSpotScoringProfile, type UserSurfExperienceRe
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased, surfRatingVisual } from '@/app/lib/surf/ratings'
 import {
   compareSurfScoresThenHeight,
+  compareSurfScores,
   correctedHeightForSwellSelection,
   pickBestSwell,
   selectedSwellFromPick,
@@ -2668,7 +2669,7 @@ export async function GET(req: Request) {
         const a = overall.best
         const b = results[i].best
 
-        const cmp = compareScored(a.scored, b.scored)
+        const cmp = compareSurfScores(a.scored, b.scored)
         if (cmp > 0) {
           overall = results[i]
           continue

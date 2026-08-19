@@ -68,7 +68,7 @@ export function surfScoreTablesValue(scored: ReturnType<typeof scoreSurf> | null
   return Number.isFinite(total) ? total : -Infinity
 }
 
-function compareScored(a: ReturnType<typeof scoreSurf>, b: ReturnType<typeof scoreSurf>) {
+export function compareSurfScores(a: ReturnType<typeof scoreSurf>, b: ReturnType<typeof scoreSurf>) {
   const aBlend = surfScoreBlendedValue(a)
   const bBlend = surfScoreBlendedValue(b)
   if (bBlend !== aBlend) return bBlend > aBlend ? 1 : -1
@@ -90,7 +90,7 @@ export function compareSurfScoresThenHeight(args: {
   correctedHeightA: number
   correctedHeightB: number
 }) {
-  const comparison = compareScored(args.scoredA, args.scoredB)
+  const comparison = compareSurfScores(args.scoredA, args.scoredB)
   if (comparison !== 0) return comparison
   if (args.correctedHeightB > args.correctedHeightA) return 1
   if (args.correctedHeightA > args.correctedHeightB) return -1
