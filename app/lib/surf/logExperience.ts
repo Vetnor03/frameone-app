@@ -1,21 +1,14 @@
 // app/lib/surf/logExperience.ts
-import { scoreSurf } from '../surfScoring'
 import { fetchOpenMeteoJson } from '../server/openMeteo'
+import type { CustomSpotScoringProfile, UserSurfExperienceRecord } from '../surfScoring'
+import {
+  selectBestSurfSwell,
+  type SurfMarineBundle,
+  type SurfSwell,
+} from './swellSelection'
 
-export type Sideswell = {
-  present: boolean
-  height_m: number
-  direction_deg_from: number
-  period_s: number
-}
-
-export type MarineBundle = {
-  time_utc: string
-  primary: Sideswell
-  secondary: Sideswell
-  wind_speed_ms: number
-  wind_direction_deg_from: number
-}
+export type Sideswell = SurfSwell
+export type MarineBundle = SurfMarineBundle
 
 type MarineSeries = {
   mt: string[]
@@ -44,7 +37,8 @@ export type ChosenSurfConditions = {
     swells: Array<{ index: number; height_m: number; period_s: number; direction_deg_from: number }>
     wind_speed_ms: number
     wind_direction_deg_from: number
-    forecast_time_utc: string
+    forecast_time_utc?: string | null
+    tide_m?: number | null
   }
 }
 
@@ -54,7 +48,7 @@ function clampInt(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
 }
 
-function toNum(x: any) {
+function toNum(x: unknown) {
   const n = Number(x)
   return Number.isFinite(n) ? n : 0
 }
@@ -98,8 +92,42 @@ export function getUtcHourRange(when: Date) {
 async function fetchMarineSeriesAtTime(lat: number, lon: number, when: Date): Promise<MarineSeries> {
   void when
   const [marineFetched, windFetched] = await Promise.all([
-    fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'marine', lat, lon, hourly: ['wave_height', 'wave_direction', 'wave_period', 'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'], timezone: 'UTC', pastDays: 7, forecastDays: 16, timeoutMs: 12000, forecastRange: 'past7-forecast16d', frameRequest: false, allowStale: true }),
-    fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'forecast', lat, lon, hourly: ['wind_speed_10m', 'wind_direction_10m'], timezone: 'UTC', pastDays: 7, forecastDays: 16, params: { wind_speed_unit: 'ms' }, timeoutMs: 12000, forecastRange: 'past7-forecast16d', frameRequest: false, allowStale: true }),
+    fetchOpenMeteoJson({
+      dataType: 'surf',
+      endpoint: 'marine',
+      lat,
+      lon,
+      hourly: [
+        'wave_height',
+        'wave_direction',
+        'wave_period',
+        'secondary_swell_wave_height',
+        'secondary_swell_wave_direction',
+        'secondary_swell_wave_period',
+      ],
+      timezone: 'UTC',
+      pastDays: 7,
+      forecastDays: 16,
+      timeoutMs: 12000,
+      forecastRange: 'past7-forecast16d',
+      frameRequest: false,
+      allowStale: true,
+    }),
+    fetchOpenMeteoJson({
+      dataType: 'surf',
+      endpoint: 'forecast',
+      lat,
+      lon,
+      hourly: ['wind_speed_10m', 'wind_direction_10m'],
+      timezone: 'UTC',
+      pastDays: 7,
+      forecastDays: 16,
+      params: { wind_speed_unit: 'ms' },
+      timeoutMs: 12000,
+      forecastRange: 'past7-forecast16d',
+      frameRequest: false,
+      allowStale: true,
+    }),
   ])
 
   if (!marineFetched.payload) throw new Error(`Marine fetch failed (${marineFetched.error || 'unavailable'})`)
@@ -145,8 +173,7 @@ function makeBundleAtIndices(series: MarineSeries, mi: number, wi: number): Mari
   const sH = toNum(series.sH[safeMi])
   const sD = toNum(series.sD[safeMi])
   const sP = toNum(series.sP[safeMi])
-
-  const secondaryPresent = sH >= SECONDARY_MIN_M
+  const secondaryPresent = sH >= SECONDARY_MIN_M && Number.isFinite(sD) && Number.isFinite(sP)
 
   return {
     time_utc: series.mt[safeMi],
@@ -167,43 +194,15 @@ function makeBundleAtIndices(series: MarineSeries, mi: number, wi: number): Mari
   }
 }
 
-function pickBestSwellForHour(spotKey: string, marine: MarineBundle) {
-  const primaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: marine.primary.height_m,
-    swellPeriodS: marine.primary.period_s,
-    swellDirDeg: marine.primary.direction_deg_from,
-    windSpeedMs: marine.wind_speed_ms,
-    windDirDeg: marine.wind_direction_deg_from,
-  })
-
-  if (!marine.secondary.present) {
-    return { which: 'primary' as const, chosen: marine.primary }
-  }
-
-  const secondaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: marine.secondary.height_m,
-    swellPeriodS: marine.secondary.period_s,
-    swellDirDeg: marine.secondary.direction_deg_from,
-    windSpeedMs: marine.wind_speed_ms,
-    windDirDeg: marine.wind_direction_deg_from,
-  })
-
-  if (secondaryScore.rating > primaryScore.rating) {
-    return { which: 'secondary' as const, chosen: marine.secondary }
-  }
-
-  return { which: 'primary' as const, chosen: marine.primary }
-}
-
 export async function getChosenSurfConditionsAt(args: {
   spotKey: string
   lat: number
   lon: number
   when: Date
+  userExperiences?: UserSurfExperienceRecord[]
+  customSpotProfile?: CustomSpotScoringProfile | null
 }): Promise<ChosenSurfConditions> {
-  const { spotKey, lat, lon, when } = args
+  const { spotKey, lat, lon, when, userExperiences, customSpotProfile } = args
 
   const series = await fetchMarineSeriesAtTime(lat, lon, when)
   const targetHour = isoHourUTC(when)
@@ -211,26 +210,47 @@ export async function getChosenSurfConditionsAt(args: {
   const wi = nearestHourIndex(series.wt, targetHour)
 
   const marine = makeBundleAtIndices(series, mi, wi)
-  const picked = pickBestSwellForHour(spotKey, marine)
+  const picked = selectBestSurfSwell({
+    spotKey,
+    marine,
+    userExperiences,
+    customSpotProfile,
+  })
+
+  const fallbackSignature = {
+    spotKey,
+    swells: [
+      {
+        index: 1,
+        height_m: Number(marine.primary.height_m),
+        period_s: Number(marine.primary.period_s),
+        direction_deg_from: Number(marine.primary.direction_deg_from),
+      },
+      ...(marine.secondary.present
+        ? [{
+            index: 2,
+            height_m: Number(marine.secondary.height_m),
+            period_s: Number(marine.secondary.period_s),
+            direction_deg_from: Number(marine.secondary.direction_deg_from),
+          }]
+        : []),
+    ],
+    wind_speed_ms: Number(marine.wind_speed_ms),
+    wind_direction_deg_from: Number(marine.wind_direction_deg_from),
+    forecast_time_utc: marine.time_utc,
+  }
+
+  const conditionSignature = picked.combinedScore.breakdown?.swellMixSignature ?? fallbackSignature
 
   return {
     time_utc: marine.time_utc,
-    wave_dir_from_deg: Number(picked.chosen.direction_deg_from),
-    wave_height_m: Number(picked.chosen.height_m),
-    wave_period_s: Number(picked.chosen.period_s),
+    wave_dir_from_deg: Number(picked.chosenSwell.direction_deg_from),
+    wave_height_m: Number(picked.chosenSwell.height_m),
+    wave_period_s: Number(picked.chosenSwell.period_s),
     wind_dir_from_deg: Number(marine.wind_direction_deg_from),
     wind_speed_ms: Number(marine.wind_speed_ms),
-    picked: picked.which,
-    selected_swell_index: picked.which === 'secondary' ? 2 : 1,
-    condition_signature: {
-      spotKey,
-      swells: [
-        { index: 1, height_m: Number(marine.primary.height_m), period_s: Number(marine.primary.period_s), direction_deg_from: Number(marine.primary.direction_deg_from) },
-        ...(marine.secondary.present ? [{ index: 2, height_m: Number(marine.secondary.height_m), period_s: Number(marine.secondary.period_s), direction_deg_from: Number(marine.secondary.direction_deg_from) }] : []),
-      ],
-      wind_speed_ms: Number(marine.wind_speed_ms),
-      wind_direction_deg_from: Number(marine.wind_direction_deg_from),
-      forecast_time_utc: marine.time_utc,
-    },
+    picked: picked.chosen,
+    selected_swell_index: picked.selectedSwellIndex,
+    condition_signature: conditionSignature,
   }
 }
