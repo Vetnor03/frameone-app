@@ -85,6 +85,22 @@ export function nearestValidSplitGuide(cell, point, viewport = {width: 785, heig
   return guides.sort((a, b) => a.distance - b.distance || (a.axis === b.axis ? a.boundary - b.boundary : a.axis === 'vertical' ? -1 : 1))[0]
 }
 
+/** Hit-test a cell's internal split guides in viewport-local pixel coordinates. */
+export function findSplitGuideNearPointer(cell, point, viewport = {width: 785, height: 458}, tolerance = 14) {
+  const guide = nearestValidSplitGuide(cell, point, viewport)
+  return guide && guide.distance <= tolerance ? guide : undefined
+}
+
+/** Resolve short-tap intent in divider, split-guide, then containing-cell priority. */
+export function resolveShortTap(cells, point, viewport = {width: 785, height: 458}) {
+  const divider = findDividerNearPointer(cells, point, viewport)
+  if (divider) return {kind: 'merge', divider}
+  const logical = {x: point.x / viewport.width * GRID_SIZE, y: point.y / viewport.height * GRID_SIZE}
+  const cell = findContainingCell(cells, logical)
+  const guide = findSplitGuideNearPointer(cell, point, viewport)
+  return guide ? {kind: 'split', cell, guide} : {kind: 'select', cell}
+}
+
 /** Split one complete cell at an internal grid boundary. */
 export function splitCellAtBoundary(cells, cellId, guide) {
   const parent = cells.find(cell => cell.id === cellId)
@@ -101,10 +117,10 @@ export function splitCellAtBoundary(cells, cellId, guide) {
   return validateLayout(next) ? {valid: true, cells: next, parentId: parent.id, intendedId: pieces[0].id} : {valid: false, reason: 'The split partition is invalid', cells}
 }
 
-export function splitCellNearPointer(cells, point, viewport = {width: 785, height: 458}) {
+export function splitCellNearPointer(cells, point, viewport = {width: 785, height: 458}, tolerance = 14) {
   const logical = {x: point.x / viewport.width * GRID_SIZE, y: point.y / viewport.height * GRID_SIZE}
   const parent = findContainingCell(cells, logical)
-  const guide = nearestValidSplitGuide(parent, point, viewport)
+  const guide = findSplitGuideNearPointer(parent, point, viewport, tolerance)
   return {...splitCellAtBoundary(cells, parent?.id, guide), guide}
 }
 

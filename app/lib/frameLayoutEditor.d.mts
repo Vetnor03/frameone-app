@@ -23,8 +23,10 @@ export function internalDividerSegments(cells:EditorCell[]):DividerSegment[]
 export function removableDividerSegments(cells:EditorCell[]):RemovableDividerSegment[]
 export function findDividerNearPointer(cells:EditorCell[],point:Point,viewport?:{width:number;height:number},tolerance?:number):DividerHit|undefined
 export function nearestValidSplitGuide(cell:EditorCell|undefined,point:Point,viewport?:{width:number;height:number}):SplitGuide|undefined
+export function findSplitGuideNearPointer(cell:EditorCell|undefined,point:Point,viewport?:{width:number;height:number},tolerance?:number):SplitGuide|undefined
+export function resolveShortTap(cells:EditorCell[],point:Point,viewport?:{width:number;height:number}):{kind:'merge';divider:DividerHit}|{kind:'split';cell:EditorCell;guide:SplitGuide}|{kind:'select';cell:EditorCell|undefined}
 export function splitCellAtBoundary(cells:EditorCell[],cellId:string|undefined,guide:Pick<SplitGuide,'axis'|'boundary'>|undefined):StrokePreview
-export function splitCellNearPointer(cells:EditorCell[],point:Point,viewport?:{width:number;height:number}):StrokePreview&{guide?:SplitGuide}
+export function splitCellNearPointer(cells:EditorCell[],point:Point,viewport?:{width:number;height:number},tolerance?:number):StrokePreview&{guide?:SplitGuide}
 export function snapDragSelection(start:Point,end:Point,viewport?:{width:number;height:number}):GridSelection
 export function cellsFullyContainedInSelection(cells:EditorCell[],selection:GridSelection):EditorCell[]
 export function selectionIsExactlyTiled(cells:EditorCell[],selection:GridSelection):boolean
