@@ -1,0 +1,25 @@
+export type EditorModuleId = 'empty' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+export type EditorCell = {id:string; col:number; row:number; colSpan:number; rowSpan:number; moduleId:EditorModuleId}
+export type Point = {x:number;y:number}
+export type Stroke = {start:Point;end:Point}
+export type NormalizedStroke = {orientation:'vertical'|'horizontal';boundary:number;rangeStart:number;rangeEnd:number;nearestEdge:'left'|'right'|'top'|'bottom'}
+export type StrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];parentId?:string;intendedId?:string;normalized?:NormalizedStroke}
+export type EditorHistory = {past:EditorCell[][];present:EditorCell[];future:EditorCell[][]}
+export const GRID_SIZE:number
+export const MIN_STROKE_PX:number
+export function cellArea(cell:EditorCell):number
+export function sortCells(cells:EditorCell[]):EditorCell[]
+export function detectOrientation(stroke:Stroke):'vertical'|'horizontal'
+export function snapBoundary(value:number,extent:number):number
+export function hasOverlap(a:EditorCell,b:EditorCell):boolean
+export function validateLayout(cells:EditorCell[]):boolean
+export function findContainingCell(cells:EditorCell[],point:Point):EditorCell|undefined
+export function chooseNearestEdge(cell:EditorCell,orientation:'vertical'|'horizontal',boundary:number):'left'|'right'|'top'|'bottom'
+export function partitionCell(parent:EditorCell,normalized:NormalizedStroke):{pieces:EditorCell[];intendedId:string}
+export function previewStroke(cells:EditorCell[],stroke:Stroke,viewport?:{width:number;height:number}):StrokePreview
+export function commitPreview(cells:EditorCell[],preview:StrokePreview):EditorCell[]
+export function initialLayout():EditorCell[]
+export function createHistory(initial?:EditorCell[]):EditorHistory
+export function pushHistory(history:EditorHistory,next:EditorCell[]):EditorHistory
+export function undoHistory(history:EditorHistory):EditorHistory
+export function redoHistory(history:EditorHistory):EditorHistory
