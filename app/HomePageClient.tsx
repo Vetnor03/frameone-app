@@ -13618,6 +13618,7 @@ const sortedReminders = useMemo(() => {
           language={language}
           activeDeviceId={activeDeviceId}
           fallbackDate={addDate}
+          selectedDate={selectedDayYmd}
           onClose={() => setComposerOpen(false)}
           onSaved={async () => { setComposerOpen(false); await loadReminders() }}
           onEditDetails={(draft) => {
@@ -13668,10 +13669,11 @@ const sortedReminders = useMemo(() => {
   )
 }
 
-function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClose, onSaved, onEditDetails }: {
+function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selectedDate, onClose, onSaved, onEditDetails }: {
   language: AppLanguage
   activeDeviceId: string
   fallbackDate: string
+  selectedDate: string | null
   onClose: () => void
   onSaved: () => void | Promise<void>
   onEditDetails: (draft: ReminderUiItem) => void
@@ -13693,6 +13695,10 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
   }
 
   const draftFromText = (): ReminderUiItem => ({ id: '', title: text.trim(), date: fallbackDate, time: null, endDate: null, endTime: null, tag: null, repeat: 'none', customRepeatDays: null })
+  const initialPartial = (): any => selectedDate ? {
+    title: text.trim(), due_date: selectedDate, due_time: null, end_date: null, end_time: null,
+    repeat_type: 'none', custom_repeat_days: null, tag: null, ambiguities: [],
+  } : undefined
   const parsedDraft = (): ReminderUiItem => ({
     id: '', title: parsed.title, date: parsed.due_date || fallbackDate, time: parsed.due_time,
     endDate: parsed.end_date, endTime: parsed.end_time, tag: isReminderTag(parsed.tag) ? parsed.tag : null,
@@ -13713,7 +13719,9 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           text: text.trim(), localNow: localNowIso(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language,
-          ...(completing ? { partial: clarification.partial, clarificationQuestion: clarification.question, clarificationAnswer: clarificationAnswer.trim() } : {}),
+          ...(completing
+            ? { partial: clarification.partial, clarificationQuestion: clarification.question, clarificationAnswer: clarificationAnswer.trim() }
+            : selectedDate ? { partial: initialPartial() } : {}),
         }),
       })
       const json = await response.json().catch(() => ({}))
@@ -13746,12 +13754,14 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
   }
 
   const locale = language === 'no' ? 'nb-NO' : 'en-GB'
+  const selectedDateLabel = selectedDate ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }) : null
   const previewDate = parsed?.due_date ? new Date(`${parsed.due_date}T12:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }) : null
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5">
       <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY PÅMINNELSE' : 'NEW REMINDER'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
       {!parsed && !clarification ? <>
         <label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva vil du bli påminnet om?' : 'What should I remind you about?'}</label>
+        {selectedDateLabel && <div className="mt-2 text-sm text-[color:var(--fg-60)]">{language === 'no' ? 'Valgt dato' : 'Selected date'} · {selectedDateLabel}</div>}
         <textarea autoFocus rows={4} value={text} onChange={(e) => { setText(e.target.value); setFailed(false); setClarificationRounds(0) }} placeholder={language === 'no' ? 'Tannlege neste tirsdag kl. 14:30' : 'Dentist next Tuesday at 14:30'} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" />
         <SensitiveInformationHelper language={language} />
         {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Klarte ikke å tolke alt. Prøv igjen eller rediger detaljene manuelt.' : "Couldn't understand that completely. Try again or edit the details manually."}</p>}
