@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -26,7 +26,7 @@ test('merge assignment rules preserve one or matching values and reject conflict
 test('merge is one history operation and undo restores exact IDs and assignments',()=>{const before=[{id:'exact-left',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'weather'},{id:'exact-right',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'empty'}],merged=mergeCells(before,'exact-left','exact-right');assert.equal(merged.valid,true);assert.equal(merged.cells[0].id,'merged:exact-left+exact-right');const history=pushHistory(createHistory(before),merged.cells);assert.deepEqual(undoHistory(history).present,before);assert.deepEqual(redoHistory(undoHistory(history)).present,merged.cells)})
 test('split then targeted divider merge returns the original geometry',()=>{const before=initialLayout(),after=split(before,stroke(200,0,200,400)).cells,hit=findDividerNearPointer(after,{x:200,y:200},viewport),merged=mergeDivider(after,hit);assert.equal(merged.valid,true);assert.deepEqual(geometry(merged.cells),geometry(before));assertPartition(merged.cells)})
 test('divider hit testing targets the compatible pair at the pointed segment',()=>{const cells=[{id:'l1',col:0,row:0,colSpan:2,rowSpan:1,moduleId:'empty'},{id:'r1',col:2,row:0,colSpan:2,rowSpan:1,moduleId:'empty'},{id:'l2',col:0,row:1,colSpan:2,rowSpan:3,moduleId:'empty'},{id:'r2',col:2,row:1,colSpan:2,rowSpan:3,moduleId:'empty'}];const upper=findDividerNearPointer(cells,{x:202,y:40},viewport),lower=findDividerNearPointer(cells,{x:198,y:250},viewport);assert.deepEqual(upper.cellIds,['l1','r1']);assert.deepEqual({from:upper.from,to:upper.to},{from:0,to:1});assert.deepEqual(lower.cellIds,['l2','r2']);assert.deepEqual({from:lower.from,to:lower.to},{from:1,to:4});assert.equal(findDividerNearPointer(cells,{x:230,y:40},viewport),undefined)})
-test('registry mirrors every firmware dispatch and drives the picker',async()=>{const registry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8')),renderer=await readFile(new URL('../frame/src/modules/ModuleRenderer.cpp',import.meta.url),'utf8'),simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8');const expected=['date','weather','surf','reminders','countdown','soccer','stocks','groceries'];assert.deepEqual(registry.map(x=>x.id),expected);for(const id of expected)assert.match(renderer,new RegExp(`(?:equalsIgnoreCase|startsWith)\\(\"${id}`));assert.match(simulator,/frameModuleRegistry\.map/);assert.doesNotMatch(simulator,/const modules\s*=/);assert.doesNotMatch(simulator,/committed\.forEach\(c=>ctx\.strokeRect/);assert.match(simulator,/ox\.strokeRect/);assert.match(simulator,/mergeCellsInSelection/);assert.doesNotMatch(simulator,/EditMode|setMode|>Draw<|>Erase</);for(const id of expected)assert.match(simulator,new RegExp(`${id}`))})
+test('registry mirrors every firmware dispatch and drives the picker',async()=>{const registry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8')),renderer=await readFile(new URL('../frame/src/modules/ModuleRenderer.cpp',import.meta.url),'utf8'),simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8');const expected=['date','weather','surf','reminders','countdown','soccer','stocks','groceries'];assert.deepEqual(registry.map(x=>x.id),expected);for(const id of expected)assert.match(renderer,new RegExp(`(?:equalsIgnoreCase|startsWith)\\(\"${id}`));assert.match(simulator,/frameModuleRegistry\.map/);assert.doesNotMatch(simulator,/const modules\s*=/);assert.doesNotMatch(simulator,/committed\.forEach\(c=>ctx\.strokeRect/);assert.match(simulator,/ox\.strokeRect/);assert.match(simulator,/overwriteWithSelection/);assert.doesNotMatch(simulator,/EditMode|setMode|>Draw<|>Erase</);for(const id of expected)assert.match(simulator,new RegExp(`${id}`))})
 
 
 test('tap split chooses vertical, horizontal, and vertical on an exact tie',()=>{
@@ -82,14 +82,14 @@ test('drag selection uses the complete inclusive cells under both pointers',()=>
   assert.deepEqual(selectionBetweenGridCells({col:1,row:1},{col:2,row:2}),{col:1,row:1,colSpan:2,rowSpan:2})
   assert.deepEqual(gridCellAtPointer({x:400,y:400},viewport),{col:3,row:3})
 })
-test('cell-based drag merge is one undoable operation and rejects partial regions',()=>{
+test('cell-based drag merge is one undoable operation and overwrites partial regions',()=>{
   const units=Array.from({length:4},(_,row)=>Array.from({length:4},(_,col)=>({id:`${col}-${row}`,col,row,colSpan:1,rowSpan:1,moduleId:'empty'}))).flat()
   const selection=dragSelectionFromPointers({x:50,y:50},{x:250,y:150},viewport),merged=mergeCellsInSelection(units,selection)
   assert.equal(merged.valid,true);assert.deepEqual(geometry(merged.cells).find(c=>c.col===0&&c.row===0),{col:0,row:0,colSpan:3,rowSpan:2,moduleId:'empty'});assertPartition(merged.cells)
   assert.deepEqual(undoHistory(pushHistory(createHistory(units),merged.cells)).present,units)
   const crossing=[{id:'wide',col:0,row:0,colSpan:2,rowSpan:1,moduleId:'empty'},...units.filter(c=>c.row!==0||c.col>1)]
   const partial=dragSelectionFromPointers({x:150,y:50},{x:150,y:150},viewport)
-  assert.equal(mergeCellsInSelection(crossing,partial).valid,false)
+  assert.equal(overwriteWithSelection(crossing,partial).valid,true)
 })
 test('drag rejects gaps, partial cells, L unions, and conflicting assignments',()=>{
   const quadrants=[{id:'a',col:0,row:0,colSpan:2,rowSpan:2,moduleId:'weather'},{id:'b',col:2,row:0,colSpan:2,rowSpan:2,moduleId:'date'},{id:'c',col:0,row:2,colSpan:2,rowSpan:2,moduleId:'empty'},{id:'d',col:2,row:2,colSpan:2,rowSpan:2,moduleId:'empty'}]
@@ -98,11 +98,32 @@ test('drag rejects gaps, partial cells, L unions, and conflicting assignments',(
   const lSelection={col:0,row:0,colSpan:4,rowSpan:4},lCells=quadrants.filter(c=>c.id!=='d');assert.equal(selectionIsExactlyTiled(lCells,lSelection),false);assert.equal(mergeCellsInSelection(lCells,lSelection).valid,false)
   const safe=quadrants.map(c=>({...c,moduleId:'empty'}));assert.deepEqual(cellsFullyContainedInSelection(safe,{col:0,row:0,colSpan:4,rowSpan:2}).map(c=>c.id),['a','b'])
 })
+
+test('authoritative rectangle subtraction creates deterministic rectangular partitions',()=>{
+  const full={id:'full',col:0,row:0,colSpan:4,rowSpan:4,moduleId:'weather'},center={col:1,row:1,colSpan:2,rowSpan:2}
+  const fragments=subtractRectangle(full,center)
+  assert.deepEqual(fragments.map(({col,row,colSpan,rowSpan})=>({col,row,colSpan,rowSpan})),[{col:0,row:0,colSpan:4,rowSpan:1},{col:0,row:1,colSpan:1,rowSpan:2},{col:3,row:1,colSpan:1,rowSpan:2},{col:0,row:3,colSpan:4,rowSpan:1}])
+  let result=overwriteWithSelection([full],center);assert.equal(result.valid,true);assert.equal(result.cells.length,5);assert.equal(result.cells.find(c=>c.id.startsWith('override:')).moduleId,'empty');assert.equal(result.cells.find(c=>c.moduleId==='weather').row,0);assertPartition(result.cells)
+  assert.deepEqual(overwriteWithSelection([full],center).cells,result.cells)
+  result=overwriteWithSelection([full],{col:0,row:1,colSpan:2,rowSpan:2});assert.equal(result.valid,true);assert.equal(result.cells.length,4);assertPartition(result.cells)
+})
+test('authoritative overwrite crosses assigned cells and is exactly undoable',()=>{
+  const before=[{id:'left',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'weather'},{id:'rt',col:2,row:0,colSpan:2,rowSpan:2,moduleId:'date'},{id:'rb',col:2,row:2,colSpan:2,rowSpan:2,moduleId:'surf'}]
+  const result=overwriteWithSelection(before,{col:1,row:1,colSpan:2,rowSpan:2});assert.equal(result.valid,true);assertPartition(result.cells)
+  const override=result.cells.find(c=>c.id.startsWith('override:'));assert.deepEqual({col:override.col,row:override.row,colSpan:override.colSpan,rowSpan:override.rowSpan,moduleId:override.moduleId},{col:1,row:1,colSpan:2,rowSpan:2,moduleId:'empty'})
+  for(const moduleId of ['weather','date','surf'])assert.equal(result.cells.filter(c=>c.moduleId===moduleId).length,1)
+  const history=pushHistory(createHistory(before),result.cells);assert.deepEqual(undoHistory(history).present,before);assert.deepEqual(redoHistory(undoHistory(history)).present,result.cells)
+})
+test('whole-cell authoritative overwrite retains merge assignments and conflicts',()=>{
+  const cells=[{id:'a',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'weather'},{id:'b',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'empty'}]
+  const merged=overwriteWithSelection(cells,{col:0,row:0,colSpan:4,rowSpan:4});assert.equal(merged.valid,true);assert.equal(merged.cells[0].moduleId,'weather');assertPartition(merged.cells)
+  assert.equal(overwriteWithSelection(cells.map((c,i)=>({...c,moduleId:i?'date':'weather'})),{col:0,row:0,colSpan:4,rowSpan:4}).valid,false)
+})
 test('mode-less simulator uses authoritative full overlay grid',async()=>{
   const simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8'),declarations=await readFile(new URL('../app/lib/frameLayoutEditor.d.mts',import.meta.url),'utf8')
   assert.doesNotMatch(simulator,/EditMode|setMode|>Draw<|>Erase</)
   assert.match(simulator,/for\(let boundary=1;boundary<4;boundary\+\+\)\{line\(ctx,gridX\(boundary\),gridY\(0\),gridX\(boundary\),gridY\(4\)\);line\(ctx,gridX\(0\),gridY\(boundary\),gridX\(4\),gridY\(boundary\)\)\}/)
   assert.match(simulator,/x:\(e\.clientX-r\.left\)\*VIEWPORT\.width\/r\.width,y:\(e\.clientY-r\.top\)\*VIEWPORT\.height\/r\.height/)
   assert.doesNotMatch(simulator,/\*PANEL\.(?:width|height)\/r\.(?:width|height)-VIEWPORT\.(?:x|y)/)
-  for(const helper of ['gridCellAtPointer','selectionBetweenGridCells','dragSelectionFromPointers','snapDragSelection'])assert.match(declarations,new RegExp(`export function ${helper}\\(`))
+  for(const helper of ['gridCellAtPointer','selectionBetweenGridCells','dragSelectionFromPointers','snapDragSelection','subtractRectangle','overwriteWithSelection'])assert.match(declarations,new RegExp(`export function ${helper}\\(`))
 })

@@ -34,6 +34,8 @@ export function snapDragSelection(start:Point,end:Point,viewport?:{width:number;
 export function cellsFullyContainedInSelection(cells:EditorCell[],selection:GridSelection):EditorCell[]
 export function selectionIsExactlyTiled(cells:EditorCell[],selection:GridSelection):boolean
 export function mergeCellsInSelection(cells:EditorCell[],selection:GridSelection):MergeResult
+export function subtractRectangle(cell:EditorCell,cut:GridSelection):EditorCell[]
+export function overwriteWithSelection(cells:EditorCell[],selection:GridSelection):MergeResult
 export function mergeCells(cells:EditorCell[],firstId:string,secondId:string):MergeResult
 export function mergeDivider(cells:EditorCell[],divider:RemovableDividerSegment|DividerHit|undefined):MergeResult
 export function findContainingCell(cells:EditorCell[],point:Point):EditorCell|undefined
