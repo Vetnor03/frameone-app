@@ -10,7 +10,7 @@ import {
 } from './surf/customSpotScoring'
 import { isValidRangeBound, rangeBucketMatches, rangeBucketSortValue } from './surf/rangeBuckets'
 import { applyCalmWindDirectionWeighting } from './surf/calmWind'
-import { calibratedFinalSurfRating1to6 } from './surf/ratings'
+import { calibratedFinalSurfRating1to6, surfRatingLabel } from './surf/ratings'
 
 export { normalizeCustomDirectionSector, normalizeCustomSpotScoringProfile, scoreCustomDirectionInSector } from './surf/customSpotScoring'
 export { applyCalmWindDirectionWeighting, windDirectionWeightMultiplierForSpeed } from './surf/calmWind'
@@ -223,6 +223,9 @@ type ScoreBreakdown = {
   modelRating?: number
   experienceRating?: number
   finalRating?: number
+  baseScore?: number
+  experienceAdjustment?: number
+  finalScore?: number
   whySelected?: string
 
   method: string
@@ -232,6 +235,11 @@ type ScoreBreakdown = {
 export type SurfScoreResult = {
   rating: number // 1..6
   score: number // same as rating (kept for firmware compatibility)
+  baseScore: number
+  experienceAdjustment: number
+  experienceConfidence: number
+  finalScore: number
+  finalRating: number
   line1: string
   line2: string
   breakdown: ScoreBreakdown
@@ -368,13 +376,7 @@ function labelToRating1to6(lbl: string): number {
 }
 
 function expRating1to6ToLabel(rating: number): string {
-  const arr: any[] = (EXP as any)?.rating_map_1_6_to_label ?? []
-  for (const v of arr) {
-    const label = String(v?.label ?? '')
-    const values: any[] = Array.isArray(v?.values) ? v.values : []
-    for (const vv of values) if (Number(vv) === rating) return label
-  }
-  return ''
+  return surfRatingLabel(rating)
 }
 
 // ---------------------
@@ -1658,6 +1660,11 @@ export function scoreSurf(params: {
   return {
     rating: finalRating,
     score: finalRating,
+    baseScore: model.rating,
+    experienceAdjustment: exp.blended_rating_float - model.rating,
+    experienceConfidence: exp.confidence,
+    finalScore: finalRating,
+    finalRating,
     line1,
     line2,
     breakdown: {
@@ -1715,6 +1722,9 @@ export function scoreSurf(params: {
       modelRating: model.rating,
       experienceRating: exp.rating_1_6,
       finalRating,
+      baseScore: model.rating,
+      experienceAdjustment: exp.blended_rating_float - model.rating,
+      finalScore: finalRating,
       whySelected: params.whySelected,
       method:
         'tables_weighted_total + experience_confidence_blend(user>legacy, recency-weighted, multi-record, dir-aware)',

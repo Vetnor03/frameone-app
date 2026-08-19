@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
 import { scoreSurf, normalizeCustomSpotScoringProfile, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased, surfRatingVisual } from '@/app/lib/surf/ratings'
+import { pickBestSwell, selectedSwellFromPick, selectedSwellIndex } from '@/app/lib/surf/swellSelection'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
@@ -612,12 +613,6 @@ type MarineSeries = {
 }
 
 const SECONDARY_MIN_M = 0.05
-const MIN_USABLE_SWELL_HEIGHT_M = 0.35
-const MIN_USABLE_SWELL_PERIOD_S = 5
-const NEAR_FLAT_SWELL_HEIGHT_M = 0.3
-const NEAR_FLAT_SWELL_PERIOD_S = 4
-const CLEARLY_STRONGER_ENERGY_RATIO = 1.75
-const CLEARLY_STRONGER_CORRECTED_M = 0.35
 
 function toForecastNum(x: any) {
   const n = Number(x)
@@ -650,47 +645,6 @@ function resolveForecastCoordinates(lat: number, lon: number): ForecastCoordinat
 
 function forecastGridKey(lat: number, lon: number) {
   return `${round6(lat)},${round6(lon)}`
-}
-
-function correctedHeightForPick(h: number, p: number) {
-  if (!(h > 0) || !(p > 0)) return h
-  return h * (p / 10)
-}
-
-type SwellPickMetrics = {
-  height: number
-  period: number
-  correctedHeight: number
-  usable: boolean
-  nearFlat: boolean
-}
-
-function swellPickMetrics(swell: Sideswell): SwellPickMetrics {
-  const height = Number.isFinite(swell.height_m) ? swell.height_m : 0
-  const period = Number.isFinite(swell.period_s) ? swell.period_s : 0
-  const correctedHeight = correctedHeightForPick(height, period)
-
-  return {
-    height,
-    period,
-    correctedHeight,
-    usable: height >= MIN_USABLE_SWELL_HEIGHT_M && period >= MIN_USABLE_SWELL_PERIOD_S,
-    nearFlat: height <= NEAR_FLAT_SWELL_HEIGHT_M || period <= NEAR_FLAT_SWELL_PERIOD_S,
-  }
-}
-
-function clearlyStrongerEnergy(a: SwellPickMetrics, b: SwellPickMetrics) {
-  if (!a.usable || a.correctedHeight <= 0) return false
-  if (a.correctedHeight < b.correctedHeight + CLEARLY_STRONGER_CORRECTED_M) return false
-  return a.correctedHeight >= Math.max(b.correctedHeight * CLEARLY_STRONGER_ENERGY_RATIO, CLEARLY_STRONGER_CORRECTED_M)
-}
-
-function selectedSwellFromPick(marine: MarineBundle, picked: { chosen: 'primary' | 'secondary' }) {
-  return picked.chosen === 'secondary' ? marine.secondary : marine.primary
-}
-
-function selectedSwellIndex(picked: { chosen: 'primary' | 'secondary' }) {
-  return picked.chosen === 'secondary' ? 2 : 1
 }
 
 function makeBundleAtIndexes(series: MarineSeries, marineIndex: number, windIndex: number): MarineBundle {
@@ -874,8 +828,6 @@ function bearerLooksLikeUserJwt(bearer: string) {
 
 function authBearerFromReq(req: Request) {
   const raw = req.headers.get('authorization') || ''
-  console.log('RAW AUTH HEADER VALUE:', raw)
-  console.log('ALL HEADERS AUTH:', req.headers.get('authorization'))
   return raw.startsWith('Bearer ') ? raw : ''
 }
 
@@ -884,8 +836,6 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
   for (const id of spotIds) out[id] = []
 
   const bearer = authBearerFromReq(req)
-  console.log('SURF AUTH has bearer:', !!bearer)
-  console.log('SURF AUTH bearer preview:', bearer ? bearer.slice(0, 25) : null)
 
   if (!bearer) return out
 
@@ -919,8 +869,6 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       error: userErr,
     } = await userSupabase.auth.getUser()
 
-    console.log('SURF AUTH userErr:', userErr?.message ?? null)
-    console.log('SURF AUTH user id:', user?.id ?? null)
     ownerUserId = user?.id ?? null
   } else {
     console.info('Bearer is not user JWT, trying device auth fallback')
@@ -943,8 +891,6 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       .eq('device_token_hash', tokenHash)
       .maybeSingle()
 
-    console.log('SURF AUTH device lookup error:', deviceErr?.message ?? null)
-    console.log('SURF AUTH device id:', deviceRow?.device_id ?? null)
 
     if (!deviceRow?.device_id) return out
 
@@ -955,9 +901,6 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       .eq('role', 'owner')
       .maybeSingle()
 
-    console.log('SURF AUTH member lookup error:', memberErr?.message ?? null)
-    console.log('SURF AUTH member user id:', memberRow?.user_id ?? null)
-    console.log('SURF AUTH member role:', memberRow?.role ?? null)
 
     ownerUserId = memberRow?.user_id ?? null
 
@@ -977,6 +920,19 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
         wind_dir_from_deg,
         wind_speed_ms,
         rating_1_6,
+        primary_swell_height_m,
+        primary_swell_period_s,
+        primary_swell_dir_from_deg,
+        secondary_swell_height_m,
+        secondary_swell_period_s,
+        secondary_swell_dir_from_deg,
+        third_swell_height_m,
+        third_swell_period_s,
+        third_swell_dir_from_deg,
+        tide_m,
+        forecast_time_utc,
+        selected_swell_index,
+        condition_signature,
         created_at,
         updated_at
       `)
@@ -984,13 +940,11 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       .or(`spot_id.in.(${ids.join(',')}),spot.in.(${ids.join(',')})`)
       .order('logged_at', { ascending: false })
 
-    console.log('SURF AUTH device-path experience error:', error?.message ?? null)
-    console.log('SURF AUTH device-path experience count:', Array.isArray(data) ? data.length : null)
 
     if (error || !Array.isArray(data)) return out
 
     for (const row of data) {
-      const sid = String(row?.spot_id ?? '').trim()
+      const sid = String(row?.spot_id ?? row?.spot ?? '').trim()
       if (!sid) continue
       if (!out[sid]) out[sid] = []
       out[sid].push(row as UserSurfExperienceRecord)
@@ -1015,6 +969,19 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       wind_dir_from_deg,
       wind_speed_ms,
       rating_1_6,
+      primary_swell_height_m,
+      primary_swell_period_s,
+      primary_swell_dir_from_deg,
+      secondary_swell_height_m,
+      secondary_swell_period_s,
+      secondary_swell_dir_from_deg,
+      third_swell_height_m,
+      third_swell_period_s,
+      third_swell_dir_from_deg,
+      tide_m,
+      forecast_time_utc,
+      selected_swell_index,
+      condition_signature,
       created_at,
       updated_at
     `)
@@ -1022,13 +989,11 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
     .or(`spot_id.in.(${ids.join(',')}),spot.in.(${ids.join(',')})`)
     .order('logged_at', { ascending: false })
 
-  console.log('SURF AUTH user-path experience error:', error?.message ?? null)
-  console.log('SURF AUTH user-path experience count:', Array.isArray(data) ? data.length : null)
 
   if (error || !Array.isArray(data)) return out
 
   for (const row of data as any[]) {
-    const sid = String(row?.spot_id ?? '').trim()
+    const sid = String(row?.spot_id ?? row?.spot ?? '').trim()
     if (!sid) continue
     if (!out[sid]) out[sid] = []
     out[sid].push(row as UserSurfExperienceRecord)
@@ -1044,305 +1009,6 @@ function userExperiencesForSpot(
   const sid = String(spotId ?? '').trim()
   if (!sid) return []
   return Array.isArray(userExpBySpotId[sid]) ? userExpBySpotId[sid] : []
-}
-
-/** ---------- Scored comparisons ---------- **/
-
-function scoredBlendFloat(scored: any) {
-  const x = Number(scored?.breakdown?.experience?.blended_rating_float)
-  const r = Number(scored?.rating)
-  if (Number.isFinite(x)) return x
-  if (Number.isFinite(r)) return r
-  return -Infinity
-}
-
-function scoredRating(scored: any) {
-  const r = Number(scored?.rating)
-  return Number.isFinite(r) ? r : -Infinity
-}
-
-function scoredConfidence(scored: any) {
-  const c = Number(scored?.breakdown?.experience?.confidence)
-  return Number.isFinite(c) ? c : 0
-}
-
-function scoredTablesTotal(scored: any) {
-  const t = Number(scored?.breakdown?.tables?.total)
-  return Number.isFinite(t) ? t : -Infinity
-}
-
-function scoredExperienceMatched(scored: any) {
-  return !!scored?.breakdown?.experience?.matched
-}
-
-function compareScored(scoredA: any, scoredB: any) {
-  const aBlend = scoredBlendFloat(scoredA)
-  const bBlend = scoredBlendFloat(scoredB)
-  if (bBlend > aBlend) return 1
-  if (aBlend > bBlend) return -1
-
-  const aRating = scoredRating(scoredA)
-  const bRating = scoredRating(scoredB)
-  if (bRating > aRating) return 1
-  if (aRating > bRating) return -1
-
-  const aMatched = scoredExperienceMatched(scoredA)
-  const bMatched = scoredExperienceMatched(scoredB)
-  if (aMatched && !bMatched) return -1
-  if (bMatched && !aMatched) return 1
-
-  const aConf = scoredConfidence(scoredA)
-  const bConf = scoredConfidence(scoredB)
-  if (bConf > aConf) return 1
-  if (aConf > bConf) return -1
-
-  const aTot = scoredTablesTotal(scoredA)
-  const bTot = scoredTablesTotal(scoredB)
-  if (bTot > aTot) return 1
-  if (aTot > bTot) return -1
-
-  return 0
-}
-
-function betterByScoredThenHeight(args: {
-  scoredA: any
-  scoredB: any
-  correctedHeightA: number
-  correctedHeightB: number
-}) {
-  const cmp = compareScored(args.scoredA, args.scoredB)
-  if (cmp !== 0) return cmp
-  if (args.correctedHeightB > args.correctedHeightA) return 1
-  if (args.correctedHeightA > args.correctedHeightB) return -1
-  return 0
-}
-
-function swellDirectionScore(scored: ReturnType<typeof scoreSurf> | null | undefined) {
-  const score = Number(scored?.breakdown?.tables?.wave_dir?.score)
-  return Number.isFinite(score) ? score : null
-}
-
-function swellCombinedScore(scored: ReturnType<typeof scoreSurf> | null | undefined) {
-  const total = Number(scored?.breakdown?.tables?.total)
-  return Number.isFinite(total) ? total : null
-}
-
-function swellSelectionDebug(args: {
-  marine: MarineBundle
-  selected: Sideswell
-  selectedSource: 'primary' | 'secondary'
-  primaryScore: ReturnType<typeof scoreSurf>
-  secondaryScore?: ReturnType<typeof scoreSurf> | null
-}) {
-  const { marine, selected, selectedSource, primaryScore, secondaryScore } = args
-  const secondaryPresent = marine.secondary.present
-
-  return {
-    selected_swell_source: selectedSource,
-    primary_swell_direction_deg_from: marine.primary.direction_deg_from,
-    primary_swell_height_m: marine.primary.height_m,
-    primary_swell_period_s: marine.primary.period_s,
-    primary_swell_direction_score: swellDirectionScore(primaryScore),
-    primary_combined_score: swellCombinedScore(primaryScore),
-    secondary_swell_direction_deg_from: secondaryPresent ? marine.secondary.direction_deg_from : null,
-    secondary_swell_height_m: secondaryPresent ? marine.secondary.height_m : null,
-    secondary_swell_period_s: secondaryPresent ? marine.secondary.period_s : null,
-    secondary_swell_direction_score: secondaryPresent ? swellDirectionScore(secondaryScore) : null,
-    secondary_combined_score: secondaryPresent ? swellCombinedScore(secondaryScore) : null,
-    selected_swell_height_m: selected.height_m,
-    selected_swell_period_s: selected.period_s,
-    selected_swell_direction_deg_from: selected.direction_deg_from,
-  }
-}
-
-function pickBestSwell(args: {
-  spotKey: string
-  marine: MarineBundle
-  userExperiences?: UserSurfExperienceRecord[]
-  customSpotProfile?: CustomSpotScoringProfile | null
-}) {
-  const { spotKey, marine, userExperiences, customSpotProfile } = args
-
-  const windSpeedMs = marine.wind_speed_ms
-  const windDirDeg = marine.wind_direction_deg_from
-  const primaryMetrics = swellPickMetrics(marine.primary)
-  const secondaryMetrics = swellPickMetrics(marine.secondary)
-
-  const primaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: marine.primary.height_m,
-    swellPeriodS: marine.primary.period_s,
-    swellDirDeg: marine.primary.direction_deg_from,
-    windSpeedMs,
-    windDirDeg,
-    userExperiences,
-    customSpotProfile,
-  })
-
-  const withDebug = <T extends {
-    chosen: 'primary' | 'secondary'
-    chosenScore: ReturnType<typeof scoreSurf>
-    primaryScore: ReturnType<typeof scoreSurf>
-    secondaryScore?: ReturnType<typeof scoreSurf> | null
-  }>(
-    picked: T,
-    whySelected: string
-  ) => {
-    const main = selectedSwellFromPick(marine, picked)
-    const mainIndex = selectedSwellIndex(picked)
-    const combinedScore = scoreSurf({
-      spotKey,
-      swellHeightM: main.height_m,
-      swellPeriodS: main.period_s,
-      swellDirDeg: main.direction_deg_from,
-      windSpeedMs,
-      windDirDeg,
-      selectedMainSwellIndex: mainIndex,
-      swells: [
-        {
-          index: 1,
-          height_m: marine.primary.height_m,
-          period_s: marine.primary.period_s,
-          direction_deg_from: marine.primary.direction_deg_from,
-        },
-        ...(marine.secondary.present
-          ? [{
-              index: 2,
-              height_m: marine.secondary.height_m,
-              period_s: marine.secondary.period_s,
-              direction_deg_from: marine.secondary.direction_deg_from,
-            }]
-          : []),
-      ],
-      forecastTimeUtc: marine.time_utc,
-      whySelected,
-      userExperiences,
-      customSpotProfile,
-    })
-
-    const selectionDebug = swellSelectionDebug({
-      marine,
-      selected: main,
-      selectedSource: picked.chosen,
-      primaryScore: picked.primaryScore,
-      secondaryScore: picked.secondaryScore,
-    })
-
-    return {
-      ...picked,
-      chosenScore: combinedScore,
-      selectedSwellIndex: mainIndex,
-      selectedMainSwellIndex: mainIndex,
-      contributingSwellIndexes: combinedScore.breakdown?.contributingSwellIndexes ?? [mainIndex],
-      swellMixSignature: combinedScore.breakdown?.swellMixSignature ?? null,
-      experienceMatchType: combinedScore.breakdown?.experienceMatchType ?? 'none',
-      experienceConfidence: combinedScore.breakdown?.experienceConfidence ?? 0,
-      modelRating: combinedScore.breakdown?.modelRating ?? combinedScore.rating,
-      experienceRating: combinedScore.breakdown?.experienceRating ?? null,
-      finalRating: combinedScore.breakdown?.finalRating ?? combinedScore.rating,
-      selectedSwellHeight: main.height_m,
-      selectedSwellPeriod: main.period_s,
-      selectedSwellDirection: main.direction_deg_from,
-      ratingSource: scoredExperienceMatched(combinedScore) ? 'experience_blend' : 'tables',
-      displayHeightSource: picked.chosen,
-      whySelected,
-      selectionDebug,
-      ...selectionDebug,
-      primaryMetrics,
-      secondaryMetrics,
-    }
-  }
-
-  if (!marine.secondary.present) {
-    return withDebug(
-      {
-        chosen: 'primary' as const,
-        chosenScore: primaryScore,
-        secondaryScore: null,
-        primaryScore,
-      },
-      'secondary swell not present'
-    )
-  }
-
-  const secondaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: marine.secondary.height_m,
-    swellPeriodS: marine.secondary.period_s,
-    swellDirDeg: marine.secondary.direction_deg_from,
-    windSpeedMs,
-    windDirDeg,
-    userExperiences,
-    customSpotProfile,
-  })
-
-  const pickPrimary = (whySelected: string) =>
-    withDebug(
-      {
-        chosen: 'primary' as const,
-        chosenScore: primaryScore,
-        secondaryScore,
-        primaryScore,
-      },
-      whySelected
-    )
-
-  const pickSecondary = (whySelected: string) =>
-    withDebug(
-      {
-        chosen: 'secondary' as const,
-        chosenScore: secondaryScore,
-        secondaryScore,
-        primaryScore,
-      },
-      whySelected
-    )
-
-  if (normalizeCustomSpotScoringProfile(customSpotProfile)) {
-    const customCmp = betterByScoredThenHeight({
-      scoredA: primaryScore,
-      scoredB: secondaryScore,
-      correctedHeightA: primaryMetrics.correctedHeight,
-      correctedHeightB: secondaryMetrics.correctedHeight,
-    })
-
-    if (customCmp > 0) return pickSecondary('custom spot secondary scored higher with custom sector profile')
-
-    return pickPrimary(
-      customCmp < 0
-        ? 'custom spot primary scored higher with custom sector profile'
-        : 'custom spot scores tied with custom sector profile; primary fallback'
-    )
-  }
-
-  if (primaryMetrics.usable && secondaryMetrics.nearFlat) {
-    return pickPrimary('primary usable; secondary is near-flat/short-period')
-  }
-
-  if (secondaryMetrics.usable && primaryMetrics.nearFlat) {
-    return pickSecondary('secondary usable; primary is near-flat/short-period')
-  }
-
-  if (clearlyStrongerEnergy(primaryMetrics, secondaryMetrics)) {
-    return pickPrimary('primary has clearly stronger usable energy')
-  }
-
-  if (clearlyStrongerEnergy(secondaryMetrics, primaryMetrics)) {
-    return pickSecondary('secondary has clearly stronger usable energy')
-  }
-
-  const cmp = betterByScoredThenHeight({
-    scoredA: primaryScore,
-    scoredB: secondaryScore,
-    correctedHeightA: primaryMetrics.correctedHeight,
-    correctedHeightB: secondaryMetrics.correctedHeight,
-  })
-
-  if (cmp > 0) return pickSecondary('scores comparable after usable-energy gates; secondary scored higher')
-
-  return pickPrimary(
-    cmp < 0 ? 'scores comparable after usable-energy gates; primary scored higher' : 'scores tied; primary fallback'
-  )
 }
 
 /** ---------- Bucket lookup (independent of experience) ---------- **/
@@ -2808,7 +2474,6 @@ function surfJsonResponse(payload: any, compact: boolean, init?: { status?: numb
 export async function GET(req: Request) {
   try {
     
-    console.log('RAW AUTH HEADER:', req.headers.get('authorization'))
     const url = new URL(req.url)
     const requestContext = createSurfRequestContext({
       configUpdatedAt: url.searchParams.get('configUpdatedAt'),

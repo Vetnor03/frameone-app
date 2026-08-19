@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calibratedFinalSurfRating1to6, normalizeSurfRating1to6, surfRatingIsExperienceBased } from '../app/lib/surf/ratings.ts'
+import { calibratedFinalSurfRating1to6, normalizeSurfRating1to6, surfRatingIsExperienceBased, surfRatingLabel } from '../app/lib/surf/ratings.ts'
+
+test('canonical labels cover the production 1-6 scale', () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(surfRatingLabel), ['Flat', 'Poor', 'Poor to Fair', 'Fair', 'Good', 'Epic'])
+})
 
 test('normal spot rating stays on existing 1-6 scale', () => {
   const normalized = normalizeSurfRating1to6({ rating: 5, score: 5 })
@@ -47,6 +51,21 @@ test('shared final surf calibration is used for raw final score floats', () => {
   assert.equal(normalizedExperience.rating, 5)
   assert.equal(normalizedExperience.source, 'experience_blend')
   assert.equal(normalizedExperience.ratingFromExperience, true)
+})
+
+test('explicit final rating cannot be overwritten by downstream base recalculation', () => {
+  const normalized = normalizeSurfRating1to6({
+    finalRating: 5,
+    experienceAdjustment: 0.6,
+    breakdown: {
+      finalRating: 5,
+      scoring_breakdown: { finalScoreFloatAfterPenalties: 2.1 },
+      experience: { matched: false, confidence: 0.2 },
+    },
+  })
+
+  assert.equal(normalized.rating, 5)
+  assert.equal(normalized.source, 'experience_blend')
 })
 
 test('missing or invalid rating is unavailable and does not become 1', () => {
