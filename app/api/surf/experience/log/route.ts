@@ -61,7 +61,7 @@ async function fetchCustomSpotForUser(userId: string, spotIdOrName: string): Pro
     .eq('id', cleanId)
     .maybeSingle()
 
-  if (byId.data) return byId.data as CustomSurfSpotRow
+  if (byId.data) return byId.data as unknown as CustomSurfSpotRow
 
   const byName = await supabaseAdmin
     .from('custom_surf_spots')
@@ -70,7 +70,7 @@ async function fetchCustomSpotForUser(userId: string, spotIdOrName: string): Pro
     .ilike('name', q)
     .maybeSingle()
 
-  return (byName.data as CustomSurfSpotRow | null) || null
+  return (byName.data as unknown as CustomSurfSpotRow | null) || null
 }
 
 function customSpotProfileFromRow(row: CustomSurfSpotRow | null): CustomSpotScoringProfile | null {
