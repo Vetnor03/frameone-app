@@ -23,8 +23,9 @@
     ]
   },
   "dividers": {
-    "full": [], "default": [{"axis":"y","boundary":1},{"axis":"y","boundary":2}],
-    "pyramid": [{"axis":"y","boundary":1},{"axis":"y","boundary":2},{"axis":"x","boundary":2,"from":2,"to":4}],
-    "square": [{"axis":"y","boundary":2},{"axis":"x","boundary":2}]
+    "full": [],
+    "default": [{"axis":"y","boundary":1,"span":"viewport95"},{"axis":"y","boundary":2,"span":"viewport95"}],
+    "pyramid": [{"axis":"y","boundary":1,"span":"viewport95"},{"axis":"y","boundary":2,"span":"viewport95"},{"axis":"x","boundary":2,"span":"region95","fromBoundary":2,"toBoundary":4}],
+    "square": [{"axis":"y","boundary":2,"span":"viewport95"},{"axis":"x","boundary":2,"span":"viewport95"}]
   }
 }

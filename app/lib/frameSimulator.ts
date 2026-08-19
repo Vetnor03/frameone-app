@@ -9,7 +9,9 @@ export type GridCell = { col:number; row:number; colSpan:number; rowSpan:number;
 export type PixelCell = GridCell & { x:number; y:number; w:number; h:number }
 export type LayoutName = keyof typeof spec.layouts
 export type ModuleName = keyof typeof profiles
-export { spec as frameLayouts, profiles as moduleProfiles }
+export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
+export const frameLayouts = spec
+export { profiles as moduleProfiles }
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
 export const gridY = (row:number) => VIEWPORT.y + Math.trunc(VIEWPORT.height * row / GRID_SIZE)
 export function validGridCell(c: GridCell) {
@@ -20,6 +22,34 @@ export function resolveGridCell(c: GridCell): PixelCell {
   return {...c, x:gridX(c.col), y:gridY(c.row), w:gridX(c.col+c.colSpan)-gridX(c.col), h:gridY(c.row+c.rowSpan)-gridY(c.row)}
 }
 export function cellsForLayout(name: LayoutName) { return frameLayouts.layouts[name].map(c => resolveGridCell(c as GridCell)) }
+const span95 = (start:number, length:number) => {
+  const margin = Math.trunc(length * 0.025)
+  return [start + margin, start + length - margin] as const
+}
+export function dividersForLayout(name: LayoutName): DividerLine[] {
+  return frameLayouts.dividers[name].map(div => {
+    if (div.axis === 'y') {
+      const [x1,x2] = span95(VIEWPORT.x, VIEWPORT.width)
+      return {x1,y1:gridY(div.boundary),x2,y2:gridY(div.boundary)}
+    }
+    const fromBoundary = 'fromBoundary' in div && typeof div.fromBoundary === 'number' ? div.fromBoundary : 0
+    const toBoundary = 'toBoundary' in div && typeof div.toBoundary === 'number' ? div.toBoundary : GRID_SIZE
+    const start = gridY(fromBoundary)
+    const length = gridY(toBoundary) - start
+    const [y1,y2] = div.span === 'region95' ? span95(start,length) : span95(VIEWPORT.y,VIEWPORT.height)
+    return {x1:gridX(div.boundary),y1,x2:gridX(div.boundary),y2}
+  })
+}
+export function quantizeOneBit(ctx: CanvasRenderingContext2D, paperDark:boolean) {
+  const image = ctx.getImageData(0,0,PANEL.width,PANEL.height)
+  for (let i=0;i<image.data.length;i+=4) {
+    const luminance = image.data[i]*0.2126 + image.data[i+1]*0.7152 + image.data[i+2]*0.0722
+    const inkPixel = paperDark ? luminance >= 128 : luminance < 128
+    const value = inkPixel ? (paperDark ? 255 : 0) : (paperDark ? 0 : 255)
+    image.data[i]=value; image.data[i+1]=value; image.data[i+2]=value; image.data[i+3]=255
+  }
+  ctx.putImageData(image,0,0)
+}
 export const supportedGeometry: Record<ModuleName, string[]> = {
   date:['4x1','2x2','4x2','4x4'], reminders:['4x1','2x2','4x2','4x4'], weather:['4x1','2x2','4x2','4x4'], countdown:['4x1','2x2','4x2','4x4']
 }

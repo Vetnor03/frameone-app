@@ -104,10 +104,10 @@ int buildCells(LayoutKey key, Cell* outCells, int maxCells) {
   if (!outCells || maxCells <= 0) return 0;
 
   const GridCell* source = GeneratedLayouts::SQUARE;
-  int sourceCount = sizeof(GeneratedLayouts::SQUARE) / sizeof(GridCell);
-  if (key == LAYOUT_FULL) { source = GeneratedLayouts::FULL; sourceCount = 1; }
-  else if (key == LAYOUT_DEFAULT) { source = GeneratedLayouts::DEFAULT; sourceCount = 3; }
-  else if (key == LAYOUT_PYRAMID) { source = GeneratedLayouts::PYRAMID; sourceCount = 4; }
+  int sourceCount = GeneratedLayouts::SQUARE_COUNT;
+  if (key == LAYOUT_FULL) { source = GeneratedLayouts::FULL; sourceCount = GeneratedLayouts::FULL_COUNT; }
+  else if (key == LAYOUT_DEFAULT) { source = GeneratedLayouts::DEFAULT; sourceCount = GeneratedLayouts::DEFAULT_COUNT; }
+  else if (key == LAYOUT_PYRAMID) { source = GeneratedLayouts::PYRAMID; sourceCount = GeneratedLayouts::PYRAMID_COUNT; }
   const int count = sourceCount < maxCells ? sourceCount : maxCells;
   for (int i = 0; i < count; ++i) resolveGridCell(source[i], outCells[i]);
   return count;

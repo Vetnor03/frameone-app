@@ -8,7 +8,7 @@ for (const name of names) {
   const id = name.toUpperCase()
   out += `static const GridCell ${id}[] = {\n`
   for (const c of source.layouts[name]) out += `  {${c.col}, ${c.row}, ${c.colSpan}, ${c.rowSpan}, ${c.slot}, ${size[c.size]}},\n`
-  out += `};\n`
+  out += `};\nstatic const int ${id}_COUNT = sizeof(${id}) / sizeof(${id}[0]);\n`
 }
 out += `}\n`
 const target = new URL('../frame/src/core/GeneratedLayouts.h', import.meta.url)
