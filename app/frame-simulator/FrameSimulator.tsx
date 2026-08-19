@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import styles from './FrameSimulator.module.css'
 import {
-  PANEL, VIEWPORT, calendarGeometry, cellsForLayout, dividersForLayout, frameLayouts, gridX, gridY,
+  PANEL, VIEWPORT, calendarGeometry, cellsForLayout, dividersForLayout, frameLayouts, gridX, gridY, isoWeekNumber,
   isSupported, moduleProfiles, quantizeOneBit, resolveGridCell,
   type CalendarRowMode, type LayoutName, type ModuleName, type PixelCell,
 } from '../lib/frameSimulator'
@@ -21,21 +21,22 @@ const calendarPreset: Record<Preset,{year:number;month0:number}> = {
   extreme:{year:2099,month0:8}, empty:{year:2026,month0:7},
 }
 const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December']
+type CalendarDisplay = { showMonthTitle:boolean; showWeekNums:boolean; showDowHeader:boolean }
 
 function line(ctx:CanvasRenderingContext2D,x1:number,y1:number,x2:number,y2:number) { ctx.beginPath();ctx.moveTo(x1+.5,y1+.5);ctx.lineTo(x2+.5,y2+.5);ctx.stroke() }
 function centered(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,w:number,font:string) { ctx.font=font;ctx.textAlign='center';ctx.fillText(text,x+w/2,y) }
 function clippedCentered(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,w:number,h=28) { ctx.save();ctx.beginPath();ctx.rect(x,y-h,w,h+4);ctx.clip();ctx.textAlign='center';ctx.fillText(text,x+w/2,y);ctx.restore() }
 function metricHeight(font:string) { const match=font.match(/(\d+)px/); return match ? Number(match[1]) : 16 }
 
-function drawCalendar(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,year:number,month0:number,mode:CalendarRowMode,title=true) {
-  const p=moduleProfiles.date.calendar, padX=p.padding[0],padY=p.padding[1],weekW=26
+function drawCalendar(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,year:number,month0:number,mode:CalendarRowMode,display:CalendarDisplay) {
+  const p=moduleProfiles.date.calendar,padX=p.padding[0],padY=p.padding[1],weekW=display.showWeekNums?p.weekWidth:0,titleH=display.showMonthTitle?p.titleHeight:0,titleGap=display.showMonthTitle?p.titleGap:0,dowH=display.showDowHeader?p.dowHeight:0
   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();let top=y+padY
-  if(title){ctx.font='bold 16px sans-serif';centered(ctx,monthNames[month0],x,top+18,w,'bold 16px sans-serif');top+=p.titleHeight+p.titleGap}
+  if(display.showMonthTitle){ctx.font='bold 16px sans-serif';centered(ctx,monthNames[month0],x,top+18,w,'bold 16px sans-serif');top+=titleH+titleGap}
   const {firstWeekday,dayCount,rows}=calendarGeometry(year,month0,mode)
-  const gridX0=x+padX+weekW,gridW=Math.max(7,w-padX*2-weekW),cellW=Math.trunc(gridW/7),cellH=Math.max(10,Math.trunc((y+h-padY-top-p.dowHeight)/rows))
-  ctx.font='11px sans-serif';['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d,i)=>centered(ctx,d,gridX0+i*cellW,top+12,cellW,'11px sans-serif'))
-  top+=p.dowHeight;line(ctx,gridX0-1,top+2,gridX0-1,top+rows*cellH-2)
-  for(let day=1;day<=dayCount;day++){const index=firstWeekday+day-1,row=Math.trunc(index/7),col=index%7;centered(ctx,String(day),gridX0+col*cellW,top+row*cellH+Math.trunc(cellH/2)+4,cellW,'11px sans-serif')}
+  const gridX0=x+padX+weekW,gridW=Math.max(7,w-padX*2-weekW),cellW=Math.trunc(gridW/7),cellH=Math.max(10,Math.trunc((h-padY*2-titleH-titleGap-dowH)/rows))
+  if(display.showDowHeader){ctx.font='11px sans-serif';['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d,i)=>centered(ctx,d,gridX0+i*cellW,top+12,cellW,'11px sans-serif'));top+=dowH}
+  if(display.showWeekNums){line(ctx,gridX0-1,top+2,gridX0-1,top+rows*cellH-2);for(let row=0;row<rows;row++){const firstDay=row*7-firstWeekday+1,lastDay=firstDay+6;if(lastDay<1||firstDay>dayCount)continue;const sampleDay=Math.max(1,Math.min(dayCount,firstDay));centered(ctx,String(isoWeekNumber(year,month0,sampleDay)),x+padX,top+row*cellH+Math.trunc(cellH/2)+4,weekW,'11px sans-serif')}}
+  for(let day=1;day<=dayCount;day++){const index=firstWeekday+day-1,row=Math.trunc(index/7),col=index%7;if(row>=rows)continue;centered(ctx,String(day),gridX0+col*cellW,top+row*cellH+Math.trunc(cellH/2)+4,cellW,'11px sans-serif')}
   ctx.restore()
 }
 function drawMediumStack(ctx:CanvasRenderingContext2D,c:PixelCell,parts:string[],kind:'date'|'countdown') {
@@ -50,10 +51,10 @@ function drawDate(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],preset:Pre
   if(c.size==='SMALL'){clippedCentered(ctx,`${d[0]} ${d[2]}. ${d[1]}`,c.x+8,c.y+c.h/2+9,c.w-16);return}
   if(c.size==='MEDIUM'){drawMediumStack(ctx,c,[d[3],d[1],d[2],d[0]],'date');return}
   const gap=moduleProfiles.date.large.columnGap,leftW=Math.trunc((c.w-gap)/2),rightX=c.x+leftW+gap
-  if(c.size==='LARGE'){drawMediumStack(ctx,{...c,w:leftW},[d[3],d[1],d[2],d[0]],'date');const p=moduleProfiles.date.large.calendarPadding;drawCalendar(ctx,rightX+p,c.y+p,c.w-leftW-gap-p*2,c.h-p*2,year,month0,'dateLarge',false);return}
+  if(c.size==='LARGE'){drawMediumStack(ctx,{...c,w:leftW},[d[3],d[1],d[2],d[0]],'date');const p=moduleProfiles.date.large.calendarPadding;drawCalendar(ctx,rightX+p,c.y+p,c.w-leftW-gap-p*2,c.h-p*2,year,month0,'dateLarge',{showMonthTitle:false,showWeekNums:true,showDowHeader:true});return}
   const rowGap=moduleProfiles.date.xl.rowGap,topH=Math.trunc((c.h-rowGap)/2),bottomY=c.y+topH+rowGap,rightW=c.w-leftW-gap
   drawMediumStack(ctx,{...c,w:leftW,h:topH},[d[3],d[1],d[2],d[0]],'date');centered(ctx,'UPCOMING HOLIDAYS',c.x,bottomY+30,leftW,'bold 14px sans-serif');centered(ctx,'24.12  Christmas Eve',c.x,bottomY+65,leftW,'14px sans-serif')
-  const mp=moduleProfiles.date.xl.monthPadding,rp=moduleProfiles.date.xl.rightPadding;drawCalendar(ctx,rightX,c.y+mp-9,rightW-rp,topH-mp+8,year,month0,'date',true);drawCalendar(ctx,rightX,bottomY,rightW-rp,c.y+c.h-bottomY-mp,nextYear,nextMonth0,'date',true)
+  const mp=moduleProfiles.date.xl.monthPadding,rp=moduleProfiles.date.xl.rightPadding;drawCalendar(ctx,rightX,c.y+mp-9,rightW-rp,topH-mp+8,year,month0,'date',{showMonthTitle:true,showWeekNums:true,showDowHeader:true});drawCalendar(ctx,rightX,bottomY,rightW-rp,c.y+c.h-bottomY-mp,nextYear,nextMonth0,'date',{showMonthTitle:true,showWeekNums:true,showDowHeader:false})
 }
 function drawReminderMedium(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],small:boolean) {
   const p=small?moduleProfiles.reminders.small:moduleProfiles.reminders.medium,visible=Math.min(d.length-1,p.maxItems),titleY=c.y+p.topPadding
@@ -66,9 +67,9 @@ function drawReminders(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],prese
   const {year,month0}=calendarPreset[preset],nextMonth0=(month0+1)%12,nextYear=month0===11?year+1:year
   if(c.size==='SMALL'){drawReminderMedium(ctx,c,d,true);return}if(c.size==='MEDIUM'){drawReminderMedium(ctx,c,d,false);return}
   const gap=moduleProfiles.reminders.large.columnGap,leftW=Math.trunc((c.w-gap)/2),rightX=c.x+leftW+gap
-  if(c.size==='LARGE'){const p=moduleProfiles.reminders.large;drawReminderMedium(ctx,{...c,w:leftW},d,false);drawCalendar(ctx,rightX+p.calendarPadding,c.y+p.calendarPadding,c.w-leftW-gap-p.calendarPadding*2,c.h-p.calendarPadding*2,year,month0,'remindersLarge',false);return}
+  if(c.size==='LARGE'){const p=moduleProfiles.reminders.large;drawReminderMedium(ctx,{...c,w:leftW},d,false);drawCalendar(ctx,rightX+p.calendarPadding,c.y+p.calendarPadding,c.w-leftW-gap-p.calendarPadding*2,c.h-p.calendarPadding*2,year,month0,'remindersLarge',{showMonthTitle:false,showWeekNums:true,showDowHeader:true});return}
   const p=moduleProfiles.reminders.xl
-  const topH=Math.trunc((c.h-p.rowGap)/2),bottomY=c.y+topH+p.rowGap,rightW=c.w-leftW-gap;drawReminderMedium(ctx,{...c,w:leftW,h:topH},d,false);centered(ctx,'NEXT REMINDERS',c.x,bottomY+28,leftW,'bold 14px sans-serif');d.slice(1,4).forEach((v,i)=>clippedCentered(ctx,v,c.x+16,bottomY+58+i*27,leftW-32));drawCalendar(ctx,rightX,c.y+p.monthPadding-9,rightW-p.rightPadding,topH-p.monthPadding+8,year,month0,'remindersXL',true);drawCalendar(ctx,rightX,bottomY,rightW-p.rightPadding,c.y+c.h-bottomY-p.monthPadding,nextYear,nextMonth0,'remindersXL',true)
+  const topH=Math.trunc((c.h-p.rowGap)/2),bottomY=c.y+topH+p.rowGap,rightW=c.w-leftW-gap;drawReminderMedium(ctx,{...c,w:leftW,h:topH},d,false);centered(ctx,'NEXT REMINDERS',c.x,bottomY+28,leftW,'bold 14px sans-serif');d.slice(1,4).forEach((v,i)=>clippedCentered(ctx,v,c.x+16,bottomY+58+i*27,leftW-32));drawCalendar(ctx,rightX,c.y+p.monthPadding-9,rightW-p.rightPadding,topH-p.monthPadding+8,year,month0,'remindersXL',{showMonthTitle:true,showWeekNums:true,showDowHeader:true});drawCalendar(ctx,rightX,bottomY,rightW-p.rightPadding,c.y+c.h-bottomY-p.monthPadding,nextYear,nextMonth0,'remindersXL',{showMonthTitle:true,showWeekNums:true,showDowHeader:false})
 }
 function weatherColumn(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,label:string,d:string[]){centered(ctx,label,x,y+20,w,'bold 15px sans-serif');ctx.beginPath();ctx.arc(x+w/2,y+h*.44,Math.max(16,Math.min(w*.2,h*.16)),0,Math.PI*2);ctx.stroke();centered(ctx,`${d[3]} | ${d[4]}`,x,y+h-42,w,'bold 14px sans-serif');centered(ctx,'Wind 5 m/s',x,y+h-20,w,'12px sans-serif')}
 function drawWeather(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[]){
@@ -83,7 +84,7 @@ function drawCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],prese
   if(c.size==='MEDIUM'){drawMediumStack(ctx,c,d,'countdown');return}
   const p=c.size==='LARGE'?moduleProfiles.countdown.large:moduleProfiles.countdown.xl,gap=p.columnGap,leftW=Math.trunc((c.w-gap)/2),rightX=c.x+leftW+gap
   if(c.size==='LARGE'){drawMediumStack(ctx,{...c,w:leftW},d,'countdown');centered(ctx,'COMING UP',rightX,c.y+55,c.w-leftW-gap,'bold 14px sans-serif');for(let i=0;i<p.listRows;i++)clippedCentered(ctx,`• Event ${i+2} in ${i*14+60} days`,rightX+12,c.y+90+i*28,c.w-leftW-gap-24);return}
-  const topH=Math.trunc((c.h-p.rowGap)/2),botY=c.y+topH+p.rowGap,rightW=c.w-leftW-gap;drawMediumStack(ctx,{...c,w:leftW,h:topH},d,'countdown');centered(ctx,'COMING UP',c.x,botY+30,leftW,'bold 14px sans-serif');for(let i=0;i<p.listRows;i++)clippedCentered(ctx,`• Event ${i+2}`,c.x+12,botY+60+i*26,leftW-24);drawCalendar(ctx,rightX,c.y,rightW,topH,year,month0,'countdown',true);drawCalendar(ctx,rightX,botY,rightW,c.y+c.h-botY,nextYear,nextMonth0,'countdown',true)
+  const topH=Math.trunc((c.h-p.rowGap)/2),botY=c.y+topH+p.rowGap,rightW=c.w-leftW-gap;drawMediumStack(ctx,{...c,w:leftW,h:topH},d,'countdown');centered(ctx,'COMING UP',c.x,botY+30,leftW,'bold 14px sans-serif');for(let i=0;i<p.listRows;i++)clippedCentered(ctx,`• Event ${i+2}`,c.x+12,botY+60+i*26,leftW-24);drawCalendar(ctx,rightX,c.y,rightW,topH,year,month0,'countdown',{showMonthTitle:true,showWeekNums:false,showDowHeader:true});drawCalendar(ctx,rightX,botY,rightW,c.y+c.h-botY,nextYear,nextMonth0,'countdown',{showMonthTitle:true,showWeekNums:false,showDowHeader:false})
 }
 function drawModule(ctx:CanvasRenderingContext2D,c:PixelCell,m:ModuleName,p:Preset,ink:string){const d=fake[m][p];ctx.save();ctx.beginPath();ctx.rect(c.x,c.y,c.w,c.h);ctx.clip();ctx.fillStyle=ink;ctx.strokeStyle=ink;ctx.lineWidth=1;if(m==='date')drawDate(ctx,c,d,p);if(m==='reminders')drawReminders(ctx,c,d,p);if(m==='weather')drawWeather(ctx,c,d);if(m==='countdown')drawCountdown(ctx,c,d,p);ctx.restore()}
 

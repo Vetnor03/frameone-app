@@ -66,6 +66,13 @@ export function calendarGeometry(year:number, month0:number, mode:CalendarRowMod
     mode === 'dateLarge' || mode === 'remindersLarge' ? Math.min(calculatedRows, 5) : calculatedRows
   return { firstWeekday, dayCount, rows }
 }
+export function isoWeekNumber(year:number, month0:number, day:number) {
+  const date = new Date(Date.UTC(year, month0, day))
+  const weekday = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - weekday)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+}
 export const supportedGeometry: Record<ModuleName, string[]> = {
   date:['4x1','2x2','4x2','4x4'], reminders:['4x1','2x2','4x2','4x4'], weather:['4x1','2x2','4x2','4x4'], countdown:['4x1','2x2','4x2','4x4']
 }
