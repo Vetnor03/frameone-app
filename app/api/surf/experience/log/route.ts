@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { findSpotByLabel, SURF_SPOTS } from '@/app/lib/surf/spots'
-import { scoreSurf } from '@/app/lib/surfScoring'
+import { correctedHeightForSwellSelection, pickBestSwell, selectedSwellFromPick } from '@/app/lib/surf/swellSelection'
 import { fetchOpenMeteoJson } from '@/app/lib/server/openMeteo'
 
 export const runtime = 'nodejs'
@@ -100,137 +100,6 @@ function isoHourUTCFromDate(d: Date) {
   return x.toISOString().slice(0, 13) + ':00'
 }
 
-function correctedHeight(h: number, p: number) {
-  if (!(h > 0) || !(p > 0)) return h
-  return h * (p / 10)
-}
-
-function pickLoggedSwell(args: {
-  spotKey: string
-  primary: SwellPart
-  secondary: SwellPart
-  windSpeed: number
-  windDir: number
-}) {
-  const { spotKey, primary, secondary, windSpeed, windDir } = args
-
-  const primaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: primary.height,
-    swellPeriodS: primary.period,
-    swellDirDeg: primary.dir,
-    windSpeedMs: windSpeed,
-    windDirDeg: windDir,
-  })
-
-  if (!(secondary.height > 0.05)) {
-    return {
-      chosen: 'primary' as const,
-      chosenData: primary,
-      primaryScore,
-      secondaryScore: null as any,
-      primaryTablesTotal: Number(primaryScore?.breakdown?.tables?.total ?? -Infinity),
-      secondaryTablesTotal: null as number | null,
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  const secondaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: secondary.height,
-    swellPeriodS: secondary.period,
-    swellDirDeg: secondary.dir,
-    windSpeedMs: windSpeed,
-    windDirDeg: windDir,
-  })
-
-  const pRating = Number(primaryScore?.rating ?? 0)
-  const sRating = Number(secondaryScore?.rating ?? 0)
-
-  if (sRating > pRating) {
-    return {
-      chosen: 'secondary' as const,
-      chosenData: secondary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: Number(primaryScore?.breakdown?.tables?.total ?? -Infinity),
-      secondaryTablesTotal: Number(secondaryScore?.breakdown?.tables?.total ?? -Infinity),
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  if (pRating > sRating) {
-    return {
-      chosen: 'primary' as const,
-      chosenData: primary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: Number(primaryScore?.breakdown?.tables?.total ?? -Infinity),
-      secondaryTablesTotal: Number(secondaryScore?.breakdown?.tables?.total ?? -Infinity),
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  const pTotal = Number(primaryScore?.breakdown?.tables?.total ?? -Infinity)
-  const sTotal = Number(secondaryScore?.breakdown?.tables?.total ?? -Infinity)
-
-  if (sTotal > pTotal) {
-    return {
-      chosen: 'secondary' as const,
-      chosenData: secondary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: pTotal,
-      secondaryTablesTotal: sTotal,
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  if (pTotal > sTotal) {
-    return {
-      chosen: 'primary' as const,
-      chosenData: primary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: pTotal,
-      secondaryTablesTotal: sTotal,
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  const pCorr = correctedHeight(primary.height, primary.period)
-  const sCorr = correctedHeight(secondary.height, secondary.period)
-
-  if (sCorr > pCorr) {
-    return {
-      chosen: 'secondary' as const,
-      chosenData: secondary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: pTotal,
-      secondaryTablesTotal: sTotal,
-      primaryCorrectedHeight: pCorr,
-      secondaryCorrectedHeight: sCorr,
-    }
-  }
-
-  return {
-    chosen: 'primary' as const,
-    chosenData: primary,
-    primaryScore,
-    secondaryScore,
-    primaryTablesTotal: pTotal,
-    secondaryTablesTotal: sTotal,
-    primaryCorrectedHeight: pCorr,
-    secondaryCorrectedHeight: sCorr,
-  }
-}
-
 async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, spotKey: string): Promise<MarinePoint> {
   const [marineFetched, windFetched] = await Promise.all([
     fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'marine', lat, lon, hourly: ['wave_height', 'wave_direction', 'wave_period', 'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'], timezone: 'UTC', pastDays: 7, forecastDays: 7, timeoutMs: 12000, forecastRange: 'past7-forecast7d', frameRequest: false, allowStale: true }),
@@ -268,20 +137,23 @@ async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, 
   const windSpeed = toNum(wind?.hourly?.wind_speed_10m?.[wi])
   const windDir = toNum(wind?.hourly?.wind_direction_10m?.[wi])
 
-  const picked = pickLoggedSwell({
-    spotKey,
-    primary,
-    secondary,
-    windSpeed,
-    windDir,
-  })
+  const selectionConditions = {
+    time_utc: mt[mi],
+    primary: { present: primary.height > 0.01, height_m: primary.height, direction_deg_from: primary.dir, period_s: primary.period },
+    secondary: { present: secondary.height >= 0.05, height_m: secondary.height, direction_deg_from: secondary.dir, period_s: secondary.period },
+    wind_speed_ms: windSpeed,
+    wind_direction_deg_from: windDir,
+  }
+  const picked = pickBestSwell({ spotKey, marine: selectionConditions })
+  const chosenSwell = selectedSwellFromPick(selectionConditions, picked)
+  const chosenData = { height: chosenSwell.height_m, dir: chosenSwell.direction_deg_from, period: chosenSwell.period_s }
 
   return {
     time: mt[mi],
 
-    wave_height: picked.chosenData.height,
-    wave_direction: picked.chosenData.dir,
-    wave_period: picked.chosenData.period,
+    wave_height: chosenData.height,
+    wave_direction: chosenData.dir,
+    wave_period: chosenData.period,
 
     wind_speed_10m: windSpeed,
     wind_direction_10m: windDir,
@@ -289,20 +161,20 @@ async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, 
     debug: {
       primary,
       secondary,
-      chosen: picked.chosenData,
+      chosen: chosenData,
       chosen_source: picked.chosen,
       primary_rating: Number(picked.primaryScore?.rating ?? 0),
       secondary_rating: Number(picked.secondaryScore?.rating ?? 0),
       primary_tables_total:
-        Number.isFinite(picked.primaryTablesTotal) && picked.primaryTablesTotal !== -Infinity
-          ? picked.primaryTablesTotal
+        Number.isFinite(Number(picked.primaryScore?.breakdown?.tables?.total ?? -Infinity)) && Number(picked.primaryScore?.breakdown?.tables?.total ?? -Infinity) !== -Infinity
+          ? Number(picked.primaryScore?.breakdown?.tables?.total ?? -Infinity)
           : null,
       secondary_tables_total:
-        Number.isFinite(picked.secondaryTablesTotal as number) && picked.secondaryTablesTotal !== -Infinity
-          ? (picked.secondaryTablesTotal as number)
+        Number.isFinite(Number(picked.secondaryScore?.breakdown?.tables?.total ?? -Infinity) as number) && Number(picked.secondaryScore?.breakdown?.tables?.total ?? -Infinity) !== -Infinity
+          ? (Number(picked.secondaryScore?.breakdown?.tables?.total ?? -Infinity) as number)
           : null,
-      primary_corrected_height: picked.primaryCorrectedHeight,
-      secondary_corrected_height: picked.secondaryCorrectedHeight,
+      primary_corrected_height: correctedHeightForSwellSelection(primary.height, primary.period),
+      secondary_corrected_height: correctedHeightForSwellSelection(secondary.height, secondary.period),
       condition_signature: {
         spotKey,
         swells: [

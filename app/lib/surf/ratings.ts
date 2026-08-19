@@ -97,6 +97,8 @@ export function surfRatingIsExperienceBased(payload: unknown): boolean {
   const pickedExperience = asRecord(picked.experience)
 
   return (
+    Math.abs(asNumber(record.experienceAdjustment) ?? 0) > 0.000001 ||
+    Math.abs(asNumber(asRecord(record.breakdown).experienceAdjustment) ?? 0) > 0.000001 ||
     truthy(record.isExperienceBased) ||
     truthy(record.ratingFromExperience) ||
     truthy(record.basedOnExperience) ||
@@ -121,6 +123,18 @@ export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unkno
   const pickedBreakdownExperience = asRecord(asRecord(picked.breakdown).experience)
   const pickedExperience = asRecord(picked.experience)
   const isExperienceBased = surfRatingIsExperienceBased(record)
+
+  // A production scorer's explicit final rating is authoritative. Presentation
+  // code must not rebuild the deterministic score and overwrite its blend.
+  const explicitFinal = asRating1to6(record.finalRating ?? asRecord(record.breakdown).finalRating)
+  if (explicitFinal != null) {
+    return {
+      rating: explicitFinal,
+      source: isExperienceBased ? 'experience_blend' : 'base',
+      ratingFromExperience: isExperienceBased,
+      experienceDiceValue: isExperienceBased ? explicitFinal : undefined,
+    }
+  }
 
   if (isExperienceBased) {
     const blendedFloatCandidates = [

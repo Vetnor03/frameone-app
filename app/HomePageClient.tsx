@@ -8,7 +8,7 @@ import { supabase } from './lib/supabase'
 import { fetchSurfScore } from './lib/fetchSurfScore'
 import { findSpotByLabel } from './lib/surf/spots'
 import { clampAngleToSector, normalizeAngle, sectorMidpoint } from './lib/surf/customSpotMath'
-import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased } from './lib/surf/ratings'
+import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased, surfRatingLabel } from './lib/surf/ratings'
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
@@ -4548,15 +4548,7 @@ function MirrorXLDateView({
 }
 
 function mirrorSurfRatingWord(rating: number | undefined) {
-  switch (Math.round(Number(rating))) {
-    case 1: return 'Flat'
-    case 2: return 'Poor'
-    case 3: return 'Poor to Fair'
-    case 4: return 'Fair'
-    case 5: return 'Good'
-    case 6: return 'Legendary'
-    default: return '--'
-  }
+  return rating == null ? '--' : surfRatingLabel(rating)
 }
 
 type MirrorSurfTrend = { symbol: '↑' | '−' | '↓'; label: string }

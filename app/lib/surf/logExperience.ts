@@ -1,5 +1,5 @@
 // app/lib/surf/logExperience.ts
-import { scoreSurf } from '../surfScoring'
+import { pickBestSwell, selectedSwellFromPick } from './swellSelection'
 import { fetchOpenMeteoJson } from '../server/openMeteo'
 
 export type Sideswell = {
@@ -167,36 +167,6 @@ function makeBundleAtIndices(series: MarineSeries, mi: number, wi: number): Mari
   }
 }
 
-function pickBestSwellForHour(spotKey: string, marine: MarineBundle) {
-  const primaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: marine.primary.height_m,
-    swellPeriodS: marine.primary.period_s,
-    swellDirDeg: marine.primary.direction_deg_from,
-    windSpeedMs: marine.wind_speed_ms,
-    windDirDeg: marine.wind_direction_deg_from,
-  })
-
-  if (!marine.secondary.present) {
-    return { which: 'primary' as const, chosen: marine.primary }
-  }
-
-  const secondaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: marine.secondary.height_m,
-    swellPeriodS: marine.secondary.period_s,
-    swellDirDeg: marine.secondary.direction_deg_from,
-    windSpeedMs: marine.wind_speed_ms,
-    windDirDeg: marine.wind_direction_deg_from,
-  })
-
-  if (secondaryScore.rating > primaryScore.rating) {
-    return { which: 'secondary' as const, chosen: marine.secondary }
-  }
-
-  return { which: 'primary' as const, chosen: marine.primary }
-}
-
 export async function getChosenSurfConditionsAt(args: {
   spotKey: string
   lat: number
@@ -211,17 +181,18 @@ export async function getChosenSurfConditionsAt(args: {
   const wi = nearestHourIndex(series.wt, targetHour)
 
   const marine = makeBundleAtIndices(series, mi, wi)
-  const picked = pickBestSwellForHour(spotKey, marine)
+  const picked = pickBestSwell({ spotKey, marine })
+  const chosen = selectedSwellFromPick(marine, picked)
 
   return {
     time_utc: marine.time_utc,
-    wave_dir_from_deg: Number(picked.chosen.direction_deg_from),
-    wave_height_m: Number(picked.chosen.height_m),
-    wave_period_s: Number(picked.chosen.period_s),
+    wave_dir_from_deg: Number(chosen.direction_deg_from),
+    wave_height_m: Number(chosen.height_m),
+    wave_period_s: Number(chosen.period_s),
     wind_dir_from_deg: Number(marine.wind_direction_deg_from),
     wind_speed_ms: Number(marine.wind_speed_ms),
-    picked: picked.which,
-    selected_swell_index: picked.which === 'secondary' ? 2 : 1,
+    picked: picked.chosen,
+    selected_swell_index: picked.chosen === 'secondary' ? 2 : 1,
     condition_signature: {
       spotKey,
       swells: [
