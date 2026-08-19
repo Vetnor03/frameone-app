@@ -124,12 +124,25 @@ export function splitCellNearPointer(cells, point, viewport = {width: 785, heigh
   return {...splitCellAtBoundary(cells, parent?.id, guide), guide}
 }
 
-/** Snap both drag endpoints to grid boundaries and normalize the rectangle. */
-export function snapDragSelection(start, end, viewport = {width: 785, height: 458}) {
-  const a = {col: snapBoundary(start.x, viewport.width), row: snapBoundary(start.y, viewport.height)}
-  const b = {col: snapBoundary(end.x, viewport.width), row: snapBoundary(end.y, viewport.height)}
-  return {col: Math.min(a.col, b.col), row: Math.min(a.row, b.row), colSpan: Math.abs(a.col - b.col), rowSpan: Math.abs(a.row - b.row)}
+/** Find the atomic grid cell containing a viewport-local pointer. */
+export function gridCellAtPointer(point, viewport = {width: 785, height: 458}) {
+  const index = (value, extent) => Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(value / extent * GRID_SIZE)))
+  return {col: index(point.x, viewport.width), row: index(point.y, viewport.height)}
 }
+
+/** Return the inclusive, normalized rectangle between two atomic grid cells. */
+export function selectionBetweenGridCells(start, end) {
+  const col = Math.min(start.col, end.col), row = Math.min(start.row, end.row)
+  return {col, row, colSpan: Math.max(start.col, end.col) - col + 1, rowSpan: Math.max(start.row, end.row) - row + 1}
+}
+
+/** Select complete cells under both pointers, rather than rounding to nearby edges. */
+export function dragSelectionFromPointers(start, end, viewport = {width: 785, height: 458}) {
+  return selectionBetweenGridCells(gridCellAtPointer(start, viewport), gridCellAtPointer(end, viewport))
+}
+
+/** @deprecated Use dragSelectionFromPointers. Retained for external editor consumers. */
+export const snapDragSelection = dragSelectionFromPointers
 
 export function cellsFullyContainedInSelection(cells, selection) {
   return sortCells(cells.filter(cell => cell.col >= selection.col && cell.row >= selection.row && cell.col + cell.colSpan <= selection.col + selection.colSpan && cell.row + cell.rowSpan <= selection.row + selection.rowSpan))

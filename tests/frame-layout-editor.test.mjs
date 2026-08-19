@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -64,11 +64,32 @@ test('complete-cell split preserves assignment on largest and deterministic top-
   result=splitCellAtBoundary(assigned,'cell',{axis:'horizontal',boundary:2});assert.deepEqual({row:result.cells.find(c=>c.moduleId==='weather').row,moduleId:result.cells.find(c=>c.moduleId==='weather').moduleId},{row:0,moduleId:'weather'})
 })
 test('drag snapping and merging two and three-plus cells',()=>{
-  assert.deepEqual(snapDragSelection({x:5,y:5},{x:395,y:205},viewport),{col:0,row:0,colSpan:4,rowSpan:2})
+  assert.deepEqual(snapDragSelection({x:5,y:5},{x:395,y:205},viewport),{col:0,row:0,colSpan:4,rowSpan:3})
   const two=[{id:'a',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'empty'},{id:'b',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'date'}]
   let result=mergeCellsInSelection(two,{col:0,row:0,colSpan:4,rowSpan:4});assert.equal(result.valid,true);assert.equal(result.cells[0].moduleId,'date');assertPartition(result.cells)
   const four=[{id:'a',col:0,row:0,colSpan:1,rowSpan:4,moduleId:'surf'},{id:'b',col:1,row:0,colSpan:1,rowSpan:4,moduleId:'surf'},{id:'c',col:2,row:0,colSpan:1,rowSpan:4,moduleId:'empty'},{id:'d',col:3,row:0,colSpan:1,rowSpan:4,moduleId:'empty'}]
   result=mergeCellsInSelection(four,{col:0,row:0,colSpan:3,rowSpan:4});assert.equal(result.valid,true);assert.equal(result.cells.find(c=>c.col===0).moduleId,'surf');assertPartition(result.cells)
+})
+test('drag selection uses the complete inclusive cells under both pointers',()=>{
+  const center=(col,row)=>({x:col*100+50,y:row*100+50})
+  assert.deepEqual(gridCellAtPointer(center(2,3),viewport),{col:2,row:3})
+  assert.deepEqual(dragSelectionFromPointers(center(0,0),center(1,0),viewport),{col:0,row:0,colSpan:2,rowSpan:1})
+  assert.deepEqual(dragSelectionFromPointers(center(0,0),center(2,1),viewport),{col:0,row:0,colSpan:3,rowSpan:2})
+  assert.deepEqual(dragSelectionFromPointers(center(2,1),center(0,0),viewport),dragSelectionFromPointers(center(0,0),center(2,1),viewport))
+  assert.deepEqual(dragSelectionFromPointers(center(3,3),center(0,0),viewport),{col:0,row:0,colSpan:4,rowSpan:4})
+  assert.deepEqual(dragSelectionFromPointers({x:2,y:2},{x:99,y:99},viewport),{col:0,row:0,colSpan:1,rowSpan:1})
+  assert.deepEqual(dragSelectionFromPointers({x:99,y:50},{x:100,y:50},viewport),{col:0,row:0,colSpan:2,rowSpan:1})
+  assert.deepEqual(selectionBetweenGridCells({col:1,row:1},{col:2,row:2}),{col:1,row:1,colSpan:2,rowSpan:2})
+  assert.deepEqual(gridCellAtPointer({x:400,y:400},viewport),{col:3,row:3})
+})
+test('cell-based drag merge is one undoable operation and rejects partial regions',()=>{
+  const units=Array.from({length:4},(_,row)=>Array.from({length:4},(_,col)=>({id:`${col}-${row}`,col,row,colSpan:1,rowSpan:1,moduleId:'empty'}))).flat()
+  const selection=dragSelectionFromPointers({x:50,y:50},{x:250,y:150},viewport),merged=mergeCellsInSelection(units,selection)
+  assert.equal(merged.valid,true);assert.deepEqual(geometry(merged.cells).find(c=>c.col===0&&c.row===0),{col:0,row:0,colSpan:3,rowSpan:2,moduleId:'empty'});assertPartition(merged.cells)
+  assert.deepEqual(undoHistory(pushHistory(createHistory(units),merged.cells)).present,units)
+  const crossing=[{id:'wide',col:0,row:0,colSpan:2,rowSpan:1,moduleId:'empty'},...units.filter(c=>c.row!==0||c.col>1)]
+  const partial=dragSelectionFromPointers({x:150,y:50},{x:150,y:150},viewport)
+  assert.equal(mergeCellsInSelection(crossing,partial).valid,false)
 })
 test('drag rejects gaps, partial cells, L unions, and conflicting assignments',()=>{
   const quadrants=[{id:'a',col:0,row:0,colSpan:2,rowSpan:2,moduleId:'weather'},{id:'b',col:2,row:0,colSpan:2,rowSpan:2,moduleId:'date'},{id:'c',col:0,row:2,colSpan:2,rowSpan:2,moduleId:'empty'},{id:'d',col:2,row:2,colSpan:2,rowSpan:2,moduleId:'empty'}]
