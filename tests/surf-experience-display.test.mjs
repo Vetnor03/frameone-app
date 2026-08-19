@@ -5,6 +5,7 @@ register('./typescript-test-loader.mjs', import.meta.url)
 
 const {
   MIN_PERSONAL_EXPERIENCES,
+  SURF_DICE_MIN_MATCH_QUALITY,
   SURF_DICE_MIN_PERSONAL_CONFIDENCE,
   scoreSurf,
   surfExperienceDisplayDecision,
@@ -41,9 +42,10 @@ test('presentation decision is conservative and explainable', () => {
   assert.deepEqual(surfExperienceDisplayDecision(null), {
     experienceDisplay: 'normal', experienceDisplayReason: 'no_personal_evidence',
   })
-  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES - 1, confidence: 1 }).experienceDisplayReason, 'insufficient_personal_samples')
-  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: SURF_DICE_MIN_PERSONAL_CONFIDENCE - 0.01 }).experienceDisplayReason, 'low_personal_confidence')
-  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: SURF_DICE_MIN_PERSONAL_CONFIDENCE }).experienceDisplayReason, 'strong_personal_match')
+  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES - 1, confidence: 1, matchQuality: 1 }).experienceDisplayReason, 'insufficient_personal_samples')
+  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: SURF_DICE_MIN_PERSONAL_CONFIDENCE - 0.01, matchQuality: 1 }).experienceDisplayReason, 'low_personal_confidence')
+  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: 1, matchQuality: SURF_DICE_MIN_MATCH_QUALITY - 0.01 }).experienceDisplayReason, 'weak_personal_match')
+  assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: SURF_DICE_MIN_PERSONAL_CONFIDENCE, matchQuality: SURF_DICE_MIN_MATCH_QUALITY }).experienceDisplayReason, 'strong_personal_match')
 })
 
 test('base, legacy/bootstrap, and shared-only influence use the normal icon', () => {
@@ -77,6 +79,24 @@ test('strong personal evidence shows dice with or without shared calibration', (
     assert.equal(result.experienceDisplayReason, 'strong_personal_match')
     assert.equal(normalizeSurfRating1to6(result).ratingFromExperience, true)
   }
+})
+
+test('many mediocre matches cannot replace three genuinely close matches', () => {
+  // A 0.8m height difference yields roughly 0.75 geometric condition similarity:
+  // qualifying for calibration, and numerous enough for high confidence, but not close.
+  const mediocre = Array.from({ length: 50 }, (_, i) => row(i, 'personal', { wave_height_m: 2.0 }))
+  const fourMediocre = scoreSurf({ ...conditions, userExperiences: mediocre.slice(0, 4) })
+  const fiftyMediocre = scoreSurf({ ...conditions, userExperiences: mediocre })
+  const close = scoreSurf({ ...conditions, userExperiences: Array.from({ length: 3 }, (_, i) => row(i)) })
+
+  for (const result of [fourMediocre, fiftyMediocre]) {
+    assert.ok(result.breakdown.calibration.personalConfidence >= SURF_DICE_MIN_PERSONAL_CONFIDENCE)
+    assert.ok(result.breakdown.calibration.personalMatchQuality < SURF_DICE_MIN_MATCH_QUALITY)
+    assert.equal(result.experienceDisplay, 'normal')
+    assert.equal(result.experienceDisplayReason, 'weak_personal_match')
+  }
+  assert.ok(close.breakdown.calibration.personalMatchQuality >= SURF_DICE_MIN_MATCH_QUALITY)
+  assert.equal(close.experienceDisplay, 'personal_match')
 })
 
 test('AI enrichment follows personal relevance; annotation alone cannot show dice', () => {
