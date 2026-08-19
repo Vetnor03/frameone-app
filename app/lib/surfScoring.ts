@@ -71,6 +71,9 @@ export type UserSurfExperienceRecord = {
   selected_swell_index?: number | null
   created_at?: string
   updated_at?: string
+  /** Server-only routing hint. Never persisted or returned to clients. */
+  calibration_scope?: 'shared' | 'personal'
+  surf_model_version?: string | null
 }
 
 
@@ -214,6 +217,22 @@ type ScoreBreakdown = {
   }
 
   scoring_breakdown?: SurfScoringBreakdown
+  calibration?: {
+    surfModelVersion: string
+    sharedCalibrationVersion: string
+    baseScore: number
+    bootstrapScore: number
+    sharedAdjustment: number
+    sharedConfidence: number
+    sharedSampleCount: number
+    sharedDistinctUsers: number
+    personalAdjustment: number
+    personalConfidence: number
+    personalSampleCount: number
+    finalScore: number
+    finalRating: number
+    source: 'base_only' | 'shared_calibration' | 'personal_calibration' | 'shared_and_personal'
+  }
   custom_spot_scoring_profile?: CustomSpotScoringProfile | null
   selectedMainSwellIndex?: number
   contributingSwellIndexes?: number[]
@@ -244,6 +263,14 @@ export type SurfScoreResult = {
   line2: string
   breakdown: ScoreBreakdown
 }
+
+export const SURF_MODEL_VERSION = 'deterministic-v1'
+export const SHARED_CALIBRATION_VERSION = 'residual-v1'
+export const MIN_SHARED_EXPERIENCES = 8
+export const MIN_SHARED_DISTINCT_USERS = 3
+export const MIN_PERSONAL_EXPERIENCES = 3
+export const MAX_SHARED_ADJUSTMENT = 0.75
+export const MAX_PERSONAL_ADJUSTMENT = 0.75
 
 // ---------------------
 // Mojibake + normalization
@@ -1578,6 +1605,158 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
 // ---------------------
 // MAIN
 // ---------------------
+type CalibrationSummary = { adjustment: number; confidence: number; sampleCount: number; distinctUsers: number }
+
+// Weak keys keep prepared data scoped to the in-memory candidate objects/array used by a request.
+// Nothing is persisted or addressable by user id, and entries disappear when the request pool is
+// no longer referenced.
+const historicalBootstrapCache = new WeakMap<UserSurfExperienceRecord, Map<string, number>>()
+const historicalPersonalSharedCache = new WeakMap<UserSurfExperienceRecord[], Map<string, WeakMap<UserSurfExperienceRecord, number>>>()
+let calibrationCacheStats = { bootstrapReplays: 0, personalSharedComputations: 0 }
+
+export function resetSurfCalibrationCacheStats() {
+  calibrationCacheStats = { bootstrapReplays: 0, personalSharedComputations: 0 }
+}
+
+export function getSurfCalibrationCacheStats() {
+  return { ...calibrationCacheStats }
+}
+
+function calibrationCacheKey(spotKey: string, customSpotProfile?: CustomSpotScoringProfile | null) {
+  return `${SURF_MODEL_VERSION}|${SHARED_CALIBRATION_VERSION}|${spotKey}|${JSON.stringify(customSpotProfile ?? null)}`
+}
+
+function circularDistance(a: number, b: number) {
+  const d = Math.abs(a - b) % 360
+  return Math.min(d, 360 - d)
+}
+
+function replayableConditions(record: UserSurfExperienceRecord) {
+  let signature: NormalizedSwellMixSignature | null = null
+  if (record.condition_signature) {
+    try {
+      signature = (typeof record.condition_signature === 'string' ? JSON.parse(record.condition_signature) : record.condition_signature) as NormalizedSwellMixSignature
+    } catch { signature = null }
+  }
+  const selected = signature?.swells?.find((s) => s.index === record.selected_swell_index)
+    ?? signature?.swells?.[0]
+  const h = Number(selected?.height_m ?? record.wave_height_m)
+  const p = Number(selected?.period_s ?? record.wave_period_s)
+  const d = Number(selected?.direction_deg_from ?? record.wave_dir_from_deg)
+  const ws = Number(signature?.wind_speed_ms ?? record.wind_speed_ms)
+  const wd = Number(signature?.wind_direction_deg_from ?? record.wind_dir_from_deg)
+  if (![h, p, d, ws, wd, Number(record.rating_1_6)].every(Number.isFinite)) return null
+  return { h, p, d, ws, wd, signature }
+}
+
+function replayedBootstrapPrediction(args: { spotKey: string; h: number; p: number; d: number; ws: number; wd: number; signature?: NormalizedSwellMixSignature | null; customSpotProfile?: CustomSpotScoringProfile | null }) {
+  const replay = buildModelScore({ spotKey: args.spotKey, h: args.h, p: args.p, sd: args.d, ws: args.ws, wd: args.wd, customSpotProfile: args.customSpotProfile })
+  const signature = args.signature ?? buildSwellMixSignature({
+    spotKey: args.spotKey,
+    fallback: { index: 1, height_m: args.h, period_s: args.p, direction_deg_from: args.d },
+    windSpeed: args.ws,
+    windDirFrom: args.wd,
+    customSpotProfile: args.customSpotProfile,
+  })
+  const bootstrap = buildExperienceBlend({
+    spotKey: args.spotKey,
+    waveH: args.h,
+    waveDirFrom: args.d,
+    wavePeriod: args.p,
+    windSpeed: args.ws,
+    windDirFrom: args.wd,
+    swellMixSignature: signature,
+    userExperiences: [],
+    modelRating: replay.rating,
+  })
+  return { model: replay, score: bootstrap.blended_rating_float }
+}
+
+function cachedHistoricalBootstrapPrediction(record: UserSurfExperienceRecord, conditions: NonNullable<ReturnType<typeof replayableConditions>>, args: { spotKey: string; customSpotProfile?: CustomSpotScoringProfile | null }) {
+  const key = calibrationCacheKey(args.spotKey, args.customSpotProfile)
+  let byConfiguration = historicalBootstrapCache.get(record)
+  if (!byConfiguration) {
+    byConfiguration = new Map()
+    historicalBootstrapCache.set(record, byConfiguration)
+  }
+  const cached = byConfiguration.get(key)
+  if (cached != null) return cached
+  const score = replayedBootstrapPrediction({ spotKey: args.spotKey, h: conditions.h, p: conditions.p, d: conditions.d, ws: conditions.ws, wd: conditions.wd, signature: conditions.signature, customSpotProfile: args.customSpotProfile }).score
+  byConfiguration.set(key, score)
+  calibrationCacheStats.bootstrapReplays++
+  return score
+}
+
+function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: string; h: number; p: number; d: number; ws: number; wd: number; currentSwellCount: number; personal: boolean; now: number; sharedRecords?: UserSurfExperienceRecord[]; calibrationPool?: UserSurfExperienceRecord[]; customSpotProfile?: CustomSpotScoringProfile | null }): CalibrationSummary {
+  const candidates: Array<{ residual: number; weight: number; user: string }> = []
+  for (const record of args.records) {
+    const c = replayableConditions(record)
+    if (!c) continue
+    const heightSimilarity = Math.exp(-Math.abs(c.h - args.h) / 0.55)
+    const periodSimilarity = Math.exp(-Math.abs(c.p - args.p) / 3)
+    const swellDirectionSimilarity = Math.exp(-circularDistance(c.d, args.d) / 45)
+    const windSpeedSimilarity = Math.exp(-Math.abs(c.ws - args.ws) / 4)
+    const windDirectionSimilarity = Math.exp(-circularDistance(c.wd, args.wd) / 70)
+    let similarity = Math.pow(heightSimilarity * periodSimilarity * swellDirectionSimilarity * windSpeedSimilarity * windDirectionSimilarity, 0.2)
+    if (c.signature?.swells?.length) {
+      similarity *= 1 - Math.min(0.2, Math.abs(c.signature.swells.length - args.currentSwellCount) * 0.1)
+    }
+    if (similarity < 0.58) continue
+    const at = Date.parse(record.logged_at ?? record.created_at ?? '')
+    const ageDays = Number.isFinite(at) ? Math.max(0, args.now - at) / 86400000 : 365
+    const recency = Math.exp(-ageDays / 540)
+    const weight = similarity * similarity * recency
+    if (weight < 0.12) continue
+    const bootstrapPrediction = cachedHistoricalBootstrapPrediction(record, c, { spotKey: args.spotKey, customSpotProfile: args.customSpotProfile })
+    let historicalSharedAdjustment = 0
+    if (args.personal && args.sharedRecords?.length) {
+      const pool = args.calibrationPool ?? args.records
+      const key = calibrationCacheKey(args.spotKey, args.customSpotProfile)
+      let byConfiguration = historicalPersonalSharedCache.get(pool)
+      if (!byConfiguration) {
+        byConfiguration = new Map()
+        historicalPersonalSharedCache.set(pool, byConfiguration)
+      }
+      let byPersonalRecord = byConfiguration.get(key)
+      if (!byPersonalRecord) {
+        byPersonalRecord = new WeakMap()
+        byConfiguration.set(key, byPersonalRecord)
+      }
+      const cached = byPersonalRecord.get(record)
+      if (cached != null) {
+        historicalSharedAdjustment = cached
+      } else {
+        historicalSharedAdjustment = calibrationFor({
+          records: args.sharedRecords,
+          spotKey: args.spotKey,
+          h: c.h,
+          p: c.p,
+          d: c.d,
+          ws: c.ws,
+          wd: c.wd,
+          currentSwellCount: c.signature?.swells?.length ?? 1,
+          personal: false,
+          now: args.now,
+          customSpotProfile: args.customSpotProfile,
+        }).adjustment
+        byPersonalRecord.set(record, historicalSharedAdjustment)
+        calibrationCacheStats.personalSharedComputations++
+      }
+    }
+    const predicted = bootstrapPrediction + historicalSharedAdjustment
+    candidates.push({ residual: Number(record.rating_1_6) - predicted, weight, user: String(record.user_id ?? record.id ?? 'legacy') })
+  }
+  const distinctUsers = new Set(candidates.map((x) => x.user)).size
+  const minimum = args.personal ? MIN_PERSONAL_EXPERIENCES : MIN_SHARED_EXPERIENCES
+  if (candidates.length < minimum || (!args.personal && distinctUsers < MIN_SHARED_DISTINCT_USERS)) return { adjustment: 0, confidence: 0, sampleCount: candidates.length, distinctUsers }
+  const total = candidates.reduce((s, x) => s + x.weight, 0)
+  const raw = candidates.reduce((s, x) => s + x.residual * x.weight, 0) / total
+  const confidence = clamp((total / (args.personal ? 3 : 8)) * (args.personal ? 1 : distinctUsers / 3), 0, 1)
+  if (confidence < 0.35) return { adjustment: 0, confidence, sampleCount: candidates.length, distinctUsers }
+  const cap = args.personal ? MAX_PERSONAL_ADJUSTMENT : MAX_SHARED_ADJUSTMENT
+  return { adjustment: clamp(raw * confidence, -cap, cap), confidence, sampleCount: candidates.length, distinctUsers }
+}
+
 export function scoreSurf(params: {
   spotKey: string
   swellHeightM: number
@@ -1643,6 +1822,7 @@ export function scoreSurf(params: {
     customSpotProfile: params.customSpotProfile,
   })
 
+  const scopedCalibration = !!params.userExperiences?.some((r) => r.calibration_scope)
   const exp = buildExperienceBlend({
     spotKey,
     waveH: h,
@@ -1651,18 +1831,27 @@ export function scoreSurf(params: {
     windSpeed: ws,
     windDirFrom: wd,
     swellMixSignature,
-    userExperiences: params.userExperiences,
+    // Scoped database rows are consumed only by privacy-safe residual aggregates below;
+    // the empty list intentionally preserves the static legacy/bootstrap prior.
+    userExperiences: scopedCalibration ? [] : params.userExperiences,
     modelRating: model.rating,
   })
-
-  const finalRating = clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
+  const sharedRecords = params.userExperiences?.filter((r) => r.calibration_scope === 'shared') ?? []
+  const personalRecords = params.userExperiences?.filter((r) => r.calibration_scope === 'personal') ?? []
+  const shared = scopedCalibration ? calibrationFor({ records: sharedRecords, spotKey, h, p, d: sd, ws, wd, currentSwellCount: swellMixSignature.swells.length, personal: false, now: Date.now(), customSpotProfile: params.customSpotProfile }) : null
+  const personal = scopedCalibration ? calibrationFor({ records: personalRecords, spotKey, h, p, d: sd, ws, wd, currentSwellCount: swellMixSignature.swells.length, sharedRecords, calibrationPool: params.userExperiences, personal: true, now: Date.now(), customSpotProfile: params.customSpotProfile }) : null
+  const baseScoreFloat = model.scoringBreakdown.finalScoreFloat
+  const bootstrapScoreFloat = exp.blended_rating_float
+  const calibratedScoreFloat = clamp(bootstrapScoreFloat + (shared?.adjustment ?? 0) + (personal?.adjustment ?? 0), 1, 6)
+  const finalRating = scopedCalibration ? roundFinalScore(calibratedScoreFloat) : clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
+  const calibrationSource = shared?.adjustment && personal?.adjustment ? 'shared_and_personal' : shared?.adjustment ? 'shared_calibration' : personal?.adjustment ? 'personal_calibration' : 'base_only'
 
   return {
     rating: finalRating,
     score: finalRating,
     baseScore: model.rating,
-    experienceAdjustment: exp.blended_rating_float - model.rating,
-    experienceConfidence: exp.confidence,
+    experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
+    experienceConfidence: scopedCalibration ? Math.max(shared?.confidence ?? 0, personal?.confidence ?? 0) : exp.confidence,
     finalScore: finalRating,
     finalRating,
     line1,
@@ -1713,6 +1902,15 @@ export function scoreSurf(params: {
       },
       tables: model.tables,
       scoring_breakdown: model.scoringBreakdown,
+      calibration: scopedCalibration ? {
+        surfModelVersion: SURF_MODEL_VERSION, sharedCalibrationVersion: SHARED_CALIBRATION_VERSION,
+        baseScore: baseScoreFloat, sharedAdjustment: shared!.adjustment, sharedConfidence: shared!.confidence,
+        bootstrapScore: bootstrapScoreFloat,
+        sharedSampleCount: shared!.sampleCount, sharedDistinctUsers: shared!.distinctUsers,
+        personalAdjustment: personal!.adjustment, personalConfidence: personal!.confidence,
+        personalSampleCount: personal!.sampleCount, finalScore: calibratedScoreFloat, finalRating,
+        source: calibrationSource,
+      } : undefined,
       custom_spot_scoring_profile: customSpotProfileForBreakdown(params.customSpotProfile),
       selectedMainSwellIndex,
       contributingSwellIndexes: scoreSwells.map((x) => x.index),
@@ -1723,7 +1921,7 @@ export function scoreSurf(params: {
       experienceRating: exp.rating_1_6,
       finalRating,
       baseScore: model.rating,
-      experienceAdjustment: exp.blended_rating_float - model.rating,
+      experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
       finalScore: finalRating,
       whySelected: params.whySelected,
       method:

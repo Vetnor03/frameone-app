@@ -825,6 +825,25 @@ async function fetchMarineSeries(lat: number, lon: number, ctx = createSurfReque
 
 type UserExpMap = Record<string, UserSurfExperienceRecord[]>
 
+const SURF_CALIBRATION_CANDIDATE_LIMIT = 250
+
+async function appendSharedCalibrationRows(args: { out: UserExpMap; ids: string[]; ownerUserId: string; supabaseUrl: string; serviceRoleKey: string }) {
+  const admin = createClient(args.supabaseUrl, args.serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  const { data } = await admin.from('user_surf_experiences').select(`
+    id,user_id,spot_id,spot,logged_at,wave_dir_from_deg,wave_height_m,wave_period_s,
+    wind_dir_from_deg,wind_speed_ms,rating_1_6,primary_swell_height_m,primary_swell_period_s,
+    primary_swell_dir_from_deg,secondary_swell_height_m,secondary_swell_period_s,
+    secondary_swell_dir_from_deg,third_swell_height_m,third_swell_period_s,
+    third_swell_dir_from_deg,tide_m,forecast_time_utc,selected_swell_index,condition_signature,
+    surf_model_version,created_at,updated_at
+  `).or(`spot_id.in.(${args.ids.join(',')}),spot.in.(${args.ids.join(',')})`)
+    .neq('user_id', args.ownerUserId).order('logged_at', { ascending: false }).limit(SURF_CALIBRATION_CANDIDATE_LIMIT)
+  for (const row of Array.isArray(data) ? data : []) {
+    const sid = String(row?.spot_id ?? row?.spot ?? '').trim()
+    if (sid && args.out[sid]) args.out[sid].push({ ...row, calibration_scope: 'shared' } as UserSurfExperienceRecord)
+  }
+}
+
 
 function rawTokenFromBearer(bearer: string) {
   return String(bearer || '').replace(/^Bearer\s+/i, '').trim()
@@ -847,8 +866,6 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
 
   const bearer = authBearerFromReq(req)
 
-  if (!bearer) return out
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -857,6 +874,10 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
 
   const ids = Array.from(new Set(spotIds.map((s) => String(s || '').trim()).filter(Boolean)))
   if (!ids.length) return out
+  if (!bearer) {
+    await appendSharedCalibrationRows({ out, ids, ownerUserId: '__anonymous__', supabaseUrl, serviceRoleKey })
+    return out
+  }
 
   let userSupabase: ReturnType<typeof createClient> | null = null
   let ownerUserId: string | null = null
@@ -949,6 +970,7 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       .eq('user_id', ownerUserId)
       .or(`spot_id.in.(${ids.join(',')}),spot.in.(${ids.join(',')})`)
       .order('logged_at', { ascending: false })
+      .limit(100)
 
 
     if (error || !Array.isArray(data)) return out
@@ -957,9 +979,9 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       const sid = String(row?.spot_id ?? row?.spot ?? '').trim()
       if (!sid) continue
       if (!out[sid]) out[sid] = []
-      out[sid].push(row as UserSurfExperienceRecord)
+      out[sid].push({ ...row, calibration_scope: 'personal' } as UserSurfExperienceRecord)
     }
-
+    await appendSharedCalibrationRows({ out, ids, ownerUserId, supabaseUrl, serviceRoleKey })
     return out
   }
 
@@ -998,6 +1020,7 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
     .eq('user_id', ownerUserId)
     .or(`spot_id.in.(${ids.join(',')}),spot.in.(${ids.join(',')})`)
     .order('logged_at', { ascending: false })
+    .limit(100)
 
 
   if (error || !Array.isArray(data)) return out
@@ -1006,9 +1029,9 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
     const sid = String(row?.spot_id ?? row?.spot ?? '').trim()
     if (!sid) continue
     if (!out[sid]) out[sid] = []
-    out[sid].push(row as UserSurfExperienceRecord)
+    out[sid].push({ ...row, calibration_scope: 'personal' } as UserSurfExperienceRecord)
   }
-
+  await appendSharedCalibrationRows({ out, ids, ownerUserId, supabaseUrl, serviceRoleKey })
   return out
 }
 
@@ -2868,8 +2891,8 @@ export async function GET(req: Request) {
           auth: {
             has_bearer: hasBearer,
             chosen_user_experiences_for_spot: chosenUserExperiences.length,
-            chosen_user_experience_ids: chosenUserExperiences.map((x) => x.id),
-            chosen_user_experience_logged_at: chosenUserExperiences.map((x) => x.logged_at),
+            chosen_user_experience_ids: chosenUserExperiences.filter((x) => x.calibration_scope !== 'shared').map((x) => x.id),
+            chosen_user_experience_logged_at: chosenUserExperiences.filter((x) => x.calibration_scope !== 'shared').map((x) => x.logged_at),
           },
 
           ...pickedNow.selectionDebug,
@@ -3213,8 +3236,8 @@ export async function GET(req: Request) {
         auth: {
           has_bearer: hasBearer,
           user_experiences_for_spot: spotUserExperiences.length,
-          user_experience_ids: spotUserExperiences.map((x) => x.id),
-          user_experience_logged_at: spotUserExperiences.map((x) => x.logged_at),
+          user_experience_ids: spotUserExperiences.filter((x) => x.calibration_scope !== 'shared').map((x) => x.id),
+          user_experience_logged_at: spotUserExperiences.filter((x) => x.calibration_scope !== 'shared').map((x) => x.logged_at),
         },
 
         ...pickedNow.selectionDebug,

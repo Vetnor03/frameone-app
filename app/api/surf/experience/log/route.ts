@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { findSpotByLabel, SURF_SPOTS } from '@/app/lib/surf/spots'
 import { correctedHeightForSwellSelection, pickBestSwell, selectedSwellFromPick } from '@/app/lib/surf/swellSelection'
 import { fetchOpenMeteoJson } from '@/app/lib/server/openMeteo'
+import { SURF_MODEL_VERSION } from '@/app/lib/surfScoring'
 
 export const runtime = 'nodejs'
 
@@ -319,6 +320,7 @@ export async function POST(req: Request) {
           condition_signature: marine.debug.condition_signature,
           forecast_time_utc: marine.time,
           rating_1_6: ratingNum,
+          surf_model_version: SURF_MODEL_VERSION,
         })
         .eq('id', existingId)
         .eq('user_id', user.id)
@@ -374,6 +376,7 @@ export async function POST(req: Request) {
         condition_signature: marine.debug.condition_signature,
         forecast_time_utc: marine.time,
         rating_1_6: ratingNum,
+        surf_model_version: SURF_MODEL_VERSION,
       })
 
     if (error) throw error
