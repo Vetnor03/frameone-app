@@ -2,7 +2,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { findSpotByLabel, SURF_SPOTS } from '@/app/lib/surf/spots'
-import { scoreSurf } from '@/app/lib/surfScoring'
+import {
+  normalizeCustomSpotScoringProfile,
+  type CustomSpotScoringProfile,
+} from '@/app/lib/surfScoring'
+import {
+  selectBestSurfSwell,
+  type SurfMarineBundle,
+} from '@/app/lib/surf/swellSelection'
 import { fetchOpenMeteoJson } from '@/app/lib/server/openMeteo'
 
 export const runtime = 'nodejs'
@@ -12,29 +19,74 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function fetchCustomSpotForUser(userId: string, spotIdOrName: string) {
+const SECONDARY_MIN_M = 0.05
+
+type CustomSurfSpotRow = {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  user_id: string
+  swell_sector_start_deg: number
+  swell_sector_end_deg: number
+  swell_main_deg: number
+  wind_sector_start_deg: number
+  wind_sector_end_deg: number
+  wind_main_deg: number
+}
+
+async function fetchCustomSpotForUser(userId: string, spotIdOrName: string): Promise<CustomSurfSpotRow | null> {
   const q = String(spotIdOrName || '').trim()
   if (!q) return null
 
   const cleanId = q.startsWith('custom:') ? q.slice('custom:'.length).trim() : q
+  const columns = [
+    'id',
+    'name',
+    'lat',
+    'lon',
+    'user_id',
+    'swell_sector_start_deg',
+    'swell_sector_end_deg',
+    'swell_main_deg',
+    'wind_sector_start_deg',
+    'wind_sector_end_deg',
+    'wind_main_deg',
+  ].join(',')
 
   const byId = await supabaseAdmin
     .from('custom_surf_spots')
-    .select('id,name,lat,lon,user_id')
+    .select(columns)
     .eq('user_id', userId)
     .eq('id', cleanId)
     .maybeSingle()
 
-  if (byId.data) return byId.data
+  if (byId.data) return byId.data as CustomSurfSpotRow
 
   const byName = await supabaseAdmin
     .from('custom_surf_spots')
-    .select('id,name,lat,lon,user_id')
+    .select(columns)
     .eq('user_id', userId)
     .ilike('name', q)
     .maybeSingle()
 
-  return byName.data || null
+  return (byName.data as CustomSurfSpotRow | null) || null
+}
+
+function customSpotProfileFromRow(row: CustomSurfSpotRow | null): CustomSpotScoringProfile | null {
+  if (!row) return null
+  return normalizeCustomSpotScoringProfile({
+    waveDir: {
+      startDeg: Number(row.swell_sector_start_deg),
+      endDeg: Number(row.swell_sector_end_deg),
+      mainDeg: Number(row.swell_main_deg),
+    },
+    windDir: {
+      startDeg: Number(row.wind_sector_start_deg),
+      endDeg: Number(row.wind_sector_end_deg),
+      mainDeg: Number(row.wind_main_deg),
+    },
+  })
 }
 
 type SwellPart = {
@@ -45,33 +97,38 @@ type SwellPart = {
 
 type MarinePoint = {
   time: string
-
   wave_height: number
   wave_direction: number
   wave_period: number
-
   wind_speed_10m: number
   wind_direction_10m: number
-
   debug: {
     primary: SwellPart
     secondary: SwellPart
     chosen: SwellPart
     chosen_source: 'primary' | 'secondary'
+    selected_swell_index: 1 | 2
     primary_rating: number
     secondary_rating: number
+    final_rating: number
     primary_tables_total: number | null
     secondary_tables_total: number | null
     primary_corrected_height: number
     secondary_corrected_height: number
+    why_selected: string
     condition_signature: any
     contributing_swell_indexes: number[]
   }
 }
 
-function toNum(v: any) {
+function toNum(v: unknown) {
   const n = Number(v)
   return Number.isFinite(n) ? n : 0
+}
+
+function finiteOrNull(v: unknown) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
 }
 
 function nearestHourIndex(times: string[], targetIsoHourUtc: string) {
@@ -100,141 +157,63 @@ function isoHourUTCFromDate(d: Date) {
   return x.toISOString().slice(0, 13) + ':00'
 }
 
-function correctedHeight(h: number, p: number) {
-  if (!(h > 0) || !(p > 0)) return h
-  return h * (p / 10)
+function tableTotal(score: any): number | null {
+  const total = Number(score?.breakdown?.tables?.total)
+  return Number.isFinite(total) ? total : null
 }
 
-function pickLoggedSwell(args: {
-  spotKey: string
-  primary: SwellPart
-  secondary: SwellPart
-  windSpeed: number
-  windDir: number
-}) {
-  const { spotKey, primary, secondary, windSpeed, windDir } = args
-
-  const primaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: primary.height,
-    swellPeriodS: primary.period,
-    swellDirDeg: primary.dir,
-    windSpeedMs: windSpeed,
-    windDirDeg: windDir,
-  })
-
-  if (!(secondary.height > 0.05)) {
-    return {
-      chosen: 'primary' as const,
-      chosenData: primary,
-      primaryScore,
-      secondaryScore: null as any,
-      primaryTablesTotal: Number(primaryScore?.breakdown?.tables?.total ?? -Infinity),
-      secondaryTablesTotal: null as number | null,
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  const secondaryScore = scoreSurf({
-    spotKey,
-    swellHeightM: secondary.height,
-    swellPeriodS: secondary.period,
-    swellDirDeg: secondary.dir,
-    windSpeedMs: windSpeed,
-    windDirDeg: windDir,
-  })
-
-  const pRating = Number(primaryScore?.rating ?? 0)
-  const sRating = Number(secondaryScore?.rating ?? 0)
-
-  if (sRating > pRating) {
-    return {
-      chosen: 'secondary' as const,
-      chosenData: secondary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: Number(primaryScore?.breakdown?.tables?.total ?? -Infinity),
-      secondaryTablesTotal: Number(secondaryScore?.breakdown?.tables?.total ?? -Infinity),
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  if (pRating > sRating) {
-    return {
-      chosen: 'primary' as const,
-      chosenData: primary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: Number(primaryScore?.breakdown?.tables?.total ?? -Infinity),
-      secondaryTablesTotal: Number(secondaryScore?.breakdown?.tables?.total ?? -Infinity),
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  const pTotal = Number(primaryScore?.breakdown?.tables?.total ?? -Infinity)
-  const sTotal = Number(secondaryScore?.breakdown?.tables?.total ?? -Infinity)
-
-  if (sTotal > pTotal) {
-    return {
-      chosen: 'secondary' as const,
-      chosenData: secondary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: pTotal,
-      secondaryTablesTotal: sTotal,
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  if (pTotal > sTotal) {
-    return {
-      chosen: 'primary' as const,
-      chosenData: primary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: pTotal,
-      secondaryTablesTotal: sTotal,
-      primaryCorrectedHeight: correctedHeight(primary.height, primary.period),
-      secondaryCorrectedHeight: correctedHeight(secondary.height, secondary.period),
-    }
-  }
-
-  const pCorr = correctedHeight(primary.height, primary.period)
-  const sCorr = correctedHeight(secondary.height, secondary.period)
-
-  if (sCorr > pCorr) {
-    return {
-      chosen: 'secondary' as const,
-      chosenData: secondary,
-      primaryScore,
-      secondaryScore,
-      primaryTablesTotal: pTotal,
-      secondaryTablesTotal: sTotal,
-      primaryCorrectedHeight: pCorr,
-      secondaryCorrectedHeight: sCorr,
-    }
-  }
-
+function partFromSwell(swell: SurfMarineBundle['primary']): SwellPart {
   return {
-    chosen: 'primary' as const,
-    chosenData: primary,
-    primaryScore,
-    secondaryScore,
-    primaryTablesTotal: pTotal,
-    secondaryTablesTotal: sTotal,
-    primaryCorrectedHeight: pCorr,
-    secondaryCorrectedHeight: sCorr,
+    height: Number(swell.height_m),
+    dir: Number(swell.direction_deg_from),
+    period: Number(swell.period_s),
   }
 }
 
-async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, spotKey: string): Promise<MarinePoint> {
+async function fetchMarineAtTime(
+  lat: number,
+  lon: number,
+  loggedAtIso: string,
+  spotKey: string,
+  customSpotProfile: CustomSpotScoringProfile | null
+): Promise<MarinePoint> {
   const [marineFetched, windFetched] = await Promise.all([
-    fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'marine', lat, lon, hourly: ['wave_height', 'wave_direction', 'wave_period', 'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'], timezone: 'UTC', pastDays: 7, forecastDays: 7, timeoutMs: 12000, forecastRange: 'past7-forecast7d', frameRequest: false, allowStale: true }),
-    fetchOpenMeteoJson({ dataType: 'surf', endpoint: 'forecast', lat, lon, hourly: ['wind_speed_10m', 'wind_direction_10m'], timezone: 'UTC', pastDays: 7, forecastDays: 7, params: { wind_speed_unit: 'ms' }, timeoutMs: 12000, forecastRange: 'past7-forecast7d', frameRequest: false, allowStale: true }),
+    fetchOpenMeteoJson({
+      dataType: 'surf',
+      endpoint: 'marine',
+      lat,
+      lon,
+      hourly: [
+        'wave_height',
+        'wave_direction',
+        'wave_period',
+        'secondary_swell_wave_height',
+        'secondary_swell_wave_direction',
+        'secondary_swell_wave_period',
+      ],
+      timezone: 'UTC',
+      pastDays: 7,
+      forecastDays: 7,
+      timeoutMs: 12000,
+      forecastRange: 'past7-forecast7d',
+      frameRequest: false,
+      allowStale: true,
+    }),
+    fetchOpenMeteoJson({
+      dataType: 'surf',
+      endpoint: 'forecast',
+      lat,
+      lon,
+      hourly: ['wind_speed_10m', 'wind_direction_10m'],
+      timezone: 'UTC',
+      pastDays: 7,
+      forecastDays: 7,
+      params: { wind_speed_unit: 'ms' },
+      timeoutMs: 12000,
+      forecastRange: 'past7-forecast7d',
+      frameRequest: false,
+      allowStale: true,
+    }),
   ])
 
   if (!marineFetched.payload) throw new Error('Marine fetch failed')
@@ -245,11 +224,9 @@ async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, 
 
   const mt: string[] = Array.isArray(marine?.hourly?.time) ? marine.hourly.time : []
   const wt: string[] = Array.isArray(wind?.hourly?.time) ? wind.hourly.time : []
-
   if (!mt.length || !wt.length) throw new Error('Missing hourly time series')
 
   const targetIsoHour = isoHourUTCFromDate(new Date(loggedAtIso))
-
   const mi = nearestHourIndex(mt, targetIsoHour)
   const wi = nearestHourIndex(wt, targetIsoHour)
 
@@ -259,65 +236,117 @@ async function fetchMarineAtTime(lat: number, lon: number, loggedAtIso: string, 
     period: toNum(marine?.hourly?.wave_period?.[mi]),
   }
 
+  const secondaryHeightRaw = finiteOrNull(marine?.hourly?.secondary_swell_wave_height?.[mi])
+  const secondaryDirRaw = finiteOrNull(marine?.hourly?.secondary_swell_wave_direction?.[mi])
+  const secondaryPeriodRaw = finiteOrNull(marine?.hourly?.secondary_swell_wave_period?.[mi])
+  const secondaryPresent =
+    secondaryHeightRaw != null &&
+    secondaryHeightRaw >= SECONDARY_MIN_M &&
+    secondaryDirRaw != null &&
+    secondaryPeriodRaw != null
+
   const secondary: SwellPart = {
-    height: toNum(marine?.hourly?.secondary_swell_wave_height?.[mi]),
-    dir: toNum(marine?.hourly?.secondary_swell_wave_direction?.[mi]),
-    period: toNum(marine?.hourly?.secondary_swell_wave_period?.[mi]),
+    height: secondaryPresent ? secondaryHeightRaw : 0,
+    dir: secondaryPresent ? secondaryDirRaw : 0,
+    period: secondaryPresent ? secondaryPeriodRaw : 0,
   }
 
   const windSpeed = toNum(wind?.hourly?.wind_speed_10m?.[wi])
   const windDir = toNum(wind?.hourly?.wind_direction_10m?.[wi])
 
-  const picked = pickLoggedSwell({
+  const marineBundle: SurfMarineBundle = {
+    time_utc: mt[mi],
+    primary: {
+      present: primary.height > 0.01,
+      height_m: primary.height,
+      direction_deg_from: primary.dir,
+      period_s: primary.period,
+    },
+    secondary: {
+      present: secondaryPresent,
+      height_m: secondary.height,
+      direction_deg_from: secondary.dir,
+      period_s: secondary.period,
+    },
+    wind_speed_ms: windSpeed,
+    wind_direction_deg_from: windDir,
+  }
+
+  const picked = selectBestSurfSwell({
     spotKey,
-    primary,
-    secondary,
-    windSpeed,
-    windDir,
+    marine: marineBundle,
+    customSpotProfile,
   })
+
+  const chosen = partFromSwell(picked.chosenSwell)
+  const conditionSignature = picked.combinedScore.breakdown?.swellMixSignature ?? {
+    spotKey,
+    swells: [
+      { index: 1, height_m: primary.height, period_s: primary.period, direction_deg_from: primary.dir },
+      ...(secondaryPresent
+        ? [{ index: 2, height_m: secondary.height, period_s: secondary.period, direction_deg_from: secondary.dir }]
+        : []),
+    ],
+    wind_speed_ms: windSpeed,
+    wind_direction_deg_from: windDir,
+    forecast_time_utc: mt[mi],
+  }
 
   return {
     time: mt[mi],
-
-    wave_height: picked.chosenData.height,
-    wave_direction: picked.chosenData.dir,
-    wave_period: picked.chosenData.period,
-
+    wave_height: chosen.height,
+    wave_direction: chosen.dir,
+    wave_period: chosen.period,
     wind_speed_10m: windSpeed,
     wind_direction_10m: windDir,
-
     debug: {
       primary,
       secondary,
-      chosen: picked.chosenData,
+      chosen,
       chosen_source: picked.chosen,
+      selected_swell_index: picked.selectedSwellIndex,
       primary_rating: Number(picked.primaryScore?.rating ?? 0),
       secondary_rating: Number(picked.secondaryScore?.rating ?? 0),
-      primary_tables_total:
-        Number.isFinite(picked.primaryTablesTotal) && picked.primaryTablesTotal !== -Infinity
-          ? picked.primaryTablesTotal
-          : null,
-      secondary_tables_total:
-        Number.isFinite(picked.secondaryTablesTotal as number) && picked.secondaryTablesTotal !== -Infinity
-          ? (picked.secondaryTablesTotal as number)
-          : null,
-      primary_corrected_height: picked.primaryCorrectedHeight,
-      secondary_corrected_height: picked.secondaryCorrectedHeight,
-      condition_signature: {
-        spotKey,
-        swells: [
-          { index: 1, height_m: primary.height, period_s: primary.period, direction_deg_from: primary.dir },
-          ...(secondary.height > 0.05 ? [{ index: 2, height_m: secondary.height, period_s: secondary.period, direction_deg_from: secondary.dir }] : []),
-        ],
-        wind_speed_ms: windSpeed,
-        wind_direction_deg_from: windDir,
-        forecast_time_utc: mt[mi],
-      },
-      contributing_swell_indexes: [
-        1,
-        ...(secondary.height > 0.05 ? [2] : []),
-      ],
+      final_rating: Number(picked.combinedScore?.rating ?? 0),
+      primary_tables_total: tableTotal(picked.primaryScore),
+      secondary_tables_total: tableTotal(picked.secondaryScore),
+      primary_corrected_height: picked.primaryMetrics.correctedHeight,
+      secondary_corrected_height: picked.secondaryMetrics.correctedHeight,
+      why_selected: picked.whySelected,
+      condition_signature: conditionSignature,
+      contributing_swell_indexes:
+        picked.combinedScore.breakdown?.contributingSwellIndexes ?? [picked.selectedSwellIndex],
     },
+  }
+}
+
+function storedExperienceFields(args: {
+  resolvedSpotId: string
+  resolvedSpotLabel: string
+  loggedAtIso: string
+  marine: MarinePoint
+  ratingNum: number
+}) {
+  const { resolvedSpotId, resolvedSpotLabel, loggedAtIso, marine, ratingNum } = args
+  return {
+    spot_id: resolvedSpotId,
+    spot: resolvedSpotLabel,
+    logged_at: loggedAtIso,
+    wave_dir_from_deg: marine.wave_direction,
+    wave_height_m: marine.wave_height,
+    wave_period_s: marine.wave_period,
+    wind_dir_from_deg: marine.wind_direction_10m,
+    wind_speed_ms: marine.wind_speed_10m,
+    primary_swell_height_m: marine.debug.primary.height,
+    primary_swell_period_s: marine.debug.primary.period,
+    primary_swell_dir_from_deg: marine.debug.primary.dir,
+    secondary_swell_height_m: marine.debug.secondary.height,
+    secondary_swell_period_s: marine.debug.secondary.period,
+    secondary_swell_dir_from_deg: marine.debug.secondary.dir,
+    selected_swell_index: marine.debug.selected_swell_index,
+    condition_signature: marine.debug.condition_signature,
+    forecast_time_utc: marine.time,
+    rating_1_6: ratingNum,
   }
 }
 
@@ -340,7 +369,6 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-
     const {
       spotId,
       spot,
@@ -350,7 +378,7 @@ export async function POST(req: Request) {
       existingId = null,
     } = body || {}
 
-    if (!spotId || !spot || !loggedAt || !rating_1_6) {
+    if (!spotId || !spot || !loggedAt || rating_1_6 == null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -363,6 +391,7 @@ export async function POST(req: Request) {
     let lon: number | null = null
     let resolvedSpotLabel: string | null = null
     let resolvedSpotId: string | null = null
+    let customSpotProfile: CustomSpotScoringProfile | null = null
 
     const spotIdRaw = String(spotId).trim()
     const byId = Object.values(SURF_SPOTS).find((s) => s.spotId === spotIdRaw) || null
@@ -379,10 +408,7 @@ export async function POST(req: Request) {
       resolvedSpotLabel = String(custom.name)
       lat = Number(custom.lat)
       lon = Number(custom.lon)
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        return NextResponse.json({ error: 'Spot coordinates missing' }, { status: 400 })
-      }
+      customSpotProfile = customSpotProfileFromRow(custom)
     } else {
       resolvedSpotId = String(resolved.spotId)
       resolvedSpotLabel = String(resolved.label)
@@ -390,7 +416,7 @@ export async function POST(req: Request) {
       lon = Number(resolved.lon)
     }
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (!resolvedSpotId || !resolvedSpotLabel || !Number.isFinite(lat) || !Number.isFinite(lon)) {
       return NextResponse.json({ error: 'Spot coordinates missing' }, { status: 400 })
     }
 
@@ -423,31 +449,26 @@ export async function POST(req: Request) {
       }
     }
 
-    const marine = await fetchMarineAtTime(lat, lon, loggedAt, resolvedSpotLabel)
+    const marine = await fetchMarineAtTime(
+      lat,
+      lon,
+      loggedAtDate.toISOString(),
+      resolvedSpotLabel,
+      customSpotProfile
+    )
+
+    const stored = storedExperienceFields({
+      resolvedSpotId,
+      resolvedSpotLabel,
+      loggedAtIso: loggedAtDate.toISOString(),
+      marine,
+      ratingNum,
+    })
 
     if (mode === 'update_existing' && existingId) {
       const { error } = await supabaseAdmin
         .from('user_surf_experiences')
-        .update({
-          spot_id: resolvedSpotId,
-          spot: resolvedSpotLabel,
-          logged_at: loggedAtDate.toISOString(),
-          wave_dir_from_deg: marine.wave_direction,
-          wave_height_m: marine.wave_height,
-          wave_period_s: marine.wave_period,
-          wind_dir_from_deg: marine.wind_direction_10m,
-          wind_speed_ms: marine.wind_speed_10m,
-          primary_swell_height_m: marine.debug.primary.height,
-          primary_swell_period_s: marine.debug.primary.period,
-          primary_swell_dir_from_deg: marine.debug.primary.dir,
-          secondary_swell_height_m: marine.debug.secondary.height,
-          secondary_swell_period_s: marine.debug.secondary.period,
-          secondary_swell_dir_from_deg: marine.debug.secondary.dir,
-          selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
-          condition_signature: marine.debug.condition_signature,
-          forecast_time_utc: marine.time,
-          rating_1_6: ratingNum,
-        })
+        .update(stored)
         .eq('id', existingId)
         .eq('user_id', user.id)
 
@@ -456,26 +477,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         mode: 'update_existing',
-        stored: {
-          spot_id: resolvedSpotId,
-          spot: resolvedSpotLabel,
-          logged_at: loggedAtDate.toISOString(),
-          wave_dir_from_deg: marine.wave_direction,
-          wave_height_m: marine.wave_height,
-          wave_period_s: marine.wave_period,
-          wind_dir_from_deg: marine.wind_direction_10m,
-          wind_speed_ms: marine.wind_speed_10m,
-          primary_swell_height_m: marine.debug.primary.height,
-          primary_swell_period_s: marine.debug.primary.period,
-          primary_swell_dir_from_deg: marine.debug.primary.dir,
-          secondary_swell_height_m: marine.debug.secondary.height,
-          secondary_swell_period_s: marine.debug.secondary.period,
-          secondary_swell_dir_from_deg: marine.debug.secondary.dir,
-          selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
-          condition_signature: marine.debug.condition_signature,
-          forecast_time_utc: marine.time,
-          rating_1_6: ratingNum,
-        },
+        stored,
         debug: marine.debug,
       })
     }
@@ -484,24 +486,7 @@ export async function POST(req: Request) {
       .from('user_surf_experiences')
       .insert({
         user_id: user.id,
-        spot_id: resolvedSpotId,
-        spot: resolvedSpotLabel,
-        logged_at: loggedAtDate.toISOString(),
-        wave_dir_from_deg: marine.wave_direction,
-        wave_height_m: marine.wave_height,
-        wave_period_s: marine.wave_period,
-        wind_dir_from_deg: marine.wind_direction_10m,
-        wind_speed_ms: marine.wind_speed_10m,
-        primary_swell_height_m: marine.debug.primary.height,
-        primary_swell_period_s: marine.debug.primary.period,
-        primary_swell_dir_from_deg: marine.debug.primary.dir,
-        secondary_swell_height_m: marine.debug.secondary.height,
-        secondary_swell_period_s: marine.debug.secondary.period,
-        secondary_swell_dir_from_deg: marine.debug.secondary.dir,
-        selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
-        condition_signature: marine.debug.condition_signature,
-        forecast_time_utc: marine.time,
-        rating_1_6: ratingNum,
+        ...stored,
       })
 
     if (error) throw error
@@ -509,26 +494,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       mode: 'insert',
-      stored: {
-        spot_id: resolvedSpotId,
-        spot: resolvedSpotLabel,
-        logged_at: loggedAtDate.toISOString(),
-        wave_dir_from_deg: marine.wave_direction,
-        wave_height_m: marine.wave_height,
-        wave_period_s: marine.wave_period,
-        wind_dir_from_deg: marine.wind_direction_10m,
-        wind_speed_ms: marine.wind_speed_10m,
-        primary_swell_height_m: marine.debug.primary.height,
-        primary_swell_period_s: marine.debug.primary.period,
-        primary_swell_dir_from_deg: marine.debug.primary.dir,
-        secondary_swell_height_m: marine.debug.secondary.height,
-        secondary_swell_period_s: marine.debug.secondary.period,
-        secondary_swell_dir_from_deg: marine.debug.secondary.dir,
-        selected_swell_index: marine.debug.chosen_source === 'secondary' ? 2 : 1,
-        condition_signature: marine.debug.condition_signature,
-        forecast_time_utc: marine.time,
-        rating_1_6: ratingNum,
-      },
+      stored,
       debug: marine.debug,
     })
   } catch (err: any) {
