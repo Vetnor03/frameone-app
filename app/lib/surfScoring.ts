@@ -71,6 +71,9 @@ export type UserSurfExperienceRecord = {
   selected_swell_index?: number | null
   created_at?: string
   updated_at?: string
+  /** Server-only routing hint. Never persisted or returned to clients. */
+  calibration_scope?: 'shared' | 'personal'
+  surf_model_version?: string | null
 }
 
 
@@ -214,6 +217,21 @@ type ScoreBreakdown = {
   }
 
   scoring_breakdown?: SurfScoringBreakdown
+  calibration?: {
+    surfModelVersion: string
+    sharedCalibrationVersion: string
+    baseScore: number
+    sharedAdjustment: number
+    sharedConfidence: number
+    sharedSampleCount: number
+    sharedDistinctUsers: number
+    personalAdjustment: number
+    personalConfidence: number
+    personalSampleCount: number
+    finalScore: number
+    finalRating: number
+    source: 'base_only' | 'shared_calibration' | 'personal_calibration' | 'shared_and_personal'
+  }
   custom_spot_scoring_profile?: CustomSpotScoringProfile | null
   selectedMainSwellIndex?: number
   contributingSwellIndexes?: number[]
@@ -244,6 +262,14 @@ export type SurfScoreResult = {
   line2: string
   breakdown: ScoreBreakdown
 }
+
+export const SURF_MODEL_VERSION = 'deterministic-v1'
+export const SHARED_CALIBRATION_VERSION = 'residual-v1'
+export const MIN_SHARED_EXPERIENCES = 8
+export const MIN_SHARED_DISTINCT_USERS = 3
+export const MIN_PERSONAL_EXPERIENCES = 3
+export const MAX_SHARED_ADJUSTMENT = 0.75
+export const MAX_PERSONAL_ADJUSTMENT = 0.75
 
 // ---------------------
 // Mojibake + normalization
@@ -1578,6 +1604,66 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
 // ---------------------
 // MAIN
 // ---------------------
+type CalibrationSummary = { adjustment: number; confidence: number; sampleCount: number; distinctUsers: number }
+
+function circularDistance(a: number, b: number) {
+  const d = Math.abs(a - b) % 360
+  return Math.min(d, 360 - d)
+}
+
+function replayableConditions(record: UserSurfExperienceRecord) {
+  let signature: NormalizedSwellMixSignature | null = null
+  if (record.condition_signature) {
+    try {
+      signature = (typeof record.condition_signature === 'string' ? JSON.parse(record.condition_signature) : record.condition_signature) as NormalizedSwellMixSignature
+    } catch { signature = null }
+  }
+  const selected = signature?.swells?.find((s) => s.index === record.selected_swell_index)
+    ?? signature?.swells?.[0]
+  const h = Number(selected?.height_m ?? record.wave_height_m)
+  const p = Number(selected?.period_s ?? record.wave_period_s)
+  const d = Number(selected?.direction_deg_from ?? record.wave_dir_from_deg)
+  const ws = Number(signature?.wind_speed_ms ?? record.wind_speed_ms)
+  const wd = Number(signature?.wind_direction_deg_from ?? record.wind_dir_from_deg)
+  if (![h, p, d, ws, wd, Number(record.rating_1_6)].every(Number.isFinite)) return null
+  return { h, p, d, ws, wd, signature }
+}
+
+function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: string; h: number; p: number; d: number; ws: number; wd: number; currentSwellCount: number; sharedOffset?: number; personal: boolean; now: number; customSpotProfile?: CustomSpotScoringProfile | null }): CalibrationSummary {
+  const candidates: Array<{ residual: number; weight: number; user: string }> = []
+  for (const record of args.records) {
+    const c = replayableConditions(record)
+    if (!c) continue
+    const heightSimilarity = Math.exp(-Math.abs(c.h - args.h) / 0.55)
+    const periodSimilarity = Math.exp(-Math.abs(c.p - args.p) / 3)
+    const swellDirectionSimilarity = Math.exp(-circularDistance(c.d, args.d) / 45)
+    const windSpeedSimilarity = Math.exp(-Math.abs(c.ws - args.ws) / 4)
+    const windDirectionSimilarity = Math.exp(-circularDistance(c.wd, args.wd) / 70)
+    let similarity = Math.pow(heightSimilarity * periodSimilarity * swellDirectionSimilarity * windSpeedSimilarity * windDirectionSimilarity, 0.2)
+    if (c.signature?.swells?.length) {
+      similarity *= 1 - Math.min(0.2, Math.abs(c.signature.swells.length - args.currentSwellCount) * 0.1)
+    }
+    if (similarity < 0.58) continue
+    const at = Date.parse(record.logged_at ?? record.created_at ?? '')
+    const ageDays = Number.isFinite(at) ? Math.max(0, args.now - at) / 86400000 : 365
+    const recency = Math.exp(-ageDays / 540)
+    const weight = similarity * similarity * recency
+    if (weight < 0.12) continue
+    const replay = buildModelScore({ spotKey: args.spotKey, h: c.h, p: c.p, sd: c.d, ws: c.ws, wd: c.wd, customSpotProfile: args.customSpotProfile })
+    const predicted = replay.scoringBreakdown.finalScoreFloat + (args.sharedOffset ?? 0)
+    candidates.push({ residual: Number(record.rating_1_6) - predicted, weight, user: String(record.user_id ?? record.id ?? 'legacy') })
+  }
+  const distinctUsers = new Set(candidates.map((x) => x.user)).size
+  const minimum = args.personal ? MIN_PERSONAL_EXPERIENCES : MIN_SHARED_EXPERIENCES
+  if (candidates.length < minimum || (!args.personal && distinctUsers < MIN_SHARED_DISTINCT_USERS)) return { adjustment: 0, confidence: 0, sampleCount: candidates.length, distinctUsers }
+  const total = candidates.reduce((s, x) => s + x.weight, 0)
+  const raw = candidates.reduce((s, x) => s + x.residual * x.weight, 0) / total
+  const confidence = clamp((total / (args.personal ? 3 : 8)) * (args.personal ? 1 : distinctUsers / 3), 0, 1)
+  if (confidence < 0.35) return { adjustment: 0, confidence, sampleCount: candidates.length, distinctUsers }
+  const cap = args.personal ? MAX_PERSONAL_ADJUSTMENT : MAX_SHARED_ADJUSTMENT
+  return { adjustment: clamp(raw * confidence, -cap, cap), confidence, sampleCount: candidates.length, distinctUsers }
+}
+
 export function scoreSurf(params: {
   spotKey: string
   swellHeightM: number
@@ -1643,6 +1729,7 @@ export function scoreSurf(params: {
     customSpotProfile: params.customSpotProfile,
   })
 
+  const scopedCalibration = !!params.userExperiences?.some((r) => r.calibration_scope)
   const exp = buildExperienceBlend({
     spotKey,
     waveH: h,
@@ -1651,18 +1738,23 @@ export function scoreSurf(params: {
     windSpeed: ws,
     windDirFrom: wd,
     swellMixSignature,
-    userExperiences: params.userExperiences,
+    // Scoped database rows are consumed only by privacy-safe residual aggregates below.
+    userExperiences: scopedCalibration ? [] : params.userExperiences,
     modelRating: model.rating,
   })
-
-  const finalRating = clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
+  const shared = scopedCalibration ? calibrationFor({ records: params.userExperiences!.filter((r) => r.calibration_scope === 'shared'), spotKey, h, p, d: sd, ws, wd, currentSwellCount: swellMixSignature.swells.length, personal: false, now: Date.now(), customSpotProfile: params.customSpotProfile }) : null
+  const personal = scopedCalibration ? calibrationFor({ records: params.userExperiences!.filter((r) => r.calibration_scope === 'personal'), spotKey, h, p, d: sd, ws, wd, currentSwellCount: swellMixSignature.swells.length, sharedOffset: shared?.adjustment ?? 0, personal: true, now: Date.now(), customSpotProfile: params.customSpotProfile }) : null
+  const baseScoreFloat = model.scoringBreakdown.finalScoreFloat
+  const calibratedScoreFloat = clamp(baseScoreFloat + (shared?.adjustment ?? 0) + (personal?.adjustment ?? 0), 1, 6)
+  const finalRating = scopedCalibration ? roundFinalScore(calibratedScoreFloat) : clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
+  const calibrationSource = shared?.adjustment && personal?.adjustment ? 'shared_and_personal' : shared?.adjustment ? 'shared_calibration' : personal?.adjustment ? 'personal_calibration' : 'base_only'
 
   return {
     rating: finalRating,
     score: finalRating,
     baseScore: model.rating,
-    experienceAdjustment: exp.blended_rating_float - model.rating,
-    experienceConfidence: exp.confidence,
+    experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
+    experienceConfidence: scopedCalibration ? Math.max(shared?.confidence ?? 0, personal?.confidence ?? 0) : exp.confidence,
     finalScore: finalRating,
     finalRating,
     line1,
@@ -1713,6 +1805,14 @@ export function scoreSurf(params: {
       },
       tables: model.tables,
       scoring_breakdown: model.scoringBreakdown,
+      calibration: scopedCalibration ? {
+        surfModelVersion: SURF_MODEL_VERSION, sharedCalibrationVersion: SHARED_CALIBRATION_VERSION,
+        baseScore: baseScoreFloat, sharedAdjustment: shared!.adjustment, sharedConfidence: shared!.confidence,
+        sharedSampleCount: shared!.sampleCount, sharedDistinctUsers: shared!.distinctUsers,
+        personalAdjustment: personal!.adjustment, personalConfidence: personal!.confidence,
+        personalSampleCount: personal!.sampleCount, finalScore: calibratedScoreFloat, finalRating,
+        source: calibrationSource,
+      } : undefined,
       custom_spot_scoring_profile: customSpotProfileForBreakdown(params.customSpotProfile),
       selectedMainSwellIndex,
       contributingSwellIndexes: scoreSwells.map((x) => x.index),
@@ -1723,7 +1823,7 @@ export function scoreSurf(params: {
       experienceRating: exp.rating_1_6,
       finalRating,
       baseScore: model.rating,
-      experienceAdjustment: exp.blended_rating_float - model.rating,
+      experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
       finalScore: finalRating,
       whySelected: params.whySelected,
       method:
