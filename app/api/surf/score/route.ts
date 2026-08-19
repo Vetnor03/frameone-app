@@ -970,6 +970,7 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       .eq('user_id', ownerUserId)
       .or(`spot_id.in.(${ids.join(',')}),spot.in.(${ids.join(',')})`)
       .order('logged_at', { ascending: false })
+      .limit(100)
 
 
     if (error || !Array.isArray(data)) return out
@@ -1019,6 +1020,7 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
     .eq('user_id', ownerUserId)
     .or(`spot_id.in.(${ids.join(',')}),spot.in.(${ids.join(',')})`)
     .order('logged_at', { ascending: false })
+    .limit(100)
 
 
   if (error || !Array.isArray(data)) return out
