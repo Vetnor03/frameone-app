@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { register } from 'node:module'
 register('./typescript-test-loader.mjs', import.meta.url)
-const { scoreSurf, MAX_SHARED_ADJUSTMENT, MAX_PERSONAL_ADJUSTMENT } = await import('../app/lib/surfScoring.ts')
+const { scoreSurf, MAX_SHARED_ADJUSTMENT, MAX_PERSONAL_ADJUSTMENT, resetSurfCalibrationCacheStats, getSurfCalibrationCacheStats } = await import('../app/lib/surfScoring.ts')
 
 const current = { spotKey: 'Bore', swellHeightM: 1.2, swellPeriodS: 10, swellDirDeg: 280, windSpeedMs: 3, windDirDeg: 100 }
 const now = new Date().toISOString()
@@ -70,6 +70,22 @@ test('personal residuals use shared calibration for each historical condition', 
   // Type B sessions agree with type B's shared expectation. They must not inherit type A's
   // current-condition shared offset and be misclassified as a large negative personal bias.
   assert.ok(personalizedAtA.personalAdjustment > -0.3)
+})
+test('request-scoped preparation preserves outputs and bounds historical replay work', () => {
+  const stableTime = '2099-01-01T00:00:00Z'
+  const pool = [
+    ...Array.from({ length: 12 }, (_, i) => row(100 + i, 6, 'shared', { logged_at: stableTime, user_id: `cache-user-${i % 4}` })),
+    ...Array.from({ length: 4 }, (_, i) => row(200 + i, 5, 'personal', { logged_at: stableTime, user_id: 'cache-owner' })),
+  ]
+  resetSurfCalibrationCacheStats()
+  const preparedFresh = scoreSurf({ ...current, userExperiences: pool }).breakdown.calibration
+  const afterPreparation = getSurfCalibrationCacheStats()
+  const preparedCached = scoreSurf({ ...current, userExperiences: pool }).breakdown.calibration
+  const afterCachedScore = getSurfCalibrationCacheStats()
+  assert.deepEqual(preparedCached, preparedFresh)
+  assert.equal(afterPreparation.personalSharedComputations, 4)
+  assert.deepEqual(afterCachedScore, afterPreparation)
+  assert.ok(afterPreparation.bootstrapReplays <= pool.length)
 })
 test('legacy and multi-swell signatures are replayable', () => {
   const records = Array.from({ length: 8 }, (_, i) => row(i, 6, 'shared', i % 2 ? {} : { condition_signature: JSON.stringify({ spotKey: 'Bore', swells: [{ index: 1, height_m: 1.2, period_s: 10, direction_deg_from: 280 }, { index: 2, height_m: .4, period_s: 7, direction_deg_from: 250 }], wind_speed_ms: 3, wind_direction_deg_from: 100 }), selected_swell_index: 1 }))

@@ -17,5 +17,10 @@ once, after continuous bootstrap, shared, and personal scores are combined. Each
 personal residual uses the shared adjustment calculated for that historical session's conditions,
 not the current forecast's shared adjustment.
 
+Historical bootstrap predictions and per-personal-session shared expectations are memoized with
+weak references to the request's candidate objects and pool. Repeated forecast/daypart scores reuse
+that preparation; the cache has no persistent user-id key and is garbage-collectable with the
+request data.
+
 The `surf_model_version` migration must be applied before deploying the updated experience
 logging endpoint, because new and updated rows write that column.
