@@ -7,6 +7,7 @@ import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload 
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 import { AI_ASSISTANT_FRAME_LIMITS, selectAiAssistantFrameItems, type AiAssistantFrameUpdate } from '@/app/lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, simplifyAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
+import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -486,6 +487,7 @@ async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: strin
       const daysLeft = diffDaysYmd(todayYmd, targetDate)
       return title && targetDate
         ? {
+            id: asString(row.id).trim(),
             title,
             targetDate,
             daysLeft,
@@ -494,7 +496,7 @@ async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: strin
           }
         : null
     })
-    .filter((item): item is { title: string; targetDate: string; daysLeft: number; pinned: boolean; isPast: boolean } => !!item)
+    .filter((item): item is { id: string; title: string; targetDate: string; daysLeft: number; pinned: boolean; isPast: boolean } => !!item)
     .sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
       if (a.isPast !== b.isPast) return a.isPast ? 1 : -1
@@ -506,18 +508,27 @@ async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: strin
   const nearest = items.find((item) => !item.isPast) ?? items[0]
   if (!nearest) return { primary: language === 'no' ? 'Ingen nedtelling' : 'No Countdown', secondary: language === 'no' ? 'Ingen hendelser' : 'No events yet' }
 
+  const upcomingItems = items.filter((item) => !item.isPast).slice(1, 5)
+  const frameItems = [nearest, ...upcomingItems.filter((item) => item.id !== nearest.id)]
+  const optimizedTitles = await optimizeFrameContent(frameItems.map((item) => ({
+    id: item.id,
+    title: item.title,
+    contentType: 'countdown',
+    displayDate: item.targetDate,
+  })))
+  const optimizedTitleById = new Map(optimizedTitles.map((item) => [item.id, item.title]))
+  const frameTitle = (item: typeof nearest) => optimizedTitleById.get(item.id) || item.title
+
   return {
-    primary: nearest.title,
+    primary: frameTitle(nearest),
     secondary: language === 'no' ? 'Nedtelling' : 'Countdown',
-    countdownTitle: nearest.title,
+    countdownTitle: frameTitle(nearest),
     countdownDaysLeft: nearest.daysLeft,
     countdownTargetDate: nearest.targetDate,
     countdownPinned: nearest.pinned,
-    countdownUpcoming: items
-      .filter((item) => !item.isPast)
-      .slice(1, 5)
+    countdownUpcoming: upcomingItems
       .map((item) => ({
-        title: item.title,
+        title: frameTitle(item),
         targetDate: item.targetDate,
         daysLeft: item.daysLeft,
       })),
@@ -1901,6 +1912,16 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
 
     const updateCandidates = Array.isArray(data) ? data : []
     const selected = selectAiAssistantFrameItems(updateCandidates as AiAssistantFrameUpdate[], { memberUserIds, limit, liveMirrorView: true })
+    const optimizedHeadlines = await optimizeFrameContent(selected.items.map((item) => ({
+      id: item.id,
+      title: item.headline,
+      contentType: 'ai-follow',
+    })))
+    const optimizedHeadlineById = new Map(optimizedHeadlines.map((item) => [item.id, item.title]))
+    const frameItems = selected.items.map((item) => ({
+      ...item,
+      headline: optimizedHeadlineById.get(item.id) || item.headline,
+    }))
     console.info('[mirror-snapshot:ai-assistant-snapshot]', {
       frameId,
       frameMemberCount: memberUserIds.length,
@@ -1911,11 +1932,11 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
     return {
       primary: 'UPDATES',
       secondary: 'UPDATES',
-      aiAssistantItems: selected.items,
+      aiAssistantItems: frameItems,
       aiAssistantOverflowCount: selected.overflowCount,
       aiAssistantActiveWatchCount: activeWatches.length,
       aiAssistantLastCheckedAt: lastCheckedAt,
-      aiAssistantTopicTitle: selected.items[0]?.topicTitle || activeTopicTitle,
+      aiAssistantTopicTitle: frameItems[0]?.topicTitle || activeTopicTitle,
       aiAssistantActiveWatchTopics,
     }
   } catch (e: unknown) {

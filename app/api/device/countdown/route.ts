@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
 
 export const runtime = 'nodejs'
 
@@ -133,7 +134,7 @@ export async function GET(req: Request) {
     const todayYmd = getTodayYmdInTimeZone(timeZone)
     const rows = Array.isArray(events) ? (events as CountdownRow[]) : []
 
-    const items = rows
+    const sourceItems = rows
       .map((row) => {
         const title = String(row.title ?? '').trim()
         const target_date = String(row.target_date ?? '').trim()
@@ -162,6 +163,18 @@ export async function GET(req: Request) {
         if (a.target_date > b.target_date) return 1
         return a.title.localeCompare(b.title)
       })
+
+    const optimizedTitles = await optimizeFrameContent(sourceItems.map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      contentType: 'countdown',
+      displayDate: item.display_date,
+    })))
+    const optimizedTitleById = new Map(optimizedTitles.map((item) => [item.id, item.title]))
+    const items = sourceItems.map((item: any) => ({
+      ...item,
+      title: optimizedTitleById.get(item.id) || item.title,
+    }))
 
     return NextResponse.json({
       device_id,

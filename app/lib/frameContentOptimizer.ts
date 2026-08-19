@@ -1,9 +1,11 @@
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
+export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow'
 
 export type FrameContentInput = {
   id: string
   title: string
   source?: FrameContentSource
+  contentType?: FrameContentType
   displayDate?: string
   displayTime?: string | null
 }
@@ -55,6 +57,10 @@ Rewrite each title so it is immediately understandable at a glance.
 - Never turn a specific title into a vague generic title.
 - Do not add emojis or decorative punctuation.
 - Respect maxTitleChars for every item.
+- Follow the contentType-specific rules:
+  - reminder: retain the action or event needed for a useful reminder.
+  - countdown: produce a compact countdown title; remove phrases such as "days until" or "time left until" because the countdown value is rendered separately.
+  - ai-follow: turn the update into a calm, specific, headline-like summary; never return a paragraph.
 - Return exactly one result for every supplied id.`
 
 function normalizeText(value: string) {
@@ -82,7 +88,7 @@ function optimizationEnabled() {
 }
 
 function cacheKey(item: FrameContentInput, model: string, maxChars: number) {
-  return [model, maxChars, item.source || 'unknown', normalizeText(item.title)].join('::')
+  return [model, maxChars, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title)].join('::')
 }
 
 function getCachedTitle(key: string) {
@@ -145,6 +151,7 @@ async function requestOptimizedTitles(
                 items: items.map((item) => ({
                   id: item.id,
                   title: normalizeText(item.title),
+                  contentType: item.contentType || 'reminder',
                   source: item.source || 'unknown',
                   displayDate: item.displayDate || null,
                   displayTime: item.displayTime || null,
