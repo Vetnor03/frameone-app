@@ -113,15 +113,29 @@ export function surfRatingIsExperienceBased(payload: unknown): boolean {
   )
 }
 
+function normalizedResult(rating: number, isExperienceBased: boolean): NormalizedSurfRating {
+  return {
+    rating,
+    source: isExperienceBased ? 'experience_blend' : 'base',
+    ratingFromExperience: isExperienceBased,
+    experienceDiceValue: isExperienceBased ? rating : undefined,
+  }
+}
+
 export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unknown): NormalizedSurfRating {
   const record = asRecord(payload)
-  const breakdownExperience = asRecord(asRecord(record.breakdown).experience)
+  const breakdown = asRecord(record.breakdown)
+  const breakdownExperience = asRecord(breakdown.experience)
   const topExperience = asRecord(record.experience)
   const picked = asRecord(record.picked)
-  const pickedBreakdownExperience = asRecord(asRecord(picked.breakdown).experience)
+  const pickedBreakdown = asRecord(picked.breakdown)
+  const pickedBreakdownExperience = asRecord(pickedBreakdown.experience)
   const pickedExperience = asRecord(picked.experience)
   const isExperienceBased = surfRatingIsExperienceBased(record)
 
+  // When the experience engine has crossed its confidence threshold, prefer the
+  // actual blended result. Some callers intentionally keep a separate model
+  // rating alongside it, so do not fall back to that model value first.
   if (isExperienceBased) {
     const blendedFloatCandidates = [
       breakdownExperience.blended_rating_float,
@@ -132,14 +146,7 @@ export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unkno
 
     for (const candidate of blendedFloatCandidates) {
       const rating = calibratedFinalSurfRating1to6(candidate)
-      if (rating != null) {
-        return {
-          rating,
-          source: 'experience_blend',
-          ratingFromExperience: true,
-          experienceDiceValue: rating,
-        }
-      }
+      if (rating != null) return normalizedResult(rating, true)
     }
 
     const blendedCandidates = [
@@ -148,66 +155,67 @@ export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unkno
       pickedBreakdownExperience.blended_rating_1_6,
       pickedExperience.blended_rating_1_6,
       record.finalRating,
-      asRecord(picked).finalRating,
+      picked.finalRating,
+      record.rating,
+      picked.rating,
     ]
 
     for (const candidate of blendedCandidates) {
       const rating = asRating1to6(candidate)
-      if (rating != null) {
-        return {
-          rating,
-          source: 'experience_blend',
-          ratingFromExperience: true,
-          experienceDiceValue: rating,
-        }
-      }
+      if (rating != null) return normalizedResult(rating, true)
     }
   }
 
+  // The scorer's public rating/finalRating is the canonical output. This is
+  // important for low-confidence experience blending: scoreSurf may legitimately
+  // nudge the public rating before the blend is strong enough to be labelled as
+  // an experience match. Re-deriving from the base scoring breakdown here would
+  // silently undo that final result for some consumers.
+  const canonicalCandidates = [
+    record.finalRating,
+    picked.finalRating,
+    record.rating,
+    record.score,
+    record.stars,
+    picked.rating,
+    picked.score,
+    picked.stars,
+    fallbackRating,
+  ]
+
+  for (const candidate of canonicalCandidates) {
+    const rating = asRating1to6(candidate)
+    if (rating != null) return normalizedResult(rating, isExperienceBased)
+  }
+
+  // Older payloads may not expose the canonical rating. Only then reconstruct
+  // one from the deterministic scoring float.
   const finalScoreFloatCandidates = [
-    asRecord(asRecord(record.breakdown).scoring_breakdown).finalScoreFloatAfterPenalties,
-    asRecord(record.breakdown).finalScoreFloatAfterPenalties,
-    asRecord(record.breakdown).finalScoreFloat,
+    asRecord(breakdown.scoring_breakdown).finalScoreFloatAfterPenalties,
+    breakdown.finalScoreFloatAfterPenalties,
+    breakdown.finalScoreFloat,
+    asRecord(pickedBreakdown.scoring_breakdown).finalScoreFloatAfterPenalties,
+    pickedBreakdown.finalScoreFloatAfterPenalties,
+    pickedBreakdown.finalScoreFloat,
   ]
 
   for (const candidate of finalScoreFloatCandidates) {
     const rating = calibratedFinalSurfRating1to6(candidate)
-    if (rating != null) {
-      return {
-        rating,
-        source: isExperienceBased ? 'experience_blend' : 'base',
-        ratingFromExperience: isExperienceBased,
-        experienceDiceValue: isExperienceBased ? rating : undefined,
-      }
-    }
+    if (rating != null) return normalizedResult(rating, isExperienceBased)
   }
 
-  const baseCandidates = [
-    record.rating,
-    record.score,
-    record.stars,
+  const modelCandidates = [
     record.modelRating,
-    asRecord(picked).rating,
-    asRecord(picked).score,
-    asRecord(picked).stars,
-    asRecord(picked).modelRating,
+    picked.modelRating,
     breakdownExperience.model_rating_1_6,
     topExperience.model_rating_1_6,
     pickedBreakdownExperience.model_rating_1_6,
     pickedExperience.model_rating_1_6,
-    fallbackRating,
   ]
 
-  for (const candidate of baseCandidates) {
+  for (const candidate of modelCandidates) {
     const rating = asRating1to6(candidate)
-    if (rating != null) {
-      return {
-        rating,
-        source: isExperienceBased ? 'experience_blend' : 'base',
-        ratingFromExperience: isExperienceBased,
-        experienceDiceValue: isExperienceBased ? rating : undefined,
-      }
-    }
+    if (rating != null) return normalizedResult(rating, isExperienceBased)
   }
 
   if (isExperienceBased) {
@@ -219,14 +227,7 @@ export function normalizeSurfRating1to6(payload: unknown, fallbackRating?: unkno
     ]
     for (const candidate of rawExperienceCandidates) {
       const rating = asRating1to6(candidate)
-      if (rating != null) {
-        return {
-          rating,
-          source: 'experience_blend',
-          ratingFromExperience: true,
-          experienceDiceValue: rating,
-        }
-      }
+      if (rating != null) return normalizedResult(rating, true)
     }
   }
 
