@@ -1,0 +1,31 @@
+{
+  "panel": { "width": 800, "height": 480 },
+  "viewport": { "x": 9, "y": 22, "width": 785, "height": 458 },
+  "gridSize": 4,
+  "layouts": {
+    "full": [{ "col": 0, "row": 0, "colSpan": 4, "rowSpan": 4, "slot": 0, "size": "XL" }],
+    "default": [
+      { "col": 0, "row": 0, "colSpan": 4, "rowSpan": 1, "slot": 0, "size": "SMALL" },
+      { "col": 0, "row": 1, "colSpan": 4, "rowSpan": 1, "slot": 1, "size": "SMALL" },
+      { "col": 0, "row": 2, "colSpan": 4, "rowSpan": 2, "slot": 2, "size": "LARGE" }
+    ],
+    "pyramid": [
+      { "col": 0, "row": 0, "colSpan": 4, "rowSpan": 1, "slot": 0, "size": "SMALL" },
+      { "col": 0, "row": 1, "colSpan": 4, "rowSpan": 1, "slot": 1, "size": "SMALL" },
+      { "col": 0, "row": 2, "colSpan": 2, "rowSpan": 2, "slot": 2, "size": "MEDIUM" },
+      { "col": 2, "row": 2, "colSpan": 2, "rowSpan": 2, "slot": 3, "size": "MEDIUM" }
+    ],
+    "square": [
+      { "col": 0, "row": 0, "colSpan": 2, "rowSpan": 2, "slot": 0, "size": "MEDIUM" },
+      { "col": 2, "row": 0, "colSpan": 2, "rowSpan": 2, "slot": 1, "size": "MEDIUM" },
+      { "col": 0, "row": 2, "colSpan": 2, "rowSpan": 2, "slot": 2, "size": "MEDIUM" },
+      { "col": 2, "row": 2, "colSpan": 2, "rowSpan": 2, "slot": 3, "size": "MEDIUM" }
+    ]
+  },
+  "dividers": {
+    "full": [],
+    "default": [{"axis":"y","boundary":1,"span":"viewport95"},{"axis":"y","boundary":2,"span":"viewport95"}],
+    "pyramid": [{"axis":"y","boundary":1,"span":"viewport95"},{"axis":"y","boundary":2,"span":"viewport95"},{"axis":"x","boundary":2,"span":"region95","fromBoundary":2,"toBoundary":4}],
+    "square": [{"axis":"y","boundary":2,"span":"viewport95"},{"axis":"x","boundary":2,"span":"viewport95"}]
+  }
+}

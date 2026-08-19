@@ -1,0 +1,26 @@
+{
+  "date": {
+    "medium": { "gaps": [6, 14, 14], "badgePadding": [18, 10], "maxBadgeInset": 16 },
+    "calendar": { "padding": [12, 8], "weekWidth": 26, "titleHeight": 22, "titleGap": 10, "dowHeight": 18 },
+    "large": { "columnGap": 14, "calendarPadding": 26 },
+    "xl": { "columnGap": 14, "rowGap": 14, "monthPadding": 26, "rightPadding": 26 }
+  },
+  "reminders": {
+    "small": { "topPadding": 20, "underlineGap": 1, "underlineHeight": 2, "contentGap": 10, "contentBottom": 10, "sectionTextPadding": 8, "maxItems": 3 },
+    "medium": { "topPadding": 26, "underlineGap": 1, "underlineHeight": 2, "contentGap": 12, "bottomPadding": 35, "maxItems": 4 },
+    "large": { "columnGap": 14, "calendarPadding": 26 },
+    "xl": { "columnGap": 14, "rowGap": 14, "monthPadding": 26, "rightPadding": 26 }
+  },
+  "weather": {
+    "small": { "itemGap": 18, "underlineGap": 4, "underlineHeight": 2, "lineGap": 20, "contentPercent": 95 },
+    "medium": { "topPadding": 22, "bottomPadding": 18, "iconScalePercent": 46 },
+    "large": { "topPadding": 22, "underlineGap": 4, "underlineHeight": 2, "regionInset": 10, "columns": 4, "columnTopGap": 16 },
+    "xl": { "topRows": 2, "topColumns": 3, "headerY": 14, "headerHeight": 28, "dividerPercent": 95 }
+  },
+  "countdown": {
+    "small": { "horizontalInset": 8, "maxLines": 1 },
+    "medium": { "gaps": [10, 14, 18], "badgePadding": [18, 10], "maxBadgeInset": 16 },
+    "large": { "columnGap": 14, "listRows": 4, "rowGap": 14, "bulletRadius": 3, "bulletGap": 8 },
+    "xl": { "columnGap": 14, "rowGap": 14, "listRows": 4 }
+  }
+}
