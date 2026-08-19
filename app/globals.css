@@ -415,6 +415,19 @@ a {
   }
 }
 
+@keyframes reminder-thinking {
+  0%, 100% { opacity: .3; transform: scale(.8); }
+  50% { opacity: .9; transform: scale(1); }
+}
+
+.reminder-thinking-dot {
+  animation: reminder-thinking 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reminder-thinking-dot { animation: none; opacity: .7; transform: none; }
+}
+
 /* Shop-only premium motion */
 .shop-page .shop-reveal {
   animation: shop-reveal-up 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
