@@ -13,6 +13,8 @@ const candidate = (reminder, missing_fields = [], question = null) => ({ reminde
 const responseFor = (result, inspect) => async (_url, options) => {
   const request = JSON.parse(options.body)
   assert.equal(request.store, false)
+  assert.deepEqual(request.reasoning, { effort: 'minimal' })
+  assert.equal(request.max_output_tokens, 450)
   assert.equal(request.input[1].content[0].text.includes('2026-08-19T10:00:00'), true)
   inspect?.(JSON.parse(request.input[1].content[0].text))
   return new Response(JSON.stringify({ output: [{ content: [{ type: 'output_text', text: JSON.stringify(result) }] }] }), { status: 200 })
@@ -82,6 +84,30 @@ test('schema and prompt preserve canonical semantic titles', () => {
   assert.match(prompt, /Any meaningful information unsupported by structured fields remains in title/)
 })
 
+test('reminder parsing uses its dedicated model and never inherits OPENAI_MODEL', async () => {
+  const previousReminderModel = process.env.REMINDER_PARSE_MODEL
+  const previousGenericModel = process.env.OPENAI_MODEL
+  delete process.env.REMINDER_PARSE_MODEL
+  process.env.OPENAI_MODEL = 'generic-model-must-not-be-used'
+  let selectedModel
+  try {
+    await parseReminder(context('Dentist tomorrow'), async (_url, options) => {
+      selectedModel = JSON.parse(options.body).model
+      return responseFor(candidate(base))(_url, options)
+    })
+    assert.equal(selectedModel, 'gpt-5-mini')
+    process.env.REMINDER_PARSE_MODEL = 'reminder-specific-model'
+    await parseReminder(context('Dentist tomorrow'), async (_url, options) => {
+      selectedModel = JSON.parse(options.body).model
+      return responseFor(candidate(base))(_url, options)
+    })
+    assert.equal(selectedModel, 'reminder-specific-model')
+  } finally {
+    if (previousReminderModel == null) delete process.env.REMINDER_PARSE_MODEL; else process.env.REMINDER_PARSE_MODEL = previousReminderModel
+    if (previousGenericModel == null) delete process.env.OPENAI_MODEL; else process.env.OPENAI_MODEL = previousGenericModel
+  }
+})
+
 test('parser failures are fail-soft, reason-coded, and never log sensitive content', async () => {
   const logs = []
   const originalError = console.error
@@ -103,6 +129,36 @@ test('parser failures are fail-soft, reason-coded, and never log sensitive conte
   assert.match(home, /onEditDetails\(draftFromText\(\)\)/)
   assert.match(home, /clarificationRounds >= 2/)
   assert.match(home, /I just need one more detail/)
+})
+
+test('successful latency diagnostics contain only duration and outcome', async () => {
+  const logs = []
+  const originalInfo = console.info
+  console.info = (...args) => logs.push(args)
+  try {
+    const ctx = { ...context('PRIVATE REMINDER TEXT'), clarificationAnswer: 'PRIVATE CLARIFICATION ANSWER' }
+    assert.deepEqual(await parseReminder(ctx, responseFor(candidate(base))), ready(base))
+  } finally { console.info = originalInfo }
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0][0], 'reminder_parse_completed')
+  assert.equal(typeof logs[0][1].duration_ms, 'number')
+  assert.equal(logs[0][1].outcome, 'ready')
+  assert.deepEqual(Object.keys(logs[0][1]).sort(), ['duration_ms', 'outcome'])
+  assert.doesNotMatch(JSON.stringify(logs), /PRIVATE|REMINDER|CLARIFICATION|ANSWER/)
+})
+
+test('composer shows localized initial and clarification thinking states and guards duplicate parsing', () => {
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(home, /Forbereder påminnelsen …/)
+  assert.match(home, /Understanding your reminder …/)
+  assert.match(home, /Fullfører påminnelsen …/)
+  assert.match(home, /Finishing your reminder …/)
+  assert.match(home, /parsing \? <ReminderThinkingState language=\{language\} completing=\{false\}/)
+  assert.match(home, /parsing \? <ReminderThinkingState language=\{language\} completing/)
+  assert.match(home, /if \(parsingRef\.current\) return/)
+  assert.match(home, /reminder-thinking-dot/)
+  const styles = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
+  assert.match(styles, /prefers-reduced-motion: reduce[\s\S]*\.reminder-thinking-dot \{ animation: none/)
 })
 
 const responseForText = (text) => async () => new Response(JSON.stringify({ output: [{ content: [{ type: 'output_text', text }] }] }), { status: 200 })

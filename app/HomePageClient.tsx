@@ -13682,6 +13682,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
   const [clarificationAnswer, setClarificationAnswer] = useState('')
   const [clarificationRounds, setClarificationRounds] = useState(0)
   const [parsing, setParsing] = useState(false)
+  const parsingRef = useRef(false)
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const localNowIso = () => {
@@ -13699,8 +13700,10 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
   })
 
   async function interpret(completing = false) {
+    if (parsingRef.current) return
     if (!text.trim()) return
     if (completing && (!clarificationAnswer.trim() || clarificationRounds >= 2)) return
+    parsingRef.current = true
     setParsing(true); setFailed(false); setParsed(null)
     try {
       const { data } = await supabase.auth.getSession()
@@ -13721,7 +13724,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
         const nextRounds = clarificationRounds + (completing ? 1 : 0)
         setClarification(json); setClarificationAnswer(''); setClarificationRounds(nextRounds)
       } else throw new Error('invalid parse result')
-    } catch { setFailed(true) } finally { setParsing(false) }
+    } catch { setFailed(true) } finally { parsingRef.current = false; setParsing(false) }
   }
 
   async function addReminder() {
@@ -13752,7 +13755,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
         <textarea autoFocus rows={4} value={text} onChange={(e) => { setText(e.target.value); setFailed(false); setClarificationRounds(0) }} placeholder={language === 'no' ? 'Tannlege neste tirsdag kl. 14:30' : 'Dentist next Tuesday at 14:30'} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" />
         <SensitiveInformationHelper language={language} />
         {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Klarte ikke å tolke alt. Prøv igjen eller rediger detaljene manuelt.' : "Couldn't understand that completely. Try again or edit the details manually."}</p>}
-        <button onClick={() => interpret()} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'CONTINUING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>
+        {parsing ? <ReminderThinkingState language={language} completing={false} /> : <button onClick={() => interpret()} disabled={!text.trim()} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'FORTSETT' : 'CONTINUE'}</button>}
         {failed && <button onClick={() => onEditDetails(draftFromText())} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>}
       </> : clarification ? <>
         <div className="mt-7 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
@@ -13763,7 +13766,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
           {clarificationRounds >= 2 && <p className="mt-3 text-sm text-[color:var(--fg-60)]">{language === 'no' ? 'Rediger detaljene for å fullføre påminnelsen.' : 'Edit the details to finish the reminder.'}</p>}
           {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Noe gikk galt. Prøv igjen eller rediger detaljene manuelt.' : 'Something went wrong. Try again or edit the details manually.'}</p>}
         </div>
-        {clarificationRounds < 2 && <button onClick={() => interpret(true)} disabled={!clarificationAnswer.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'CONTINUING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>}
+        {clarificationRounds < 2 && (parsing ? <ReminderThinkingState language={language} completing /> : <button onClick={() => interpret(true)} disabled={!clarificationAnswer.trim()} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'FORTSETT' : 'CONTINUE'}</button>)}
         <button onClick={() => onEditDetails({ id: '', title: clarification.partial.title, date: clarification.partial.due_date || fallbackDate, time: clarification.partial.due_time, endDate: clarification.partial.end_date, endTime: clarification.partial.end_time, tag: isReminderTag(clarification.partial.tag) ? clarification.partial.tag : null, repeat: isReminderRepeatKey(clarification.partial.repeat_type) ? clarification.partial.repeat_type : 'none', customRepeatDays: clarification.partial.custom_repeat_days })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>
         <button onClick={() => { setClarification(null); setClarificationAnswer('') }} className="mt-1 h-10 w-full text-xs tracking-widest text-[color:var(--fg-50)]">{language === 'no' ? 'ENDRE TEKST' : 'CHANGE TEXT'}</button>
       </> : <>
@@ -13777,6 +13780,18 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
         <button onClick={() => setParsed(null)} className="mt-1 h-10 w-full text-xs tracking-widest text-[color:var(--fg-50)]">{language === 'no' ? 'ENDRE TEKST' : 'CHANGE TEXT'}</button>
       </>}
     </div>
+  </div>
+}
+
+function ReminderThinkingState({ language, completing }: { language: AppLanguage; completing: boolean }) {
+  const copy = completing
+    ? (language === 'no' ? 'Fullfører påminnelsen …' : 'Finishing your reminder …')
+    : (language === 'no' ? 'Forbereder påminnelsen …' : 'Understanding your reminder …')
+  return <div role="status" aria-live="polite" aria-busy="true" className="mt-5 flex h-12 w-full items-center justify-center gap-3 text-sm text-[color:var(--fg-70)]">
+    <span aria-hidden="true" className="flex items-center gap-1.5">
+      {[0, 1, 2].map((dot) => <span key={dot} className="reminder-thinking-dot h-1.5 w-1.5 rounded-full bg-current" style={{ animationDelay: `${dot * 160}ms` }} />)}
+    </span>
+    <span>{copy}</span>
   </div>
 }
 
