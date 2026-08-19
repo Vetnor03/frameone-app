@@ -1,8 +1,9 @@
-export const REMINDER_PARSE_VERSION = 'reminder-parse-v1'
+export const REMINDER_PARSE_VERSION = 'reminder-parse-v2'
 export const REMINDER_PARSE_TIMEOUT_MS = 10_000
 
 export const REMINDER_REPEAT_TYPES = ['none', 'daily', 'weekly', '2weeks', '4weeks', 'monthly', 'halfyear', 'yearly', '2years', 'custom'] as const
 export const REMINDER_TAGS = ['work', 'personal', 'sports', 'chores', 'event'] as const
+export const REMINDER_MISSING_FIELDS = ['due_date', 'due_time'] as const
 
 export type ParsedReminder = {
   title: string
@@ -16,16 +17,24 @@ export type ParsedReminder = {
   ambiguities: string[]
 }
 
+export type ReminderParseResult =
+  | { status: 'ready'; reminder: ParsedReminder; partial: null; missing_fields: []; question: null }
+  | { status: 'needs_clarification'; reminder: null; partial: ParsedReminder; missing_fields: Array<typeof REMINDER_MISSING_FIELDS[number]>; question: string }
+
 export type ReminderParseContext = {
   text: string
   localNow: string
   timezone?: string | null
   language: 'en' | 'no'
+  partial?: ParsedReminder
+  clarificationQuestion?: string
+  clarificationAnswer?: string
 }
 
 const YMD = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
-const allowedKeys = new Set(['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'tag', 'ambiguities'])
+const reminderKeys = new Set(['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'tag', 'ambiguities'])
+const resultKeys = new Set(['status', 'reminder', 'partial', 'missing_fields', 'question'])
 
 function isRealYmd(value: unknown): value is string {
   if (typeof value !== 'string' || !YMD.test(value)) return false
@@ -37,7 +46,7 @@ function isRealYmd(value: unknown): value is string {
 export function validateParsedReminder(value: unknown): ParsedReminder | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
-  if (Object.keys(v).some((key) => !allowedKeys.has(key))) return null
+  if (Object.keys(v).some((key) => !reminderKeys.has(key))) return null
   const nullableMatch = (x: unknown, pattern: RegExp) => x === null || (typeof x === 'string' && pattern.test(x))
   const nullableRealYmd = (x: unknown) => x === null || isRealYmd(x)
   if (typeof v.title !== 'string' || !v.title.trim() || v.title.trim().length > 500) return null
@@ -56,6 +65,25 @@ export function validateParsedReminder(value: unknown): ParsedReminder | null {
   return { ...v, title: v.title.trim() } as ParsedReminder
 }
 
+export function validateReminderParseResult(value: unknown): ReminderParseResult | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const v = value as Record<string, unknown>
+  if (Object.keys(v).some((key) => !resultKeys.has(key)) || !Array.isArray(v.missing_fields)) return null
+  if (v.status === 'ready') {
+    const reminder = validateParsedReminder(v.reminder)
+    if (!reminder?.due_date || v.partial !== null || v.question !== null || v.missing_fields.length) return null
+    return { status: 'ready', reminder, partial: null, missing_fields: [], question: null }
+  }
+  if (v.status === 'needs_clarification') {
+    const partial = validateParsedReminder(v.partial)
+    const missing = v.missing_fields
+    if (v.reminder !== null || !partial || typeof v.question !== 'string' || !v.question.trim() || !missing.length || !missing.every((x) => (REMINDER_MISSING_FIELDS as readonly unknown[]).includes(x))) return null
+    if (missing.includes('due_date') !== (partial.due_date === null) || (missing.includes('due_time') && partial.due_time !== null)) return null
+    return { status: 'needs_clarification', reminder: null, partial, missing_fields: [...new Set(missing)] as Array<typeof REMINDER_MISSING_FIELDS[number]>, question: v.question.trim() }
+  }
+  return null
+}
+
 function outputText(payload: any) {
   for (const item of payload?.output ?? []) for (const content of item?.content ?? []) {
     if (content?.type === 'output_text' && typeof content.text === 'string') return content.text
@@ -64,7 +92,7 @@ function outputText(payload: any) {
 }
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] })
-export const reminderParseJsonSchema = {
+const reminderSchema = {
   type: 'object', additionalProperties: false,
   properties: {
     title: { type: 'string', minLength: 1, maxLength: 500 },
@@ -79,8 +107,18 @@ export const reminderParseJsonSchema = {
   },
   required: ['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'tag', 'ambiguities'],
 }
+export const reminderParseJsonSchema = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    status: { type: 'string', enum: ['ready', 'needs_clarification'] },
+    reminder: nullable(reminderSchema), partial: nullable(reminderSchema),
+    missing_fields: { type: 'array', items: { type: 'string', enum: [...REMINDER_MISSING_FIELDS] } },
+    question: nullable({ type: 'string', minLength: 1, maxLength: 240 }),
+  },
+  required: ['status', 'reminder', 'partial', 'missing_fields', 'question'],
+}
 
-export async function parseReminder(context: ReminderParseContext, fetcher: typeof fetch = fetch): Promise<ParsedReminder | null> {
+export async function parseReminder(context: ReminderParseContext, fetcher: typeof fetch = fetch): Promise<ReminderParseResult | null> {
   if (!process.env.OPENAI_API_KEY || !context.text.trim() || !Date.parse(context.localNow)) return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REMINDER_PARSE_TIMEOUT_MS)
@@ -89,22 +127,15 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
       method: 'POST', signal: controller.signal,
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: process.env.REMINDER_PARSE_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini',
-        store: false,
+        model: process.env.REMINDER_PARSE_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini', store: false,
         input: [
-          { role: 'developer', content: [{ type: 'input_text', text: `Parse a reminder into the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Resolve relative dates only from localNow and timezone supplied by the user. Preserve the meaningful title; do not shorten it. Never invent a date, exact time, end, tag, person, place, or repeat rule. A null due_time represents a reminder without an explicit clock time. Any meaningful reminder information that cannot be represented by the supported structured fields must remain in the reminder title rather than being moved into an unsupported field. For vague words such as later/afternoon, leave unsupported precise fields null and add a concise ambiguity. end_date/end_time describe this occurrence; they are never recurrence termination. The app represents Sunday recurrence as weekly with a Sunday due_date. Unsupported intent belongs in ambiguities. custom_repeat_days is only for an explicit every-N-days rule.` }] },
-          { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ text: context.text.trim(), localNow: context.localNow, timezone: context.timezone || null, language: context.language }) }] },
+          { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. Return ready only when due_date is known; an exact due_time is optional. If understandable scheduling language is too vague to safely produce a required date or an explicitly implied time (for example later or after work), return needs_clarification with the useful partial, precisely missing fields, and one calm, specific question written naturally in the requested language. Preserve any previously parsed fields when completing a clarification and use the answer only to fill or correct what it addresses.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. custom_repeat_days is only for an explicit every-N-days rule. ambiguities may describe non-blocking unsupported intent; missing required scheduling data must use needs_clarification instead.` }] },
+          { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ original_reminder_text: context.text.trim(), existing_partial: context.partial, clarification_question: context.clarificationQuestion, clarification_answer: context.clarificationAnswer, localNow: context.localNow, timezone: context.timezone || null, language: context.language }) }] },
         ],
-        text: { format: { type: 'json_schema', name: 'reminder_parse', strict: true, schema: reminderParseJsonSchema } },
-        max_output_tokens: 900,
+        text: { format: { type: 'json_schema', name: 'reminder_parse', strict: true, schema: reminderParseJsonSchema } }, max_output_tokens: 1200,
       }),
     })
     if (!response.ok) return null
-    const raw = outputText(await response.json())
-    return validateParsedReminder(JSON.parse(raw))
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
+    return validateReminderParseResult(JSON.parse(outputText(await response.json())))
+  } catch { return null } finally { clearTimeout(timeout) }
 }

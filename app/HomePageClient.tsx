@@ -13678,6 +13678,9 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
 }) {
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState<any>(null)
+  const [clarification, setClarification] = useState<any>(null)
+  const [clarificationAnswer, setClarificationAnswer] = useState('')
+  const [clarificationRounds, setClarificationRounds] = useState(0)
   const [parsing, setParsing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -13695,8 +13698,9 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
     repeat: isReminderRepeatKey(parsed.repeat_type) ? parsed.repeat_type : 'none', customRepeatDays: parsed.custom_repeat_days,
   })
 
-  async function interpret() {
+  async function interpret(completing = false) {
     if (!text.trim()) return
+    if (completing && (!clarificationAnswer.trim() || clarificationRounds >= 2)) return
     setParsing(true); setFailed(false); setParsed(null)
     try {
       const { data } = await supabase.auth.getSession()
@@ -13704,11 +13708,19 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
       if (!accessToken) throw new Error('sign in')
       const response = await fetch('/api/reminders/parse', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ text: text.trim(), localNow: localNowIso(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language }),
+        body: JSON.stringify({
+          text: text.trim(), localNow: localNowIso(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language,
+          ...(completing ? { partial: clarification.partial, clarificationQuestion: clarification.question, clarificationAnswer: clarificationAnswer.trim() } : {}),
+        }),
       })
       const json = await response.json().catch(() => ({}))
-      if (!response.ok || !json.reminder) throw new Error('parse failed')
-      setParsed(json.reminder)
+      if (!response.ok || (json.status !== 'ready' && json.status !== 'needs_clarification')) throw new Error('parse failed')
+      if (json.status === 'ready' && json.reminder) {
+        setParsed(json.reminder); setClarification(null); setClarificationAnswer('')
+      } else if (json.status === 'needs_clarification' && json.partial && json.question) {
+        const nextRounds = clarificationRounds + (completing ? 1 : 0)
+        setClarification(json); setClarificationAnswer(''); setClarificationRounds(nextRounds)
+      } else throw new Error('invalid parse result')
     } catch { setFailed(true) } finally { setParsing(false) }
   }
 
@@ -13735,13 +13747,25 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClo
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5">
       <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY PÅMINNELSE' : 'NEW REMINDER'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
-      {!parsed ? <>
+      {!parsed && !clarification ? <>
         <label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva vil du bli påminnet om?' : 'What should I remind you about?'}</label>
-        <textarea autoFocus rows={4} value={text} onChange={(e) => { setText(e.target.value); setFailed(false) }} placeholder={language === 'no' ? 'Tannlege neste tirsdag kl. 14:30' : 'Dentist next Tuesday at 14:30'} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" />
+        <textarea autoFocus rows={4} value={text} onChange={(e) => { setText(e.target.value); setFailed(false); setClarificationRounds(0) }} placeholder={language === 'no' ? 'Tannlege neste tirsdag kl. 14:30' : 'Dentist next Tuesday at 14:30'} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" />
         <SensitiveInformationHelper language={language} />
         {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Klarte ikke å tolke alt. Prøv igjen eller rediger detaljene manuelt.' : "Couldn't understand that completely. Try again or edit the details manually."}</p>}
-        <button onClick={interpret} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'CONTINUING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>
+        <button onClick={() => interpret()} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'CONTINUING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>
         {failed && <button onClick={() => onEditDetails(draftFromText())} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>}
+      </> : clarification ? <>
+        <div className="mt-7 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+          <div className="text-lg font-medium text-[color:var(--fg-95)]">{clarification.partial.title}</div>
+          <div className="mt-3 text-sm font-medium text-[color:var(--fg-80)]">{language === 'no' ? 'Jeg trenger bare én detalj til' : 'I just need one more detail'}</div>
+          <label className="mt-2 block text-sm text-[color:var(--fg-60)]" htmlFor="reminder-clarification">{clarification.question}</label>
+          {clarificationRounds < 2 && <input id="reminder-clarification" autoFocus value={clarificationAnswer} onChange={(e) => { setClarificationAnswer(e.target.value); setFailed(false) }} placeholder={language === 'no' ? 'I dag kl. 16:00' : 'Today at 16:00'} className="mt-3 h-12 w-full rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-4 text-[color:var(--fg-90)] outline-none" />}
+          {clarificationRounds >= 2 && <p className="mt-3 text-sm text-[color:var(--fg-60)]">{language === 'no' ? 'Rediger detaljene for å fullføre påminnelsen.' : 'Edit the details to finish the reminder.'}</p>}
+          {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Noe gikk galt. Prøv igjen eller rediger detaljene manuelt.' : 'Something went wrong. Try again or edit the details manually.'}</p>}
+        </div>
+        {clarificationRounds < 2 && <button onClick={() => interpret(true)} disabled={!clarificationAnswer.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'CONTINUING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>}
+        <button onClick={() => onEditDetails({ id: '', title: clarification.partial.title, date: clarification.partial.due_date || fallbackDate, time: clarification.partial.due_time, endDate: clarification.partial.end_date, endTime: clarification.partial.end_time, tag: isReminderTag(clarification.partial.tag) ? clarification.partial.tag : null, repeat: isReminderRepeatKey(clarification.partial.repeat_type) ? clarification.partial.repeat_type : 'none', customRepeatDays: clarification.partial.custom_repeat_days })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>
+        <button onClick={() => { setClarification(null); setClarificationAnswer('') }} className="mt-1 h-10 w-full text-xs tracking-widest text-[color:var(--fg-50)]">{language === 'no' ? 'ENDRE TEKST' : 'CHANGE TEXT'}</button>
       </> : <>
         <div className="mt-7 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
           <div className="text-lg font-medium text-[color:var(--fg-95)]">{parsed.title}</div>
