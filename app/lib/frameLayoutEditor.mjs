@@ -38,6 +38,69 @@ export function internalDividerSegments(cells) {
   }, [])
 }
 
+/** Return divider portions whose two owners can be replaced by one rectangle. */
+export function removableDividerSegments(cells) {
+  if (!validateLayout(cells)) return []
+  const segments = []
+  for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) {
+    const a = cells[i], b = cells[j]
+    const aModule = a.moduleId && a.moduleId !== 'empty' ? a.moduleId : 'empty'
+    const bModule = b.moduleId && b.moduleId !== 'empty' ? b.moduleId : 'empty'
+    if (aModule !== 'empty' && bModule !== 'empty' && aModule !== bModule) continue
+    if (a.row === b.row && a.rowSpan === b.rowSpan) {
+      const left = a.col < b.col ? a : b, right = left === a ? b : a
+      if (left.col + left.colSpan === right.col) segments.push({axis: 'vertical', boundary: right.col, from: a.row, to: a.row + a.rowSpan, cellIds: [left.id, right.id]})
+    }
+    if (a.col === b.col && a.colSpan === b.colSpan) {
+      const top = a.row < b.row ? a : b, bottom = top === a ? b : a
+      if (top.row + top.rowSpan === bottom.row) segments.push({axis: 'horizontal', boundary: bottom.row, from: a.col, to: a.col + a.colSpan, cellIds: [top.id, bottom.id]})
+    }
+  }
+  return segments.sort((a, b) => a.axis.localeCompare(b.axis) || a.boundary - b.boundary || a.from - b.from || a.cellIds[0].localeCompare(b.cellIds[0]))
+}
+
+/** Hit-test removable divider segments in viewport-local pixel coordinates. */
+export function findDividerNearPointer(cells, point, viewport = {width: 785, height: 458}, tolerance = 10) {
+  const candidates = removableDividerSegments(cells).map(segment => {
+    const vertical = segment.axis === 'vertical'
+    const fixed = segment.boundary / GRID_SIZE * (vertical ? viewport.width : viewport.height)
+    const along = vertical ? point.y : point.x
+    const cross = vertical ? point.x : point.y
+    const extent = vertical ? viewport.height : viewport.width
+    const start = segment.from / GRID_SIZE * extent, end = segment.to / GRID_SIZE * extent
+    const nearestAlong = Math.max(start, Math.min(end, along))
+    return {...segment, distance: Math.hypot(cross - fixed, along - nearestAlong)}
+  }).filter(candidate => candidate.distance <= tolerance)
+  return candidates.sort((a, b) => a.distance - b.distance || (a.to - a.from) - (b.to - b.from) || a.cellIds.join().localeCompare(b.cellIds.join()))[0]
+}
+
+const assignedModule = cell => cell.moduleId && cell.moduleId !== 'empty' ? cell.moduleId : 'empty'
+
+/** Merge a compatible neighboring pair, or return the original partition unchanged. */
+export function mergeCells(cells, firstId, secondId) {
+  const first = cells.find(cell => cell.id === firstId), second = cells.find(cell => cell.id === secondId)
+  if (!first || !second || first === second) return {valid: false, reason: 'Divider does not identify two cells', cells}
+  const vertical = first.row === second.row && first.rowSpan === second.rowSpan && (first.col + first.colSpan === second.col || second.col + second.colSpan === first.col)
+  const horizontal = first.col === second.col && first.colSpan === second.colSpan && (first.row + first.rowSpan === second.row || second.row + second.rowSpan === first.row)
+  if (!vertical && !horizontal) return {valid: false, reason: 'Those cells do not form one rectangle', cells}
+  const firstModule = assignedModule(first), secondModule = assignedModule(second)
+  if (firstModule !== 'empty' && secondModule !== 'empty' && firstModule !== secondModule) return {valid: false, reason: 'Clear one conflicting assignment before erasing', cells}
+  const ids = [first.id, second.id].sort()
+  const merged = {
+    id: `merged:${ids.map(encodeURIComponent).join('+')}`,
+    col: Math.min(first.col, second.col), row: Math.min(first.row, second.row),
+    colSpan: vertical ? first.colSpan + second.colSpan : first.colSpan,
+    rowSpan: horizontal ? first.rowSpan + second.rowSpan : first.rowSpan,
+    moduleId: firstModule !== 'empty' ? firstModule : secondModule,
+  }
+  const next = sortCells(cells.filter(cell => cell !== first && cell !== second).concat(merged))
+  return validateLayout(next) ? {valid: true, cells: next, mergedId: merged.id} : {valid: false, reason: 'The merged partition is invalid', cells}
+}
+
+export function mergeDivider(cells, divider) {
+  return divider?.cellIds?.length === 2 ? mergeCells(cells, divider.cellIds[0], divider.cellIds[1]) : {valid: false, reason: 'No removable divider selected', cells}
+}
+
 export function findContainingCell(cells, point) {
   return sortCells(cells).find(c => point.x >= c.col && point.x <= c.col + c.colSpan && point.y >= c.row && point.y <= c.row + c.rowSpan)
 }
