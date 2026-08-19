@@ -7,6 +7,8 @@ export type DividerSegment = {axis:'vertical'|'horizontal';boundary:number;from:
 export type RemovableDividerSegment = DividerSegment & {cellIds:[string,string]}
 export type DividerHit = RemovableDividerSegment & {distance:number}
 export type MergeResult = {valid:boolean;reason?:string;cells:EditorCell[];mergedId?:string}
+export type SplitGuide = {axis:'vertical'|'horizontal';boundary:number;distance:number}
+export type GridSelection = {col:number;row:number;colSpan:number;rowSpan:number}
 export type StrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];parentId?:string;intendedId?:string;normalized?:NormalizedStroke}
 export type EditorHistory = {past:EditorCell[][];present:EditorCell[];future:EditorCell[][]}
 export const GRID_SIZE:number
@@ -20,6 +22,13 @@ export function validateLayout(cells:EditorCell[]):boolean
 export function internalDividerSegments(cells:EditorCell[]):DividerSegment[]
 export function removableDividerSegments(cells:EditorCell[]):RemovableDividerSegment[]
 export function findDividerNearPointer(cells:EditorCell[],point:Point,viewport?:{width:number;height:number},tolerance?:number):DividerHit|undefined
+export function nearestValidSplitGuide(cell:EditorCell|undefined,point:Point,viewport?:{width:number;height:number}):SplitGuide|undefined
+export function splitCellAtBoundary(cells:EditorCell[],cellId:string|undefined,guide:Pick<SplitGuide,'axis'|'boundary'>|undefined):StrokePreview
+export function splitCellNearPointer(cells:EditorCell[],point:Point,viewport?:{width:number;height:number}):StrokePreview&{guide?:SplitGuide}
+export function snapDragSelection(start:Point,end:Point,viewport?:{width:number;height:number}):GridSelection
+export function cellsFullyContainedInSelection(cells:EditorCell[],selection:GridSelection):EditorCell[]
+export function selectionIsExactlyTiled(cells:EditorCell[],selection:GridSelection):boolean
+export function mergeCellsInSelection(cells:EditorCell[],selection:GridSelection):MergeResult
 export function mergeCells(cells:EditorCell[],firstId:string,secondId:string):MergeResult
 export function mergeDivider(cells:EditorCell[],divider:RemovableDividerSegment|DividerHit|undefined):MergeResult
 export function findContainingCell(cells:EditorCell[],point:Point):EditorCell|undefined

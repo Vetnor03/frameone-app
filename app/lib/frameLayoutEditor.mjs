@@ -76,6 +76,68 @@ export function findDividerNearPointer(cells, point, viewport = {width: 785, hei
 
 const assignedModule = cell => cell.moduleId && cell.moduleId !== 'empty' ? cell.moduleId : 'empty'
 
+/** Find the closest 4x4 boundary crossing a cell's interior (vertical wins ties). */
+export function nearestValidSplitGuide(cell, point, viewport = {width: 785, height: 458}) {
+  if (!cell) return undefined
+  const guides = []
+  for (let boundary = cell.col + 1; boundary < cell.col + cell.colSpan; boundary++) guides.push({axis: 'vertical', boundary, distance: Math.abs(point.x - boundary / GRID_SIZE * viewport.width)})
+  for (let boundary = cell.row + 1; boundary < cell.row + cell.rowSpan; boundary++) guides.push({axis: 'horizontal', boundary, distance: Math.abs(point.y - boundary / GRID_SIZE * viewport.height)})
+  return guides.sort((a, b) => a.distance - b.distance || (a.axis === b.axis ? a.boundary - b.boundary : a.axis === 'vertical' ? -1 : 1))[0]
+}
+
+/** Split one complete cell at an internal grid boundary. */
+export function splitCellAtBoundary(cells, cellId, guide) {
+  const parent = cells.find(cell => cell.id === cellId)
+  if (!parent || !guide) return {valid: false, reason: 'No valid split guide', cells}
+  const vertical = guide.axis === 'vertical'
+  const low = vertical ? parent.col : parent.row, high = low + (vertical ? parent.colSpan : parent.rowSpan)
+  if (!Number.isInteger(guide.boundary) || guide.boundary <= low || guide.boundary >= high) return {valid: false, reason: 'The guide does not cross this cell', cells}
+  const geometries = vertical
+    ? [{col: parent.col, row: parent.row, colSpan: guide.boundary - parent.col, rowSpan: parent.rowSpan}, {col: guide.boundary, row: parent.row, colSpan: parent.col + parent.colSpan - guide.boundary, rowSpan: parent.rowSpan}]
+    : [{col: parent.col, row: parent.row, colSpan: parent.colSpan, rowSpan: guide.boundary - parent.row}, {col: parent.col, row: guide.boundary, colSpan: parent.colSpan, rowSpan: parent.row + parent.rowSpan - guide.boundary}]
+  const pieces = geometries.map((geometry, index) => child(parent, geometry, index === 0 ? 'first' : 'second'))
+  if (assignedModule(parent) !== 'empty') [...pieces].sort((a, b) => cellArea(b) - cellArea(a) || a.row - b.row || a.col - b.col)[0].moduleId = parent.moduleId
+  const next = sortCells(cells.filter(cell => cell.id !== parent.id).concat(pieces))
+  return validateLayout(next) ? {valid: true, cells: next, parentId: parent.id, intendedId: pieces[0].id} : {valid: false, reason: 'The split partition is invalid', cells}
+}
+
+export function splitCellNearPointer(cells, point, viewport = {width: 785, height: 458}) {
+  const logical = {x: point.x / viewport.width * GRID_SIZE, y: point.y / viewport.height * GRID_SIZE}
+  const parent = findContainingCell(cells, logical)
+  const guide = nearestValidSplitGuide(parent, point, viewport)
+  return {...splitCellAtBoundary(cells, parent?.id, guide), guide}
+}
+
+/** Snap both drag endpoints to grid boundaries and normalize the rectangle. */
+export function snapDragSelection(start, end, viewport = {width: 785, height: 458}) {
+  const a = {col: snapBoundary(start.x, viewport.width), row: snapBoundary(start.y, viewport.height)}
+  const b = {col: snapBoundary(end.x, viewport.width), row: snapBoundary(end.y, viewport.height)}
+  return {col: Math.min(a.col, b.col), row: Math.min(a.row, b.row), colSpan: Math.abs(a.col - b.col), rowSpan: Math.abs(a.row - b.row)}
+}
+
+export function cellsFullyContainedInSelection(cells, selection) {
+  return sortCells(cells.filter(cell => cell.col >= selection.col && cell.row >= selection.row && cell.col + cell.colSpan <= selection.col + selection.colSpan && cell.row + cell.rowSpan <= selection.row + selection.rowSpan))
+}
+
+export function selectionIsExactlyTiled(cells, selection) {
+  if (!selection || selection.colSpan < 1 || selection.rowSpan < 1) return false
+  const selected = cellsFullyContainedInSelection(cells, selection)
+  if (selected.length < 2 || selected.reduce((sum, cell) => sum + cellArea(cell), 0) !== selection.colSpan * selection.rowSpan) return false
+  return Array.from({length: selection.rowSpan}, (_, r) => Array.from({length: selection.colSpan}, (_, c) => selected.filter(cell => c + selection.col >= cell.col && c + selection.col < cell.col + cell.colSpan && r + selection.row >= cell.row && r + selection.row < cell.row + cell.rowSpan).length)).flat().every(count => count === 1)
+}
+
+/** Merge every cell exactly tiling a requested rectangle. */
+export function mergeCellsInSelection(cells, selection) {
+  const selected = cellsFullyContainedInSelection(cells, selection)
+  if (!selectionIsExactlyTiled(cells, selection)) return {valid: false, reason: 'Selection must exactly cover whole cells', cells}
+  const modules = [...new Set(selected.map(assignedModule).filter(module => module !== 'empty'))]
+  if (modules.length > 1) return {valid: false, reason: 'Clear conflicting assignments before merging', cells}
+  const ids = selected.map(cell => cell.id).sort()
+  const merged = {...selection, id: `merged:${ids.map(encodeURIComponent).join('+')}`, moduleId: modules[0] ?? 'empty'}
+  const selectedIds = new Set(ids), next = sortCells(cells.filter(cell => !selectedIds.has(cell.id)).concat(merged))
+  return validateLayout(next) ? {valid: true, cells: next, mergedId: merged.id} : {valid: false, reason: 'The merged partition is invalid', cells}
+}
+
 /** Merge a compatible neighboring pair, or return the original partition unchanged. */
 export function mergeCells(cells, firstId, secondId) {
   const first = cells.find(cell => cell.id === firstId), second = cells.find(cell => cell.id === secondId)
