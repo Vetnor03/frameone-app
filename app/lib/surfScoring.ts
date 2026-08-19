@@ -248,6 +248,8 @@ type ScoreBreakdown = {
   finalRating?: number
   baseScore?: number
   experienceAdjustment?: number
+  experienceDisplay: 'normal' | 'personal_match'
+  experienceDisplayReason: SurfExperienceDisplayReason
   finalScore?: number
   whySelected?: string
 
@@ -261,6 +263,8 @@ export type SurfScoreResult = {
   baseScore: number
   experienceAdjustment: number
   experienceConfidence: number
+  experienceDisplay: 'normal' | 'personal_match'
+  experienceDisplayReason: SurfExperienceDisplayReason
   finalScore: number
   finalRating: number
   line1: string
@@ -273,6 +277,23 @@ export const SHARED_CALIBRATION_VERSION = 'residual-v1'
 export const MIN_SHARED_EXPERIENCES = 8
 export const MIN_SHARED_DISTINCT_USERS = 3
 export const MIN_PERSONAL_EXPERIENCES = 3
+// Personal confidence is the similarity-squared, recency-weighted effective sample
+// mass divided by the three-row personal minimum. Keeping this above 0.65 makes the
+// presentation selective without requiring the residual to change the final score.
+export const SURF_DICE_MIN_PERSONAL_CONFIDENCE = 0.65
+
+export type SurfExperienceDisplayReason =
+  | 'no_personal_evidence'
+  | 'insufficient_personal_samples'
+  | 'low_personal_confidence'
+  | 'strong_personal_match'
+
+export function surfExperienceDisplayDecision(personal: Pick<CalibrationSummary, 'sampleCount' | 'confidence'> | null | undefined) {
+  if (!personal || personal.sampleCount === 0) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'no_personal_evidence' as const }
+  if (personal.sampleCount < MIN_PERSONAL_EXPERIENCES) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'insufficient_personal_samples' as const }
+  if (personal.confidence < SURF_DICE_MIN_PERSONAL_CONFIDENCE) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'low_personal_confidence' as const }
+  return { experienceDisplay: 'personal_match' as const, experienceDisplayReason: 'strong_personal_match' as const }
+}
 export const MAX_SHARED_ADJUSTMENT = 0.75
 export const MAX_PERSONAL_ADJUSTMENT = 0.75
 export const SURF_COMMENT_MIN_CONFIDENCE = 0.55
@@ -1865,6 +1886,10 @@ export function scoreSurf(params: {
   const calibratedScoreFloat = clamp(bootstrapScoreFloat + (shared?.adjustment ?? 0) + (personal?.adjustment ?? 0), 1, 6)
   const finalRating = scopedCalibration ? roundFinalScore(calibratedScoreFloat) : clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
   const calibrationSource = shared?.adjustment && personal?.adjustment ? 'shared_and_personal' : shared?.adjustment ? 'shared_calibration' : personal?.adjustment ? 'personal_calibration' : 'base_only'
+  // This presentation-only decision deliberately ignores bootstrap/shared influence
+  // and adjustment magnitude. Personal qualifying samples already passed the scoring
+  // similarity/quality filters in calibrationFor; confidence expresses their relevance.
+  const experienceDisplayDecision = surfExperienceDisplayDecision(personal)
 
   return {
     rating: finalRating,
@@ -1872,6 +1897,7 @@ export function scoreSurf(params: {
     baseScore: model.rating,
     experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
     experienceConfidence: scopedCalibration ? Math.max(shared?.confidence ?? 0, personal?.confidence ?? 0) : exp.confidence,
+    ...experienceDisplayDecision,
     finalScore: finalRating,
     finalRating,
     line1,
@@ -1944,6 +1970,7 @@ export function scoreSurf(params: {
       finalRating,
       baseScore: model.rating,
       experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
+      ...experienceDisplayDecision,
       finalScore: finalRating,
       whySelected: params.whySelected,
       method:

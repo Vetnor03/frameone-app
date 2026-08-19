@@ -5890,20 +5890,7 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
 }
 
 function isSurfExperienceBased(detail: MirrorModuleDetail | undefined) {
-  const d = recordFromUnknown(detail)
-  if (!Object.keys(d).length) return false
-  if (booleanish(d.isExperienceBased) || booleanish(d.ratingFromExperience) || booleanish(d.basedOnExperience)) return true
-  const source = String(d.ratingSource ?? d.source ?? '').toLowerCase()
-  if (source.includes('experience') || source.includes('user_surf_experiences')) return true
-
-  const experience = recordFromUnknown(d.experience)
-  if (booleanish(experience.matched) || booleanish(experience.isExperienceBased)) return true
-
-  const breakdownExperience = recordFromUnknown(recordFromUnknown(d.breakdown).experience)
-  if (booleanish(breakdownExperience.matched)) return true
-
-  const pickedExperience = recordFromUnknown(recordFromUnknown(d.picked).experience)
-  return booleanish(pickedExperience.matched)
+  return surfRatingIsExperienceBased(detail)
 }
 
 function DiceRating({ value, rating, isExperienceBased, muted, paperColor, className = '', compact = false }: DiceRatingProps) {

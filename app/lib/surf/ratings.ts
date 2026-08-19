@@ -90,11 +90,23 @@ function includesExperience(value: unknown): boolean {
 
 export function surfRatingIsExperienceBased(payload: unknown): boolean {
   const record = asRecord(payload)
+  const breakdown = asRecord(record.breakdown)
   const breakdownExperience = asRecord(asRecord(record.breakdown).experience)
   const topExperience = asRecord(record.experience)
   const picked = asRecord(record.picked)
   const pickedBreakdownExperience = asRecord(asRecord(picked.breakdown).experience)
   const pickedExperience = asRecord(picked.experience)
+
+  // New scorer payloads carry one authoritative presentation decision. Only use
+  // historical heuristics when reading an older payload that has no such field.
+  const explicitDisplays = [
+    record.experienceDisplay,
+    breakdown.experienceDisplay,
+    picked.experienceDisplay,
+    asRecord(picked.breakdown).experienceDisplay,
+  ]
+  const explicitDisplay = explicitDisplays.find((value) => value === 'normal' || value === 'personal_match')
+  if (explicitDisplay != null) return explicitDisplay === 'personal_match'
 
   return (
     Math.abs(asNumber(record.experienceAdjustment) ?? 0) > 0.000001 ||
