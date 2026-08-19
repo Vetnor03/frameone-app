@@ -31,6 +31,31 @@ export type ReminderParseContext = {
   clarificationAnswer?: string
 }
 
+function normalizedClarificationText(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/[.,!?]+$/g, '').replace(/\s+/g, ' ')
+}
+
+function isScheduleOnlyClarification(value: string) {
+  return /^(?:(?:kl(?:okken)?\.?\s*)?(?:[01]?\d|2[0-3])(?::[0-5]\d)?(?:\s+i kveld)?|(?:seks|seven|sju|åtte|ni|ti|elleve|tolv)(?:\s+i kveld)?|(?:i dag|today|i morgen|tomorrow)|(?:mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{4}-\d{2}-\d{2})$/i.test(value)
+}
+
+function mergeExistingReminder(existing: ParsedReminder | undefined, candidate: unknown, clarificationAnswer?: string) {
+  if (!existing || !candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate
+  const next = candidate as Record<string, unknown>
+  const candidateTitle = typeof next.title === 'string' ? normalizedClarificationText(next.title) : ''
+  const answer = clarificationAnswer ? normalizedClarificationText(clarificationAnswer) : ''
+  const titleWasReplacedByAnswer = Boolean(answer && candidateTitle === answer && isScheduleOnlyClarification(answer))
+  // Structured context is authoritative until the user/model supplies a new value.
+  // A normalized semantic title may legitimately change after a clarification. Only
+  // restore it when the model has clearly mistaken the clarification answer for the title.
+  return Object.fromEntries(Object.keys(next).map((key) => [
+    key,
+    (titleWasReplacedByAnswer && key === 'title') || ((next[key] === null || next[key] === undefined) && existing[key as keyof ParsedReminder] != null)
+      ? existing[key as keyof ParsedReminder]
+      : next[key],
+  ]))
+}
+
 const YMD = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
 const reminderKeys = new Set(['title', 'due_date', 'due_time', 'end_date', 'end_time', 'repeat_type', 'custom_repeat_days', 'tag', 'ambiguities'])
@@ -156,7 +181,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
         model: process.env.REMINDER_PARSE_MODEL || 'gpt-5-mini', store: false,
         reasoning: { effort: 'minimal' },
         input: [
-          { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Always return exactly one reminder candidate plus missing_fields and question; never decide a status. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. due_date is required; due_time is generally optional. Put due_date in missing_fields whenever it is unknown. If wording clearly implies a time that is too vague to represent safely (for example later, after work, or an undefined evening), also put due_time in missing_fields. When missing_fields is non-empty, provide one calm, concise question written naturally in the requested language; otherwise question must be null. Preserve any previously parsed fields when completing a clarification and use the answer only to fill or correct what it addresses.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. custom_repeat_days is only for an explicit every-N-days rule. ambiguities may describe non-blocking unsupported intent.` }] },
+          { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Always return exactly one reminder candidate plus missing_fields and question; never decide a status. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. Treat every non-null field in existing_partial as already supplied structured context. Preserve it unless the user's current text or clarification answer explicitly changes that field. A clarification answer is additive: fill or modify what the question asks without clearing unrelated fields. due_date is required; due_time is generally optional. Put due_date in missing_fields whenever it is unknown. If wording clearly implies a time that is too vague to represent safely (for example later, after work, or an undefined evening), also put due_time in missing_fields. When missing_fields is non-empty, provide one calm, concise question written naturally in the requested language; otherwise question must be null.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. custom_repeat_days is only for an explicit every-N-days rule. ambiguities may describe non-blocking unsupported intent.` }] },
           { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ original_reminder_text: context.text.trim(), existing_partial: context.partial, clarification_question: context.clarificationQuestion, clarification_answer: context.clarificationAnswer, localNow: context.localNow, timezone: context.timezone || null, language: context.language }) }] },
         ],
         text: { format: { type: 'json_schema', name: 'reminder_parse', strict: true, schema: reminderParseJsonSchema } }, max_output_tokens: 450,
@@ -171,6 +196,20 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     try { decoded = JSON.parse(outputText(payload)) } catch {
       logParseFailure('reminder_parse_invalid_json')
       return null
+    }
+    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
+      const output = decoded as Record<string, unknown>
+      output.reminder = mergeExistingReminder(context.partial, output.reminder, context.clarificationAnswer)
+      if (output.reminder && typeof output.reminder === 'object' && !Array.isArray(output.reminder)) {
+        const reminder = output.reminder as Record<string, unknown>
+        if (reminder.due_date != null && Array.isArray(output.missing_fields)) {
+          output.missing_fields = output.missing_fields.filter((field) => field !== 'due_date')
+        }
+        if (reminder.due_time != null && Array.isArray(output.missing_fields)) {
+          output.missing_fields = output.missing_fields.filter((field) => field !== 'due_time')
+        }
+        if (Array.isArray(output.missing_fields) && output.missing_fields.length === 0) output.question = null
+      }
     }
     const result = validateReminderParseResult(decoded, context.language)
     if (!result) logParseFailure('reminder_parse_invalid_result')

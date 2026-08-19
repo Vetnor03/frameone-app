@@ -58,6 +58,66 @@ test('clarification sends original, partial, question, and answer and can become
   assert.deepEqual(result, ready(reminder))
 })
 
+test('selected date survives a title followed by a time-only clarification', async () => {
+  const partial = { ...base, title: 'Besøk farmor', due_date: '2026-08-22', due_time: null }
+  const ctx = { ...context('Besøk farmor', 'no'), partial, clarificationQuestion: 'Når på dagen?', clarificationAnswer: '18:00' }
+  const modelCandidate = { ...partial, title: '18:00', due_date: null, due_time: '18:00' }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(modelCandidate))), ready({ ...partial, due_time: '18:00' }))
+})
+
+test('time clarification allows a legitimately normalized title while preserving the selected date', async () => {
+  const partial = { ...base, title: 'Besøk farmor i kveld', due_date: '2026-08-22', due_time: null }
+  const ctx = { ...context('Besøk farmor i kveld', 'no'), partial, clarificationQuestion: 'Når på kvelden?', clarificationAnswer: '18:00' }
+  const normalized = { ...partial, title: 'Besøk farmor', due_date: null, due_time: '18:00' }
+  assert.deepEqual(
+    await parseReminder(ctx, responseFor(candidate(normalized))),
+    ready({ ...normalized, due_date: '2026-08-22' }),
+  )
+})
+
+test('time clarification rejects the answer as a replacement title while preserving the selected date', async () => {
+  const partial = { ...base, title: 'Besøk farmor', due_date: '2026-08-22', due_time: null }
+  const ctx = { ...context('Besøk farmor', 'no'), partial, clarificationQuestion: 'Når på dagen?', clarificationAnswer: '18:00' }
+  const badCandidate = { ...partial, title: '18:00', due_date: null, due_time: '18:00' }
+  assert.deepEqual(
+    await parseReminder(ctx, responseFor(candidate(badCandidate))),
+    ready({ ...partial, due_time: '18:00' }),
+  )
+})
+
+test('selected date is structured context when the original title includes a time', async () => {
+  const partial = { ...base, title: 'Besøk farmor kl. 18', due_date: '2026-08-22', due_time: null }
+  const reminder = { ...partial, title: 'Besøk farmor', due_time: '18:00' }
+  const ctx = { ...context('Besøk farmor kl. 18', 'no'), partial }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(reminder), (payload) => {
+    assert.equal(payload.existing_partial.due_date, '2026-08-22')
+  })), ready(reminder))
+})
+
+test('without a selected date the parser still asks for the missing date today as before', async () => {
+  const partial = { ...base, title: 'Besøk farmor', due_date: null, due_time: null }
+  assert.deepEqual(
+    await parseReminder(context('Besøk farmor', 'no'), responseFor(candidate(partial, ['due_date'], 'Hvilken dag?'))),
+    clarify(partial, ['due_date'], 'Hvilken dag?'),
+  )
+})
+
+test('a later explicit date overrides the existing selected date', async () => {
+  const partial = { ...base, title: 'Besøk farmor', due_date: '2026-08-22', due_time: null }
+  const changed = { ...partial, due_date: '2026-08-23' }
+  const ctx = { ...context('Besøk farmor', 'no'), partial, clarificationQuestion: 'Når på dagen?', clarificationAnswer: 'I morgen i stedet' }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(changed))), ready(changed))
+})
+
+test('time-only follow-up cannot clear an existing date or title', async () => {
+  const partial = { ...base, title: 'Besøk farmor', due_date: '2026-08-22', due_time: null }
+  for (const answer of ['18', 'kl 18', 'klokken 18', 'seks', '6 i kveld']) {
+    const ctx = { ...context('Besøk farmor', 'no'), partial, clarificationQuestion: 'Når på dagen?', clarificationAnswer: answer }
+    const incompleteModelCandidate = { ...partial, title: answer, due_date: null, due_time: '18:00' }
+    assert.deepEqual(await parseReminder(ctx, responseFor(candidate(incompleteModelCandidate))), ready({ ...partial, due_time: '18:00' }))
+  }
+})
+
 test('invalid structured outcomes and invalid end ranges are rejected', async () => {
   assert.equal(validateParsedReminder({ ...base, due_time: '7pm' }), null)
   assert.equal(validateParsedReminder({ ...base, end_date: '2026-08-24' }), null)

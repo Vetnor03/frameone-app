@@ -10,8 +10,9 @@ export async function POST(request: Request) {
   if (!auth.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   let body: Partial<ReminderParseContext>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }) }
-  const isClarification = body.partial !== undefined || body.clarificationQuestion !== undefined || body.clarificationAnswer !== undefined
-  if (typeof body.text !== 'string' || body.text.trim().length < 1 || body.text.length > 2_000 || typeof body.localNow !== 'string' || !Date.parse(body.localNow) || (body.language !== 'en' && body.language !== 'no') || (body.timezone != null && typeof body.timezone !== 'string') || (isClarification && (!validateParsedReminder(body.partial) || typeof body.clarificationQuestion !== 'string' || !body.clarificationQuestion.trim() || body.clarificationQuestion.length > 240 || typeof body.clarificationAnswer !== 'string' || !body.clarificationAnswer.trim() || body.clarificationAnswer.length > 1_000))) {
+  const hasPartial = body.partial !== undefined
+  const isClarification = body.clarificationQuestion !== undefined || body.clarificationAnswer !== undefined
+  if (typeof body.text !== 'string' || body.text.trim().length < 1 || body.text.length > 2_000 || typeof body.localNow !== 'string' || !Date.parse(body.localNow) || (body.language !== 'en' && body.language !== 'no') || (body.timezone != null && typeof body.timezone !== 'string') || (hasPartial && !validateParsedReminder(body.partial)) || (isClarification && (!hasPartial || typeof body.clarificationQuestion !== 'string' || !body.clarificationQuestion.trim() || body.clarificationQuestion.length > 240 || typeof body.clarificationAnswer !== 'string' || !body.clarificationAnswer.trim() || body.clarificationAnswer.length > 1_000))) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
   const result = await parseReminder({
