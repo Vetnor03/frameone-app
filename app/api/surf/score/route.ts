@@ -3,7 +3,16 @@ import { NextResponse } from 'next/server'
 import { SURF_SPOTS, findSpotByLabel } from '@/app/lib/surf/spots'
 import { scoreSurf, normalizeCustomSpotScoringProfile, type UserSurfExperienceRecord, type CustomSpotScoringProfile } from '@/app/lib/surfScoring'
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased, surfRatingVisual } from '@/app/lib/surf/ratings'
-import { pickBestSwell, selectedSwellFromPick, selectedSwellIndex } from '@/app/lib/surf/swellSelection'
+import {
+  compareSurfScoresThenHeight,
+  correctedHeightForSwellSelection,
+  pickBestSwell,
+  selectedSwellFromPick,
+  selectedSwellIndex,
+  surfScoreBlendedValue,
+  surfScoreConfidenceValue,
+  surfScoreTablesValue,
+} from '@/app/lib/surf/swellSelection'
 import TABLES from '@/app/lib/surf/waveguide_tables.json'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
@@ -1380,10 +1389,10 @@ function bestWithinWindow(
     const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
     const scored = picked.chosenScore
 
-    const tablesTotal = scoredTablesTotal(scored)
+    const tablesTotal = surfScoreTablesValue(scored)
     const chosenH = selectedSwellFromPick(marine, picked).height_m
     const chosenP = selectedSwellFromPick(marine, picked).period_s
-    const corr = correctedHeightForPick(chosenH, chosenP)
+    const corr = correctedHeightForSwellSelection(chosenH, chosenP)
 
     const cand: BestPick = {
       hourOffset: off,
@@ -1392,8 +1401,8 @@ function bestWithinWindow(
       scored,
       tablesTotal,
       correctedHeight: corr,
-      blendedFloat: scoredBlendFloat(scored),
-      confidence: scoredConfidence(scored),
+      blendedFloat: surfScoreBlendedValue(scored),
+      confidence: surfScoreConfidenceValue(scored),
     }
 
     if (!best) {
@@ -1401,7 +1410,7 @@ function bestWithinWindow(
       continue
     }
 
-    const cmp = betterByScoredThenHeight({
+    const cmp = compareSurfScoresThenHeight({
       scoredA: best.scored,
       scoredB: cand.scored,
       correctedHeightA: best.correctedHeight,
@@ -1666,8 +1675,8 @@ function scoreRawSurfHourAtIdx(
   const picked = pickBestSwell({ spotKey: spotKeyForTables, marine, userExperiences, customSpotProfile })
   const scored = picked.chosenScore
   const selected = selectedSwellFromPick(marine, picked)
-  const tablesTotal = scoredTablesTotal(scored)
-  const correctedHeight = correctedHeightForPick(selected.height_m, selected.period_s)
+  const tablesTotal = surfScoreTablesValue(scored)
+  const correctedHeight = correctedHeightForSwellSelection(selected.height_m, selected.period_s)
 
   return {
     idx,
@@ -1746,7 +1755,7 @@ function bestHourFromEvaluatedHours(hours: HourEval[]) {
       continue
     }
 
-    const cmp = betterByScoredThenHeight({
+    const cmp = compareSurfScoresThenHeight({
       scoredA: best.scored,
       scoredB: hour.scored,
       correctedHeightA: best.correctedHeight,
@@ -1797,7 +1806,7 @@ function bestScoredRawSurfHourAroundTargetIso(args: {
       continue
     }
 
-    const cmp = betterByScoredThenHeight({
+    const cmp = compareSurfScoresThenHeight({
       scoredA: best.scored,
       scoredB: cand.scored,
       correctedHeightA: best.correctedHeight,
@@ -1967,13 +1976,13 @@ function evalHourAtIdx(
   const picked = pickBestSwell({ spotKey, marine, userExperiences, customSpotProfile })
   const scored = picked.chosenScore
 
-  const tablesTotal = scoredTablesTotal(scored)
+  const tablesTotal = surfScoreTablesValue(scored)
 
   const chosenH = selectedSwellFromPick(marine, picked).height_m
   const chosenP = selectedSwellFromPick(marine, picked).period_s
   const chosenDir = selectedSwellFromPick(marine, picked).direction_deg_from
 
-  const corr = correctedHeightForPick(chosenH, chosenP)
+  const corr = correctedHeightForSwellSelection(chosenH, chosenP)
 
   return {
     idx,
@@ -2036,9 +2045,9 @@ function best4hWindowForLocalDay(
       evalHourAtIdx(series, spotKey, i, userExperiences, customSpotProfile)
     )
 
-    const avgBlend = avg(hrs.map((h) => scoredBlendFloat(h.scored)))
+    const avgBlend = avg(hrs.map((h) => surfScoreBlendedValue(h.scored)))
     const avgRating = avg(hrs.map((h) => h.rating))
-    const avgConfidence = avg(hrs.map((h) => scoredConfidence(h.scored)))
+    const avgConfidence = avg(hrs.map((h) => surfScoreConfidenceValue(h.scored)))
     const avgTables = avg(hrs.map((h) => h.tablesTotal))
     const avgCorr = avg(hrs.map((h) => h.correctedHeight))
 
@@ -2886,10 +2895,10 @@ export async function GET(req: Request) {
           secondary_rating: pickedNow.secondaryScore?.rating ?? null,
           primary_total: pickedNow.primaryScore?.breakdown?.tables?.total ?? null,
           secondary_total: pickedNow.secondaryScore?.breakdown?.tables?.total ?? null,
-          primary_blended_float: scoredBlendFloat(pickedNow.primaryScore),
-          secondary_blended_float: scoredBlendFloat(pickedNow.secondaryScore),
-          primary_confidence: scoredConfidence(pickedNow.primaryScore),
-          secondary_confidence: scoredConfidence(pickedNow.secondaryScore),
+          primary_blended_float: surfScoreBlendedValue(pickedNow.primaryScore),
+          secondary_blended_float: surfScoreBlendedValue(pickedNow.secondaryScore),
+          primary_confidence: surfScoreConfidenceValue(pickedNow.primaryScore),
+          secondary_confidence: surfScoreConfidenceValue(pickedNow.secondaryScore),
 
           fuel_penalty: {
             enabled: !!home,
@@ -3234,10 +3243,10 @@ export async function GET(req: Request) {
         secondary_rating: pickedNow.secondaryScore?.rating ?? null,
         primary_total: pickedNow.primaryScore?.breakdown?.tables?.total ?? null,
         secondary_total: pickedNow.secondaryScore?.breakdown?.tables?.total ?? null,
-        primary_blended_float: scoredBlendFloat(pickedNow.primaryScore),
-        secondary_blended_float: scoredBlendFloat(pickedNow.secondaryScore),
-        primary_confidence: scoredConfidence(pickedNow.primaryScore),
-        secondary_confidence: scoredConfidence(pickedNow.secondaryScore),
+        primary_blended_float: surfScoreBlendedValue(pickedNow.primaryScore),
+        secondary_blended_float: surfScoreBlendedValue(pickedNow.secondaryScore),
+        primary_confidence: surfScoreConfidenceValue(pickedNow.primaryScore),
+        secondary_confidence: surfScoreConfidenceValue(pickedNow.secondaryScore),
 
         ...(daypartsOn ? { dayparts: { enabled: true, tz: DAYPARTS_TZ, targets: DAYPART_TARGETS } } : {}),
         ...(dailyOn ? { daily: { enabled: true, tz: DAILY_TZ, days } } : {}),

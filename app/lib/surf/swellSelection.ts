@@ -50,21 +50,51 @@ function clearlyStrongerEnergy(a: ReturnType<typeof metrics>, b: ReturnType<type
   return a.correctedHeight >= Math.max(b.correctedHeight * CLEARLY_STRONGER_ENERGY_RATIO, CLEARLY_STRONGER_CORRECTED_M)
 }
 
+export function surfScoreBlendedValue(scored: ReturnType<typeof scoreSurf> | null | undefined) {
+  const blended = Number(scored?.breakdown.experience?.blended_rating_float)
+  const rating = Number(scored?.rating)
+  if (Number.isFinite(blended)) return blended
+  if (Number.isFinite(rating)) return rating
+  return -Infinity
+}
+
+export function surfScoreConfidenceValue(scored: ReturnType<typeof scoreSurf> | null | undefined) {
+  const confidence = Number(scored?.breakdown.experience?.confidence)
+  return Number.isFinite(confidence) ? confidence : 0
+}
+
+export function surfScoreTablesValue(scored: ReturnType<typeof scoreSurf> | null | undefined) {
+  const total = Number(scored?.breakdown.tables?.total)
+  return Number.isFinite(total) ? total : -Infinity
+}
+
 function compareScored(a: ReturnType<typeof scoreSurf>, b: ReturnType<typeof scoreSurf>) {
-  const number = (value: unknown, fallback: number) => Number.isFinite(Number(value)) ? Number(value) : fallback
-  const aBlend = number(a.breakdown.experience?.blended_rating_float, number(a.rating, -Infinity))
-  const bBlend = number(b.breakdown.experience?.blended_rating_float, number(b.rating, -Infinity))
+  const aBlend = surfScoreBlendedValue(a)
+  const bBlend = surfScoreBlendedValue(b)
   if (bBlend !== aBlend) return bBlend > aBlend ? 1 : -1
   if (b.rating !== a.rating) return b.rating > a.rating ? 1 : -1
   const aMatched = !!a.breakdown.experience?.matched
   const bMatched = !!b.breakdown.experience?.matched
   if (aMatched !== bMatched) return bMatched ? 1 : -1
-  const aConfidence = number(a.breakdown.experience?.confidence, 0)
-  const bConfidence = number(b.breakdown.experience?.confidence, 0)
+  const aConfidence = surfScoreConfidenceValue(a)
+  const bConfidence = surfScoreConfidenceValue(b)
   if (bConfidence !== aConfidence) return bConfidence > aConfidence ? 1 : -1
-  const aTotal = number(a.breakdown.tables?.total, -Infinity)
-  const bTotal = number(b.breakdown.tables?.total, -Infinity)
+  const aTotal = surfScoreTablesValue(a)
+  const bTotal = surfScoreTablesValue(b)
   return bTotal === aTotal ? 0 : bTotal > aTotal ? 1 : -1
+}
+
+export function compareSurfScoresThenHeight(args: {
+  scoredA: ReturnType<typeof scoreSurf>
+  scoredB: ReturnType<typeof scoreSurf>
+  correctedHeightA: number
+  correctedHeightB: number
+}) {
+  const comparison = compareScored(args.scoredA, args.scoredB)
+  if (comparison !== 0) return comparison
+  if (args.correctedHeightB > args.correctedHeightA) return 1
+  if (args.correctedHeightA > args.correctedHeightB) return -1
+  return 0
 }
 
 export function selectedSwellFromPick(conditions: SurfConditions, picked: { chosen: 'primary' | 'secondary' }) {
@@ -144,9 +174,12 @@ export function pickBestSwell(args: {
   if (!marine.secondary.present) return finish('primary', null, 'secondary swell not present')
   const secondaryScore = score(marine.secondary)
   const better = () => {
-    const cmp = compareScored(primaryScore, secondaryScore)
-    if (cmp) return cmp
-    return secondaryMetrics.correctedHeight === primaryMetrics.correctedHeight ? 0 : secondaryMetrics.correctedHeight > primaryMetrics.correctedHeight ? 1 : -1
+    return compareSurfScoresThenHeight({
+      scoredA: primaryScore,
+      scoredB: secondaryScore,
+      correctedHeightA: primaryMetrics.correctedHeight,
+      correctedHeightB: secondaryMetrics.correctedHeight,
+    })
   }
   if (normalizeCustomSpotScoringProfile(customSpotProfile)) {
     const cmp = better()
