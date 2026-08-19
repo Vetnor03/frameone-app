@@ -31,6 +31,27 @@ test('custom spot rating uses blended 1-6 experience rating when present', () =>
   assert.equal(normalized.experienceDiceValue, 5)
 })
 
+test('canonical scorer rating is preserved before reconstructing a base score', () => {
+  const normalized = normalizeSurfRating1to6({
+    rating: 4,
+    breakdown: {
+      experience: {
+        matched: false,
+        confidence: 0.34,
+        blended_rating_float: 4.45,
+        blended_rating_1_6: 4,
+      },
+      scoring_breakdown: {
+        finalScoreFloatAfterPenalties: 3.8,
+      },
+    },
+  })
+
+  assert.equal(normalized.rating, 4)
+  assert.equal(normalized.source, 'base')
+  assert.equal(normalized.ratingFromExperience, false)
+})
+
 test('shared final surf calibration is used for raw final score floats', () => {
   assert.equal(calibratedFinalSurfRating1to6(5.6), 5)
   assert.equal(calibratedFinalSurfRating1to6(5.8), 6)
