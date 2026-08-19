@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,finalizeStroke,findDividerNearPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,previewStroke,pushHistory,redoHistory,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -36,6 +36,27 @@ test('tap split chooses vertical, horizontal, and vertical on an exact tie',()=>
   result=splitCellNearPointer(full,{x:40,y:295},viewport)
   assert.equal(result.valid,true);assert.equal(result.guide.axis,'horizontal');assert.equal(result.guide.boundary,3)
   assert.deepEqual(nearestValidSplitGuide(full[0],{x:200,y:200},viewport),{axis:'vertical',boundary:2,distance:0})
+})
+test('tap split requires a nearby guide and leaves distant cell geometry unchanged',()=>{
+  const full=initialLayout(),before=geometry(full)
+  assert.equal(findSplitGuideNearPointer(full[0],{x:50,y:50},viewport),undefined)
+  assert.deepEqual(findSplitGuideNearPointer(full[0],{x:114,y:40},viewport),{axis:'vertical',boundary:1,distance:14})
+  assert.equal(findSplitGuideNearPointer(full[0],{x:115,y:40},viewport),undefined)
+  const result=splitCellNearPointer(full,{x:50,y:50},viewport)
+  assert.equal(result.valid,false);assert.equal(result.cells,full);assert.deepEqual(geometry(result.cells),before);assertPartition(result.cells)
+  const tap=resolveShortTap(full,{x:50,y:50},viewport)
+  assert.equal(tap.kind,'select');assert.equal(tap.cell.id,'cell');assert.deepEqual(geometry(full),before)
+})
+test('nearby vertical and horizontal dotted guides split into valid partitions',()=>{
+  const full=initialLayout()
+  const vertical=splitCellNearPointer(full,{x:112,y:40},viewport),horizontal=splitCellNearPointer(full,{x:40,y:288},viewport)
+  assert.equal(vertical.guide.axis,'vertical');assert.equal(vertical.guide.boundary,1);assertPartition(vertical.cells)
+  assert.equal(horizontal.guide.axis,'horizontal');assert.equal(horizontal.guide.boundary,3);assertPartition(horizontal.cells)
+})
+test('short tap gives a removable solid divider priority over split and selection',()=>{
+  const cells=[{id:'left',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'empty'},{id:'right',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'empty'}]
+  const tap=resolveShortTap(cells,{x:200,y:200},viewport)
+  assert.equal(tap.kind,'merge');const result=mergeDivider(cells,tap.divider);assert.equal(result.valid,true);assertPartition(result.cells)
 })
 test('complete-cell split preserves assignment on largest and deterministic top-left tie',()=>{
   const assigned=[{...initialLayout()[0],moduleId:'weather'}]
