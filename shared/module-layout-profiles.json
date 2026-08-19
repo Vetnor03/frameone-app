@@ -1,0 +1,6 @@
+{
+  "date": { "padding": 12, "mediumGaps": [6,14,14], "largeGap": 14, "calendarPadding": 26 },
+  "reminders": { "smallPadding": [12,8], "sectionGap": 10, "largeGap": 14, "calendarPadding": 26 },
+  "weather": { "smallPadding": 12, "contentGap": 10, "forecastGap": 6, "largeHeaderY": 14 },
+  "countdown": { "smallPadding": [10,8], "smallGaps": [6,4], "mediumGaps": [10,14,18], "largeGap": 14 }
+}

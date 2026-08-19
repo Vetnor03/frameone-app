@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "ModuleRenderer.h"
 #include "Theme.h"
+#include "GeneratedLayouts.h"
 
 #include "ModuleDate.h"
 #include "ModuleWeather.h"
@@ -37,6 +38,21 @@ static void drawVLine(int x, int y0, int y1) {
 }
 
 namespace Layout {
+
+int gridX(uint8_t boundary) { return VIEWPORT_X + (VIEWPORT_W * (int)boundary) / GRID_SIZE; }
+int gridY(uint8_t boundary) { return VIEWPORT_Y + (VIEWPORT_H * (int)boundary) / GRID_SIZE; }
+
+bool isValidGridCell(const GridCell& c) {
+  return c.col < GRID_SIZE && c.row < GRID_SIZE && c.colSpan >= 1 && c.rowSpan >= 1 &&
+         c.col + c.colSpan <= GRID_SIZE && c.row + c.rowSpan <= GRID_SIZE;
+}
+
+bool resolveGridCell(const GridCell& g, Cell& c) {
+  if (!isValidGridCell(g)) return false;
+  c = Cell{gridX(g.col), gridY(g.row), gridX(g.col + g.colSpan) - gridX(g.col),
+           gridY(g.row + g.rowSpan) - gridY(g.row), g.slot, g.size};
+  return true;
+}
 
 void draw(LayoutKey key) {
   auto& d = DisplayCore::get();
@@ -87,57 +103,14 @@ void draw(LayoutKey key) {
 int buildCells(LayoutKey key, Cell* outCells, int maxCells) {
   if (!outCells || maxCells <= 0) return 0;
 
-  const int x = FRAME_X;
-  const int y = FRAME_Y;
-  const int w = FRAME_W;
-  const int h = FRAME_H;
-
-  const int halfY = y + h / 2;
-  const int quarterY = y + h / 4;
-  const int midX = x + w / 2;
-
-  int count = 0;
-
-  auto push = [&](int cx, int cy, int cw, int ch, uint8_t slot, CellSize size) {
-    if (count >= maxCells) return;
-    outCells[count++] = Cell{cx, cy, cw, ch, slot, size};
-  };
-
-  if (key == LAYOUT_FULL) {
-    push(x, y, w, h, 0, CELL_XL);
-    return count;
-  }
-
-  if (key == LAYOUT_DEFAULT) {
-    push(x, y, w, (quarterY - y), 0, CELL_SMALL);
-    push(x, quarterY, w, (halfY - quarterY), 1, CELL_SMALL);
-    push(x, halfY, w, (y + h - halfY), 2, CELL_LARGE);
-    return count;
-  }
-
-  if (key == LAYOUT_PYRAMID) {
-    push(x, y, w, (quarterY - y), 0, CELL_SMALL);
-    push(x, quarterY, w, (halfY - quarterY), 1, CELL_SMALL);
-
-    const int bottomH = (y + h - halfY);
-    push(x, halfY, (midX - x), bottomH, 2, CELL_MEDIUM);
-    push(midX, halfY, (x + w - midX), bottomH, 3, CELL_MEDIUM);
-    return count;
-  }
-
-  // LAYOUT_SQUARE
-  {
-    const int topH = (halfY - y);
-    const int bottomH = (y + h - halfY);
-    const int leftW = (midX - x);
-    const int rightW = (x + w - midX);
-
-    push(x, y, leftW, topH, 0, CELL_MEDIUM);
-    push(midX, y, rightW, topH, 1, CELL_MEDIUM);
-    push(x, halfY, leftW, bottomH, 2, CELL_MEDIUM);
-    push(midX, halfY, rightW, bottomH, 3, CELL_MEDIUM);
-    return count;
-  }
+  const GridCell* source = GeneratedLayouts::SQUARE;
+  int sourceCount = sizeof(GeneratedLayouts::SQUARE) / sizeof(GridCell);
+  if (key == LAYOUT_FULL) { source = GeneratedLayouts::FULL; sourceCount = 1; }
+  else if (key == LAYOUT_DEFAULT) { source = GeneratedLayouts::DEFAULT; sourceCount = 3; }
+  else if (key == LAYOUT_PYRAMID) { source = GeneratedLayouts::PYRAMID; sourceCount = 4; }
+  const int count = sourceCount < maxCells ? sourceCount : maxCells;
+  for (int i = 0; i < count; ++i) resolveGridCell(source[i], outCells[i]);
+  return count;
 }
 
 void drawWithContent(LayoutKey key, const FrameConfig& cfg) {

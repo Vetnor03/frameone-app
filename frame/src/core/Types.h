@@ -23,3 +23,8 @@ struct Cell {
   uint8_t slot;
   CellSize size;
 };
+
+struct GridCell {
+  uint8_t col, row, colSpan, rowSpan, slot;
+  CellSize size;
+};
