@@ -14,6 +14,14 @@ function truthy(v: any) {
 }
 
 function getMatchedFlag(payload: any): boolean {
+  const displays = [
+    payload?.experienceDisplay,
+    payload?.breakdown?.experienceDisplay,
+    payload?.picked?.experienceDisplay,
+    payload?.picked?.breakdown?.experienceDisplay,
+  ]
+  const explicit = displays.find((value) => value === 'normal' || value === 'personal_match')
+  if (explicit) return explicit === 'personal_match'
   return (
     truthy(payload?.breakdown?.experience?.matched) ||
     truthy(payload?.experience?.matched) ||

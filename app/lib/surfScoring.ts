@@ -231,6 +231,7 @@ type ScoreBreakdown = {
     personalAdjustment: number
     personalConfidence: number
     personalSampleCount: number
+    personalMatchQuality: number
     aiEnrichedSampleCount: number
     aiDriverWeightedSampleCount: number
     finalScore: number
@@ -248,6 +249,8 @@ type ScoreBreakdown = {
   finalRating?: number
   baseScore?: number
   experienceAdjustment?: number
+  experienceDisplay: 'normal' | 'personal_match'
+  experienceDisplayReason: SurfExperienceDisplayReason
   finalScore?: number
   whySelected?: string
 
@@ -261,6 +264,8 @@ export type SurfScoreResult = {
   baseScore: number
   experienceAdjustment: number
   experienceConfidence: number
+  experienceDisplay: 'normal' | 'personal_match'
+  experienceDisplayReason: SurfExperienceDisplayReason
   finalScore: number
   finalRating: number
   line1: string
@@ -273,6 +278,29 @@ export const SHARED_CALIBRATION_VERSION = 'residual-v1'
 export const MIN_SHARED_EXPERIENCES = 8
 export const MIN_SHARED_DISTINCT_USERS = 3
 export const MIN_PERSONAL_EXPERIENCES = 3
+// Personal confidence is the similarity-squared, recency-weighted effective sample
+// mass divided by the three-row personal minimum. Keeping this above 0.65 makes the
+// presentation selective without requiring the residual to change the final score.
+export const SURF_DICE_MIN_PERSONAL_CONFIDENCE = 0.65
+// The geometric similarity combines five condition dimensions (plus the existing
+// multi-swell penalty). Requiring the best-three mean to reach 0.82 admits only
+// consistently close sessions; extra mediocre history cannot inflate this value.
+export const SURF_DICE_MIN_MATCH_QUALITY = 0.82
+
+export type SurfExperienceDisplayReason =
+  | 'no_personal_evidence'
+  | 'insufficient_personal_samples'
+  | 'low_personal_confidence'
+  | 'weak_personal_match'
+  | 'strong_personal_match'
+
+export function surfExperienceDisplayDecision(personal: Pick<CalibrationSummary, 'sampleCount' | 'confidence' | 'matchQuality'> | null | undefined) {
+  if (!personal || personal.sampleCount === 0) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'no_personal_evidence' as const }
+  if (personal.sampleCount < MIN_PERSONAL_EXPERIENCES) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'insufficient_personal_samples' as const }
+  if (personal.confidence < SURF_DICE_MIN_PERSONAL_CONFIDENCE) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'low_personal_confidence' as const }
+  if (personal.matchQuality < SURF_DICE_MIN_MATCH_QUALITY) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'weak_personal_match' as const }
+  return { experienceDisplay: 'personal_match' as const, experienceDisplayReason: 'strong_personal_match' as const }
+}
 export const MAX_SHARED_ADJUSTMENT = 0.75
 export const MAX_PERSONAL_ADJUSTMENT = 0.75
 export const SURF_COMMENT_MIN_CONFIDENCE = 0.55
@@ -1610,7 +1638,7 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
 // ---------------------
 // MAIN
 // ---------------------
-type CalibrationSummary = { adjustment: number; confidence: number; sampleCount: number; distinctUsers: number; aiEnrichedSampleCount: number; aiDriverWeightedSampleCount: number }
+type CalibrationSummary = { adjustment: number; confidence: number; sampleCount: number; distinctUsers: number; matchQuality: number; aiEnrichedSampleCount: number; aiDriverWeightedSampleCount: number }
 
 // Weak keys keep prepared data scoped to the in-memory candidate objects/array used by a request.
 // Nothing is persisted or addressable by user id, and entries disappear when the request pool is
@@ -1693,7 +1721,7 @@ function cachedHistoricalBootstrapPrediction(record: UserSurfExperienceRecord, c
 }
 
 function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: string; h: number; p: number; d: number; ws: number; wd: number; currentSwellCount: number; personal: boolean; now: number; sharedRecords?: UserSurfExperienceRecord[]; calibrationPool?: UserSurfExperienceRecord[]; customSpotProfile?: CustomSpotScoringProfile | null }): CalibrationSummary {
-  const candidates: Array<{ residual: number; weight: number; user: string }> = []
+  const candidates: Array<{ residual: number; weight: number; user: string; similarity: number }> = []
   let aiEnrichedSampleCount = 0
   let aiDriverWeightedSampleCount = 0
   for (const record of args.records) {
@@ -1764,17 +1792,23 @@ function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: st
       }
     }
     const predicted = bootstrapPrediction + historicalSharedAdjustment
-    candidates.push({ residual: Number(record.rating_1_6) - predicted, weight, user: String(record.user_id ?? record.id ?? 'legacy') })
+    candidates.push({ residual: Number(record.rating_1_6) - predicted, weight, user: String(record.user_id ?? record.id ?? 'legacy'), similarity })
   }
   const distinctUsers = new Set(candidates.map((x) => x.user)).size
+  // Presentation metadata only: fixed top-N prevents record volume from increasing
+  // match quality. It is intentionally absent from weights, residuals and confidence.
+  const strongestSimilarities = [...candidates].sort((a, b) => b.similarity - a.similarity).slice(0, MIN_PERSONAL_EXPERIENCES)
+  const matchQuality = args.personal && strongestSimilarities.length
+    ? strongestSimilarities.reduce((sum, candidate) => sum + candidate.similarity, 0) / strongestSimilarities.length
+    : 0
   const minimum = args.personal ? MIN_PERSONAL_EXPERIENCES : MIN_SHARED_EXPERIENCES
-  if (candidates.length < minimum || (!args.personal && distinctUsers < MIN_SHARED_DISTINCT_USERS)) return { adjustment: 0, confidence: 0, sampleCount: candidates.length, distinctUsers, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
+  if (candidates.length < minimum || (!args.personal && distinctUsers < MIN_SHARED_DISTINCT_USERS)) return { adjustment: 0, confidence: 0, sampleCount: candidates.length, distinctUsers, matchQuality, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
   const total = candidates.reduce((s, x) => s + x.weight, 0)
   const raw = candidates.reduce((s, x) => s + x.residual * x.weight, 0) / total
   const confidence = clamp((total / (args.personal ? 3 : 8)) * (args.personal ? 1 : distinctUsers / 3), 0, 1)
-  if (confidence < 0.35) return { adjustment: 0, confidence, sampleCount: candidates.length, distinctUsers, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
+  if (confidence < 0.35) return { adjustment: 0, confidence, sampleCount: candidates.length, distinctUsers, matchQuality, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
   const cap = args.personal ? MAX_PERSONAL_ADJUSTMENT : MAX_SHARED_ADJUSTMENT
-  return { adjustment: clamp(raw * confidence, -cap, cap), confidence, sampleCount: candidates.length, distinctUsers, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
+  return { adjustment: clamp(raw * confidence, -cap, cap), confidence, sampleCount: candidates.length, distinctUsers, matchQuality, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
 }
 
 export function scoreSurf(params: {
@@ -1865,6 +1899,10 @@ export function scoreSurf(params: {
   const calibratedScoreFloat = clamp(bootstrapScoreFloat + (shared?.adjustment ?? 0) + (personal?.adjustment ?? 0), 1, 6)
   const finalRating = scopedCalibration ? roundFinalScore(calibratedScoreFloat) : clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
   const calibrationSource = shared?.adjustment && personal?.adjustment ? 'shared_and_personal' : shared?.adjustment ? 'shared_calibration' : personal?.adjustment ? 'personal_calibration' : 'base_only'
+  // This presentation-only decision deliberately ignores bootstrap/shared influence
+  // and adjustment magnitude. Personal qualifying samples already passed the scoring
+  // similarity/quality filters in calibrationFor; confidence expresses their relevance.
+  const experienceDisplayDecision = surfExperienceDisplayDecision(personal)
 
   return {
     rating: finalRating,
@@ -1872,6 +1910,7 @@ export function scoreSurf(params: {
     baseScore: model.rating,
     experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
     experienceConfidence: scopedCalibration ? Math.max(shared?.confidence ?? 0, personal?.confidence ?? 0) : exp.confidence,
+    ...experienceDisplayDecision,
     finalScore: finalRating,
     finalRating,
     line1,
@@ -1929,6 +1968,7 @@ export function scoreSurf(params: {
         sharedSampleCount: shared!.sampleCount, sharedDistinctUsers: shared!.distinctUsers,
         personalAdjustment: personal!.adjustment, personalConfidence: personal!.confidence,
         personalSampleCount: personal!.sampleCount, finalScore: calibratedScoreFloat, finalRating,
+        personalMatchQuality: personal!.matchQuality,
         aiEnrichedSampleCount: shared!.aiEnrichedSampleCount + personal!.aiEnrichedSampleCount,
         aiDriverWeightedSampleCount: shared!.aiDriverWeightedSampleCount + personal!.aiDriverWeightedSampleCount,
         source: calibrationSource,
@@ -1944,6 +1984,7 @@ export function scoreSurf(params: {
       finalRating,
       baseScore: model.rating,
       experienceAdjustment: scopedCalibration ? calibratedScoreFloat - baseScoreFloat : exp.blended_rating_float - model.rating,
+      ...experienceDisplayDecision,
       finalScore: finalRating,
       whySelected: params.whySelected,
       method:

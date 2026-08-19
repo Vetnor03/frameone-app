@@ -160,6 +160,8 @@ export function pickBestSwell(args: {
       swellMixSignature: chosenScore.breakdown.swellMixSignature ?? null,
       experienceMatchType: chosenScore.breakdown.experienceMatchType ?? 'none',
       experienceConfidence: chosenScore.breakdown.experienceConfidence ?? 0,
+      experienceDisplay: chosenScore.experienceDisplay,
+      experienceDisplayReason: chosenScore.experienceDisplayReason,
       modelRating: chosenScore.breakdown.modelRating ?? chosenScore.rating,
       experienceRating: chosenScore.breakdown.experienceRating ?? null,
       finalRating: chosenScore.breakdown.finalRating ?? chosenScore.rating,
