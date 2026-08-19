@@ -99,7 +99,10 @@ test('drag rejects gaps, partial cells, L unions, and conflicting assignments',(
   const safe=quadrants.map(c=>({...c,moduleId:'empty'}));assert.deepEqual(cellsFullyContainedInSelection(safe,{col:0,row:0,colSpan:4,rowSpan:2}).map(c=>c.id),['a','b'])
 })
 test('mode-less simulator uses authoritative full overlay grid',async()=>{
-  const simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8'),declarations=await readFile(new URL('../app/lib/frameLayoutEditor.d.mts',import.meta.url),'utf8')
   assert.doesNotMatch(simulator,/EditMode|setMode|>Draw<|>Erase</)
   assert.match(simulator,/for\(let boundary=1;boundary<4;boundary\+\+\)\{line\(ctx,gridX\(boundary\),gridY\(0\),gridX\(boundary\),gridY\(4\)\);line\(ctx,gridX\(0\),gridY\(boundary\),gridX\(4\),gridY\(boundary\)\)\}/)
+  assert.match(simulator,/x:\(e\.clientX-r\.left\)\*VIEWPORT\.width\/r\.width,y:\(e\.clientY-r\.top\)\*VIEWPORT\.height\/r\.height/)
+  assert.doesNotMatch(simulator,/\*PANEL\.(?:width|height)\/r\.(?:width|height)-VIEWPORT\.(?:x|y)/)
+  for(const helper of ['gridCellAtPointer','selectionBetweenGridCells','dragSelectionFromPointers','snapDragSelection'])assert.match(declarations,new RegExp(`export function ${helper}\\(`))
 })
