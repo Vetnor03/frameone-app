@@ -10,6 +10,7 @@ export type PixelCell = GridCell & { x:number; y:number; w:number; h:number }
 export type LayoutName = keyof typeof spec.layouts
 export type ModuleName = keyof typeof profiles
 export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
+export type CalendarRowMode = 'date' | 'dateLarge' | 'remindersLarge' | 'remindersXL' | 'countdown'
 export const frameLayouts = spec
 export { profiles as moduleProfiles }
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
@@ -49,6 +50,21 @@ export function quantizeOneBit(ctx: CanvasRenderingContext2D, paperDark:boolean)
     image.data[i]=value; image.data[i+1]=value; image.data[i+2]=value; image.data[i+3]=255
   }
   ctx.putImageData(image,0,0)
+}
+export function daysInMonth(year:number, month0:number) {
+  return new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate()
+}
+export function mondayFirstWeekday(year:number, month0:number) {
+  const sundayFirst = new Date(Date.UTC(year, month0, 1)).getUTCDay()
+  return sundayFirst === 0 ? 6 : sundayFirst - 1
+}
+export function calendarGeometry(year:number, month0:number, mode:CalendarRowMode) {
+  const firstWeekday = mondayFirstWeekday(year, month0)
+  const dayCount = daysInMonth(year, month0)
+  const calculatedRows = Math.max(4, Math.min(6, Math.ceil((firstWeekday + dayCount) / 7)))
+  const rows = mode === 'remindersXL' ? 6 :
+    mode === 'dateLarge' || mode === 'remindersLarge' ? Math.min(calculatedRows, 5) : calculatedRows
+  return { firstWeekday, dayCount, rows }
 }
 export const supportedGeometry: Record<ModuleName, string[]> = {
   date:['4x1','2x2','4x2','4x4'], reminders:['4x1','2x2','4x2','4x4'], weather:['4x1','2x2','4x2','4x4'], countdown:['4x1','2x2','4x2','4x4']
