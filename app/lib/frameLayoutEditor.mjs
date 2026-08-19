@@ -193,7 +193,15 @@ export function subtractRectangle(cell, cut) {
 /** Make a dragged rectangle authoritative, rebuilding every intersected remainder. */
 export function overwriteWithSelection(cells, selection) {
   if (!validateLayout(cells) || !selection || !Number.isInteger(selection.col) || !Number.isInteger(selection.row) || !Number.isInteger(selection.colSpan) || !Number.isInteger(selection.rowSpan) || selection.col < 0 || selection.row < 0 || selection.colSpan < 1 || selection.rowSpan < 1 || selection.col + selection.colSpan > GRID_SIZE || selection.row + selection.rowSpan > GRID_SIZE) return {valid: false, reason: 'Selection must be a valid grid rectangle', cells}
-  if (selectionIsExactlyTiled(cells, selection)) return mergeCellsInSelection(cells, selection)
+  if (selectionIsExactlyTiled(cells, selection)) {
+    const selected = cellsFullyContainedInSelection(cells, selection)
+    const modules = [...new Set(selected.map(assignedModule).filter(module => module !== 'empty'))]
+    if (modules.length <= 1) return mergeCellsInSelection(cells, selection)
+    const ids = selected.map(cell => cell.id).sort(), selectedIds = new Set(ids)
+    const merged = {...selection, id: `merged:${ids.map(encodeURIComponent).join('+')}`, moduleId: 'empty'}
+    const next = sortCells(cells.filter(cell => !selectedIds.has(cell.id)).concat(merged))
+    return validateLayout(next) ? {valid: true, cells: next, mergedId: merged.id} : {valid: false, reason: 'The merged partition is invalid', cells}
+  }
   const intersected = cells.filter(cell => rectangleIntersection(cell, selection))
   const partial = intersected.filter(cell => {
     const intersection = rectangleIntersection(cell, selection)

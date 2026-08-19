@@ -114,10 +114,15 @@ test('authoritative overwrite crosses assigned cells and is exactly undoable',()
   for(const moduleId of ['weather','date','surf'])assert.equal(result.cells.filter(c=>c.moduleId===moduleId).length,1)
   const history=pushHistory(createHistory(before),result.cells);assert.deepEqual(undoHistory(history).present,before);assert.deepEqual(redoHistory(undoHistory(history)).present,result.cells)
 })
-test('whole-cell authoritative overwrite retains merge assignments and conflicts',()=>{
-  const cells=[{id:'a',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'weather'},{id:'b',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'empty'}]
-  const merged=overwriteWithSelection(cells,{col:0,row:0,colSpan:4,rowSpan:4});assert.equal(merged.valid,true);assert.equal(merged.cells[0].moduleId,'weather');assertPartition(merged.cells)
-  assert.equal(overwriteWithSelection(cells.map((c,i)=>({...c,moduleId:i?'date':'weather'})),{col:0,row:0,colSpan:4,rowSpan:4}).valid,false)
+test('whole-cell authoritative overwrite preserves compatible assignments',()=>{
+  const pair=(left,right)=>[{id:'a',col:0,row:0,colSpan:2,rowSpan:4,moduleId:left},{id:'b',col:2,row:0,colSpan:2,rowSpan:4,moduleId:right}]
+  for(const [left,right,expected] of [['weather','empty','weather'],['surf','surf','surf']]){const merged=overwriteWithSelection(pair(left,right),{col:0,row:0,colSpan:4,rowSpan:4});assert.equal(merged.valid,true);assert.equal(merged.cells[0].moduleId,expected);assertPartition(merged.cells)}
+})
+test('whole-cell authoritative overwrite clears conflicts and preserves outside cells through history',()=>{
+  const before=[{id:'a',col:0,row:0,colSpan:2,rowSpan:2,moduleId:'weather'},{id:'b',col:2,row:0,colSpan:2,rowSpan:2,moduleId:'date'},{id:'outside',col:0,row:2,colSpan:4,rowSpan:2,moduleId:'surf'}]
+  const result=overwriteWithSelection(before,{col:0,row:0,colSpan:4,rowSpan:2});assert.equal(result.valid,true);assertPartition(result.cells)
+  const merged=result.cells.find(c=>c.row===0);assert.deepEqual(merged,{id:'merged:a+b',col:0,row:0,colSpan:4,rowSpan:2,moduleId:'empty'});assert.equal(result.cells.find(c=>c.id==='outside'),before[2])
+  const history=pushHistory(createHistory(before),result.cells),undone=undoHistory(history);assert.deepEqual(undone.present,before);assert.deepEqual(redoHistory(undone).present,result.cells)
 })
 test('mode-less simulator uses authoritative full overlay grid',async()=>{
   const simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8'),declarations=await readFile(new URL('../app/lib/frameLayoutEditor.d.mts',import.meta.url),'utf8')
