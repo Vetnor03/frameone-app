@@ -4,6 +4,9 @@ export type Point = {x:number;y:number}
 export type Stroke = {start:Point;end:Point}
 export type NormalizedStroke = {orientation:'vertical'|'horizontal';boundary:number;rangeStart:number;rangeEnd:number;nearestEdge:'left'|'right'|'top'|'bottom'}
 export type DividerSegment = {axis:'vertical'|'horizontal';boundary:number;from:number;to:number}
+export type RemovableDividerSegment = DividerSegment & {cellIds:[string,string]}
+export type DividerHit = RemovableDividerSegment & {distance:number}
+export type MergeResult = {valid:boolean;reason?:string;cells:EditorCell[];mergedId?:string}
 export type StrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];parentId?:string;intendedId?:string;normalized?:NormalizedStroke}
 export type EditorHistory = {past:EditorCell[][];present:EditorCell[];future:EditorCell[][]}
 export const GRID_SIZE:number
@@ -15,6 +18,10 @@ export function snapBoundary(value:number,extent:number):number
 export function hasOverlap(a:EditorCell,b:EditorCell):boolean
 export function validateLayout(cells:EditorCell[]):boolean
 export function internalDividerSegments(cells:EditorCell[]):DividerSegment[]
+export function removableDividerSegments(cells:EditorCell[]):RemovableDividerSegment[]
+export function findDividerNearPointer(cells:EditorCell[],point:Point,viewport?:{width:number;height:number},tolerance?:number):DividerHit|undefined
+export function mergeCells(cells:EditorCell[],firstId:string,secondId:string):MergeResult
+export function mergeDivider(cells:EditorCell[],divider:RemovableDividerSegment|DividerHit|undefined):MergeResult
 export function findContainingCell(cells:EditorCell[],point:Point):EditorCell|undefined
 export function chooseNearestEdge(cell:EditorCell,orientation:'vertical'|'horizontal',boundary:number):'left'|'right'|'top'|'bottom'
 export function partitionCell(parent:EditorCell,normalized:NormalizedStroke):{pieces:EditorCell[];intendedId:string}
