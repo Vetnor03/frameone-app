@@ -9247,6 +9247,8 @@ type ReminderUiItem = {
   title: string
   date: string
   time?: any
+  endDate?: string | null
+  endTime?: string | null
   tag: ReminderTag | null
   repeat: ReminderRepeatKey
   customRepeatDays?: number | null
@@ -12904,6 +12906,8 @@ function RemindersModuleSettingsTab({
   const [skipToggleError, setSkipToggleError] = useState<string | null>(null)
 
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [composerDraft, setComposerDraft] = useState<ReminderUiItem | null>(null)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
   const [tagFilter, setTagFilter] = useState<ReminderTagFilter>('all')
 
@@ -12930,7 +12934,7 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, due_time, tag, repeat_type, custom_repeat_days, is_done')
+        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, is_done')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
@@ -12968,6 +12972,8 @@ const manualItems: ReminderUiItem[] = (data || [])
     title: String(row.title ?? '').trim(),
     date: String(row.due_date ?? '').trim(),
     time: row.due_time ?? null,
+    endDate: row.end_date ?? null,
+    endTime: row.end_time ?? null,
     tag: isReminderTag(row.tag) ? row.tag : null,
     repeat: isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none',
     customRepeatDays:
@@ -13593,16 +13599,7 @@ const sortedReminders = useMemo(() => {
       <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center py-5">
         <button
           onClick={() => {
-            setEditingReminder({
-              id: '',
-              title: '',
-              date: addDate,
-              time: null,
-              tag: null,
-              repeat: 'none',
-              customRepeatDays: null,
-            } as any)
-            setSheetOpen(true)
+            setComposerOpen(true)
           }}
           disabled={!activeDeviceId}
           className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
@@ -13616,19 +13613,38 @@ const sortedReminders = useMemo(() => {
         </button>
       </div>
 
+      {composerOpen && activeDeviceId && (
+        <NaturalReminderComposer
+          language={language}
+          activeDeviceId={activeDeviceId}
+          fallbackDate={addDate}
+          onClose={() => setComposerOpen(false)}
+          onSaved={async () => { setComposerOpen(false); await loadReminders() }}
+          onEditDetails={(draft) => {
+            setComposerDraft(draft)
+            setComposerOpen(false)
+            setEditingReminder(null)
+            setSheetOpen(true)
+          }}
+        />
+      )}
+
     {sheetOpen && activeDeviceId && (
         <ReminderDraftSheet
           language={language}
           activeDeviceId={activeDeviceId}
           editingReminder={editingReminder && editingReminder.id ? editingReminder : null}
+          initialDraft={composerDraft}
           initialDate={editingReminder?.date || addDate}
           onClose={() => {
             setSheetOpen(false)
             setEditingReminder(null)
+            setComposerDraft(null)
           }}
           onSaved={async () => {
             setSheetOpen(false)
             setEditingReminder(null)
+            setComposerDraft(null)
             await loadReminders()
           }}
           onDeleted={async () => {
@@ -13652,10 +13668,99 @@ const sortedReminders = useMemo(() => {
   )
 }
 
+function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, onClose, onSaved, onEditDetails }: {
+  language: AppLanguage
+  activeDeviceId: string
+  fallbackDate: string
+  onClose: () => void
+  onSaved: () => void | Promise<void>
+  onEditDetails: (draft: ReminderUiItem) => void
+}) {
+  const [text, setText] = useState('')
+  const [parsed, setParsed] = useState<any>(null)
+  const [parsing, setParsing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const localNowIso = () => {
+    const now = new Date()
+    const offset = -now.getTimezoneOffset()
+    const sign = offset >= 0 ? '+' : '-'
+    return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`
+  }
+
+  const draftFromText = (): ReminderUiItem => ({ id: '', title: text.trim(), date: fallbackDate, time: null, endDate: null, endTime: null, tag: null, repeat: 'none', customRepeatDays: null })
+  const parsedDraft = (): ReminderUiItem => ({
+    id: '', title: parsed.title, date: parsed.due_date || fallbackDate, time: parsed.due_time,
+    endDate: parsed.end_date, endTime: parsed.end_time, tag: isReminderTag(parsed.tag) ? parsed.tag : null,
+    repeat: isReminderRepeatKey(parsed.repeat_type) ? parsed.repeat_type : 'none', customRepeatDays: parsed.custom_repeat_days,
+  })
+
+  async function interpret() {
+    if (!text.trim()) return
+    setParsing(true); setFailed(false); setParsed(null)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const accessToken = data.session?.access_token
+      if (!accessToken) throw new Error('sign in')
+      const response = await fetch('/api/reminders/parse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ text: text.trim(), localNow: localNowIso(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok || !json.reminder) throw new Error('parse failed')
+      setParsed(json.reminder)
+    } catch { setFailed(true) } finally { setParsing(false) }
+  }
+
+  async function addReminder() {
+    if (!parsed?.due_date) return
+    setSaving(true)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const userId = data.session?.user?.id
+      if (!userId) throw new Error('sign in')
+      const { error } = await supabase.from('reminders').insert({
+        device_id: activeDeviceId, created_by_user_id: userId, updated_by_user_id: userId,
+        title: parsed.title, due_date: parsed.due_date, due_time: parsed.due_time,
+        end_date: parsed.end_date, end_time: parsed.end_time, tag: parsed.tag,
+        repeat_type: parsed.repeat_type, custom_repeat_days: parsed.custom_repeat_days, is_done: false,
+      })
+      if (error) throw error
+      await onSaved()
+    } catch { setFailed(true) } finally { setSaving(false) }
+  }
+
+  const locale = language === 'no' ? 'nb-NO' : 'en-GB'
+  const previewDate = parsed?.due_date ? new Date(`${parsed.due_date}T12:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }) : null
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
+    <div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5">
+      <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY PÅMINNELSE' : 'NEW REMINDER'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
+      {!parsed ? <>
+        <label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva vil du bli påminnet om?' : 'What should I remind you about?'}</label>
+        <textarea autoFocus rows={4} value={text} onChange={(e) => { setText(e.target.value); setFailed(false) }} placeholder={language === 'no' ? 'Tannlege neste tirsdag kl. 14:30' : 'Dentist next Tuesday at 14:30'} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" />
+        <SensitiveInformationHelper language={language} />
+        {failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Klarte ikke å tolke alt. Prøv igjen eller rediger detaljene manuelt.' : "Couldn't understand that completely. Try again or edit the details manually."}</p>}
+        <button onClick={interpret} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'CONTINUING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>
+        {failed && <button onClick={() => onEditDetails(draftFromText())} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>}
+      </> : <>
+        <div className="mt-7 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-5">
+          <div className="text-lg font-medium text-[color:var(--fg-95)]">{parsed.title}</div>
+          <div className="mt-2 text-sm text-[color:var(--fg-60)]">{[previewDate, parsed.due_time, parsed.end_date && parsed.end_date !== parsed.due_date ? `– ${parsed.end_date}` : parsed.end_time ? `– ${parsed.end_time}` : null, parsed.repeat_type !== 'none' ? reminderRepeatOptionLabel(language, parsed.repeat_type) : null].filter(Boolean).join(' · ') || (language === 'no' ? 'Tidspunkt ikke angitt' : 'When not specified')}</div>
+          {parsed.ambiguities?.length > 0 && <div className="mt-3 text-sm text-[color:var(--fg-60)]"><div>{language === 'no' ? 'Klarte ikke å tolke alt:' : "Couldn't understand that completely:"}</div><ul className="mt-1 list-disc pl-5">{parsed.ambiguities.map((x: string) => <li key={x}>{x}</li>)}</ul></div>}
+        </div>
+        <button onClick={addReminder} disabled={!parsed.due_date || saving} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{saving ? (language === 'no' ? 'LEGGER TIL…' : 'ADDING…') : (language === 'no' ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER')}</button>
+        <button onClick={() => onEditDetails(parsedDraft())} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER DETALJER' : 'EDIT DETAILS'}</button>
+        <button onClick={() => setParsed(null)} className="mt-1 h-10 w-full text-xs tracking-widest text-[color:var(--fg-50)]">{language === 'no' ? 'ENDRE TEKST' : 'CHANGE TEXT'}</button>
+      </>}
+    </div>
+  </div>
+}
+
 function ReminderDraftSheet({
   language,
   activeDeviceId,
   editingReminder,
+  initialDraft,
   initialDate,
   onClose,
   onSaved,
@@ -13665,20 +13770,23 @@ function ReminderDraftSheet({
   language: AppLanguage
   activeDeviceId: string
   editingReminder: ReminderUiItem | null
+  initialDraft?: ReminderUiItem | null
   initialDate: string
   onClose: () => void
   onSaved: () => void | Promise<void>
   onDeleted: () => void | Promise<void>
   onCompleted?: (completion: { reminderId: string; occurrenceDate: string; repeat: ReminderRepeatKey }) => void
 }) {
-const [title, setTitle] = useState(editingReminder?.title ?? '')
-const [date, setDate] = useState(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
-const [time, setTime] = useState<string>(normalizeReminderTime(editingReminder?.time) ?? '')
-const [tag, setTag] = useState<ReminderTag | null>(isReminderTag(editingReminder?.tag) ? editingReminder?.tag : null)
-const [repeat, setRepeat] = useState<ReminderRepeatKey>(editingReminder?.repeat ?? 'none')
+const [title, setTitle] = useState(editingReminder?.title ?? initialDraft?.title ?? '')
+const [date, setDate] = useState(editingReminder?.date ?? initialDraft?.date ?? initialDate ?? toLocalYmd(new Date()))
+const [time, setTime] = useState<string>(normalizeReminderTime(editingReminder?.time ?? initialDraft?.time) ?? '')
+const [endDate, setEndDate] = useState(editingReminder?.endDate ?? initialDraft?.endDate ?? '')
+const [endTime, setEndTime] = useState(normalizeReminderTime(editingReminder?.endTime ?? initialDraft?.endTime) ?? '')
+const [tag, setTag] = useState<ReminderTag | null>(isReminderTag(editingReminder?.tag ?? initialDraft?.tag) ? (editingReminder?.tag ?? initialDraft?.tag)! : null)
+const [repeat, setRepeat] = useState<ReminderRepeatKey>(editingReminder?.repeat ?? initialDraft?.repeat ?? 'none')
 const [customRepeatDays, setCustomRepeatDays] = useState<number | ''>(
-  Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
-    ? Number(editingReminder?.customRepeatDays)
+  Number.isFinite(Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays)) && Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays) > 0
+    ? Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays)
     : ''
 )
 
@@ -13702,18 +13810,20 @@ const normalizedCustomRepeatDays =
 const normalizedTime = normalizeReminderTime(time)
 
   useEffect(() => {
-  setTitle(editingReminder?.title ?? '')
-  setDate(editingReminder?.date ?? initialDate ?? toLocalYmd(new Date()))
-  setTime(normalizeReminderTime(editingReminder?.time) ?? '')
-  setTag(isReminderTag(editingReminder?.tag) ? editingReminder?.tag : null)
-  setRepeat(editingReminder?.repeat ?? 'none')
+  setTitle(editingReminder?.title ?? initialDraft?.title ?? '')
+  setDate(editingReminder?.date ?? initialDraft?.date ?? initialDate ?? toLocalYmd(new Date()))
+  setTime(normalizeReminderTime(editingReminder?.time ?? initialDraft?.time) ?? '')
+  setEndDate(editingReminder?.endDate ?? initialDraft?.endDate ?? '')
+  setEndTime(normalizeReminderTime(editingReminder?.endTime ?? initialDraft?.endTime) ?? '')
+  setTag(isReminderTag(editingReminder?.tag ?? initialDraft?.tag) ? (editingReminder?.tag ?? initialDraft?.tag)! : null)
+  setRepeat(editingReminder?.repeat ?? initialDraft?.repeat ?? 'none')
   setCustomRepeatDays(
-    Number.isFinite(Number(editingReminder?.customRepeatDays)) && Number(editingReminder?.customRepeatDays) > 0
-      ? Number(editingReminder?.customRepeatDays)
+    Number.isFinite(Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays)) && Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays) > 0
+      ? Number(editingReminder?.customRepeatDays ?? initialDraft?.customRepeatDays)
       : ''
   )
   setStatus(null)
-}, [editingReminder, initialDate])
+}, [editingReminder, initialDraft, initialDate])
 
   const canSave =
     title.trim().length > 0 &&
@@ -13743,6 +13853,12 @@ const normalizedTime = normalizeReminderTime(time)
       setStatus(language === 'no' ? 'Skriv inn antall dager' : 'Enter custom repeat days')
       return
     }
+    const effectiveEndDate = endDate || cleanDate
+    if ((endDate && endDate < cleanDate) || (endTime && effectiveEndDate === cleanDate && normalizedTime && endTime < normalizedTime)) {
+      setStatusKind('error')
+      setStatus(language === 'no' ? 'Slutten kan ikke være før starten' : 'End cannot be before start')
+      return
+    }
 
     try {
       setSaving(true)
@@ -13760,6 +13876,8 @@ const normalizedTime = normalizeReminderTime(time)
     title: cleanTitle,
     due_date: cleanDate,
     due_time: normalizedTime,
+    end_date: endDate || null,
+    end_time: normalizeReminderTime(endTime),
     tag,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
@@ -13780,6 +13898,8 @@ const normalizedTime = normalizeReminderTime(time)
     title: cleanTitle,
     due_date: cleanDate,
     due_time: normalizedTime,
+    end_date: endDate || null,
+    end_time: normalizeReminderTime(endTime),
     tag,
     repeat_type: repeat,
     custom_repeat_days: repeat === 'custom' ? normalizedCustomRepeatDays : null,
@@ -13945,6 +14065,17 @@ async function completeReminderFromEditor() {
     </button>
   </div>
 </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SLUTTDATO' : 'END DATE'}</span>
+              <input type="date" min={date} value={endDate} onChange={(e) => { setEndDate(e.target.value); setStatus(null) }} className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none" />
+            </label>
+            <label className="block">
+              <span className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SLUTTID' : 'END TIME'}</span>
+              <input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setStatus(null) }} className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none" />
+            </label>
+          </div>
 
           <div className="mt-4">
             <div className="tracking-widest text-xs text-[color:var(--fg-50)]">TAG</div>
