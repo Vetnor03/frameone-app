@@ -9482,6 +9482,17 @@ function formatReminderFullDateLabel(language: AppLanguage, ymd: string) {
   return `${weekday} ${toLocalYmd(dt)}`
 }
 
+function formatReminderPickerDateLabel(language: AppLanguage, ymd: string) {
+  const dt = parseYmdToLocalDate(ymd)
+  if (!dt) return ymd || '--'
+
+  return dt.toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
+}
+
 function addDaysLocal(d: Date, days: number) {
   const x = new Date(d)
   x.setDate(x.getDate() + days)
@@ -13846,6 +13857,8 @@ const [statusKind, setStatusKind] = useState<'ok' | 'error' | 'info'>('info')
 
 const [datePickerOpen, setDatePickerOpen] = useState(false)
 const [timePickerOpen, setTimePickerOpen] = useState(false)
+const [endDatePickerOpen, setEndDatePickerOpen] = useState(false)
+const [endTimePickerOpen, setEndTimePickerOpen] = useState(false)
 const [tagPickerOpen, setTagPickerOpen] = useState(false)
 const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false)
@@ -14038,16 +14051,26 @@ async function completeReminderFromEditor() {
     .reminder-sheet-scroll {
       -ms-overflow-style: none;
       scrollbar-width: none;
+      overscroll-behavior-x: none;
+      touch-action: pan-y;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+    .reminder-sheet-scroll > * {
+      min-width: 0;
+      max-width: 100%;
     }
     .reminder-sheet-scroll::-webkit-scrollbar {
       display: none;
     }
   `}</style>
 
-  <div className="w-full max-w-[420px] rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh]">
+  <div className="w-full min-w-0 max-w-[420px] overflow-x-hidden overscroll-x-none touch-pan-y rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] flex flex-col max-h-[88vh]">
     <div
       ref={scrollRef}
-      className="reminder-sheet-scroll flex-1 min-h-0 overflow-y-auto px-5 pt-5 pb-4"
+      className="reminder-sheet-scroll flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-x-none touch-pan-y px-5 pt-5 pb-4"
     >
           <div className="flex items-center justify-between">
             <div className="tracking-widest text-sm text-[color:var(--fg-70)]">
@@ -14080,7 +14103,7 @@ async function completeReminderFromEditor() {
               onClick={() => setDatePickerOpen(true)}
               className="mt-2 flex w-full h-12 items-center rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]"
             >
-              {date}
+              {formatReminderPickerDateLabel(language, date)}
             </button>
           </div>
 
@@ -14115,15 +14138,35 @@ async function completeReminderFromEditor() {
   </div>
 </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SLUTTDATO' : 'END DATE'}</span>
-              <input type="date" min={date} value={endDate} onChange={(e) => { setEndDate(e.target.value); setStatus(null) }} className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none" />
-            </label>
-            <label className="block">
-              <span className="tracking-widest text-xs text-[color:var(--fg-50)]">{language === 'no' ? 'SLUTTID' : 'END TIME'}</span>
-              <input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setStatus(null) }} className="mt-2 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-3 text-[color:var(--fg-90)] outline-none" />
-            </label>
+          <div className="mt-4 grid min-w-0 grid-cols-1 gap-4">
+            {[
+              {
+                label: language === 'no' ? 'SLUTTDATO · VALGFRITT' : 'END DATE · OPTIONAL',
+                value: endDate ? formatReminderPickerDateLabel(language, endDate) : (language === 'no' ? 'Ingen sluttdato' : 'No end date'),
+                open: () => setEndDatePickerOpen(true),
+                clear: () => setEndDate(''),
+                selected: !!endDate,
+              },
+              {
+                label: language === 'no' ? 'SLUTTID · VALGFRITT' : 'END TIME · OPTIONAL',
+                value: normalizeReminderTime(endTime) || (language === 'no' ? 'Ingen sluttid' : 'No end time'),
+                open: () => setEndTimePickerOpen(true),
+                clear: () => setEndTime(''),
+                selected: !!normalizeReminderTime(endTime),
+              },
+            ].map((field) => (
+              <div key={field.label} className="min-w-0">
+                <div className="tracking-widest text-xs text-[color:var(--fg-50)]">{field.label}</div>
+                <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  <button type="button" onClick={field.open} className="flex h-12 min-w-0 items-center truncate rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 text-left text-[color:var(--fg-90)]">
+                    {field.value}
+                  </button>
+                  <button type="button" disabled={!field.selected} onClick={() => { field.clear(); setStatus(null) }} className="h-12 rounded-2xl border border-[color:var(--bd-10)] px-4 text-xs tracking-widest text-[color:var(--fg-60)] disabled:text-[color:var(--fg-40)]">
+                    {language === 'no' ? 'FJERN' : 'CLEAR'}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="mt-4">
@@ -14288,6 +14331,38 @@ async function completeReminderFromEditor() {
     }}
   />
 )}
+
+      {endDatePickerOpen && (
+        <DatePickerSheet
+          language={language}
+          value={parseYmdToLocalDate(endDate || date) || new Date()}
+          onClose={() => setEndDatePickerOpen(false)}
+          onApply={(d) => {
+            setEndDate(toLocalYmd(d))
+            setStatus(null)
+            setEndDatePickerOpen(false)
+          }}
+        />
+      )}
+
+      {endTimePickerOpen && (
+        <TimePickerSheet
+          language={language}
+          value={(() => {
+            const base = parseYmdToLocalDate(endDate || date) || new Date()
+            const [hh, mm] = (normalizeReminderTime(endTime) || normalizedTime || '12:00').split(':').map(Number)
+            base.setHours(hh, mm, 0, 0)
+            return base
+          })()}
+          onClose={() => setEndTimePickerOpen(false)}
+          onApply={(d) => {
+            const rounded = roundToNearest5Min(d)
+            setEndTime(`${pad2(rounded.getHours())}:${pad2(rounded.getMinutes())}`)
+            setStatus(null)
+            setEndTimePickerOpen(false)
+          }}
+        />
+      )}
 
       {tagPickerOpen && (
         <ReminderTagPickerSheet
@@ -16368,7 +16443,7 @@ function TimePickerSheet({
 
             <div className="mt-2 relative rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] overflow-hidden">
               <div
-                className="pointer-events-none absolute left-0 right-0 z-10 border-y border-[color:var(--bd-10)] bg-[color:var(--panel-08)]"
+                className="pointer-events-none absolute left-0 right-0 z-0 border-y border-[color:var(--bd-10)] bg-[color:var(--panel-08)]"
                 style={{ top: CENTER_TOP, height: ROW_H }}
               />
 
@@ -16383,7 +16458,7 @@ function TimePickerSheet({
                     pickHourFromScroll()
                   }, 70)
                 }}
-                className="overflow-y-auto no-scrollbar"
+                className="relative z-10 overflow-x-hidden overflow-y-auto no-scrollbar touch-pan-y"
                 style={{
                   height: PICKER_H,
                   WebkitOverflowScrolling: 'touch',
@@ -16417,7 +16492,7 @@ function TimePickerSheet({
 
             <div className="mt-2 relative rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] overflow-hidden">
               <div
-                className="pointer-events-none absolute left-0 right-0 z-10 border-y border-[color:var(--bd-10)] bg-[color:var(--panel-08)]"
+                className="pointer-events-none absolute left-0 right-0 z-0 border-y border-[color:var(--bd-10)] bg-[color:var(--panel-08)]"
                 style={{ top: CENTER_TOP, height: ROW_H }}
               />
 
@@ -16432,7 +16507,7 @@ function TimePickerSheet({
                     pickMinuteFromScroll()
                   }, 70)
                 }}
-                className="overflow-y-auto no-scrollbar"
+                className="relative z-10 overflow-x-hidden overflow-y-auto no-scrollbar touch-pan-y"
                 style={{
                   height: PICKER_H,
                   WebkitOverflowScrolling: 'touch',
