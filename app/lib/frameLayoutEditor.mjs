@@ -124,12 +124,25 @@ export function splitCellNearPointer(cells, point, viewport = {width: 785, heigh
   return {...splitCellAtBoundary(cells, parent?.id, guide), guide}
 }
 
-/** Snap both drag endpoints to grid boundaries and normalize the rectangle. */
-export function snapDragSelection(start, end, viewport = {width: 785, height: 458}) {
-  const a = {col: snapBoundary(start.x, viewport.width), row: snapBoundary(start.y, viewport.height)}
-  const b = {col: snapBoundary(end.x, viewport.width), row: snapBoundary(end.y, viewport.height)}
-  return {col: Math.min(a.col, b.col), row: Math.min(a.row, b.row), colSpan: Math.abs(a.col - b.col), rowSpan: Math.abs(a.row - b.row)}
+/** Find the atomic grid cell containing a viewport-local pointer. */
+export function gridCellAtPointer(point, viewport = {width: 785, height: 458}) {
+  const index = (value, extent) => Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(value / extent * GRID_SIZE)))
+  return {col: index(point.x, viewport.width), row: index(point.y, viewport.height)}
 }
+
+/** Return the inclusive, normalized rectangle between two atomic grid cells. */
+export function selectionBetweenGridCells(start, end) {
+  const col = Math.min(start.col, end.col), row = Math.min(start.row, end.row)
+  return {col, row, colSpan: Math.max(start.col, end.col) - col + 1, rowSpan: Math.max(start.row, end.row) - row + 1}
+}
+
+/** Select complete cells under both pointers, rather than rounding to nearby edges. */
+export function dragSelectionFromPointers(start, end, viewport = {width: 785, height: 458}) {
+  return selectionBetweenGridCells(gridCellAtPointer(start, viewport), gridCellAtPointer(end, viewport))
+}
+
+/** @deprecated Use dragSelectionFromPointers. Retained for external editor consumers. */
+export const snapDragSelection = dragSelectionFromPointers
 
 export function cellsFullyContainedInSelection(cells, selection) {
   return sortCells(cells.filter(cell => cell.col >= selection.col && cell.row >= selection.row && cell.col + cell.colSpan <= selection.col + selection.colSpan && cell.row + cell.rowSpan <= selection.row + selection.rowSpan))
@@ -152,6 +165,54 @@ export function mergeCellsInSelection(cells, selection) {
   const merged = {...selection, id: `merged:${ids.map(encodeURIComponent).join('+')}`, moduleId: modules[0] ?? 'empty'}
   const selectedIds = new Set(ids), next = sortCells(cells.filter(cell => !selectedIds.has(cell.id)).concat(merged))
   return validateLayout(next) ? {valid: true, cells: next, mergedId: merged.id} : {valid: false, reason: 'The merged partition is invalid', cells}
+}
+
+const rectangleIntersection = (cell, cut) => {
+  const col = Math.max(cell.col, cut.col), row = Math.max(cell.row, cut.row)
+  const right = Math.min(cell.col + cell.colSpan, cut.col + cut.colSpan), bottom = Math.min(cell.row + cell.rowSpan, cut.row + cut.rowSpan)
+  return right > col && bottom > row ? {col, row, colSpan: right - col, rowSpan: bottom - row} : undefined
+}
+
+/** Subtract a rectangular cut from one cell as deterministic rectangular strips. */
+export function subtractRectangle(cell, cut) {
+  const intersection = rectangleIntersection(cell, cut)
+  if (!intersection) return [cell]
+  const right = cell.col + cell.colSpan, bottom = cell.row + cell.rowSpan
+  const intersectionRight = intersection.col + intersection.colSpan, intersectionBottom = intersection.row + intersection.rowSpan
+  const candidates = [
+    ['top', {col: cell.col, row: cell.row, colSpan: cell.colSpan, rowSpan: intersection.row - cell.row}],
+    ['bottom', {col: cell.col, row: intersectionBottom, colSpan: cell.colSpan, rowSpan: bottom - intersectionBottom}],
+    ['left', {col: cell.col, row: intersection.row, colSpan: intersection.col - cell.col, rowSpan: intersection.rowSpan}],
+    ['right', {col: intersectionRight, row: intersection.row, colSpan: right - intersectionRight, rowSpan: intersection.rowSpan}],
+  ]
+  const fragments = candidates.filter(([, geometry]) => geometry.colSpan > 0 && geometry.rowSpan > 0).map(([identity, geometry]) => ({...geometry, id: `${cell.id}/cut-${identity}:${geometry.col},${geometry.row},${geometry.colSpan},${geometry.rowSpan}`, moduleId: 'empty'}))
+  if (assignedModule(cell) !== 'empty' && fragments.length) sortCells(fragments).sort((a, b) => cellArea(b) - cellArea(a) || a.row - b.row || a.col - b.col || a.id.localeCompare(b.id))[0].moduleId = cell.moduleId
+  return sortCells(fragments)
+}
+
+/** Make a dragged rectangle authoritative, rebuilding every intersected remainder. */
+export function overwriteWithSelection(cells, selection) {
+  if (!validateLayout(cells) || !selection || !Number.isInteger(selection.col) || !Number.isInteger(selection.row) || !Number.isInteger(selection.colSpan) || !Number.isInteger(selection.rowSpan) || selection.col < 0 || selection.row < 0 || selection.colSpan < 1 || selection.rowSpan < 1 || selection.col + selection.colSpan > GRID_SIZE || selection.row + selection.rowSpan > GRID_SIZE) return {valid: false, reason: 'Selection must be a valid grid rectangle', cells}
+  if (selectionIsExactlyTiled(cells, selection)) {
+    const selected = cellsFullyContainedInSelection(cells, selection)
+    const modules = [...new Set(selected.map(assignedModule).filter(module => module !== 'empty'))]
+    if (modules.length <= 1) return mergeCellsInSelection(cells, selection)
+    const ids = selected.map(cell => cell.id).sort(), selectedIds = new Set(ids)
+    const merged = {...selection, id: `merged:${ids.map(encodeURIComponent).join('+')}`, moduleId: 'empty'}
+    const next = sortCells(cells.filter(cell => !selectedIds.has(cell.id)).concat(merged))
+    return validateLayout(next) ? {valid: true, cells: next, mergedId: merged.id} : {valid: false, reason: 'The merged partition is invalid', cells}
+  }
+  const intersected = cells.filter(cell => rectangleIntersection(cell, selection))
+  const partial = intersected.filter(cell => {
+    const intersection = rectangleIntersection(cell, selection)
+    return intersection && cellArea(intersection) < cellArea(cell)
+  })
+  if (!partial.length) return {valid: false, reason: 'Select at least two cells to merge', cells}
+  const fragments = cells.flatMap(cell => subtractRectangle(cell, selection))
+  const sourceIds = intersected.map(cell => cell.id).sort()
+  const override = {...selection, id: `override:${selection.col},${selection.row},${selection.colSpan},${selection.rowSpan}:${sourceIds.map(encodeURIComponent).join('+')}`, moduleId: 'empty'}
+  const next = sortCells([...fragments, override])
+  return validateLayout(next) ? {valid: true, cells: next, mergedId: override.id} : {valid: false, reason: 'The overwritten partition is invalid', cells}
 }
 
 /** Merge a compatible neighboring pair, or return the original partition unchanged. */
