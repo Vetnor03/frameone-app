@@ -9,6 +9,7 @@ process.env.OPENAI_API_KEY = 'test-key'
 const base = { title: 'Dentist', due_date: '2026-08-25', due_time: '14:30', end_date: null, end_time: null, repeat_type: 'none', custom_repeat_days: null, tag: null, ambiguities: [] }
 const ready = (reminder) => ({ status: 'ready', reminder, partial: null, missing_fields: [], question: null })
 const clarify = (partial, missing_fields = ['due_date', 'due_time'], question = 'Når skal jeg minne deg på det?') => ({ status: 'needs_clarification', reminder: null, partial, missing_fields, question })
+const candidate = (reminder, missing_fields = [], question = null) => ({ reminder, missing_fields, question })
 const responseFor = (result, inspect) => async (_url, options) => {
   const request = JSON.parse(options.body)
   assert.equal(request.store, false)
@@ -31,7 +32,7 @@ for (const [name, text, language, reminder] of [
   ['meaningful relationship phrase retained', 'Ring mamma om bursdagen hennes på torsdag', 'no', { ...base, title: 'Ring mamma om bursdagen hennes', due_date: '2026-08-20', due_time: null }],
   ['location phrase retained', 'Møte på kontoret torsdag', 'no', { ...base, title: 'Møte på kontoret', due_date: '2026-08-20', due_time: null }],
   ['date without time is ready', 'Møte fredag', 'no', { ...base, title: 'Møte', due_date: '2026-08-21', due_time: null }],
-]) test(name, async () => assert.deepEqual(await parseReminder(context(text, language), responseFor(ready(reminder))), ready(reminder)))
+]) test(name, async () => assert.deepEqual(await parseReminder(context(text, language), responseFor(candidate(reminder))), ready(reminder)))
 
 for (const [name, text, partial, missing] of [
   ['after work asks when without invention', 'Hent Siri etter jobb', { ...base, title: 'Hent Siri', due_date: null, due_time: null }, ['due_date', 'due_time']],
@@ -39,14 +40,14 @@ for (const [name, text, partial, missing] of [
   ['known time asks only for date', 'Tannlege kl. 14:30', { ...base, title: 'Tannlege', due_date: null, due_time: '14:30' }, ['due_date']],
 ]) test(name, async () => {
   const expected = clarify(partial, missing)
-  assert.deepEqual(await parseReminder(context(text, 'no'), responseFor(expected)), expected)
+  assert.deepEqual(await parseReminder(context(text, 'no'), responseFor(candidate(partial, missing, expected.question))), expected)
 })
 
 test('clarification sends original, partial, question, and answer and can become ready', async () => {
   const partial = { ...base, title: 'Hent Siri', due_date: null, due_time: null }
   const reminder = { ...partial, due_date: '2026-08-19', due_time: '16:00' }
   const ctx = { ...context('Hent Siri etter jobb', 'no'), partial, clarificationQuestion: 'Når skal jeg minne deg på det?', clarificationAnswer: 'I dag kl. 16' }
-  const result = await parseReminder(ctx, responseFor(ready(reminder), (payload) => {
+  const result = await parseReminder(ctx, responseFor(candidate(reminder), (payload) => {
     assert.equal(payload.original_reminder_text, ctx.text)
     assert.deepEqual(payload.existing_partial, partial)
     assert.equal(payload.clarification_question, ctx.clarificationQuestion)
@@ -59,9 +60,8 @@ test('invalid structured outcomes and invalid end ranges are rejected', async ()
   assert.equal(validateParsedReminder({ ...base, due_time: '7pm' }), null)
   assert.equal(validateParsedReminder({ ...base, end_date: '2026-08-24' }), null)
   assert.equal(validateParsedReminder({ ...base, end_date: '2026-08-25', end_time: '13:00' }), null)
-  assert.equal(validateReminderParseResult(ready({ ...base, due_date: null })), null)
-  assert.equal(validateReminderParseResult(clarify({ ...base, due_date: '2026-08-25' }, ['due_date'])), null)
-  assert.equal(await parseReminder(context('Dentist'), responseFor(ready({ ...base, repeat_type: 'sometimes' }))), null)
+  assert.deepEqual(validateReminderParseResult(candidate({ ...base, due_date: null }, [], 'What day?')), clarify({ ...base, due_date: null }, ['due_date'], 'What day?'))
+  assert.equal(validateReminderParseResult(candidate(base, ['due_date'], 'What day?')), null)
 })
 
 test('real calendar dates accept valid leap and ordinary days and reject impossible dates', () => {
@@ -72,18 +72,45 @@ test('real calendar dates accept valid leap and ordinary days and reject impossi
 
 test('schema and prompt preserve canonical semantic titles', () => {
   assert.equal('note' in reminderParseJsonSchema.properties, false)
-  assert.deepEqual(reminderParseJsonSchema.properties.status.enum, ['ready', 'needs_clarification'])
+  assert.equal('status' in reminderParseJsonSchema.properties, false)
+  assert.equal('partial' in reminderParseJsonSchema.properties, false)
+  assert.equal(reminderParseJsonSchema.properties.reminder.type, 'object')
   const prompt = readFileSync(new URL('../app/lib/reminders/parser.ts', import.meta.url), 'utf8')
   assert.match(prompt, /Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented/)
   assert.match(prompt, /Any meaningful information unsupported by structured fields remains in title/)
 })
 
-test('OpenAI failure is fail-soft and manual editing remains available', async () => {
-  assert.equal(await parseReminder(context('Call Dad'), async () => { throw new Error('timeout') }), null)
+test('parser failures are fail-soft, reason-coded, and never log sensitive content', async () => {
+  const logs = []
+  const originalError = console.error
+  console.error = (...args) => logs.push(args)
+  try {
+    assert.equal(await parseReminder(context('PRIVATE HTTP TEXT'), async () => new Response('', { status: 429 })), null)
+    assert.equal(await parseReminder(context('PRIVATE TIMEOUT TEXT'), async () => { throw new DOMException('PRIVATE ANSWER', 'AbortError') }), null)
+    assert.equal(await parseReminder(context('PRIVATE JSON TEXT'), responseForText('{broken')), null)
+    assert.equal(await parseReminder(context('PRIVATE INVALID TEXT'), responseForText(JSON.stringify(candidate({ ...base, due_time: 'tomorrow' })))), null)
+  } finally { console.error = originalError }
+  assert.deepEqual(logs.map(([reason]) => reason), [
+    'reminder_parse_openai_http_error', 'reminder_parse_timeout',
+    'reminder_parse_invalid_json', 'reminder_parse_invalid_result',
+  ])
+  assert.deepEqual(logs[0][1], { status: 429 })
+  const serializedLogs = JSON.stringify(logs)
+  assert.doesNotMatch(serializedLogs, /PRIVATE|ANSWER|Authorization|test-key/)
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(home, /onEditDetails\(draftFromText\(\)\)/)
   assert.match(home, /clarificationRounds >= 2/)
   assert.match(home, /I just need one more detail/)
+})
+
+const responseForText = (text) => async () => new Response(JSON.stringify({ output: [{ content: [{ type: 'output_text', text }] }] }), { status: 200 })
+
+test('a valid clarification candidate is successful and therefore does not become a 503', async () => {
+  const partial = { ...base, title: 'Hent Siri', due_date: null, due_time: null }
+  const result = await parseReminder(context('Hent Siri etter jobb', 'no'), responseFor(candidate(partial, ['due_date', 'due_time'], 'Når skal jeg minne deg på det?')))
+  assert.deepEqual(result, clarify(partial))
+  const route = readFileSync(new URL('../app/api/reminders/parse/route.ts', import.meta.url), 'utf8')
+  assert.match(route, /if \(!result\).*503/)
 })
 
 test('end values round-trip while device output remains unchanged', () => {
@@ -95,7 +122,7 @@ test('end values round-trip while device output remains unchanged', () => {
 })
 
 test('parser version and occurrence end semantics are explicit', () => {
-  assert.equal(REMINDER_PARSE_VERSION, 'reminder-parse-v2')
+  assert.equal(REMINDER_PARSE_VERSION, 'reminder-parse-v3')
   const source = readFileSync(new URL('../app/lib/reminders/parser.ts', import.meta.url), 'utf8')
   assert.match(source, /end_date\/end_time describe this occurrence, never recurrence termination/)
   assert.doesNotMatch(source, /repeat_until/)
