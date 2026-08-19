@@ -1,5 +1,6 @@
 import spec from '../../shared/frame-layouts.json'
 import profiles from '../../shared/module-layout-profiles.json'
+import registry from '../../shared/frame-modules.json'
 
 export const PANEL = spec.panel
 export const VIEWPORT = spec.viewport
@@ -8,11 +9,12 @@ export type CellSize = 'SMALL' | 'MEDIUM' | 'LARGE' | 'XL'
 export type GridCell = { col:number; row:number; colSpan:number; rowSpan:number; slot:number; size:CellSize }
 export type PixelCell = GridCell & { x:number; y:number; w:number; h:number }
 export type LayoutName = keyof typeof spec.layouts
-export type ModuleName = keyof typeof profiles
+export type ModuleName = 'date'|'weather'|'surf'|'reminders'|'countdown'|'soccer'|'stocks'|'groceries'
 export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
 export type CalendarRowMode = 'date' | 'dateLarge' | 'remindersLarge' | 'remindersXL' | 'countdown'
 export const frameLayouts = spec
 export { profiles as moduleProfiles }
+export const frameModuleRegistry = registry as {id:ModuleName;label:string}[]
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
 export const gridY = (row:number) => VIEWPORT.y + Math.trunc(VIEWPORT.height * row / GRID_SIZE)
 export function validGridCell(c: GridCell) {
@@ -74,6 +76,7 @@ export function isoWeekNumber(year:number, month0:number, day:number) {
   return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
 export const supportedGeometry: Record<ModuleName, string[]> = {
-  date:['4x1','2x2','4x2','4x4'], reminders:['4x1','2x2','4x2','4x4'], weather:['4x1','2x2','4x2','4x4'], countdown:['4x1','2x2','4x2','4x4']
+  date:['4x1','2x2','4x2','4x4'], reminders:['4x1','2x2','4x2','4x4'], weather:['4x1','2x2','4x2','4x4'], countdown:['4x1','2x2','4x2','4x4'],
+  surf:['4x1','2x2','4x2','4x4'], soccer:['4x1','2x2','4x2','4x4'], stocks:['4x1','2x2','4x2','4x4'], groceries:['4x1','2x2','4x2','4x4']
 }
 export const isSupported = (module:ModuleName, colSpan:number, rowSpan:number) => supportedGeometry[module].includes(`${colSpan}x${rowSpan}`)

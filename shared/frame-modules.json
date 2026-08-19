@@ -1,0 +1,10 @@
+[
+  { "id": "date", "label": "Date" },
+  { "id": "weather", "label": "Weather" },
+  { "id": "surf", "label": "Surf" },
+  { "id": "reminders", "label": "Reminders" },
+  { "id": "countdown", "label": "Countdown" },
+  { "id": "soccer", "label": "Football" },
+  { "id": "stocks", "label": "Stocks" },
+  { "id": "groceries", "label": "Groceries" }
+]
