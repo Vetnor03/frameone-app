@@ -61,6 +61,8 @@ test('invalid structured outcomes and invalid end ranges are rejected', async ()
   assert.equal(validateParsedReminder({ ...base, end_date: '2026-08-24' }), null)
   assert.equal(validateParsedReminder({ ...base, end_date: '2026-08-25', end_time: '13:00' }), null)
   assert.deepEqual(validateReminderParseResult(candidate({ ...base, due_date: null }, [], 'What day?')), clarify({ ...base, due_date: null }, ['due_date'], 'What day?'))
+  assert.deepEqual(validateReminderParseResult(candidate({ ...base, due_date: null }, [], ''), 'no'), clarify({ ...base, due_date: null }, ['due_date'], 'Hvilken dag?'))
+  assert.deepEqual(validateReminderParseResult(candidate({ ...base, due_date: null }, [], ' '.repeat(241)), 'en'), clarify({ ...base, due_date: null }, ['due_date'], 'Which day?'))
   assert.equal(validateReminderParseResult(candidate(base, ['due_date'], 'What day?')), null)
 })
 
@@ -111,6 +113,31 @@ test('a valid clarification candidate is successful and therefore does not becom
   assert.deepEqual(result, clarify(partial))
   const route = readFileSync(new URL('../app/api/reminders/parse/route.ts', import.meta.url), 'utf8')
   assert.match(route, /if \(!result\).*503/)
+})
+
+test('server supplies a Norwegian date question when the model omits clarification metadata', async () => {
+  const partial = { ...base, title: 'Hent Siri', due_date: null, due_time: null }
+  const result = await parseReminder(context('Hent Siri', 'no'), responseFor(candidate(partial)))
+  assert.deepEqual(result, clarify(partial, ['due_date'], 'Hvilken dag?'))
+})
+
+test('server supplies a generic Norwegian question when date and implied time are missing', async () => {
+  const partial = { ...base, title: 'Hent Siri', due_date: null, due_time: null }
+  const result = await parseReminder(context('Hent Siri etter jobb', 'no'), responseFor(candidate(partial, ['due_date', 'due_time'])))
+  assert.deepEqual(result, clarify(partial, ['due_date', 'due_time'], 'Når skal jeg minne deg på det?'))
+})
+
+test('a valid contextual model question is preserved unchanged', async () => {
+  const partial = { ...base, title: 'Hent Siri', due_date: null, due_time: null }
+  const question = 'Når er du ferdig på jobb?'
+  const result = await parseReminder(context('Hent Siri etter jobb', 'no'), responseFor(candidate(partial, ['due_date', 'due_time'], question)))
+  assert.deepEqual(result, clarify(partial, ['due_date', 'due_time'], question))
+})
+
+test('server clarification fallback follows the requested English language', async () => {
+  const partial = { ...base, title: 'Call Dad', due_date: null, due_time: null }
+  const result = await parseReminder(context('Call Dad', 'en'), responseFor(candidate(partial)))
+  assert.deepEqual(result, clarify(partial, ['due_date'], 'Which day?'))
 })
 
 test('end values round-trip while device output remains unchanged', () => {

@@ -65,7 +65,18 @@ export function validateParsedReminder(value: unknown): ParsedReminder | null {
   return { ...v, title: v.title.trim() } as ParsedReminder
 }
 
-export function validateReminderParseResult(value: unknown): ReminderParseResult | null {
+function clarificationFallback(missing: Array<typeof REMINDER_MISSING_FIELDS[number]>, language: ReminderParseContext['language']) {
+  const missingDate = missing.includes('due_date')
+  const missingTime = missing.includes('due_time')
+  if (language === 'no') {
+    if (missingDate && missingTime) return 'Når skal jeg minne deg på det?'
+    return missingDate ? 'Hvilken dag?' : 'Når på dagen?'
+  }
+  if (missingDate && missingTime) return 'When should I remind you?'
+  return missingDate ? 'Which day?' : 'What time?'
+}
+
+export function validateReminderParseResult(value: unknown, language: ReminderParseContext['language'] = 'en'): ReminderParseResult | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
   if (Object.keys(v).some((key) => !resultKeys.has(key)) || !Array.isArray(v.missing_fields)) return null
@@ -81,8 +92,9 @@ export function validateReminderParseResult(value: unknown): ReminderParseResult
     if (!reminder.due_date || v.question !== null) return null
     return { status: 'ready', reminder, partial: null, missing_fields: [], question: null }
   }
-  if (typeof v.question !== 'string' || !v.question.trim() || v.question.trim().length > 240) return null
-  return { status: 'needs_clarification', reminder: null, partial: reminder, missing_fields: missing, question: v.question.trim() }
+  const modelQuestion = typeof v.question === 'string' ? v.question.trim() : ''
+  const question = modelQuestion && modelQuestion.length <= 240 ? modelQuestion : clarificationFallback(missing, language)
+  return { status: 'needs_clarification', reminder: null, partial: reminder, missing_fields: missing, question }
 }
 
 function outputText(payload: any) {
@@ -153,7 +165,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
       logParseFailure('reminder_parse_invalid_json')
       return null
     }
-    const result = validateReminderParseResult(decoded)
+    const result = validateReminderParseResult(decoded, context.language)
     if (!result) logParseFailure('reminder_parse_invalid_result')
     return result
   } catch (error) {
