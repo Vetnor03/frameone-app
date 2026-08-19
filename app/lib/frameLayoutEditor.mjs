@@ -19,6 +19,25 @@ export function validateLayout(cells) {
   return Array.from({length: GRID_SIZE}, (_, row) => Array.from({length: GRID_SIZE}, (_, col) => cells.filter(c => col >= c.col && col < c.col + c.colSpan && row >= c.row && row < c.row + c.rowSpan).length)).flat().every(n => n === 1)
 }
 
+/** Return each internal shared edge once, merging adjacent collinear units. */
+export function internalDividerSegments(cells) {
+  if (!validateLayout(cells)) return []
+  const owner = (col, row) => cells.find(c => col >= c.col && col < c.col + c.colSpan && row >= c.row && row < c.row + c.rowSpan)?.id
+  const units = []
+  for (let boundary = 1; boundary < GRID_SIZE; boundary++) for (let row = 0; row < GRID_SIZE; row++) {
+    if (owner(boundary - 1, row) !== owner(boundary, row)) units.push({axis: 'vertical', boundary, from: row, to: row + 1})
+  }
+  for (let boundary = 1; boundary < GRID_SIZE; boundary++) for (let col = 0; col < GRID_SIZE; col++) {
+    if (owner(col, boundary - 1) !== owner(col, boundary)) units.push({axis: 'horizontal', boundary, from: col, to: col + 1})
+  }
+  return units.reduce((segments, unit) => {
+    const previous = segments.at(-1)
+    if (previous && previous.axis === unit.axis && previous.boundary === unit.boundary && previous.to === unit.from) previous.to = unit.to
+    else segments.push({...unit})
+    return segments
+  }, [])
+}
+
 export function findContainingCell(cells, point) {
   return sortCells(cells).find(c => point.x >= c.col && point.x <= c.col + c.colSpan && point.y >= c.row && point.y <= c.row + c.rowSpan)
 }
@@ -88,6 +107,9 @@ export function previewStroke(cells, stroke, viewport = {width: 785, height: 458
   if (!validateLayout(next)) return {valid: false, reason: 'The proposed partition is invalid', cells}
   return {valid: true, cells: next, parentId: parent.id, intendedId, normalized}
 }
+
+/** Synchronous pointer-up entrypoint; callers must pass the actual release point. */
+export const finalizeStroke = (cells, start, end, viewport) => previewStroke(cells, {start, end}, viewport)
 
 export const commitPreview = (cells, preview) => preview.valid ? preview.cells : cells
 export const initialLayout = () => [{id: 'cell', col: 0, row: 0, colSpan: 4, rowSpan: 4, moduleId: 'empty'}]
