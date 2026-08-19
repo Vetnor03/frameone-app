@@ -74,6 +74,8 @@ export type UserSurfExperienceRecord = {
   /** Server-only routing hint. Never persisted or returned to clients. */
   calibration_scope?: 'shared' | 'personal'
   surf_model_version?: string | null
+  comment_ai_analysis?: unknown
+  comment_ai_version?: string | null
 }
 
 
@@ -229,6 +231,8 @@ type ScoreBreakdown = {
     personalAdjustment: number
     personalConfidence: number
     personalSampleCount: number
+    aiEnrichedSampleCount: number
+    aiDriverWeightedSampleCount: number
     finalScore: number
     finalRating: number
     source: 'base_only' | 'shared_calibration' | 'personal_calibration' | 'shared_and_personal'
@@ -271,6 +275,7 @@ export const MIN_SHARED_DISTINCT_USERS = 3
 export const MIN_PERSONAL_EXPERIENCES = 3
 export const MAX_SHARED_ADJUSTMENT = 0.75
 export const MAX_PERSONAL_ADJUSTMENT = 0.75
+export const SURF_COMMENT_MIN_CONFIDENCE = 0.55
 
 // ---------------------
 // Mojibake + normalization
@@ -1605,7 +1610,7 @@ function buildExperienceBlend(args: ExperienceMatchArgs): ExperienceBlendResult 
 // ---------------------
 // MAIN
 // ---------------------
-type CalibrationSummary = { adjustment: number; confidence: number; sampleCount: number; distinctUsers: number }
+type CalibrationSummary = { adjustment: number; confidence: number; sampleCount: number; distinctUsers: number; aiEnrichedSampleCount: number; aiDriverWeightedSampleCount: number }
 
 // Weak keys keep prepared data scoped to the in-memory candidate objects/array used by a request.
 // Nothing is persisted or addressable by user id, and entries disappear when the request pool is
@@ -1689,6 +1694,8 @@ function cachedHistoricalBootstrapPrediction(record: UserSurfExperienceRecord, c
 
 function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: string; h: number; p: number; d: number; ws: number; wd: number; currentSwellCount: number; personal: boolean; now: number; sharedRecords?: UserSurfExperienceRecord[]; calibrationPool?: UserSurfExperienceRecord[]; customSpotProfile?: CustomSpotScoringProfile | null }): CalibrationSummary {
   const candidates: Array<{ residual: number; weight: number; user: string }> = []
+  let aiEnrichedSampleCount = 0
+  let aiDriverWeightedSampleCount = 0
   for (const record of args.records) {
     const c = replayableConditions(record)
     if (!c) continue
@@ -1697,10 +1704,19 @@ function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: st
     const swellDirectionSimilarity = Math.exp(-circularDistance(c.d, args.d) / 45)
     const windSpeedSimilarity = Math.exp(-Math.abs(c.ws - args.ws) / 4)
     const windDirectionSimilarity = Math.exp(-circularDistance(c.wd, args.wd) / 70)
-    let similarity = Math.pow(heightSimilarity * periodSimilarity * swellDirectionSimilarity * windSpeedSimilarity * windDirectionSimilarity, 0.2)
-    if (c.signature?.swells?.length) {
-      similarity *= 1 - Math.min(0.2, Math.abs(c.signature.swells.length - args.currentSwellCount) * 0.1)
+    const multiSwellSimilarity = c.signature?.swells?.length ? 1 - Math.min(0.2, Math.abs(c.signature.swells.length - args.currentSwellCount) * 0.1) : 1
+    const analysis = record.comment_ai_version === 'surf-comment-v1' && record.comment_ai_analysis && typeof record.comment_ai_analysis === 'object' ? record.comment_ai_analysis as any : null
+    if (analysis && Number.isFinite(analysis.confidence)) aiEnrichedSampleCount++
+    const extras: Record<string, number> = {}
+    if (analysis?.confidence >= SURF_COMMENT_MIN_CONFIDENCE && Array.isArray(analysis.drivers)) {
+      for (const driver of analysis.drivers) if (typeof driver?.dimension === 'string' && Number.isFinite(driver.strength) && driver.strength >= 0 && driver.strength <= 1) extras[driver.dimension] = Math.max(extras[driver.dimension] ?? 0, driver.strength)
     }
+    const dimensions: Array<[string, number]> = [['wave_height', heightSimilarity], ['wave_period', periodSimilarity], ['swell_direction', swellDirectionSimilarity], ['wind_speed', windSpeedSimilarity], ['wind_direction', windDirectionSimilarity], ['multi_swell', multiSwellSimilarity]]
+    const extraTotal = dimensions.reduce((sum, [name]) => sum + (extras[name] ?? 0), 0)
+    let similarity = extraTotal === 0
+      ? Math.pow(heightSimilarity * periodSimilarity * swellDirectionSimilarity * windSpeedSimilarity * windDirectionSimilarity, 0.2) * multiSwellSimilarity
+      : Math.exp(dimensions.reduce((sum, [name, value]) => sum + (1 + (extras[name] ?? 0)) * Math.log(Math.max(value, 0.000001)), 0) / dimensions.reduce((sum, [name]) => sum + 1 + (extras[name] ?? 0), 0))
+    if (extraTotal > 0) aiDriverWeightedSampleCount++
     if (similarity < 0.58) continue
     const at = Date.parse(record.logged_at ?? record.created_at ?? '')
     const ageDays = Number.isFinite(at) ? Math.max(0, args.now - at) / 86400000 : 365
@@ -1748,13 +1764,13 @@ function calibrationFor(args: { records: UserSurfExperienceRecord[]; spotKey: st
   }
   const distinctUsers = new Set(candidates.map((x) => x.user)).size
   const minimum = args.personal ? MIN_PERSONAL_EXPERIENCES : MIN_SHARED_EXPERIENCES
-  if (candidates.length < minimum || (!args.personal && distinctUsers < MIN_SHARED_DISTINCT_USERS)) return { adjustment: 0, confidence: 0, sampleCount: candidates.length, distinctUsers }
+  if (candidates.length < minimum || (!args.personal && distinctUsers < MIN_SHARED_DISTINCT_USERS)) return { adjustment: 0, confidence: 0, sampleCount: candidates.length, distinctUsers, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
   const total = candidates.reduce((s, x) => s + x.weight, 0)
   const raw = candidates.reduce((s, x) => s + x.residual * x.weight, 0) / total
   const confidence = clamp((total / (args.personal ? 3 : 8)) * (args.personal ? 1 : distinctUsers / 3), 0, 1)
-  if (confidence < 0.35) return { adjustment: 0, confidence, sampleCount: candidates.length, distinctUsers }
+  if (confidence < 0.35) return { adjustment: 0, confidence, sampleCount: candidates.length, distinctUsers, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
   const cap = args.personal ? MAX_PERSONAL_ADJUSTMENT : MAX_SHARED_ADJUSTMENT
-  return { adjustment: clamp(raw * confidence, -cap, cap), confidence, sampleCount: candidates.length, distinctUsers }
+  return { adjustment: clamp(raw * confidence, -cap, cap), confidence, sampleCount: candidates.length, distinctUsers, aiEnrichedSampleCount, aiDriverWeightedSampleCount }
 }
 
 export function scoreSurf(params: {
@@ -1909,6 +1925,8 @@ export function scoreSurf(params: {
         sharedSampleCount: shared!.sampleCount, sharedDistinctUsers: shared!.distinctUsers,
         personalAdjustment: personal!.adjustment, personalConfidence: personal!.confidence,
         personalSampleCount: personal!.sampleCount, finalScore: calibratedScoreFloat, finalRating,
+        aiEnrichedSampleCount: shared!.aiEnrichedSampleCount + personal!.aiEnrichedSampleCount,
+        aiDriverWeightedSampleCount: shared!.aiDriverWeightedSampleCount + personal!.aiDriverWeightedSampleCount,
         source: calibrationSource,
       } : undefined,
       custom_spot_scoring_profile: customSpotProfileForBreakdown(params.customSpotProfile),

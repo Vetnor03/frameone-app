@@ -5,6 +5,7 @@ import { findSpotByLabel, SURF_SPOTS } from '@/app/lib/surf/spots'
 import { correctedHeightForSwellSelection, pickBestSwell, selectedSwellFromPick } from '@/app/lib/surf/swellSelection'
 import { fetchOpenMeteoJson } from '@/app/lib/server/openMeteo'
 import { SURF_MODEL_VERSION } from '@/app/lib/surfScoring'
+import { analyzeSurfComment, SURF_COMMENT_ANALYSIS_VERSION, SURF_COMMENT_MAX_LENGTH } from '@/app/lib/surf/commentAnalysis'
 
 export const runtime = 'nodejs'
 
@@ -221,6 +222,7 @@ export async function POST(req: Request) {
       rating_1_6,
       mode = 'detect',
       existingId = null,
+      comment: rawComment = null,
     } = body || {}
 
     if (!spotId || !spot || !loggedAt || !rating_1_6) {
@@ -231,6 +233,9 @@ export async function POST(req: Request) {
     if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 6) {
       return NextResponse.json({ error: 'rating_1_6 must be between 1 and 6' }, { status: 400 })
     }
+    if (rawComment != null && typeof rawComment !== 'string') return NextResponse.json({ error: 'comment must be text' }, { status: 400 })
+    const comment = String(rawComment ?? '').trim() || null
+    if (comment && comment.length > SURF_COMMENT_MAX_LENGTH) return NextResponse.json({ error: `comment must be ${SURF_COMMENT_MAX_LENGTH} characters or fewer` }, { status: 400 })
 
     let lat: number | null = null
     let lon: number | null = null
@@ -298,8 +303,29 @@ export async function POST(req: Request) {
 
     const marine = await fetchMarineAtTime(lat, lon, loggedAt, resolvedSpotLabel)
 
+    const analyzeAndStore = async (experienceId: string) => {
+      if (!comment) return
+      const result = await analyzeSurfComment({
+        comment,
+        spot: { id: resolvedSpotId!, name: resolvedSpotLabel! },
+        conditions: {
+          wave_height_m: marine.wave_height, wave_period_s: marine.wave_period,
+          swell_direction_deg_from: marine.wave_direction,
+          wind_speed_ms: marine.wind_speed_10m, wind_direction_deg_from: marine.wind_direction_10m,
+          swells: marine.debug.condition_signature.swells,
+        },
+      })
+      if (!result) return
+      await supabaseAdmin.from('user_surf_experiences').update({
+        comment_ai_analysis: result.analysis, comment_ai_version: SURF_COMMENT_ANALYSIS_VERSION,
+        comment_ai_model: result.model, comment_ai_processed_at: new Date().toISOString(),
+      }).eq('id', experienceId).eq('user_id', user.id)
+    }
+
     if (mode === 'update_existing' && existingId) {
-      const { error } = await supabaseAdmin
+      const { data: previous } = await supabaseAdmin.from('user_surf_experiences').select('comment').eq('id', existingId).eq('user_id', user.id).maybeSingle()
+      const commentChanged = (previous?.comment ?? null) !== comment
+      const { data: updated, error } = await supabaseAdmin
         .from('user_surf_experiences')
         .update({
           spot_id: resolvedSpotId,
@@ -321,11 +347,17 @@ export async function POST(req: Request) {
           forecast_time_utc: marine.time,
           rating_1_6: ratingNum,
           surf_model_version: SURF_MODEL_VERSION,
+          comment,
+          ...(commentChanged ? { comment_ai_analysis: null, comment_ai_version: null, comment_ai_model: null, comment_ai_processed_at: null } : {}),
         })
         .eq('id', existingId)
         .eq('user_id', user.id)
+        .select('id')
+        .maybeSingle()
 
       if (error) throw error
+      if (!updated) return NextResponse.json({ error: 'Experience not found' }, { status: 404 })
+      if (commentChanged && comment) await analyzeAndStore(updated.id)
 
       return NextResponse.json({
         ok: true,
@@ -349,12 +381,13 @@ export async function POST(req: Request) {
           condition_signature: marine.debug.condition_signature,
           forecast_time_utc: marine.time,
           rating_1_6: ratingNum,
+          comment,
         },
         debug: marine.debug,
       })
     }
 
-    const { error } = await supabaseAdmin
+    const { data: inserted, error } = await supabaseAdmin
       .from('user_surf_experiences')
       .insert({
         user_id: user.id,
@@ -377,9 +410,13 @@ export async function POST(req: Request) {
         forecast_time_utc: marine.time,
         rating_1_6: ratingNum,
         surf_model_version: SURF_MODEL_VERSION,
+        comment,
       })
+      .select('id')
+      .single()
 
     if (error) throw error
+    await analyzeAndStore(inserted.id)
 
     return NextResponse.json({
       ok: true,
@@ -403,6 +440,7 @@ export async function POST(req: Request) {
         condition_signature: marine.debug.condition_signature,
         forecast_time_utc: marine.time,
         rating_1_6: ratingNum,
+        comment,
       },
       debug: marine.debug,
     })
