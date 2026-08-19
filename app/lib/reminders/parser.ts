@@ -31,14 +31,26 @@ export type ReminderParseContext = {
   clarificationAnswer?: string
 }
 
-function mergeExistingReminder(existing: ParsedReminder | undefined, candidate: unknown, preserveTitle: boolean) {
+function normalizedClarificationText(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/[.,!?]+$/g, '').replace(/\s+/g, ' ')
+}
+
+function isScheduleOnlyClarification(value: string) {
+  return /^(?:(?:kl(?:okken)?\.?\s*)?(?:[01]?\d|2[0-3])(?::[0-5]\d)?(?:\s+i kveld)?|(?:seks|seven|sju|åtte|ni|ti|elleve|tolv)(?:\s+i kveld)?|(?:i dag|today|i morgen|tomorrow)|(?:mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{4}-\d{2}-\d{2})$/i.test(value)
+}
+
+function mergeExistingReminder(existing: ParsedReminder | undefined, candidate: unknown, clarificationAnswer?: string) {
   if (!existing || !candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate
   const next = candidate as Record<string, unknown>
+  const candidateTitle = typeof next.title === 'string' ? normalizedClarificationText(next.title) : ''
+  const answer = clarificationAnswer ? normalizedClarificationText(clarificationAnswer) : ''
+  const titleWasReplacedByAnswer = Boolean(answer && candidateTitle === answer && isScheduleOnlyClarification(answer))
   // Structured context is authoritative until the user/model supplies a new value.
-  // In particular, a time-only clarification must not turn known fields back into null.
+  // A normalized semantic title may legitimately change after a clarification. Only
+  // restore it when the model has clearly mistaken the clarification answer for the title.
   return Object.fromEntries(Object.keys(next).map((key) => [
     key,
-    (preserveTitle && key === 'title') || ((next[key] === null || next[key] === undefined) && existing[key as keyof ParsedReminder] != null)
+    (titleWasReplacedByAnswer && key === 'title') || ((next[key] === null || next[key] === undefined) && existing[key as keyof ParsedReminder] != null)
       ? existing[key as keyof ParsedReminder]
       : next[key],
   ]))
@@ -187,7 +199,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     }
     if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
       const output = decoded as Record<string, unknown>
-      output.reminder = mergeExistingReminder(context.partial, output.reminder, Boolean(context.clarificationQuestion))
+      output.reminder = mergeExistingReminder(context.partial, output.reminder, context.clarificationAnswer)
       if (output.reminder && typeof output.reminder === 'object' && !Array.isArray(output.reminder)) {
         const reminder = output.reminder as Record<string, unknown>
         if (reminder.due_date != null && Array.isArray(output.missing_fields)) {

@@ -65,6 +65,26 @@ test('selected date survives a title followed by a time-only clarification', asy
   assert.deepEqual(await parseReminder(ctx, responseFor(candidate(modelCandidate))), ready({ ...partial, due_time: '18:00' }))
 })
 
+test('time clarification allows a legitimately normalized title while preserving the selected date', async () => {
+  const partial = { ...base, title: 'Besøk farmor i kveld', due_date: '2026-08-22', due_time: null }
+  const ctx = { ...context('Besøk farmor i kveld', 'no'), partial, clarificationQuestion: 'Når på kvelden?', clarificationAnswer: '18:00' }
+  const normalized = { ...partial, title: 'Besøk farmor', due_date: null, due_time: '18:00' }
+  assert.deepEqual(
+    await parseReminder(ctx, responseFor(candidate(normalized))),
+    ready({ ...normalized, due_date: '2026-08-22' }),
+  )
+})
+
+test('time clarification rejects the answer as a replacement title while preserving the selected date', async () => {
+  const partial = { ...base, title: 'Besøk farmor', due_date: '2026-08-22', due_time: null }
+  const ctx = { ...context('Besøk farmor', 'no'), partial, clarificationQuestion: 'Når på dagen?', clarificationAnswer: '18:00' }
+  const badCandidate = { ...partial, title: '18:00', due_date: null, due_time: '18:00' }
+  assert.deepEqual(
+    await parseReminder(ctx, responseFor(candidate(badCandidate))),
+    ready({ ...partial, due_time: '18:00' }),
+  )
+})
+
 test('selected date is structured context when the original title includes a time', async () => {
   const partial = { ...base, title: 'Besøk farmor kl. 18', due_date: '2026-08-22', due_time: null }
   const reminder = { ...partial, title: 'Besøk farmor', due_time: '18:00' }
