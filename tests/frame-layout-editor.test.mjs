@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {chooseNearestEdge,createHistory,detectOrientation,finalizeStroke,findDividerNearPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeDivider,previewStroke,pushHistory,redoHistory,snapBoundary,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,finalizeStroke,findDividerNearPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,previewStroke,pushHistory,redoHistory,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -26,4 +26,38 @@ test('merge assignment rules preserve one or matching values and reject conflict
 test('merge is one history operation and undo restores exact IDs and assignments',()=>{const before=[{id:'exact-left',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'weather'},{id:'exact-right',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'empty'}],merged=mergeCells(before,'exact-left','exact-right');assert.equal(merged.valid,true);assert.equal(merged.cells[0].id,'merged:exact-left+exact-right');const history=pushHistory(createHistory(before),merged.cells);assert.deepEqual(undoHistory(history).present,before);assert.deepEqual(redoHistory(undoHistory(history)).present,merged.cells)})
 test('split then targeted divider merge returns the original geometry',()=>{const before=initialLayout(),after=split(before,stroke(200,0,200,400)).cells,hit=findDividerNearPointer(after,{x:200,y:200},viewport),merged=mergeDivider(after,hit);assert.equal(merged.valid,true);assert.deepEqual(geometry(merged.cells),geometry(before));assertPartition(merged.cells)})
 test('divider hit testing targets the compatible pair at the pointed segment',()=>{const cells=[{id:'l1',col:0,row:0,colSpan:2,rowSpan:1,moduleId:'empty'},{id:'r1',col:2,row:0,colSpan:2,rowSpan:1,moduleId:'empty'},{id:'l2',col:0,row:1,colSpan:2,rowSpan:3,moduleId:'empty'},{id:'r2',col:2,row:1,colSpan:2,rowSpan:3,moduleId:'empty'}];const upper=findDividerNearPointer(cells,{x:202,y:40},viewport),lower=findDividerNearPointer(cells,{x:198,y:250},viewport);assert.deepEqual(upper.cellIds,['l1','r1']);assert.deepEqual({from:upper.from,to:upper.to},{from:0,to:1});assert.deepEqual(lower.cellIds,['l2','r2']);assert.deepEqual({from:lower.from,to:lower.to},{from:1,to:4});assert.equal(findDividerNearPointer(cells,{x:230,y:40},viewport),undefined)})
-test('registry mirrors every firmware dispatch and drives the picker',async()=>{const registry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8')),renderer=await readFile(new URL('../frame/src/modules/ModuleRenderer.cpp',import.meta.url),'utf8'),simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8');const expected=['date','weather','surf','reminders','countdown','soccer','stocks','groceries'];assert.deepEqual(registry.map(x=>x.id),expected);for(const id of expected)assert.match(renderer,new RegExp(`(?:equalsIgnoreCase|startsWith)\\(\"${id}`));assert.match(simulator,/frameModuleRegistry\.map/);assert.doesNotMatch(simulator,/const modules\s*=/);assert.doesNotMatch(simulator,/committed\.forEach\(c=>ctx\.strokeRect/);assert.match(simulator,/ox\.strokeRect/);assert.match(simulator,/merged\.valid\)\{setHistory\([^}]+setSelected\(null\);setHoveredDivider\(null\)/);assert.match(simulator,/const beginCustom=\(\)=>\{[^}]+setMode\('draw'\);setHoveredDivider\(null\);setStroke\(null\);setSelected\(null\);setFeedback\(''\)/);for(const id of expected)assert.match(simulator,new RegExp(`${id}`))})
+test('registry mirrors every firmware dispatch and drives the picker',async()=>{const registry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8')),renderer=await readFile(new URL('../frame/src/modules/ModuleRenderer.cpp',import.meta.url),'utf8'),simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8');const expected=['date','weather','surf','reminders','countdown','soccer','stocks','groceries'];assert.deepEqual(registry.map(x=>x.id),expected);for(const id of expected)assert.match(renderer,new RegExp(`(?:equalsIgnoreCase|startsWith)\\(\"${id}`));assert.match(simulator,/frameModuleRegistry\.map/);assert.doesNotMatch(simulator,/const modules\s*=/);assert.doesNotMatch(simulator,/committed\.forEach\(c=>ctx\.strokeRect/);assert.match(simulator,/ox\.strokeRect/);assert.match(simulator,/mergeCellsInSelection/);assert.doesNotMatch(simulator,/EditMode|setMode|>Draw<|>Erase</);for(const id of expected)assert.match(simulator,new RegExp(`${id}`))})
+
+
+test('tap split chooses vertical, horizontal, and vertical on an exact tie',()=>{
+  const full=initialLayout()
+  let result=splitCellNearPointer(full,{x:205,y:130},viewport)
+  assert.equal(result.valid,true);assert.deepEqual(result.guide,{axis:'vertical',boundary:2,distance:5});assert.equal(result.cells.length,2);assertPartition(result.cells)
+  result=splitCellNearPointer(full,{x:40,y:295},viewport)
+  assert.equal(result.valid,true);assert.equal(result.guide.axis,'horizontal');assert.equal(result.guide.boundary,3)
+  assert.deepEqual(nearestValidSplitGuide(full[0],{x:200,y:200},viewport),{axis:'vertical',boundary:2,distance:0})
+})
+test('complete-cell split preserves assignment on largest and deterministic top-left tie',()=>{
+  const assigned=[{...initialLayout()[0],moduleId:'weather'}]
+  let result=splitCellAtBoundary(assigned,'cell',{axis:'vertical',boundary:1});assert.equal(result.cells.find(c=>c.moduleId==='weather').col,1)
+  result=splitCellAtBoundary(assigned,'cell',{axis:'horizontal',boundary:2});assert.deepEqual({row:result.cells.find(c=>c.moduleId==='weather').row,moduleId:result.cells.find(c=>c.moduleId==='weather').moduleId},{row:0,moduleId:'weather'})
+})
+test('drag snapping and merging two and three-plus cells',()=>{
+  assert.deepEqual(snapDragSelection({x:5,y:5},{x:395,y:205},viewport),{col:0,row:0,colSpan:4,rowSpan:2})
+  const two=[{id:'a',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'empty'},{id:'b',col:2,row:0,colSpan:2,rowSpan:4,moduleId:'date'}]
+  let result=mergeCellsInSelection(two,{col:0,row:0,colSpan:4,rowSpan:4});assert.equal(result.valid,true);assert.equal(result.cells[0].moduleId,'date');assertPartition(result.cells)
+  const four=[{id:'a',col:0,row:0,colSpan:1,rowSpan:4,moduleId:'surf'},{id:'b',col:1,row:0,colSpan:1,rowSpan:4,moduleId:'surf'},{id:'c',col:2,row:0,colSpan:1,rowSpan:4,moduleId:'empty'},{id:'d',col:3,row:0,colSpan:1,rowSpan:4,moduleId:'empty'}]
+  result=mergeCellsInSelection(four,{col:0,row:0,colSpan:3,rowSpan:4});assert.equal(result.valid,true);assert.equal(result.cells.find(c=>c.col===0).moduleId,'surf');assertPartition(result.cells)
+})
+test('drag rejects gaps, partial cells, L unions, and conflicting assignments',()=>{
+  const quadrants=[{id:'a',col:0,row:0,colSpan:2,rowSpan:2,moduleId:'weather'},{id:'b',col:2,row:0,colSpan:2,rowSpan:2,moduleId:'date'},{id:'c',col:0,row:2,colSpan:2,rowSpan:2,moduleId:'empty'},{id:'d',col:2,row:2,colSpan:2,rowSpan:2,moduleId:'empty'}]
+  assert.equal(mergeCellsInSelection(quadrants,{col:0,row:0,colSpan:4,rowSpan:2}).valid,false)
+  assert.equal(mergeCellsInSelection(quadrants,{col:0,row:0,colSpan:3,rowSpan:2}).valid,false)
+  const lSelection={col:0,row:0,colSpan:4,rowSpan:4},lCells=quadrants.filter(c=>c.id!=='d');assert.equal(selectionIsExactlyTiled(lCells,lSelection),false);assert.equal(mergeCellsInSelection(lCells,lSelection).valid,false)
+  const safe=quadrants.map(c=>({...c,moduleId:'empty'}));assert.deepEqual(cellsFullyContainedInSelection(safe,{col:0,row:0,colSpan:4,rowSpan:2}).map(c=>c.id),['a','b'])
+})
+test('mode-less simulator uses authoritative full overlay grid',async()=>{
+  const simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  assert.doesNotMatch(simulator,/EditMode|setMode|>Draw<|>Erase</)
+  assert.match(simulator,/for\(let boundary=1;boundary<4;boundary\+\+\)\{line\(ctx,gridX\(boundary\),gridY\(0\),gridX\(boundary\),gridY\(4\)\);line\(ctx,gridX\(0\),gridY\(boundary\),gridX\(4\),gridY\(boundary\)\)\}/)
+})
