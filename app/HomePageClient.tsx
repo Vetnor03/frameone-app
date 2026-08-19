@@ -15353,6 +15353,7 @@ function SurfExperienceEditor({
   const [spotId, setSpotId] = useState('')
 
   const [feeling, setFeeling] = useState<FeelingChoice | null>(null)
+  const [experienceComment, setExperienceComment] = useState('')
   const [selectedAt, setSelectedAt] = useState<Date>(() => roundToNearest5Min(new Date()))
   const [dateYmd, setDateYmd] = useState<string>(() => toDateInputValue(roundToNearest5Min(new Date())))
   const [timeHm, setTimeHm] = useState<string>(() => {
@@ -15400,6 +15401,7 @@ function SurfExperienceEditor({
         setSpotLabel(language === 'no' ? 'Velg spot' : 'Select spot')
         setSpotId('')
         setFeeling(null)
+        setExperienceComment('')
         setSelectedAt(now)
         setDateYmd(toDateInputValue(now))
         setTimeHm(`${pad2(now.getHours())}:${pad2(now.getMinutes())}`)
@@ -15419,7 +15421,7 @@ function SurfExperienceEditor({
 
         const { data, error } = await supabase
           .from('user_surf_experiences')
-          .select('id, spot_id, spot, logged_at, rating_1_6')
+          .select('id, spot_id, spot, logged_at, rating_1_6, comment')
           .eq('id', experienceId)
           .eq('user_id', userId)
           .maybeSingle()
@@ -15433,6 +15435,7 @@ function SurfExperienceEditor({
         setSpotLabel(String(data.spot || (language === 'no' ? 'Velg spot' : 'Select spot')))
         setSpotId(String(data.spot_id || ''))
         setFeeling(ratingToFeelingChoice(data.rating_1_6))
+        setExperienceComment(String(data.comment || ''))
         setSelectedAt(dt)
         setDateYmd(toDateInputValue(dt))
         setTimeHm(`${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`)
@@ -15488,6 +15491,7 @@ function SurfExperienceEditor({
           rating_1_6,
           mode: effectiveMode,
           existingId: effectiveId,
+          comment: experienceComment,
         }),
       })
 
@@ -15614,6 +15618,22 @@ function SurfExperienceEditor({
                   )
                 })}
               </div>
+            </div>
+
+            <div className="mt-4">
+              <label htmlFor="surf-experience-comment" className="tracking-widest text-xs text-[color:var(--fg-50)]">
+                {language === 'no' ? 'KOMMENTAR (VALGFRITT)' : 'COMMENT (OPTIONAL)'}
+              </label>
+              <textarea
+                id="surf-experience-comment"
+                value={experienceComment}
+                onChange={(event) => setExperienceComment(event.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder={language === 'no' ? 'Noe scoren ikke fanget opp? Vind, størrelse, kvalitet…' : "Anything the score didn't capture? Wind, size, quality…"}
+                className="mt-2 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 py-3 text-sm text-[color:var(--fg-90)] placeholder:text-[color:var(--fg-40)]"
+              />
+              <div className="mt-1 text-right text-xs text-[color:var(--fg-40)]">{experienceComment.length}/500</div>
             </div>
 
             <div className="mt-4 space-y-2">

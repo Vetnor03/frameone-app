@@ -834,7 +834,7 @@ async function appendSharedCalibrationRows(args: { out: UserExpMap; ids: string[
     wind_dir_from_deg,wind_speed_ms,rating_1_6,primary_swell_height_m,primary_swell_period_s,
     primary_swell_dir_from_deg,secondary_swell_height_m,secondary_swell_period_s,
     secondary_swell_dir_from_deg,third_swell_height_m,third_swell_period_s,
-    third_swell_dir_from_deg,tide_m,forecast_time_utc,selected_swell_index,condition_signature,
+    third_swell_dir_from_deg,tide_m,forecast_time_utc,selected_swell_index,condition_signature,comment_ai_analysis,comment_ai_version,
     surf_model_version,created_at,updated_at
   `).or(`spot_id.in.(${args.ids.join(',')}),spot.in.(${args.ids.join(',')})`)
     .neq('user_id', args.ownerUserId).order('logged_at', { ascending: false }).limit(SURF_CALIBRATION_CANDIDATE_LIMIT)
@@ -964,6 +964,8 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
         forecast_time_utc,
         selected_swell_index,
         condition_signature,
+        comment_ai_analysis,
+        comment_ai_version,
         created_at,
         updated_at
       `)
@@ -1014,6 +1016,8 @@ async function fetchUserExperiencesBySpotIds(req: Request, spotIds: string[]): P
       forecast_time_utc,
       selected_swell_index,
       condition_signature,
+      comment_ai_analysis,
+      comment_ai_version,
       created_at,
       updated_at
     `)
