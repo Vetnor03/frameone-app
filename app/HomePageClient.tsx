@@ -4309,7 +4309,7 @@ function MirrorMediumDateCard({
 
         <div
           className="flex min-h-[clamp(1.28rem,3.05vw,1.9rem)] shrink-0 items-center justify-center px-[clamp(0.3rem,0.86vw,0.56rem)] py-[clamp(0.28rem,0.72vw,0.5rem)] text-[clamp(0.55rem,1.32vw,0.82rem)] font-bold tracking-[0.18em]"
-          style={{ backgroundColor: textColor, color: frameBackground }}
+          style={{ backgroundColor: '#ffffff', color: '#000000' }}
         >
           <span className="max-w-full truncate">{dateParts.weekday}</span>
         </div>
@@ -5502,7 +5502,7 @@ function MirrorMediumRemindersCard({
       </div>
 
       {showBottomBadge && (
-        <div className="absolute bottom-[clamp(1.05rem,2.55vw,1.55rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.5rem,1.08vw,0.72rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: frameBackground, color: textColor }} title={badgeLabel}>
+        <div className="absolute bottom-[clamp(1.05rem,2.55vw,1.55rem)] left-1/2 max-w-[72%] -translate-x-1/2 truncate px-[clamp(0.55rem,1.35vw,0.88rem)] py-[clamp(0.32rem,0.8vw,0.5rem)] text-[clamp(0.5rem,1.08vw,0.72rem)] font-semibold tracking-[0.045em]" style={{ backgroundColor: '#ffffff', color: '#000000' }} title={badgeLabel}>
           {badgeLabel}
         </div>
       )}

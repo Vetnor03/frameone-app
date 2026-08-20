@@ -14,6 +14,9 @@ export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
 export type CalendarRowMode = 'date' | 'dateLarge' | 'remindersLarge' | 'remindersXL' | 'countdown'
 export const frameLayouts = spec
 export { profiles as moduleProfiles }
+export function visualContractFor(module: ModuleName, size: CellSize) {
+  return profiles[module][size.toLowerCase() as 'small'|'medium'|'large'|'xl']
+}
 export const frameModuleRegistry = registry as {id:ModuleName;label:string}[]
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
 export const gridY = (row:number) => VIEWPORT.y + Math.trunc(VIEWPORT.height * row / GRID_SIZE)
