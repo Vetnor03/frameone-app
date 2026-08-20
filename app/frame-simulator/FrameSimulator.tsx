@@ -57,7 +57,7 @@ function drawResponsiveReminders(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   const drawItem=(item:ReminderItem,x:number,y:number,w:number,h:number)=>{
     const timeW=composition.showTime&&item.time?Math.min(46,w*.28):0,gap=timeW?7:0,font=p.density==='micro'?'bold 13px sans-serif':'14px sans-serif'
     ctx.font=font;ctx.textAlign='left';if(timeW&&item.time)ctx.fillText(item.time,x,y+15)
-    const selected=chooseReminderTextVariant(item.text,Math.max(1,w-timeW-gap),value=>ctx.measureText(value).width)
+    const selected=chooseReminderTextVariant(item,Math.max(1,w-timeW-gap),value=>ctx.measureText(value).width)
     ctx.save();ctx.beginPath();ctx.rect(x+timeW+gap,y,w-timeW-gap,h);ctx.clip();ctx.fillText(selected.text,x+timeW+gap,y+15);ctx.restore()
     return selected.variant as ReminderTextVariant
   }

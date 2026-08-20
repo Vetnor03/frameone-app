@@ -63,14 +63,29 @@ test('all modules expose distinct responsive behavior contracts', () => {
 })
 
 test('reminder wording uses the longest measured variant that fits, then fallback', () => {
-  const text={full:'a very long full version',compact:'compact wording',short:'short copy',tiny:'tiny'}
+  const item={time:'14:30',text:{full:'a very long full version',compact:'compact wording',short:'short copy',tiny:'tiny'},protectedFacts:[]}
   const measure=value=>value.length*10
-  assert.equal(chooseReminderTextVariant(text,250,measure).variant,'full')
-  assert.equal(chooseReminderTextVariant(text,160,measure).variant,'compact')
-  assert.equal(chooseReminderTextVariant(text,105,measure).variant,'short')
-  assert.equal(chooseReminderTextVariant(text,45,measure).variant,'tiny')
-  assert.equal(chooseReminderTextVariant(text,25,measure).variant,'fallback')
+  assert.equal(chooseReminderTextVariant(item,250,measure).variant,'full')
+  assert.equal(chooseReminderTextVariant(item,160,measure).variant,'compact')
+  assert.equal(chooseReminderTextVariant(item,105,measure).variant,'short')
+  assert.equal(chooseReminderTextVariant(item,45,measure).variant,'tiny')
+  assert.equal(chooseReminderTextVariant(item,25,measure).variant,'fallback')
   assert.deepEqual(REMINDER_TEXT_ORDER,['full','compact','short','tiny'])
+})
+
+test('protected IDs are atomic during deterministic fallback', () => {
+  const item={time:'09:00',text:{full:'Project status for IMR 26-050',compact:'Status for IMR 26-050',short:'IMR 26-050',tiny:'IMR 26-050'},protectedFacts:[{value:'IMR 26-050',kind:'id',optionalInTitle:true}]}
+  const measure=value=>value.length
+  assert.equal(chooseReminderTextVariant(item,11,measure).text,'IMR 26-050')
+  assert.equal(chooseReminderTextVariant(item,8,measure).text,'')
+  for(const width of [1,5,8,9])assert.doesNotMatch(chooseReminderTextVariant(item,width,measure).text,/IMR 26(?:-|$)/)
+})
+
+test('time is structured and optional location can be omitted at low density', () => {
+  const dentist=reminderStudioPresets.normal.today[0]
+  assert.equal(dentist.time,'14:30');assert.ok(dentist.protectedFacts.some(fact=>fact.value==='Madla'&&fact.optionalInTitle))
+  assert.equal(dentist.text.tiny,'Dentist');assert.doesNotMatch(dentist.text.tiny,/Madla/)
+  assert.equal(chooseReminderTextVariant(dentist,8,value=>value.length).text,'Dentist')
 })
 
 test('deterministic reminder states cover empty, normal, long and extreme content', () => {
