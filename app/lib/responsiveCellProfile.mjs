@@ -14,6 +14,8 @@ export function responsiveCellProfile(colSpan, rowSpan, width, height) {
   if (!(width > 0) || !(height > 0)) throw new RangeError('Responsive cells need positive pixel dimensions')
   const aspectRatio = width / height
   const area = colSpan * rowSpan
+  // Responsive module variants inherit the visual grammar of their handmade anchor renderers.
+  // Responsive behavior changes composition and information density, not module identity.
   // Studio composition follows the physical region, not the logical grid shape.
   const orientation = aspectRatio > 1.12 ? 'landscape' : aspectRatio < .88 ? 'portrait' : 'square'
   const density = area <= 2 ? 'micro' : area <= 4 ? 'compact' : area <= 8 ? 'normal' : 'expanded'

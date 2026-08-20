@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRenderStrategy } from '../app/lib/responsiveCellProfile.mjs'
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
-import { weatherComposition, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
+import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
   for (let colSpan=1;colSpan<=4;colSpan++) for (let rowSpan=1;rowSpan<=4;rowSpan++) {
@@ -78,6 +78,37 @@ test('missing optional Weather values create no empty disclosure regions', () =>
   const state={location:'Oslo',condition:'Clear',temperature:'9°'}
   const composition=weatherComposition(responsiveCellProfile(4,3,785,343),state)
   assert.equal(composition.showRange,false);assert.equal(composition.showWind,false);assert.equal(composition.showPrecipitation,false);assert.equal(composition.showInsight,false);assert.equal(composition.forecastRows,0)
+})
+
+test('Weather progressively discloses content without enabling shallow forecasts', () => {
+  const small=weatherComposition(responsiveCellProfile(1,1,196,114),weatherStudioPresets.extreme)
+  const medium=weatherComposition(responsiveCellProfile(3,2,588,229),weatherStudioPresets.extreme)
+  const large=weatherComposition(responsiveCellProfile(4,3,785,343),weatherStudioPresets.extreme)
+  const disclosed=value=>['showLocation','showCondition','showTemperature','showRange','showWind','showPrecipitation','showInsight'].filter(key=>value[key]).length+value.forecastRows
+  assert.ok(disclosed(small)<disclosed(medium));assert.ok(disclosed(medium)<disclosed(large))
+  assert.equal(small.showCondition,false);assert.equal(medium.forecastRows,0);assert.equal(large.forecastRows,4)
+})
+
+test('forecast-enabled Weather layouts reserve valid, disjoint regions', () => {
+  for(const [colSpan,rowSpan] of [[2,4],[3,3],[3,4],[4,3]]){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114)
+    const composition=weatherComposition(profile,weatherStudioPresets.extreme)
+    const layout=weatherLayout(profile,composition)
+    assert.ok(layout.forecastRect);assert.ok(layout.dividerY>0)
+    assert.ok(layout.primaryRect.y+layout.primaryRect.height<=layout.dividerY)
+    if(layout.detailsRect)assert.ok(layout.detailsRect.y+layout.detailsRect.height<=layout.dividerY)
+    assert.ok(layout.dividerY<layout.forecastRect.y)
+    for(const rect of [layout.headerRect,layout.primaryRect,layout.detailsRect,layout.forecastRect].filter(Boolean)){
+      assert.ok(rect.width>0&&rect.height>0);assert.ok(rect.x>=0&&rect.y>=0)
+      assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)
+    }
+  }
+})
+
+test('Weather fitting uses Canvas measurement rather than title character counts', async () => {
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const responsive=source.slice(source.indexOf('function fitWeatherText'),source.indexOf('function weatherColumn'))
+  assert.match(responsive,/measureText/);assert.doesNotMatch(responsive,/location\.length|condition\.length/)
 })
 
 test('all modules expose distinct responsive behavior contracts', () => {
