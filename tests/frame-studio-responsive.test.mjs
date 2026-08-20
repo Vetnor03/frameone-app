@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRenderStrategy } from '../app/lib/responsiveCellProfile.mjs'
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
-import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
+import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderComposition, reminderLayout, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
@@ -166,6 +166,62 @@ test('deterministic reminder states cover empty, normal, long and extreme conten
   assert.deepEqual(Object.keys(reminderStudioPresets),['empty','normal','long','extreme'])
   assert.equal(reminderStudioPresets.empty.today.length,0);assert.ok(reminderStudioPresets.normal.today.length>=3)
   assert.ok(reminderStudioPresets.long.tomorrow.length);assert.ok(reminderStudioPresets.extreme.today.length>reminderStudioPresets.normal.today.length)
+})
+
+test('Reminders progressively discloses sections and calm item counts', () => {
+  const smallProfile=responsiveCellProfile(1,1,196,114),largeProfile=responsiveCellProfile(4,3,785,343)
+  const small=reminderComposition(smallProfile,reminderStudioPresets.extreme)
+  const large=reminderComposition(largeProfile,reminderStudioPresets.extreme)
+  assert.equal(small.direction,'horizontal');assert.equal(small.showTomorrow,false);assert.equal(small.todayItems,1)
+  assert.equal(large.direction,'vertical');assert.equal(large.showTomorrow,true);assert.ok(large.maxItems>small.maxItems)
+  assert.ok(large.todayItems>0);assert.ok(large.tomorrowItems>0);assert.ok(large.maxItems<=6)
+})
+
+test('Reminders vertical layout reserves disjoint sections and footer before rows', () => {
+  for(const [colSpan,rowSpan] of [[2,4],[3,3],[3,4],[4,3]]){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114)
+    const composition=reminderComposition(profile,reminderStudioPresets.extreme),layout=reminderLayout(profile,composition)
+    assert.ok(layout.todayRect);assert.ok(layout.tomorrowRect);assert.ok(layout.footerRect)
+    assert.ok(layout.todayRect.y+layout.todayRect.height<=layout.tomorrowRect.y)
+    assert.ok(layout.tomorrowRect.y+layout.tomorrowRect.height<=layout.footerRect.y)
+    for(const item of layout.items){
+      assert.ok(item.itemRect.y+item.itemRect.height<=layout.footerRect.y)
+      assert.ok(item.timeRect.x+item.timeRect.width<=item.titleRect.x||item.timeRect.y+item.timeRect.height<=item.titleRect.y)
+    }
+  }
+})
+
+test('Reminders horizontal items, time, title, and overflow own disjoint regions', () => {
+  for(const colSpan of [1,2,3]){
+    const profile=responsiveCellProfile(colSpan,1,colSpan*196,114)
+    const composition=reminderComposition(profile,reminderStudioPresets.extreme),layout=reminderLayout(profile,composition)
+    assert.equal(composition.showTomorrow,false);assert.ok(layout.footerRect)
+    for(let index=1;index<layout.items.length;index++)assert.ok(layout.items[index-1].itemRect.x+layout.items[index-1].itemRect.width<=layout.items[index].itemRect.x)
+    for(const item of layout.items){
+      assert.ok(item.timeRect.y+item.timeRect.height<=item.titleRect.y||item.timeRect.x+item.timeRect.width<=item.titleRect.x)
+      assert.ok(item.itemRect.x+item.itemRect.width<=layout.footerRect.x)
+    }
+  }
+})
+
+test('Reminders empty and Tomorrow-only states produce valid bounded layouts', () => {
+  const profile=responsiveCellProfile(1,2,196,229)
+  const emptyComposition=reminderComposition(profile,reminderStudioPresets.empty),emptyLayout=reminderLayout(profile,emptyComposition)
+  assert.equal(emptyComposition.available,false);assert.ok(emptyLayout.emptyRect);assert.equal(emptyLayout.items.length,0)
+  const tomorrowOnly={today:[],tomorrow:reminderStudioPresets.extreme.tomorrow}
+  const composition=reminderComposition(profile,tomorrowOnly),layout=reminderLayout(profile,composition)
+  assert.equal(composition.showTomorrow,true);assert.equal(composition.todayItems,0);assert.ok(composition.tomorrowItems>0)
+  assert.equal(layout.todayRect,null);assert.ok(layout.tomorrowRect)
+  for(const rect of [layout.emptyRect,layout.todayRect,layout.tomorrowRect,layout.footerRect,...layout.items.flatMap(item=>[item.itemRect,item.timeRect,item.titleRect])].filter(Boolean)){
+    assert.ok(rect.x>=0&&rect.y>=0&&rect.width>0&&rect.height>0);assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)
+  }
+})
+
+test('Reminders runtime exports have matching declarations', async () => {
+  const runtime=await readFile(new URL('../app/lib/remindersResponsive.mjs',import.meta.url),'utf8')
+  const declarations=await readFile(new URL('../app/lib/remindersResponsive.d.mts',import.meta.url),'utf8')
+  const exports=[...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1])
+  for(const name of exports)assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
 })
 
 test('Studio sample-data options keep lowercase state values separate from labels', async () => {
