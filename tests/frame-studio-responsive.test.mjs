@@ -10,12 +10,13 @@ test('all 16 rectangular geometries produce responsive profiles', () => {
   }
 })
 
-test('orientation uses the actual rectangular pixel geometry', () => {
+test('orientation uses the actual pixel rectangle rather than equal logical spans', () => {
   assert.equal(responsiveCellProfile(1,3,196,343).orientation,'portrait')
   assert.equal(responsiveCellProfile(3,1,589,114).orientation,'landscape')
-  assert.equal(responsiveCellProfile(2,2,392,229).orientation,'square')
-  assert.equal(responsiveCellProfile(4,4,785,458).orientation,'square')
+  assert.equal(responsiveCellProfile(2,2,392,229).orientation,'landscape')
+  assert.equal(responsiveCellProfile(4,4,785,458).orientation,'landscape')
   assert.equal(responsiveCellProfile(2,2,200,200).orientation,'square')
+  assert.equal(responsiveCellProfile(1,1,106,100).orientation,'square')
 })
 
 test('four production geometries retain their legacy Studio variants', () => {

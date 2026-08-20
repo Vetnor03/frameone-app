@@ -14,9 +14,8 @@ export function responsiveCellProfile(colSpan, rowSpan, width, height) {
   if (!(width > 0) || !(height > 0)) throw new RangeError('Responsive cells need positive pixel dimensions')
   const aspectRatio = width / height
   const area = colSpan * rowSpan
-  // Grid orientation is intentionally logical: equal spans remain "square" even
-  // though the physical e-paper pixels are wider than they are tall.
-  const orientation = colSpan > rowSpan ? 'landscape' : colSpan < rowSpan ? 'portrait' : 'square'
+  // Studio composition follows the physical region, not the logical grid shape.
+  const orientation = aspectRatio > 1.12 ? 'landscape' : aspectRatio < .88 ? 'portrait' : 'square'
   const density = area <= 2 ? 'micro' : area <= 4 ? 'compact' : area <= 8 ? 'normal' : 'expanded'
   return { colSpan, rowSpan, width, height, area, aspectRatio, orientation, density }
 }
