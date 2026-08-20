@@ -1,4 +1,4 @@
-export type EditorModuleId = 'empty' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+export type EditorModuleId = 'empty' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries' | 'ai-follow'
 export type EditorCell = {id:string; col:number; row:number; colSpan:number; rowSpan:number; moduleId:EditorModuleId}
 export type Point = {x:number;y:number}
 export type Stroke = {start:Point;end:Point}

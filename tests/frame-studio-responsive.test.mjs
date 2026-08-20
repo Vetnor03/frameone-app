@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRenderStrategy } from '../app/lib/responsiveCellProfile.mjs'
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
+import { weatherComposition, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
   for (let colSpan=1;colSpan<=4;colSpan++) for (let rowSpan=1;rowSpan<=4;rowSpan++) {
@@ -52,6 +53,31 @@ test('Reminders keeps four handmade anchors and owns the 12 adaptive paths', () 
     else {assert.equal(strategy.path,'reminders-responsive');adaptive++}
   }
   assert.equal(adaptive,12)
+})
+
+test('Weather keeps four handmade anchors and owns the 12 weather-responsive paths', () => {
+  const locked=new Map([['4x1','SMALL'],['2x2','MEDIUM'],['4x2','LARGE'],['4x4','XL']]);let adaptive=0
+  for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    const strategy=studioRenderStrategy('weather',colSpan,rowSpan,colSpan*196,rowSpan*114),expected=locked.get(`${colSpan}x${rowSpan}`)
+    if(expected){assert.equal(strategy.path,'legacy');assert.equal(strategy.legacyVariant,expected)}
+    else {assert.equal(strategy.path,'weather-responsive');adaptive++}
+  }
+  assert.equal(adaptive,12)
+})
+
+test('all Weather states compose safely for all 16 geometries', () => {
+  assert.deepEqual(Object.keys(weatherStudioPresets),['normal','long','extreme','empty'])
+  for(const state of Object.values(weatherStudioPresets))for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    const composition=weatherComposition(responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),state)
+    assert.equal(typeof composition.available,'boolean');assert.ok(composition.forecastRows>=0);assert.ok(composition.forecastRows<=(state.forecast?.length??0))
+  }
+  assert.equal(weatherComposition(responsiveCellProfile(3,3,588,343),weatherStudioPresets.empty).available,false)
+})
+
+test('missing optional Weather values create no empty disclosure regions', () => {
+  const state={location:'Oslo',condition:'Clear',temperature:'9°'}
+  const composition=weatherComposition(responsiveCellProfile(4,3,785,343),state)
+  assert.equal(composition.showRange,false);assert.equal(composition.showWind,false);assert.equal(composition.showPrecipitation,false);assert.equal(composition.showInsight,false);assert.equal(composition.forecastRows,0)
 })
 
 test('all modules expose distinct responsive behavior contracts', () => {
@@ -117,4 +143,13 @@ test('Studio sample-data options keep lowercase state values separate from label
   const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
   assert.match(source,/<label>Sample data <select/);assert.match(source,/<option key=\{x\} value=\{x\}>/)
   assert.match(source,/GeometryShowcase module=\{showcaseModule\}[^>]*preset=\{preset\}/)
+})
+
+test('AI Follow is a Studio-only picker option and stays out of the responsive showcase', async () => {
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const simulatorLibrary=await readFile(new URL('../app/lib/frameSimulator.ts',import.meta.url),'utf8')
+  const productionRegistry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8'))
+  assert.equal((simulatorLibrary.match(/id:'ai-follow'/g)||[]).length,1);assert.doesNotMatch(JSON.stringify(productionRegistry),/ai-follow/)
+  assert.match(source,/studioModuleRegistry\.map\(module/);assert.match(source,/responsiveShowcaseRegistry\.map\(m/)
+  assert.match(source,/if\(m==='ai-follow'\).*AI FOLLOW.*Topic update/);assert.match(source,/if\(m==='ai-follow'\)[\s\S]*return}const d=fake\[m\]\[p\],strategy=studioRenderStrategy/)
 })

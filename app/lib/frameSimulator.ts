@@ -10,6 +10,7 @@ export type GridCell = { col:number; row:number; colSpan:number; rowSpan:number;
 export type PixelCell = GridCell & { x:number; y:number; w:number; h:number }
 export type LayoutName = keyof typeof spec.layouts
 export type ModuleName = 'date'|'weather'|'surf'|'reminders'|'countdown'|'soccer'|'stocks'|'groceries'
+export type StudioModuleName = ModuleName|'ai-follow'
 export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
 export type CalendarRowMode = 'date' | 'dateLarge' | 'remindersLarge' | 'remindersXL' | 'countdown'
 export const frameLayouts = spec
@@ -18,6 +19,9 @@ export function visualContractFor(module: ModuleName, size: CellSize) {
   return profiles[module][size.toLowerCase() as 'small'|'medium'|'large'|'xl']
 }
 export const frameModuleRegistry = registry as {id:ModuleName;label:string}[]
+// Studio-only extension: this does not alter the shared physical/backend module catalog.
+export const studioModuleRegistry:readonly {id:StudioModuleName;label:string}[] = [...frameModuleRegistry,{id:'ai-follow',label:'AI Follow'}]
+export const responsiveShowcaseRegistry = frameModuleRegistry
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
 export const gridY = (row:number) => VIEWPORT.y + Math.trunc(VIEWPORT.height * row / GRID_SIZE)
 export function validGridCell(c: GridCell) {
