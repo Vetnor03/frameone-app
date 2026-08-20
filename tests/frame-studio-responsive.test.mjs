@@ -5,6 +5,7 @@ import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRende
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderComposition, reminderLayout, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
+import { countdownComposition, countdownLayout, countdownStudioPresets, fitCountdownStructuredText } from '../app/lib/countdownResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
   for (let colSpan=1;colSpan<=4;colSpan++) for (let rowSpan=1;rowSpan<=4;rowSpan++) {
@@ -63,6 +64,79 @@ test('Weather keeps four handmade anchors and owns the 12 weather-responsive pat
     else {assert.equal(strategy.path,'weather-responsive');adaptive++}
   }
   assert.equal(adaptive,12)
+})
+
+test('Countdown keeps four handmade anchors and owns the 12 countdown-responsive paths', () => {
+  const locked=new Map([['4x1','SMALL'],['2x2','MEDIUM'],['4x2','LARGE'],['4x4','XL']]);let adaptive=0
+  for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    const strategy=studioRenderStrategy('countdown',colSpan,rowSpan,colSpan*196,rowSpan*114),expected=locked.get(`${colSpan}x${rowSpan}`)
+    if(expected){assert.equal(strategy.path,'legacy');assert.equal(strategy.legacyVariant,expected)}
+    else {assert.equal(strategy.path,'countdown-responsive');adaptive++}
+  }
+  assert.equal(adaptive,12)
+})
+
+test('Countdown structured states preserve the hero count and progressive disclosure', () => {
+  assert.deepEqual(Object.keys(countdownStudioPresets),['normal','long','extreme','empty'])
+  const tiny=countdownComposition(responsiveCellProfile(1,1,196,114),countdownStudioPresets.extreme)
+  const large=countdownComposition(responsiveCellProfile(4,3,785,343),countdownStudioPresets.extreme)
+  assert.equal(countdownStudioPresets.extreme.count,'99999');assert.equal(tiny.showCount,true);assert.equal(tiny.showUnit,true)
+  assert.equal(tiny.showTitle,false);assert.equal(tiny.showTargetDate,false);assert.equal(tiny.upcomingRows,0)
+  assert.equal(large.showTitle,true);assert.equal(large.showTargetDate,true);assert.ok(large.upcomingRows>0)
+  for(const [name,state] of Object.entries(countdownStudioPresets))for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    if(new Set(['4x1','2x2','4x2','4x4']).has(`${colSpan}x${rowSpan}`))continue
+    const composition=countdownComposition(responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),state)
+    assert.equal(composition.available,name!=='empty');if(name!=='empty')assert.equal(composition.showCount,true)
+  }
+  assert.equal(countdownComposition(responsiveCellProfile(3,3,588,343),countdownStudioPresets.empty).showCount,false)
+})
+
+test('Countdown regions are bounded and pairwise disjoint for long and extreme titles', () => {
+  const overlap=(a,b)=>a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height
+  for(const state of [countdownStudioPresets.long,countdownStudioPresets.extreme])for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    if(new Set(['4x1','2x2','4x2','4x4']).has(`${colSpan}x${rowSpan}`))continue
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),layout=countdownLayout(profile,countdownComposition(profile,state))
+    const primary=[layout.titleRect,layout.countRect,layout.unitRect,layout.targetDateRect].filter(Boolean)
+    for(const rect of [...primary,layout.upcomingRect,...layout.upcomingRows].filter(Boolean)){assert.ok(rect.width>0&&rect.height>0);assert.ok(rect.x>=0&&rect.y>=0);assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)}
+    for(let i=0;i<primary.length;i++)for(let j=i+1;j<primary.length;j++)assert.equal(overlap(primary[i],primary[j]),false)
+    if(layout.upcomingRect){for(const rect of primary)assert.equal(overlap(rect,layout.upcomingRect),false);for(const row of layout.upcomingRows)assert.ok(row.x>=layout.upcomingRect.x&&row.y>=layout.upcomingRect.y&&row.x+row.width<=layout.upcomingRect.x+layout.upcomingRect.width&&row.y+row.height<=layout.upcomingRect.y+layout.upcomingRect.height)}
+  }
+})
+
+test('Countdown composition responds to actual physical orientation', () => {
+  const landscape=countdownComposition(responsiveCellProfile(3,2,588,120),countdownStudioPresets.normal)
+  const portrait=countdownComposition(responsiveCellProfile(3,2,240,500),countdownStudioPresets.normal)
+  assert.equal(landscape.family,'horizontal');assert.equal(portrait.family,'stack')
+})
+
+test('Countdown renderer preserves digits, measures titles, and leaves handmade renderer untouched', async () => {
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const responsive=source.slice(source.indexOf('function drawResponsiveCountdown'),source.indexOf('function drawCountdown'))
+  assert.match(responsive,/measureText\(countValue\)/);assert.match(responsive,/fillText\(countValue/);assert.doesNotMatch(responsive,/99k|slice\([^)]*count|ellipsize\(countValue/)
+  assert.match(responsive,/measureText/);assert.doesNotMatch(responsive,/France trip/)
+  const handmade=source.slice(source.indexOf('function drawCountdown'),source.indexOf('function drawSparkline'))
+  assert.match(handmade,/if\(c\.size==='SMALL'\)/);assert.match(handmade,/if\(c\.size==='MEDIUM'\).*drawMediumStack/);assert.match(handmade,/if\(c\.size==='LARGE'\)/);assert.match(handmade,/drawCalendar/)
+})
+
+test('Countdown runtime exports have matching declarations', async () => {
+  const runtime=await readFile(new URL('../app/lib/countdownResponsive.mjs',import.meta.url),'utf8')
+  const declarations=await readFile(new URL('../app/lib/countdownResponsive.d.mts',import.meta.url),'utf8')
+  const exports=[...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1])
+  for(const name of exports)assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
+})
+
+test('Countdown structured facts fit whole or are omitted whole', async () => {
+  const measure=(value,fontSize)=>value.length*fontSize
+  const upcoming=fitCountdownStructuredText('365 days',80,12,measure,{maxFont:12,minFont:9})
+  assert.deepEqual(upcoming,{text:'365 days',fontSize:10})
+  assert.equal(fitCountdownStructuredText('99999 working days',20,12,measure,{maxFont:12,minFont:9}),null)
+  assert.equal(fitCountdownStructuredText('19 August 2027',30,12,measure,{maxFont:12,minFont:9}),null)
+  assert.equal(countdownStudioPresets.extreme.count,'99999')
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const responsive=source.slice(source.indexOf('function drawResponsiveCountdown'),source.indexOf('function drawCountdown'))
+  assert.match(responsive,/structured\(metric,metricRect/);assert.match(responsive,/structured\(state\.unit!/)
+  assert.doesNotMatch(responsive,/fitted\(metric|fitted\(state\.unit/)
+  assert.match(responsive,/ellipsize\(item\.title/);assert.match(responsive,/measureText\(state\.targetDate\)/)
 })
 
 test('all Weather states compose safely for all 16 geometries', () => {
