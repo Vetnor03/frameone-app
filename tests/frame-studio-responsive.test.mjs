@@ -6,6 +6,7 @@ import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mj
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderComposition, reminderLayout, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
 import { countdownComposition, countdownLayout, countdownStudioPresets, fitCountdownStructuredText } from '../app/lib/countdownResponsive.mjs'
+import { DATE_CALENDAR_MIN, dateCalendarFeatures, dateComposition, dateLayout, dateStudioPresets, fitDateFact } from '../app/lib/dateResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
   for (let colSpan=1;colSpan<=4;colSpan++) for (let rowSpan=1;rowSpan<=4;rowSpan++) {
@@ -33,9 +34,83 @@ test('the other 12 geometries use the responsive renderer', () => {
   let responsive=0,legacy=0
   for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
     const strategy=studioRenderStrategy('date',colSpan,rowSpan,colSpan*196,rowSpan*114)
-    strategy.path==='responsive'?responsive++:legacy++
+    strategy.path==='date-responsive'?responsive++:legacy++
   }
   assert.equal(responsive,12);assert.equal(legacy,4)
+})
+
+test('Date keeps its four handmade anchors and owns exactly 12 date-responsive paths', () => {
+  const locked=new Map([['4x1','SMALL'],['2x2','MEDIUM'],['4x2','LARGE'],['4x4','XL']]);let adaptive=0
+  for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    const strategy=studioRenderStrategy('date',colSpan,rowSpan,colSpan*196,rowSpan*114),expected=locked.get(`${colSpan}x${rowSpan}`)
+    if(expected){assert.equal(strategy.path,'legacy');assert.equal(strategy.legacyVariant,expected)}
+    else {assert.equal(strategy.path,'date-responsive');adaptive++}
+  }
+  assert.equal(adaptive,12)
+})
+
+test('all deterministic Date presets safely compose across all 16 geometries', () => {
+  assert.deepEqual(Object.keys(dateStudioPresets),['normal','long','extreme','empty'])
+  for(const [name,state] of Object.entries(dateStudioPresets))for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),composition=dateComposition(profile,state),layout=dateLayout(profile,composition)
+    assert.equal(composition.available,name!=='empty');assert.ok(layout.emptyRect||layout.dayRect)
+    if(name==='empty'){assert.equal(composition.currentCalendar,null);assert.equal(composition.nextCalendar,null)}
+  }
+})
+
+test('Date composition follows physical geometry and progressively discloses calendars', () => {
+  const tiny=dateComposition(responsiveCellProfile(1,1,196,114),dateStudioPresets.normal)
+  const shallow=dateComposition(responsiveCellProfile(3,1,588,114),dateStudioPresets.normal)
+  const tall=dateComposition(responsiveCellProfile(1,4,196,456),dateStudioPresets.normal)
+  const medium=dateComposition(responsiveCellProfile(3,2,588,228),dateStudioPresets.normal)
+  const tallLarge=dateComposition(responsiveCellProfile(2,4,392,456),dateStudioPresets.normal)
+  const balanced=dateComposition(responsiveCellProfile(3,3,588,342),dateStudioPresets.normal)
+  const expanded=dateComposition(responsiveCellProfile(4,3,784,342),dateStudioPresets.normal)
+  assert.equal(tiny.family,'micro');assert.equal(tiny.currentCalendar,null)
+  assert.equal(shallow.family,'horizontal');assert.equal(shallow.currentCalendar,null)
+  assert.equal(tall.family,'stack');assert.equal(tall.currentCalendar,null)
+  assert.equal(medium.family,'calendar-split');assert.ok(medium.currentCalendar);assert.equal(medium.nextCalendar,null)
+  assert.equal(tallLarge.family,'calendar-split');assert.ok(tallLarge.currentCalendar);assert.equal(tallLarge.nextCalendar,null)
+  assert.equal(balanced.family,'calendar-split');assert.ok(balanced.currentCalendar);assert.equal(balanced.nextCalendar,null)
+  assert.equal(expanded.family,'expanded');assert.ok(expanded.currentCalendar);assert.ok(expanded.nextCalendar)
+  const sameSpanLandscape=dateComposition(responsiveCellProfile(3,2,600,160),dateStudioPresets.normal)
+  const sameSpanPortrait=dateComposition(responsiveCellProfile(3,2,240,500),dateStudioPresets.normal)
+  assert.equal(sameSpanLandscape.family,'horizontal');assert.equal(sameSpanPortrait.family,'stack')
+})
+
+test('Date calendar minimums disclose features in deterministic usability order', () => {
+  assert.equal(dateCalendarFeatures(DATE_CALENDAR_MIN.gridWidth-1,500),null)
+  assert.deepEqual(dateCalendarFeatures(DATE_CALENDAR_MIN.gridWidth,DATE_CALENDAR_MIN.gridHeight),{showMonthTitle:false,showWeekNums:false,showDowHeader:false})
+  assert.deepEqual(dateCalendarFeatures(DATE_CALENDAR_MIN.dowWidth,DATE_CALENDAR_MIN.dowHeight),{showMonthTitle:false,showWeekNums:false,showDowHeader:true})
+  assert.deepEqual(dateCalendarFeatures(DATE_CALENDAR_MIN.weekWidth,DATE_CALENDAR_MIN.weekHeight),{showMonthTitle:false,showWeekNums:true,showDowHeader:true})
+  assert.deepEqual(dateCalendarFeatures(DATE_CALENDAR_MIN.weekWidth,DATE_CALENDAR_MIN.titleHeight,{title:true}),{showMonthTitle:true,showWeekNums:true,showDowHeader:true})
+})
+
+test('Date hero, calendars, and holiday regions are bounded and disjoint', () => {
+  const overlap=(a,b)=>a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height
+  for(const state of [dateStudioPresets.long,dateStudioPresets.extreme])for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),layout=dateLayout(profile,dateComposition(profile,state))
+    const facts=[layout.yearRect,layout.monthRect,layout.dayRect,layout.weekdayRect].filter(Boolean)
+    const regions=[layout.heroRect,layout.calendarRect,layout.nextCalendarRect,layout.holidayRect].filter(Boolean)
+    for(const r of [...facts,...regions]){assert.ok(r.x>=0&&r.y>=0&&r.width>0&&r.height>0);assert.ok(r.x+r.width<=profile.width+.001);assert.ok(r.y+r.height<=profile.height+.001)}
+    for(let i=0;i<facts.length;i++)for(let j=i+1;j<facts.length;j++)assert.equal(overlap(facts[i],facts[j]),false)
+    for(const calendar of [layout.calendarRect,layout.nextCalendarRect].filter(Boolean)){assert.equal(overlap(layout.heroRect,calendar),false);if(layout.holidayRect)assert.equal(overlap(layout.holidayRect,calendar),false)}
+    if(layout.calendarRect&&layout.nextCalendarRect)assert.equal(overlap(layout.calendarRect,layout.nextCalendarRect),false)
+  }
+})
+
+test('Date facts fit whole or are omitted, and runtime declarations stay in parity', async () => {
+  const measure=(value,size)=>value.length*size
+  assert.deepEqual(fitDateFact('September',90,14,measure,{maxFont:14,minFont:9}),{text:'September',fontSize:10})
+  assert.equal(fitDateFact('September',30,14,measure,{maxFont:14,minFont:9}),null)
+  assert.deepEqual(fitDateFact(30,30,20,measure,{maxFont:20,minFont:9}),{text:'30',fontSize:15})
+  const runtime=await readFile(new URL('../app/lib/dateResponsive.mjs',import.meta.url),'utf8'),declarations=await readFile(new URL('../app/lib/dateResponsive.d.mts',import.meta.url),'utf8')
+  for(const name of [...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1]))assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const responsive=source.slice(source.indexOf('function drawResponsiveDate'),source.indexOf('function drawResponsiveReminders'))
+  assert.match(responsive,/fitDateFact/);assert.doesNotMatch(responsive,/state\.(?:weekday|monthName|year|day)\??\.slice|ellips/i);assert.doesNotMatch(responsive,/fetch\(|generate|rewrite/i)
+  const handmade=source.slice(source.indexOf('function drawDate'),source.indexOf('function drawReminderMedium'))
+  assert.match(handmade,/if\(c\.size==='SMALL'\)/);assert.match(handmade,/if\(c\.size==='MEDIUM'\)/);assert.match(handmade,/if\(c\.size==='LARGE'\)/);assert.match(handmade,/drawMediumStack/)
 })
 
 test('all 128 module and geometry combinations have a render strategy', () => {
