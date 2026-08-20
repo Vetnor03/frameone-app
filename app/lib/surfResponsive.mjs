@@ -1,16 +1,28 @@
 export const SURF_FORECAST_MIN_COLUMN_WIDTH = 112
 
+export function surfRatingWord(score) {
+  switch (Math.round(Number(score) || 0)) {
+    case 1: return 'Flat'
+    case 2: return 'Poor'
+    case 3: return 'Poor to Fair'
+    case 4: return 'Fair'
+    case 5: return 'Good'
+    case 6: return 'Epic'
+    default: return null
+  }
+}
+
 const forecast = [
-  {day:'Thu',ratingScore:4,ratingLabel:'GOOD',waveHeight:'1.2–1.8 m',period:'12 s'},
-  {day:'Fri',ratingScore:3,ratingLabel:'FAIR',waveHeight:'1.0–1.5 m',period:'11 s'},
-  {day:'Sat',ratingScore:5,ratingLabel:'GOOD',waveHeight:'1.6–2.2 m',period:'14 s'},
-  {day:'Sun',ratingScore:2,ratingLabel:'POOR',waveHeight:'0.8–1.2 m',period:'9 s'},
+  {day:'Thu',ratingScore:4,ratingLabel:surfRatingWord(4),waveHeight:'1.2–1.8 m',period:'12 s'},
+  {day:'Fri',ratingScore:3,ratingLabel:surfRatingWord(3),waveHeight:'1.0–1.5 m',period:'11 s'},
+  {day:'Sat',ratingScore:5,ratingLabel:surfRatingWord(5),waveHeight:'1.6–2.2 m',period:'14 s'},
+  {day:'Sun',ratingScore:2,ratingLabel:surfRatingWord(2),waveHeight:'0.8–1.2 m',period:'9 s'},
 ]
 
 export const surfStudioPresets = {
-  normal:{spot:'Hoddevik',rating:{score:4,max:6,label:'GOOD'},waveHeight:'1.2–1.8 m',period:'12 s',swellDirection:'W',windDirection:'N',windSpeed:'5 m/s',bestWindow:{label:"TODAY'S BEST",time:'14:00–18:00'},airTemperature:'12° / 19°',waterTemperature:'14° / 16°',sunrise:'06:01',sunset:'20:32',forecast},
-  long:{spot:'Unstad Beach, Lofoten',rating:{score:5,max:6,label:'VERY GOOD'},waveHeight:'2.0–3.5 m',period:'15 s',swellDirection:'NW',windDirection:'E',windSpeed:'8 m/s',bestWindow:{label:"TODAY'S BEST",time:'15:30–19:00'},airTemperature:'8° / 14°',waterTemperature:'11° / 13°',sunrise:'05:42',sunset:'21:18',forecast:forecast.map((entry,index)=>({...entry,ratingScore:[5,4,3,5][index],waveHeight:['2.0–3.5 m','1.8–3.0 m','1.5–2.4 m','2.2–3.8 m'][index]}))},
-  extreme:{spot:'An exceptionally long surf spot name',rating:{score:6,max:6,label:'EXCELLENT'},waveHeight:'8.0–12.0 m',period:'22 s',swellDirection:'WNW',windDirection:'SSE',windSpeed:'18 m/s',bestWindow:{label:"TODAY'S BEST",time:'13:45–17:15'},airTemperature:'2° / 7°',waterTemperature:'7° / 9°',sunrise:'08:12',sunset:'16:04',forecast:forecast.map((entry,index)=>({...entry,ratingScore:[6,5,4,3][index],ratingLabel:['EXCELLENT','VERY GOOD','GOOD','FAIR'][index],waveHeight:['8.0–12.0 m','6.5–9.0 m','4.0–6.5 m','3.0–4.5 m'][index],period:['22 s','20 s','18 s','16 s'][index]}))},
+  normal:{spot:'Hoddevik',rating:{score:4,max:6,label:surfRatingWord(4)},waveHeight:'1.2–1.8 m',period:'12 s',swellDirection:'W',windDirection:'N',windSpeed:'5 m/s',bestWindow:{label:"TODAY'S BEST",time:'14:00–18:00'},airTemperature:'12° / 19°',waterTemperature:'14° / 16°',sunrise:'06:01',sunset:'20:32',forecast},
+  long:{spot:'Unstad Beach, Lofoten',rating:{score:5,max:6,label:surfRatingWord(5)},waveHeight:'2.0–3.5 m',period:'15 s',swellDirection:'NW',windDirection:'E',windSpeed:'8 m/s',bestWindow:{label:"TODAY'S BEST",time:'15:30–19:00'},airTemperature:'8° / 14°',waterTemperature:'11° / 13°',sunrise:'05:42',sunset:'21:18',forecast:forecast.map((entry,index)=>{const ratingScore=[5,4,3,5][index];return {...entry,ratingScore,ratingLabel:surfRatingWord(ratingScore),waveHeight:['2.0–3.5 m','1.8–3.0 m','1.5–2.4 m','2.2–3.8 m'][index]}})},
+  extreme:{spot:'An exceptionally long surf spot name',rating:{score:6,max:6,label:surfRatingWord(6)},waveHeight:'8.0–12.0 m',period:'22 s',swellDirection:'WNW',windDirection:'SSE',windSpeed:'18 m/s',bestWindow:{label:"TODAY'S BEST",time:'13:45–17:15'},airTemperature:'2° / 7°',waterTemperature:'7° / 9°',sunrise:'08:12',sunset:'16:04',forecast:forecast.map((entry,index)=>{const ratingScore=[6,5,4,3][index];return {...entry,ratingScore,ratingLabel:surfRatingWord(ratingScore),waveHeight:['8.0–12.0 m','6.5–9.0 m','4.0–6.5 m','3.0–4.5 m'][index],period:['22 s','20 s','18 s','16 s'][index]}})},
   empty:{spot:null,rating:{score:null,max:6,label:null},waveHeight:null,period:null,swellDirection:null,windDirection:null,windSpeed:null,bestWindow:null,airTemperature:null,waterTemperature:null,sunrise:null,sunset:null,forecast:[]},
 }
 

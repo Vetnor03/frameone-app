@@ -7,7 +7,7 @@ import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT
 import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
 import { countdownComposition, countdownLayout, countdownStudioPresets, fitCountdownStructuredText } from '../app/lib/countdownResponsive.mjs'
 import { DATE_CALENDAR_MIN, dateCalendarFeatures, dateComposition, dateLayout, dateStudioPresets, fitDateFact } from '../app/lib/dateResponsive.mjs'
-import { SURF_FORECAST_MIN_COLUMN_WIDTH, fitSurfFact, surfComposition, surfLayout, surfStudioPresets } from '../app/lib/surfResponsive.mjs'
+import { SURF_FORECAST_MIN_COLUMN_WIDTH, fitSurfFact, surfComposition, surfLayout, surfRatingWord, surfStudioPresets } from '../app/lib/surfResponsive.mjs'
 
 test('Surf keeps four handmade anchors and owns exactly 12 surf-responsive paths', () => {
   const locked=new Map([['4x1','SMALL'],['2x2','MEDIUM'],['4x2','LARGE'],['4x4','XL']]);let adaptive=0
@@ -55,6 +55,24 @@ test('Surf facts are atomic, score drives rating blocks, and declarations match 
   for(const name of [...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1]))assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
   const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8'),responsive=source.slice(source.indexOf('function drawResponsiveSurf'),source.indexOf('function drawSurf'))
   assert.match(responsive,/ratingBlocks\([^\n]+state\.rating\.score/);assert.match(responsive,/measureText\(fitted\.text\)/);assert.doesNotMatch(responsive,/\.slice\(|ellips/i);assert.doesNotMatch(responsive,/fetch\(|generate|rewrite/i)
+})
+
+test('Surf Studio uses the physical firmware rating words without visible numeric fractions', async () => {
+  assert.deepEqual([1,2,3,4,5,6].map(surfRatingWord),['Flat','Poor','Poor to Fair','Fair','Good','Epic'])
+  for(const state of Object.values(surfStudioPresets)){
+    if(state.rating.score!=null)assert.equal(state.rating.label,surfRatingWord(state.rating.score))
+    for(const entry of state.forecast)assert.equal(entry.ratingLabel,surfRatingWord(entry.ratingScore))
+  }
+
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const responsive=source.slice(source.indexOf('function drawResponsiveSurf'),source.indexOf('function drawSurf'))
+  const handmade=source.slice(source.indexOf('function drawSurf'),source.indexOf('function soccerFixture'))
+  const surfSamples=source.slice(source.indexOf('const fake ='),source.indexOf('const calendarPreset'))
+  for(const studioSurfSource of [responsive,handmade,surfSamples])assert.doesNotMatch(studioSurfSource,/\d\s*\/\s*6|ratingScore\}\//)
+  assert.match(responsive,/fact\(surfRatingWord\(state\.rating\.score\),layout\.ratingRect/)
+  assert.match(responsive,/fact\(surfRatingWord\(entry\.ratingScore\),column\.ratingRect/)
+  assert.match(responsive,/ratingBlocks\([^\n]+entry\.ratingScore/)
+  assert.match(handmade,/ratingBlocks\([^\n]+score/)
 })
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
