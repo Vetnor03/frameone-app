@@ -173,12 +173,12 @@ test('Reminders progressively discloses sections and calm item counts', () => {
   const small=reminderComposition(smallProfile,reminderStudioPresets.extreme)
   const large=reminderComposition(largeProfile,reminderStudioPresets.extreme)
   assert.equal(small.direction,'horizontal');assert.equal(small.showTomorrow,false);assert.equal(small.todayItems,1)
-  assert.equal(large.direction,'vertical');assert.equal(large.showTomorrow,true);assert.ok(large.maxItems>small.maxItems)
-  assert.ok(large.todayItems>0);assert.ok(large.tomorrowItems>0);assert.ok(large.maxItems<=6)
+  assert.equal(large.direction,'split');assert.equal(large.family,'split-sections');assert.equal(large.showTomorrow,true);assert.ok(large.maxItems>small.maxItems)
+  assert.ok(large.todayItems>0);assert.ok(large.tomorrowItems>0);assert.ok(large.maxItems<=9)
 })
 
 test('Reminders vertical layout reserves disjoint sections and footer before rows', () => {
-  for(const [colSpan,rowSpan] of [[2,4],[3,3],[3,4],[4,3]]){
+  for(const [colSpan,rowSpan] of [[2,4]]){
     const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114)
     const composition=reminderComposition(profile,reminderStudioPresets.extreme),layout=reminderLayout(profile,composition)
     assert.ok(layout.todayRect);assert.ok(layout.tomorrowRect);assert.ok(layout.footerRect)
@@ -188,6 +188,52 @@ test('Reminders vertical layout reserves disjoint sections and footer before row
       assert.ok(item.itemRect.y+item.itemRect.height<=layout.footerRect.y)
       assert.ok(item.timeRect.x+item.timeRect.width<=item.titleRect.x||item.timeRect.y+item.timeRect.height<=item.titleRect.y)
     }
+  }
+})
+
+test('large-landscape Reminders use physical orientation and split bounded sections', () => {
+  for(const [colSpan,rowSpan,width,height] of [[4,3,785,343],[3,2,588,229],[3,3,588,343]]){
+    const profile=responsiveCellProfile(colSpan,rowSpan,width,height)
+    const composition=reminderComposition(profile,reminderStudioPresets.extreme),layout=reminderLayout(profile,composition)
+    assert.equal(profile.orientation,'landscape');assert.equal(composition.family,'split-sections');assert.equal(composition.direction,'split')
+    assert.ok(layout.todayRect&&layout.tomorrowRect)
+    assert.ok(layout.todayRect.x+layout.todayRect.width<layout.tomorrowRect.x)
+    assert.equal(layout.todayRect.y,layout.tomorrowRect.y)
+  }
+  const sameSpansPortrait=reminderComposition(responsiveCellProfile(3,2,300,500),reminderStudioPresets.extreme)
+  const square=reminderComposition(responsiveCellProfile(3,3,400,400),reminderStudioPresets.extreme)
+  assert.equal(sameSpansPortrait.family,'vertical-list');assert.equal(square.family,'vertical-list')
+})
+
+test('shallow physical cells keep the horizontal item strip while tall cells stay vertical', () => {
+  for(const [colSpan,width] of [[2,392],[3,588]])assert.equal(reminderComposition(responsiveCellProfile(colSpan,1,width,114),reminderStudioPresets.extreme).family,'shallow-horizontal')
+  assert.equal(reminderComposition(responsiveCellProfile(3,1,180,300),reminderStudioPresets.extreme).family,'vertical-list')
+  assert.equal(reminderComposition(responsiveCellProfile(1,3,196,343),reminderStudioPresets.extreme).direction,'vertical')
+})
+
+test('split sections expand Today and avoid wasting width on a small Tomorrow section', () => {
+  const profile=responsiveCellProfile(4,3,785,343)
+  const normal=reminderLayout(profile,reminderComposition(profile,reminderStudioPresets.normal))
+  assert.ok(normal.todayRect.width>normal.tomorrowRect.width*2)
+  const todayOnly={today:reminderStudioPresets.extreme.today,tomorrow:[]}
+  const expanded=reminderLayout(profile,reminderComposition(profile,todayOnly))
+  assert.equal(expanded.tomorrowRect,null);assert.ok(expanded.todayRect.width>normal.todayRect.width)
+})
+
+test('split overflow remains inside its owning section footer', () => {
+  const profile=responsiveCellProfile(4,3,785,343),items=reminderStudioPresets.extreme.today
+  const state={today:[...items,...items],tomorrow:[...items,...items]}
+  const composition=reminderComposition(profile,state),layout=reminderLayout(profile,composition)
+  assert.ok(composition.todayOverflow>0&&composition.tomorrowOverflow>0)
+  for(const [section,footer] of [[layout.todayRect,layout.todayFooterRect],[layout.tomorrowRect,layout.tomorrowFooterRect]]){
+    assert.ok(footer.x>=section.x&&footer.x+footer.width<=section.x+section.width)
+    assert.ok(footer.y>=section.y&&footer.y+footer.height<=section.y+section.height)
+  }
+  for(const item of layout.items){
+    const section=item.itemRect.x<layout.tomorrowRect.x?layout.todayRect:layout.tomorrowRect
+    const footer=item.itemRect.x<layout.tomorrowRect.x?layout.todayFooterRect:layout.tomorrowFooterRect
+    assert.ok(item.itemRect.x>=section.x&&item.itemRect.x+item.itemRect.width<=section.x+section.width)
+    assert.ok(item.itemRect.y+item.itemRect.height<=footer.y)
   }
 })
 

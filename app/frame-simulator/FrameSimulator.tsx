@@ -69,6 +69,7 @@ function drawResponsiveReminders(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   visible.forEach((item,index)=>drawItem(item,layout.items[index]))
   if(composition.direction==='horizontal')layout.items.slice(1).forEach(item=>{const r=absolute(item.itemRect);line(ctx,r.x-6,r.y+5,r.x-6,r.y+r.height-5)})
   if(layout.footerRect){const r=absolute(layout.footerRect),label=r.width<48?`+${composition.overflow}`:`+${composition.overflow} more`;ctx.font='bold 12px sans-serif';ctx.textAlign=composition.direction==='horizontal'?'center':'right';ctx.fillText(label,composition.direction==='horizontal'?r.x+r.width/2:r.x+r.width,r.y+r.height/2+4)}
+  for(const [rect,count] of [[layout.todayFooterRect,composition.todayOverflow],[layout.tomorrowFooterRect,composition.tomorrowOverflow]] as const){if(rect){const r=absolute(rect);ctx.font='bold 12px sans-serif';ctx.textAlign='right';ctx.fillText(`+${count} more`,r.x+r.width,r.y+r.height/2+4)}}
 }
 function drawResponsive(ctx:CanvasRenderingContext2D,c:PixelCell,m:ModuleName,d:string[],p:ResponsiveCellProfile) {
   const centerY=c.y+c.h*(p.orientation==='portrait'?.38:.53)
