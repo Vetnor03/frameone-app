@@ -3,16 +3,21 @@ export const REMINDER_TEXT_ORDER=Object.freeze(['full','compact','short','tiny']
 /** Selects verbosity only after composition has allocated a real pixel width. */
 export function chooseReminderTextVariant(item,availableWidth,measure) {
   const {text,protectedFacts=[]}=item
-  for(const variant of REMINDER_TEXT_ORDER) if(text[variant]&&measure(text[variant])<=availableWidth)return {variant,text:text[variant]}
-  const source=text.tiny||text.short||text.compact||text.full||''
-  if(measure(source)<=availableWidth)return {variant:'tiny',text:source}
+  const requiredFacts=protectedFacts.filter(fact=>!fact.optionalInTitle).map(fact=>fact.value)
+  const eligible=REMINDER_TEXT_ORDER.filter(variant=>text[variant]&&requiredFacts.every(fact=>text[variant].includes(fact)))
+  for(const variant of eligible) if(measure(text[variant])<=availableWidth)return {variant,text:text[variant]}
+  const source=[...eligible].reverse().map(variant=>text[variant]).find(Boolean)||''
+  if(!source)return {variant:'fallback',text:''}
   const ellipsis='…'
   if(measure(ellipsis)>availableWidth)return {variant:'fallback',text:''}
   // Protected facts are atomic. The fallback may omit an optional fact, but it
   // must never display a prefix such as "IMR 26-0…" or a partial location.
   const atoms=atomicTextParts(source,protectedFacts.map(fact=>fact.value));let fitted=''
   for(const atom of atoms){const candidate=fitted?`${fitted} ${atom}`:atom;if(measure(candidate+ellipsis)>availableWidth)break;fitted=candidate}
-  return {variant:'fallback',text:fitted?fitted+ellipsis:''}
+  const fallback=fitted?fitted+ellipsis:''
+  if(requiredFacts.every(fact=>fallback.includes(fact)))return {variant:'fallback',text:fallback}
+  const factsOnly=requiredFacts.join(' ')
+  return {variant:'fallback',text:factsOnly&&measure(factsOnly)<=availableWidth?factsOnly:''}
 }
 
 function atomicTextParts(source,protectedFacts) {

@@ -88,6 +88,22 @@ test('time is structured and optional location can be omitted at low density', (
   assert.equal(chooseReminderTextVariant(dentist,8,value=>value.length).text,'Dentist')
 })
 
+test('non-optional title facts are never dropped by authored variants or fallback', () => {
+  const mum=reminderStudioPresets.normal.today[2],measure=value=>value.length
+  for(let width=0;width<8;width++){
+    const displayed=chooseReminderTextVariant(mum,width,measure).text
+    assert.ok(displayed===''||displayed.includes('Mum'));assert.notEqual(displayed,'Call…')
+  }
+  assert.equal(chooseReminderTextVariant(mum,3,measure).text,'Mum')
+  assert.equal(chooseReminderTextVariant(mum,2,measure).text,'')
+})
+
+test('authored variants missing a required fact are ineligible', () => {
+  const item={time:null,text:{full:'Call Mum tomorrow',compact:'Call Mum',short:'Call Mum',tiny:'Call'},protectedFacts:[{value:'Mum',kind:'name',optionalInTitle:false}]}
+  assert.equal(chooseReminderTextVariant(item,4,value=>value.length).text,'Mum')
+  assert.equal(chooseReminderTextVariant(item,2,value=>value.length).text,'')
+})
+
 test('deterministic reminder states cover empty, normal, long and extreme content', () => {
   assert.deepEqual(Object.keys(reminderStudioPresets),['empty','normal','long','extreme'])
   assert.equal(reminderStudioPresets.empty.today.length,0);assert.ok(reminderStudioPresets.normal.today.length>=3)
