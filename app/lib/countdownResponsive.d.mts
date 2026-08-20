@@ -4,7 +4,8 @@ export type CountdownState={title:string|null;count:string|null;unit:string|null
 export type CountdownFamily='unavailable'|'micro'|'horizontal'|'stack'|'split-horizontal'|'expanded-vertical'
 export type CountdownComposition={available:boolean;family:CountdownFamily;showTitle:boolean;showCount:boolean;showUnit:boolean;showTargetDate:boolean;upcomingRows:number}
 export type CountdownRect={x:number;y:number;width:number;height:number}
-export type CountdownLayout={pad:number;emptyRect:CountdownRect|null;primaryRect:CountdownRect|null;titleRect:CountdownRect|null;countRect:CountdownRect|null;unitRect:CountdownRect|null;targetDateRect:CountdownRect|null;upcomingRect:CountdownRect|null;upcomingRows:readonly CountdownRect[]}
+export type CountdownUpcomingRowLayout={rowRect:CountdownRect;titleRect:CountdownRect;metricRect:CountdownRect}
+export type CountdownLayout={pad:number;emptyRect:CountdownRect|null;primaryRect:CountdownRect|null;heroGroupRect:CountdownRect|null;titleRect:CountdownRect|null;countRect:CountdownRect|null;unitRect:CountdownRect|null;targetDateRect:CountdownRect|null;upcomingRect:CountdownRect|null;upcomingRows:readonly CountdownUpcomingRowLayout[]}
 export const COUNTDOWN_STUDIO_PRESET_VALUES:readonly ['normal','long','extreme','empty']
 export const countdownStudioPresets:Readonly<Record<typeof COUNTDOWN_STUDIO_PRESET_VALUES[number],CountdownState>>
 export function countdownComposition(profile:ResponsiveCellProfile,state:CountdownState):CountdownComposition
