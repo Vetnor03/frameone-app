@@ -9,7 +9,7 @@ import {
 } from '../lib/frameSimulator'
 import { createHistory, findContainingCell, findDividerNearPointer, findSplitGuideNearPointer, gridCellAtPointer, internalDividerSegments, mergeDivider, overwriteWithSelection, pushHistory, redoHistory, resolveShortTap, selectionBetweenGridCells, splitCellAtBoundary, undoHistory, type DividerHit, type EditorCell, type EditorHistory, type GridSelection, type Point, type SplitGuide } from '../lib/frameLayoutEditor.mjs'
 import { legacyStudioVariant, responsiveCellProfile, studioRenderStrategy, type ResponsiveCellProfile } from '../lib/responsiveCellProfile.mjs'
-import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, reminderComposition, reminderStudioPresets, type ReminderItem, type ReminderState, type ReminderTextVariant } from '../lib/remindersResponsive.mjs'
+import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, reminderComposition, reminderLayout, reminderStudioPresets, type ReminderItem, type ReminderItemLayout, type ReminderRect, type ReminderState } from '../lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets, type WeatherState } from '../lib/weatherResponsive.mjs'
 
 type Preset = typeof REMINDER_STUDIO_PRESET_VALUES[number]
@@ -50,24 +50,25 @@ function adaptiveMetrics(ctx:CanvasRenderingContext2D,c:PixelCell,values:string[
   const gap=Math.min(34,(c.y+c.h-start)/shown.length);shown.forEach((v,i)=>clippedCentered(ctx,v,c.x+6,start+i*gap,c.w-12,gap))
 }
 function drawResponsiveReminders(ctx:CanvasRenderingContext2D,c:PixelCell,p:ResponsiveCellProfile,state:ReminderState) {
-  const composition=reminderComposition(p,state),all=[...state.today,...(composition.showTomorrow?state.tomorrow:[])],visible=all.slice(0,composition.maxItems),overflow=state.today.length+state.tomorrow.length-visible.length
-  if(!all.length){centered(ctx,'No reminders',c.x,c.y+c.h/2+5,c.w,'14px sans-serif');return}
-  const pad=Math.max(9,Math.min(18,Math.round(Math.min(c.w,c.h)*.08))),top=c.y+pad
-  if(composition.showHeading){ctx.font='bold 14px sans-serif';ctx.textAlign='left';ctx.fillText('TODAY',c.x+pad,top+14);ctx.fillRect(c.x+pad,top+19,Math.min(54,c.w-pad*2),2)}
-  const start=top+(composition.showHeading?37:0),footer=overflow>0?22:5,room=Math.max(20,c.y+c.h-pad-footer-start)
-  const drawItem=(item:ReminderItem,x:number,y:number,w:number,h:number)=>{
-    const timeW=composition.showTime&&item.time?Math.min(46,w*.28):0,gap=timeW?7:0,font=p.density==='micro'?'bold 13px sans-serif':'14px sans-serif'
-    ctx.font=font;ctx.textAlign='left';if(timeW&&item.time)ctx.fillText(item.time,x,y+15)
-    const selected=chooseReminderTextVariant(item,Math.max(1,w-timeW-gap),value=>ctx.measureText(value).width)
-    ctx.save();ctx.beginPath();ctx.rect(x+timeW+gap,y,w-timeW-gap,h);ctx.clip();ctx.fillText(selected.text,x+timeW+gap,y+15);ctx.restore()
-    return selected.variant as ReminderTextVariant
+  const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
+  if(!composition.available&&layout.emptyRect){const r=layout.emptyRect;centered(ctx,'No reminders',c.x+r.x,c.y+r.y+r.height/2+5,r.width,'14px sans-serif');return}
+  const visible=[...state.today.slice(0,composition.todayItems),...state.tomorrow.slice(0,composition.tomorrowItems)]
+  const absolute=(r:ReminderRect):ReminderRect=>({...r,x:c.x+r.x,y:c.y+r.y})
+  const heading=(label:string,rect:ReminderRect|null)=>{if(!composition.showHeading||!rect)return;const r=absolute(rect);ctx.font='bold 14px sans-serif';ctx.textAlign='left';ctx.fillText(label,r.x,r.y+14);ctx.fillRect(r.x,r.y+19,Math.min(ctx.measureText(label).width,r.width),2)}
+  heading('TODAY',layout.todayRect)
+  heading('TOMORROW',layout.tomorrowRect)
+  const drawItem=(item:ReminderItem,itemLayout:ReminderItemLayout)=>{
+    const itemRect=absolute(itemLayout.itemRect),timeRect=absolute(itemLayout.timeRect)
+    let titleRect=absolute(itemLayout.titleRect)
+    if(!item.time)titleRect={...itemRect,x:itemRect.x+2,width:Math.max(1,itemRect.width-4)}
+    const font=p.density==='micro'?'bold 13px sans-serif':'14px sans-serif';ctx.font=font;ctx.textAlign='left'
+    if(composition.showTime&&item.time){ctx.save();ctx.beginPath();ctx.rect(timeRect.x,timeRect.y,timeRect.width,timeRect.height);ctx.clip();ctx.fillText(item.time,timeRect.x,timeRect.y+Math.min(15,timeRect.height));ctx.restore()}
+    const selected=chooseReminderTextVariant(item,titleRect.width,value=>ctx.measureText(value).width)
+    ctx.save();ctx.beginPath();ctx.rect(titleRect.x,titleRect.y,titleRect.width,titleRect.height);ctx.clip();ctx.fillText(selected.text,titleRect.x,titleRect.y+Math.min(15,titleRect.height));ctx.restore()
   }
-  if(composition.direction==='horizontal'){
-    const itemW=(c.w-pad*2)/Math.max(1,visible.length);visible.forEach((item,index)=>{if(index)line(ctx,c.x+pad+index*itemW,start+2,c.x+pad+index*itemW,start+Math.min(room,34));drawItem(item,c.x+pad+index*itemW+(index?9:0),start,itemW-(index?14:6),room)})
-  }else{
-    const rowH=Math.min(38,room/Math.max(1,visible.length));visible.forEach((item,index)=>drawItem(item,c.x+pad,start+index*rowH,c.w-pad*2,rowH))
-  }
-  if(overflow>0){ctx.font='bold 12px sans-serif';ctx.textAlign='right';ctx.fillText(`+${overflow}`,c.x+c.w-pad,c.y+c.h-pad)}
+  visible.forEach((item,index)=>drawItem(item,layout.items[index]))
+  if(composition.direction==='horizontal')layout.items.slice(1).forEach(item=>{const r=absolute(item.itemRect);line(ctx,r.x-6,r.y+5,r.x-6,r.y+r.height-5)})
+  if(layout.footerRect){const r=absolute(layout.footerRect),label=r.width<48?`+${composition.overflow}`:`+${composition.overflow} more`;ctx.font='bold 12px sans-serif';ctx.textAlign=composition.direction==='horizontal'?'center':'right';ctx.fillText(label,composition.direction==='horizontal'?r.x+r.width/2:r.x+r.width,r.y+r.height/2+4)}
 }
 function drawResponsive(ctx:CanvasRenderingContext2D,c:PixelCell,m:ModuleName,d:string[],p:ResponsiveCellProfile) {
   const centerY=c.y+c.h*(p.orientation==='portrait'?.38:.53)
