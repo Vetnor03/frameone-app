@@ -10,7 +10,7 @@ import {
 import { createHistory, findContainingCell, findDividerNearPointer, findSplitGuideNearPointer, gridCellAtPointer, internalDividerSegments, mergeDivider, overwriteWithSelection, pushHistory, redoHistory, resolveShortTap, selectionBetweenGridCells, splitCellAtBoundary, undoHistory, type DividerHit, type EditorCell, type EditorHistory, type GridSelection, type Point, type SplitGuide } from '../lib/frameLayoutEditor.mjs'
 import { legacyStudioVariant, responsiveCellProfile, studioRenderStrategy, type ResponsiveCellProfile } from '../lib/responsiveCellProfile.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, reminderComposition, reminderStudioPresets, type ReminderItem, type ReminderState, type ReminderTextVariant } from '../lib/remindersResponsive.mjs'
-import { weatherComposition, weatherStudioPresets, type WeatherState } from '../lib/weatherResponsive.mjs'
+import { weatherComposition, weatherLayout, weatherStudioPresets, type WeatherState } from '../lib/weatherResponsive.mjs'
 
 type Preset = typeof REMINDER_STUDIO_PRESET_VALUES[number]
 const fake = {
@@ -134,22 +134,43 @@ function drawReminders(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],prese
   const topH=Math.trunc((c.h-p.rowGap)/2),bottomY=c.y+topH+p.rowGap,rightW=c.w-leftW-gap;drawReminderMedium(ctx,{...c,w:leftW,h:topH},d,false);const nextRows=moduleProfiles.reminders.xl.nextReminderRows,rowH=32,startY=bottomY+topH-nextRows*rowH-24;for(let i=0;i<nextRows;i++){const ry=startY+i*rowH;ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillText(`${String(20+i).padStart(2,'0')}.08`,c.x+82,ry+18);ctx.textAlign='left';ctx.fillText(d[1+i%(Math.max(1,d.length-1))]||'Upcoming reminder',c.x+98,ry+18)};drawCalendar(ctx,rightX,c.y+p.monthPadding-9,rightW-p.rightPadding,topH-p.monthPadding+8,year,month0,'remindersXL',{showMonthTitle:true,showWeekNums:true,showDowHeader:true});drawCalendar(ctx,rightX,bottomY,rightW-p.rightPadding,c.y+c.h-bottomY-p.monthPadding,nextYear,nextMonth0,'remindersXL',{showMonthTitle:true,showWeekNums:true,showDowHeader:false})
 }
 function weatherIcon(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number){const r=Math.min(w,h)*.22;ctx.beginPath();ctx.arc(x+w*.42,y+h*.42,r,Math.PI,Math.PI*2);ctx.arc(x+w*.58,y+h*.48,r*.8,Math.PI,Math.PI*2);ctx.lineTo(x+w*.76,y+h*.68);ctx.lineTo(x+w*.25,y+h*.68);ctx.closePath();ctx.stroke();line(ctx,x+w*.35,y+h*.82,x+w*.31,y+h*.94);line(ctx,x+w*.55,y+h*.82,x+w*.51,y+h*.94);line(ctx,x+w*.72,y+h*.82,x+w*.68,y+h*.94)}
-function drawResponsiveWeather(ctx:CanvasRenderingContext2D,c:PixelCell,p:ResponsiveCellProfile,state:WeatherState){
-  const composition=weatherComposition(p,state),pad=Math.max(9,Math.min(18,Math.round(Math.min(c.w,c.h)*.08)))
-  if(!composition.available){centered(ctx,'Weather unavailable',c.x,c.y+c.h/2+5,c.w,'14px sans-serif');return}
-  const text=(value:string|number|null|undefined,x:number,y:number,w:number,font:string)=>{if(value!=null){ctx.font=font;clippedCentered(ctx,String(value),x,y,w,metricHeight(font)+4)}}
-  const range=[state.low&&`Low ${state.low}`,state.high&&`High ${state.high}`].filter(Boolean).join('  '),wind=[state.windDirection,state.windSpeed].filter(Boolean).join(' ')
-  const details=[composition.showRange&&range,composition.showWind&&wind&&`Wind ${wind}`,composition.showPrecipitation&&`Rain ${state.precipitationProbability}%`].filter(Boolean) as string[]
-  if(composition.layout==='vertical'){
-    text(state.location,c.x+pad,c.y+pad+13,c.w-pad*2,'bold 11px sans-serif');text(state.temperature,c.x+pad,c.y+Math.min(70,c.h*.24),c.w-pad*2,`bold ${Math.min(42,c.w*.24)}px sans-serif`)
-    const iconTop=c.y+Math.min(78,c.h*.27),iconH=Math.min(82,c.h*.27);weatherIcon(ctx,c.x+c.w*.22,iconTop,c.w*.56,iconH);text(state.condition,c.x+pad,iconTop+iconH+18,c.w-pad*2,'bold 13px sans-serif')
-    details.forEach((value,index)=>text(value,c.x+pad,iconTop+iconH+45+index*24,c.w-pad*2,'12px sans-serif'));return
+type WeatherRect={x:number;y:number;width:number;height:number}
+function fitWeatherText(ctx:CanvasRenderingContext2D,value:string|null|undefined,rect:WeatherRect,options:{maxFont:number;minFont:number;bold?:boolean;maxLines?:number}){
+  if(!value||rect.width<8||rect.height<options.minFont)return
+  const maxLines=options.maxLines??1,prefix=options.bold?'bold ':''
+  const ellipsize=(text:string,width:number)=>{if(ctx.measureText(text).width<=width)return text;let lo=0,hi=text.length;while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(ctx.measureText(`${text.slice(0,mid).trimEnd()}…`).width<=width)lo=mid;else hi=mid-1}return lo?`${text.slice(0,lo).trimEnd()}…`:''}
+  for(let size=options.maxFont;size>=options.minFont;size--){
+    ctx.font=`${prefix}${size}px sans-serif`;const words=value.split(/\s+/),lines:string[]=[];let current=''
+    for(const word of words){const candidate=current?`${current} ${word}`:word;if(ctx.measureText(candidate).width<=rect.width)current=candidate;else{if(current)lines.push(current);current=word}}
+    if(current)lines.push(current)
+    if(lines.length<=maxLines&&lines.length*size*1.2<=rect.height){ctx.textAlign='center';lines.forEach((text,index)=>ctx.fillText(text,rect.x+rect.width/2,rect.y+size+(index*size*1.2)));return}
+    if(size===options.minFont){const shown=lines.slice(0,maxLines);shown[maxLines-1]=ellipsize(lines.slice(maxLines-1).join(' '),rect.width);ctx.textAlign='center';shown.filter(Boolean).forEach((text,index)=>ctx.fillText(text,rect.x+rect.width/2,rect.y+size+(index*size*1.2)))}
   }
-  const primaryW=composition.layout==='horizontal'?Math.min(c.w*.62,330):c.w,primaryX=c.x
-  weatherIcon(ctx,primaryX+pad,c.y+c.h*.18,Math.min(92,primaryW*.32),Math.min(78,c.h*.55));const textX=primaryX+Math.min(110,primaryW*.38),textW=Math.max(50,primaryW-(textX-primaryX)-pad)
-  text(state.temperature,textX,c.y+c.h*.42,textW,`bold ${Math.min(42,c.h*.34)}px sans-serif`);text(state.condition,textX,c.y+c.h*.67,textW,'bold 13px sans-serif');if(composition.showLocation)text(state.location,textX,c.y+pad+12,textW,'11px sans-serif')
-  if(composition.layout==='horizontal'){const detailX=c.x+primaryW,detailW=c.w-primaryW-pad;details.forEach((value,index)=>text(value,detailX,c.y+c.h*.35+index*25,detailW,'12px sans-serif'))}else details.forEach((value,index)=>text(value,c.x+pad,c.y+c.h-18-index*22,c.w-pad*2,'12px sans-serif'))
-  if(composition.forecastRows){const top=c.y+c.h*.61,rowW=(c.w-pad*2)/composition.forecastRows;line(ctx,c.x+pad,top-13,c.x+c.w-pad,top-13);state.forecast?.slice(0,composition.forecastRows).forEach((forecast,index)=>{const x=c.x+pad+index*rowW;if(index)line(ctx,x,top,x,c.y+c.h-pad);text(forecast.day,x,top+16,rowW,'bold 12px sans-serif');text(forecast.temperature,x,top+42,rowW,'bold 15px sans-serif');text(forecast.condition,x,top+64,rowW,'11px sans-serif')})}else if(composition.showInsight)text(state.insight,c.x+pad,c.y+c.h-18,c.w-pad*2,'11px sans-serif')
+}
+function drawResponsiveWeather(ctx:CanvasRenderingContext2D,c:PixelCell,p:ResponsiveCellProfile,state:WeatherState){
+  const composition=weatherComposition(p,state),layout=weatherLayout(p,composition),offset=(rect:WeatherRect|null)=>rect&&({x:c.x+rect.x,y:c.y+rect.y,width:rect.width,height:rect.height})
+  if(!composition.available){centered(ctx,'Weather unavailable',c.x,c.y+c.h/2+5,c.w,'14px sans-serif');return}
+  const header=offset(layout.headerRect),primary=offset(layout.primaryRect)!,detailsRect=offset(layout.detailsRect),forecast=offset(layout.forecastRect)
+  const range=[state.low&&`Low ${state.low}`,state.high&&`High ${state.high}`].filter(Boolean).join('  '),wind=[state.windDirection,state.windSpeed].filter(Boolean).join(' ')
+  const detailLines=[composition.showRange&&range,composition.showWind&&wind&&`Wind ${wind}`,composition.showPrecipitation&&`Rain ${state.precipitationProbability}%`].filter(Boolean) as string[]
+  if(header&&state.location){fitWeatherText(ctx,state.location,header,{maxFont:13,minFont:10,bold:true});ctx.font='bold 13px sans-serif';const underline=Math.min(header.width*.68,ctx.measureText(state.location).width);ctx.fillRect(header.x+(header.width-underline)/2,header.y+Math.min(header.height-5,18),underline,2)}
+  ctx.save();ctx.beginPath();ctx.rect(primary.x,primary.y,primary.width,primary.height);ctx.clip()
+  if(composition.layout==='vertical'){
+    const tempH=Math.min(58,primary.height*.3),iconH=Math.min(88,primary.height*.4),conditionH=composition.showCondition?Math.max(0,primary.height-tempH-iconH):0
+    fitWeatherText(ctx,state.temperature,{x:primary.x,y:primary.y,width:primary.width,height:tempH},{maxFont:Math.min(42,tempH*.72),minFont:22,bold:true})
+    const iconW=Math.min(primary.width*.62,90);weatherIcon(ctx,primary.x+(primary.width-iconW)/2,primary.y+tempH,iconW,iconH)
+    if(conditionH>=16)fitWeatherText(ctx,state.condition,{x:primary.x,y:primary.y+tempH+iconH,width:primary.width,height:conditionH},{maxFont:13,minFont:10,bold:true,maxLines:conditionH>=28?2:1})
+  }else{
+    const iconW=Math.min(primary.width*.34,94),gap=Math.min(12,primary.width*.04),textRect={x:primary.x+iconW+gap,y:primary.y,width:Math.max(1,primary.width-iconW-gap),height:primary.height}
+    weatherIcon(ctx,primary.x,primary.y+primary.height*.12,iconW,primary.height*.72)
+    const tempH=composition.showCondition?primary.height*.58:primary.height
+    fitWeatherText(ctx,state.temperature,{...textRect,height:tempH},{maxFont:Math.min(42,tempH*.62),minFont:22,bold:true})
+    if(composition.showCondition)fitWeatherText(ctx,state.condition,{x:textRect.x,y:textRect.y+tempH,width:textRect.width,height:textRect.height-tempH},{maxFont:13,minFont:10,bold:true,maxLines:textRect.height-tempH>=28?2:1})
+  }
+  ctx.restore()
+  if(detailsRect){const rowH=detailsRect.height/Math.max(1,detailLines.length);detailLines.forEach((value,index)=>fitWeatherText(ctx,value,{x:detailsRect.x,y:detailsRect.y+index*rowH,width:detailsRect.width,height:rowH},{maxFont:12,minFont:10,maxLines:rowH>=28?2:1}))}
+  if(forecast&&layout.dividerY!=null){line(ctx,forecast.x,c.y+layout.dividerY,forecast.x+forecast.width,c.y+layout.dividerY);const columnW=forecast.width/composition.forecastRows;state.forecast?.slice(0,composition.forecastRows).forEach((item,index)=>{const column={x:forecast.x+index*columnW,y:forecast.y,width:columnW,height:forecast.height};if(index)line(ctx,column.x,column.y+7,column.x,column.y+column.height-5);ctx.save();ctx.beginPath();ctx.rect(column.x+4,column.y,column.width-8,column.height);ctx.clip();fitWeatherText(ctx,item.day,{x:column.x+5,y:column.y+4,width:column.width-10,height:22},{maxFont:12,minFont:10,bold:true});fitWeatherText(ctx,item.temperature,{x:column.x+5,y:column.y+30,width:column.width-10,height:25},{maxFont:15,minFont:12,bold:true});fitWeatherText(ctx,item.condition,{x:column.x+5,y:column.y+59,width:column.width-10,height:column.height-61},{maxFont:11,minFont:9,maxLines:2});ctx.restore()})}
+  else if(composition.showInsight&&detailsRect)fitWeatherText(ctx,state.insight,detailsRect,{maxFont:11,minFont:9,maxLines:2})
 }
 function weatherColumn(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,label:string,d:string[]){centered(ctx,label,x,y+20,w,'bold 15px sans-serif');weatherIcon(ctx,x+w*.25,y+h*.2,w*.5,h*.38);centered(ctx,`${d[3]} | ${d[4]}`,x,y+h-42,w,'bold 14px sans-serif');centered(ctx,'Wind 5 m/s · Rain 20%',x,y+h-20,w,'12px sans-serif')}
 function drawWeather(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[]){
