@@ -1,5 +1,6 @@
 {
   "date": {
+    "small": { "horizontalInset": 8, "maxLines": 1 },
     "medium": { "gaps": [6, 14, 14], "badgePadding": [18, 10], "maxBadgeInset": 16 },
     "calendar": { "padding": [12, 8], "weekWidth": 26, "titleHeight": 22, "titleGap": 10, "dowHeight": 18 },
     "large": { "columnGap": 14, "calendarPadding": 26 },
@@ -21,6 +22,30 @@
     "small": { "horizontalInset": 8, "maxLines": 1 },
     "medium": { "gaps": [10, 14, 18], "badgePadding": [18, 10], "maxBadgeInset": 16 },
     "large": { "columnGap": 14, "listRows": 4, "rowGap": 14, "bulletRadius": 3, "bulletGap": 8 },
-    "xl": { "columnGap": 14, "rowGap": 14, "listRows": 4 }
+    "xl": { "columnGap": 14, "rowGap": 14, "listRows": 4, "calendarMarkers": ["crossedDay", "targetCircle"] }
+  },
+  "surf": {
+    "small": { "headerRegion": 34, "ratingVisual": [134, 18], "forecastColumns": 1 },
+    "medium": { "headerRegion": 58, "topRegions": 2, "ratingVisual": [134, 18], "directionIcons": 2, "metricIcons": 2 },
+    "large": { "headerRegion": 62, "forecastColumns": 4, "labels": ["Morning", "Noon", "Afternoon", "Evening"] },
+    "xl": { "topRegions": 3, "forecastColumns": 4, "dividerPercent": 95, "ratingVisual": [134, 18] }
+  },
+  "soccer": {
+    "small": { "fixtureRegion": 58, "bottomStatRegions": 3 },
+    "medium": { "rows": 7, "dividerPercent": 90 },
+    "large": { "panelRatio": 0.5, "standingsColumns": ["P", "Team", "Pts", "Gap", "GD"], "standingsRows": 6 },
+    "xl": { "panelRatio": 0.5, "standingsColumns": ["P", "Team", "Pts", "Gap", "GD"], "standingsRows": 12 }
+  },
+  "stocks": {
+    "small": { "summaryColumns": 3, "headerRegion": 42 },
+    "medium": { "summaryColumns": 3, "chartRegion": [0.08, 0.38, 0.84, 0.4] },
+    "large": { "panelRatio": 0.5, "chartRegion": [0.53, 0.18, 0.43, 0.68] },
+    "xl": { "summaryColumns": 3, "detailGroups": 3, "detailRows": 2, "chartRegion": [0.03, 0.58, 0.94, 0.35] }
+  },
+  "groceries": {
+    "small": { "headerRegion": 58, "itemRegions": 3 },
+    "medium": { "headerRegion": 70, "listColumns": 2 },
+    "large": { "topPanels": ["Grocery List", "Weekly Menu"], "panelRatio": 0.5 },
+    "xl": { "topPanels": ["Grocery List", "Weekly Menu"], "bottomPanels": ["Running Low", "Meal Ideas"], "panelRatio": 0.5 }
   }
 }
