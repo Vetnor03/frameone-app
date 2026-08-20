@@ -12,11 +12,10 @@ test('every current module has a complete structural contract consumed by Studio
   assert.match(lib,/function visualContractFor/)
 })
 
-test('geometry mapping and unsupported behavior remain closed',async()=>{
-  const [lib,ui]=await Promise.all([read('app/lib/frameSimulator.ts'),read('app/frame-simulator/FrameSimulator.tsx')])
-  assert.match(ui,/colSpan===4&&cell\.rowSpan===1\?'SMALL'/);assert.match(ui,/colSpan===2&&cell\.rowSpan===2\?'MEDIUM'/)
-  assert.match(ui,/colSpan===4&&cell\.rowSpan===2\?'LARGE'/);assert.match(ui,/colSpan===4&&cell\.rowSpan===4\?'XL'/)
-  assert.match(lib,/\.includes\(`\$\{colSpan\}x\$\{rowSpan\}`\)/);assert.match(ui,/UNSUPPORTED — NEEDS NEW VARIANT/)
+test('geometry mapping preserves legacy paths and opens responsive Studio cells',async()=>{
+  const [responsive,ui]=await Promise.all([read('app/lib/responsiveCellProfile.mjs'),read('app/frame-simulator/FrameSimulator.tsx')])
+  for(const pair of [["4x1","SMALL"],["2x2","MEDIUM"],["4x2","LARGE"],["4x4","XL"]])assert.match(responsive,new RegExp(`\\['${pair[0]}', '${pair[1]}'\\]`))
+  assert.match(ui,/strategy\.path==='responsive'/);assert.doesNotMatch(ui,/UNSUPPORTED — NEEDS NEW VARIANT/)
 })
 
 test('reminder contract matches adaptive firmware composition',async()=>{
