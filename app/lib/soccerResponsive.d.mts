@@ -1,0 +1,12 @@
+import type { ResponsiveCellProfile } from './responsiveCellProfile.mjs'
+export type SoccerRect={x:number;y:number;width:number;height:number}
+export type SoccerFixture={homeTeam:string;awayTeam:string;kickoffDay?:string|null;kickoffTime?:string|null;homeScore?:number|null;awayScore?:number|null}
+export type SoccerStanding={position:number;team:string;points:number;gap?:number|null;goalDifference?:number|null;selected?:boolean}
+export type SoccerState={teamName:string|null;competitionName?:string|null;nextFixture?:SoccerFixture|null;previousFixture?:SoccerFixture|null;position?:number|null;points?:number|null;table?:readonly SoccerStanding[];topScorer?:{name:string;goals:number}|null;record?:{won:number;drawn:number;lost:number}|null;goalsFor?:number|null;goalsAgainst?:number|null;goalDifference?:number|null;form?:string|null}
+export const soccerStudioPresets:Record<'normal'|'long'|'extreme'|'empty',SoccerState>
+export function soccerTeamAbbreviation(name:unknown):string
+export function fitSoccerFact(value:string|number|null|undefined,width:number,height:number,measure:(value:string,fontSize:number)=>number,options?:{maxFont?:number;minFont?:number}):{text:string;fontSize:number}|null
+export function soccerFixtureTeamLabels(fixture:SoccerFixture|null|undefined,width:number,measure:(value:string,fontSize:number)=>number,fontSize?:number):{home:string;away:string;abbreviated:boolean}|null
+export function soccerTableWindow(rows:readonly SoccerStanding[]|null|undefined,maxRows:number):SoccerStanding[]
+export function soccerComposition(profile:ResponsiveCellProfile,state:SoccerState):{family:'empty'|'micro'|'fixture-strip'|'fixture-stack'|'fixture-history'|'fixture-standings'|'expanded';available:boolean;primaryState:'empty'|'next'|'previous'|'standing';showStanding:boolean;showPrevious:boolean;showTable:boolean;tableColumns:string[];tableRows:number;showDetails:boolean}
+export function soccerLayout(profile:ResponsiveCellProfile,composition:ReturnType<typeof soccerComposition>):{emptyRect:SoccerRect|null;primaryRect:SoccerRect|null;kickoffRect:SoccerRect|null;teamsRect:SoccerRect|null;standingRect:SoccerRect|null;previousRect:SoccerRect|null;standingsRect:SoccerRect|null;detailsRect:SoccerRect|null;rowRects:SoccerRect[]}
