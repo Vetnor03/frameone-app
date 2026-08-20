@@ -97,10 +97,37 @@ test('Countdown regions are bounded and pairwise disjoint for long and extreme t
     if(new Set(['4x1','2x2','4x2','4x4']).has(`${colSpan}x${rowSpan}`))continue
     const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),layout=countdownLayout(profile,countdownComposition(profile,state))
     const primary=[layout.titleRect,layout.countRect,layout.unitRect,layout.targetDateRect].filter(Boolean)
-    for(const rect of [...primary,layout.upcomingRect,...layout.upcomingRows].filter(Boolean)){assert.ok(rect.width>0&&rect.height>0);assert.ok(rect.x>=0&&rect.y>=0);assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)}
+    for(const rect of [...primary,layout.upcomingRect,...layout.upcomingRows.map(row=>row.rowRect)].filter(Boolean)){assert.ok(rect.width>0&&rect.height>0);assert.ok(rect.x>=0&&rect.y>=0);assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)}
     for(let i=0;i<primary.length;i++)for(let j=i+1;j<primary.length;j++)assert.equal(overlap(primary[i],primary[j]),false)
-    if(layout.upcomingRect){for(const rect of primary)assert.equal(overlap(rect,layout.upcomingRect),false);for(const row of layout.upcomingRows)assert.ok(row.x>=layout.upcomingRect.x&&row.y>=layout.upcomingRect.y&&row.x+row.width<=layout.upcomingRect.x+layout.upcomingRect.width&&row.y+row.height<=layout.upcomingRect.y+layout.upcomingRect.height)}
+    if(layout.upcomingRect){for(const rect of primary)assert.equal(overlap(rect,layout.upcomingRect),false);for(const {rowRect:row} of layout.upcomingRows)assert.ok(row.x>=layout.upcomingRect.x&&row.y>=layout.upcomingRect.y&&row.x+row.width<=layout.upcomingRect.x+layout.upcomingRect.width&&row.y+row.height<=layout.upcomingRect.y+layout.upcomingRect.height)}
   }
+})
+
+test('expanded Countdown groups its hero and uses compact aligned upcoming rows', () => {
+  const overlap=(a,b)=>a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height
+  for(const [colSpan,rowSpan] of [[2,4],[3,4],[4,3],[3,3]]){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114)
+    const layout=countdownLayout(profile,countdownComposition(profile,countdownStudioPresets.extreme))
+    assert.ok(layout.heroGroupRect.height<layout.primaryRect.height)
+    assert.ok(layout.heroGroupRect.y>layout.primaryRect.y)
+    assert.ok(layout.heroGroupRect.y+layout.heroGroupRect.height<layout.primaryRect.y+layout.primaryRect.height)
+    for(let index=0;index<layout.upcomingRows.length;index++){
+      const row=layout.upcomingRows[index]
+      assert.ok(row.rowRect.height<=34)
+      assert.equal(row.titleRect.y,row.rowRect.y);assert.equal(row.titleRect.height,row.rowRect.height)
+      assert.equal(row.metricRect.y,row.rowRect.y);assert.equal(row.metricRect.height,row.rowRect.height)
+      assert.equal(overlap(row.titleRect,row.metricRect),false)
+      if(index)assert.equal(overlap(layout.upcomingRows[index-1].rowRect,row.rowRect),false)
+    }
+    const last=layout.upcomingRows.at(-1)?.rowRect
+    assert.ok(last.y+last.height<layout.upcomingRect.y+layout.upcomingRect.height)
+  }
+})
+
+test('3x2 Countdown keeps its established non-expanded composition', () => {
+  const profile=responsiveCellProfile(3,2,3*196,2*114),composition=countdownComposition(profile,countdownStudioPresets.normal)
+  const layout=countdownLayout(profile,composition)
+  assert.equal(composition.family,'stack');assert.equal(layout.heroGroupRect,layout.primaryRect);assert.equal(layout.upcomingRows.length,0)
 })
 
 test('Countdown composition responds to actual physical orientation', () => {
