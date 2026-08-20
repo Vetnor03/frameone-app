@@ -1,4 +1,5 @@
 export const REMINDER_TEXT_ORDER=Object.freeze(['full','compact','short','tiny'])
+export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extreme','empty'])
 
 /** Selects verbosity only after composition has allocated a real pixel width. */
 export function chooseReminderTextVariant(item,availableWidth,measure) {

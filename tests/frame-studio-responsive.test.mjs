@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRenderStrategy } from '../app/lib/responsiveCellProfile.mjs'
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
-import { chooseReminderTextVariant, REMINDER_TEXT_ORDER, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
+import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
   for (let colSpan=1;colSpan<=4;colSpan++) for (let rowSpan=1;rowSpan<=4;rowSpan++) {
@@ -108,4 +109,12 @@ test('deterministic reminder states cover empty, normal, long and extreme conten
   assert.deepEqual(Object.keys(reminderStudioPresets),['empty','normal','long','extreme'])
   assert.equal(reminderStudioPresets.empty.today.length,0);assert.ok(reminderStudioPresets.normal.today.length>=3)
   assert.ok(reminderStudioPresets.long.tomorrow.length);assert.ok(reminderStudioPresets.extreme.today.length>reminderStudioPresets.normal.today.length)
+})
+
+test('Studio sample-data options keep lowercase state values separate from labels', async () => {
+  assert.deepEqual(REMINDER_STUDIO_PRESET_VALUES,['normal','long','extreme','empty'])
+  for(const value of REMINDER_STUDIO_PRESET_VALUES)assert.ok(reminderStudioPresets[value])
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  assert.match(source,/<label>Sample data <select/);assert.match(source,/<option key=\{x\} value=\{x\}>/)
+  assert.match(source,/GeometryShowcase module=\{showcaseModule\}[^>]*preset=\{preset\}/)
 })
