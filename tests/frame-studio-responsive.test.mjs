@@ -97,7 +97,7 @@ test('Countdown regions are bounded and pairwise disjoint for long and extreme t
     if(new Set(['4x1','2x2','4x2','4x4']).has(`${colSpan}x${rowSpan}`))continue
     const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),layout=countdownLayout(profile,countdownComposition(profile,state))
     const primary=[layout.titleRect,layout.countRect,layout.unitRect,layout.targetDateRect].filter(Boolean)
-    for(const rect of [...primary,layout.upcomingRect,...layout.upcomingRows.map(row=>row.rowRect)].filter(Boolean)){assert.ok(rect.width>0&&rect.height>0);assert.ok(rect.x>=0&&rect.y>=0);assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)}
+    for(const rect of [...primary,layout.upcomingRect,layout.upcomingGroupRect,...layout.upcomingRows.map(row=>row.rowRect)].filter(Boolean)){assert.ok(rect.width>0&&rect.height>0);assert.ok(rect.x>=0&&rect.y>=0);assert.ok(rect.x+rect.width<=profile.width);assert.ok(rect.y+rect.height<=profile.height)}
     for(let i=0;i<primary.length;i++)for(let j=i+1;j<primary.length;j++)assert.equal(overlap(primary[i],primary[j]),false)
     if(layout.upcomingRect){for(const rect of primary)assert.equal(overlap(rect,layout.upcomingRect),false);for(const {rowRect:row} of layout.upcomingRows)assert.ok(row.x>=layout.upcomingRect.x&&row.y>=layout.upcomingRect.y&&row.x+row.width<=layout.upcomingRect.x+layout.upcomingRect.width&&row.y+row.height<=layout.upcomingRect.y+layout.upcomingRect.height)}
   }
@@ -122,6 +122,44 @@ test('expanded Countdown groups its hero and uses compact aligned upcoming rows'
     const last=layout.upcomingRows.at(-1)?.rowRect
     assert.ok(last.y+last.height<layout.upcomingRect.y+layout.upcomingRect.height)
   }
+})
+
+test('split-horizontal Countdown centers a content-sized upcoming group beside the hero', () => {
+  for(const [colSpan,rowSpan] of [[3,3],[3,4],[4,3]]){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114)
+    const layout=countdownLayout(profile,countdownComposition(profile,countdownStudioPresets.extreme))
+    assert.ok(layout.upcomingGroupRect);assert.ok(layout.upcomingGroupRect.height<layout.upcomingRect.height)
+    const upcomingCenter=layout.upcomingGroupRect.y+layout.upcomingGroupRect.height/2
+    const panelCenter=layout.upcomingRect.y+layout.upcomingRect.height/2
+    const heroCenter=layout.heroGroupRect.y+layout.heroGroupRect.height/2
+    assert.ok(Math.abs(upcomingCenter-panelCenter)<=.001)
+    assert.ok(Math.abs(upcomingCenter-heroCenter)<=1)
+    for(const row of layout.upcomingRows){
+      assert.ok(row.rowRect.y>=layout.upcomingGroupRect.y)
+      assert.ok(row.rowRect.y+row.rowRect.height<=layout.upcomingGroupRect.y+layout.upcomingGroupRect.height)
+    }
+  }
+})
+
+test('Countdown upcoming row heights stay compact while the group moves as a unit', () => {
+  for(const [colSpan,rowSpan] of [[3,3],[3,4],[4,3]]){
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114)
+    const layout=countdownLayout(profile,countdownComposition(profile,countdownStudioPresets.extreme))
+    const rowCount=layout.upcomingRows.length,availableHeight=Math.floor((layout.upcomingRect.height-27-5-4*(rowCount-1))/rowCount)
+    const expectedHeight=Math.min(34,Math.max(1,availableHeight),Math.max(28,layout.upcomingRect.width*.085))
+    assert.deepEqual(layout.upcomingRows.map(row=>row.rowRect.height),Array(layout.upcomingRows.length).fill(expectedHeight))
+  }
+})
+
+test('expanded-vertical Countdown keeps compact groups in one vertical composition', () => {
+  const profile=responsiveCellProfile(2,4,2*196,4*114)
+  const layout=countdownLayout(profile,countdownComposition(profile,countdownStudioPresets.extreme))
+  assert.ok(layout.heroGroupRect.height<layout.primaryRect.height)
+  assert.ok(layout.upcomingGroupRect.height<layout.upcomingRect.height)
+  assert.equal(layout.upcomingGroupRect.x,layout.upcomingRect.x)
+  assert.equal(layout.upcomingGroupRect.width,layout.upcomingRect.width)
+  const visualGap=layout.upcomingGroupRect.y-(layout.heroGroupRect.y+layout.heroGroupRect.height)
+  assert.ok(visualGap>=16&&visualGap<80)
 })
 
 test('3x2 Countdown keeps its established non-expanded composition', () => {

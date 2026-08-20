@@ -29,7 +29,7 @@ export function countdownComposition(profile,state) {
 export function countdownLayout(profile,composition) {
   const pad=Math.max(8,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.07)))
   const inner={x:pad,y:pad,width:Math.max(1,profile.width-pad*2),height:Math.max(1,profile.height-pad*2)}
-  if(!composition.available)return Object.freeze({pad,emptyRect:inner,primaryRect:null,heroGroupRect:null,titleRect:null,countRect:null,unitRect:null,targetDateRect:null,upcomingRect:null,upcomingRows:[]})
+  if(!composition.available)return Object.freeze({pad,emptyRect:inner,primaryRect:null,heroGroupRect:null,titleRect:null,countRect:null,unitRect:null,targetDateRect:null,upcomingRect:null,upcomingGroupRect:null,upcomingRows:[]})
   let primaryRect=inner,upcomingRect=null
   if(composition.upcomingRows){
     if(composition.family==='split-horizontal'){
@@ -64,15 +64,21 @@ export function countdownLayout(profile,composition) {
     unitRect={x:primaryRect.x,y:countRect.y+countRect.height,width:primaryRect.width,height:unitHeight}
     if(dateHeight)targetDateRect={x:primaryRect.x,y:unitRect.y+unitRect.height,width:primaryRect.width,height:dateHeight}
   }
-  const upcomingRows=upcomingRect?Array.from({length:composition.upcomingRows},(_,index)=>{
+  let upcomingGroupRect=null
+  const upcomingRows=upcomingRect?(()=>{
     const headerHeight=27,headerGap=5,rowGap=4
     const availableRowHeight=Math.floor((upcomingRect.height-headerHeight-headerGap-rowGap*(composition.upcomingRows-1))/composition.upcomingRows)
     const rowHeight=Math.min(34,Math.max(1,availableRowHeight),Math.max(28,upcomingRect.width*.085))
-    const rowRect={x:upcomingRect.x,y:upcomingRect.y+headerHeight+headerGap+index*(rowHeight+rowGap),width:upcomingRect.width,height:rowHeight}
-    const metricWidth=Math.min(rowRect.width*.42,110),columnGap=8
-    return Object.freeze({rowRect,titleRect:{x:rowRect.x,y:rowRect.y,width:Math.max(1,rowRect.width-metricWidth-columnGap),height:rowRect.height},metricRect:{x:rowRect.x+rowRect.width-metricWidth,y:rowRect.y,width:metricWidth,height:rowRect.height}})
-  }):[]
-  return Object.freeze({pad,emptyRect:null,primaryRect,heroGroupRect,titleRect,countRect,unitRect,targetDateRect,upcomingRect,upcomingRows:Object.freeze(upcomingRows)})
+    const groupHeight=headerHeight+headerGap+composition.upcomingRows*rowHeight+(composition.upcomingRows-1)*rowGap
+    const groupY=composition.family==='split-horizontal'?upcomingRect.y+(upcomingRect.height-groupHeight)/2:upcomingRect.y
+    upcomingGroupRect={x:upcomingRect.x,y:groupY,width:upcomingRect.width,height:groupHeight}
+    return Array.from({length:composition.upcomingRows},(_,index)=>{
+      const rowRect={x:upcomingGroupRect.x,y:upcomingGroupRect.y+headerHeight+headerGap+index*(rowHeight+rowGap),width:upcomingGroupRect.width,height:rowHeight}
+      const metricWidth=Math.min(rowRect.width*.42,110),columnGap=8
+      return Object.freeze({rowRect,titleRect:{x:rowRect.x,y:rowRect.y,width:Math.max(1,rowRect.width-metricWidth-columnGap),height:rowRect.height},metricRect:{x:rowRect.x+rowRect.width-metricWidth,y:rowRect.y,width:metricWidth,height:rowRect.height}})
+    })
+  })():[]
+  return Object.freeze({pad,emptyRect:null,primaryRect,heroGroupRect,titleRect,countRect,unitRect,targetDateRect,upcomingRect,upcomingGroupRect,upcomingRows:Object.freeze(upcomingRows)})
 }
 
 /** Fit an atomic structured fact without ever shortening its value. */

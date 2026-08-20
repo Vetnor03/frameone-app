@@ -186,7 +186,7 @@ function drawResponsiveCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   const composition=countdownComposition(p,state),layout=countdownLayout(p,composition)
   const absolute=(rect:CountdownRect|null)=>rect&&({x:c.x+rect.x,y:c.y+rect.y,width:rect.width,height:rect.height})
   if(!composition.available){centered(ctx,'No countdown',c.x,c.y+c.h/2+5,c.w,'14px sans-serif');return}
-  const title=absolute(layout.titleRect),count=absolute(layout.countRect)!,unit=absolute(layout.unitRect)!,date=absolute(layout.targetDateRect),upcoming=absolute(layout.upcomingRect)
+  const title=absolute(layout.titleRect),count=absolute(layout.countRect)!,unit=absolute(layout.unitRect)!,date=absolute(layout.targetDateRect),upcomingGroup=absolute(layout.upcomingGroupRect)
   const ellipsize=(value:string,width:number)=>{if(ctx.measureText(value).width<=width)return value;let lo=0,hi=value.length;while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(ctx.measureText(`${value.slice(0,mid).trimEnd()}…`).width<=width)lo=mid;else hi=mid-1}return lo?`${value.slice(0,lo).trimEnd()}…`:''}
   const fitted=(value:string,rect:CountdownRect,{max=17,min=11,lines=1,bold=true}:{max?:number;min?:number;lines?:number;bold?:boolean}={})=>{
     const prefix=bold?'bold ':''
@@ -204,7 +204,7 @@ function drawResponsiveCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   ctx.font=`bold ${countSize}px sans-serif`;ctx.textAlign='center';ctx.fillText(countValue,count.x+count.width/2,count.y+(count.height+countSize*.72)/2)
   structured(state.unit!,unit,{max:composition.family==='horizontal'?15:16,min:9})
   if(date&&state.targetDate){ctx.font='bold 12px sans-serif';if(ctx.measureText(state.targetDate).width<=date.width-12){const badgeW=Math.min(date.width,ctx.measureText(state.targetDate).width+18),badgeH=Math.min(25,date.height),bx=date.x+(date.width-badgeW)/2,by=date.y+(date.height-badgeH)/2;ctx.save();ctx.fillStyle='#fff';ctx.fillRect(bx,by,badgeW,badgeH);ctx.fillStyle='#000';centered(ctx,state.targetDate,bx,by+17,badgeW,'bold 12px sans-serif');ctx.restore()}}
-  if(upcoming){centered(ctx,'COMING UP',upcoming.x,upcoming.y+15,upcoming.width,'bold 12px sans-serif');layout.upcomingRows.forEach((local,index)=>{const item=state.upcoming?.[index];if(!item)return;const titleRect=absolute(local.titleRect)!,metricRect=absolute(local.metricRect)!,metric=`${item.count} ${item.unit}`;ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(ellipsize(item.title,titleRect.width),titleRect.x,titleRect.y+(titleRect.height+12*.72)/2);structured(metric,metricRect,{max:12,min:9})})}
+  if(upcomingGroup){centered(ctx,'COMING UP',upcomingGroup.x,upcomingGroup.y+15,upcomingGroup.width,'bold 12px sans-serif');layout.upcomingRows.forEach((local,index)=>{const item=state.upcoming?.[index];if(!item)return;const titleRect=absolute(local.titleRect)!,metricRect=absolute(local.metricRect)!,metric=`${item.count} ${item.unit}`;ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(ellipsize(item.title,titleRect.width),titleRect.x,titleRect.y+(titleRect.height+12*.72)/2);structured(metric,metricRect,{max:12,min:9})})}
 }
 function drawCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],preset:Preset){
   const {year,month0}=calendarPreset[preset],nextMonth0=(month0+1)%12,nextYear=month0===11?year+1:year
