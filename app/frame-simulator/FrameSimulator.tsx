@@ -11,7 +11,7 @@ import { createHistory, findContainingCell, findDividerNearPointer, findSplitGui
 import { legacyStudioVariant, responsiveCellProfile, studioRenderStrategy, type ResponsiveCellProfile } from '../lib/responsiveCellProfile.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, reminderComposition, reminderLayout, reminderStudioPresets, type ReminderItem, type ReminderItemLayout, type ReminderRect, type ReminderState } from '../lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets, type WeatherState } from '../lib/weatherResponsive.mjs'
-import { countdownComposition, countdownLayout, countdownStudioPresets, type CountdownRect, type CountdownState } from '../lib/countdownResponsive.mjs'
+import { countdownComposition, countdownLayout, countdownStudioPresets, fitCountdownStructuredText, type CountdownRect, type CountdownState } from '../lib/countdownResponsive.mjs'
 
 type Preset = typeof REMINDER_STUDIO_PRESET_VALUES[number]
 const fake = {
@@ -192,14 +192,19 @@ function drawResponsiveCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
     const prefix=bold?'bold ':''
     for(let size=max;size>=min;size--){ctx.font=`${prefix}${size}px sans-serif`;const words=value.split(/\s+/),wrapped:string[]=[];let current='';for(const word of words){const candidate=current?`${current} ${word}`:word;if(ctx.measureText(candidate).width<=rect.width)current=candidate;else{if(current)wrapped.push(current);current=word}}if(current)wrapped.push(current);if(wrapped.length<=lines&&wrapped.length*size*1.2<=rect.height){ctx.textAlign='center';wrapped.forEach((text,index)=>ctx.fillText(text,rect.x+rect.width/2,rect.y+size+(index*size*1.2)));return}if(size===min){const shown=wrapped.slice(0,lines);shown[lines-1]=ellipsize(wrapped.slice(lines-1).join(' '),rect.width);ctx.textAlign='center';shown.filter(Boolean).forEach((text,index)=>ctx.fillText(text,rect.x+rect.width/2,rect.y+size+(index*size*1.2)))}}
   }
+  const structured=(value:string,rect:CountdownRect,{max=16,min=9}:{max?:number;min?:number}={})=>{
+    const result=fitCountdownStructuredText(value,rect.width,rect.height,(text,size)=>{ctx.font=`bold ${size}px sans-serif`;return ctx.measureText(text).width},{maxFont:max,minFont:min})
+    if(!result)return false
+    ctx.font=`bold ${result.fontSize}px sans-serif`;ctx.textAlign='center';ctx.fillText(result.text,rect.x+rect.width/2,rect.y+(rect.height+result.fontSize*.72)/2);return true
+  }
   if(title&&state.title)fitted(state.title,title,{max:17,min:11,lines:title.height>=38?2:1})
   // Count is always drawn verbatim. Only its font size changes to fit the allocated hero region.
   const countValue=state.count!,maxCount=Math.max(18,Math.min(76,Math.floor(count.height*.82))),minCount=10
   let countSize=maxCount;for(;countSize>minCount;countSize--){ctx.font=`bold ${countSize}px sans-serif`;if(ctx.measureText(countValue).width<=count.width-2&&countSize<=count.height*.88)break}
   ctx.font=`bold ${countSize}px sans-serif`;ctx.textAlign='center';ctx.fillText(countValue,count.x+count.width/2,count.y+(count.height+countSize*.72)/2)
-  fitted(state.unit!,unit,{max:composition.family==='horizontal'?15:16,min:9,lines:unit.height>=30?2:1})
+  structured(state.unit!,unit,{max:composition.family==='horizontal'?15:16,min:9})
   if(date&&state.targetDate){ctx.font='bold 12px sans-serif';if(ctx.measureText(state.targetDate).width<=date.width-12){const badgeW=Math.min(date.width,ctx.measureText(state.targetDate).width+18),badgeH=Math.min(25,date.height),bx=date.x+(date.width-badgeW)/2,by=date.y+(date.height-badgeH)/2;ctx.save();ctx.fillStyle='#fff';ctx.fillRect(bx,by,badgeW,badgeH);ctx.fillStyle='#000';centered(ctx,state.targetDate,bx,by+17,badgeW,'bold 12px sans-serif');ctx.restore()}}
-  if(upcoming){centered(ctx,'COMING UP',upcoming.x,upcoming.y+15,upcoming.width,'bold 12px sans-serif');layout.upcomingRows.forEach((local,index)=>{const item=state.upcoming?.[index];if(!item)return;const row=absolute(local)!,metric=`${item.count} ${item.unit}`,metricWidth=Math.min(row.width*.42,110),titleRect={x:row.x,y:row.y,width:Math.max(1,row.width-metricWidth-8),height:row.height},metricRect={x:row.x+row.width-metricWidth,y:row.y,width:metricWidth,height:row.height};ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(ellipsize(item.title,titleRect.width),titleRect.x,titleRect.y+Math.min(17,titleRect.height*.65));fitted(metric,metricRect,{max:12,min:9,lines:1})})}
+  if(upcoming){centered(ctx,'COMING UP',upcoming.x,upcoming.y+15,upcoming.width,'bold 12px sans-serif');layout.upcomingRows.forEach((local,index)=>{const item=state.upcoming?.[index];if(!item)return;const row=absolute(local)!,metric=`${item.count} ${item.unit}`,metricWidth=Math.min(row.width*.42,110),titleRect={x:row.x,y:row.y,width:Math.max(1,row.width-metricWidth-8),height:row.height},metricRect={x:row.x+row.width-metricWidth,y:row.y,width:metricWidth,height:row.height};ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(ellipsize(item.title,titleRect.width),titleRect.x,titleRect.y+Math.min(17,titleRect.height*.65));structured(metric,metricRect,{max:12,min:9})})}
 }
 function drawCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],preset:Preset){
   const {year,month0}=calendarPreset[preset],nextMonth0=(month0+1)%12,nextYear=month0===11?year+1:year

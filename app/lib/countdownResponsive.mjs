@@ -66,3 +66,12 @@ export function countdownLayout(profile,composition) {
   }):[]
   return Object.freeze({pad,emptyRect:null,primaryRect,titleRect,countRect,unitRect,targetDateRect,upcomingRect,upcomingRows:Object.freeze(upcomingRows)})
 }
+
+/** Fit an atomic structured fact without ever shortening its value. */
+export function fitCountdownStructuredText(value,width,height,measure,{maxFont=16,minFont=9}={}) {
+  if(!value||width<=0||height<=0)return null
+  for(let fontSize=Math.floor(maxFont);fontSize>=Math.ceil(minFont);fontSize--){
+    if(fontSize<=height&&measure(value,fontSize)<=width)return Object.freeze({text:value,fontSize})
+  }
+  return null
+}

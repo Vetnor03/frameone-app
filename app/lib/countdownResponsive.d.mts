@@ -9,3 +9,4 @@ export const COUNTDOWN_STUDIO_PRESET_VALUES:readonly ['normal','long','extreme',
 export const countdownStudioPresets:Readonly<Record<typeof COUNTDOWN_STUDIO_PRESET_VALUES[number],CountdownState>>
 export function countdownComposition(profile:ResponsiveCellProfile,state:CountdownState):CountdownComposition
 export function countdownLayout(profile:ResponsiveCellProfile,composition:CountdownComposition):CountdownLayout
+export function fitCountdownStructuredText(value:string,width:number,height:number,measure:(value:string,fontSize:number)=>number,options?:{maxFont?:number;minFont?:number}):Readonly<{text:string;fontSize:number}>|null

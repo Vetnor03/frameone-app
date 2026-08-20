@@ -5,7 +5,7 @@ import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRende
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderComposition, reminderLayout, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
-import { countdownComposition, countdownLayout, countdownStudioPresets } from '../app/lib/countdownResponsive.mjs'
+import { countdownComposition, countdownLayout, countdownStudioPresets, fitCountdownStructuredText } from '../app/lib/countdownResponsive.mjs'
 
 test('all 16 rectangular geometries produce responsive profiles', () => {
   for (let colSpan=1;colSpan<=4;colSpan++) for (let rowSpan=1;rowSpan<=4;rowSpan++) {
@@ -123,6 +123,20 @@ test('Countdown runtime exports have matching declarations', async () => {
   const declarations=await readFile(new URL('../app/lib/countdownResponsive.d.mts',import.meta.url),'utf8')
   const exports=[...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1])
   for(const name of exports)assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
+})
+
+test('Countdown structured facts fit whole or are omitted whole', async () => {
+  const measure=(value,fontSize)=>value.length*fontSize
+  const upcoming=fitCountdownStructuredText('365 days',80,12,measure,{maxFont:12,minFont:9})
+  assert.deepEqual(upcoming,{text:'365 days',fontSize:10})
+  assert.equal(fitCountdownStructuredText('99999 working days',20,12,measure,{maxFont:12,minFont:9}),null)
+  assert.equal(fitCountdownStructuredText('19 August 2027',30,12,measure,{maxFont:12,minFont:9}),null)
+  assert.equal(countdownStudioPresets.extreme.count,'99999')
+  const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+  const responsive=source.slice(source.indexOf('function drawResponsiveCountdown'),source.indexOf('function drawCountdown'))
+  assert.match(responsive,/structured\(metric,metricRect/);assert.match(responsive,/structured\(state\.unit!/)
+  assert.doesNotMatch(responsive,/fitted\(metric|fitted\(state\.unit/)
+  assert.match(responsive,/ellipsize\(item\.title/);assert.match(responsive,/measureText\(state\.targetDate\)/)
 })
 
 test('all Weather states compose safely for all 16 geometries', () => {
