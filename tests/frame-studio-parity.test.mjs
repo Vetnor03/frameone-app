@@ -21,11 +21,15 @@ test('geometry mapping and unsupported behavior remain closed',async()=>{
 
 test('reminder contract matches adaptive firmware composition',async()=>{
   const [p,ui]=await Promise.all([read('shared/module-layout-profiles.json').then(JSON.parse),read('app/frame-simulator/FrameSimulator.tsx')])
-  assert.equal(p.reminders.medium.layout,'adaptive-centered-list');assert.equal(p.reminders.medium.maxTodayItems,4);assert.equal(p.reminders.medium.maxFutureItems,3)
+  assert.equal(p.reminders.small.maxItems,3);assert.equal(p.reminders.medium.layout,'adaptive-centered-list');assert.equal(p.reminders.medium.maxTodayItems,4);assert.equal(p.reminders.medium.maxFutureItems,3)
   assert.deepEqual(p.reminders.medium.regions,['overflow','tomorrowNote','futureDateBadge']);assert.equal(p.reminders.medium.badgeMode,'fixed-white-black')
   assert.equal(p.reminders.large.leftPanel,'medium');assert.equal(p.reminders.xl.topLeftPanel,'medium');assert.equal(p.reminders.xl.bottomLeftPanel,'datedReminderRows');assert.equal(p.reminders.xl.dateColumn,true)
   const reminderSource=ui.slice(ui.indexOf('function drawReminderMedium'),ui.indexOf('function drawReminders'))
-  assert.doesNotMatch(reminderSource,/cols=|cellW=c\.w\/cols/);assert.match(reminderSource,/Tomorrow: 2/);assert.match(reminderSource,/\+\$\{d\.length-1-visible\} more/)
+  assert.match(reminderSource,/maxItems=small\?moduleProfiles\.reminders\.small\.maxItems:isFuture\?moduleProfiles\.reminders\.medium\.maxFutureItems:moduleProfiles\.reminders\.medium\.maxTodayItems/)
+  assert.doesNotMatch(reminderSource,/maxItems=isFuture\?moduleProfiles\.reminders\.medium/);assert.doesNotMatch(reminderSource,/cols=|cellW=c\.w\/cols/)
+  assert.match(reminderSource,/tomorrowNote=d\[0\]==='Today'\?'Tomorrow: 2':'\'/);assert.doesNotMatch(reminderSource,/tomorrowNote=!small/)
+  assert.match(reminderSource,/visible=Math\.min\(d\.length-1,maxItems\)/);assert.match(reminderSource,/\+\$\{d\.length-1-visible\} more/)
+  assert.match(ui,/extreme:\['Upcoming'(?:,[^\]]+){5}\]/)
 })
 
 test('fixed badges and calendar marker primitives match firmware colors and states',async()=>{
