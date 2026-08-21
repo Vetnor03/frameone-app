@@ -216,40 +216,39 @@ test('smart completion matches all seven real-user blank-canvas gestures',()=>{
   for(const [start,end,expected] of cases){const result=draw(start,end);assert.equal(result.valid,true);assert.deepEqual(result.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),expected);assertPartition(result.cells);assert.deepEqual(geometry(draw(end,start).cells),geometry(result.cells))}
 })
 
-test('direct crossings overwrite perpendicular structure while endpoints preserve T junctions',()=>{
+test('direct crossings preserve every perpendicular divider and create intersections',()=>{
   const p=(col,row)=>({x:col*100,y:row*100}),draw=(cells,start,end)=>finalizeDividerStroke(cells,start,end,viewport)
   const horizontal=draw(initialLayout(),p(0,2),p(4,2)).cells
-  const verticalOverwrite=draw(horizontal,p(2,0),p(2,4));assert.deepEqual(verticalOverwrite.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,2,4],[2,0,2,4]]);assertPartition(verticalOverwrite.cells)
+  const verticalCross=draw(horizontal,p(2,0),p(2,4));assert.deepEqual(verticalCross.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,2,2],[2,0,2,2],[0,2,2,2],[2,2,2,2]]);assertPartition(verticalCross.cells)
   const vertical=draw(initialLayout(),p(2,0),p(2,4)).cells
-  const horizontalOverwrite=draw(vertical,p(0,2),p(4,2));assert.deepEqual(horizontalOverwrite.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,4,2],[0,2,4,2]]);assertPartition(horizontalOverwrite.cells)
+  const horizontalCross=draw(vertical,p(0,2),p(4,2));assert.deepEqual(geometry(horizontalCross.cells),geometry(verticalCross.cells));assertPartition(horizontalCross.cells)
   const t=draw(horizontal,p(2,0),p(2,2));assert.deepEqual(t.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,2,2],[2,0,2,2],[0,2,4,2]]);assertPartition(t.cells)
   const bands=draw(draw(horizontal,p(0,1),p(4,1)).cells,p(0,3),p(4,3)).cells
-  const multiple=draw(bands,p(2,0),p(2,4));assert.deepEqual(multiple.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,2,4],[2,0,2,4]]);assertPartition(multiple.cells)
+  const multiple=draw(bands,p(2,0),p(2,4));assert.equal(internalDividerSegments(multiple.cells).filter(s=>s.axis==='horizontal').length,3);assert.equal(multiple.cells.length,8);assertPartition(multiple.cells)
+  assert.deepEqual(geometry(draw(bands,p(2,4),p(2,0)).cells),geometry(multiple.cells))
 })
 
-test('traced divider rewrites only the nearest side of crossed perpendicular bands',()=>{
+test('drawing V1 through horizontal bands preserves the bands',()=>{
   const p=(col,row)=>({x:col*100,y:row*100}),draw=(cells,start,end)=>finalizeDividerStroke(cells,start,end,viewport)
-  const verticalBands=boundary=>[0,1,2].flatMap((row,index)=>[
-    {id:`left-${row}`,col:0,row,colSpan:boundary,rowSpan:index<2?1:2,moduleId:'empty'},
-    {id:`right-${row}`,col:boundary,row,colSpan:4-boundary,rowSpan:index<2?1:2,moduleId:'empty'},
-  ])
-  const atV1=draw(verticalBands(1),p(1,0),p(1,4))
-  assert.equal(atV1.intent,'rewrite');assert.deepEqual(atV1.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,1,4],[1,0,3,1],[1,1,3,1],[1,2,3,2]]);assertPartition(atV1.cells)
-  const atV3=draw(verticalBands(3),p(3,4),p(3,0))
-  assert.equal(atV3.intent,'rewrite');assert.deepEqual(atV3.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,3,1],[3,0,1,4],[0,1,3,1],[0,2,3,2]]);assertPartition(atV3.cells)
+  const bands=draw(draw(initialLayout(),p(0,1),p(4,1)).cells,p(0,2),p(4,2)).cells
+  const result=draw(bands,p(1,0),p(1,4))
+  assert.equal(result.intent,'draw');assert.deepEqual(result.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,1,1],[1,0,3,1],[0,1,1,1],[1,1,3,1],[0,2,1,2],[1,2,3,2]]);assertPartition(result.cells)
 })
 
-test('horizontal traced spine symmetrically consolidates its nearest band',()=>{
-  const p=(col,row)=>({x:col*100,y:row*100})
-  const cells=[0,1,2].flatMap((col,index)=>[
-    {id:`top-${col}`,col,row:0,colSpan:index<2?1:2,rowSpan:1,moduleId:'empty'},
-    {id:`bottom-${col}`,col,row:1,colSpan:index<2?1:2,rowSpan:3,moduleId:'empty'},
-  ])
-  const result=finalizeDividerStroke(cells,p(0,1),p(4,1),viewport)
-  assert.equal(result.intent,'rewrite');assert.deepEqual(result.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,4,1],[0,1,1,3],[1,1,1,3],[2,1,2,3]]);assertPartition(result.cells)
+test('tracing a spine erases only collinear units and preserves crossed dividers',()=>{
+  const p=(col,row)=>({x:col*100,y:row*100}),draw=(cells,start,end)=>finalizeDividerStroke(cells,start,end,viewport)
+  const bands=draw(draw(initialLayout(),p(0,1),p(4,1)).cells,p(0,2),p(4,2)).cells
+  const gridded=draw(bands,p(1,0),p(1,4)).cells
+  const erased=draw(gridded,p(1,0),p(1,4))
+  assert.equal(erased.intent,'erase');assert.deepEqual(geometry(erased.cells),geometry(bands));assertPartition(erased.cells)
+
+  const h2=draw(initialLayout(),p(0,2),p(4,2)).cells
+  const v2=draw(h2,p(2,0),p(2,4)).cells
+  const partial=draw(v2,p(2,2),p(2,4))
+  assert.equal(partial.intent,'erase');assert.deepEqual(partial.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,2,2],[2,0,2,2],[0,2,4,2]]);assertPartition(partial.cells)
 })
 
-test('completion is recursive and inferred intersections do not gain overwrite authority',()=>{
+test('completion is recursive and additive across existing dividers',()=>{
   const p=(col,row)=>({x:col*100,y:row*100}),draw=(cells,start,end)=>finalizeDividerStroke(cells,start,end,viewport)
   const columns=draw(initialLayout(),p(1,0),p(1,4)).cells
   const rightBand=draw(columns,p(1,1),p(3,1));assert.equal(rightBand.valid,true);assert.ok(rightBand.cells.some(c=>c.col===0&&c.row===0&&c.colSpan===1&&c.rowSpan===4));assertPartition(rightBand.cells)
