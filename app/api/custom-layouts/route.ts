@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { normalizeLayoutName, validateCustomGeometry } from '@/app/lib/customLayouts'
+import { nextCustomLayoutName, normalizeLayoutName, validateCustomGeometry } from '@/app/lib/customLayouts'
 
 export const runtime = 'nodejs'
 const tokenFor = (req: Request) => (req.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || ''
@@ -27,11 +27,17 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({})), deviceId = String(body.deviceId || '').trim(), name = normalizeLayoutName(body.name)
-  if (!deviceId || !name) return NextResponse.json({ error: !deviceId ? 'missing_device_id' : 'invalid_name' }, { status: 400 })
+  const body = await req.json().catch(() => ({})), deviceId = String(body.deviceId || '').trim()
+  if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
   const validation = validateCustomGeometry(body.cells, { requirePhysical: false })
   if (!validation.valid) return NextResponse.json({ error: 'invalid_geometry', details: validation }, { status: 400 })
   const ctx = await context(req, deviceId); if ('error' in ctx) return ctx.error
+  let name = normalizeLayoutName(body.name)
+  if (!name) {
+    const existing = await ctx.client.from('custom_layouts').select('name').eq('device_id', deviceId).eq('owner_user_id', ctx.userId)
+    if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 })
+    name = nextCustomLayoutName(existing.data || [])
+  }
   const max = await ctx.client.from('custom_layouts').select('sort_order').eq('device_id', deviceId).eq('owner_user_id', ctx.userId).order('sort_order', { ascending: false }).limit(1).maybeSingle()
   if (max.error) return NextResponse.json({ error: max.error.message }, { status: 500 })
   const result = await ctx.client.from('custom_layouts').insert({ device_id: deviceId, owner_user_id: ctx.userId, name, cells: body.cells, sort_order: Number(max.data?.sort_order ?? -1) + 1 }).select('*').single()

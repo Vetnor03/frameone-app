@@ -4,6 +4,7 @@ export const BUILT_IN_LAYOUT_KEYS: readonly ['default', 'pyramid', 'square', 'fu
 export const CUSTOM_LAYOUT_NAME_MAX: number
 export const SUPPORTED_PHYSICAL_GEOMETRIES: Set<string>
 export function normalizeLayoutName(value: unknown): string
+export function nextCustomLayoutName(layouts: Array<{name?:unknown}>): string
 export function orderedLayoutItems(customLayouts: CustomLayout[]): Array<{type: string; key: string; id: string; layout?: CustomLayout}>
 export function validateCustomGeometry(cells: unknown, options?: {requirePhysical?: boolean; requireModules?: boolean}): {valid: boolean; errors: string[]; unsupportedSlots: number[]}
 export function geometryWithAssignments(cells: CustomLayoutCell[], assignments: Record<number, string | null>): Array<CustomLayoutCell & {module: string}>

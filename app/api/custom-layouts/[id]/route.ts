@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{id:strin
   const { id } = await params, ctx = await owner(req, id); if ('error' in ctx) return ctx.error
   const following = await ctx.client.from('custom_layouts').select('id,sort_order').eq('device_id',ctx.found.device_id).eq('owner_user_id',ctx.userId).gt('sort_order',ctx.found.sort_order).order('sort_order')
   for (const item of [...(following.data || [])].reverse()) await ctx.client.from('custom_layouts').update({sort_order:Number(item.sort_order)+1}).eq('id',item.id)
-  const result = await ctx.client.from('custom_layouts').insert({device_id:ctx.found.device_id,owner_user_id:ctx.userId,name:`${ctx.found.name} copy`.slice(0,40),cells:ctx.found.cells,sort_order:Number(ctx.found.sort_order)+1}).select('*').single()
+  const result = await ctx.client.from('custom_layouts').insert({device_id:ctx.found.device_id,owner_user_id:ctx.userId,name:normalizeLayoutName(`${ctx.found.name} copy`),cells:ctx.found.cells,sort_order:Number(ctx.found.sort_order)+1}).select('*').single()
   if (result.error) return NextResponse.json({error:result.error.message},{status:500})
   return NextResponse.json({layout:map(result.data)}, {status:201})
 }

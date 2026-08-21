@@ -28,7 +28,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 
@@ -1407,7 +1407,7 @@ export default function HomePage() {
     }
   }, [])
 
-  const layoutMeta = carouselItemId==='add-layout' ? {title:'CUSTOM',subtitle:'Tap + to create your own layout'} : activeCustomLayoutId ? {title:customLayouts.find(item=>item.id===activeCustomLayoutId)?.name||'Custom layout',subtitle:'CUSTOM'} : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
+  const layoutMeta = carouselItemId==='add-layout' ? {title:'CUSTOM',subtitle:'Tap + to create your own layout'} : activeCustomLayoutId ? {title:normalizeLayoutName(customLayouts.find(item=>item.id===activeCustomLayoutId)?.name)||'CUSTOM LAYOUT',subtitle:'CUSTOM'} : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
   const mirrorSnapshot = useMemo<PhysicalFrameSnapshot | null>(() => {
     if (physicalFrameSnapshot) {
@@ -2223,8 +2223,8 @@ export default function HomePage() {
   function beginEditLayout(layout:CustomLayout){setLayoutDraftName(layout.name);setLayoutDraftCells(editorCells(layout.cells));setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'edit',layout})}
   function cancelLayoutEditor(){setLayoutFlow(null);setLayoutDraftError('');setLayoutDraftUnsupported([])}
   async function submitLayoutDraft(){
-    const name=normalizeLayoutName(layoutDraftName),cells=withSlots(layoutDraftCells)
-    if(!name){setLayoutDraftError('Enter a name for your layout.');return}
+    const name=normalizeLayoutName(layoutDraftName)||(layoutFlow?.mode==='create'?nextCustomLayoutName(customLayouts):''),cells=withSlots(layoutDraftCells)
+    if(!name)return
     const validation=validateCustomGeometry(cells,{requirePhysical:false})
     if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError('The layout must cover the whole frame without overlapping.');return}
     setLayoutDraftName(name);setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutDraftSaving(true)
@@ -3580,7 +3580,7 @@ function FrameTab(props: {
         </button>
 
         <div className="min-w-0 flex-1 text-center">
-          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
+          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold uppercase tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Drag to merge · tap to split':subtitle}</div>
         </div>
 
@@ -3590,7 +3590,7 @@ function FrameTab(props: {
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap} renderCellLabel={assignment=><FrameCellLabel language={language} module={assignment as ModuleKey|null}/>}/>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
+        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap} renderCellLabel={(assignment,cell)=><AdaptiveCustomCellLabel language={language} module={assignment as ModuleKey|null} colSpan={cell.colSpan} rowSpan={cell.rowSpan}/>}/>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
       </div>
     </div>
   )
@@ -3754,6 +3754,32 @@ function CellButton({
 function FrameCellLabel({language,module}:{language:AppLanguage;module:ModuleKey|null|undefined}) {
   return <div className={`tracking-widest ${module?'text-[color:var(--fg)] font-semibold text-lg':'text-[color:var(--fg-50)] text-2xl'}`}>
     {module?moduleLabel(language,module):'+'}
+  </div>
+}
+
+function AdaptiveCustomCellLabel({language,module,colSpan,rowSpan}:{language:AppLanguage;module:ModuleKey|null|undefined;colSpan:number;rowSpan:number}) {
+  const boxRef=useRef<HTMLDivElement>(null),labelRef=useRef<HTMLSpanElement>(null)
+  const [fit,setFit]=useState({rotated:false,scale:1})
+  const text=module?moduleLabel(language,module):'+'
+  useLayoutEffect(()=>{
+    const box=boxRef.current,label=labelRef.current
+    if(!box||!label)return
+    const update=()=>{
+      const availableWidth=Math.max(1,box.clientWidth-12),availableHeight=Math.max(1,box.clientHeight-12)
+      const labelWidth=Math.max(1,label.scrollWidth),labelHeight=Math.max(1,label.scrollHeight)
+      const horizontal=Math.min(1,availableWidth/labelWidth,availableHeight/labelHeight)
+      const rotated=Math.min(1,availableWidth/labelHeight,availableHeight/labelWidth)
+      const useRotation=!!module&&rowSpan>colSpan&&rotated>horizontal*1.15
+      setFit({rotated:useRotation,scale:useRotation?rotated:horizontal})
+    }
+    update()
+    const observer=new ResizeObserver(update);observer.observe(box)
+    return()=>observer.disconnect()
+  },[text,module,colSpan,rowSpan])
+  return <div ref={boxRef} data-custom-cell-label data-col-span={colSpan} data-row-span={rowSpan} data-orientation={fit.rotated?'rotated':'horizontal'} className="pointer-events-none relative h-full w-full overflow-hidden">
+    <span ref={labelRef} className={`absolute left-1/2 top-1/2 whitespace-nowrap ${module?'text-lg font-semibold tracking-widest text-[color:var(--fg)]':'text-2xl text-[color:var(--fg-50)]'}`} style={{transform:`translate(-50%, -50%) rotate(${fit.rotated?-90:0}deg) scale(${fit.scale})`}}>
+      {text}
+    </span>
   </div>
 }
 
