@@ -3581,11 +3581,9 @@ function FrameTab(props: {
         </button>
 
         <div className="min-w-0 flex-1 text-center">
-          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="text-2xl font-semibold tracking-widest">{title}</div>}
+          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<div className="relative flex items-center"><button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button><button type="button" aria-label="Manage custom layout" onClick={onToggleMenu} className="inline-flex h-8 w-6 items-center justify-center text-sm text-[color:var(--fg-35)]">•••</button>{customMenuOpen&&<div className="absolute left-7 top-8 z-30 w-40 rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)] p-1 text-left text-sm shadow-xl">{[['Rename',()=>onRename(customLayout)],['Duplicate',()=>onDuplicate(customLayout)]].map(([label,action])=><button key={String(label)} onClick={action as ()=>void} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[color:var(--fg-10)]">{label as string}</button>)}</div>}</div>}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Drag to merge · tap to split':subtitle}</div>
         </div>
-
-        {customLayout&&!editorMode&&<div className="absolute right-5 top-0"><button aria-label="Manage custom layout" onClick={onToggleMenu} className="h-10 w-10 text-xl">…</button>{customMenuOpen&&<div className="absolute right-0 z-30 w-40 rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)] p-1 text-left text-sm shadow-xl">{[['Edit layout',()=>onEdit(customLayout)],['Rename',()=>onRename(customLayout)],['Duplicate',()=>onDuplicate(customLayout)],['Delete',()=>onDelete(customLayout)]].map(([label,action])=><button key={String(label)} onClick={action as ()=>void} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[color:var(--fg-10)]">{label as string}</button>)}</div>}</div>}
 
         <button onClick={onNext} disabled={!!editorMode} aria-hidden={!!editorMode} className={`w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl ${editorMode?'invisible':''}`}>
           ›
@@ -3593,7 +3591,7 @@ function FrameTab(props: {
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<div className="h-full"><CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap}/>{Object.values(customAssignments).some(value=>!value)&&<p className="mt-3 text-center text-xs text-[color:var(--fg-55)]">Add a module to every cell before updating the frame.</p>}</div>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
+        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap}/>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
       </div>
     </div>
   )
