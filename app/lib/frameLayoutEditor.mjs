@@ -310,6 +310,71 @@ export function previewStroke(cells, stroke, viewport = {width: 785, height: 458
   return {valid: true, cells: next, parentId: parent.id, intendedId, normalized}
 }
 
+/**
+ * Normalize and apply a mode-less divider stroke. Dotted units are added while
+ * a stroke that is predominantly over solid units removes the whole traced
+ * segment. Atomic connectivity is converted back to rectangular editor cells,
+ * so an operation which would make an L-shaped region is rejected unchanged.
+ */
+export function previewDividerStroke(cells, stroke, viewport = {width: 785, height: 458}) {
+  const length = Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y)
+  if (length < MIN_STROKE_PX) return {valid: false, reason: 'Draw a longer line', cells}
+  if (!validateLayout(cells) || [stroke.start, stroke.end].some(p => p.x < 0 || p.y < 0 || p.x > viewport.width || p.y > viewport.height)) return {valid: false, reason: 'Keep the line inside the viewport', cells}
+  const orientation = detectOrientation(stroke)
+  const vertical = orientation === 'vertical'
+  const boundary = snapBoundary(vertical ? (stroke.start.x + stroke.end.x) / 2 : (stroke.start.y + stroke.end.y) / 2, vertical ? viewport.width : viewport.height)
+  const rangeStart = snapBoundary(Math.min(vertical ? stroke.start.y : stroke.start.x, vertical ? stroke.end.y : stroke.end.x), vertical ? viewport.height : viewport.width)
+  const rangeEnd = snapBoundary(Math.max(vertical ? stroke.start.y : stroke.start.x, vertical ? stroke.end.y : stroke.end.x), vertical ? viewport.height : viewport.width)
+  const normalized = {orientation, boundary, rangeStart, rangeEnd}
+  if (boundary <= 0 || boundary >= GRID_SIZE || rangeStart >= rangeEnd) return {valid: false, reason: 'That line does not follow an internal grid path', cells, normalized}
+
+  const key = (axis, fixed, along) => `${axis}:${fixed}:${along}`
+  const barriers = new Set()
+  for (const segment of internalDividerSegments(cells)) for (let along = segment.from; along < segment.to; along++) barriers.add(key(segment.axis, segment.boundary, along))
+  let existing = 0
+  for (let along = rangeStart; along < rangeEnd; along++) if (barriers.has(key(orientation, boundary, along))) existing++
+  const intent = existing > (rangeEnd - rangeStart) / 2 ? 'erase' : 'draw'
+  for (let along = rangeStart; along < rangeEnd; along++) {
+    const unit = key(orientation, boundary, along)
+    if (intent === 'erase') barriers.delete(unit)
+    else barriers.add(unit)
+  }
+
+  const visited = new Set(), geometries = []
+  for (let row = 0; row < GRID_SIZE; row++) for (let col = 0; col < GRID_SIZE; col++) {
+    const origin = `${col},${row}`
+    if (visited.has(origin)) continue
+    const queue = [{col, row}], component = []
+    visited.add(origin)
+    while (queue.length) {
+      const point = queue.shift(); component.push(point)
+      const neighbors = [
+        {col: point.col - 1, row: point.row, blocked: key('vertical', point.col, point.row)},
+        {col: point.col + 1, row: point.row, blocked: key('vertical', point.col + 1, point.row)},
+        {col: point.col, row: point.row - 1, blocked: key('horizontal', point.row, point.col)},
+        {col: point.col, row: point.row + 1, blocked: key('horizontal', point.row + 1, point.col)},
+      ]
+      for (const next of neighbors) if (next.col >= 0 && next.row >= 0 && next.col < GRID_SIZE && next.row < GRID_SIZE && !barriers.has(next.blocked) && !visited.has(`${next.col},${next.row}`)) { visited.add(`${next.col},${next.row}`); queue.push(next) }
+    }
+    const minCol = Math.min(...component.map(p => p.col)), maxCol = Math.max(...component.map(p => p.col)), minRow = Math.min(...component.map(p => p.row)), maxRow = Math.max(...component.map(p => p.row))
+    const geometry = {col: minCol, row: minRow, colSpan: maxCol - minCol + 1, rowSpan: maxRow - minRow + 1}
+    if (cellArea(geometry) !== component.length) return {valid: false, reason: 'That stroke would create a non-rectangular region', cells, normalized, intent}
+    geometries.push(geometry)
+  }
+  const next = sortCells(geometries.map(geometry => {
+    const unchanged = cells.find(cell => cell.col === geometry.col && cell.row === geometry.row && cell.colSpan === geometry.colSpan && cell.rowSpan === geometry.rowSpan)
+    return unchanged ?? {...geometry, id: `stroke:${geometry.col},${geometry.row},${geometry.colSpan},${geometry.rowSpan}`, moduleId: 'empty'}
+  }))
+  if (!validateLayout(next) || internalDividerSegments(next).some(segment => {
+    for (let along = segment.from; along < segment.to; along++) if (!barriers.has(key(segment.axis, segment.boundary, along))) return true
+    return false
+  })) return {valid: false, reason: 'The proposed partition is invalid', cells, normalized, intent}
+  return {valid: true, cells: next, normalized, intent}
+}
+
+/** Synchronous mode-less divider entrypoint; pass the actual release point. */
+export const finalizeDividerStroke = (cells, start, end, viewport) => previewDividerStroke(cells, {start, end}, viewport)
+
 /** Synchronous pointer-up entrypoint; callers must pass the actual release point. */
 export const finalizeStroke = (cells, start, end, viewport) => previewStroke(cells, {start, end}, viewport)
 
