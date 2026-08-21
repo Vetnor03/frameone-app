@@ -108,6 +108,30 @@ test('authoritative rectangle subtraction creates deterministic rectangular part
   assert.deepEqual(overwriteWithSelection([full],center).cells,result.cells)
   result=overwriteWithSelection([full],{col:0,row:1,colSpan:2,rowSpan:2});assert.equal(result.valid,true);assert.equal(result.cells.length,4);assertPartition(result.cells)
 })
+test('mobile drag rectangles use simulator overwrite semantics from a full canvas',()=>{
+  const full=initialLayout(),center=(col,row)=>({x:col*100+50,y:row*100+50})
+  const cases=[
+    [center(0,0),center(3,0),[{col:0,row:0,colSpan:4,rowSpan:1,moduleId:'empty'},{col:0,row:1,colSpan:4,rowSpan:3,moduleId:'empty'}]],
+    [center(0,0),center(3,1),[{col:0,row:0,colSpan:4,rowSpan:2,moduleId:'empty'},{col:0,row:2,colSpan:4,rowSpan:2,moduleId:'empty'}]],
+  ]
+  for(const [start,end,expected] of cases){const result=overwriteWithSelection(full,dragSelectionFromPointers(start,end,viewport));assert.equal(result.valid,true);assert.deepEqual(geometry(result.cells),expected);assertPartition(result.cells)}
+
+  const quadrantSelection=dragSelectionFromPointers(center(0,0),center(1,1),viewport)
+  const quadrant=overwriteWithSelection(full,quadrantSelection)
+  assert.equal(quadrant.valid,true);assert.ok(quadrant.cells.some(cell=>cell.col===0&&cell.row===0&&cell.colSpan===2&&cell.rowSpan===2));assertPartition(quadrant.cells)
+  const reversed=overwriteWithSelection(full,dragSelectionFromPointers(center(1,1),center(0,0),viewport))
+  assert.deepEqual(reversed.cells,quadrant.cells);assertPartition(reversed.cells)
+})
+test('mobile drag overwrite crosses existing partitions and every tap result remains valid',()=>{
+  const before=[{id:'top',col:0,row:0,colSpan:4,rowSpan:1,moduleId:'empty'},{id:'lower-left',col:0,row:1,colSpan:2,rowSpan:3,moduleId:'empty'},{id:'lower-right',col:2,row:1,colSpan:2,rowSpan:3,moduleId:'empty'}]
+  const selection=dragSelectionFromPointers({x:150,y:50},{x:250,y:250},viewport),overwritten=overwriteWithSelection(before,selection)
+  assert.equal(overwritten.valid,true);assert.ok(overwritten.cells.some(cell=>cell.col===1&&cell.row===0&&cell.colSpan===2&&cell.rowSpan===3));assertPartition(overwritten.cells)
+
+  const full=initialLayout(),splitTap=resolveShortTap(full,{x:200,y:100},viewport)
+  assert.equal(splitTap.kind,'split');const splitResult=splitCellAtBoundary(full,splitTap.cell.id,splitTap.guide);assert.equal(splitResult.valid,true);assertPartition(splitResult.cells)
+  const mergeTap=resolveShortTap(splitResult.cells,{x:200,y:100},viewport)
+  assert.equal(mergeTap.kind,'merge');const mergeResult=mergeDivider(splitResult.cells,mergeTap.divider);assert.equal(mergeResult.valid,true);assertPartition(mergeResult.cells)
+})
 test('authoritative overwrite crosses assigned cells and is exactly undoable',()=>{
   const before=[{id:'left',col:0,row:0,colSpan:2,rowSpan:4,moduleId:'weather'},{id:'rt',col:2,row:0,colSpan:2,rowSpan:2,moduleId:'date'},{id:'rb',col:2,row:2,colSpan:2,rowSpan:2,moduleId:'surf'}]
   const result=overwriteWithSelection(before,{col:1,row:1,colSpan:2,rowSpan:2});assert.equal(result.valid,true);assertPartition(result.cells)

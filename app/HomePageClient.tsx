@@ -28,7 +28,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, duplicateLayoutClientState, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { orderedLayoutItems, customPhysicalPayload, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 
@@ -1150,7 +1150,6 @@ export default function HomePage() {
   const [layoutDraftError,setLayoutDraftError]=useState('')
   const [layoutDraftUnsupported,setLayoutDraftUnsupported]=useState<number[]>([])
   const [layoutDraftSaving,setLayoutDraftSaving]=useState(false)
-  const [customMenuId, setCustomMenuId] = useState<string|null>(null)
   const [carouselItemId, setCarouselItemId] = useState<string>('built-in:default')
 
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -2214,7 +2213,7 @@ export default function HomePage() {
     const json=await response.json().catch(()=>({}));if(!response.ok)throw new Error(json.error||'Unable to update layout.');return json
   }
   function beginCreateLayout(){setLayoutDraftName('');setLayoutDraftCells(initialEditorCells());setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'create'})}
-  function beginEditLayout(layout:CustomLayout){setLayoutDraftName(layout.name);setLayoutDraftCells(editorCells(layout.cells));setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'edit',layout});setCustomMenuId(null)}
+  function beginEditLayout(layout:CustomLayout){setLayoutDraftName(layout.name);setLayoutDraftCells(editorCells(layout.cells));setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'edit',layout})}
   function cancelLayoutEditor(){setLayoutFlow(null);setLayoutDraftError('');setLayoutDraftUnsupported([])}
   async function submitLayoutDraft(){
     const name=normalizeLayoutName(layoutDraftName),cells=withSlots(layoutDraftCells)
@@ -2237,9 +2236,7 @@ export default function HomePage() {
     }
     setLayoutFlow(null)
   }
-  async function renameCustom(layout:CustomLayout){const name=window.prompt('Layout name',layout.name);if(name==null)return;const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'PATCH',body:JSON.stringify({name})});setCustomLayouts(items=>items.map(item=>item.id===layout.id?json.layout:item));setCustomMenuId(null)}
-  async function duplicateCustom(layout:CustomLayout){const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'POST'}),next=duplicateLayoutClientState(customLayouts,customAssignments,layout.id,json.layout);setCustomLayouts(next.layouts);setCustomAssignments(next.assignments);setCarouselItemId(next.carouselItemId);setActiveCustomLayoutId(next.activeCustomLayoutId);setActiveTab('frame');setDirty(true);setCustomMenuId(null)}
-  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setCustomMenuId(null);setLayoutFlow(null)}
+  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
   function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
@@ -2549,12 +2546,7 @@ async function handleSelectTab(k: TabKey) {
                   customAssignments={customAssignments[carouselItemId]||{}}
                   isAddCard={carouselItemId==='add-layout'}
                   onAdd={beginCreateLayout}
-                  customMenuOpen={customMenuId===carouselItemId}
-                  onToggleMenu={()=>setCustomMenuId(value=>value===carouselItemId?null:carouselItemId)}
                   onEdit={beginEditLayout}
-                  onRename={renameCustom}
-                  onDuplicate={duplicateCustom}
-                  onDelete={deleteCustom}
                 />
               )}
 
@@ -3564,14 +3556,9 @@ function FrameTab(props: {
   customAssignments: Record<number,ModuleKey|null>
   isAddCard: boolean
   onAdd:()=>void
-  customMenuOpen:boolean
-  onToggleMenu:()=>void
   onEdit:(layout:CustomLayout)=>void
-  onRename:(layout:CustomLayout)=>void
-  onDuplicate:(layout:CustomLayout)=>void
-  onDelete:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,customMenuOpen,onToggleMenu,onEdit,onRename,onDuplicate,onDelete } = props
+  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
 
   return (
     <div className="h-full flex flex-col">
@@ -3581,7 +3568,7 @@ function FrameTab(props: {
         </button>
 
         <div className="min-w-0 flex-1 text-center">
-          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<div className="relative flex items-center"><button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button><button type="button" aria-label="Manage custom layout" onClick={onToggleMenu} className="inline-flex h-8 w-6 items-center justify-center text-sm text-[color:var(--fg-35)]">•••</button>{customMenuOpen&&<div className="absolute left-7 top-8 z-30 w-40 rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)] p-1 text-left text-sm shadow-xl">{[['Rename',()=>onRename(customLayout)],['Duplicate',()=>onDuplicate(customLayout)]].map(([label,action])=><button key={String(label)} onClick={action as ()=>void} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[color:var(--fg-10)]">{label as string}</button>)}</div>}</div>}</div>}
+          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="flex items-center justify-center gap-1"><span className="text-2xl font-semibold tracking-widest">{title}</span>{customLayout&&<button type="button" aria-label="Edit custom layout" title="Edit layout" onClick={()=>onEdit(customLayout)} className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--fg-45)] transition-colors hover:text-[color:var(--fg-75)]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.5"><path d="m4 20 4.1-1 10.8-10.8a2.1 2.1 0 0 0-3-3L5.1 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg></button>}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Drag to merge · tap to split':subtitle}</div>
         </div>
 
