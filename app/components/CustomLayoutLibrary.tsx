@@ -1,6 +1,6 @@
 'use client'
 import React, { useRef, useState } from 'react'
-import { MIN_STROKE_PX, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, resolveDividerStrokeLock, sortCells, type DividerStrokeLock, type DividerStrokePreview, type EditorCell } from '../lib/frameLayoutEditor.mjs'
+import { MIN_STROKE_PX, clampPointToViewport, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, resolveDividerStrokeLock, sortCells, type DividerStrokeLock, type DividerStrokePreview, type EditorCell, type Point } from '../lib/frameLayoutEditor.mjs'
 import { type CustomLayoutCell } from '../lib/customLayouts'
 
 export const initialEditorCells = (): EditorCell[] => [{ id:'whole', col:0, row:0, colSpan:4, rowSpan:4, moduleId:'empty' }]
@@ -28,20 +28,23 @@ export function AddLayoutCard({onClick}:{onClick:()=>void}) { return <button typ
 </button> }
 
 export function InlineCustomLayoutEditor({cells,onChange,unsupportedSlots=[]}:{cells:EditorCell[];onChange:(cells:EditorCell[])=>void;unsupportedSlots?:number[]}) {
-  const drag=useRef<{id:number;start:{x:number;y:number};lock?:DividerStrokeLock}|null>(null)
+  const drag=useRef<{id:number;start:Point;latestRaw:Point;latestClamped:Point;lock?:DividerStrokeLock;meaningful:boolean}|null>(null)
   const [pendingStroke,setPendingStroke]=useState<DividerStrokePreview|null>(null)
   const point=(event:React.PointerEvent<HTMLDivElement>)=>{const r=event.currentTarget.getBoundingClientRect();return{x:event.clientX-r.left,y:event.clientY-r.top}}
   const viewport=(element:HTMLDivElement)=>({width:element.clientWidth,height:element.clientHeight})
-  const down=(e:React.PointerEvent<HTMLDivElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,start:point(e)};setPendingStroke(null)}
-  const move=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const current=point(e),start=drag.current.start
+  const down=(e:React.PointerEvent<HTMLDivElement>)=>{const start=point(e);e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,start,latestRaw:start,latestClamped:start,meaningful:false};setPendingStroke(null)}
+  const move=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const raw=point(e),current=clampPointToViewport(raw,viewport(e.currentTarget)),start=drag.current.start
+    drag.current.latestRaw=raw;drag.current.latestClamped=current
     if(Math.hypot(current.x-start.x,current.y-start.y)<MIN_STROKE_PX){setPendingStroke(null);return}
     drag.current.lock??=resolveDividerStrokeLock({start,end:current},viewport(e.currentTarget))
-    const preview=previewDividerStroke(cells,{start,end:current,lock:drag.current.lock},viewport(e.currentTarget));setPendingStroke(preview.normalized?.rangeStart!==preview.normalized?.rangeEnd?preview:null)
+    const preview=previewDividerStroke(cells,{start,end:current,lock:drag.current.lock},viewport(e.currentTarget));drag.current.meaningful=!!drag.current.lock&&preview.valid&&preview.normalized?.rangeStart!==preview.normalized?.rangeEnd;setPendingStroke(preview.normalized?.rangeStart!==preview.normalized?.rangeEnd?preview:null)
   }
   const clearDrag=(pointerId:number)=>{if(!drag.current||drag.current.id!==pointerId)return;drag.current=null;setPendingStroke(null)}
   const cancel=(e:React.PointerEvent<HTMLDivElement>)=>clearDrag(e.pointerId)
-  const up=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const end=point(e),{start}=drag.current,lock=drag.current.lock??resolveDividerStrokeLock({start,end},viewport(e.currentTarget));clearDrag(e.pointerId);const result=finalizeDividerStroke(cells,start,end,viewport(e.currentTarget),lock);if(result.valid)onChange(result.cells)}
-  return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onLostPointerCapture={cancel} className="relative h-full w-full touch-none overflow-hidden">
+  const finish=(e:React.PointerEvent<HTMLDivElement>,lost=false)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const state=drag.current,raw=lost?state.latestRaw:point(e),end=lost?state.latestClamped:clampPointToViewport(raw,viewport(e.currentTarget));state.latestRaw=raw;state.latestClamped=end;const lock=state.lock??resolveDividerStrokeLock({start:state.start,end},viewport(e.currentTarget));if(lost&&!state.meaningful){clearDrag(e.pointerId);return}clearDrag(e.pointerId);const result=finalizeDividerStroke(cells,state.start,end,viewport(e.currentTarget),lock);if(result.valid)onChange(result.cells)}
+  const up=(e:React.PointerEvent<HTMLDivElement>)=>finish(e)
+  const lostCapture=(e:React.PointerEvent<HTMLDivElement>)=>finish(e,true)
+  return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onLostPointerCapture={lostCapture} className="relative h-full w-full touch-none overflow-hidden">
     <CustomLayoutPreview cells={withSlots(pendingStroke?.valid?pendingStroke.cells:cells)} unsupportedSlots={unsupportedSlots} editorGuide/>
     {pendingStroke?.inferredKeys?.map(unit=>{const [axis,fixed,along]=unit.split(':');return <span key={unit} aria-label="Inferred divider completion" data-layout-inferred-stroke={unit} className={`pointer-events-none absolute z-30 bg-[#2aa3ff]/70 ${axis==='vertical'?'w-[2px] -translate-x-1/2':'h-[2px] -translate-y-1/2'}`} style={axis==='vertical'?{left:`${Number(fixed)*25}%`,top:`${Number(along)*25}%`,height:'25%'}:{top:`${Number(fixed)*25}%`,left:`${Number(along)*25}%`,width:'25%'}}/>})}
     {pendingStroke?.normalized&&pendingStroke.intent!=='erase'&&<span aria-label="Pending divider stroke" data-layout-pending-stroke={`${pendingStroke.normalized.orientation}:${pendingStroke.normalized.boundary}:${pendingStroke.normalized.rangeStart}:${pendingStroke.normalized.rangeEnd}`} className={`pointer-events-none absolute z-30 rounded-full bg-[#2aa3ff] ${pendingStroke.normalized.orientation==='vertical'?'w-[3px] -translate-x-1/2':'h-[3px] -translate-y-1/2'}`} style={pendingStroke.normalized.orientation==='vertical'?{left:`${pendingStroke.normalized.boundary*25}%`,top:`${pendingStroke.normalized.rangeStart*25}%`,height:`${(pendingStroke.normalized.rangeEnd-pendingStroke.normalized.rangeStart)*25}%`}:{top:`${pendingStroke.normalized.boundary*25}%`,left:`${pendingStroke.normalized.rangeStart*25}%`,width:`${(pendingStroke.normalized.rangeEnd-pendingStroke.normalized.rangeStart)*25}%`}}/>}
