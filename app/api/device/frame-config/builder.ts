@@ -1,6 +1,7 @@
 // app/api/device/frame-config/builder.ts
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
+import { validateCustomGeometry } from '@/app/lib/customLayouts'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
@@ -192,7 +193,7 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       throw new Error(error.message)
     }
 
-    const settings_json: UnknownRecord =
+    let settings_json: UnknownRecord =
       data?.settings_json ?? {
         theme: 'dark',
         layout: 'default',
@@ -203,6 +204,17 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
         ],
         modules: {},
       }
+
+    if (settings_json.layout === 'custom') {
+      const customValidation = validateCustomGeometry(settings_json.cells, { requirePhysical: true, requireModules: true })
+      if (!customValidation.valid) {
+        // Defense in depth: an incomplete or malformed custom plan must never be
+        // delivered to firmware, whose deliberate D2 fallback remains unchanged.
+        settings_json = { ...settings_json, layout: 'default', cells: [
+          { slot: 0, module: 'date' }, { slot: 1, module: 'weather:1' }, { slot: 2, module: 'surf:1' },
+        ] }
+      }
+    }
 
     const sourceModules: UnknownRecord =
       settings_json.modules && typeof settings_json.modules === 'object' && !Array.isArray(settings_json.modules)

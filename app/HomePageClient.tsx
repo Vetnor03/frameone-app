@@ -28,6 +28,8 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
+import { orderedLayoutItems, customPhysicalPayload, duplicateLayoutClientState, remapAssignmentsAfterGeometryEdit, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { AddLayoutCard, CustomLayoutFlow, CustomLayoutPreview } from './components/CustomLayoutLibrary'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -474,8 +476,9 @@ type SettingsJson = {
   theme?: 'dark' | 'light'
   language?: AppLanguage
   fontSize?: AppFontSize
-  layout?: LayoutKey
-  cells?: { slot: number; module: string }[]
+  layout?: LayoutKey | 'custom'
+  custom_layout_id?: string
+  cells?: { slot: number; module: string; col?:number; row?:number; colSpan?:number; rowSpan?:number }[]
   modules?: Record<string, any>
   pinned_tabs?: ModuleKey[]
   layout_module_memory?: (ModuleKey | null)[]
@@ -1137,6 +1140,12 @@ export default function HomePage() {
   )
 
   const [layoutKey, setLayoutKey] = useState<LayoutKey>('default')
+  const [customLayouts, setCustomLayouts] = useState<CustomLayout[]>([])
+  const [activeCustomLayoutId, setActiveCustomLayoutId] = useState<string | null>(null)
+  const [customAssignments, setCustomAssignments] = useState<Record<string, Record<number, ModuleKey | null>>>({})
+  const [layoutFlow, setLayoutFlow] = useState<{mode:'create'}|{mode:'edit';layout:CustomLayout}|null>(null)
+  const [customMenuId, setCustomMenuId] = useState<string|null>(null)
+  const [carouselItemId, setCarouselItemId] = useState<string>('built-in:default')
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerSlot, setPickerSlot] = useState<number | null>(null)
@@ -1392,7 +1401,7 @@ export default function HomePage() {
     }
   }, [])
 
-  const layoutMeta = allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0]
+  const layoutMeta = activeCustomLayoutId ? {title:customLayouts.find(item=>item.id===activeCustomLayoutId)?.name||'Custom layout',subtitle:'CUSTOM'} : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
   const mirrorSnapshot = useMemo<PhysicalFrameSnapshot | null>(() => {
     if (physicalFrameSnapshot) {
@@ -1886,6 +1895,12 @@ export default function HomePage() {
   }
 
   async function loadDeviceSettings(deviceId: string) {
+    const session = await supabase.auth.getSession()
+    const token = session.data.session?.access_token
+    if (token) {
+      const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (response.ok) setCustomLayouts((await response.json()).layouts || [])
+    }
     const { data, error } = await supabase
       .from('device_settings')
       .select('settings_json, updated_at')
@@ -1904,7 +1919,8 @@ export default function HomePage() {
     const nextFrameTheme = isAppTheme(json.theme) ? json.theme : 'dark'
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
-    const nextLayout = (json.layout || 'default') as LayoutKey
+    const storedCustomId = json.layout === 'custom' && typeof json.custom_layout_id === 'string' ? json.custom_layout_id : null
+    const nextLayout = (json.layout === 'custom' ? 'default' : (json.layout || 'default')) as LayoutKey
     const nextCellsForLayout = cellsArrayToMap(nextLayout, json.cells || [])
 
     const nextCellsByLayout = {
@@ -1934,6 +1950,9 @@ export default function HomePage() {
     setFontSize(nextFontSize)
     setCellsByLayout(nextCellsByLayout)
     setLayoutKey(nextLayout)
+    setActiveCustomLayoutId(storedCustomId)
+    setCarouselItemId(storedCustomId || `built-in:${nextLayout}`)
+    if (storedCustomId) setCustomAssignments(previous => ({...previous,[storedCustomId]:Object.fromEntries((json.cells||[]).map(cell=>[cell.slot,baseModuleKeyFromStored(cell.module)]))}))
     setModulesJson(normalizedModules)
     setPinnedModuleTabs(nextPinnedTabs)
 
@@ -2183,50 +2202,36 @@ export default function HomePage() {
     await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
   }
 
-  function prevLayout() {
-    const layouts = allLayouts(language)
-    const idx = layouts.findIndex((l) => l.key === layoutKey)
-    const next = (idx - 1 + layouts.length) % layouts.length
-    const nextLayoutKey = layouts[next].key
-
-    stickySettingsRef.current = false
-
-    const projected = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, nextLayoutKey)
-    const nextCellsByLayout = {
-      ...cellsByLayout,
-      [nextLayoutKey]: projected,
+  async function customLayoutRequest(path:string, init?:RequestInit) {
+    const session=await supabase.auth.getSession(),token=session.data.session?.access_token
+    const response=await fetch(path,{...init,headers:{'content-type':'application/json',Authorization:`Bearer ${token}`,...init?.headers}})
+    const json=await response.json().catch(()=>({}));if(!response.ok)throw new Error(json.error||'Unable to update layout.');return json
+  }
+  async function saveCustomLayout(name:string,cells:CustomLayoutCell[]) {
+    if(!activeDeviceId)return
+    if(layoutFlow?.mode==='edit'){
+      const json=await customLayoutRequest(`/api/custom-layouts/${layoutFlow.layout.id}`,{method:'PATCH',body:JSON.stringify({name,cells})})
+      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id);setActiveCustomLayoutId(json.layout.id);setActiveTab('frame')
+      setCustomAssignments(items=>({...items,[json.layout.id]:remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,items[json.layout.id]||{})}))
+    }else{
+      const json=await customLayoutRequest('/api/custom-layouts',{method:'POST',body:JSON.stringify({deviceId:activeDeviceId,name,cells})})
+      setCustomLayouts(items=>[...items,json.layout]);setActiveCustomLayoutId(json.layout.id);setCarouselItemId(json.layout.id)
+      setCustomAssignments(items=>({...items,[json.layout.id]:Object.fromEntries(cells.map(cell=>[cell.slot,null]))}))
     }
+    setLayoutFlow(null)
+  }
+  async function renameCustom(layout:CustomLayout){const name=window.prompt('Layout name',layout.name);if(name==null)return;const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'PATCH',body:JSON.stringify({name})});setCustomLayouts(items=>items.map(item=>item.id===layout.id?json.layout:item));setCustomMenuId(null)}
+  async function duplicateCustom(layout:CustomLayout){const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'POST'}),next=duplicateLayoutClientState(customLayouts,customAssignments,layout.id,json.layout);setCustomLayouts(next.layouts);setCustomAssignments(next.assignments);setCarouselItemId(next.carouselItemId);setActiveCustomLayoutId(next.activeCustomLayoutId);setActiveTab('frame');setDirty(true);setCustomMenuId(null)}
+  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setCustomMenuId(null)}
+  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout'){setLayoutFlow({mode:'create'});return}const custom=customLayouts.find(item=>item.id===id);if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
+  function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
-    setCellsByLayout(nextCellsByLayout)
-    setLayoutKey(nextLayoutKey)
-    setActiveTab('frame')
-    markDirty({
-      layoutKey: nextLayoutKey,
-      cellsByLayout: nextCellsByLayout,
-    })
+  function prevLayout() {
+    moveCarousel(-1)
   }
 
   function nextLayout() {
-    const layouts = allLayouts(language)
-    const idx = layouts.findIndex((l) => l.key === layoutKey)
-    const next = (idx + 1) % layouts.length
-    const nextLayoutKey = layouts[next].key
-
-    stickySettingsRef.current = false
-
-    const projected = projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current, nextLayoutKey)
-    const nextCellsByLayout = {
-      ...cellsByLayout,
-      [nextLayoutKey]: projected,
-    }
-
-    setCellsByLayout(nextCellsByLayout)
-    setLayoutKey(nextLayoutKey)
-    setActiveTab('frame')
-    markDirty({
-      layoutKey: nextLayoutKey,
-      cellsByLayout: nextCellsByLayout,
-    })
+    moveCarousel(1)
   }
 
   function openPicker(slot: number) {
@@ -2237,6 +2242,8 @@ export default function HomePage() {
 
   function chooseModule(module: ModuleKey) {
     if (pickerSlot == null) return
+
+    if(activeCustomLayoutId){setCustomAssignments(items=>({...items,[activeCustomLayoutId]:{...(items[activeCustomLayoutId]||{}),[pickerSlot]:module}}));setPickerOpen(false);setPickerSlot(null);setDirty(true);return}
 
     layoutModuleMemoryRef.current = replaceMemoryAtSlotIndex(
       layoutModuleMemoryRef.current,
@@ -2260,6 +2267,8 @@ export default function HomePage() {
 
   function clearCell() {
     if (pickerSlot == null) return
+
+    if(activeCustomLayoutId){setCustomAssignments(items=>({...items,[activeCustomLayoutId]:{...(items[activeCustomLayoutId]||{}),[pickerSlot]:null}}));setPickerOpen(false);setPickerSlot(null);setDirty(true);return}
 
     layoutModuleMemoryRef.current = replaceMemoryAtSlotIndex(
       layoutModuleMemoryRef.current,
@@ -2296,7 +2305,7 @@ export default function HomePage() {
         currentCellsForLayout
       )
 
-      const settingsJson: SettingsJson = {
+      let settingsJson: SettingsJson = {
         theme: frameTheme,
         language,
         fontSize,
@@ -2306,6 +2315,7 @@ export default function HomePage() {
         pinned_tabs: pinnedModuleTabs,
         layout_module_memory: nextLayoutModuleMemory,
       }
+      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){setShowNextUpdateAfterSave(false);return false}settingsJson={...settingsJson,...payload}}
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
         p_device_id: deviceId,
@@ -2488,6 +2498,7 @@ async function handleSelectTab(k: TabKey) {
             onComplete={completeFrameSetup}
           />
         )}
+        {layoutFlow&&<CustomLayoutFlow layout={layoutFlow.mode==='edit'?layoutFlow.layout:undefined} onClose={()=>setLayoutFlow(null)} onSave={saveCustomLayout}/>}
 
         <div
           className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding || setupDeviceId ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
@@ -2512,6 +2523,16 @@ async function handleSelectTab(k: TabKey) {
                   onNext={nextLayout}
                   onCellTap={openPicker}
                   language={language}
+                  customLayout={customLayouts.find(item=>item.id===carouselItemId)}
+                  customAssignments={customAssignments[carouselItemId]||{}}
+                  isAddCard={carouselItemId==='add-layout'}
+                  onAdd={()=>setLayoutFlow({mode:'create'})}
+                  customMenuOpen={customMenuId===carouselItemId}
+                  onToggleMenu={()=>setCustomMenuId(value=>value===carouselItemId?null:carouselItemId)}
+                  onEdit={(item)=>{setLayoutFlow({mode:'edit',layout:item});setCustomMenuId(null)}}
+                  onRename={renameCustom}
+                  onDuplicate={duplicateCustom}
+                  onDelete={deleteCustom}
                 />
               )}
 
@@ -3508,8 +3529,18 @@ function FrameTab(props: {
   onNext: () => void
   onCellTap: (slot: number) => void
   language: AppLanguage
+  customLayout?: CustomLayout
+  customAssignments: Record<number,ModuleKey|null>
+  isAddCard: boolean
+  onAdd:()=>void
+  customMenuOpen:boolean
+  onToggleMenu:()=>void
+  onEdit:(layout:CustomLayout)=>void
+  onRename:(layout:CustomLayout)=>void
+  onDuplicate:(layout:CustomLayout)=>void
+  onDelete:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language } = props
+  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,customLayout,customAssignments,isAddCard,onAdd,customMenuOpen,onToggleMenu,onEdit,onRename,onDuplicate,onDelete } = props
 
   return (
     <div className="h-full flex flex-col">
@@ -3523,13 +3554,15 @@ function FrameTab(props: {
           <div className="text-xs text-[color:var(--fg-60)] tracking-widest mt-1">{subtitle}</div>
         </div>
 
+        {customLayout&&<div className="absolute right-5 top-0"><button aria-label="Manage custom layout" onClick={onToggleMenu} className="h-10 w-10 text-xl">…</button>{customMenuOpen&&<div className="absolute right-0 z-30 w-40 rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)] p-1 text-left text-sm shadow-xl">{[['Edit layout',()=>onEdit(customLayout)],['Rename',()=>onRename(customLayout)],['Duplicate',()=>onDuplicate(customLayout)],['Delete',()=>onDelete(customLayout)]].map(([label,action])=><button key={String(label)} onClick={action as ()=>void} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[color:var(--fg-10)]">{label as string}</button>)}</div>}</div>}
+
         <button onClick={onNext} className="w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl">
           ›
         </button>
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        <FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />
+        {isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<div className="h-full"><CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap}/>{Object.values(customAssignments).some(value=>!value)&&<p className="mt-3 text-center text-xs text-[color:var(--fg-55)]">Add a module to every cell before updating the frame.</p>}</div>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
       </div>
     </div>
   )

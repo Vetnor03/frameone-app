@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { validateCustomGeometry } from '@/app/lib/customLayouts'
 
 export const runtime = 'nodejs'
 
@@ -21,6 +22,11 @@ export async function POST(req: Request) {
     if (!deviceId) return NextResponse.json({ ok: false, error: 'missing_device_id' }, { status: 400 })
     if (!settingsJson || typeof settingsJson !== 'object' || Array.isArray(settingsJson)) {
       return NextResponse.json({ ok: false, error: 'invalid_settings_json' }, { status: 400 })
+    }
+    const settingsRecord = settingsJson as Record<string, unknown>
+    if (settingsRecord.layout === 'custom') {
+      const validation = validateCustomGeometry(settingsRecord.cells, { requirePhysical: true, requireModules: true })
+      if (!validation.valid) return NextResponse.json({ ok: false, error: 'invalid_custom_layout', details: validation }, { status: 400 })
     }
 
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
