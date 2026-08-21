@@ -21,7 +21,7 @@ export function visualContractFor(module: ModuleName, size: CellSize) {
 export const frameModuleRegistry = registry as {id:ModuleName;label:string}[]
 // Studio-only extension: this does not alter the shared physical/backend module catalog.
 export const studioModuleRegistry:readonly {id:StudioModuleName;label:string}[] = [...frameModuleRegistry,{id:'ai-follow',label:'AI Follow'}]
-export const responsiveShowcaseRegistry = frameModuleRegistry
+export const responsiveShowcaseRegistry:readonly {id:StudioModuleName;label:string}[] = studioModuleRegistry
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
 export const gridY = (row:number) => VIEWPORT.y + Math.trunc(VIEWPORT.height * row / GRID_SIZE)
 export function validGridCell(c: GridCell) {

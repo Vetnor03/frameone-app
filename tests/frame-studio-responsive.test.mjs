@@ -180,12 +180,12 @@ test('Date facts fit whole or are omitted, and runtime declarations stay in pari
   assert.match(handmade,/if\(c\.size==='SMALL'\)/);assert.match(handmade,/if\(c\.size==='MEDIUM'\)/);assert.match(handmade,/if\(c\.size==='LARGE'\)/);assert.match(handmade,/drawMediumStack/)
 })
 
-test('all 128 module and geometry combinations have a render strategy', () => {
-  assert.equal(STUDIO_MODULES.length,8);let covered=0
+test('all 144 Studio module and geometry combinations have a render strategy', () => {
+  assert.equal(STUDIO_MODULES.length,9);let covered=0
   for(const module of STUDIO_MODULES)for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
     assert.ok(studioRenderStrategy(module,colSpan,rowSpan,colSpan*196,rowSpan*114).path);covered++
   }
-  assert.equal(covered,128)
+  assert.equal(covered,144)
 })
 
 test('Reminders keeps four handmade anchors and owns the 12 adaptive paths', () => {
@@ -559,11 +559,11 @@ test('Studio sample-data options keep lowercase state values separate from label
   assert.match(source,/GeometryShowcase module=\{showcaseModule\}[^>]*preset=\{preset\}/)
 })
 
-test('AI Follow is a Studio-only picker option and stays out of the responsive showcase', async () => {
+test('AI Follow is a Studio-only picker option and participates in the responsive showcase', async () => {
   const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
   const simulatorLibrary=await readFile(new URL('../app/lib/frameSimulator.ts',import.meta.url),'utf8')
   const productionRegistry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8'))
   assert.equal((simulatorLibrary.match(/id:'ai-follow'/g)||[]).length,1);assert.doesNotMatch(JSON.stringify(productionRegistry),/ai-follow/)
   assert.match(source,/studioModuleRegistry\.map\(module/);assert.match(source,/responsiveShowcaseRegistry\.map\(m/)
-  assert.match(source,/if\(m==='ai-follow'\).*AI FOLLOW.*Topic update/);assert.match(source,/if\(m==='ai-follow'\)[\s\S]*return}const d=fake\[m\]\[p\],strategy=studioRenderStrategy/)
+  assert.match(simulatorLibrary,/responsiveShowcaseRegistry[^\n]+studioModuleRegistry/);assert.match(source,/strategy\.path==='ai-follow-responsive'/);assert.doesNotMatch(source,/Topic update/)
 })

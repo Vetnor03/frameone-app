@@ -11,6 +11,7 @@ export const moduleResponsivePolicies = Object.freeze({
   soccer: policy('soccer',['metrics','text'],'bounded',['automated'],'deterministic-only',['teams','score-kickoff'],['competition','position','previous-next-fixture'],'state-specific'),
   stocks: policy('stocks',['metrics','visual'],'bounded',['automated'],'never',['symbol','price','change'],['chart','range','additional-metrics'],'figure-first'),
   groceries: policy('groceries',['text','list'],'high',['user-input'],'ai-eligible-later',['items'],['item-count','sections','meal-planning','running-low'],'variable-list'),
+  'ai-follow': policy('ai-follow',['text','list'],'high',['precomputed-update'],'deterministic-only',['topic-title','change-summary'],['overflow-count'],'current-topic-queue'),
 })
 
 function policy(module,contentNature,variability,sourceType,textCompression,priorities,optionalContent,composition) {
