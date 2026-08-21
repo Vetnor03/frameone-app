@@ -3,28 +3,28 @@
 #include "Types.h"
 
 namespace GeneratedLayouts {
-static const GridCell FULL[] = {
+static const GridCell LAYOUT_FULL_CELLS[] = {
   {0, 0, 4, 4, 0, CELL_XL},
 };
-static const int FULL_COUNT = sizeof(FULL) / sizeof(FULL[0]);
-static const GridCell DEFAULT[] = {
+static const int LAYOUT_FULL_CELL_COUNT = sizeof(LAYOUT_FULL_CELLS) / sizeof(LAYOUT_FULL_CELLS[0]);
+static const GridCell LAYOUT_DEFAULT_CELLS[] = {
   {0, 0, 4, 1, 0, CELL_SMALL},
   {0, 1, 4, 1, 1, CELL_SMALL},
   {0, 2, 4, 2, 2, CELL_LARGE},
 };
-static const int DEFAULT_COUNT = sizeof(DEFAULT) / sizeof(DEFAULT[0]);
-static const GridCell PYRAMID[] = {
+static const int LAYOUT_DEFAULT_CELL_COUNT = sizeof(LAYOUT_DEFAULT_CELLS) / sizeof(LAYOUT_DEFAULT_CELLS[0]);
+static const GridCell LAYOUT_PYRAMID_CELLS[] = {
   {0, 0, 4, 1, 0, CELL_SMALL},
   {0, 1, 4, 1, 1, CELL_SMALL},
   {0, 2, 2, 2, 2, CELL_MEDIUM},
   {2, 2, 2, 2, 3, CELL_MEDIUM},
 };
-static const int PYRAMID_COUNT = sizeof(PYRAMID) / sizeof(PYRAMID[0]);
-static const GridCell SQUARE[] = {
+static const int LAYOUT_PYRAMID_CELL_COUNT = sizeof(LAYOUT_PYRAMID_CELLS) / sizeof(LAYOUT_PYRAMID_CELLS[0]);
+static const GridCell LAYOUT_SQUARE_CELLS[] = {
   {0, 0, 2, 2, 0, CELL_MEDIUM},
   {2, 0, 2, 2, 1, CELL_MEDIUM},
   {0, 2, 2, 2, 2, CELL_MEDIUM},
   {2, 2, 2, 2, 3, CELL_MEDIUM},
 };
-static const int SQUARE_COUNT = sizeof(SQUARE) / sizeof(SQUARE[0]);
+static const int LAYOUT_SQUARE_CELL_COUNT = sizeof(LAYOUT_SQUARE_CELLS) / sizeof(LAYOUT_SQUARE_CELLS[0]);
 }

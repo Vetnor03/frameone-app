@@ -12,7 +12,7 @@ const sizeFor = (w, h) => w === 4 && h === 1 ? 'CELL_SMALL' : w === 2 && h === 2
   ? 'CELL_MEDIUM' : w === 4 && h === 2 ? 'CELL_LARGE' : w === 4 && h === 4 ? 'CELL_XL' : 'CELL_ADAPTIVE'
 const cell = (col, row, colSpan, rowSpan, slot) => ({ col, row, colSpan, rowSpan, slot, size: sizeFor(colSpan, rowSpan) })
 function named(name) {
-  const body = generated.match(new RegExp(`static const GridCell ${name}\\[\\] = \\{([\\s\\S]*?)\\n\\};`))[1]
+  const body = generated.match(new RegExp(`static const GridCell LAYOUT_${name}_CELLS\\[\\] = \\{([\\s\\S]*?)\\n\\};`))[1]
   return [...body.matchAll(/\{(\d+), (\d+), (\d+), (\d+), (\d+), (CELL_\w+)\}/g)]
     .map((m) => ({ col: +m[1], row: +m[2], colSpan: +m[3], rowSpan: +m[4], slot: +m[5], size: m[6] }))
 }
@@ -102,7 +102,7 @@ test('preflight is atomic, blocks adaptive cells, and routes assignments safely'
 })
 test('named build/dividers remain isolated and key-only custom drawing defaults', () => {
   const build = source.match(/int buildCells[\s\S]*?\n\}/)[0]
-  assert.deepEqual([...build.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)].map((m) => m[1]), ['SQUARE','FULL','DEFAULT','PYRAMID'])
+  assert.deepEqual([...build.matchAll(/GeneratedLayouts::LAYOUT_(FULL|DEFAULT|PYRAMID|SQUARE)_CELLS/g)].map((m) => m[1]), ['SQUARE','FULL','DEFAULT','PYRAMID'])
   assert.doesNotMatch(build, /custom|GridLayout/)
   const draw = source.match(/void draw\(LayoutKey key\)[\s\S]*?\n\}/)[0]
   assert.match(draw, /if \(key == LAYOUT_CUSTOM\) key = LAYOUT_DEFAULT/)

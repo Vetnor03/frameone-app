@@ -114,7 +114,7 @@ function tuples(cells) {
 }
 
 function parseGeneratedLayout(name) {
-  const id = name.toUpperCase()
+  const id = `LAYOUT_${name.toUpperCase()}_CELLS`
   const body = generatedSource.match(
     new RegExp(`static\\s+const\\s+GridCell\\s+${id}\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`),
   )
@@ -222,8 +222,9 @@ test('shared and generated named layouts match the exact production baseline', (
     assert.deepEqual(shared, expectedLayouts[name], `${name} shared geometry is exact`)
     assert.deepEqual(parseGeneratedLayout(name), shared,
       `${name} generated fields, sizes, slots, and ordering match shared JSON`)
+    const id = `LAYOUT_${name.toUpperCase()}`
     assert.match(generatedSource, new RegExp(
-      `static\\s+const\\s+int\\s+${name.toUpperCase()}_COUNT\\s*=\\s*sizeof\\(${name.toUpperCase()}\\)\\s*\\/\\s*sizeof\\(${name.toUpperCase()}\\[0\\]\\);`,
+      `static\\s+const\\s+int\\s+${id}_CELL_COUNT\\s*=\\s*sizeof\\(${id}_CELLS\\)\\s*\\/\\s*sizeof\\(${id}_CELLS\\[0\\]\\);`,
     ))
   }
 })
@@ -260,10 +261,10 @@ test('divider definitions, integer coordinates, and 95% truncation are exact', (
 test('named layout selection and fallback behavior remain frozen', () => {
   const buildCells = layoutSource.match(/int buildCells\([\s\S]*?\n\}/)?.[0]
   assert.ok(buildCells, 'Layout::buildCells source exists')
-  assert.deepEqual([...buildCells.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)]
+  assert.deepEqual([...buildCells.matchAll(/GeneratedLayouts::LAYOUT_(FULL|DEFAULT|PYRAMID|SQUARE)_CELLS/g)]
     .map((match) => match[1]), ['SQUARE', 'FULL', 'DEFAULT', 'PYRAMID'])
-  assert.match(buildCells, /const GridCell\* source = GeneratedLayouts::SQUARE;/)
-  assert.match(buildCells, /int sourceCount = GeneratedLayouts::SQUARE_COUNT;/)
+  assert.match(buildCells, /const GridCell\* source = GeneratedLayouts::LAYOUT_SQUARE_CELLS;/)
+  assert.match(buildCells, /int sourceCount = GeneratedLayouts::LAYOUT_SQUARE_CELL_COUNT;/)
 
   const parseLayout = frameConfigSource.match(/static LayoutKey parseLayout\([\s\S]*?\n\}/)?.[0]
   assert.ok(parseLayout, 'parseLayout source exists')

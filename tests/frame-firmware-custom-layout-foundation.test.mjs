@@ -45,7 +45,7 @@ function valid(cells) {
 }
 
 function named(name) {
-  const body = generated.match(new RegExp(`static const GridCell ${name}\\[\\] = \\{([\\s\\S]*?)\\n\\};`))?.[1]
+  const body = generated.match(new RegExp(`static const GridCell LAYOUT_${name}_CELLS\\[\\] = \\{([\\s\\S]*?)\\n\\};`))?.[1]
   assert.ok(body)
   return [...body.matchAll(/\{(\d+), (\d+), (\d+), (\d+), (\d+), (CELL_\w+)\}/g)]
     .map((m) => cell(...m.slice(1, 6).map(Number), m[6]))
@@ -133,7 +133,7 @@ test('setter validates first and therefore leaves destination unchanged on failu
 
 test('Phase B validation remains authoritative after D2 activation', () => {
   const build = source.match(/int buildCells\([\s\S]*?\n\}/)?.[0]
-  assert.deepEqual([...build.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)].map((m) => m[1]),
+  assert.deepEqual([...build.matchAll(/GeneratedLayouts::LAYOUT_(FULL|DEFAULT|PYRAMID|SQUARE)_CELLS/g)].map((m) => m[1]),
     ['SQUARE', 'FULL', 'DEFAULT', 'PYRAMID'])
   assert.doesNotMatch(build, /GridLayout|ADAPTIVE|CUSTOM/)
   assert.match(source, /isLegacyRenderableGridLayout[\s\S]*validateGridLayout/)
