@@ -277,10 +277,11 @@ test('named layout selection and fallback behavior remain frozen', () => {
   assert.match(parseLayout, /return LAYOUT_DEFAULT;\s*\}$/)
 })
 
-test('current eight-assignment and drawing-buffer limits remain deliberate baselines', () => {
-  // These limits are intentional assertions for this baseline. The later custom-layout
-  // infrastructure PR must deliberately update this test when it changes them.
-  assert.match(frameConfigHeader, /SlotModule\s+assigns\[8\]\s*;/)
-  assert.match(layoutSource, /Cell\s+cells\[8\]\s*;/)
-  assert.match(layoutSource, /buildCells\(key, cells, 8\)/)
+test('D1 expands only resource capacity from the historical eight-cell baseline', () => {
+  // Phase A froze 8. D1 deliberately expands to the full 4x4 maximum of 16;
+  // all geometry, divider, ordering, and named-layout assertions above stay frozen.
+  assert.match(frameConfigHeader, /MAX_FRAME_ASSIGNMENTS\s*=\s*MAX_GRID_CELLS/)
+  assert.match(frameConfigHeader, /SlotModule\s+assigns\[MAX_FRAME_ASSIGNMENTS\]\s*;/)
+  assert.match(layoutSource, /Cell\s+cells\[MAX_GRID_CELLS\]\s*;/)
+  assert.match(layoutSource, /buildCells\(key, cells, MAX_GRID_CELLS\)/)
 })

@@ -2,6 +2,7 @@
 // FrameConfig.cpp (FULL FILE)
 // ===============================
 #include "FrameConfig.h"
+#include "Layout.h"
 #include "Config.h"
 #include "NetClient.h"
 #include "DeviceIdentity.h"
@@ -85,6 +86,70 @@ static void resetSoccer(FrameConfig& out) {
   }
 }
 
+static void resetCustomLayout(FrameConfig& out) {
+  out.customLayoutRequested = false;
+  out.customLayout.grid.count = 0;
+  out.customLayout.assignCount = 0;
+  out.customLayout.valid = false;
+  for (int i = 0; i < MAX_FRAME_ASSIGNMENTS; ++i) {
+    out.customLayout.assigns[i].slot = 0;
+    out.customLayout.assigns[i].module[0] = '\0';
+  }
+}
+
+static bool readRequiredInt(JsonObject cell, const char* key, int& value) {
+  JsonVariant field = cell[key];
+  if (field.isNull() || !field.is<int>()) return false;
+  value = field.as<int>();
+  return true;
+}
+
+// Stage into local fixed-capacity candidates and publish only after every check passes.
+static bool stageCustomLayout(FrameConfig& out, JsonArray cells) {
+  if (cells.isNull() || cells.size() < 1 || cells.size() > MAX_GRID_CELLS) return false;
+
+  GridCell candidateCells[MAX_GRID_CELLS];
+  SlotModule candidateAssigns[MAX_FRAME_ASSIGNMENTS];
+  uint16_t geometrySlots = 0;
+  uint16_t assignmentSlots = 0;
+  int count = 0;
+
+  for (JsonObject cell : cells) {
+    int slot, col, row, colSpan, rowSpan;
+    if (!readRequiredInt(cell, "slot", slot) ||
+        !readRequiredInt(cell, "col", col) ||
+        !readRequiredInt(cell, "row", row) ||
+        !readRequiredInt(cell, "colSpan", colSpan) ||
+        !readRequiredInt(cell, "rowSpan", rowSpan)) return false;
+    const char* module = cell["module"] | "";
+    if (!module || module[0] == '\0' || slot < 0 || slot >= MAX_GRID_CELLS ||
+        col < 0 || col >= Layout::GRID_SIZE || row < 0 || row >= Layout::GRID_SIZE ||
+        colSpan < 1 || colSpan > Layout::GRID_SIZE ||
+        rowSpan < 1 || rowSpan > Layout::GRID_SIZE) return false;
+
+    const uint16_t slotMask = (uint16_t)1U << slot;
+    if ((geometrySlots & slotMask) || (assignmentSlots & slotMask)) return false;
+    geometrySlots |= slotMask;
+    assignmentSlots |= slotMask;
+
+    candidateCells[count] = Layout::makeGridCell(
+      (uint8_t)col, (uint8_t)row, (uint8_t)colSpan, (uint8_t)rowSpan, (uint8_t)slot);
+    candidateAssigns[count].slot = (uint8_t)slot;
+    strlcpy(candidateAssigns[count].module, module, sizeof(candidateAssigns[count].module));
+    ++count;
+  }
+
+  GridLayout candidateGrid;
+  if (geometrySlots != assignmentSlots || count < 1 || count > MAX_GRID_CELLS ||
+      !Layout::setGridLayout(candidateGrid, candidateCells, count)) return false;
+
+  out.customLayout.grid = candidateGrid;
+  for (int i = 0; i < count; ++i) out.customLayout.assigns[i] = candidateAssigns[i];
+  out.customLayout.assignCount = (uint8_t)count;
+  out.customLayout.valid = true;
+  return true;
+}
+
 static void resetStocks(FrameConfig& out) {
   out.stocksCount = 0;
   for (int i = 0; i < 4; i++) {
@@ -105,9 +170,10 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // reset core
   out.layout = LAYOUT_DEFAULT;
   out.theme = THEME_DARK;
+  resetCustomLayout(out);
 
   out.assignCount = 0;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < MAX_FRAME_ASSIGNMENTS; i++) {
     out.assigns[i].slot = 0;
     out.assigns[i].module[0] = '\0';
   }
@@ -187,18 +253,21 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
 
   // layout
   const char* layoutStr = settings["layout"] | "default";
-  out.layout = parseLayout(String(layoutStr));
+  out.customLayoutRequested = strcmp(layoutStr, "custom") == 0;
+  out.layout = parseLayout(String(layoutStr)); // "custom" deliberately falls back to DEFAULT in D1.
 
   // cells
   JsonArray cells = settings["cells"].as<JsonArray>();
-  if (!cells.isNull()) {
+  if (out.customLayoutRequested) {
+    stageCustomLayout(out, cells);
+  } else if (!cells.isNull()) {
     for (JsonObject c : cells) {
-      if (out.assignCount >= 8) break;
+      if (out.assignCount >= MAX_FRAME_ASSIGNMENTS) break;
 
       int slot = c["slot"] | -1;
       const char* module = c["module"] | "";
 
-      if (slot < 0 || slot > 7) continue;
+      if (slot < 0 || slot >= MAX_FRAME_ASSIGNMENTS) continue;
       if (!module || module[0] == '\0') continue;
 
       out.assigns[out.assignCount].slot = (uint8_t)slot;

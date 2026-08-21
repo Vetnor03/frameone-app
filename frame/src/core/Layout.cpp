@@ -279,8 +279,8 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
       drawVLine(midX, vy0, vy1);
     }
 
-    Cell cells[8];
-    int n = buildCells(key, cells, 8);
+    Cell cells[MAX_GRID_CELLS];
+    int n = buildCells(key, cells, MAX_GRID_CELLS);
 
     ModuleRenderer::renderPlaceholders(cfg.assigns, cfg.assignCount, cells, n);
 

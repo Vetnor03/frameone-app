@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "Types.h"
 
 enum LayoutKey {
   LAYOUT_DEFAULT,
@@ -60,6 +61,15 @@ struct SurfModuleConfig {
   uint32_t refreshMs = 1800000UL; // default 30 min
 };
 
+static const uint8_t MAX_FRAME_ASSIGNMENTS = MAX_GRID_CELLS;
+
+struct CustomLayoutConfig {
+  GridLayout grid;
+  SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
+  uint8_t assignCount = 0;
+  bool valid = false;
+};
+
 // ===== Surf global settings (parsed from settings_json.modules.surf_settings) =====
 struct SurfSettingsConfig {
   bool fuelPenalty = false;
@@ -95,8 +105,12 @@ struct FrameConfig {
   LayoutKey layout = LAYOUT_DEFAULT;
   ThemeKey theme = THEME_DARK;
 
-  SlotModule assigns[8];
+  SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
   int assignCount = 0;
+
+  // Phase D1 staging only. Runtime drawing deliberately continues to use layout/assigns.
+  bool customLayoutRequested = false;
+  CustomLayoutConfig customLayout;
 
   // Parsed modules
   DateModuleConfig date;
