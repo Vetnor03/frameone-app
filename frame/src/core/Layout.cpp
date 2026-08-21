@@ -42,9 +42,64 @@ namespace Layout {
 int gridX(uint8_t boundary) { return VIEWPORT_X + (VIEWPORT_W * (int)boundary) / GRID_SIZE; }
 int gridY(uint8_t boundary) { return VIEWPORT_Y + (VIEWPORT_H * (int)boundary) / GRID_SIZE; }
 
+CellSize cellSizeForGeometry(uint8_t colSpan, uint8_t rowSpan) {
+  if (colSpan == 4 && rowSpan == 1) return CELL_SMALL;
+  if (colSpan == 2 && rowSpan == 2) return CELL_MEDIUM;
+  if (colSpan == 4 && rowSpan == 2) return CELL_LARGE;
+  if (colSpan == 4 && rowSpan == 4) return CELL_XL;
+  return CELL_ADAPTIVE;
+}
+
+GridCell makeGridCell(uint8_t col, uint8_t row, uint8_t colSpan, uint8_t rowSpan,
+                      uint8_t slot) {
+  return GridCell{col, row, colSpan, rowSpan, slot,
+                  cellSizeForGeometry(colSpan, rowSpan)};
+}
+
 bool isValidGridCell(const GridCell& c) {
   return c.col < GRID_SIZE && c.row < GRID_SIZE && c.colSpan >= 1 && c.rowSpan >= 1 &&
          c.col + c.colSpan <= GRID_SIZE && c.row + c.rowSpan <= GRID_SIZE;
+}
+
+bool validateGridLayout(const GridCell* cells, int count) {
+  if (!cells || count < 1 || count > MAX_GRID_CELLS) return false;
+
+  bool occupied[GRID_SIZE][GRID_SIZE] = {};
+  uint16_t usedSlots = 0;
+  for (int i = 0; i < count; ++i) {
+    const GridCell& cell = cells[i];
+    if (!isValidGridCell(cell) || cell.slot >= MAX_GRID_CELLS ||
+        cell.size != cellSizeForGeometry(cell.colSpan, cell.rowSpan)) return false;
+
+    const uint16_t slotMask = (uint16_t)1U << cell.slot;
+    if (usedSlots & slotMask) return false;
+    usedSlots |= slotMask;
+
+    for (uint8_t row = cell.row; row < cell.row + cell.rowSpan; ++row) {
+      for (uint8_t col = cell.col; col < cell.col + cell.colSpan; ++col) {
+        if (occupied[row][col]) return false;
+        occupied[row][col] = true;
+      }
+    }
+  }
+
+  for (uint8_t row = 0; row < GRID_SIZE; ++row) {
+    for (uint8_t col = 0; col < GRID_SIZE; ++col) {
+      if (!occupied[row][col]) return false;
+    }
+  }
+  return true;
+}
+
+bool validateGridLayout(const GridLayout& layout) {
+  return validateGridLayout(layout.cells, layout.count);
+}
+
+bool setGridLayout(GridLayout& destination, const GridCell* source, int count) {
+  if (!validateGridLayout(source, count)) return false;
+  for (int i = 0; i < count; ++i) destination.cells[i] = source[i];
+  destination.count = (uint8_t)count;
+  return true;
 }
 
 bool resolveGridCell(const GridCell& g, Cell& c) {

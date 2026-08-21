@@ -15,7 +15,8 @@ enum CellSize {
   CELL_SMALL,
   CELL_MEDIUM,
   CELL_LARGE,
-  CELL_XL   
+  CELL_XL,
+  CELL_ADAPTIVE
 };
 
 struct Cell {
@@ -27,4 +28,11 @@ struct Cell {
 struct GridCell {
   uint8_t col, row, colSpan, rowSpan, slot;
   CellSize size;
+};
+
+static const uint8_t MAX_GRID_CELLS = 16;
+
+struct GridLayout {
+  GridCell cells[MAX_GRID_CELLS];
+  uint8_t count = 0;
 };
