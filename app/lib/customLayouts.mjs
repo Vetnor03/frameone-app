@@ -59,3 +59,15 @@ export function remapAssignmentsAfterGeometryEdit(previousCells, nextCells, assi
 export function duplicateLayout(layout, id, now = new Date().toISOString()) {
   return { ...layout, id, name: `${layout.name} copy`.slice(0, CUSTOM_LAYOUT_NAME_MAX), sortOrder: layout.sortOrder + 1, createdAt: now, updatedAt: now }
 }
+
+/** Build one consistent client snapshot after the server creates a duplicate. */
+export function duplicateLayoutClientState(layouts, assignments, sourceId, duplicate) {
+  const sourceIndex = layouts.findIndex(layout => layout.id === sourceId)
+  const insertionIndex = sourceIndex < 0 ? layouts.length : sourceIndex + 1
+  return {
+    layouts: [...layouts.slice(0, insertionIndex), duplicate, ...layouts.slice(insertionIndex)],
+    assignments: { ...assignments, [duplicate.id]: { ...(assignments[sourceId] || {}) } },
+    carouselItemId: duplicate.id,
+    activeCustomLayoutId: duplicate.id,
+  }
+}

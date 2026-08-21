@@ -28,7 +28,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, remapAssignmentsAfterGeometryEdit, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { orderedLayoutItems, customPhysicalPayload, duplicateLayoutClientState, remapAssignmentsAfterGeometryEdit, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutFlow, CustomLayoutPreview } from './components/CustomLayoutLibrary'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -2211,7 +2211,7 @@ export default function HomePage() {
     if(!activeDeviceId)return
     if(layoutFlow?.mode==='edit'){
       const json=await customLayoutRequest(`/api/custom-layouts/${layoutFlow.layout.id}`,{method:'PATCH',body:JSON.stringify({name,cells})})
-      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id)
+      setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id);setActiveCustomLayoutId(json.layout.id);setActiveTab('frame')
       setCustomAssignments(items=>({...items,[json.layout.id]:remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,items[json.layout.id]||{})}))
     }else{
       const json=await customLayoutRequest('/api/custom-layouts',{method:'POST',body:JSON.stringify({deviceId:activeDeviceId,name,cells})})
@@ -2221,7 +2221,7 @@ export default function HomePage() {
     setLayoutFlow(null)
   }
   async function renameCustom(layout:CustomLayout){const name=window.prompt('Layout name',layout.name);if(name==null)return;const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'PATCH',body:JSON.stringify({name})});setCustomLayouts(items=>items.map(item=>item.id===layout.id?json.layout:item));setCustomMenuId(null)}
-  async function duplicateCustom(layout:CustomLayout){const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'POST'});setCustomLayouts(items=>{const at=items.findIndex(x=>x.id===layout.id);return [...items.slice(0,at+1),json.layout,...items.slice(at+1)]});setCustomAssignments(items=>({...items,[json.layout.id]:{...(items[layout.id]||{})}}));setCarouselItemId(json.layout.id);setCustomMenuId(null)}
+  async function duplicateCustom(layout:CustomLayout){const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'POST'}),next=duplicateLayoutClientState(customLayouts,customAssignments,layout.id,json.layout);setCustomLayouts(next.layouts);setCustomAssignments(next.assignments);setCarouselItemId(next.carouselItemId);setActiveCustomLayoutId(next.activeCustomLayoutId);setActiveTab('frame');setDirty(true);setCustomMenuId(null)}
   async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setCustomMenuId(null)}
   function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout'){setLayoutFlow({mode:'create'});return}const custom=customLayouts.find(item=>item.id===id);if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}

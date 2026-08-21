@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { customPhysicalPayload, duplicateLayout, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
+import { customPhysicalPayload, duplicateLayout, duplicateLayoutClientState, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
 import { sortCells } from '../app/lib/frameLayoutEditor.mjs'
 
 const cell=(slot,col,row,colSpan,rowSpan)=>({slot,col,row,colSpan,rowSpan})
@@ -19,6 +19,7 @@ test('four immutable built-ins lead and Add layout is permanent last',()=>{
 })
 test('name is presentation, UUID remains identity through rename/edit',()=>{assert.equal(normalizeLayoutName('  Morning   room  '),'Morning room');const original=layout('stable-uuid','Morning',0),renamed={...original,name:'Kitchen'},edited={...renamed,cells:large};assert.equal(edited.id,original.id)})
 test('duplicate gets new UUID, copied geometry, derived name and following order',()=>{const copy=duplicateLayout(layout('a','Morning',4),'b');assert.equal(copy.id,'b');assert.equal(copy.name,'Morning copy');assert.equal(copy.sortOrder,5);assert.deepEqual(copy.cells,rows)})
+test('duplicate becomes the visible and active custom layout with independent assignments',()=>{const source=layout('original','Morning',0),copy=layout('duplicate','Morning copy',1),sourceAssignments={0:'date',1:'weather'},state=duplicateLayoutClientState([source],{original:sourceAssignments},source.id,copy);assert.deepEqual(state.layouts.map(item=>item.id),['original','duplicate']);assert.equal(state.carouselItemId,'duplicate');assert.equal(state.activeCustomLayoutId,'duplicate');assert.deepEqual(state.assignments.duplicate,sourceAssignments);assert.notEqual(state.assignments.duplicate,sourceAssignments);state.assignments.duplicate[0]='groceries';assert.equal(sourceAssignments[0],'date')})
 test('all currently supported physical compositions pass',()=>{for(const cells of [rows,large,medium,full])assert.deepEqual(validateCustomGeometry(cells),{valid:true,errors:[],unsupportedSlots:[]})})
 test('unsupported cells and malformed geometry are rejected centrally',()=>{
   assert.equal(validateCustomGeometry(Array.from({length:16},(_,i)=>cell(i,i%4,Math.floor(i/4),1,1))).errors.includes('unsupported_geometry'),true)

@@ -10,3 +10,4 @@ export function geometryWithAssignments(cells: CustomLayoutCell[], assignments: 
 export function customPhysicalPayload(layout: CustomLayout, assignments: Record<number, string | null>): {layout: 'custom'; custom_layout_id: string; cells: Array<CustomLayoutCell & {module: string}>} | null
 export function remapAssignmentsAfterGeometryEdit(previousCells: CustomLayoutCell[], nextCells: CustomLayoutCell[], assignments: Record<number, string | null>): Record<number, string | null>
 export function duplicateLayout(layout: CustomLayout, id: string, now?: string): CustomLayout
+export function duplicateLayoutClientState<T extends Record<PropertyKey, unknown>>(layouts: CustomLayout[], assignments: Record<string, T>, sourceId: string, duplicate: CustomLayout): {layouts: CustomLayout[]; assignments: Record<string, T>; carouselItemId: string; activeCustomLayoutId: string}
