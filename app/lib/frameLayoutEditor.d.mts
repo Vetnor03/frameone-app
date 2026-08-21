@@ -10,6 +10,7 @@ export type MergeResult = {valid:boolean;reason?:string;cells:EditorCell[];merge
 export type SplitGuide = {axis:'vertical'|'horizontal';boundary:number;distance:number}
 export type GridSelection = {col:number;row:number;colSpan:number;rowSpan:number}
 export type StrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];parentId?:string;intendedId?:string;normalized?:NormalizedStroke}
+export type DividerStrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];normalized?:Pick<NormalizedStroke,'orientation'|'boundary'|'rangeStart'|'rangeEnd'>;intent?:'draw'|'erase'}
 export type EditorHistory = {past:EditorCell[][];present:EditorCell[];future:EditorCell[][]}
 export const GRID_SIZE:number
 export const MIN_STROKE_PX:number
@@ -43,6 +44,8 @@ export function chooseNearestEdge(cell:EditorCell,orientation:'vertical'|'horizo
 export function partitionCell(parent:EditorCell,normalized:NormalizedStroke):{pieces:EditorCell[];intendedId:string}
 export function previewStroke(cells:EditorCell[],stroke:Stroke,viewport?:{width:number;height:number}):StrokePreview
 export function finalizeStroke(cells:EditorCell[],start:Point,end:Point,viewport?:{width:number;height:number}):StrokePreview
+export function previewDividerStroke(cells:EditorCell[],stroke:Stroke,viewport?:{width:number;height:number}):DividerStrokePreview
+export function finalizeDividerStroke(cells:EditorCell[],start:Point,end:Point,viewport?:{width:number;height:number}):DividerStrokePreview
 export function commitPreview(cells:EditorCell[],preview:StrokePreview):EditorCell[]
 export function initialLayout():EditorCell[]
 export function createHistory(initial?:EditorCell[]):EditorHistory

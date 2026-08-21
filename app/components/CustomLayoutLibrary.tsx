@@ -1,6 +1,6 @@
 'use client'
 import React, { useRef, useState } from 'react'
-import { dragSelectionFromPointers, internalDividerSegments, overwriteWithSelection, resolveShortTap, splitCellAtBoundary, mergeDivider, sortCells, type EditorCell } from '../lib/frameLayoutEditor.mjs'
+import { MIN_STROKE_PX, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, sortCells, type EditorCell, type NormalizedStroke } from '../lib/frameLayoutEditor.mjs'
 import { type CustomLayoutCell } from '../lib/customLayouts'
 
 export const initialEditorCells = (): EditorCell[] => [{ id:'whole', col:0, row:0, colSpan:4, rowSpan:4, moduleId:'empty' }]
@@ -29,21 +29,19 @@ export function AddLayoutCard({onClick}:{onClick:()=>void}) { return <button typ
 
 export function InlineCustomLayoutEditor({cells,onChange,unsupportedSlots=[]}:{cells:EditorCell[];onChange:(cells:EditorCell[])=>void;unsupportedSlots?:number[]}) {
   const drag=useRef<{id:number;start:{x:number;y:number}}|null>(null)
-  const [pendingSelection,setPendingSelection]=useState<{col:number;row:number;colSpan:number;rowSpan:number}|null>(null)
+  const [pendingStroke,setPendingStroke]=useState<Pick<NormalizedStroke,'orientation'|'boundary'|'rangeStart'|'rangeEnd'>|null>(null)
   const point=(event:React.PointerEvent<HTMLDivElement>)=>{const r=event.currentTarget.getBoundingClientRect();return{x:event.clientX-r.left,y:event.clientY-r.top}}
   const viewport=(element:HTMLDivElement)=>({width:element.clientWidth,height:element.clientHeight})
-  const down=(e:React.PointerEvent<HTMLDivElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,start:point(e)};setPendingSelection(null)}
+  const down=(e:React.PointerEvent<HTMLDivElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,start:point(e)};setPendingStroke(null)}
   const move=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const current=point(e),start=drag.current.start
-    if(Math.hypot(current.x-start.x,current.y-start.y)<8){setPendingSelection(null);return}
-    setPendingSelection(dragSelectionFromPointers(start,current,viewport(e.currentTarget)))
+    if(Math.hypot(current.x-start.x,current.y-start.y)<MIN_STROKE_PX){setPendingStroke(null);return}
+    const preview=previewDividerStroke(cells,{start,end:current},viewport(e.currentTarget));setPendingStroke(preview.normalized?.rangeStart!==preview.normalized?.rangeEnd?preview.normalized??null:null)
   }
-  const clearDrag=(pointerId:number)=>{if(!drag.current||drag.current.id!==pointerId)return;drag.current=null;setPendingSelection(null)}
+  const clearDrag=(pointerId:number)=>{if(!drag.current||drag.current.id!==pointerId)return;drag.current=null;setPendingStroke(null)}
   const cancel=(e:React.PointerEvent<HTMLDivElement>)=>clearDrag(e.pointerId)
-  const up=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const end=point(e),start=drag.current.start;clearDrag(e.pointerId);const moved=Math.hypot(end.x-start.x,end.y-start.y)>=8
-    if(moved){const result=overwriteWithSelection(cells,dragSelectionFromPointers(start,end,viewport(e.currentTarget)));if(result.valid)onChange(result.cells)}
-    else {const intent=resolveShortTap(cells,end,viewport(e.currentTarget));if(intent.kind==='merge'){const result=mergeDivider(cells,intent.divider);if(result.valid)onChange(result.cells)}else if(intent.kind==='split'&&intent.cell){const result=splitCellAtBoundary(cells,intent.cell.id,intent.guide);if(result.valid)onChange(result.cells)}}}
+  const up=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const end=point(e),start=drag.current.start;clearDrag(e.pointerId);const result=finalizeDividerStroke(cells,start,end,viewport(e.currentTarget));if(result.valid)onChange(result.cells)}
   return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onLostPointerCapture={cancel} className="relative h-full w-full touch-none overflow-hidden">
     <CustomLayoutPreview cells={withSlots(cells)} unsupportedSlots={unsupportedSlots} editorGuide/>
-    {pendingSelection&&<span aria-label="Pending drag selection" data-layout-pending-selection={`${pendingSelection.col},${pendingSelection.row},${pendingSelection.colSpan},${pendingSelection.rowSpan}`} className="pointer-events-none absolute z-[5] border-2 border-[#2aa3ff] bg-[#2aa3ff]/15" style={{left:`${pendingSelection.col*25}%`,top:`${pendingSelection.row*25}%`,width:`${pendingSelection.colSpan*25}%`,height:`${pendingSelection.rowSpan*25}%`}}/>}
+    {pendingStroke&&<span aria-label="Pending divider stroke" data-layout-pending-stroke={`${pendingStroke.orientation}:${pendingStroke.boundary}:${pendingStroke.rangeStart}:${pendingStroke.rangeEnd}`} className={`pointer-events-none absolute z-30 rounded-full bg-[#2aa3ff] ${pendingStroke.orientation==='vertical'?'w-[3px] -translate-x-1/2':'h-[3px] -translate-y-1/2'}`} style={pendingStroke.orientation==='vertical'?{left:`${pendingStroke.boundary*25}%`,top:`${pendingStroke.rangeStart*25}%`,height:`${(pendingStroke.rangeEnd-pendingStroke.rangeStart)*25}%`}:{top:`${pendingStroke.boundary*25}%`,left:`${pendingStroke.rangeStart*25}%`,width:`${(pendingStroke.rangeEnd-pendingStroke.rangeStart)*25}%`}}/>}
   </div>
 }
