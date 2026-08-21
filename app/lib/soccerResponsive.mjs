@@ -37,7 +37,7 @@ export function soccerTableWindow(rows,maxRows){
 
 export function soccerComposition(profile,state){
   const hasNext=Boolean(state.nextFixture),hasPrevious=Boolean(state.previousFixture),hasStanding=state.position!=null||state.points!=null,hasTable=Array.isArray(state.table)&&state.table.length>0,available=hasNext||hasPrevious||hasStanding||hasTable
-  if(!available)return {family:'empty',available:false,primaryState:'empty',showStanding:false,showPrevious:false,showTable:false,tableColumns:[],tableRows:0,showDetails:false}
+  if(!available)return {family:'empty',available:false,primaryState:'empty',showStanding:false,showPrevious:false,showTable:false,tableColumns:[],tableRows:0,showDetails:false,detailRows:0}
   const {width:w,height:h,orientation}=profile
   let family;if(w<230&&h<150)family='micro';else if(h<160)family='fixture-strip';else if(w<260)family='fixture-stack';else if(w>=560&&h>=300)family='fixture-standings';else if(h>=390&&w>=360)family='expanded';else family='fixture-history'
   const primaryState=hasNext?'next':hasPrevious?'previous':'standing'
@@ -45,23 +45,32 @@ export function soccerComposition(profile,state){
   const tableHeight=family==='fixture-standings'?h-28:family==='expanded'?Math.min(180,h*.38):0
   let tableColumns=[];if(hasTable&&tableHeight>=96){if(tableWidth>=300)tableColumns=['P','Team','Pts','Gap','GD'];else if(tableWidth>=235)tableColumns=['P','Team','Pts','GD'];else if(tableWidth>=180)tableColumns=['P','Team','Pts']}
   const tableRows=tableColumns.length?Math.min(state.table.length,Math.max(3,Math.floor((tableHeight-30)/22))):0
-  return {family,available,primaryState,showStanding:hasStanding&&family!=='micro',showPrevious:hasPrevious&&hasNext&&['fixture-stack','fixture-history','fixture-standings','expanded'].includes(family)&&h>=250,showTable:tableRows>=3,tableColumns,tableRows,showDetails:family==='expanded'&&h>=420&&Boolean(state.competitionName||state.record||state.form||state.topScorer)}
+  const wideHistory=family==='fixture-history'&&orientation==='landscape'&&w>=500&&h>=190
+  const detailRows=[state.competitionName,state.record,state.form,state.topScorer].filter(Boolean).length
+  return {family,available,primaryState,showStanding:hasStanding&&family!=='micro',showPrevious:hasPrevious&&hasNext&&['fixture-stack','fixture-history','fixture-standings','expanded'].includes(family)&&(h>=250||wideHistory),showTable:tableRows>=3,tableColumns,tableRows,showDetails:family==='expanded'&&h>=420&&detailRows>0,detailRows}
 }
 
 const rect=(x,y,width,height)=>({x,y,width:Math.max(1,width),height:Math.max(1,height)})
 export function soccerLayout(profile,composition){
   const {width:w,height:h}=profile,pad=Math.max(8,Math.min(14,w*.035)),gap=10
-  const blank={emptyRect:null,primaryRect:null,kickoffRect:null,teamsRect:null,standingRect:null,previousRect:null,standingsRect:null,detailsRect:null,rowRects:[]}
+  const blank={emptyRect:null,primaryRect:null,primaryGroupRect:null,kickoffRect:null,teamsRect:null,standingRect:null,previousRect:null,previousGroupRect:null,standingsRect:null,detailsRect:null,detailsGroupRect:null,detailRowRects:[],dividerX:null,rowRects:[]}
   if(!composition.available)return {...blank,emptyRect:rect(pad,pad,w-pad*2,h-pad*2)}
-  let primaryRect,standingsRect=null,detailsRect=null
+  let primaryRect,standingsRect=null,detailsRect=null,previousRect=null,dividerX=null
   if(composition.showTable&&composition.family==='fixture-standings'){const sw=Math.min(w*.46,360);primaryRect=rect(pad,pad,w-pad*2-sw-gap,h-pad*2);standingsRect=rect(primaryRect.x+primaryRect.width+gap,pad,sw,h-pad*2)}
   else if(composition.showTable&&composition.family==='expanded'){const sh=Math.min(180,h*.38);standingsRect=rect(pad,h-pad-sh,w-pad*2,sh);primaryRect=rect(pad,pad,w-pad*2,standingsRect.y-pad-gap);if(composition.showDetails){const dw=Math.min(230,primaryRect.width*.36);detailsRect=rect(primaryRect.x+primaryRect.width-dw,primaryRect.y,dw,primaryRect.height);primaryRect=rect(primaryRect.x,primaryRect.y,primaryRect.width-dw-gap,primaryRect.height)}}
   else primaryRect=rect(pad,pad,w-pad*2,h-pad*2)
+  const wideHistory=composition.family==='fixture-history'&&composition.showPrevious&&w>=500&&h>=190
+  if(wideHistory){const available=primaryRect.width-gap,primaryW=available*.65;previousRect=rect(primaryRect.x+primaryW+gap,primaryRect.y,available-primaryW,primaryRect.height);primaryRect=rect(primaryRect.x,primaryRect.y,primaryW,primaryRect.height);dividerX=primaryRect.x+primaryRect.width+gap/2}
   const boundedH=Math.min(primaryRect.height,composition.family==='micro'?primaryRect.height:composition.family==='fixture-strip'?86:composition.showPrevious?250:170),groupY=primaryRect.y+(primaryRect.height-boundedH)/2
-  let kickoffRect=null,teamsRect,standingRect=null,previousRect=null
+  let kickoffRect=null,teamsRect,standingRect=null,previousGroupRect=null
   if(composition.family==='fixture-strip'){teamsRect=rect(primaryRect.x,groupY,primaryRect.width*.48,boundedH);kickoffRect=rect(primaryRect.x+primaryRect.width*.5,groupY,primaryRect.width*.22,boundedH);if(composition.showStanding)standingRect=rect(primaryRect.x+primaryRect.width*.74,groupY,primaryRect.width*.26,boundedH)}
   else if(composition.family==='micro')teamsRect=rect(primaryRect.x,groupY,primaryRect.width,boundedH)
-  else {const kh=composition.primaryState==='next'?Math.min(36,boundedH*.2):0,th=Math.min(70,boundedH*.34);kickoffRect=kh?rect(primaryRect.x,groupY,primaryRect.width,kh):null;teamsRect=rect(primaryRect.x,groupY+kh,primaryRect.width,th);let y=groupY+kh+th+6;if(composition.showStanding){standingRect=rect(primaryRect.x,y,primaryRect.width,30);y+=36}if(composition.showPrevious)previousRect=rect(primaryRect.x,y+5,primaryRect.width,Math.min(92,groupY+boundedH-y-5))}
+  else {const kh=composition.primaryState==='next'?Math.min(36,boundedH*.2):0,th=Math.min(70,boundedH*.34);kickoffRect=kh?rect(primaryRect.x,groupY,primaryRect.width,kh):null;teamsRect=rect(primaryRect.x,groupY+kh,primaryRect.width,th);let y=groupY+kh+th+6;if(composition.showStanding){standingRect=rect(primaryRect.x,y,primaryRect.width,30);y+=36}if(composition.showPrevious&&!wideHistory){previousRect=rect(primaryRect.x,y+5,primaryRect.width,Math.min(92,groupY+boundedH-y-5));previousGroupRect=previousRect}}
+  const primaryChildren=[kickoffRect,teamsRect,standingRect,!wideHistory&&previousRect].filter(Boolean),primaryTop=Math.min(...primaryChildren.map(r=>r.y)),primaryBottom=Math.max(...primaryChildren.map(r=>r.y+r.height));
+  const primaryGroupRect=rect(primaryRect.x,primaryTop,primaryRect.width,primaryBottom-primaryTop)
+  if(wideHistory&&previousRect){const gh=Math.min(82,previousRect.height),gy=previousRect.y+(previousRect.height-gh)/2;previousGroupRect=rect(previousRect.x,gy,previousRect.width,gh)}
+  let detailsGroupRect=null,detailRowRects=[]
+  if(detailsRect){const rowH=24,rowGap=4,count=composition.detailRows,groupH=rowH*count+rowGap*Math.max(0,count-1),primaryCenter=primaryGroupRect.y+primaryGroupRect.height/2,gy=Math.max(detailsRect.y,Math.min(detailsRect.y+detailsRect.height-groupH,primaryCenter-groupH/2));detailsGroupRect=rect(detailsRect.x,gy,detailsRect.width,groupH);detailRowRects=Array.from({length:count},(_,i)=>rect(detailsGroupRect.x,detailsGroupRect.y+i*(rowH+rowGap),detailsGroupRect.width,rowH));dividerX=primaryRect.x+primaryRect.width+gap/2}
   const rowRects=[];if(standingsRect){const headerH=26,rowH=(standingsRect.height-headerH)/composition.tableRows;for(let i=0;i<composition.tableRows;i++)rowRects.push(rect(standingsRect.x,standingsRect.y+headerH+i*rowH,standingsRect.width,rowH))}
-  return {...blank,primaryRect,kickoffRect,teamsRect,standingRect,previousRect,standingsRect,detailsRect,rowRects}
+  return {...blank,primaryRect,primaryGroupRect,kickoffRect,teamsRect,standingRect,previousRect,previousGroupRect,standingsRect,detailsRect,detailsGroupRect,detailRowRects,dividerX,rowRects}
 }
