@@ -70,7 +70,7 @@ test('capacity is shared and fixed at 16 for named and custom resolution', () =>
   assert.match(header, /MAX_FRAME_ASSIGNMENTS\s*=\s*MAX_GRID_CELLS/)
   assert.match(header, /SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\]/)
   assert.match(header, /GridLayout grid;[\s\S]*SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\]/)
-  assert.match(layout, /Cell staged\[MAX_GRID_CELLS\]/)
+  assert.match(layout, /static Cell g_gridCellStaging\[MAX_GRID_CELLS\]/)
   assert.match(header, /LAYOUT_FULL,\s*LAYOUT_CUSTOM/)
 })
 

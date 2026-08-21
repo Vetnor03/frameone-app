@@ -130,8 +130,8 @@ test('topology ignores input order, slot values, and valid CellSize labels', () 
 
 test('invalid derivation is validate-first and atomic for every malformed class', () => {
   const fn = source.match(/bool deriveGridDividers[\s\S]*?\n\}/)?.[0]; assert.ok(fn)
-  assert.ok(fn.indexOf('validateGridLayout') < fn.indexOf('GridDividerLayout derived'))
-  assert.ok(fn.indexOf('destination = derived') > fn.indexOf('GridDividerLayout derived'))
+  assert.ok(fn.indexOf('validateGridLayout') < fn.indexOf('GridDividerLayout& derived'))
+  assert.ok(fn.indexOf('destination = derived') > fn.indexOf('GridDividerLayout& derived'))
   const singles = Array.from({ length: 16 }, (_, i) => cell(i % 4, Math.floor(i / 4), 1, 1, i))
   const badSize = singles.map((c) => ({ ...c })); badSize[0].size = 'CELL_SMALL'
   const duplicate = singles.map((c) => ({ ...c })); duplicate[1].slot = 0
