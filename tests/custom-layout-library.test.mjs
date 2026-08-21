@@ -76,4 +76,13 @@ test('only saved custom headers offer the quiet inline edit control',async()=>{
   assert.match(page,/layoutFlow\?\.mode==='edit'&&<button type="button" onClick=/)
   assert.equal((page.match(/>DELETE LAYOUT<\/button>/g)||[]).length,1)
 })
+test('saved custom modules reuse the built-in readable cell-label presentation',async()=>{
+  const page=await readFile(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
+  const library=await readFile(new URL('../app/components/CustomLayoutLibrary.tsx',import.meta.url),'utf8')
+  assert.match(page,/customLayout\?<CustomLayoutPreview[^>]+renderCellLabel=\{assignment=><FrameCellLabel language=\{language\}/)
+  assert.match(page,/function FrameCellLabel\([\s\S]*module\?moduleLabel\(language,module\):'\+'/)
+  assert.match(page,/module\?'text-\[color:var\(--fg\)\] font-semibold text-lg':'text-\[color:var\(--fg-50\)\] text-2xl'/)
+  assert.match(page,/const body = content \?\? <FrameCellLabel language=\{language\} module=\{module\}\/\>/)
+  assert.doesNotMatch(library,/text-xs uppercase tracking-wider/)
+})
 test('schema and routes enforce owner plus frame membership',async()=>{const sql=await readFile(new URL('../supabase/migrations/20260821120000_add_custom_layout_library.sql',import.meta.url),'utf8');assert.match(sql,/owner_user_id = auth\.uid\(\)/);assert.match(sql,/device_members/);assert.match(sql,/enable row level security/);const builder=await readFile(new URL('../app/api/device/frame-config/builder.ts',import.meta.url),'utf8');assert.match(builder,/requirePhysical: true, requireModules: true/);assert.match(builder,/layout: 'default'/)})

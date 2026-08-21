@@ -3591,7 +3591,7 @@ function FrameTab(props: {
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap}/>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
+        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap} renderCellLabel={assignment=><FrameCellLabel language={language} module={assignment as ModuleKey|null}/>}/>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
       </div>
     </div>
   )
@@ -3739,16 +3739,7 @@ function CellButton({
   renderCellContent?: FrameCellRenderer
 }) {
   const content = renderCellContent ? renderCellContent(module, slot, size) : null
-  const label = module ? moduleLabel(language, module) : '+'
-  const body = content ?? (
-    <div
-      className={`tracking-widest ${
-        module ? 'text-[color:var(--fg)] font-semibold text-lg' : 'text-[color:var(--fg-50)] text-2xl'
-      }`}
-    >
-      {label}
-    </div>
-  )
+  const body = content ?? <FrameCellLabel language={language} module={module}/>
 
   if (!onTap) {
     return <div className="w-full h-full flex items-center justify-center">{body}</div>
@@ -3759,6 +3750,12 @@ function CellButton({
       {body}
     </button>
   )
+}
+
+function FrameCellLabel({language,module}:{language:AppLanguage;module:ModuleKey|null|undefined}) {
+  return <div className={`tracking-widest ${module?'text-[color:var(--fg)] font-semibold text-lg':'text-[color:var(--fg-50)] text-2xl'}`}>
+    {module?moduleLabel(language,module):'+'}
+  </div>
 }
 
 
