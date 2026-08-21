@@ -5,6 +5,10 @@ MAIN = (ROOT / "src/frame_v2.5.1.ino").read_text()
 LIVE = (ROOT / "src/network/LiveUpdate.cpp").read_text()
 
 
+def test_live_update_declares_its_wifi_dependency():
+    assert "#include <WiFi.h>" in LIVE
+
+
 def test_elapsed_scheduler_is_approximately_15_minutes():
     elapsed = 0
     due_at = []

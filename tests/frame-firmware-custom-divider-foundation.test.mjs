@@ -18,7 +18,7 @@ const sizeFor = (w, h) => w === 4 && h === 1 ? 'CELL_SMALL'
 const cell = (col, row, colSpan, rowSpan, slot, size = sizeFor(colSpan, rowSpan)) =>
   ({ col, row, colSpan, rowSpan, slot, size })
 function named(name) {
-  const body = generated.match(new RegExp(`static const GridCell ${name}\\[\\] = \\{([\\s\\S]*?)\\n\\};`))?.[1]
+  const body = generated.match(new RegExp(`static const GridCell LAYOUT_${name}_CELLS\\[\\] = \\{([\\s\\S]*?)\\n\\};`))?.[1]
   assert.ok(body)
   return [...body.matchAll(/\{(\d+), (\d+), (\d+), (\d+), (\d+), (CELL_\w+)\}/g)]
     .map((m) => cell(...m.slice(1, 6).map(Number), m[6]))
@@ -155,7 +155,7 @@ test('Phase C engine is used only by the explicit custom runtime path', () => {
   assert.doesNotMatch(build, /deriveGridDividers|resolveGridDivider/)
   assert.match(preflight, /deriveGridDividers[\s\S]*resolveGridDivider/)
   assert.match(draw, /LAYOUT_DEFAULT[\s\S]*drawHLine[\s\S]*LAYOUT_PYRAMID[\s\S]*drawVLine[\s\S]*LAYOUT_SQUARE/)
-  assert.deepEqual([...build.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)].map((m) => m[1]),
+  assert.deepEqual([...build.matchAll(/GeneratedLayouts::LAYOUT_(FULL|DEFAULT|PYRAMID|SQUARE)_CELLS/g)].map((m) => m[1]),
     ['SQUARE', 'FULL', 'DEFAULT', 'PYRAMID'])
   assert.match(configHeader, /LAYOUT_FULL,\s*LAYOUT_CUSTOM/)
   assert.match(configSource, /return LAYOUT_DEFAULT;\s*\}/)

@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <inttypes.h>
 
