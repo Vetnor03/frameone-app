@@ -1,4 +1,4 @@
-export const STUDIO_MODULES = ['date','reminders','weather','countdown','surf','soccer','stocks','groceries']
+export const STUDIO_MODULES = ['date','reminders','weather','countdown','surf','soccer','stocks','groceries','ai-follow']
 
 const legacyVariants = new Map([
   ['4x1', 'SMALL'],
@@ -29,6 +29,7 @@ export function legacyStudioVariant(colSpan, rowSpan) {
 export function studioRenderStrategy(module, colSpan, rowSpan, width, height) {
   if (!STUDIO_MODULES.includes(module)) throw new RangeError(`Unknown Studio module: ${module}`)
   const profile = responsiveCellProfile(colSpan, rowSpan, width, height)
+  if (module === 'ai-follow') return { path:'ai-follow-responsive', legacyVariant:null, profile }
   const legacyVariant = legacyStudioVariant(colSpan, rowSpan)
   const path = legacyVariant ? 'legacy' : module === 'reminders' ? 'reminders-responsive' : module === 'weather' ? 'weather-responsive' : module === 'countdown' ? 'countdown-responsive' : module === 'date' ? 'date-responsive' : module === 'surf' ? 'surf-responsive' : module === 'soccer' ? 'soccer-responsive' : module === 'stocks' ? 'stocks-responsive' : module === 'groceries' ? 'groceries-responsive' : 'responsive'
   return { path, legacyVariant, profile }
