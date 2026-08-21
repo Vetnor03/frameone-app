@@ -8,7 +8,7 @@ export const withSlots = (cells: EditorCell[]): CustomLayoutCell[] => sortCells(
 export const editorCells = (cells: CustomLayoutCell[]): EditorCell[] => cells.map(({slot,col,row,colSpan,rowSpan})=>({id:`saved:${slot}`,col,row,colSpan,rowSpan,moduleId:'empty'}))
 
 export function CustomLayoutPreview({ cells, onCellTap, assignments = {}, unsupportedSlots = [], editorGuide = false }: {cells:CustomLayoutCell[]; onCellTap?:(slot:number)=>void; assignments?:Record<number,string|null>; unsupportedSlots?:number[];editorGuide?:boolean}) {
-  return <div className={`relative h-full w-full overflow-hidden rounded-[22px] ${editorGuide?'bg-transparent':'bg-[color:var(--card-bg)]'}`} aria-label="Custom layout preview">
+  return <div className={`relative h-full w-full overflow-hidden ${editorGuide?'bg-transparent':'rounded-[22px] bg-[color:var(--card-bg)]'}`} aria-label="Custom layout preview">
     {cells.map(cell=><button type="button" key={cell.slot} onClick={()=>onCellTap?.(cell.slot)} disabled={!onCellTap}
       className={`absolute flex items-center justify-center border border-[color:var(--bd-15)] text-2xl ${unsupportedSlots.includes(cell.slot)?'bg-red-500/15 ring-2 ring-red-400':'bg-transparent'}`}
       style={{left:`${cell.col*25}%`,top:`${cell.row*25}%`,width:`${cell.colSpan*25}%`,height:`${cell.rowSpan*25}%`}}>
@@ -28,7 +28,7 @@ export function InlineCustomLayoutEditor({cells,onChange,unsupportedSlots=[]}:{c
   const up=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current)return;const end=point(e),start=drag.current.start;drag.current=null;const moved=Math.hypot(end.x-start.x,end.y-start.y)>8
     if(moved){const result=mergeCellsInSelection(cells,dragSelectionFromPointers(start,end,{width:e.currentTarget.clientWidth,height:e.currentTarget.clientHeight}));if(result.valid)onChange(result.cells)}
     else {const intent=resolveShortTap(cells,end,{width:e.currentTarget.clientWidth,height:e.currentTarget.clientHeight});if(intent.kind==='merge'){const result=mergeDivider(cells,intent.divider);if(result.valid)onChange(result.cells)}else if(intent.kind==='split'&&intent.cell){const result=splitCellAtBoundary(cells,intent.cell.id,intent.guide);if(result.valid)onChange(result.cells)}}}
-  return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerUp={up} className="relative h-full w-full touch-none overflow-hidden rounded-[22px] bg-[color:var(--card-bg)]" style={{backgroundImage:'radial-gradient(var(--fg-25) 1px,transparent 1px)',backgroundSize:'25% 25%'}}>
+  return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerUp={up} className="relative h-full w-full touch-none overflow-hidden" style={{backgroundImage:'radial-gradient(var(--fg-25) 1px,transparent 1px)',backgroundSize:'25% 25%'}}>
     <CustomLayoutPreview cells={withSlots(cells)} unsupportedSlots={unsupportedSlots} editorGuide/>
   </div>
 }

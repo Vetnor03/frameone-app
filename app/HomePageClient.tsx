@@ -3581,7 +3581,7 @@ function FrameTab(props: {
         </button>
 
         <div className="min-w-0 flex-1 text-center">
-          {editorMode?<input aria-label="Layout name" autoFocus maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="text-2xl font-semibold tracking-widest">{title}</div>}
+          {editorMode?<input aria-label="Layout name" maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="text-2xl font-semibold tracking-widest">{title}</div>}
           <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Drag to merge · tap to split':subtitle}</div>
         </div>
 
