@@ -147,17 +147,16 @@ test('partial regions use their own 2.5% truncating margin', () => {
   assert.match(source, /span95\(start, end - start, resolved\.y0, resolved\.y1\)/)
 })
 
-test('Phase C remains disconnected from runtime drawing and configuration', () => {
+test('Phase C engine is used only by the explicit custom runtime path', () => {
   const draw = source.match(/void draw\(LayoutKey key\)[\s\S]*?\n\}/)?.[0]
-  const content = source.match(/void drawWithContent\(LayoutKey key[\s\S]*?\n\}/)?.[0]
   const build = source.match(/int buildCells\(LayoutKey key[\s\S]*?\n\}/)?.[0]
-  for (const fn of [draw, content, build]) assert.doesNotMatch(fn, /deriveGridDividers|resolveGridDivider/)
+  const preflight = source.match(/static bool prepareCustomRender[\s\S]*?\n\}/)?.[0]
+  assert.doesNotMatch(draw, /deriveGridDividers|resolveGridDivider/)
+  assert.doesNotMatch(build, /deriveGridDividers|resolveGridDivider/)
+  assert.match(preflight, /deriveGridDividers[\s\S]*resolveGridDivider/)
   assert.match(draw, /LAYOUT_DEFAULT[\s\S]*drawHLine[\s\S]*LAYOUT_PYRAMID[\s\S]*drawVLine[\s\S]*LAYOUT_SQUARE/)
-  // D1 intentionally raises the historical capacity of 8 to the full 4x4 maximum.
-  assert.match(content, /Cell cells\[MAX_GRID_CELLS\];/)
-  assert.match(configHeader, /SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\];/)
   assert.deepEqual([...build.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)].map((m) => m[1]),
     ['SQUARE', 'FULL', 'DEFAULT', 'PYRAMID'])
-  assert.doesNotMatch(configSource + configHeader, /LAYOUT_CUSTOM/)
+  assert.match(configHeader, /LAYOUT_FULL,\s*LAYOUT_CUSTOM/)
   assert.match(configSource, /return LAYOUT_DEFAULT;\s*\}/)
 })

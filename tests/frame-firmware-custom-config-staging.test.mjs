@@ -65,13 +65,13 @@ const mixed = [
   { slot: 12, module: 'bottom', col: 0, row: 3, colSpan: 4, rowSpan: 1 },
 ]
 
-test('capacity is shared, fixed at 16, and active named cell resolution only gets capacity', () => {
+test('capacity is shared and fixed at 16 for named and custom resolution', () => {
   assert.match(types, /MAX_GRID_CELLS\s*=\s*16/)
   assert.match(header, /MAX_FRAME_ASSIGNMENTS\s*=\s*MAX_GRID_CELLS/)
   assert.match(header, /SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\]/)
   assert.match(header, /GridLayout grid;[\s\S]*SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\]/)
-  assert.match(layout, /Cell cells\[MAX_GRID_CELLS\][\s\S]*buildCells\(key, cells, MAX_GRID_CELLS\)/)
-  assert.doesNotMatch(header + config + layout, /LAYOUT_CUSTOM/)
+  assert.match(layout, /Cell staged\[MAX_GRID_CELLS\]/)
+  assert.match(header, /LAYOUT_FULL,\s*LAYOUT_CUSTOM/)
 })
 
 test('custom intent is separate, fallback stays DEFAULT, and named parsing stays geometry-free', () => {
@@ -116,13 +116,11 @@ test('signed validation precedes casts and firmware derives size without trustin
   assert.doesNotMatch(config, /cell\["size"\]|c\["size"\]/)
 })
 
-test('custom state fully resets and dormant geometry cannot reach runtime rendering', () => {
+test('custom state resets and adaptive geometry remains blocked at runtime', () => {
   assert.match(config, /resetCustomLayout\(out\);/)
-  assert.match(config, /customLayout\.grid\.count = 0[\s\S]*customLayout\.assignCount = 0[\s\S]*customLayout\.valid = false/)
-  const build = layout.match(/int buildCells\([\s\S]*?\n\}/)[0]
-  const draw = layout.match(/void draw\(LayoutKey key\)[\s\S]*?\n\}/)[0]
-  const content = layout.match(/void drawWithContent\(LayoutKey key[\s\S]*?\n\}/)[0]
-  for (const fn of [build, draw, content]) assert.doesNotMatch(fn, /customLayout|deriveGridDividers|resolveGridDivider/)
+  assert.match(config, /customLayout\.grid\.count = 0[\s\S]*customLayout\.assignCount = 0[\s\S]*customLayout\.valid = false[\s\S]*customLayout\.renderable = false/)
+  assert.match(layout, /if \(staged\.cells\[i\]\.size == CELL_ADAPTIVE/)
+  assert.match(layout, /ModuleRenderer::renderPlaceholders\(assigns, assignCount, cells, n\)/)
   assert.doesNotMatch(renderer, /CELL_ADAPTIVE|GridLayout|customLayout/)
 })
 

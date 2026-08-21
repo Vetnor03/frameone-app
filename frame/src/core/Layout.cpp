@@ -95,6 +95,16 @@ bool validateGridLayout(const GridLayout& layout) {
   return validateGridLayout(layout.cells, layout.count);
 }
 
+bool isLegacyRenderableGridLayout(const GridLayout& layout) {
+  if (!validateGridLayout(layout)) return false;
+  for (uint8_t i = 0; i < layout.count; ++i) {
+    const CellSize size = layout.cells[i].size;
+    if (size != CELL_SMALL && size != CELL_MEDIUM && size != CELL_LARGE &&
+        size != CELL_XL) return false;
+  }
+  return true;
+}
+
 bool setGridLayout(GridLayout& destination, const GridCell* source, int count) {
   if (!validateGridLayout(source, count)) return false;
   for (int i = 0; i < count; ++i) destination.cells[i] = source[i];
@@ -106,6 +116,18 @@ bool resolveGridCell(const GridCell& g, Cell& c) {
   if (!isValidGridCell(g)) return false;
   c = Cell{gridX(g.col), gridY(g.row), gridX(g.col + g.colSpan) - gridX(g.col),
            gridY(g.row + g.rowSpan) - gridY(g.row), g.slot, g.size};
+  return true;
+}
+
+bool buildGridCells(const GridLayout& grid, Cell* outCells, int maxCells,
+                    int& outCount) {
+  if (!outCells || !validateGridLayout(grid) || maxCells < grid.count) return false;
+  Cell staged[MAX_GRID_CELLS];
+  for (uint8_t i = 0; i < grid.count; ++i) {
+    if (!resolveGridCell(grid.cells[i], staged[i])) return false;
+  }
+  for (uint8_t i = 0; i < grid.count; ++i) outCells[i] = staged[i];
+  outCount = grid.count;
   return true;
 }
 
@@ -178,6 +200,8 @@ bool resolveGridDivider(const GridDivider& divider, PixelDivider& output) {
 }
 
 void draw(LayoutKey key) {
+  // A key alone carries no custom geometry. Never consult hidden/global state.
+  if (key == LAYOUT_CUSTOM) key = LAYOUT_DEFAULT;
   auto& d = DisplayCore::get();
 
   const int x = FRAME_X;
@@ -236,8 +260,52 @@ int buildCells(LayoutKey key, Cell* outCells, int maxCells) {
   return count;
 }
 
+struct CustomRenderPlan {
+  Cell cells[MAX_GRID_CELLS];
+  int cellCount = 0;
+  PixelDivider dividers[MAX_GRID_DIVIDERS];
+  int dividerCount = 0;
+};
+
+static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output) {
+  const CustomLayoutConfig& custom = cfg.customLayout;
+  if (!cfg.customLayoutRequested || !custom.valid || !custom.renderable ||
+      !isLegacyRenderableGridLayout(custom.grid) || custom.assignCount != custom.grid.count ||
+      custom.assignCount > MAX_FRAME_ASSIGNMENTS) return false;
+
+  uint16_t assignedSlots = 0;
+  for (uint8_t i = 0; i < custom.assignCount; ++i) {
+    const SlotModule& assignment = custom.assigns[i];
+    if (assignment.slot >= MAX_GRID_CELLS || assignment.module[0] == '\0') return false;
+    const uint16_t mask = (uint16_t)1U << assignment.slot;
+    if (assignedSlots & mask) return false;
+    assignedSlots |= mask;
+  }
+
+  CustomRenderPlan staged;
+  if (!buildGridCells(custom.grid, staged.cells, MAX_GRID_CELLS, staged.cellCount)) return false;
+  for (int i = 0; i < staged.cellCount; ++i) {
+    // D2's hard safety boundary: adaptive cells must not reach ModuleRenderer.
+    if (staged.cells[i].size == CELL_ADAPTIVE ||
+        !(assignedSlots & ((uint16_t)1U << staged.cells[i].slot))) return false;
+  }
+
+  GridDividerLayout logical;
+  if (!deriveGridDividers(logical, custom.grid)) return false;
+  for (uint8_t i = 0; i < logical.count; ++i) {
+    if (!resolveGridDivider(logical.dividers[i], staged.dividers[i])) return false;
+  }
+  staged.dividerCount = logical.count;
+  output = staged;
+  return true;
+}
+
 void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   auto& d = DisplayCore::get();
+
+  CustomRenderPlan customPlan;
+  const bool customReady = key == LAYOUT_CUSTOM && prepareCustomRender(cfg, customPlan);
+  const LayoutKey effectiveKey = key == LAYOUT_CUSTOM && !customReady ? LAYOUT_DEFAULT : key;
 
   ModuleDate::setConfig(&cfg);
   ModuleWeather::setConfig(&cfg);
@@ -262,27 +330,36 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
     // FULL SCREEN fill so outside matte area matches theme
     DisplayCore::fillThemeBackground();
 
-    if (key == LAYOUT_FULL) {
+    if (customReady) {
+      for (int i = 0; i < customPlan.dividerCount; ++i) {
+        const PixelDivider& divider = customPlan.dividers[i];
+        if (divider.y0 == divider.y1) drawHLine(divider.y0, divider.x0, divider.x1);
+        else drawVLine(divider.x0, divider.y0, divider.y1);
+      }
+    } else if (effectiveKey == LAYOUT_FULL) {
       // none
-    } else if (key == LAYOUT_DEFAULT) {
+    } else if (effectiveKey == LAYOUT_DEFAULT) {
       drawHLine(quarterY, hx0, hx1);
       drawHLine(halfY, hx0, hx1);
-    } else if (key == LAYOUT_PYRAMID) {
+    } else if (effectiveKey == LAYOUT_PYRAMID) {
       drawHLine(quarterY, hx0, hx1);
       drawHLine(halfY, hx0, hx1);
 
       int bottomY0, bottomY1;
       span95(halfY, h - (h / 2), bottomY0, bottomY1);
       drawVLine(midX, bottomY0, bottomY1);
-    } else if (key == LAYOUT_SQUARE) {
+    } else if (effectiveKey == LAYOUT_SQUARE) {
       drawHLine(halfY, hx0, hx1);
       drawVLine(midX, vy0, vy1);
     }
 
-    Cell cells[MAX_GRID_CELLS];
-    int n = buildCells(key, cells, MAX_GRID_CELLS);
+    Cell namedCells[MAX_GRID_CELLS];
+    Cell* cells = customReady ? customPlan.cells : namedCells;
+    int n = customReady ? customPlan.cellCount : buildCells(effectiveKey, namedCells, MAX_GRID_CELLS);
+    const SlotModule* assigns = customReady ? cfg.customLayout.assigns : cfg.assigns;
+    const int assignCount = customReady ? cfg.customLayout.assignCount : cfg.assignCount;
 
-    ModuleRenderer::renderPlaceholders(cfg.assigns, cfg.assignCount, cells, n);
+    ModuleRenderer::renderPlaceholders(assigns, assignCount, cells, n);
 
 #if DEBUG_DRAW_SLOTS
     d.setTextColor(Theme::ink());

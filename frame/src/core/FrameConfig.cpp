@@ -91,6 +91,7 @@ static void resetCustomLayout(FrameConfig& out) {
   out.customLayout.grid.count = 0;
   out.customLayout.assignCount = 0;
   out.customLayout.valid = false;
+  out.customLayout.renderable = false;
   for (int i = 0; i < MAX_FRAME_ASSIGNMENTS; ++i) {
     out.customLayout.assigns[i].slot = 0;
     out.customLayout.assigns[i].module[0] = '\0';
@@ -147,6 +148,7 @@ static bool stageCustomLayout(FrameConfig& out, JsonArray cells) {
   for (int i = 0; i < count; ++i) out.customLayout.assigns[i] = candidateAssigns[i];
   out.customLayout.assignCount = (uint8_t)count;
   out.customLayout.valid = true;
+  out.customLayout.renderable = Layout::isLegacyRenderableGridLayout(candidateGrid);
   return true;
 }
 
@@ -254,12 +256,14 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // layout
   const char* layoutStr = settings["layout"] | "default";
   out.customLayoutRequested = strcmp(layoutStr, "custom") == 0;
-  out.layout = parseLayout(String(layoutStr)); // "custom" deliberately falls back to DEFAULT in D1.
+  out.layout = parseLayout(String(layoutStr)); // "custom" cannot bypass the activation gate.
 
   // cells
   JsonArray cells = settings["cells"].as<JsonArray>();
   if (out.customLayoutRequested) {
     stageCustomLayout(out, cells);
+    if (out.customLayout.valid && out.customLayout.renderable) out.layout = LAYOUT_CUSTOM;
+    else out.layout = LAYOUT_DEFAULT;
   } else if (!cells.isNull()) {
     for (JsonObject c : cells) {
       if (out.assignCount >= MAX_FRAME_ASSIGNMENTS) break;
