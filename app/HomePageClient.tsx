@@ -28,8 +28,9 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, duplicateLayoutClientState, remapAssignmentsAfterGeometryEdit, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
-import { AddLayoutCard, CustomLayoutFlow, CustomLayoutPreview } from './components/CustomLayoutLibrary'
+import { orderedLayoutItems, customPhysicalPayload, duplicateLayoutClientState, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
+import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -1144,6 +1145,11 @@ export default function HomePage() {
   const [activeCustomLayoutId, setActiveCustomLayoutId] = useState<string | null>(null)
   const [customAssignments, setCustomAssignments] = useState<Record<string, Record<number, ModuleKey | null>>>({})
   const [layoutFlow, setLayoutFlow] = useState<{mode:'create'}|{mode:'edit';layout:CustomLayout}|null>(null)
+  const [layoutDraftName,setLayoutDraftName]=useState('')
+  const [layoutDraftCells,setLayoutDraftCells]=useState<EditorCell[]>(initialEditorCells)
+  const [layoutDraftError,setLayoutDraftError]=useState('')
+  const [layoutDraftUnsupported,setLayoutDraftUnsupported]=useState<number[]>([])
+  const [layoutDraftSaving,setLayoutDraftSaving]=useState(false)
   const [customMenuId, setCustomMenuId] = useState<string|null>(null)
   const [carouselItemId, setCarouselItemId] = useState<string>('built-in:default')
 
@@ -1401,7 +1407,7 @@ export default function HomePage() {
     }
   }, [])
 
-  const layoutMeta = activeCustomLayoutId ? {title:customLayouts.find(item=>item.id===activeCustomLayoutId)?.name||'Custom layout',subtitle:'CUSTOM'} : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
+  const layoutMeta = carouselItemId==='add-layout' ? {title:'CUSTOM',subtitle:'Tap + to create your own layout'} : activeCustomLayoutId ? {title:customLayouts.find(item=>item.id===activeCustomLayoutId)?.name||'Custom layout',subtitle:'CUSTOM'} : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
   const mirrorSnapshot = useMemo<PhysicalFrameSnapshot | null>(() => {
     if (physicalFrameSnapshot) {
@@ -2207,6 +2213,17 @@ export default function HomePage() {
     const response=await fetch(path,{...init,headers:{'content-type':'application/json',Authorization:`Bearer ${token}`,...init?.headers}})
     const json=await response.json().catch(()=>({}));if(!response.ok)throw new Error(json.error||'Unable to update layout.');return json
   }
+  function beginCreateLayout(){setLayoutDraftName('');setLayoutDraftCells(initialEditorCells());setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'create'})}
+  function beginEditLayout(layout:CustomLayout){setLayoutDraftName(layout.name);setLayoutDraftCells(editorCells(layout.cells));setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'edit',layout});setCustomMenuId(null)}
+  function cancelLayoutEditor(){setLayoutFlow(null);setLayoutDraftError('');setLayoutDraftUnsupported([])}
+  async function submitLayoutDraft(){
+    const name=normalizeLayoutName(layoutDraftName),cells=withSlots(layoutDraftCells)
+    if(!name){setLayoutDraftError('Enter a name for your layout.');return}
+    const validation=validateCustomGeometry(cells,{requirePhysical:true})
+    if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError(validation.errors.includes('unsupported_geometry')?'This shape isn’t supported on the frame yet.':'The layout must cover the whole frame without overlapping.');return}
+    setLayoutDraftName(name);setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutDraftSaving(true)
+    try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}
+  }
   async function saveCustomLayout(name:string,cells:CustomLayoutCell[]) {
     if(!activeDeviceId)return
     if(layoutFlow?.mode==='edit'){
@@ -2222,8 +2239,8 @@ export default function HomePage() {
   }
   async function renameCustom(layout:CustomLayout){const name=window.prompt('Layout name',layout.name);if(name==null)return;const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'PATCH',body:JSON.stringify({name})});setCustomLayouts(items=>items.map(item=>item.id===layout.id?json.layout:item));setCustomMenuId(null)}
   async function duplicateCustom(layout:CustomLayout){const json=await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'POST'}),next=duplicateLayoutClientState(customLayouts,customAssignments,layout.id,json.layout);setCustomLayouts(next.layouts);setCustomAssignments(next.assignments);setCarouselItemId(next.carouselItemId);setActiveCustomLayoutId(next.activeCustomLayoutId);setActiveTab('frame');setDirty(true);setCustomMenuId(null)}
-  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setCustomMenuId(null)}
-  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout'){setLayoutFlow({mode:'create'});return}const custom=customLayouts.find(item=>item.id===id);if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
+  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setCustomMenuId(null);setLayoutFlow(null)}
+  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
   function prevLayout() {
@@ -2498,8 +2515,6 @@ async function handleSelectTab(k: TabKey) {
             onComplete={completeFrameSetup}
           />
         )}
-        {layoutFlow&&<CustomLayoutFlow layout={layoutFlow.mode==='edit'?layoutFlow.layout:undefined} onClose={()=>setLayoutFlow(null)} onSave={saveCustomLayout}/>}
-
         <div
           className={`remind-app-shell ${!shouldRenderApp || shouldShowFirstFrameOnboarding || setupDeviceId ? 'hidden' : ''} ${booting ? 'remind-app-shell-booting' : 'remind-app-shell-ready'} flex flex-col flex-1 min-h-0`}
           aria-hidden={!shouldRenderApp || booting || shouldShowFirstFrameOnboarding || !!setupDeviceId}
@@ -2523,13 +2538,20 @@ async function handleSelectTab(k: TabKey) {
                   onNext={nextLayout}
                   onCellTap={openPicker}
                   language={language}
+                  editorMode={layoutFlow?.mode}
+                  editorName={layoutDraftName}
+                  editorCells={layoutDraftCells}
+                  editorUnsupportedSlots={layoutDraftUnsupported}
+                  onEditorNameChange={setLayoutDraftName}
+                  onEditorCellsChange={(value)=>{setLayoutDraftCells(value);setLayoutDraftError('');setLayoutDraftUnsupported([])}}
+                  onCancelEditor={cancelLayoutEditor}
                   customLayout={customLayouts.find(item=>item.id===carouselItemId)}
                   customAssignments={customAssignments[carouselItemId]||{}}
                   isAddCard={carouselItemId==='add-layout'}
-                  onAdd={()=>setLayoutFlow({mode:'create'})}
+                  onAdd={beginCreateLayout}
                   customMenuOpen={customMenuId===carouselItemId}
                   onToggleMenu={()=>setCustomMenuId(value=>value===carouselItemId?null:carouselItemId)}
-                  onEdit={(item)=>{setLayoutFlow({mode:'edit',layout:item});setCustomMenuId(null)}}
+                  onEdit={beginEditLayout}
                   onRename={renameCustom}
                   onDuplicate={duplicateCustom}
                   onDelete={deleteCustom}
@@ -2624,24 +2646,26 @@ async function handleSelectTab(k: TabKey) {
             {activeTab === 'frame' && (
               <div className="pt-5 pb-[20px] flex flex-col items-center relative z-20">
                 <button
-                  onClick={handleExplicitUpdate}
+                  onClick={layoutFlow?submitLayoutDraft:handleExplicitUpdate}
                   className={`w-[260px] h-[56px] rounded-2xl border tracking-widest transition bg-[color:var(--app-bg)] ${
-                    dirty
+                    layoutFlow||dirty
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
                   }`}
                   style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!activeDeviceId || persisting || manualUpdatePending}
+                  disabled={!activeDeviceId || persisting || manualUpdatePending || layoutDraftSaving}
                 >
-                  {persisting
+                  {layoutFlow ? (layoutDraftSaving?'Saving…':'SAVE LAYOUT') : persisting
                     ? tx(language).saving
                     : manualUpdateInProgress
                       ? 'Updating RE:MIND…'
                       : tx(language).update}
                 </button>
 
-                <div className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {updateStatusText}
+                {layoutFlow?.mode==='edit'&&<button type="button" onClick={()=>deleteCustom(layoutFlow.layout)} className="mt-4 text-xs tracking-[.16em] text-red-400">DELETE LAYOUT</button>}
+
+                <div role={layoutDraftError?'alert':undefined} className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
+                  {layoutFlow?layoutDraftError:updateStatusText}
                 </div>
               </div>
             )}
@@ -3529,6 +3553,13 @@ function FrameTab(props: {
   onNext: () => void
   onCellTap: (slot: number) => void
   language: AppLanguage
+  editorMode?:'create'|'edit'
+  editorName:string
+  editorCells:EditorCell[]
+  editorUnsupportedSlots:number[]
+  onEditorNameChange:(name:string)=>void
+  onEditorCellsChange:(cells:EditorCell[])=>void
+  onCancelEditor:()=>void
   customLayout?: CustomLayout
   customAssignments: Record<number,ModuleKey|null>
   isAddCard: boolean
@@ -3540,29 +3571,29 @@ function FrameTab(props: {
   onDuplicate:(layout:CustomLayout)=>void
   onDelete:(layout:CustomLayout)=>void
 }) {
-  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,customLayout,customAssignments,isAddCard,onAdd,customMenuOpen,onToggleMenu,onEdit,onRename,onDuplicate,onDelete } = props
+  const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,customMenuOpen,onToggleMenu,onEdit,onRename,onDuplicate,onDelete } = props
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between">
-        <button onClick={onPrev} className="w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl">
-          ‹
+        <button aria-label={editorMode?'Cancel layout editing':'Previous layout'} onClick={editorMode?onCancelEditor:onPrev} className="w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl">
+          {editorMode?'×':'‹'}
         </button>
 
-        <div className="text-center">
-          <div className="text-2xl font-semibold tracking-widest">{title}</div>
-          <div className="text-xs text-[color:var(--fg-60)] tracking-widest mt-1">{subtitle}</div>
+        <div className="min-w-0 flex-1 text-center">
+          {editorMode?<input aria-label="Layout name" autoFocus maxLength={40} value={editorName} onChange={event=>onEditorNameChange(event.target.value)} placeholder="Layout name" className="w-full bg-transparent text-center text-2xl font-semibold tracking-widest outline-none placeholder:text-[color:var(--fg-35)]"/>:<div className="text-2xl font-semibold tracking-widest">{title}</div>}
+          <div className="mt-1 text-xs tracking-widest text-[color:var(--fg-60)]">{editorMode?'Drag to merge · tap to split':subtitle}</div>
         </div>
 
-        {customLayout&&<div className="absolute right-5 top-0"><button aria-label="Manage custom layout" onClick={onToggleMenu} className="h-10 w-10 text-xl">…</button>{customMenuOpen&&<div className="absolute right-0 z-30 w-40 rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)] p-1 text-left text-sm shadow-xl">{[['Edit layout',()=>onEdit(customLayout)],['Rename',()=>onRename(customLayout)],['Duplicate',()=>onDuplicate(customLayout)],['Delete',()=>onDelete(customLayout)]].map(([label,action])=><button key={String(label)} onClick={action as ()=>void} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[color:var(--fg-10)]">{label as string}</button>)}</div>}</div>}
+        {customLayout&&!editorMode&&<div className="absolute right-5 top-0"><button aria-label="Manage custom layout" onClick={onToggleMenu} className="h-10 w-10 text-xl">…</button>{customMenuOpen&&<div className="absolute right-0 z-30 w-40 rounded-xl border border-[color:var(--bd-15)] bg-[color:var(--card-bg)] p-1 text-left text-sm shadow-xl">{[['Edit layout',()=>onEdit(customLayout)],['Rename',()=>onRename(customLayout)],['Duplicate',()=>onDuplicate(customLayout)],['Delete',()=>onDelete(customLayout)]].map(([label,action])=><button key={String(label)} onClick={action as ()=>void} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[color:var(--fg-10)]">{label as string}</button>)}</div>}</div>}
 
-        <button onClick={onNext} className="w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl">
+        <button onClick={onNext} disabled={!!editorMode} aria-hidden={!!editorMode} className={`w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl ${editorMode?'invisible':''}`}>
           ›
         </button>
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        {isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<div className="h-full"><CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap}/>{Object.values(customAssignments).some(value=>!value)&&<p className="mt-3 text-center text-xs text-[color:var(--fg-55)]">Add a module to every cell before updating the frame.</p>}</div>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
+        {editorMode?<InlineCustomLayoutEditor cells={editorCells} onChange={onEditorCellsChange} unsupportedSlots={editorUnsupportedSlots}/>:isAddCard?<AddLayoutCard onClick={onAdd}/>:customLayout?<div className="h-full"><CustomLayoutPreview cells={customLayout.cells} assignments={customAssignments} onCellTap={onCellTap}/>{Object.values(customAssignments).some(value=>!value)&&<p className="mt-3 text-center text-xs text-[color:var(--fg-55)]">Add a module to every cell before updating the frame.</p>}</div>:<FrameLayoutRenderer layoutKey={layoutKey} language={language} cells={cells} onCellTap={onCellTap} />}
       </div>
     </div>
   )
