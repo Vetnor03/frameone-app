@@ -565,5 +565,5 @@ test('AI Follow is a Studio-only picker option and participates in the responsiv
   const productionRegistry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8'))
   assert.equal((simulatorLibrary.match(/id:'ai-follow'/g)||[]).length,1);assert.doesNotMatch(JSON.stringify(productionRegistry),/ai-follow/)
   assert.match(source,/studioModuleRegistry\.map\(module/);assert.match(source,/responsiveShowcaseRegistry\.map\(m/)
-  assert.match(simulatorLibrary,/responsiveShowcaseRegistry[^\n]+studioModuleRegistry/);assert.match(source,/strategy\.path==='ai-follow-responsive'/);assert.doesNotMatch(source,/Topic update/)
+  assert.match(simulatorLibrary,/responsiveShowcaseRegistry[^\n]+studioModuleRegistry/);assert.match(source,/if\(m==='ai-follow'\).*drawResponsiveAiFollow/);assert.doesNotMatch(source,/m as ModuleName|Topic update/)
 })
