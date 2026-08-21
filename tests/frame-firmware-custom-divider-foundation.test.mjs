@@ -153,10 +153,11 @@ test('Phase C remains disconnected from runtime drawing and configuration', () =
   const build = source.match(/int buildCells\(LayoutKey key[\s\S]*?\n\}/)?.[0]
   for (const fn of [draw, content, build]) assert.doesNotMatch(fn, /deriveGridDividers|resolveGridDivider/)
   assert.match(draw, /LAYOUT_DEFAULT[\s\S]*drawHLine[\s\S]*LAYOUT_PYRAMID[\s\S]*drawVLine[\s\S]*LAYOUT_SQUARE/)
-  assert.match(content, /Cell cells\[8\];/)
-  assert.match(configHeader, /SlotModule assigns\[8\];/)
+  // D1 intentionally raises the historical capacity of 8 to the full 4x4 maximum.
+  assert.match(content, /Cell cells\[MAX_GRID_CELLS\];/)
+  assert.match(configHeader, /SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\];/)
   assert.deepEqual([...build.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)].map((m) => m[1]),
     ['SQUARE', 'FULL', 'DEFAULT', 'PYRAMID'])
-  assert.doesNotMatch(configSource + configHeader, /LAYOUT_CUSTOM|GridLayout|colSpan|rowSpan/)
+  assert.doesNotMatch(configSource + configHeader, /LAYOUT_CUSTOM/)
   assert.match(configSource, /return LAYOUT_DEFAULT;\s*\}/)
 })

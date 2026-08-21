@@ -6,8 +6,9 @@ The physical frame is an 800×480 panel with a calibrated content viewport at
 `9,22` measuring `785×458`. Layout uses a 4×4 logical grid and the four named
 layouts `FULL`, `DEFAULT`, `PYRAMID`, and `SQUARE`. Internal dividers span 95%
 of their viewport or region (a 2.5% inset at each end), and there is no outer
-border. The current maximum assignment array and drawing cell buffer are both
-8.
+border. Phase D1 deliberately expands the historical maximum assignment array
+and drawing cell buffer from 8 to the complete 4x4-grid capacity of 16. This is
+a resource-capacity change only; every named layout remains frozen.
 
 The authoritative layout contract remains
 [`shared/frame-layouts.json`](../shared/frame-layouts.json). The firmware header
@@ -27,12 +28,20 @@ coordinates, and fallback behavior.
   complete 4×4 tiling validation, and the `CELL_ADAPTIVE` representation. This
   foundation is not active from backend configuration and makes no renderer or
   physical-output changes.
-- **Phase C — this PR:** derive allocation-free generic divider topology and
+- **Phase C — complete:** derive allocation-free generic divider topology and
   resolve it to calibrated pixels. The engine is verified against the legacy
   named layouts but is not active in runtime drawing.
-- **Phase D:** controlled custom-layout activation, `FrameConfig` geometry
-  parsing, capacity expansion, and safe fallback to `DEFAULT`.
-- **Phase E:** add physical responsive module renderers, one module at a time.
+- **Phase D1 — this PR:** expand assignment and resolved-cell capacity to 16;
+  detect custom intent; and stage custom geometry plus its assignments using
+  complete, all-or-nothing validation. The active layout deliberately remains
+  `DEFAULT`; custom cells, generic dividers, and adaptive rendering remain
+  disconnected from runtime drawing.
+- **Phase D2:** introduce the controlled active custom-layout path, connect a
+  validated `GridLayout` to custom cell resolution and generic divider drawing,
+  prove legacy-equivalent custom geometries pixel-identical, and retain safe
+  fallback to `DEFAULT`.
+- **Phase E:** add responsive physical module rendering for `CELL_ADAPTIVE`, one
+  module at a time.
 
 ## Failure behavior
 
