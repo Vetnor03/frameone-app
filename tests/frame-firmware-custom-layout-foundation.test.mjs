@@ -131,14 +131,12 @@ test('setter validates first and therefore leaves destination unchanged on failu
   assert.notDeepEqual(destination, before)
 })
 
-test('Phase B remains unreachable from active rendering and config paths', () => {
+test('Phase B validation remains authoritative after D2 activation', () => {
   const build = source.match(/int buildCells\([\s\S]*?\n\}/)?.[0]
   assert.deepEqual([...build.matchAll(/GeneratedLayouts::(FULL|DEFAULT|PYRAMID|SQUARE)(?!_COUNT)/g)].map((m) => m[1]),
     ['SQUARE', 'FULL', 'DEFAULT', 'PYRAMID'])
   assert.doesNotMatch(build, /GridLayout|ADAPTIVE|CUSTOM/)
-  // D1 intentionally raises the historical capacity of 8 to the full 4x4 maximum.
-  assert.match(source, /Cell cells\[MAX_GRID_CELLS\];/)
-  assert.match(frameHeader, /SlotModule assigns\[MAX_FRAME_ASSIGNMENTS\];/)
-  assert.doesNotMatch(frameSource, /LAYOUT_CUSTOM/)
-  assert.match(frameSource, /return LAYOUT_DEFAULT;\s*\}/)
+  assert.match(source, /isLegacyRenderableGridLayout[\s\S]*validateGridLayout/)
+  assert.match(frameHeader, /LAYOUT_FULL,\s*LAYOUT_CUSTOM/)
+  assert.match(frameSource, /customLayout\.valid && out\.customLayout\.renderable/)
 })

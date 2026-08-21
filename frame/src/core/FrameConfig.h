@@ -6,7 +6,8 @@ enum LayoutKey {
   LAYOUT_DEFAULT,
   LAYOUT_PYRAMID,
   LAYOUT_SQUARE,
-  LAYOUT_FULL
+  LAYOUT_FULL,
+  LAYOUT_CUSTOM
 };
 
 enum ThemeKey {
@@ -68,6 +69,7 @@ struct CustomLayoutConfig {
   SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
   uint8_t assignCount = 0;
   bool valid = false;
+  bool renderable = false;
 };
 
 // ===== Surf global settings (parsed from settings_json.modules.surf_settings) =====
@@ -108,7 +110,7 @@ struct FrameConfig {
   SlotModule assigns[MAX_FRAME_ASSIGNMENTS];
   int assignCount = 0;
 
-  // Phase D1 staging only. Runtime drawing deliberately continues to use layout/assigns.
+  // Custom data stays separate so a failed activation cannot affect named fallback.
   bool customLayoutRequested = false;
   CustomLayoutConfig customLayout;
 
