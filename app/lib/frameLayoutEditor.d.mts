@@ -19,6 +19,7 @@ export function cellArea(cell:EditorCell):number
 export function sortCells(cells:EditorCell[]):EditorCell[]
 export function detectOrientation(stroke:Stroke):'vertical'|'horizontal'
 export function snapBoundary(value:number,extent:number):number
+export function clampPointToViewport(point:Point,viewport:{width:number;height:number}):Point
 export function resolveDividerStrokeLock(stroke:Stroke,viewport?:{width:number;height:number}):DividerStrokeLock|undefined
 export function hasOverlap(a:EditorCell,b:EditorCell):boolean
 export function validateLayout(cells:EditorCell[]):boolean

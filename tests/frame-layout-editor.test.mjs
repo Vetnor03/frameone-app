@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeDividerStroke,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewDividerStroke,previewStroke,pushHistory,redoHistory,resolveDividerStrokeLock,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,clampPointToViewport,createHistory,detectOrientation,dragSelectionFromPointers,finalizeDividerStroke,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewDividerStroke,previewStroke,pushHistory,redoHistory,resolveDividerStrokeLock,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -200,6 +200,25 @@ test('divider preview and commit share touched coverage for draw and erase',()=>
   const erased=finalizeDividerStroke(preview.cells,start,end,viewport)
   assert.equal(erased.intent,'erase');assert.deepEqual(erased.normalized,preview.normalized)
   assert.equal(erased.valid,true);assert.equal(validateLayout(erased.cells),true)
+})
+
+test('divider overshoot clamps at every viewport edge in either direction',()=>{
+  const cases=[
+    [{x:200,y:100},{x:200,y:900},{orientation:'vertical',boundary:2,rangeStart:1,rangeEnd:4}],
+    [{x:200,y:300},{x:200,y:-900},{orientation:'vertical',boundary:2,rangeStart:0,rangeEnd:3}],
+    [{x:100,y:200},{x:900,y:200},{orientation:'horizontal',boundary:2,rangeStart:1,rangeEnd:4}],
+    [{x:300,y:200},{x:-900,y:200},{orientation:'horizontal',boundary:2,rangeStart:0,rangeEnd:3}],
+  ]
+  for(const [start,end,normalized] of cases){
+    const clamped=clampPointToViewport(end,viewport),preview=previewDividerStroke(initialLayout(),{start,end:clamped},viewport),commit=finalizeDividerStroke(initialLayout(),start,end,viewport)
+    assert.deepEqual(commit.normalized,normalized);assert.deepEqual(preview.normalized,commit.normalized);assert.deepEqual(preview.cells,commit.cells);assert.equal(commit.valid,true)
+    const reverse=finalizeDividerStroke(initialLayout(),clamped,start,viewport,resolveDividerStrokeLock({start,end:clamped},viewport));assert.deepEqual(reverse.normalized,normalized);assert.deepEqual(geometry(reverse.cells),geometry(commit.cells))
+  }
+})
+
+test('a locked V2 stays on V2 when its raw endpoint is far outside',()=>{
+  const lock={orientation:'vertical',boundary:2},result=finalizeDividerStroke(initialLayout(),{x:200,y:100},{x:5000,y:5000},viewport,lock)
+  assert.equal(result.valid,true);assert.deepEqual(result.normalized,{orientation:'vertical',boundary:2,rangeStart:1,rangeEnd:4})
 })
 
 test('smart completion matches all seven real-user blank-canvas gestures',()=>{

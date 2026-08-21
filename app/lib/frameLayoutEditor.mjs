@@ -6,6 +6,10 @@ export const cellArea = cell => cell.colSpan * cell.rowSpan
 export const sortCells = cells => [...cells].sort((a, b) => a.row - b.row || a.col - b.col || a.rowSpan - b.rowSpan || a.colSpan - b.colSpan || a.id.localeCompare(b.id))
 export const detectOrientation = stroke => Math.abs(stroke.end.x - stroke.start.x) > Math.abs(stroke.end.y - stroke.start.y) ? 'horizontal' : 'vertical'
 export const snapBoundary = (value, extent) => Math.max(0, Math.min(GRID_SIZE, Math.round(value / extent * GRID_SIZE)))
+export const clampPointToViewport = (point, viewport) => ({
+  x: Math.max(0, Math.min(viewport.width, point.x)),
+  y: Math.max(0, Math.min(viewport.height, point.y)),
+})
 
 const touchedRangeBoundary = (value, extent, direction) => Math.max(0, Math.min(GRID_SIZE, Math[direction](value / extent * GRID_SIZE)))
 
@@ -331,9 +335,11 @@ export function previewStroke(cells, stroke, viewport = {width: 785, height: 458
  * so an operation which would make an L-shaped region is rejected unchanged.
  */
 export function previewDividerStroke(cells, stroke, viewport = {width: 785, height: 458}) {
-  const length = Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y)
+  const start = clampPointToViewport(stroke.start, viewport), end = clampPointToViewport(stroke.end, viewport)
+  stroke = {...stroke, start, end}
+  const length = Math.hypot(end.x - start.x, end.y - start.y)
   if (length < MIN_STROKE_PX) return {valid: false, reason: 'Draw a longer line', cells}
-  if (!validateLayout(cells) || [stroke.start, stroke.end].some(p => p.x < 0 || p.y < 0 || p.x > viewport.width || p.y > viewport.height)) return {valid: false, reason: 'Keep the line inside the viewport', cells}
+  if (!validateLayout(cells)) return {valid: false, reason: 'The current partition is invalid', cells}
   const lock = stroke.lock ?? resolveDividerStrokeLock(stroke, viewport)
   if (!lock) return {valid: false, reason: 'That line does not follow an internal grid path', cells}
   const orientation = lock.orientation
