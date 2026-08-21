@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeDividerStroke,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewDividerStroke,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeDividerStroke,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewDividerStroke,previewStroke,pushHistory,redoHistory,resolveDividerStrokeLock,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -207,6 +207,19 @@ test('divider gesture locks preserve initial orientation and boundary through wo
   const preview=previewDividerStroke(rows,{start:{x:200,y:20},end:{x:310,y:70},lock},viewport)
   assert.deepEqual(preview.normalized,{orientation:'vertical',boundary:2,rangeStart:0,rangeEnd:1})
   assert.equal(preview.valid,true);assert.equal(validateLayout(preview.cells),true)
+})
+
+test('divider locks reject outer edges while all six internal guides resolve normally',()=>{
+  const vertical=y=>({start:{x:y,y:20},end:{x:y,y:180}}),horizontal=y=>({start:{x:20,y},end:{x:180,y}})
+  for(const stroke of [vertical(10),vertical(390),horizontal(10),horizontal(390)]){
+    assert.equal(resolveDividerStrokeLock(stroke,viewport),undefined)
+    const before=initialLayout(),result=previewDividerStroke(before,stroke,viewport)
+    assert.equal(result.valid,false);assert.equal(result.cells,before)
+  }
+  for(const boundary of [1,2,3]){
+    assert.deepEqual(resolveDividerStrokeLock(vertical(boundary*100),viewport),{orientation:'vertical',boundary})
+    assert.deepEqual(resolveDividerStrokeLock(horizontal(boundary*100),viewport),{orientation:'horizontal',boundary})
+  }
 })
 
 test('forgiving erase still rejects a non-rectangular component unchanged',()=>{

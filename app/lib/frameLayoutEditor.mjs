@@ -14,7 +14,8 @@ export function resolveDividerStrokeLock(stroke, viewport = {width: 785, height:
   if (Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y) < MIN_STROKE_PX) return undefined
   const orientation = detectOrientation(stroke), vertical = orientation === 'vertical'
   const snapped = snapBoundary(vertical ? (stroke.start.x + stroke.end.x) / 2 : (stroke.start.y + stroke.end.y) / 2, vertical ? viewport.width : viewport.height)
-  return {orientation, boundary: Math.max(1, Math.min(GRID_SIZE - 1, snapped))}
+  if (snapped <= 0 || snapped >= GRID_SIZE) return undefined
+  return {orientation, boundary: snapped}
 }
 
 export function hasOverlap(a, b) {
@@ -331,6 +332,7 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
   if (length < MIN_STROKE_PX) return {valid: false, reason: 'Draw a longer line', cells}
   if (!validateLayout(cells) || [stroke.start, stroke.end].some(p => p.x < 0 || p.y < 0 || p.x > viewport.width || p.y > viewport.height)) return {valid: false, reason: 'Keep the line inside the viewport', cells}
   const lock = stroke.lock ?? resolveDividerStrokeLock(stroke, viewport)
+  if (!lock) return {valid: false, reason: 'That line does not follow an internal grid path', cells}
   const orientation = lock.orientation
   const vertical = orientation === 'vertical'
   const boundary = lock.boundary
