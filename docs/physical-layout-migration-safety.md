@@ -22,14 +22,16 @@ coordinates, and fallback behavior.
 
 ## Planned sequence
 
-- **Phase A — this PR:** freeze the baseline in tests and documentation only.
-- **Phase B:** introduce generic custom `GridCell` storage and validation while
-  leaving named layouts unchanged.
-- **Phase C:** generate internal dividers for arbitrary valid geometry while
+- **Phase A — complete:** freeze the baseline in tests and documentation only.
+- **Phase B — this PR:** add the fixed-capacity, allocation-free `GridLayout`,
+  complete 4×4 tiling validation, and the `CELL_ADAPTIVE` representation. This
+  foundation is not active from backend configuration and makes no renderer or
+  physical-output changes.
+- **Phase C:** derive generic internal dividers from a valid `GridLayout` while
   keeping named divider output pixel-identical.
-- **Phase D:** allow up to 16 custom cells and assignments.
-- **Phase E:** port responsive behavior from Studio into physical module
-  renderers, one module at a time.
+- **Phase D:** controlled custom-layout activation and assignment-capacity
+  expansion.
+- **Phase E:** add physical responsive module renderers, one module at a time.
 
 ## Failure behavior
 
