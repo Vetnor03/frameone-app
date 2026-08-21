@@ -8,4 +8,5 @@ export function orderedLayoutItems(customLayouts: CustomLayout[]): Array<{type: 
 export function validateCustomGeometry(cells: unknown, options?: {requirePhysical?: boolean; requireModules?: boolean}): {valid: boolean; errors: string[]; unsupportedSlots: number[]}
 export function geometryWithAssignments(cells: CustomLayoutCell[], assignments: Record<number, string | null>): Array<CustomLayoutCell & {module: string}>
 export function customPhysicalPayload(layout: CustomLayout, assignments: Record<number, string | null>): {layout: 'custom'; custom_layout_id: string; cells: Array<CustomLayoutCell & {module: string}>} | null
+export function remapAssignmentsAfterGeometryEdit(previousCells: CustomLayoutCell[], nextCells: CustomLayoutCell[], assignments: Record<number, string | null>): Record<number, string | null>
 export function duplicateLayout(layout: CustomLayout, id: string, now?: string): CustomLayout

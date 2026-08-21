@@ -1,12 +1,11 @@
 'use client'
 import React, { useRef, useState } from 'react'
-import { dragSelectionFromPointers, mergeCellsInSelection, resolveShortTap, splitCellAtBoundary, mergeDivider, sortCells } from '../lib/frameLayoutEditor.mjs'
+import { dragSelectionFromPointers, mergeCellsInSelection, resolveShortTap, splitCellAtBoundary, mergeDivider, sortCells, type EditorCell } from '../lib/frameLayoutEditor.mjs'
 import { normalizeLayoutName, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from '../lib/customLayouts'
 
-type EditorCell = CustomLayoutCell & { id: string; moduleId: 'empty' }
-const initialCells = (): EditorCell[] => [{ id:'whole', slot:0, col:0, row:0, colSpan:4, rowSpan:4, moduleId:'empty' }]
-const withSlots = (cells: EditorCell[]): CustomLayoutCell[] => sortCells(cells).map((cell: EditorCell, slot: number) => ({slot,col:cell.col,row:cell.row,colSpan:cell.colSpan,rowSpan:cell.rowSpan}))
-const editorCells = (cells: CustomLayoutCell[]): EditorCell[] => cells.map(c=>({...c,id:`saved:${c.slot}`,moduleId:'empty'}))
+const initialCells = (): EditorCell[] => [{ id:'whole', col:0, row:0, colSpan:4, rowSpan:4, moduleId:'empty' }]
+export const withSlots = (cells: EditorCell[]): CustomLayoutCell[] => sortCells(cells).map((cell, slot) => ({slot,col:cell.col,row:cell.row,colSpan:cell.colSpan,rowSpan:cell.rowSpan}))
+export const editorCells = (cells: CustomLayoutCell[]): EditorCell[] => cells.map(({slot,col,row,colSpan,rowSpan})=>({id:`saved:${slot}`,col,row,colSpan,rowSpan,moduleId:'empty'}))
 
 export function CustomLayoutPreview({ cells, onCellTap, assignments = {}, unsupportedSlots = [] }: {cells:CustomLayoutCell[]; onCellTap?:(slot:number)=>void; assignments?:Record<number,string|null>; unsupportedSlots?:number[]}) {
   return <div className="relative h-full w-full overflow-hidden rounded-[22px] bg-[color:var(--card-bg)]" aria-label="Custom layout preview">

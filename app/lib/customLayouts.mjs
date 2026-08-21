@@ -48,6 +48,14 @@ export function customPhysicalPayload(layout, assignments) {
   return validation.valid ? { layout: 'custom', custom_layout_id: layout.id, cells } : null
 }
 
+const geometryKey = cell => `${cell.col},${cell.row},${cell.colSpan},${cell.rowSpan}`
+
+/** Preserve assignments only for geometrically identical cells after an edit. */
+export function remapAssignmentsAfterGeometryEdit(previousCells, nextCells, assignments) {
+  const moduleByGeometry = new Map(previousCells.map(cell => [geometryKey(cell), assignments[cell.slot] ?? null]))
+  return Object.fromEntries(nextCells.map(cell => [cell.slot, moduleByGeometry.get(geometryKey(cell)) ?? null]))
+}
+
 export function duplicateLayout(layout, id, now = new Date().toISOString()) {
   return { ...layout, id, name: `${layout.name} copy`.slice(0, CUSTOM_LAYOUT_NAME_MAX), sortOrder: layout.sortOrder + 1, createdAt: now, updatedAt: now }
 }

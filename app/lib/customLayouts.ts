@@ -3,7 +3,7 @@ import {
   SUPPORTED_PHYSICAL_GEOMETRIES as geometries, normalizeLayoutName as normalize,
   orderedLayoutItems as ordered, validateCustomGeometry as validate,
   geometryWithAssignments as assigned, customPhysicalPayload as payload,
-  duplicateLayout as duplicate,
+  duplicateLayout as duplicate, remapAssignmentsAfterGeometryEdit as remap,
 } from './customLayouts.mjs'
 
 export type CustomLayoutCell = { slot: number; col: number; row: number; colSpan: number; rowSpan: number }
@@ -16,4 +16,5 @@ export const orderedLayoutItems = ordered as (layouts:CustomLayout[])=>Array<{ty
 export const validateCustomGeometry = validate as (cells:unknown, options?:{requirePhysical?:boolean;requireModules?:boolean})=>{valid:boolean;errors:string[];unsupportedSlots:number[]}
 export const geometryWithAssignments = assigned as (cells:CustomLayoutCell[], assignments:Record<number,string|null>)=>Array<CustomLayoutCell&{module:string}>
 export const customPhysicalPayload = payload as (layout:CustomLayout,assignments:Record<number,string|null>)=>{layout:'custom';custom_layout_id:string;cells:Array<CustomLayoutCell&{module:string}>}|null
+export const remapAssignmentsAfterGeometryEdit = remap as (previousCells:CustomLayoutCell[],nextCells:CustomLayoutCell[],assignments:Record<number,string|null>)=>Record<number,string|null>
 export const duplicateLayout = duplicate as (layout:CustomLayout,id:string,now?:string)=>CustomLayout

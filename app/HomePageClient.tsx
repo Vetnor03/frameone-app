@@ -28,7 +28,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { orderedLayoutItems, customPhysicalPayload, remapAssignmentsAfterGeometryEdit, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutFlow, CustomLayoutPreview } from './components/CustomLayoutLibrary'
 
 type CoreTabKey = 'frame' | 'settings'
@@ -2212,6 +2212,7 @@ export default function HomePage() {
     if(layoutFlow?.mode==='edit'){
       const json=await customLayoutRequest(`/api/custom-layouts/${layoutFlow.layout.id}`,{method:'PATCH',body:JSON.stringify({name,cells})})
       setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id)
+      setCustomAssignments(items=>({...items,[json.layout.id]:remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,items[json.layout.id]||{})}))
     }else{
       const json=await customLayoutRequest('/api/custom-layouts',{method:'POST',body:JSON.stringify({deviceId:activeDeviceId,name,cells})})
       setCustomLayouts(items=>[...items,json.layout]);setActiveCustomLayoutId(json.layout.id);setCarouselItemId(json.layout.id)

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { customPhysicalPayload, duplicateLayout, normalizeLayoutName, orderedLayoutItems, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
+import { customPhysicalPayload, duplicateLayout, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
+import { sortCells } from '../app/lib/frameLayoutEditor.mjs'
 
 const cell=(slot,col,row,colSpan,rowSpan)=>({slot,col,row,colSpan,rowSpan})
 const rows=[0,1,2,3].map(row=>cell(row,0,row,4,1))
@@ -28,4 +29,6 @@ test('unsupported cells and malformed geometry are rejected centrally',()=>{
   assert.equal(validateCustomGeometry([{slot:0,col:'0',row:0,colSpan:4,rowSpan:4}]).errors.includes('non_integer'),true)
 })
 test('physical contract contains geometry and modules but never CellSize',()=>{const source=layout('layout-uuid','Four rows',0),payload=customPhysicalPayload(source,{0:'date',1:'weather',2:'reminders',3:'groceries'});assert.equal(payload.layout,'custom');assert.equal(payload.custom_layout_id,'layout-uuid');assert.deepEqual(payload.cells[0],{...rows[0],module:'date'});assert.equal(JSON.stringify(payload).includes('CellSize'),false);assert.equal(customPhysicalPayload(source,{0:'date'}),null)})
+test('editor geometry assigns deterministic slots only at serialization',()=>{const editor=rows.toReversed().map(({slot:ignored,...geometry})=>({...geometry,id:`saved:${ignored}`,moduleId:'empty'}));assert.equal(editor.some(value=>'slot' in value),false);const serialized=sortCells(editor).map((value,slot)=>({slot,col:value.col,row:value.row,colSpan:value.colSpan,rowSpan:value.rowSpan}));assert.deepEqual(serialized,rows)})
+test('no-op edit keeps slot assignments while changed geometry clears ambiguous cells',()=>{const assignments={0:'date',1:'weather',2:'reminders',3:'groceries'};assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,rows,assignments),assignments);assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,large,assignments),{0:null,1:null});const reordered=rows.toReversed().map((value,index)=>({...value,slot:index}));assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,reordered,assignments),{0:'groceries',1:'reminders',2:'weather',3:'date'})})
 test('schema and routes enforce owner plus frame membership',async()=>{const sql=await readFile(new URL('../supabase/migrations/20260821120000_add_custom_layout_library.sql',import.meta.url),'utf8');assert.match(sql,/owner_user_id = auth\.uid\(\)/);assert.match(sql,/device_members/);assert.match(sql,/enable row level security/);const builder=await readFile(new URL('../app/api/device/frame-config/builder.ts',import.meta.url),'utf8');assert.match(builder,/requirePhysical: true, requireModules: true/);assert.match(builder,/layout: 'default'/)})
