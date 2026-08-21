@@ -3,7 +3,15 @@ export const CUSTOM_LAYOUT_NAME_MAX = 40
 export const SUPPORTED_PHYSICAL_GEOMETRIES = new Set(['4x1', '2x2', '4x2', '4x4'])
 
 export function normalizeLayoutName(value) {
-  return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, CUSTOM_LAYOUT_NAME_MAX)
+  return Array.from(String(value ?? '').trim().replace(/\s+/gu, ' ').toLocaleUpperCase()).slice(0, CUSTOM_LAYOUT_NAME_MAX).join('')
+}
+
+export function nextCustomLayoutName(layouts) {
+  const highest = layouts.reduce((maximum, layout) => {
+    const match = normalizeLayoutName(layout?.name).match(/^CUSTOM\s+(\d+)$/iu)
+    return match ? Math.max(maximum, Number(match[1])) : maximum
+  }, 0)
+  return `CUSTOM ${highest + 1}`
 }
 
 export function orderedLayoutItems(customLayouts) {
@@ -57,7 +65,7 @@ export function remapAssignmentsAfterGeometryEdit(previousCells, nextCells, assi
 }
 
 export function duplicateLayout(layout, id, now = new Date().toISOString()) {
-  return { ...layout, id, name: `${layout.name} copy`.slice(0, CUSTOM_LAYOUT_NAME_MAX), sortOrder: layout.sortOrder + 1, createdAt: now, updatedAt: now }
+  return { ...layout, id, name: normalizeLayoutName(`${layout.name} copy`), sortOrder: layout.sortOrder + 1, createdAt: now, updatedAt: now }
 }
 
 /** Build one consistent client snapshot after the server creates a duplicate. */

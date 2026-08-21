@@ -7,7 +7,7 @@ export const initialEditorCells = (): EditorCell[] => [{ id:'whole', col:0, row:
 export const withSlots = (cells: EditorCell[]): CustomLayoutCell[] => sortCells(cells).map((cell, slot) => ({slot,col:cell.col,row:cell.row,colSpan:cell.colSpan,rowSpan:cell.rowSpan}))
 export const editorCells = (cells: CustomLayoutCell[]): EditorCell[] => cells.map(({slot,col,row,colSpan,rowSpan})=>({id:`saved:${slot}`,col,row,colSpan,rowSpan,moduleId:'empty'}))
 
-export function CustomLayoutPreview({ cells, onCellTap, assignments = {}, unsupportedSlots = [], editorGuide = false, renderCellLabel }: {cells:CustomLayoutCell[]; onCellTap?:(slot:number)=>void; assignments?:Record<number,string|null>; unsupportedSlots?:number[];editorGuide?:boolean;renderCellLabel?:(assignment:string|null)=>React.ReactNode}) {
+export function CustomLayoutPreview({ cells, onCellTap, assignments = {}, unsupportedSlots = [], editorGuide = false, renderCellLabel }: {cells:CustomLayoutCell[]; onCellTap?:(slot:number)=>void; assignments?:Record<number,string|null>; unsupportedSlots?:number[];editorGuide?:boolean;renderCellLabel?:(assignment:string|null,cell:CustomLayoutCell)=>React.ReactNode}) {
   const dividers=internalDividerSegments(cells.map(cell=>({...cell,id:`preview:${cell.slot}`,moduleId:'empty'})))
   return <div className="relative h-full w-full overflow-hidden bg-transparent" aria-label="Custom layout preview" data-layout-surface="open">
     {editorGuide&&<div aria-label="4 by 4 dotted guide" className="pointer-events-none absolute inset-0 z-0">
@@ -15,9 +15,9 @@ export function CustomLayoutPreview({ cells, onCellTap, assignments = {}, unsupp
     </div>}
     {cells.map(cell=><button type="button" key={cell.slot} onClick={()=>onCellTap?.(cell.slot)} disabled={!onCellTap}
       data-layout-cell={`${cell.col},${cell.row},${cell.colSpan},${cell.rowSpan}`}
-      className={`absolute z-10 flex items-center justify-center text-2xl ${unsupportedSlots.includes(cell.slot)?'bg-red-500/15 ring-2 ring-inset ring-red-400':'bg-transparent'}`}
+      className={`absolute z-10 flex items-center justify-center overflow-hidden text-2xl ${unsupportedSlots.includes(cell.slot)?'bg-red-500/15 ring-2 ring-inset ring-red-400':'bg-transparent'}`}
       style={{left:`${cell.col*25}%`,top:`${cell.row*25}%`,width:`${cell.colSpan*25}%`,height:`${cell.rowSpan*25}%`}}>
-      {renderCellLabel ? renderCellLabel(assignments[cell.slot]??null) : null}
+      {renderCellLabel ? renderCellLabel(assignments[cell.slot]??null,cell) : null}
     </button>)}
     {dividers.map(divider=><span key={`${divider.axis}:${divider.boundary}:${divider.from}:${divider.to}`} data-layout-divider={divider.axis} className={`pointer-events-none absolute z-20 ${editorGuide?'bg-[color:var(--fg-60)]':'bg-[color:var(--bd-20)]'} ${divider.axis==='vertical'?(editorGuide?'w-0.5 -translate-x-1/2':'w-px'):(editorGuide?'h-0.5 -translate-y-1/2':'h-px')}`} style={divider.axis==='vertical'?{left:`${divider.boundary*25}%`,top:`${divider.from*25}%`,height:`${(divider.to-divider.from)*25}%`}:{top:`${divider.boundary*25}%`,left:`${divider.from*25}%`,width:`${(divider.to-divider.from)*25}%`}} aria-hidden="true"/>) }
   </div>

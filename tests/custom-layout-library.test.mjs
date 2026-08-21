@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { customPhysicalPayload, duplicateLayout, duplicateLayoutClientState, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
+import { customPhysicalPayload, duplicateLayout, duplicateLayoutClientState, nextCustomLayoutName, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
 import { sortCells } from '../app/lib/frameLayoutEditor.mjs'
 
 const cell=(slot,col,row,colSpan,rowSpan)=>({slot,col,row,colSpan,rowSpan})
@@ -18,8 +18,10 @@ test('four immutable built-ins lead and Add layout is permanent last',()=>{
   assert.deepEqual(items.map(x=>x.key),['default','pyramid','square','full','uuid-a','uuid-b','add-layout'])
   assert.equal(items[4].id,'uuid-a');assert.equal(items.at(-1).type,'add')
 })
-test('name is presentation, UUID remains identity through rename/edit',()=>{assert.equal(normalizeLayoutName('  Morning   room  '),'Morning room');const original=layout('stable-uuid','Morning',0),renamed={...original,name:'Kitchen'},edited={...renamed,cells:large};assert.equal(edited.id,original.id)})
-test('duplicate gets new UUID, copied geometry, derived name and following order',()=>{const copy=duplicateLayout(layout('a','Morning',4),'b');assert.equal(copy.id,'b');assert.equal(copy.name,'Morning copy');assert.equal(copy.sortOrder,5);assert.deepEqual(copy.cells,rows)})
+test('custom names normalize uppercase whitespace and Unicode before the character limit',()=>{assert.equal(normalizeLayoutName('  Morning   room  '),'MORNING ROOM');assert.equal(normalizeLayoutName(' blåbær  kjøkken '),'BLÅBÆR KJØKKEN');assert.equal(Array.from(normalizeLayoutName('ø'.repeat(45))).length,40)})
+test('blank custom names advance from the highest numbered existing custom name',()=>{assert.equal(nextCustomLayoutName([]),'CUSTOM 1');assert.equal(nextCustomLayoutName([layout('a','CUSTOM 1',0)]),'CUSTOM 2');assert.equal(nextCustomLayoutName([layout('a','Morning',0),layout('b','Kitchen',1)]),'CUSTOM 1');assert.equal(nextCustomLayoutName([layout('a','custom 1',0),layout('b','CUSTOM 3',1)]),'CUSTOM 4')})
+test('name is presentation, UUID remains identity through rename/edit',()=>{const original=layout('stable-uuid','Morning',0),renamed={...original,name:'Kitchen'},edited={...renamed,cells:large};assert.equal(edited.id,original.id)})
+test('duplicate gets new UUID, copied geometry, normalized name and following order',()=>{const copy=duplicateLayout(layout('a','Morning',4),'b');assert.equal(copy.id,'b');assert.equal(copy.name,'MORNING COPY');assert.equal(copy.sortOrder,5);assert.deepEqual(copy.cells,rows)})
 test('duplicate becomes the visible and active custom layout with independent assignments',()=>{const source=layout('original','Morning',0),copy=layout('duplicate','Morning copy',1),sourceAssignments={0:'date',1:'weather'},state=duplicateLayoutClientState([source],{original:sourceAssignments},source.id,copy);assert.deepEqual(state.layouts.map(item=>item.id),['original','duplicate']);assert.equal(state.carouselItemId,'duplicate');assert.equal(state.activeCustomLayoutId,'duplicate');assert.deepEqual(state.assignments.duplicate,sourceAssignments);assert.notEqual(state.assignments.duplicate,sourceAssignments);state.assignments.duplicate[0]='groceries';assert.equal(sourceAssignments[0],'date')})
 test('all currently supported physical compositions pass',()=>{for(const cells of [rows,large,medium,full])assert.deepEqual(validateCustomGeometry(cells),{valid:true,errors:[],unsupportedSlots:[]})})
 test('structural persistence accepts an adaptive 1x3 and 3x3 partition',()=>{
@@ -121,13 +123,24 @@ test('Add Layout is centered directly on the open canvas without card treatment'
   assert.match(add,/>\+<\/span><span[^>]+>Add layout<\/span>/)
   assert.doesNotMatch(add,/rounded|border|bg-\[/)
 })
-test('saved custom modules reuse the built-in readable cell-label presentation',async()=>{
+test('saved custom modules use geometry-aware fitting without changing built-in labels',async()=>{
   const page=await readFile(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
   const library=await readFile(new URL('../app/components/CustomLayoutLibrary.tsx',import.meta.url),'utf8')
-  assert.match(page,/customLayout\?<CustomLayoutPreview[^>]+renderCellLabel=\{assignment=><FrameCellLabel language=\{language\}/)
+  assert.match(page,/renderCellLabel=\{\(assignment,cell\)=><AdaptiveCustomCellLabel[^>]+colSpan=\{cell\.colSpan\} rowSpan=\{cell\.rowSpan\}/)
+  assert.match(page,/function AdaptiveCustomCellLabel\([\s\S]*module\?moduleLabel\(language,module\):'\+'/)
+  assert.match(page,/rowSpan>colSpan&&rotated>horizontal\*1\.15/)
+  assert.match(page,/Math\.min\(1,availableWidth\/labelWidth,availableHeight\/labelHeight\)/)
+  assert.match(page,/data-orientation=\{fit\.rotated\?'rotated':'horizontal'\}/)
   assert.match(page,/function FrameCellLabel\([\s\S]*module\?moduleLabel\(language,module\):'\+'/)
   assert.match(page,/module\?'text-\[color:var\(--fg\)\] font-semibold text-lg':'text-\[color:var\(--fg-50\)\] text-2xl'/)
-  assert.match(page,/const body = content \?\? <FrameCellLabel language=\{language\} module=\{module\}\/\>/)
-  assert.doesNotMatch(library,/text-xs uppercase tracking-wider/)
+  assert.match(page,/const body = content \?\? <FrameCellLabel language=\{language\} module=\{module\}\/>/)
+  assert.match(library,/absolute z-10 flex items-center justify-center overflow-hidden/)
+})
+test('legacy custom headers display uppercase and blank creates do not show a name error',async()=>{
+  const page=await readFile(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
+  assert.match(page,/title:normalizeLayoutName\(customLayouts\.find/)
+  assert.match(page,/text-2xl font-semibold uppercase tracking-widest/)
+  assert.match(page,/nextCustomLayoutName\(customLayouts\)/)
+  assert.doesNotMatch(page,/Enter a name for your layout\./)
 })
 test('schema and routes enforce owner plus frame membership',async()=>{const sql=await readFile(new URL('../supabase/migrations/20260821120000_add_custom_layout_library.sql',import.meta.url),'utf8');assert.match(sql,/owner_user_id = auth\.uid\(\)/);assert.match(sql,/device_members/);assert.match(sql,/enable row level security/);const builder=await readFile(new URL('../app/api/device/frame-config/builder.ts',import.meta.url),'utf8');assert.match(builder,/requirePhysical: true, requireModules: true/);assert.match(builder,/layout: 'default'/)})
