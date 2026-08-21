@@ -36,3 +36,27 @@ struct GridLayout {
   GridCell cells[MAX_GRID_CELLS];
   uint8_t count = 0;
 };
+
+enum GridDividerAxis {
+  DIVIDER_HORIZONTAL,
+  DIVIDER_VERTICAL
+};
+
+struct GridDivider {
+  GridDividerAxis axis;
+  uint8_t boundary;
+  uint8_t fromBoundary;
+  uint8_t toBoundary;
+};
+
+// There are at most 12 horizontal and 12 vertical internal unit edges.
+static const uint8_t MAX_GRID_DIVIDERS = 24;
+
+struct GridDividerLayout {
+  GridDivider dividers[MAX_GRID_DIVIDERS];
+  uint8_t count = 0;
+};
+
+struct PixelDivider {
+  int x0, y0, x1, y1;
+};

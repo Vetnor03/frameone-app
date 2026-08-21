@@ -109,6 +109,74 @@ bool resolveGridCell(const GridCell& g, Cell& c) {
   return true;
 }
 
+bool deriveGridDividers(GridDividerLayout& destination, const GridLayout& layout) {
+  if (!validateGridLayout(layout)) return false;
+
+  uint8_t owner[GRID_SIZE][GRID_SIZE] = {};
+  for (uint8_t index = 0; index < layout.count; ++index) {
+    const GridCell& cell = layout.cells[index];
+    for (uint8_t row = cell.row; row < cell.row + cell.rowSpan; ++row) {
+      for (uint8_t col = cell.col; col < cell.col + cell.colSpan; ++col) {
+        owner[row][col] = index;
+      }
+    }
+  }
+
+  GridDividerLayout derived;
+  // Stable order: horizontal then vertical, boundary ascending, run ascending.
+  for (uint8_t axis = DIVIDER_HORIZONTAL; axis <= DIVIDER_VERTICAL; ++axis) {
+    for (uint8_t boundary = 1; boundary < GRID_SIZE; ++boundary) {
+      uint8_t position = 0;
+      while (position < GRID_SIZE) {
+        const bool divided = axis == DIVIDER_HORIZONTAL
+          ? owner[boundary - 1][position] != owner[boundary][position]
+          : owner[position][boundary - 1] != owner[position][boundary];
+        if (!divided) {
+          ++position;
+          continue;
+        }
+
+        const uint8_t from = position++;
+        while (position < GRID_SIZE) {
+          const bool continues = axis == DIVIDER_HORIZONTAL
+            ? owner[boundary - 1][position] != owner[boundary][position]
+            : owner[position][boundary - 1] != owner[position][boundary];
+          if (!continues) break;
+          ++position;
+        }
+        if (derived.count >= MAX_GRID_DIVIDERS) return false;
+        derived.dividers[derived.count++] = GridDivider{
+          (GridDividerAxis)axis, boundary, from, position
+        };
+      }
+    }
+  }
+
+  destination = derived;
+  return true;
+}
+
+bool resolveGridDivider(const GridDivider& divider, PixelDivider& output) {
+  if ((divider.axis != DIVIDER_HORIZONTAL && divider.axis != DIVIDER_VERTICAL) ||
+      divider.boundary < 1 || divider.boundary >= GRID_SIZE ||
+      divider.fromBoundary >= divider.toBoundary || divider.toBoundary > GRID_SIZE) return false;
+
+  PixelDivider resolved;
+  if (divider.axis == DIVIDER_HORIZONTAL) {
+    const int start = gridX(divider.fromBoundary);
+    const int end = gridX(divider.toBoundary);
+    span95(start, end - start, resolved.x0, resolved.x1);
+    resolved.y0 = resolved.y1 = gridY(divider.boundary);
+  } else {
+    const int start = gridY(divider.fromBoundary);
+    const int end = gridY(divider.toBoundary);
+    span95(start, end - start, resolved.y0, resolved.y1);
+    resolved.x0 = resolved.x1 = gridX(divider.boundary);
+  }
+  output = resolved;
+  return true;
+}
+
 void draw(LayoutKey key) {
   auto& d = DisplayCore::get();
 

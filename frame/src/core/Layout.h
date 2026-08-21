@@ -15,6 +15,8 @@ namespace Layout {
   bool validateGridLayout(const GridLayout& layout);
   bool setGridLayout(GridLayout& destination, const GridCell* source, int count);
   bool resolveGridCell(const GridCell& gridCell, Cell& cell);
+  bool deriveGridDividers(GridDividerLayout& destination, const GridLayout& layout);
+  bool resolveGridDivider(const GridDivider& divider, PixelDivider& output);
   void draw(LayoutKey key);
 
   int buildCells(LayoutKey key, Cell* outCells, int maxCells);
