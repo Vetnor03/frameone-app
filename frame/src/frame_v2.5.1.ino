@@ -24,6 +24,7 @@
 #include "ModuleStocks.h"
 #include "FirmwareUpdater.h"
 
+#include <WiFi.h>
 #include <Preferences.h>
 #include <time.h>
 #include <esp_sleep.h>
