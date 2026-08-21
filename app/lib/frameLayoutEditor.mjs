@@ -260,6 +260,9 @@ export function chooseNearestEdge(cell, orientation, boundary) {
   return boundary - cell.row <= cell.row + cell.rowSpan - boundary ? 'top' : 'bottom'
 }
 
+/** Choose the neighboring band's outer edge; exact middle ties go upward. */
+export const nearestVerticalCompletionEdge = (region, boundary) => boundary - region.row <= region.row + region.rowSpan - boundary ? region.row : region.row + region.rowSpan
+
 const child = (parent, geometry, suffix) => ({...geometry, id: `${parent.id}/${suffix}`, moduleId: 'empty'})
 
 export function partitionCell(parent, normalized) {
@@ -347,11 +350,77 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
   for (const segment of internalDividerSegments(cells)) for (let along = segment.from; along < segment.to; along++) barriers.add(key(segment.axis, segment.boundary, along))
   let existing = 0
   for (let along = rangeStart; along < rangeEnd; along++) if (barriers.has(key(orientation, boundary, along))) existing++
-  const intent = existing > (rangeEnd - rangeStart) / 2 ? 'erase' : 'draw'
+  const crossedSegments = internalDividerSegments(cells).filter(segment => segment.axis !== orientation && rangeStart < segment.boundary && rangeEnd > segment.boundary && boundary >= segment.from && boundary < segment.to)
+  const traced = existing > (rangeEnd - rangeStart) / 2
+  // Tracing an authoritative divider through perpendicular structure means
+  // "make this the spine" rather than "erase the spine". The side nearest the
+  // affected rectangle's outer edge is consolidated; the opposite side keeps
+  // its useful subdivisions.
+  const intent = traced && crossedSegments.length ? 'rewrite' : traced ? 'erase' : 'draw'
+  const directKeys = new Set(Array.from({length: rangeEnd - rangeStart}, (_, index) => key(orientation, boundary, rangeStart + index)))
+  const inferredKeys = new Set()
+
+  // A direct stroke which passes through a perpendicular structural segment is
+  // authoritative. Remove that whole contiguous segment; merely ending on it
+  // leaves the segment in place as a useful T-junction.
+  if (intent === 'draw') for (const segment of crossedSegments) {
+    for (let along = segment.from; along < segment.to; along++) barriers.delete(key(segment.axis, segment.boundary, along))
+  }
+  if (intent === 'rewrite') {
+    for (const segment of crossedSegments) for (let along = segment.from; along < segment.to; along++) {
+      const consolidateLowSide = boundary - segment.from <= segment.to - boundary
+      if (consolidateLowSide ? along < boundary : along >= boundary) barriers.delete(key(segment.axis, segment.boundary, along))
+    }
+  }
+
+  // Find the rectangular region being edited after direct overwrite, but
+  // before adding the new divider. This makes completion recursive: a line in
+  // a nested cell completes only across that cell, not across the frame.
+  const componentAt = (originCol, originRow) => {
+    const seen = new Set([`${originCol},${originRow}`]), queue = [{col: originCol, row: originRow}], points = []
+    while (queue.length) {
+      const point = queue.shift(); points.push(point)
+      const neighbors = [
+        {col: point.col - 1, row: point.row, blocked: key('vertical', point.col, point.row)},
+        {col: point.col + 1, row: point.row, blocked: key('vertical', point.col + 1, point.row)},
+        {col: point.col, row: point.row - 1, blocked: key('horizontal', point.row, point.col)},
+        {col: point.col, row: point.row + 1, blocked: key('horizontal', point.row + 1, point.col)},
+      ]
+      for (const next of neighbors) if (next.col >= 0 && next.row >= 0 && next.col < GRID_SIZE && next.row < GRID_SIZE && !barriers.has(next.blocked) && !seen.has(`${next.col},${next.row}`)) { seen.add(`${next.col},${next.row}`); queue.push(next) }
+    }
+    const col = Math.min(...points.map(p => p.col)), row = Math.min(...points.map(p => p.row))
+    return {col, row, colSpan: Math.max(...points.map(p => p.col)) - col + 1, rowSpan: Math.max(...points.map(p => p.row)) - row + 1}
+  }
+  const sampleAlong = Math.min(GRID_SIZE - 1, rangeStart)
+  const region = vertical ? componentAt(Math.max(0, boundary - 1), sampleAlong) : componentAt(sampleAlong, Math.max(0, boundary - 1))
+
   for (let along = rangeStart; along < rangeEnd; along++) {
     const unit = key(orientation, boundary, along)
     if (intent === 'erase') barriers.delete(unit)
     else barriers.add(unit)
+  }
+
+  if (intent === 'draw') {
+    const addInferred = (axis, fixed, from, to) => {
+      for (let along = from; along < to; along++) {
+        const unit = key(axis, fixed, along)
+        barriers.add(unit)
+        if (!directKeys.has(unit)) inferredKeys.add(unit)
+      }
+    }
+    if (vertical) {
+      const top = region.row, bottom = region.row + region.rowSpan
+      if (rangeStart > top && rangeStart < bottom) addInferred('horizontal', rangeStart, region.col, region.col + region.colSpan)
+      if (rangeEnd > top && rangeEnd < bottom) addInferred('horizontal', rangeEnd, region.col, region.col + region.colSpan)
+    } else {
+      // Horizontal gestures establish a band boundary across the affected
+      // rectangle. Each original internal endpoint subdivides the nearest band.
+      addInferred('horizontal', boundary, region.col, region.col + region.colSpan)
+      const nearestVerticalSide = nearestVerticalCompletionEdge(region, boundary)
+      for (const endpoint of [rangeStart, rangeEnd]) if (endpoint > region.col && endpoint < region.col + region.colSpan) {
+        addInferred('vertical', endpoint, Math.min(boundary, nearestVerticalSide), Math.max(boundary, nearestVerticalSide))
+      }
+    }
   }
 
   const visited = new Set(), geometries = []
@@ -372,7 +441,7 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
     }
     const minCol = Math.min(...component.map(p => p.col)), maxCol = Math.max(...component.map(p => p.col)), minRow = Math.min(...component.map(p => p.row)), maxRow = Math.max(...component.map(p => p.row))
     const geometry = {col: minCol, row: minRow, colSpan: maxCol - minCol + 1, rowSpan: maxRow - minRow + 1}
-    if (cellArea(geometry) !== component.length) return {valid: false, reason: 'That stroke would create a non-rectangular region', cells, normalized, intent}
+    if (cellArea(geometry) !== component.length) return {valid: false, reason: 'That stroke would create a non-rectangular region', cells, normalized, intent, directKeys: [...directKeys], inferredKeys: [...inferredKeys]}
     geometries.push(geometry)
   }
   const next = sortCells(geometries.map(geometry => {
@@ -383,7 +452,7 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
     for (let along = segment.from; along < segment.to; along++) if (!barriers.has(key(segment.axis, segment.boundary, along))) return true
     return false
   })) return {valid: false, reason: 'The proposed partition is invalid', cells, normalized, intent}
-  return {valid: true, cells: next, normalized, intent}
+  return {valid: true, cells: next, normalized, intent, directKeys: [...directKeys], inferredKeys: [...inferredKeys]}
 }
 
 /** Synchronous mode-less divider entrypoint; pass the actual release point. */
