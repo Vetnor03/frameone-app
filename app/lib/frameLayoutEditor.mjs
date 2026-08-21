@@ -350,17 +350,27 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
   for (const segment of internalDividerSegments(cells)) for (let along = segment.from; along < segment.to; along++) barriers.add(key(segment.axis, segment.boundary, along))
   let existing = 0
   for (let along = rangeStart; along < rangeEnd; along++) if (barriers.has(key(orientation, boundary, along))) existing++
-  const intent = existing > (rangeEnd - rangeStart) / 2 ? 'erase' : 'draw'
+  const crossedSegments = internalDividerSegments(cells).filter(segment => segment.axis !== orientation && rangeStart < segment.boundary && rangeEnd > segment.boundary && boundary >= segment.from && boundary < segment.to)
+  const traced = existing > (rangeEnd - rangeStart) / 2
+  // Tracing an authoritative divider through perpendicular structure means
+  // "make this the spine" rather than "erase the spine". The side nearest the
+  // affected rectangle's outer edge is consolidated; the opposite side keeps
+  // its useful subdivisions.
+  const intent = traced && crossedSegments.length ? 'rewrite' : traced ? 'erase' : 'draw'
   const directKeys = new Set(Array.from({length: rangeEnd - rangeStart}, (_, index) => key(orientation, boundary, rangeStart + index)))
   const inferredKeys = new Set()
 
   // A direct stroke which passes through a perpendicular structural segment is
   // authoritative. Remove that whole contiguous segment; merely ending on it
   // leaves the segment in place as a useful T-junction.
-  if (intent === 'draw') for (const segment of internalDividerSegments(cells)) {
-    if (segment.axis === orientation) continue
-    const crossed = rangeStart < segment.boundary && rangeEnd > segment.boundary && boundary >= segment.from && boundary < segment.to
-    if (crossed) for (let along = segment.from; along < segment.to; along++) barriers.delete(key(segment.axis, segment.boundary, along))
+  if (intent === 'draw') for (const segment of crossedSegments) {
+    for (let along = segment.from; along < segment.to; along++) barriers.delete(key(segment.axis, segment.boundary, along))
+  }
+  if (intent === 'rewrite') {
+    for (const segment of crossedSegments) for (let along = segment.from; along < segment.to; along++) {
+      const consolidateLowSide = boundary - segment.from <= segment.to - boundary
+      if (consolidateLowSide ? along < boundary : along >= boundary) barriers.delete(key(segment.axis, segment.boundary, along))
+    }
   }
 
   // Find the rectangular region being edited after direct overwrite, but

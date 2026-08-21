@@ -227,6 +227,28 @@ test('direct crossings overwrite perpendicular structure while endpoints preserv
   const multiple=draw(bands,p(2,0),p(2,4));assert.deepEqual(multiple.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,2,4],[2,0,2,4]]);assertPartition(multiple.cells)
 })
 
+test('traced divider rewrites only the nearest side of crossed perpendicular bands',()=>{
+  const p=(col,row)=>({x:col*100,y:row*100}),draw=(cells,start,end)=>finalizeDividerStroke(cells,start,end,viewport)
+  const verticalBands=boundary=>[0,1,2].flatMap((row,index)=>[
+    {id:`left-${row}`,col:0,row,colSpan:boundary,rowSpan:index<2?1:2,moduleId:'empty'},
+    {id:`right-${row}`,col:boundary,row,colSpan:4-boundary,rowSpan:index<2?1:2,moduleId:'empty'},
+  ])
+  const atV1=draw(verticalBands(1),p(1,0),p(1,4))
+  assert.equal(atV1.intent,'rewrite');assert.deepEqual(atV1.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,1,4],[1,0,3,1],[1,1,3,1],[1,2,3,2]]);assertPartition(atV1.cells)
+  const atV3=draw(verticalBands(3),p(3,4),p(3,0))
+  assert.equal(atV3.intent,'rewrite');assert.deepEqual(atV3.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,3,1],[3,0,1,4],[0,1,3,1],[0,2,3,2]]);assertPartition(atV3.cells)
+})
+
+test('horizontal traced spine symmetrically consolidates its nearest band',()=>{
+  const p=(col,row)=>({x:col*100,y:row*100})
+  const cells=[0,1,2].flatMap((col,index)=>[
+    {id:`top-${col}`,col,row:0,colSpan:index<2?1:2,rowSpan:1,moduleId:'empty'},
+    {id:`bottom-${col}`,col,row:1,colSpan:index<2?1:2,rowSpan:3,moduleId:'empty'},
+  ])
+  const result=finalizeDividerStroke(cells,p(0,1),p(4,1),viewport)
+  assert.equal(result.intent,'rewrite');assert.deepEqual(result.cells.map(({col,row,colSpan,rowSpan})=>[col,row,colSpan,rowSpan]),[[0,0,4,1],[0,1,1,3],[1,1,1,3],[2,1,2,3]]);assertPartition(result.cells)
+})
+
 test('completion is recursive and inferred intersections do not gain overwrite authority',()=>{
   const p=(col,row)=>({x:col*100,y:row*100}),draw=(cells,start,end)=>finalizeDividerStroke(cells,start,end,viewport)
   const columns=draw(initialLayout(),p(1,0),p(1,4)).cells

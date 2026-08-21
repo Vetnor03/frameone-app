@@ -10,7 +10,7 @@ export type MergeResult = {valid:boolean;reason?:string;cells:EditorCell[];merge
 export type SplitGuide = {axis:'vertical'|'horizontal';boundary:number;distance:number}
 export type GridSelection = {col:number;row:number;colSpan:number;rowSpan:number}
 export type StrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];parentId?:string;intendedId?:string;normalized?:NormalizedStroke}
-export type DividerStrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];normalized?:Pick<NormalizedStroke,'orientation'|'boundary'|'rangeStart'|'rangeEnd'>;intent?:'draw'|'erase';directKeys?:string[];inferredKeys?:string[]}
+export type DividerStrokePreview = {valid:boolean;reason?:string;cells:EditorCell[];normalized?:Pick<NormalizedStroke,'orientation'|'boundary'|'rangeStart'|'rangeEnd'>;intent?:'draw'|'erase'|'rewrite';directKeys?:string[];inferredKeys?:string[]}
 export type EditorHistory = {past:EditorCell[][];present:EditorCell[];future:EditorCell[][]}
 export const GRID_SIZE:number
 export const MIN_STROKE_PX:number
