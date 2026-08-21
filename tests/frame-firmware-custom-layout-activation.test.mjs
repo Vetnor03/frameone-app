@@ -94,11 +94,21 @@ test('non-contiguous slots and shuffled geometry are deterministic by slot', () 
 test('preflight is atomic, blocks adaptive cells, and routes assignments safely', () => {
   const resolver = source.match(/bool buildGridCells[\s\S]*?\n\}/)[0]
   const preflight = source.match(/static bool prepareCustomRender[\s\S]*?\n\}/)[0]
-  assert.ok(resolver.indexOf('Cell staged') < resolver.indexOf('outCells[i] = staged[i]'))
+  assert.ok(resolver.indexOf('g_gridCellStaging') < resolver.indexOf('outCells[i] = staged[i]'))
   assert.match(preflight, /buildGridCells[\s\S]*deriveGridDividers[\s\S]*resolveGridDivider[\s\S]*output = staged/)
   assert.match(preflight, /CELL_ADAPTIVE/)
   assert.match(source, /customReady \? cfg\.customLayout\.assigns : cfg\.assigns/)
   assert.match(source, /key == LAYOUT_CUSTOM && !customReady \? LAYOUT_DEFAULT : key/)
+})
+test('D2 render workspaces cannot regress onto loopTask stack', () => {
+  const preflight = source.match(/static bool prepareCustomRender[\s\S]*?\n\}/)[0]
+  const draw = source.match(/void drawWithContent[\s\S]*?\n\}/)[0]
+  assert.match(source, /static RenderWorkspace g_renderWorkspace;/)
+  assert.doesNotMatch(draw, /CustomRenderPlan\s+customPlan\s*;/)
+  assert.doesNotMatch(draw, /Cell\s+namedCells\s*\[MAX_GRID_CELLS\]/)
+  assert.doesNotMatch(preflight, /CustomRenderPlan\s+staged\s*;/)
+  assert.match(draw, /CustomRenderPlan& customPlan = g_renderWorkspace\.prepared/)
+  assert.match(preflight, /CustomRenderPlan& staged = g_renderWorkspace\.staging/)
 })
 test('named build/dividers remain isolated and key-only custom drawing defaults', () => {
   const build = source.match(/int buildCells[\s\S]*?\n\}/)[0]

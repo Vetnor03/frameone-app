@@ -283,6 +283,6 @@ test('D1 expands only resource capacity from the historical eight-cell baseline'
   // all geometry, divider, ordering, and named-layout assertions above stay frozen.
   assert.match(frameConfigHeader, /MAX_FRAME_ASSIGNMENTS\s*=\s*MAX_GRID_CELLS/)
   assert.match(frameConfigHeader, /SlotModule\s+assigns\[MAX_FRAME_ASSIGNMENTS\]\s*;/)
-  assert.match(layoutSource, /Cell\s+staged\[MAX_GRID_CELLS\]\s*;/)
+  assert.match(layoutSource, /static Cell\s+g_gridCellStaging\[MAX_GRID_CELLS\]\s*;/)
   assert.match(layoutSource, /buildCells\(effectiveKey, namedCells, MAX_GRID_CELLS\)/)
 })

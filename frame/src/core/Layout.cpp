@@ -39,6 +39,9 @@ static void drawVLine(int x, int y0, int y1) {
 
 namespace Layout {
 
+static Cell g_gridCellStaging[MAX_GRID_CELLS];
+static GridDividerLayout g_gridDividerStaging;
+
 int gridX(uint8_t boundary) { return VIEWPORT_X + (VIEWPORT_W * (int)boundary) / GRID_SIZE; }
 int gridY(uint8_t boundary) { return VIEWPORT_Y + (VIEWPORT_H * (int)boundary) / GRID_SIZE; }
 
@@ -122,7 +125,9 @@ bool resolveGridCell(const GridCell& g, Cell& c) {
 bool buildGridCells(const GridLayout& grid, Cell* outCells, int maxCells,
                     int& outCount) {
   if (!outCells || !validateGridLayout(grid) || maxCells < grid.count) return false;
-  Cell staged[MAX_GRID_CELLS];
+  // This resolver can be reached from custom preflight on loopTask. Its staging
+  // array is fixed BSS storage outside loopTask's stack.
+  Cell* staged = g_gridCellStaging;
   for (uint8_t i = 0; i < grid.count; ++i) {
     if (!resolveGridCell(grid.cells[i], staged[i])) return false;
   }
@@ -144,7 +149,8 @@ bool deriveGridDividers(GridDividerLayout& destination, const GridLayout& layout
     }
   }
 
-  GridDividerLayout derived;
+  GridDividerLayout& derived = g_gridDividerStaging;
+  derived.count = 0;
   // Stable order: horizontal then vertical, boundary ascending, run ascending.
   for (uint8_t axis = DIVIDER_HORIZONTAL; axis <= DIVIDER_VERTICAL; ++axis) {
     for (uint8_t boundary = 1; boundary < GRID_SIZE; ++boundary) {
@@ -267,6 +273,19 @@ struct CustomRenderPlan {
   int dividerCount = 0;
 };
 
+// The dashboard render entry point is called synchronously by Arduino's loopTask;
+// GxEPD2 also completes its paged update before drawWithContent() returns.  Keep
+// D2's fixed, allocation-free work areas in BSS rather than multiplying the
+// loopTask stack requirement.  There are no ISR or second-task Layout callers.
+struct RenderWorkspace {
+  CustomRenderPlan prepared;
+  CustomRenderPlan staging;
+  Cell namedCells[MAX_GRID_CELLS];
+  GridDividerLayout logicalDividers;
+};
+
+static RenderWorkspace g_renderWorkspace;
+
 static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output) {
   const CustomLayoutConfig& custom = cfg.customLayout;
   if (!cfg.customLayoutRequested || !custom.valid || !custom.renderable ||
@@ -282,7 +301,7 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
     assignedSlots |= mask;
   }
 
-  CustomRenderPlan staged;
+  CustomRenderPlan& staged = g_renderWorkspace.staging;
   if (!buildGridCells(custom.grid, staged.cells, MAX_GRID_CELLS, staged.cellCount)) return false;
   for (int i = 0; i < staged.cellCount; ++i) {
     // D2's hard safety boundary: adaptive cells must not reach ModuleRenderer.
@@ -290,7 +309,7 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
         !(assignedSlots & ((uint16_t)1U << staged.cells[i].slot))) return false;
   }
 
-  GridDividerLayout logical;
+  GridDividerLayout& logical = g_renderWorkspace.logicalDividers;
   if (!deriveGridDividers(logical, custom.grid)) return false;
   for (uint8_t i = 0; i < logical.count; ++i) {
     if (!resolveGridDivider(logical.dividers[i], staged.dividers[i])) return false;
@@ -303,7 +322,7 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
 void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   auto& d = DisplayCore::get();
 
-  CustomRenderPlan customPlan;
+  CustomRenderPlan& customPlan = g_renderWorkspace.prepared;
   const bool customReady = key == LAYOUT_CUSTOM && prepareCustomRender(cfg, customPlan);
   const LayoutKey effectiveKey = key == LAYOUT_CUSTOM && !customReady ? LAYOUT_DEFAULT : key;
 
@@ -353,7 +372,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
       drawVLine(midX, vy0, vy1);
     }
 
-    Cell namedCells[MAX_GRID_CELLS];
+    Cell* namedCells = g_renderWorkspace.namedCells;
     Cell* cells = customReady ? customPlan.cells : namedCells;
     int n = customReady ? customPlan.cellCount : buildCells(effectiveKey, namedCells, MAX_GRID_CELLS);
     const SlotModule* assigns = customReady ? cfg.customLayout.assigns : cfg.assigns;
