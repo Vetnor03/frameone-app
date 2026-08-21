@@ -63,15 +63,18 @@ export function groceriesComposition(profile,state){
 
 const rect=(x,y,width,height)=>({x,y,width:Math.max(1,width),height:Math.max(1,height)})
 export function groceriesLayout(profile,composition,state){
-  const {width:w,height:h}=profile,pad=Math.max(9,Math.min(14,w*.035)),gap=12,blank={emptyRect:null,headerRect:null,todayLabelRect:null,titleRect:null,groceryRect:null,groceryRows:[],overflowRect:null,menuRect:null,menuHeaderRect:null,menuRows:[],runningLowRect:null,runningLowRows:[],mealIdeasRect:null,mealIdeaGroups:[],dividers:[]}
+  const {width:w,height:h}=profile,pad=Math.max(9,Math.min(14,w*.035)),gap=12,blank={emptyRect:null,headerRect:null,todayLabelRect:null,titleRect:null,groceryHeading:state.header,groceryRect:null,groceryRows:[],overflowRect:null,menuRect:null,menuHeaderRect:null,menuHeading:null,menuRows:[],runningLowRect:null,runningLowRows:[],mealIdeasRect:null,mealIdeaGroups:[],dividers:[]}
   if(composition.family==='empty')return {...blank,emptyRect:rect(pad,pad,w-pad*2,h-pad*2),headerRect:rect(pad,pad,w-pad*2,28)}
-  const headerH=composition.todayDinner&&composition.family!=='item-strip'&&composition.family!=='micro'?48:32
+  const showTodayDinnerInGroceryHeader=Boolean(composition.todayDinner)&&!composition.showMenu
+  const groceryHeading=showTodayDinnerInGroceryHeader?composition.todayDinner.title:state.header
+  const menuHeading=composition.showMenu?(composition.todayDinner?.title??'WEEKLY MENU'):null
+  const headerH=showTodayDinnerInGroceryHeader&&composition.family!=='item-strip'&&composition.family!=='micro'?48:32
   let topH=h-pad*2,bottomY=null,bottomH=0
   if(composition.showRunningLow||composition.showMealIdeas){bottomH=Math.min(116,h*.31);topH-=bottomH+gap;bottomY=pad+topH+gap}
   let groceryRect,menuRect=null
   if(composition.showMenu){const leftW=Math.max(w*.54,GROCERIES_MENU_MIN_WIDTH);groceryRect=rect(pad,pad,leftW-pad,topH);menuRect=rect(leftW+gap,pad,w-leftW-gap-pad,topH)}else groceryRect=rect(pad,pad,w-pad*2,topH)
   const headerRect=rect(groceryRect.x,groceryRect.y,groceryRect.width,headerH)
-  const todayLabelRect=composition.todayDinner&&headerH>32?rect(headerRect.x,headerRect.y,headerRect.width,16):null
+  const todayLabelRect=showTodayDinnerInGroceryHeader&&headerH>32?rect(headerRect.x,headerRect.y,headerRect.width,16):null
   const titleRect=rect(headerRect.x,headerRect.y+(todayLabelRect?16:0),headerRect.width,headerRect.height-(todayLabelRect?16:0))
   const overflowH=18,rowGap=4,listY=headerRect.y+headerRect.height+5,listH=Math.max(1,groceryRect.y+groceryRect.height-listY),rowH=composition.horizontal?Math.max(1,listH-(state.items.length>3?overflowH:0)):22
   const columns=composition.horizontal?Math.min(3,Math.max(1,state.items.length)):composition.columns
@@ -86,5 +89,5 @@ export function groceriesLayout(profile,composition,state){
   if(menuRect){menuHeaderRect=rect(menuRect.x,menuRect.y,menuRect.width,32);const menuRowH=24,max=Math.min(composition.futureDinners.length,Math.floor((menuRect.height-38)/menuRowH));menuRows=composition.futureDinners.slice(0,max).map((value,index)=>({dinner:value,rect:rect(menuRect.x,menuRect.y+38+index*menuRowH,menuRect.width,menuRowH)}))}
   let runningLowRect=null,runningLowRows=[],mealIdeasRect=null,mealIdeaGroups=[]
   if(bottomY!==null){const both=composition.showRunningLow&&composition.showMealIdeas,half=both?(w-gap)/2:w;if(composition.showRunningLow){runningLowRect=rect(pad,bottomY,half-pad,bottomH);runningLowRows=state.runningLow.slice(0,3).map((value,index)=>({item:value,rect:rect(runningLowRect.x,runningLowRect.y+30+index*24,runningLowRect.width,22)}))}if(composition.showMealIdeas){mealIdeasRect=both?rect(half+gap,bottomY,w-half-gap-pad,bottomH):rect(pad,bottomY,w-pad*2,bottomH);mealIdeaGroups=state.mealIdeas.slice(0,2).map((value,index)=>({idea:value,rect:rect(mealIdeasRect.x,mealIdeasRect.y+30+index*38,mealIdeasRect.width,36)}))}}
-  return {...blank,headerRect,todayLabelRect,titleRect,groceryRect,groceryRows,overflowRect,menuRect,menuHeaderRect,menuRows,runningLowRect,runningLowRows,mealIdeasRect,mealIdeaGroups,dividers:menuRect?[{x1:menuRect.x-gap/2,y1:pad,x2:menuRect.x-gap/2,y2:pad+topH}]:[]}
+  return {...blank,headerRect,todayLabelRect,titleRect,groceryHeading,groceryRect,groceryRows,overflowRect,menuRect,menuHeaderRect,menuHeading,menuRows,runningLowRect,runningLowRows,mealIdeasRect,mealIdeaGroups,dividers:menuRect?[{x1:menuRect.x-gap/2,y1:pad,x2:menuRect.x-gap/2,y2:pad+topH}]:[]}
 }
