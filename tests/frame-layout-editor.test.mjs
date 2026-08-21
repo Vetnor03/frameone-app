@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
-import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeDividerStroke,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewStroke,pushHistory,redoHistory,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
+import {cellsFullyContainedInSelection,chooseNearestEdge,createHistory,detectOrientation,dragSelectionFromPointers,finalizeDividerStroke,finalizeStroke,findDividerNearPointer,findSplitGuideNearPointer,gridCellAtPointer,hasOverlap,initialLayout,internalDividerSegments,mergeCells,mergeCellsInSelection,mergeDivider,nearestValidSplitGuide,overwriteWithSelection,previewDividerStroke,previewStroke,pushHistory,redoHistory,resolveDividerStrokeLock,resolveShortTap,selectionBetweenGridCells,selectionIsExactlyTiled,snapBoundary,snapDragSelection,splitCellAtBoundary,splitCellNearPointer,subtractRectangle,undoHistory,validateLayout} from '../app/lib/frameLayoutEditor.mjs'
 const viewport={width:400,height:400}
 const stroke=(x1,y1,x2,y2)=>({start:{x:x1,y:y1},end:{x:x2,y:y2}})
 const split=(cells,s)=>previewStroke(cells,s,viewport)
@@ -169,4 +169,62 @@ test('mode-less divider strokes draw, reverse, form T junctions, and partially e
   const upper=draw(four,{x:198,y:0},{x:202,y:200});assert.equal(upper.valid,true);assert.deepEqual(geometry(upper.cells),[{col:0,row:0,colSpan:4,rowSpan:2,moduleId:'empty'},{col:0,row:2,colSpan:2,rowSpan:2,moduleId:'empty'},{col:2,row:2,colSpan:2,rowSpan:2,moduleId:'empty'}]);assertPartition(upper.cells)
   const lower=draw(four,{x:202,y:400},{x:198,y:200});assert.equal(lower.valid,true);assert.deepEqual(geometry(lower.cells),[{col:0,row:0,colSpan:2,rowSpan:2,moduleId:'empty'},{col:2,row:0,colSpan:2,rowSpan:2,moduleId:'empty'},{col:0,row:2,colSpan:4,rowSpan:2,moduleId:'empty'}]);assertPartition(lower.cells)
   const invalid=draw(t.cells,{x:0,y:200},{x:200,y:200});assert.equal(invalid.valid,false);assert.equal(invalid.cells,t.cells);assertPartition(invalid.cells)
+})
+
+test('divider strokes normalize endpoints to every touched atomic segment',()=>{
+  const rows=Array.from({length:4},(_,row)=>({id:`row-${row}`,col:0,row,colSpan:4,rowSpan:1,moduleId:'empty'}))
+  const normalized=(start,end,cells=rows)=>previewDividerStroke(cells,{start,end},viewport)
+  const forward=normalized({x:200,y:50},{x:200,y:150})
+  const reverse=normalized({x:200,y:150},{x:200,y:50})
+  assert.deepEqual(forward.normalized,{orientation:'vertical',boundary:2,rangeStart:0,rangeEnd:2})
+  assert.deepEqual(reverse.normalized,forward.normalized)
+  assert.equal(forward.valid,true);assertPartition(forward.cells)
+
+  const one=normalized({x:200,y:30},{x:200,y:70})
+  assert.deepEqual(one.normalized,{orientation:'vertical',boundary:2,rangeStart:0,rangeEnd:1})
+  assert.equal(one.valid,true);assertPartition(one.cells)
+  assert.deepEqual(normalized({x:200,y:101},{x:200,y:150}).normalized,{orientation:'vertical',boundary:2,rangeStart:1,rangeEnd:2})
+  assert.deepEqual(normalized({x:200,y:150},{x:200,y:201}).normalized,{orientation:'vertical',boundary:2,rangeStart:1,rangeEnd:3})
+
+  const columns=Array.from({length:4},(_,col)=>({id:`col-${col}`,col,row:0,colSpan:1,rowSpan:4,moduleId:'empty'}))
+  assert.deepEqual(normalized({x:50,y:200},{x:150,y:200},columns).normalized,{orientation:'horizontal',boundary:2,rangeStart:0,rangeEnd:2})
+  assert.deepEqual(normalized({x:70,y:200},{x:30,y:200},columns).normalized,{orientation:'horizontal',boundary:2,rangeStart:0,rangeEnd:1})
+})
+
+test('divider preview and commit share touched coverage for draw and erase',()=>{
+  const rows=Array.from({length:4},(_,row)=>({id:`row-${row}`,col:0,row,colSpan:4,rowSpan:1,moduleId:'empty'}))
+  const start={x:200,y:50},end={x:200,y:150}
+  const preview=previewDividerStroke(rows,{start,end},viewport),committed=finalizeDividerStroke(rows,start,end,viewport)
+  assert.deepEqual(committed.normalized,preview.normalized);assert.deepEqual(committed.cells,preview.cells)
+  assert.equal(preview.intent,'draw');assert.equal(validateLayout(preview.cells),true)
+  const erased=finalizeDividerStroke(preview.cells,start,end,viewport)
+  assert.equal(erased.intent,'erase');assert.deepEqual(erased.normalized,preview.normalized)
+  assert.equal(erased.valid,true);assert.deepEqual(geometry(erased.cells),geometry(rows));assert.equal(validateLayout(erased.cells),true)
+})
+
+test('divider gesture locks preserve initial orientation and boundary through wobble',()=>{
+  const lock={orientation:'vertical',boundary:2},rows=Array.from({length:4},(_,row)=>({id:`row-${row}`,col:0,row,colSpan:4,rowSpan:1,moduleId:'empty'}))
+  const preview=previewDividerStroke(rows,{start:{x:200,y:20},end:{x:310,y:70},lock},viewport)
+  assert.deepEqual(preview.normalized,{orientation:'vertical',boundary:2,rangeStart:0,rangeEnd:1})
+  assert.equal(preview.valid,true);assert.equal(validateLayout(preview.cells),true)
+})
+
+test('divider locks reject outer edges while all six internal guides resolve normally',()=>{
+  const vertical=y=>({start:{x:y,y:20},end:{x:y,y:180}}),horizontal=y=>({start:{x:20,y},end:{x:180,y}})
+  for(const stroke of [vertical(10),vertical(390),horizontal(10),horizontal(390)]){
+    assert.equal(resolveDividerStrokeLock(stroke,viewport),undefined)
+    const before=initialLayout(),result=previewDividerStroke(before,stroke,viewport)
+    assert.equal(result.valid,false);assert.equal(result.cells,before)
+  }
+  for(const boundary of [1,2,3]){
+    assert.deepEqual(resolveDividerStrokeLock(vertical(boundary*100),viewport),{orientation:'vertical',boundary})
+    assert.deepEqual(resolveDividerStrokeLock(horizontal(boundary*100),viewport),{orientation:'horizontal',boundary})
+  }
+})
+
+test('forgiving erase still rejects a non-rectangular component unchanged',()=>{
+  const horizontal=finalizeDividerStroke(initialLayout(),{x:0,y:200},{x:400,y:200},viewport).cells
+  const t=finalizeDividerStroke(horizontal,{x:200,y:200},{x:200,y:400},viewport).cells
+  const result=finalizeDividerStroke(t,{x:50,y:200},{x:150,y:200},viewport)
+  assert.equal(result.intent,'erase');assert.equal(result.valid,false);assert.equal(result.cells,t);assert.equal(validateLayout(result.cells),true)
 })

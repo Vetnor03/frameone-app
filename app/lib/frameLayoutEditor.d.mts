@@ -14,10 +14,12 @@ export type DividerStrokePreview = {valid:boolean;reason?:string;cells:EditorCel
 export type EditorHistory = {past:EditorCell[][];present:EditorCell[];future:EditorCell[][]}
 export const GRID_SIZE:number
 export const MIN_STROKE_PX:number
+export type DividerStrokeLock={orientation:'vertical'|'horizontal';boundary:number}
 export function cellArea(cell:EditorCell):number
 export function sortCells(cells:EditorCell[]):EditorCell[]
 export function detectOrientation(stroke:Stroke):'vertical'|'horizontal'
 export function snapBoundary(value:number,extent:number):number
+export function resolveDividerStrokeLock(stroke:Stroke,viewport?:{width:number;height:number}):DividerStrokeLock|undefined
 export function hasOverlap(a:EditorCell,b:EditorCell):boolean
 export function validateLayout(cells:EditorCell[]):boolean
 export function internalDividerSegments(cells:EditorCell[]):DividerSegment[]
@@ -44,8 +46,8 @@ export function chooseNearestEdge(cell:EditorCell,orientation:'vertical'|'horizo
 export function partitionCell(parent:EditorCell,normalized:NormalizedStroke):{pieces:EditorCell[];intendedId:string}
 export function previewStroke(cells:EditorCell[],stroke:Stroke,viewport?:{width:number;height:number}):StrokePreview
 export function finalizeStroke(cells:EditorCell[],start:Point,end:Point,viewport?:{width:number;height:number}):StrokePreview
-export function previewDividerStroke(cells:EditorCell[],stroke:Stroke,viewport?:{width:number;height:number}):DividerStrokePreview
-export function finalizeDividerStroke(cells:EditorCell[],start:Point,end:Point,viewport?:{width:number;height:number}):DividerStrokePreview
+export function previewDividerStroke(cells:EditorCell[],stroke:Stroke&{lock?:DividerStrokeLock},viewport?:{width:number;height:number}):DividerStrokePreview
+export function finalizeDividerStroke(cells:EditorCell[],start:Point,end:Point,viewport?:{width:number;height:number},lock?:DividerStrokeLock):DividerStrokePreview
 export function commitPreview(cells:EditorCell[],preview:StrokePreview):EditorCell[]
 export function initialLayout():EditorCell[]
 export function createHistory(initial?:EditorCell[]):EditorHistory
