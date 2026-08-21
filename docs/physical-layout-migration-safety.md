@@ -23,14 +23,15 @@ coordinates, and fallback behavior.
 ## Planned sequence
 
 - **Phase A — complete:** freeze the baseline in tests and documentation only.
-- **Phase B — this PR:** add the fixed-capacity, allocation-free `GridLayout`,
+- **Phase B — complete:** add the fixed-capacity, allocation-free `GridLayout`,
   complete 4×4 tiling validation, and the `CELL_ADAPTIVE` representation. This
   foundation is not active from backend configuration and makes no renderer or
   physical-output changes.
-- **Phase C:** derive generic internal dividers from a valid `GridLayout` while
-  keeping named divider output pixel-identical.
-- **Phase D:** controlled custom-layout activation and assignment-capacity
-  expansion.
+- **Phase C — this PR:** derive allocation-free generic divider topology and
+  resolve it to calibrated pixels. The engine is verified against the legacy
+  named layouts but is not active in runtime drawing.
+- **Phase D:** controlled custom-layout activation, `FrameConfig` geometry
+  parsing, capacity expansion, and safe fallback to `DEFAULT`.
 - **Phase E:** add physical responsive module renderers, one module at a time.
 
 ## Failure behavior
