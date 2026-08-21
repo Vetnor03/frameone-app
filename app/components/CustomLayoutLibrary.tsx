@@ -1,5 +1,5 @@
 'use client'
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { dragSelectionFromPointers, internalDividerSegments, overwriteWithSelection, resolveShortTap, splitCellAtBoundary, mergeDivider, sortCells, type EditorCell } from '../lib/frameLayoutEditor.mjs'
 import { type CustomLayoutCell } from '../lib/customLayouts'
 
@@ -29,12 +29,21 @@ export function AddLayoutCard({onClick}:{onClick:()=>void}) { return <button typ
 
 export function InlineCustomLayoutEditor({cells,onChange,unsupportedSlots=[]}:{cells:EditorCell[];onChange:(cells:EditorCell[])=>void;unsupportedSlots?:number[]}) {
   const drag=useRef<{id:number;start:{x:number;y:number}}|null>(null)
+  const [pendingSelection,setPendingSelection]=useState<{col:number;row:number;colSpan:number;rowSpan:number}|null>(null)
   const point=(event:React.PointerEvent<HTMLDivElement>)=>{const r=event.currentTarget.getBoundingClientRect();return{x:event.clientX-r.left,y:event.clientY-r.top}}
-  const down=(e:React.PointerEvent<HTMLDivElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,start:point(e)}}
-  const up=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const end=point(e),start=drag.current.start;drag.current=null;const moved=Math.hypot(end.x-start.x,end.y-start.y)>=8
-    if(moved){const result=overwriteWithSelection(cells,dragSelectionFromPointers(start,end,{width:e.currentTarget.clientWidth,height:e.currentTarget.clientHeight}));if(result.valid)onChange(result.cells)}
-    else {const intent=resolveShortTap(cells,end,{width:e.currentTarget.clientWidth,height:e.currentTarget.clientHeight});if(intent.kind==='merge'){const result=mergeDivider(cells,intent.divider);if(result.valid)onChange(result.cells)}else if(intent.kind==='split'&&intent.cell){const result=splitCellAtBoundary(cells,intent.cell.id,intent.guide);if(result.valid)onChange(result.cells)}}}
-  return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerUp={up} className="relative h-full w-full touch-none overflow-hidden">
+  const viewport=(element:HTMLDivElement)=>({width:element.clientWidth,height:element.clientHeight})
+  const down=(e:React.PointerEvent<HTMLDivElement>)=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,start:point(e)};setPendingSelection(null)}
+  const move=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const current=point(e),start=drag.current.start
+    if(Math.hypot(current.x-start.x,current.y-start.y)<8){setPendingSelection(null);return}
+    setPendingSelection(dragSelectionFromPointers(start,current,viewport(e.currentTarget)))
+  }
+  const clearDrag=(pointerId:number)=>{if(!drag.current||drag.current.id!==pointerId)return;drag.current=null;setPendingSelection(null)}
+  const cancel=(e:React.PointerEvent<HTMLDivElement>)=>clearDrag(e.pointerId)
+  const up=(e:React.PointerEvent<HTMLDivElement>)=>{if(!drag.current||drag.current.id!==e.pointerId)return;const end=point(e),start=drag.current.start;clearDrag(e.pointerId);const moved=Math.hypot(end.x-start.x,end.y-start.y)>=8
+    if(moved){const result=overwriteWithSelection(cells,dragSelectionFromPointers(start,end,viewport(e.currentTarget)));if(result.valid)onChange(result.cells)}
+    else {const intent=resolveShortTap(cells,end,viewport(e.currentTarget));if(intent.kind==='merge'){const result=mergeDivider(cells,intent.divider);if(result.valid)onChange(result.cells)}else if(intent.kind==='split'&&intent.cell){const result=splitCellAtBoundary(cells,intent.cell.id,intent.guide);if(result.valid)onChange(result.cells)}}}
+  return <div aria-label="4 by 4 custom layout editor" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onLostPointerCapture={cancel} className="relative h-full w-full touch-none overflow-hidden">
     <CustomLayoutPreview cells={withSlots(cells)} unsupportedSlots={unsupportedSlots} editorGuide/>
+    {pendingSelection&&<span aria-label="Pending drag selection" data-layout-pending-selection={`${pendingSelection.col},${pendingSelection.row},${pendingSelection.colSpan},${pendingSelection.rowSpan}`} className="pointer-events-none absolute z-[5] border-2 border-[#2aa3ff] bg-[#2aa3ff]/15" style={{left:`${pendingSelection.col*25}%`,top:`${pendingSelection.row*25}%`,width:`${pendingSelection.colSpan*25}%`,height:`${pendingSelection.rowSpan*25}%`}}/>}
   </div>
 }
