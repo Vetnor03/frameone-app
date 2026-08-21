@@ -1157,6 +1157,7 @@ export default function HomePage() {
 
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
+  const [frameUpdateError, setFrameUpdateError] = useState('')
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'requesting' | 'updating'>('idle')
   const [manualUpdateRequestedAt, setManualUpdateRequestedAt] = useState<number | null>(null)
   const [manualUpdateStateResolved, setManualUpdateStateResolved] = useState(false)
@@ -1734,6 +1735,12 @@ export default function HomePage() {
   )
 
   useEffect(() => {
+    if (!frameUpdateError) return
+    const timer = window.setTimeout(() => setFrameUpdateError(''), 5000)
+    return () => window.clearTimeout(timer)
+  }, [frameUpdateError])
+
+  useEffect(() => {
     if (!activeDeviceId || activeTab !== 'frame') return
     // Relative freshness includes seconds, so keep it aging even when no
     // backend/device data changes while the user remains on the Frame page.
@@ -2218,8 +2225,8 @@ export default function HomePage() {
   async function submitLayoutDraft(){
     const name=normalizeLayoutName(layoutDraftName),cells=withSlots(layoutDraftCells)
     if(!name){setLayoutDraftError('Enter a name for your layout.');return}
-    const validation=validateCustomGeometry(cells,{requirePhysical:true})
-    if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError(validation.errors.includes('unsupported_geometry')?'This shape isn’t supported on the frame yet.':'The layout must cover the whole frame without overlapping.');return}
+    const validation=validateCustomGeometry(cells,{requirePhysical:false})
+    if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError('The layout must cover the whole frame without overlapping.');return}
     setLayoutDraftName(name);setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutDraftSaving(true)
     try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}
   }
@@ -2389,6 +2396,11 @@ export default function HomePage() {
   async function handleExplicitUpdate() {
     const deviceId = activeDeviceId
     if (!deviceId || updateActionInFlightRef.current) return
+    if(activeCustomLayoutId){
+      const custom=customLayouts.find(item=>item.id===activeCustomLayoutId)
+      if(custom&&!validateCustomGeometry(custom.cells,{requirePhysical:true}).valid){setFrameUpdateError('This layout isn’t supported on the frame yet.');return}
+    }
+    setFrameUpdateError('')
 
     updateActionInFlightRef.current = true
     const operationId = ++updateOperationIdRef.current
@@ -2656,8 +2668,8 @@ async function handleSelectTab(k: TabKey) {
 
                 {layoutFlow?.mode==='edit'&&<button type="button" onClick={()=>deleteCustom(layoutFlow.layout)} className="mt-4 text-xs tracking-[.16em] text-red-400">DELETE LAYOUT</button>}
 
-                <div role={layoutDraftError?'alert':undefined} className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {layoutFlow?layoutDraftError:updateStatusText}
+                <div role={(layoutFlow?layoutDraftError:frameUpdateError)?'alert':undefined} className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
+                  {layoutFlow?layoutDraftError:(frameUpdateError||updateStatusText)}
                 </div>
               </div>
             )}

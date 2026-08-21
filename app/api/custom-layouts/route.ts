@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({})), deviceId = String(body.deviceId || '').trim(), name = normalizeLayoutName(body.name)
   if (!deviceId || !name) return NextResponse.json({ error: !deviceId ? 'missing_device_id' : 'invalid_name' }, { status: 400 })
-  const validation = validateCustomGeometry(body.cells, { requirePhysical: true })
+  const validation = validateCustomGeometry(body.cells, { requirePhysical: false })
   if (!validation.valid) return NextResponse.json({ error: 'invalid_geometry', details: validation }, { status: 400 })
   const ctx = await context(req, deviceId); if ('error' in ctx) return ctx.error
   const max = await ctx.client.from('custom_layouts').select('sort_order').eq('device_id', deviceId).eq('owner_user_id', ctx.userId).order('sort_order', { ascending: false }).limit(1).maybeSingle()
