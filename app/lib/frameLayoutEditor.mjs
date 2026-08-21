@@ -7,6 +7,16 @@ export const sortCells = cells => [...cells].sort((a, b) => a.row - b.row || a.c
 export const detectOrientation = stroke => Math.abs(stroke.end.x - stroke.start.x) > Math.abs(stroke.end.y - stroke.start.y) ? 'horizontal' : 'vertical'
 export const snapBoundary = (value, extent) => Math.max(0, Math.min(GRID_SIZE, Math.round(value / extent * GRID_SIZE)))
 
+const touchedRangeBoundary = (value, extent, direction) => Math.max(0, Math.min(GRID_SIZE, Math[direction](value / extent * GRID_SIZE)))
+
+/** Lock the cross-axis interpretation once a divider drag becomes meaningful. */
+export function resolveDividerStrokeLock(stroke, viewport = {width: 785, height: 458}) {
+  if (Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y) < MIN_STROKE_PX) return undefined
+  const orientation = detectOrientation(stroke), vertical = orientation === 'vertical'
+  const snapped = snapBoundary(vertical ? (stroke.start.x + stroke.end.x) / 2 : (stroke.start.y + stroke.end.y) / 2, vertical ? viewport.width : viewport.height)
+  return {orientation, boundary: Math.max(1, Math.min(GRID_SIZE - 1, snapped))}
+}
+
 export function hasOverlap(a, b) {
   return a.col < b.col + b.colSpan && a.col + a.colSpan > b.col && a.row < b.row + b.rowSpan && a.row + a.rowSpan > b.row
 }
@@ -320,11 +330,13 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
   const length = Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y)
   if (length < MIN_STROKE_PX) return {valid: false, reason: 'Draw a longer line', cells}
   if (!validateLayout(cells) || [stroke.start, stroke.end].some(p => p.x < 0 || p.y < 0 || p.x > viewport.width || p.y > viewport.height)) return {valid: false, reason: 'Keep the line inside the viewport', cells}
-  const orientation = detectOrientation(stroke)
+  const lock = stroke.lock ?? resolveDividerStrokeLock(stroke, viewport)
+  const orientation = lock.orientation
   const vertical = orientation === 'vertical'
-  const boundary = snapBoundary(vertical ? (stroke.start.x + stroke.end.x) / 2 : (stroke.start.y + stroke.end.y) / 2, vertical ? viewport.width : viewport.height)
-  const rangeStart = snapBoundary(Math.min(vertical ? stroke.start.y : stroke.start.x, vertical ? stroke.end.y : stroke.end.x), vertical ? viewport.height : viewport.width)
-  const rangeEnd = snapBoundary(Math.max(vertical ? stroke.start.y : stroke.start.x, vertical ? stroke.end.y : stroke.end.x), vertical ? viewport.height : viewport.width)
+  const boundary = lock.boundary
+  const alongExtent = vertical ? viewport.height : viewport.width
+  const rangeStart = touchedRangeBoundary(Math.min(vertical ? stroke.start.y : stroke.start.x, vertical ? stroke.end.y : stroke.end.x), alongExtent, 'floor')
+  const rangeEnd = touchedRangeBoundary(Math.max(vertical ? stroke.start.y : stroke.start.x, vertical ? stroke.end.y : stroke.end.x), alongExtent, 'ceil')
   const normalized = {orientation, boundary, rangeStart, rangeEnd}
   if (boundary <= 0 || boundary >= GRID_SIZE || rangeStart >= rangeEnd) return {valid: false, reason: 'That line does not follow an internal grid path', cells, normalized}
 
@@ -373,7 +385,7 @@ export function previewDividerStroke(cells, stroke, viewport = {width: 785, heig
 }
 
 /** Synchronous mode-less divider entrypoint; pass the actual release point. */
-export const finalizeDividerStroke = (cells, start, end, viewport) => previewDividerStroke(cells, {start, end}, viewport)
+export const finalizeDividerStroke = (cells, start, end, viewport, lock) => previewDividerStroke(cells, {start, end, lock}, viewport)
 
 /** Synchronous pointer-up entrypoint; callers must pass the actual release point. */
 export const finalizeStroke = (cells, start, end, viewport) => previewStroke(cells, {start, end}, viewport)

@@ -7,7 +7,7 @@ import {
   moduleProfiles, quantizeOneBit, resolveGridCell, responsiveShowcaseRegistry, studioModuleRegistry,
   type CalendarRowMode, type GridCell, type LayoutName, type ModuleName, type PixelCell, type StudioModuleName,
 } from '../lib/frameSimulator'
-import { createHistory, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, pushHistory, redoHistory, undoHistory, type DividerHit, type EditorCell, type EditorHistory, type GridSelection, type Point, type SplitGuide } from '../lib/frameLayoutEditor.mjs'
+import { createHistory, finalizeDividerStroke, internalDividerSegments, previewDividerStroke, pushHistory, redoHistory, resolveDividerStrokeLock, undoHistory, type DividerHit, type DividerStrokeLock, type EditorCell, type EditorHistory, type GridSelection, type Point, type SplitGuide } from '../lib/frameLayoutEditor.mjs'
 import { legacyStudioVariant, responsiveCellProfile, studioRenderStrategy, type ResponsiveCellProfile } from '../lib/responsiveCellProfile.mjs'
 import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, reminderComposition, reminderLayout, reminderStudioPresets, type ReminderItem, type ReminderItemLayout, type ReminderRect, type ReminderState } from '../lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets, type WeatherState } from '../lib/weatherResponsive.mjs'
@@ -361,15 +361,15 @@ function drawSelection(ctx:CanvasRenderingContext2D,selection:GridSelection){
 }
 
 export default function FrameSimulator(){
-  const output=useRef<HTMLCanvasElement>(null),overlay=useRef<HTMLCanvasElement>(null),drag=useRef<{id:number;start:Point}|null>(null)
+  const output=useRef<HTMLCanvasElement>(null),overlay=useRef<HTMLCanvasElement>(null),drag=useRef<{id:number;start:Point;lock?:DividerStrokeLock}|null>(null)
   const [layout,setLayout]=useState<LayoutName|'custom'>('default'),[dark,setDark]=useState(false),[preset,setPreset]=useState<Preset>('normal'),[debug,setDebug]=useState(false),[showcase,setShowcase]=useState(false),[showcaseModule,setShowcaseModule]=useState<StudioModuleName>('date')
   const [history,setHistory]=useState<EditorHistory>(()=>createHistory()),[dragPoint,setDragPoint]=useState<Point|null>(null),[selected,setSelected]=useState<string|null>(null),[feedback,setFeedback]=useState('')
   const custom=history.present
-  const dragPreview=useMemo(()=>drag.current&&dragPoint?previewDividerStroke(custom,{start:drag.current.start,end:dragPoint},VIEWPORT):null,[custom,dragPoint])
+  const dragPreview=useMemo(()=>drag.current&&dragPoint?previewDividerStroke(custom,{start:drag.current.start,end:dragPoint,lock:drag.current.lock},VIEWPORT):null,[custom,dragPoint])
   const pointer=(e:React.PointerEvent<HTMLDivElement>):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:(e.clientX-r.left)*VIEWPORT.width/r.width,y:(e.clientY-r.top)*VIEWPORT.height/r.height}}
   const onDown=(e:React.PointerEvent<HTMLDivElement>)=>{if(layout!=='custom')return;e.currentTarget.setPointerCapture(e.pointerId);const start=pointer(e);drag.current={id:e.pointerId,start};setDragPoint(start);setFeedback('')}
-  const onMove=(e:React.PointerEvent<HTMLDivElement>)=>{if(drag.current?.id===e.pointerId)setDragPoint(pointer(e))}
-  const onUp=(e:React.PointerEvent<HTMLDivElement>)=>{if(drag.current?.id!==e.pointerId)return;const end=pointer(e),{start}=drag.current,result=finalizeDividerStroke(custom,start,end,VIEWPORT);if(result.valid){setHistory(h=>pushHistory(h,result.cells));setSelected(null)}else if(Math.hypot(end.x-start.x,end.y-start.y)>=8)setFeedback(result.reason??'That divider stroke is not rectangular');drag.current=null;setDragPoint(null)}
+  const onMove=(e:React.PointerEvent<HTMLDivElement>)=>{if(drag.current?.id===e.pointerId){const end=pointer(e);drag.current.lock??=resolveDividerStrokeLock({start:drag.current.start,end},VIEWPORT);setDragPoint(end)}}
+  const onUp=(e:React.PointerEvent<HTMLDivElement>)=>{if(drag.current?.id!==e.pointerId)return;const end=pointer(e),{start}=drag.current,lock=drag.current.lock??resolveDividerStrokeLock({start,end},VIEWPORT),result=finalizeDividerStroke(custom,start,end,VIEWPORT,lock);if(result.valid){setHistory(h=>pushHistory(h,result.cells));setSelected(null)}else if(Math.hypot(end.x-start.x,end.y-start.y)>=8)setFeedback(result.reason??'That divider stroke is not rectangular');drag.current=null;setDragPoint(null)}
   const choose=(moduleId:StudioModuleName|'empty')=>{if(!selected)return;setHistory(h=>pushHistory(h,h.present.map(c=>c.id===selected?{...c,moduleId}:c)));setSelected(null)}
   const reset=()=>{setHistory(createHistory());setSelected(null);setFeedback('')}
   const beginCustom=()=>{setLayout('custom');setHistory(createHistory());setDragPoint(null);setSelected(null);setFeedback('')}
