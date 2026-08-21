@@ -26,6 +26,28 @@ export function fitGroceryText(itemValue,width,measure,{fontSize=14,ellipsis='�
   return {quantity:quantity.trimEnd(),name,text:quantity+name,truncated:true}
 }
 
+export function fitGroceriesText(value,width,measure,{fontSize=14,ellipsis='…'}={}){
+  const text=String(value??'')
+  if(measure(text,fontSize)<=width)return {text,truncated:false}
+  let lo=0,hi=text.length
+  while(lo<hi){const mid=Math.ceil((lo+hi)/2),candidate=text.slice(0,mid).trimEnd()+ellipsis;if(measure(candidate,fontSize)<=width)lo=mid;else hi=mid-1}
+  return {text:lo?text.slice(0,lo).trimEnd()+ellipsis:'',truncated:true}
+}
+
+export function fitRunningLowText(value,width,measure,{fontSize=13}={}){
+  const full=value.label?`${value.name} — ${value.label}`:value.name
+  if(measure(full,fontSize)<=width)return {text:full,labelShown:Boolean(value.label),nameTruncated:false}
+  const name=fitGroceriesText(value.name,width,measure,{fontSize})
+  return {text:name.text,labelShown:false,nameTruncated:name.truncated}
+}
+
+export function fitMealIdeaText(value,width,measure,{fontSize=13}={}){
+  const missing=value.missing.slice(0,2)
+  for(let count=missing.length;count>=1;count--){const text=`${value.name} · missing: ${missing.slice(0,count).join(', ')}`;if(measure(text,fontSize)<=width)return {text,missingShown:count,titleTruncated:false}}
+  const title=fitGroceriesText(value.name,width,measure,{fontSize})
+  return {text:title.text,missingShown:0,titleTruncated:title.truncated}
+}
+
 export function groceriesComposition(profile,state){
   const empty=state.status==='ok'&&!state.items.length&&!state.dinners.length&&!state.runningLow.length&&!state.mealIdeas.length
   if(state.status==='failed'||empty)return {family:'empty',failed:state.status==='failed',todayDinner:null,futureDinners:[],showMenu:false,showRunningLow:false,showMealIdeas:false,columns:1,horizontal:false}

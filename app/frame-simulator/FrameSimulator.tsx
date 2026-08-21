@@ -16,7 +16,7 @@ import { dateComposition, dateLayout, dateStudioPresets, fitDateFact, type DateR
 import { fitSurfFact, surfComposition, surfLayout, surfRatingWord, surfStudioPresets, type SurfRect, type SurfState } from '../lib/surfResponsive.mjs'
 import { fitSoccerFact, soccerComposition, soccerFixtureTeamLabels, soccerLayout, soccerStudioPresets, soccerTableWindow, soccerTeamAbbreviation, type SoccerRect, type SoccerState } from '../lib/soccerResponsive.mjs'
 import { fitStockFact, formatStockPrice, formatStockSigned, STOCK_RANGE_LABELS, STOCK_RANGES, stockReferenceLine, stocksComposition, stocksLayout, stocksStudioPresets, type StockRect, type StocksState } from '../lib/stocksResponsive.mjs'
-import { fitGroceryText, groceriesComposition, groceriesLayout, groceriesStudioPresets, type GroceriesState, type GroceryRect } from '../lib/groceriesResponsive.mjs'
+import { fitGroceriesText, fitGroceryText, fitMealIdeaText, fitRunningLowText, groceriesComposition, groceriesLayout, groceriesStudioPresets, type GroceriesState, type GroceryRect } from '../lib/groceriesResponsive.mjs'
 
 type Preset = typeof REMINDER_STUDIO_PRESET_VALUES[number]
 const fake = {
@@ -307,8 +307,10 @@ function drawResponsiveStocks(ctx:CanvasRenderingContext2D,c:PixelCell,p:Respons
 }
 function drawResponsiveGroceries(ctx:CanvasRenderingContext2D,c:PixelCell,p:ResponsiveCellProfile,state:GroceriesState){
   const composition=groceriesComposition(p,state),layout=groceriesLayout(p,composition,state),absolute=(value:GroceryRect)=>({...value,x:c.x+value.x,y:c.y+value.y})
-  const fitted=(text:string,rect:GroceryRect,font='14px sans-serif',align:CanvasTextAlign='left')=>{const r=absolute(rect);ctx.font=font;let value=text;if(ctx.measureText(value).width>r.width){let lo=0,hi=value.length;while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(ctx.measureText(value.slice(0,mid).trimEnd()+'…').width<=r.width)lo=mid;else hi=mid-1}value=lo?value.slice(0,lo).trimEnd()+'…':''}ctx.save();ctx.beginPath();ctx.rect(r.x,r.y,r.width,r.height);ctx.clip();ctx.textAlign=align;ctx.fillText(value,align==='center'?r.x+r.width/2:r.x,r.y+Math.min(r.height-3,15));ctx.restore()}
-  const heading=(text:string,rect:GroceryRect|null)=>{if(!rect)return;const r=absolute(rect);ctx.font='bold 15px sans-serif';const width=Math.min(r.width-8,ctx.measureText(text).width);fitted(text,rect,'bold 15px sans-serif','center');ctx.fillRect(r.x+(r.width-width)/2,r.y+r.height-3,width,2)}
+  const measure=(font:string)=>(text:string)=>{ctx.font=font;return ctx.measureText(text).width}
+  const drawText=(text:string,rect:GroceryRect,font='14px sans-serif',align:CanvasTextAlign='left')=>{const r=absolute(rect);ctx.font=font;ctx.save();ctx.beginPath();ctx.rect(r.x,r.y,r.width,r.height);ctx.clip();ctx.textAlign=align;ctx.fillText(text,align==='center'?r.x+r.width/2:r.x,r.y+Math.min(r.height-3,15));ctx.restore()}
+  const fitted=(text:string,rect:GroceryRect,font='14px sans-serif',align:CanvasTextAlign='left')=>drawText(fitGroceriesText(text,rect.width,(value)=>measure(font)(value)).text,rect,font,align)
+  const heading=(text:string,rect:GroceryRect|null)=>{if(!rect)return;const r=absolute(rect),font='bold 15px sans-serif',rendered=fitGroceriesText(text,rect.width,measure(font));drawText(rendered.text,rect,font,'center');ctx.font=font;const width=ctx.measureText(rendered.text).width;ctx.fillRect(r.x+(r.width-width)/2,r.y+r.height-3,width,2)}
   if(layout.emptyRect){heading(state.header,layout.headerRect);const r=absolute(layout.emptyRect);centered(ctx,composition.failed?'Fetch failed':state.emptyPhrase,r.x,r.y+r.height/2+8,r.width,'14px sans-serif');return}
   if(layout.todayLabelRect)fitted("TODAY'S DINNER",layout.todayLabelRect,'bold 10px sans-serif','center')
   heading(composition.todayDinner?.title??state.header,layout.titleRect)
@@ -318,9 +320,9 @@ function drawResponsiveGroceries(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   if(layout.menuHeaderRect)heading(composition.todayDinner?.title??'WEEKLY MENU',layout.menuHeaderRect)
   layout.menuRows.forEach(row=>{const r=absolute(row.rect);ctx.font='bold 12px sans-serif';ctx.textAlign='left';ctx.fillText(`${row.dinner.dayLabel}:`,r.x,r.y+15);const dayWidth=ctx.measureText(`${row.dinner.dayLabel}: `).width;fitted(row.dinner.title,{...row.rect,x:row.rect.x+dayWidth,width:row.rect.width-dayWidth},'13px sans-serif')})
   if(layout.runningLowRect)heading('RUNNING LOW',{...layout.runningLowRect,height:25})
-  layout.runningLowRows.forEach(row=>{const label=row.item.label?`${row.item.name} — ${row.item.label}`:row.item.name;fitted(label,row.rect,'13px sans-serif')})
+  layout.runningLowRows.forEach(row=>drawText(fitRunningLowText(row.item,row.rect.width,(value)=>measure('13px sans-serif')(value)).text,row.rect,'13px sans-serif'))
   if(layout.mealIdeasRect)heading('MEAL IDEAS',{...layout.mealIdeasRect,height:25})
-  layout.mealIdeaGroups.forEach(group=>{const missing=group.idea.missing.slice(0,2),text=missing.length?`${group.idea.name} · missing: ${missing.join(', ')}`:group.idea.name;fitted(text,group.rect,'13px sans-serif')})
+  layout.mealIdeaGroups.forEach(group=>drawText(fitMealIdeaText(group.idea,group.rect.width,(value)=>measure('13px sans-serif')(value)).text,group.rect,'13px sans-serif'))
   layout.dividers.forEach(value=>line(ctx,c.x+value.x1,c.y+value.y1,c.x+value.x2,c.y+value.y2))
 }
 function drawStocks(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[]){if(c.size==='SMALL'){stockSummary(ctx,c,d,c.y+c.h-22);return}if(c.size==='MEDIUM'){stockSummary(ctx,c,d,c.y+c.h-22);centered(ctx,d[3],c.x,c.y+75,c.w,'12px sans-serif');drawSparkline(ctx,c.x+32,c.y+90,c.w-64,c.h-145);return}if(c.size==='LARGE'){const half=c.w/2;underlinedHeading(ctx,d[0],{...c,w:half},c.y+34);stockStats(ctx,c.x,c.y+74,half,d);centered(ctx,d[3],c.x+half,c.y+35,half,'bold 13px sans-serif');drawSparkline(ctx,c.x+half+20,c.y+55,half-40,c.h-82);return}underlinedHeading(ctx,d[0],c,c.y+27);const rowX=c.x+20,rowW=c.w-40,colW=rowW/moduleProfiles.stocks.xl.headlineValues;[d[1],'+2.90',d[2]].forEach((v,i)=>{if(i)line(ctx,rowX+i*colW,c.y+48,rowX+i*colW,c.y+110);centered(ctx,v,rowX+i*colW,c.y+87,colW,'bold 20px sans-serif')});[['High 126.20','Low 121.80'],['Open 123.10','Prev 121.60'],['Change +2.90','Day +2.4%']].forEach((pair,i)=>pair.forEach((v,j)=>centered(ctx,v,rowX+i*colW,c.y+137+j*25,colW,'12px sans-serif')));const mid=c.y+c.h*.52;centered(ctx,'Day   Week   Month   Year',c.x,mid+18,c.w,'bold 12px sans-serif');drawSparkline(ctx,c.x+24,mid+31,c.w-48,c.y+c.h-mid-50)}
