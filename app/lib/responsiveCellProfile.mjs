@@ -30,6 +30,6 @@ export function studioRenderStrategy(module, colSpan, rowSpan, width, height) {
   if (!STUDIO_MODULES.includes(module)) throw new RangeError(`Unknown Studio module: ${module}`)
   const profile = responsiveCellProfile(colSpan, rowSpan, width, height)
   const legacyVariant = legacyStudioVariant(colSpan, rowSpan)
-  const path = legacyVariant ? 'legacy' : module === 'reminders' ? 'reminders-responsive' : module === 'weather' ? 'weather-responsive' : module === 'countdown' ? 'countdown-responsive' : module === 'date' ? 'date-responsive' : module === 'surf' ? 'surf-responsive' : module === 'soccer' ? 'soccer-responsive' : module === 'stocks' ? 'stocks-responsive' : 'responsive'
+  const path = legacyVariant ? 'legacy' : module === 'reminders' ? 'reminders-responsive' : module === 'weather' ? 'weather-responsive' : module === 'countdown' ? 'countdown-responsive' : module === 'date' ? 'date-responsive' : module === 'surf' ? 'surf-responsive' : module === 'soccer' ? 'soccer-responsive' : module === 'stocks' ? 'stocks-responsive' : module === 'groceries' ? 'groceries-responsive' : 'responsive'
   return { path, legacyVariant, profile }
 }
