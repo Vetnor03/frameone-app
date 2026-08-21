@@ -1,8 +1,34 @@
+import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 MAIN = (ROOT / "src/frame_v2.5.1.ino").read_text()
 LIVE = (ROOT / "src/network/LiveUpdate.cpp").read_text()
+
+
+def test_firmware_translation_units_declare_direct_wifi_dependency():
+    tracked_files = subprocess.run(
+        ["git", "ls-files", "frame"],
+        cwd=ROOT.parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    translation_units = {".c", ".cc", ".cpp", ".cxx", ".ino"}
+
+    missing_dependency = []
+    for relative_path in tracked_files:
+        path = ROOT.parent / relative_path
+        if path.suffix not in translation_units:
+            continue
+
+        source = path.read_text()
+        if re.search(r"WiFi\.|\bWL_CONNECTED\b", source):
+            if not re.search(r"^\s*#\s*include\s*<WiFi\.h>", source, re.MULTILINE):
+                missing_dependency.append(relative_path)
+
+    assert missing_dependency == []
 
 
 def test_live_update_declares_its_wifi_dependency():
