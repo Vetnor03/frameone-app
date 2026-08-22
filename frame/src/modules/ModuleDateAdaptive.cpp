@@ -269,8 +269,8 @@ static bool drawCalendar(const Rect& rect, int year, int month0,
       const int centerY = dayRect.y + dayRect.h / 2;
       const bool today = year == todayYear && month0 == todayMonth0 && day == todayDay;
       if (today) {
-        int radius = (cellW < cellH ? cellW : cellH) / 2 - 2;
-        radius = clampInt(radius, 7, 14);
+        int radius = (cellW < cellH ? cellW : cellH) / 2 - 1;
+        radius = clampInt(radius, 2, 14);
         d.fillCircle(centerX, centerY, radius, GxEPD_WHITE);
       }
       const int tx = centerX - (int)tw / 2;
@@ -318,9 +318,10 @@ static void drawHeroStack(const Rect& rect, const char* month, const char* weekd
     drawFitted(region, month, ADATE_B12, ADATE_9);
     y += monthH;
   }
-  const int remainingForWeekday = group.y + group.h - y;
-  const int actualWeekdayH = remainingForWeekday > weekdayH ? weekdayH : remainingForWeekday;
-  const int actualDayH = remainingForWeekday - actualWeekdayH;
+  int remaining = group.y + group.h - y;
+  if (remaining <= 0) return;
+  const int actualWeekdayH = remaining > weekdayH ? weekdayH : remaining;
+  const int actualDayH = remaining - actualWeekdayH;
   if (actualDayH > 0) {
     Rect region = { group.x, y, group.w, actualDayH };
     drawFitted(region, dayText, ADATE_B24, ADATE_B18, ADATE_B12);
@@ -426,7 +427,7 @@ static void drawHolidayRows(const Rect& rect, int year, int month0, int day, int
     Rect dateRect = { rowRect.x, rowRect.y, dateW, rowRect.h };
     Rect nameRect = { rowRect.x + dateW + 4, rowRect.y, rowRect.w - dateW - 4, rowRect.h };
     drawFitted(dateRect, dateText, ADATE_9);
-    drawFitted(nameRect, name, ADATE_B12, ADATE_9);
+    if (nameRect.w > 0) drawFitted(nameRect, name, ADATE_B12, ADATE_9);
   }
 }
 
@@ -444,6 +445,12 @@ void setConfig(const FrameConfig* cfg) {
 }
 
 void render(const Cell& c) {
+  // Adaptive cells must carry their logical geometry from the 4x4 resolver.
+  if (c.colSpan < 1 || c.colSpan > 4 || c.rowSpan < 1 || c.rowSpan > 4) {
+    drawUnavailable(c);
+    return;
+  }
+
   tm now = {};
   if (!getLocalTime(&now, 10)) {
     drawUnavailable(c);
@@ -456,9 +463,11 @@ void render(const Cell& c) {
   const char* month = safeMonth(month0);
   const char* weekday = safeWday(now.tm_wday);
 
-  // The thresholds intentionally mirror app/lib/dateResponsive.mjs.
+  // The thresholds intentionally mirror app/lib/dateResponsive.mjs while the
+  // logical span keeps orientation stable across calibrated pixel rounding.
+  const bool logicalLandscape = c.colSpan > c.rowSpan;
   const bool micro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
-  const bool shallow = c.w > c.h && c.h < 170;
+  const bool shallow = logicalLandscape && c.h < 170;
   const bool expanded = (c.w >= 700 && c.h >= 330) || (c.w >= 520 && c.h >= 400);
   const bool horizontalCalendar = c.w >= 430 && c.h >= 210;
   const bool verticalCalendar = !horizontalCalendar && c.w >= 330 && c.h >= 400;
