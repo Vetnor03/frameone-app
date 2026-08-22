@@ -579,10 +579,31 @@ static bool retryRenderedAck(uint64_t backendDisplayed) {
   return false;
 }
 
-static void runInteractiveMode(
+enum InteractiveModeResult {
+  INTERACTIVE_FINISHED,
+  INTERACTIVE_NORMAL_SYNC_DUE,
+};
+
+static InteractiveModeResult finishInteractiveMode(
+  uint32_t startedAtMs,
+  uint32_t baselineElapsedAtEntry,
+  InteractiveModeResult result
+) {
+  const uint32_t awakeSeconds = (millis() - startedAtMs) / 1000U;
+  normalSyncElapsedSeconds = baselineElapsedAtEntry + awakeSeconds;
+  return result;
+}
+
+static void consumeNormalSyncPeriod() {
+  if (normalSyncElapsedSeconds >= NORMAL_SYNC_SECONDS) {
+    normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS;
+  }
+}
+
+static InteractiveModeResult runInteractiveMode(
   const BatteryState& batt,
   const PowerSenseDebug& pwr,
-  LiveUpdateState state
+  LiveUpdateState& state
 ) {
   Serial.println("LiveUpdate: entering interactive mode");
   WiFi.setSleep(true);
@@ -594,15 +615,32 @@ static void runInteractiveMode(
   uint8_t inactiveAckFailures = 0;
   uint8_t consecutiveProbeFailures = 0;
   uint32_t configRetryMs = INTERACTIVE_POLL_MS;
+  const uint32_t interactiveStartedAtMs = millis();
+  const uint32_t baselineElapsedAtEntry = normalSyncElapsedSeconds;
 
   while (WiFi.status() == WL_CONNECTED) {
+    const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
+    if (baselineElapsedAtEntry + awakeSeconds >= NORMAL_SYNC_SECONDS) {
+      Serial.println("LiveUpdate: normal sync became due while interactive");
+      // Carry the freshest revision state into the baseline path. A failure is
+      // non-blocking: the normal sync is already due and must not be postponed.
+      LiveUpdateState deadlineState{};
+      if (LiveUpdate::probe(DeviceIdentity::getToken(), deadlineState)) {
+        state = deadlineState;
+      }
+      return finishInteractiveMode(
+        interactiveStartedAtMs,
+        baselineElapsedAtEntry,
+        INTERACTIVE_NORMAL_SYNC_DUE
+      );
+    }
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
     if (retryRenderedAck(state.displayedRevision)) {
       inactiveAckFailures = 0;
       if (awaitingAck > state.displayedRevision) state.displayedRevision = awaitingAck;
     } else if (!state.appActive && ++inactiveAckFailures >= 3) {
       Serial.println("LiveUpdate: deferring ACK retry to next probe wake");
-      return;
+      return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
     }
 
     uint64_t rendered = LiveUpdate::getRenderedAwaitingAck();
@@ -630,7 +668,7 @@ static void runInteractiveMode(
         state.requestedRevision <= state.displayedRevision &&
         rendered == 0) {
       Serial.println("LiveUpdate: activity expired");
-      return;
+      return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
     }
 
     delay(INTERACTIVE_POLL_MS);
@@ -638,7 +676,9 @@ static void runInteractiveMode(
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
       consecutiveProbeFailures++;
       Serial.printf("LiveUpdate: interactive probe failed (%u/3)\n", consecutiveProbeFailures);
-      if (consecutiveProbeFailures >= 3) return;
+      if (consecutiveProbeFailures >= 3) {
+        return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
+      }
       continue;
     }
     consecutiveProbeFailures = 0;
@@ -656,6 +696,7 @@ static void runInteractiveMode(
     }
     state = next;
   }
+  return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
 }
 
 // --------------------------------------
@@ -841,7 +882,7 @@ void setup() {
   }
 
   const uint64_t locallyRendered = LiveUpdate::getRenderedAwaitingAck();
-  const bool explicitRevisionPending =
+  bool explicitRevisionPending =
     liveProbeOk &&
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
@@ -850,6 +891,12 @@ void setup() {
     goToSleep(pwrEarly.usbPresent);
     return;
   }
+
+run_normal_sync:
+  explicitRevisionPending =
+    liveProbeOk &&
+    liveState.requestedRevision > liveState.displayedRevision &&
+    liveState.requestedRevision > LiveUpdate::getRenderedAwaitingAck();
 
   // Only full scheduled checks advance the legacy 12-wake (three-hour)
   // physical-refresh counter. Two-minute probe wakes never touch it.
@@ -864,7 +911,11 @@ void setup() {
   DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
 
   if (!normalSyncDue) {
-    runInteractiveMode(batt, pwr, liveState);
+    if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+      consumeNormalSyncPeriod();
+      normalSyncDue = true;
+      goto run_normal_sync;
+    }
     goToSleep(pwr.usbPresent);
     return;
   }
@@ -972,7 +1023,10 @@ void setup() {
     postDeviceStatus(batt, pwr, false);
     UpdateChecker::saveBatteryPercent(batt.percent);
     if (liveProbeOk && liveState.appActive) {
-      runInteractiveMode(batt, pwr, liveState);
+      if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+        consumeNormalSyncPeriod();
+        goto run_normal_sync;
+      }
     }
     goToSleep(pwr.usbPresent);
     return;
@@ -1028,7 +1082,10 @@ void setup() {
 
   Serial.println("✅ Applied");
   if (liveProbeOk && liveState.appActive) {
-    runInteractiveMode(batt, pwr, liveState);
+    if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+      consumeNormalSyncPeriod();
+      goto run_normal_sync;
+    }
   }
   goToSleep(pwr.usbPresent);
 }
