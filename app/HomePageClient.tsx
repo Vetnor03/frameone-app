@@ -13256,7 +13256,6 @@ const manualItems: ReminderUiItem[] = (data || [])
     const map: Record<string, number> = {}
 
     for (const item of visibleOccurrences) {
-      if (item.source === 'local-events') continue
       const key = item.occurrenceDate
       if (!key) continue
       if (key < todayYmd) continue
