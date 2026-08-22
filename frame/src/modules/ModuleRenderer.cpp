@@ -4,6 +4,7 @@
 
 // Module entrypoints
 #include "ModuleDate.h"
+#include "ModuleDateAdaptive.h"
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleReminders.h"
@@ -59,12 +60,44 @@ static const GFXfont* plusFontForCell(const Cell& c) {
   }
 }
 
-String ModuleRenderer::moduleForSlot(const SlotModule* assigns, int assignCount, uint8_t slot) {
-  if (!assigns || assignCount <= 0) return "";
-  for (int i = 0; i < assignCount; i++) {
-    if (assigns[i].slot == slot) return String(assigns[i].module);
+static bool sameAsciiIgnoreCase(const char* a, const char* b) {
+  if (!a || !b) return false;
+  while (*a && *b) {
+    char ca = *a++;
+    char cb = *b++;
+    if (ca >= 'A' && ca <= 'Z') ca = (char)(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = (char)(cb - 'A' + 'a');
+    if (ca != cb) return false;
   }
-  return "";
+  return *a == '\0' && *b == '\0';
+}
+
+static bool isAnchorGeometry(const Cell& c) {
+  return (c.colSpan == 4 && c.rowSpan == 1) ||
+         (c.colSpan == 2 && c.rowSpan == 2) ||
+         (c.colSpan == 4 && c.rowSpan == 2) ||
+         (c.colSpan == 4 && c.rowSpan == 4);
+}
+
+const char* ModuleRenderer::moduleNameForSlot(const SlotModule* assigns, int assignCount, uint8_t slot) {
+  if (!assigns || assignCount <= 0) return nullptr;
+  for (int i = 0; i < assignCount; i++) {
+    if (assigns[i].slot == slot) return assigns[i].module;
+  }
+  return nullptr;
+}
+
+String ModuleRenderer::moduleForSlot(const SlotModule* assigns, int assignCount, uint8_t slot) {
+  const char* module = moduleNameForSlot(assigns, assignCount, slot);
+  return module ? String(module) : String("");
+}
+
+bool ModuleRenderer::canRenderCell(const char* module, const Cell& cell) {
+  if (!module || module[0] == '\0') return false;
+  // All four handmade anchor geometries preserve their existing renderer behavior.
+  if (isAnchorGeometry(cell)) return true;
+  // Phase E1: only Date owns a physical responsive renderer outside the anchors.
+  return sameAsciiIgnoreCase(module, "date");
 }
 
 void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCount, const Cell* cells, int n) {
@@ -85,9 +118,11 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
       continue;
     }
 
-    // Dispatch modules here
+    // Dispatch modules here. Date keeps its four handmade anchor paths exactly;
+    // non-anchor Date geometry goes through the dedicated Phase E1 renderer.
     if (mod.equalsIgnoreCase("date")) {
-      ModuleDate::render(c);
+      if (isAnchorGeometry(c)) ModuleDate::render(c);
+      else ModuleDateAdaptive::render(c);
       continue;
     }
 
