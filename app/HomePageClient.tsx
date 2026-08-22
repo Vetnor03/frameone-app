@@ -9326,8 +9326,8 @@ type ReminderRepeatKey =
   | 'custom'
 
 type ReminderTag = 'work' | 'personal' | 'sports' | 'chores' | 'event'
-type ReminderTagFilter = 'all' | ReminderTag
 type ReminderSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events'
+type ReminderSourceFilter = ReminderSource
 
 type ReminderUiItem = {
   id: string
@@ -9392,9 +9392,9 @@ function reminderTagOptionLabel(language: AppLanguage, key: ReminderTag | null) 
   return language === 'no' ? found.labelNo : found.label
 }
 
-function reminderTagFilterLabel(language: AppLanguage, key: ReminderTagFilter) {
-  if (key === 'all') return language === 'no' ? 'Alle' : 'All'
-  return reminderTagOptionLabel(language, key)
+function reminderSourceFilterLabel(language: AppLanguage, source: ReminderSourceFilter) {
+  if (source === 'remind') return language === 'no' ? 'Påminnelser' : 'Reminders'
+  return integrationReminderSourceLabel(language, source)
 }
 
 function isReminderRepeatKey(v: any): v is ReminderRepeatKey {
@@ -13007,12 +13007,12 @@ function RemindersModuleSettingsTab({
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerDraft, setComposerDraft] = useState<ReminderUiItem | null>(null)
   const [editingReminder, setEditingReminder] = useState<ReminderUiItem | null>(null)
-  const [tagFilter, setTagFilter] = useState<ReminderTagFilter>('all')
+  const [sourceFilter, setSourceFilter] = useState<ReminderSourceFilter>('remind')
+  const [availableSources, setAvailableSources] = useState<ReminderSourceFilter[]>(['remind'])
 
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(null)
 
-  const calendarTouchStartYRef = useRef<number | null>(null)
-  const calendarWheelLockRef = useRef<number>(0)
+  const calendarTouchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   const [viewYear, setViewYear] = useState(new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(new Date().getMonth())
@@ -13021,14 +13021,16 @@ function RemindersModuleSettingsTab({
   const calendarAnimTimerRef = useRef<number | null>(null)
 
   const todayYmd = toLocalYmd(new Date())
-    async function loadReminders() {
+  async function loadReminders() {
     if (!activeDeviceId) {
       setReminders([])
+      setAvailableSources(['remind'])
       return
     }
 
     try {
       setLoading(true)
+      setAvailableSources(['remind'])
 
       const { data, error } = await supabase
         .from('reminders')
@@ -13086,6 +13088,18 @@ const manualItems: ReminderUiItem[] = (data || [])
       let integrationItems: ReminderUiItem[] = []
       const userId = (await supabase.auth.getUser())?.data?.user?.id
       if (userId) {
+        const { data: connectionData } = await supabase
+          .from('user_integrations')
+          .select('provider, status, device_id')
+          .eq('status', 'connected')
+          .or(`device_id.eq.${activeDeviceId},device_id.is.null`)
+        const connectedSources = new Set<ReminderSourceFilter>(['remind'])
+        for (const connection of connectionData || []) {
+          const source = integrationProviderToReminderSource(connection.provider)
+          if (source) connectedSources.add(source)
+        }
+        setAvailableSources(['remind', 'teams', 'spond', 'local-events', 'waste'].filter((source) => connectedSources.has(source as ReminderSourceFilter)) as ReminderSourceFilter[])
+
         const nowIso = new Date().toISOString()
         let localEventSkippedIds = new Set<string>()
         let localEventHiddenSkippedIds = new Set<string>()
@@ -13175,6 +13189,10 @@ const manualItems: ReminderUiItem[] = (data || [])
   }, [activeDeviceId])
 
   useEffect(() => {
+    if (!availableSources.includes(sourceFilter)) setSourceFilter('remind')
+  }, [availableSources, sourceFilter])
+
+  useEffect(() => {
     const handler = () => { loadReminders() }
     window.addEventListener('remind:refresh-reminders', handler)
     return () => window.removeEventListener('remind:refresh-reminders', handler)
@@ -13189,7 +13207,7 @@ const manualItems: ReminderUiItem[] = (data || [])
   function triggerCalendarAnimation(direction: 'next' | 'prev') {
     if (calendarAnimTimerRef.current) window.clearTimeout(calendarAnimTimerRef.current)
 
-    setCalendarAnimClass(direction === 'next' ? 'animate-[monthSlideUp_220ms_ease-out]' : 'animate-[monthSlideDown_220ms_ease-out]')
+    setCalendarAnimClass(direction === 'next' ? 'animate-[monthSlideLeft_220ms_ease-out]' : 'animate-[monthSlideRight_220ms_ease-out]')
 
     calendarAnimTimerRef.current = window.setTimeout(() => {
       setCalendarAnimClass('')
@@ -13228,9 +13246,8 @@ const manualItems: ReminderUiItem[] = (data || [])
   }, [viewYear, viewMonth, startWeekday])
 
   const filteredReminders = useMemo(() => {
-    if (tagFilter === 'all') return reminders
-    return reminders.filter((x) => x.tag === tagFilter)
-  }, [reminders, tagFilter])
+    return reminders.filter((item) => (item.source || 'remind') === sourceFilter)
+  }, [reminders, sourceFilter])
 
   const visibleOccurrences = useMemo(() => {
     return expandReminderOccurrences(filteredReminders, gridStartYmd, gridEndYmd, 180)
@@ -13240,6 +13257,7 @@ const manualItems: ReminderUiItem[] = (data || [])
     const map: Record<string, number> = {}
 
     for (const item of visibleOccurrences) {
+      if (item.source === 'local-events') continue
       const key = item.occurrenceDate
       if (!key) continue
       if (key < todayYmd) continue
@@ -13415,34 +13433,22 @@ const sortedReminders = useMemo(() => {
     setSelectedDayYmd(ymd)
   }
 
-  function handleCalendarWheel(e: React.WheelEvent<HTMLDivElement>) {
-    const now = Date.now()
-    if (now < calendarWheelLockRef.current) return
-    if (Math.abs(e.deltaY) < 18) return
-
-    e.preventDefault()
-
-    if (e.deltaY > 0) moveMonth(1)
-    else moveMonth(-1)
-
-    calendarWheelLockRef.current = now + 320
-  }
-
   function handleCalendarTouchStart(e: React.TouchEvent<HTMLDivElement>) {
-    calendarTouchStartYRef.current = e.touches[0]?.clientY ?? null
+    const touch = e.touches[0]
+    calendarTouchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null
   }
 
   function handleCalendarTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
-    const startY = calendarTouchStartYRef.current
-    const endY = e.changedTouches[0]?.clientY ?? null
-    calendarTouchStartYRef.current = null
+    const start = calendarTouchStartRef.current
+    const touch = e.changedTouches[0]
+    calendarTouchStartRef.current = null
+    if (!start || !touch) return
 
-    if (startY == null || endY == null) return
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 36 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return
 
-    const diff = endY - startY
-    if (Math.abs(diff) < 40) return
-
-    if (diff < 0) moveMonth(1)
+    if (deltaX < 0) moveMonth(1)
     else moveMonth(-1)
   }
 
@@ -13452,25 +13458,25 @@ const sortedReminders = useMemo(() => {
   return (
     <>
       <style jsx>{`
-        @keyframes monthSlideUp {
+        @keyframes monthSlideLeft {
           0% {
             opacity: 0;
-            transform: translateY(14px);
+            transform: translateX(14px);
           }
           100% {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateX(0);
           }
         }
 
-        @keyframes monthSlideDown {
+        @keyframes monthSlideRight {
           0% {
             opacity: 0;
-            transform: translateY(-14px);
+            transform: translateX(-14px);
           }
           100% {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateX(0);
           }
         }
       `}</style>
@@ -13509,8 +13515,7 @@ const sortedReminders = useMemo(() => {
             </div>
 
             <div
-              className="mt-1 overflow-hidden"
-              onWheel={handleCalendarWheel}
+              className="mt-1 overflow-hidden touch-pan-y"
               onTouchStart={handleCalendarTouchStart}
               onTouchEnd={handleCalendarTouchEnd}
             >
@@ -13578,20 +13583,20 @@ const sortedReminders = useMemo(() => {
             </button>
           </div>
 
-          <div className="mt-2 max-[420px]:mt-1.5 grid grid-cols-3 gap-1.5 max-[420px]:gap-1.5">
-            {(['all', 'work', 'personal', 'sports', 'chores', 'event'] as ReminderTagFilter[]).map((opt) => {
-              const active = tagFilter === opt
+          <div className="mt-2 max-[420px]:mt-1.5 flex flex-wrap gap-1.5 max-[420px]:gap-1.5">
+            {availableSources.map((source) => {
+              const active = sourceFilter === source
               return (
                 <button
-                  key={opt}
-                  onClick={() => setTagFilter(opt)}
-                  className={`h-8 max-[420px]:h-[30px] rounded-xl border text-[11px] tracking-widest transition ${
+                  key={source}
+                  onClick={() => setSourceFilter(source)}
+                  className={`h-8 max-[420px]:h-[30px] rounded-xl border px-3 text-[11px] tracking-widest transition ${
                     active
                       ? 'border-[#2aa3ff] text-[#2aa3ff]'
                       : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
                   }`}
                 >
-                  {reminderTagFilterLabel(language, opt)}
+                  {reminderSourceFilterLabel(language, source)}
                 </button>
               )
             })}
