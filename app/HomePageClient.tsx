@@ -27,7 +27,7 @@ import {
   revisionHasBeenDisplayed,
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
-import { MANUAL_UPDATE_VISIBLE_MS, clearManualUpdate, manualUpdateEstimate, readManualUpdate, selectUpdatePresentation, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
+import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
@@ -1103,7 +1103,6 @@ export default function HomePage() {
   const searchParams = useSearchParams()
 
   const [lastPhysicalDisplayUpdatedAt, setLastPhysicalDisplayUpdatedAt] = useState<string | null>(null)
-  const [showNextUpdateAfterSave, setShowNextUpdateAfterSave] = useState(false)
   const [, setNextUpdateTick] = useState(0)
   const [physicalFrameSnapshot, setPhysicalFrameSnapshot] = useState<PhysicalFrameSnapshot | null>(null)
   const physicalFrameSnapshotRef = useRef<PhysicalFrameSnapshot | null>(null)
@@ -1158,9 +1157,7 @@ export default function HomePage() {
   const [modulesJson, setModulesJson] = useState<Record<string, any>>({})
   const [persisting, setPersisting] = useState(false)
   const [frameUpdateError, setFrameUpdateError] = useState('')
-  const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'requesting' | 'updating'>('idle')
-  const [manualUpdateRequestedAt, setManualUpdateRequestedAt] = useState<number | null>(null)
-  const [manualUpdateStateResolved, setManualUpdateStateResolved] = useState(false)
+  const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'saving' | 'requesting' | 'waiting_for_display'>('idle')
   const updateActionInFlightRef = useRef(false)
   const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
@@ -1172,12 +1169,9 @@ export default function HomePage() {
     const persisted = deviceId && typeof window !== 'undefined'
       ? readManualUpdate(window.localStorage, deviceId)
       : null
-    const visible = persisted && manualUpdateEstimate(persisted.requestedAt) !== null
-    if (persisted && !visible) clearManualUpdate(window.localStorage, deviceId!)
-    setExplicitUpdateStatus(visible ? persisted.phase : 'idle')
-    setManualUpdateRequestedAt(visible ? persisted.requestedAt : null)
-    if (persisted && !visible) setLastPhysicalDisplayUpdatedAt(new Date(persisted.requestedAt + MANUAL_UPDATE_VISIBLE_MS).toISOString())
-    setManualUpdateStateResolved(true)
+    if (persisted && Date.now() >= persisted.deadline) clearManualUpdate(window.localStorage, deviceId!)
+    const active = persisted && Date.now() < persisted.deadline ? persisted : null
+    setExplicitUpdateStatus(active?.phase ?? 'idle')
     return persisted
   }
 
@@ -1205,13 +1199,16 @@ export default function HomePage() {
       heartbeatTimer = null
     }
     const handleVisibilityChange = () => document.visibilityState === 'visible' ? start() : stop()
+    const handleFocus = () => heartbeat()
 
     start()
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
     return () => {
       cancelled = true
       stop()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
     }
   }, [activeDeviceId, activeTab, userId])
 
@@ -1227,7 +1224,6 @@ export default function HomePage() {
     const persisted = readManualUpdate(window.localStorage, activeDeviceId)
 
     if (!persisted) {
-      setManualUpdateStateResolved(true)
       return
     }
 
@@ -1235,26 +1231,33 @@ export default function HomePage() {
     const deviceId = activeDeviceId
     const operationId = ++updateOperationIdRef.current
     updateActionInFlightRef.current = true
+    let resolvedRevision = persisted.requestedRevision
 
     ;(async () => {
       let update = persisted
       while (!cancelled && Date.now() < update.deadline) {
         try {
-          const backend = await getDeviceUpdateStatus(supabase, deviceId)
-          // A persisted `requesting` phase may have been written before the
-          // request reached the backend. Only adopt the backend revision when
-          // it is genuinely pending; an older already-displayed revision does
-          // not prove this manual update completed.
-          const requestedRevision: number | null = update.requestedRevision
-            ?? (backend.requestedRevision > backend.displayedRevision ? backend.requestedRevision : null)
-          if (requestedRevision != null && requestedRevision > 0 && revisionHasBeenDisplayed(backend.displayedRevision, requestedRevision)) {
-            if (backend.lastDisplayedAt) setLastPhysicalDisplayUpdatedAt(backend.lastDisplayedAt)
-            return
-          }
-          if (requestedRevision != null && requestedRevision > 0 && update.requestedRevision == null) {
-            update = { ...update, phase: 'updating', requestedRevision }
+          // Recover the exact ledger operation. Replaying this request ID is
+          // idempotent and must never adopt an unrelated global revision.
+          const requestedRevision = update.requestedRevision
+            ?? await requestManualUpdateRevision(
+              update.requestId,
+              update.deadline,
+              (requestId) => requestDeviceUpdate(supabase, deviceId, requestId)
+          )
+          if (requestedRevision == null) break
+          resolvedRevision = requestedRevision
+          if (requestedRevision > 0 && update.requestedRevision == null) {
+            update = { ...update, phase: 'waiting_for_display', requestedRevision }
             writeManualUpdate(window.localStorage, deviceId, update)
-            setExplicitUpdateStatus('updating')
+            setExplicitUpdateStatus('waiting_for_display')
+          }
+          const backend = await getDeviceUpdateStatus(supabase, deviceId)
+          if (requestedRevision > 0 && revisionHasBeenDisplayed(backend.displayedRevision, requestedRevision)) {
+            clearManualUpdate(window.localStorage, deviceId)
+            setExplicitUpdateStatus('idle')
+            await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
+            return
           }
         } catch {
           // Confirmation is diagnostic only; it never changes visible progress.
@@ -1262,28 +1265,18 @@ export default function HomePage() {
         await new Promise((resolve) => window.setTimeout(resolve, DEVICE_UPDATE_POLL_MS))
       }
     })().finally(() => {
+      if (!cancelled && Date.now() >= persisted.deadline) {
+        clearManualUpdate(window.localStorage, deviceId)
+        setExplicitUpdateStatus('idle')
+        setFrameUpdateError(resolvedRevision == null
+          ? (language === 'no' ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.' : 'Settings were saved, but the update could not be started.')
+          : (language === 'no' ? 'Rammen har ikke bekreftet oppdateringen ennå.' : "Frame hasn’t confirmed the update yet."))
+      }
       if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
     })
 
     return () => { cancelled = true }
   }, [activeDeviceId, userId])
-
-  useEffect(() => {
-    if (!activeDeviceId || manualUpdateRequestedAt == null) return
-    const finishVisibleProgress = () => {
-      if (manualUpdateEstimate(manualUpdateRequestedAt) !== null) return
-      clearManualUpdate(window.localStorage, activeDeviceId)
-      setLastPhysicalDisplayUpdatedAt(new Date(manualUpdateRequestedAt + MANUAL_UPDATE_VISIBLE_MS).toISOString())
-      setManualUpdateRequestedAt(null)
-      setExplicitUpdateStatus('idle')
-    }
-    const timer = window.setTimeout(finishVisibleProgress, Math.max(0, manualUpdateRequestedAt + MANUAL_UPDATE_VISIBLE_MS - Date.now()))
-    document.addEventListener('visibilitychange', finishVisibleProgress)
-    return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('visibilitychange', finishVisibleProgress)
-    }
-  }, [activeDeviceId, manualUpdateRequestedAt])
 
   // Resolve this as soon as authentication is ready, rather than waiting for
   // Settings to mount. Settings can then render the shared, already-known state.
@@ -1570,7 +1563,6 @@ export default function HomePage() {
     const nextDirty = serialized !== savedStateRef.current
     setDirty(nextDirty)
     if (nextDirty) {
-      setShowNextUpdateAfterSave(false)
       if (!updateActionInFlightRef.current) setExplicitUpdateStatus('idle')
     }
   }
@@ -1669,7 +1661,6 @@ export default function HomePage() {
   function rememberPendingFrameUpdate(configUpdatedAt: string | null, renderAt: string | null) {
     const isPending = isFrameUpdatePending(configUpdatedAt, renderAt)
     pendingFrameConfigUpdatedAtRef.current = isPending ? configUpdatedAt : null
-    setShowNextUpdateAfterSave(isPending)
   }
 
   function formatRelative(iso: string) {
@@ -1710,29 +1701,11 @@ export default function HomePage() {
     return `${prefix} ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
-  function formatExplicitUpdateEstimate() {
-    if (manualUpdateRequestedAt == null) return null
-    const phase = manualUpdateEstimate(manualUpdateRequestedAt)
-    const copy = language === 'no'
-      ? { under2: 'Oppdatering om mindre enn 2 minutter', under1: 'Oppdatering om mindre enn 1 minutt', under30: 'Oppdatering om mindre enn 30 sekunder', under15: 'Oppdatering om mindre enn 15 sekunder' }
-      : { under2: 'Update in less than 2 minutes', under1: 'Update in less than 1 minute', under30: 'Update in less than 30 seconds', under15: 'Update in less than 15 seconds' }
-    return phase ? copy[phase] : null
-  }
-
-  const manualUpdateInProgress = explicitUpdateStatus === 'requesting' || explicitUpdateStatus === 'updating'
+  const manualUpdateInProgress = explicitUpdateStatus !== 'idle'
   const manualUpdatePending = manualUpdateInProgress
-  const manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'
-  const idleFreshnessPresentation = lastPhysicalDisplayUpdatedAt
+  const updateStatusText = lastPhysicalDisplayUpdatedAt
     ? formatRelative(lastPhysicalDisplayUpdatedAt)
     : (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
-  const manualPresentation = manualUpdateInProgress
-    ? formatExplicitUpdateEstimate()
-    : idleFreshnessPresentation
-  const updateStatusText = selectUpdatePresentation(
-    manualUpdatePresentationActive || !manualUpdateStateResolved,
-    manualPresentation,
-    idleFreshnessPresentation
-  )
 
   useEffect(() => {
     if (!frameUpdateError) return
@@ -1777,7 +1750,6 @@ export default function HomePage() {
         !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
       ) {
         pendingFrameConfigUpdatedAtRef.current = null
-        setShowNextUpdateAfterSave(false)
       }
       return renderIso || null
     } catch {
@@ -1807,7 +1779,6 @@ export default function HomePage() {
       !isFrameUpdatePending(pendingFrameConfigUpdatedAtRef.current, renderIso || null)
     ) {
       pendingFrameConfigUpdatedAtRef.current = null
-      setShowNextUpdateAfterSave(false)
     }
     return renderIso || null
   }
@@ -2134,7 +2105,6 @@ export default function HomePage() {
 
   async function selectDevice(id: string) {
     isLoadedRef.current = false
-    setManualUpdateStateResolved(false)
     restoreManualUpdateState(id)
     setActiveDeviceId(id)
     setLastPhysicalDisplayUpdatedAt(null)
@@ -2336,7 +2306,7 @@ export default function HomePage() {
         pinned_tabs: pinnedModuleTabs,
         layout_module_memory: nextLayoutModuleMemory,
       }
-      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){setShowNextUpdateAfterSave(false);return false}settingsJson={...settingsJson,...payload}}
+      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return false}settingsJson={...settingsJson,...payload}}
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
         p_device_id: deviceId,
@@ -2381,7 +2351,6 @@ export default function HomePage() {
 
       setDirty(false)
       pendingFrameConfigUpdatedAtRef.current = new Date().toISOString()
-      setShowNextUpdateAfterSave(true)
       await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
 
       return true
@@ -2396,72 +2365,99 @@ export default function HomePage() {
   async function handleExplicitUpdate() {
     const deviceId = activeDeviceId
     if (!deviceId || updateActionInFlightRef.current) return
-    if(activeCustomLayoutId){
-      const custom=customLayouts.find(item=>item.id===activeCustomLayoutId)
-      if(custom&&!validateCustomGeometry(custom.cells,{requirePhysical:true}).valid){setFrameUpdateError('This layout isn’t supported on the frame yet.');return}
+    if (activeCustomLayoutId) {
+      const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
+      if (custom && !validateCustomGeometry(custom.cells, { requirePhysical: true }).valid) {
+        setFrameUpdateError('This layout isn’t supported on the frame yet.')
+        return
+      }
     }
-    setFrameUpdateError('')
 
+    setFrameUpdateError('')
     updateActionInFlightRef.current = true
     const operationId = ++updateOperationIdRef.current
-    const requestedAt = Date.now()
-    const deadline = requestedAt + DEVICE_UPDATE_TIMEOUT_MS
-    const requestId = crypto.randomUUID()
-    const persistedRequest: PersistedManualUpdate = {
-      phase: 'requesting', requestId, requestedRevision: null, requestedAt, deadline,
-    }
-    writeManualUpdate(window.localStorage, deviceId, persistedRequest)
-    // Claim presentation precedence synchronously with the click. Saving is the
-    // first phase of this manual update, not a scheduled-refresh state.
-    setExplicitUpdateStatus('requesting')
-    setManualUpdateRequestedAt(requestedAt)
+    setExplicitUpdateStatus('saving')
 
     const saved = await persistSettings(deviceId)
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
-        clearManualUpdate(window.localStorage, deviceId)
         setExplicitUpdateStatus('idle')
-        setManualUpdateRequestedAt(null)
       }
       updateActionInFlightRef.current = false
       return
     }
 
+    const requestedAt = Date.now()
+    const requestId = crypto.randomUUID()
+    const persistedRequest: PersistedManualUpdate = {
+      phase: 'requesting',
+      requestId,
+      requestedRevision: null,
+      requestedAt,
+      deadline: requestedAt + DEVICE_UPDATE_TIMEOUT_MS,
+    }
+    // A durable display operation only exists after settings are committed.
+    writeManualUpdate(window.localStorage, deviceId, persistedRequest)
+    setExplicitUpdateStatus('requesting')
+
     try {
-      setExplicitUpdateStatus('requesting')
-      const requestedRevision = await requestDeviceUpdate(supabase, deviceId, requestId)
+      const requestedRevision = await requestManualUpdateRevision(
+        requestId,
+        persistedRequest.deadline,
+        (id) => requestDeviceUpdate(supabase, deviceId, id)
+      )
+      if (requestedRevision == null) {
+        clearManualUpdate(window.localStorage, deviceId)
+        setExplicitUpdateStatus('idle')
+        setFrameUpdateError(language === 'no'
+          ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.'
+          : 'Settings were saved, but the update could not be started.')
+        return
+      }
       if (activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) return
 
       updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
-      setExplicitUpdateStatus('updating')
-      const persistedUpdate: PersistedManualUpdate = { ...persistedRequest, phase: 'updating', requestedRevision }
+      const persistedUpdate: PersistedManualUpdate = {
+        ...persistedRequest,
+        phase: 'waiting_for_display',
+        requestedRevision,
+      }
       writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
+      setExplicitUpdateStatus('waiting_for_display')
 
-      while (Date.now() < requestedAt + MANUAL_UPDATE_VISIBLE_MS) {
+      while (Date.now() < persistedUpdate.deadline) {
         const operation = updateOperationRef.current
         if (!operation || operation.id !== operationId || activeDeviceIdRef.current !== deviceId) return
-
         try {
           const updateStatus = await getDeviceUpdateStatus(supabase, deviceId)
           if (revisionHasBeenDisplayed(updateStatus.displayedRevision, operation.requestedRevision)) {
-            if (updateStatus.lastDisplayedAt) setLastPhysicalDisplayUpdatedAt(updateStatus.lastDisplayedAt)
+            clearManualUpdate(window.localStorage, deviceId)
+            updateOperationRef.current = null
+            setExplicitUpdateStatus('idle')
+            // The revision ACK establishes completion; physical status alone
+            // owns the visible freshness timestamp.
+            await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
             return
           }
-
         } catch {
-          // Transient network/offline failures keep waiting until the bounded deadline.
+          // Keep polling the exact revision through transient network failures.
         }
-
         await new Promise((resolve) => window.setTimeout(resolve, DEVICE_UPDATE_POLL_MS))
       }
 
-      if (updateOperationRef.current?.id === operationId) updateOperationRef.current = null
+      clearManualUpdate(window.localStorage, deviceId)
+      updateOperationRef.current = null
+      setExplicitUpdateStatus('idle')
+      setFrameUpdateError(language === 'no'
+        ? 'Rammen har ikke bekreftet oppdateringen ennå.'
+        : "Frame hasn’t confirmed the update yet.")
     } catch {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
         clearManualUpdate(window.localStorage, deviceId)
-        alert(language === 'no' ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.' : 'Settings were saved, but the update could not be started.')
         setExplicitUpdateStatus('idle')
-        setManualUpdateRequestedAt(null)
+        setFrameUpdateError(language === 'no'
+          ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.'
+          : 'Settings were saved, but the update could not be started.')
       }
     } finally {
       if (updateOperationIdRef.current === operationId) updateActionInFlightRef.current = false
@@ -2668,9 +2664,16 @@ async function handleSelectTab(k: TabKey) {
 
                 {layoutFlow?.mode==='edit'&&<button type="button" onClick={()=>deleteCustom(layoutFlow.layout)} className="mt-4 text-xs tracking-[.16em] text-red-400">DELETE LAYOUT</button>}
 
-                <div role={(layoutFlow?layoutDraftError:frameUpdateError)?'alert':undefined} className="mt-6 min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
-                  {layoutFlow?layoutDraftError:(frameUpdateError||updateStatusText)}
-                </div>
+                {(layoutFlow ? layoutDraftError : frameUpdateError) && (
+                  <div role="alert" className="mt-6 max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]">
+                    {layoutFlow ? layoutDraftError : frameUpdateError}
+                  </div>
+                )}
+                {!layoutFlow && (
+                  <div className={`${frameUpdateError ? 'mt-2' : 'mt-6'} min-h-[16px] max-w-[360px] text-center text-xs tracking-widest text-[color:var(--fg-40)]`}>
+                    {updateStatusText}
+                  </div>
+                )}
               </div>
             )}
 
