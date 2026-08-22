@@ -1,7 +1,5 @@
-export const MANUAL_UPDATE_VISIBLE_MS = 2 * 60_000
-
 export type PersistedManualUpdate = {
-  phase: 'requesting' | 'updating'
+  phase: 'requesting' | 'waiting_for_display'
   requestId: string
   requestedRevision: number | null
   requestedAt: number
@@ -21,11 +19,11 @@ export function readManualUpdate(storage: StorageLike, deviceId: string): Persis
     const value = JSON.parse(storage.getItem(manualUpdateStorageKey(deviceId)) || 'null') as Partial<PersistedManualUpdate> | null
     if (!value) return null
     const phase = value.phase
-    if (phase !== 'requesting' && phase !== 'updating') return null
+    if (phase !== 'requesting' && phase !== 'waiting_for_display') return null
     if (typeof value.requestId !== 'string' || value.requestId.length < 8) return null
     if (!Number.isFinite(value.requestedAt) || !Number.isFinite(value.deadline)) return null
     const revision = value.requestedRevision
-    if (phase === 'updating' && (!Number.isSafeInteger(revision) || revision! < 0)) return null
+    if (phase === 'waiting_for_display' && (!Number.isSafeInteger(revision) || revision! < 0)) return null
     return {
       phase,
       requestId: value.requestId,
@@ -38,23 +36,10 @@ export function readManualUpdate(storage: StorageLike, deviceId: string): Persis
   }
 }
 
-export function manualUpdateEstimate(requestedAt: number, now = Date.now()) {
-  const elapsed = Math.max(0, now - requestedAt)
-  if (elapsed >= MANUAL_UPDATE_VISIBLE_MS) return null
-  if (elapsed >= 105_000) return 'under15' as const
-  if (elapsed >= 90_000) return 'under30' as const
-  if (elapsed >= 60_000) return 'under1' as const
-  return 'under2' as const
-}
-
 export function writeManualUpdate(storage: StorageLike, deviceId: string, update: PersistedManualUpdate) {
   storage.setItem(manualUpdateStorageKey(deviceId), JSON.stringify(update))
 }
 
 export function clearManualUpdate(storage: StorageLike, deviceId: string) {
   storage.removeItem(manualUpdateStorageKey(deviceId))
-}
-
-export function selectUpdatePresentation<T>(activeManualUpdate: boolean, manualPresentation: T, scheduledPresentation: T) {
-  return activeManualUpdate ? manualPresentation : scheduledPresentation
 }

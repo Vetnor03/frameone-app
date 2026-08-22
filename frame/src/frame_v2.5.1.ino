@@ -592,6 +592,8 @@ static void runInteractiveMode(
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
   uint8_t inactiveAckFailures = 0;
+  uint8_t consecutiveProbeFailures = 0;
+  uint32_t configRetryMs = INTERACTIVE_POLL_MS;
 
   while (WiFi.status() == WL_CONNECTED) {
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
@@ -608,11 +610,18 @@ static void runInteractiveMode(
         state.requestedRevision > rendered) {
       const uint64_t revisionToDisplay = state.requestedRevision;
       Serial.printf("LiveUpdate: revision %" PRIu64 " pending\n", revisionToDisplay);
-      if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return;
-      if (retryRenderedAck(state.displayedRevision)) {
-        state.displayedRevision = revisionToDisplay;
-      } else if (!state.appActive) {
-        inactiveAckFailures++;
+      if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) {
+        // The revision remains pending. Stay interactive and retry with a
+        // bounded backoff rather than turning one transient fetch into sleep.
+        delay(configRetryMs);
+        configRetryMs = min<uint32_t>(configRetryMs * 2, 5000);
+      } else {
+        configRetryMs = INTERACTIVE_POLL_MS;
+        if (retryRenderedAck(state.displayedRevision)) {
+          state.displayedRevision = revisionToDisplay;
+        } else if (!state.appActive) {
+          inactiveAckFailures++;
+        }
       }
     }
 
@@ -627,9 +636,12 @@ static void runInteractiveMode(
     delay(INTERACTIVE_POLL_MS);
     LiveUpdateState next{};
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
-      Serial.println("LiveUpdate: interactive probe failed");
-      return;
+      consecutiveProbeFailures++;
+      Serial.printf("LiveUpdate: interactive probe failed (%u/3)\n", consecutiveProbeFailures);
+      if (consecutiveProbeFailures >= 3) return;
+      continue;
     }
+    consecutiveProbeFailures = 0;
 
     if (next.appActive != lastActive ||
         next.requestedRevision != lastRequested ||

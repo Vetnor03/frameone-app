@@ -89,3 +89,33 @@ def test_revision_contract_uses_uint64_and_rejects_invalid_shapes():
     assert "uint64_t requestedRevision" in (ROOT / "src/network/LiveUpdate.h").read_text()
     assert "value.is<bool>()" in LIVE
     assert "displayed > requested" in LIVE
+
+
+def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
+    interactive = MAIN[MAIN.index("static void runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
+    assert "if (!fetchAndRenderExplicit" in interactive
+    assert "configRetryMs = min<uint32_t>(configRetryMs * 2, 5000)" in interactive
+    assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in interactive
+
+
+def test_interactive_probe_requires_three_consecutive_failures():
+    interactive = MAIN[MAIN.index("static void runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
+    assert "consecutiveProbeFailures++" in interactive
+    assert "consecutiveProbeFailures >= 3" in interactive
+    assert "consecutiveProbeFailures = 0" in interactive
+
+
+def test_manual_render_does_not_modify_normal_sync_clock():
+    interactive = MAIN[MAIN.index("static void runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
+    assert "normalSyncElapsedSeconds" not in interactive
+    assert "UpdateChecker::noteWake" not in interactive
+
+
+def test_normal_sync_clock_and_explicit_ack_remain_independent():
+    assert "static const uint32_t NORMAL_SYNC_SECONDS = 900" in MAIN
+    setup = MAIN.index("void setup()")
+    scheduler = MAIN[MAIN.index("if (wakeCause == ESP_SLEEP_WAKEUP_TIMER)", setup):MAIN.index('Serial.print("device_id: ")', setup)]
+    assert "normalSyncElapsedSeconds += PROBE_WAKE_SECONDS" in scheduler
+    assert "normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS" in scheduler
+    # Only a completed physical render can be persisted for later ACK.
+    assert MAIN.index("renderLoadedDashboard(batt, pwr)", MAIN.index("fetchAndRenderExplicit")) < MAIN.index("LiveUpdate::saveRenderedAwaitingAck(revision)")

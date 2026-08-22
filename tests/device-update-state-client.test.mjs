@@ -28,7 +28,7 @@ test('explicit Update saves before requesting and locks duplicate clicks', () =>
   assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestDeviceUpdate(supabase, deviceId, requestId)'))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending\}/)
+  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending \|\| layoutDraftSaving\}/)
 })
 
 test('backend acknowledgement remains diagnostic and does not control visible completion', () => {
@@ -50,7 +50,7 @@ test('frame/tab/auth changes invalidate stale Update operations', () => {
 })
 
 test('network errors remain non-destructive until timeout', () => {
-  assert.match(home, /Transient network\/offline failures keep waiting until the bounded deadline/)
-  assert.doesNotMatch(home, /not confirmed|unconfirmed/i)
+  assert.match(home, /Keep polling the exact revision through transient network failures/)
+  assert.match(home, /Frame hasn’t confirmed the update yet\./)
   assert.match(home, /Settings were saved, but the update could not be started\./)
 })
