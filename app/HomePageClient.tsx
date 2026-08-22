@@ -13021,7 +13021,7 @@ function RemindersModuleSettingsTab({
   const calendarAnimTimerRef = useRef<number | null>(null)
 
   const todayYmd = toLocalYmd(new Date())
-  async function loadReminders() {
+  async function loadReminders({ silent = false }: { silent?: boolean } = {}) {
     if (!activeDeviceId) {
       setReminders([])
       setAvailableSources(['remind'])
@@ -13029,7 +13029,7 @@ function RemindersModuleSettingsTab({
     }
 
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       const { data, error } = await supabase
         .from('reminders')
@@ -13042,8 +13042,10 @@ function RemindersModuleSettingsTab({
 
       if (error) {
         alert(error.message)
-        setReminders([])
-        setCompletedOccurrences([])
+        if (!silent) {
+          setReminders([])
+          setCompletedOccurrences([])
+        }
         return
       }
       const { data: completionsData, error: completionsError } = await supabase
@@ -13053,7 +13055,7 @@ function RemindersModuleSettingsTab({
 
       if (completionsError) {
         alert(completionsError.message)
-        setCompletedOccurrences([])
+        if (!silent) setCompletedOccurrences([])
       } else {
         setCompletedOccurrences(
           (completionsData || [])
@@ -13179,7 +13181,7 @@ const manualItems: ReminderUiItem[] = (data || [])
 
       setReminders([...manualItems, ...integrationItems])
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -13411,7 +13413,7 @@ const sortedReminders = useMemo(() => {
       })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || (language === 'no' ? 'Kunne ikke lagre frame-valget' : 'Could not save frame visibility'))
-      window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+      await loadReminders({ silent: true })
     } catch (error) {
       setReminders(previous)
       setSkipToggleError(error instanceof Error && error.message ? error.message : (language === 'no' ? 'Kunne ikke lagre frame-valget' : 'Could not save frame visibility'))
