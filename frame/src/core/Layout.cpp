@@ -9,6 +9,7 @@
 #include "GeneratedLayouts.h"
 
 #include "ModuleDate.h"
+#include "ModuleDateAdaptive.h"
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleStocks.h"
@@ -99,13 +100,10 @@ bool validateGridLayout(const GridLayout& layout) {
 }
 
 bool isLegacyRenderableGridLayout(const GridLayout& layout) {
-  if (!validateGridLayout(layout)) return false;
-  for (uint8_t i = 0; i < layout.count; ++i) {
-    const CellSize size = layout.cells[i].size;
-    if (size != CELL_SMALL && size != CELL_MEDIUM && size != CELL_LARGE &&
-        size != CELL_XL) return false;
-  }
-  return true;
+  // Historical API name retained for parser compatibility. From Phase E1 on,
+  // this is the structural staging gate; module-aware capability is enforced
+  // atomically by prepareCustomRender() before any custom pixels are drawn.
+  return validateGridLayout(layout);
 }
 
 bool setGridLayout(GridLayout& destination, const GridCell* source, int count) {
@@ -117,8 +115,13 @@ bool setGridLayout(GridLayout& destination, const GridCell* source, int count) {
 
 bool resolveGridCell(const GridCell& g, Cell& c) {
   if (!isValidGridCell(g)) return false;
-  c = Cell{gridX(g.col), gridY(g.row), gridX(g.col + g.colSpan) - gridX(g.col),
-           gridY(g.row + g.rowSpan) - gridY(g.row), g.slot, g.size};
+  c = Cell{
+    gridX(g.col), gridY(g.row),
+    gridX(g.col + g.colSpan) - gridX(g.col),
+    gridY(g.row + g.rowSpan) - gridY(g.row),
+    g.slot, g.size,
+    g.col, g.row, g.colSpan, g.rowSpan
+  };
   return true;
 }
 
@@ -274,9 +277,8 @@ struct CustomRenderPlan {
 };
 
 // The dashboard render entry point is called synchronously by Arduino's loopTask;
-// GxEPD2 also completes its paged update before drawWithContent() returns.  Keep
-// D2's fixed, allocation-free work areas in BSS rather than multiplying the
-// loopTask stack requirement.  There are no ISR or second-task Layout callers.
+// GxEPD2 also completes its paged update before drawWithContent() returns. Keep
+// fixed, allocation-free work areas in BSS rather than multiplying loopTask stack.
 struct RenderWorkspace {
   CustomRenderPlan prepared;
   CustomRenderPlan staging;
@@ -304,9 +306,16 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
   CustomRenderPlan& staged = g_renderWorkspace.staging;
   if (!buildGridCells(custom.grid, staged.cells, MAX_GRID_CELLS, staged.cellCount)) return false;
   for (int i = 0; i < staged.cellCount; ++i) {
-    // D2's hard safety boundary: adaptive cells must not reach ModuleRenderer.
-    if (staged.cells[i].size == CELL_ADAPTIVE ||
-        !(assignedSlots & ((uint16_t)1U << staged.cells[i].slot))) return false;
+    const Cell& cell = staged.cells[i];
+    if (!(assignedSlots & ((uint16_t)1U << cell.slot))) return false;
+    const char* module = ModuleRenderer::moduleNameForSlot(
+      custom.assigns, custom.assignCount, cell.slot);
+    // Keep the adaptive boundary explicit: Phase E1 allows it only through a
+    // renderer capability check (currently Date only). Anchors are checked too.
+    if (staged.cells[i].size == CELL_ADAPTIVE &&
+        !ModuleRenderer::canRenderCell(module, cell)) return false;
+    if (staged.cells[i].size != CELL_ADAPTIVE &&
+        !ModuleRenderer::canRenderCell(module, cell)) return false;
   }
 
   GridDividerLayout& logical = g_renderWorkspace.logicalDividers;
@@ -327,6 +336,7 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   const LayoutKey effectiveKey = key == LAYOUT_CUSTOM && !customReady ? LAYOUT_DEFAULT : key;
 
   ModuleDate::setConfig(&cfg);
+  ModuleDateAdaptive::setConfig(&cfg);
   ModuleWeather::setConfig(&cfg);
   ModuleSurf::setConfig(&cfg);
   ModuleStocks::setConfig(&cfg);
