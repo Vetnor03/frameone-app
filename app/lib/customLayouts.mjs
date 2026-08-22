@@ -2,6 +2,12 @@ export const BUILT_IN_LAYOUT_KEYS = Object.freeze(['default', 'pyramid', 'square
 export const CUSTOM_LAYOUT_NAME_MAX = 40
 export const SUPPORTED_PHYSICAL_GEOMETRIES = new Set(['4x1', '2x2', '4x2', '4x4'])
 
+export function supportsPhysicalCustomCell(cell) {
+  const geometry = `${cell?.colSpan}x${cell?.rowSpan}`
+  if (SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry)) return true
+  return typeof cell?.module === 'string' && cell.module.trim().toLowerCase() === 'date'
+}
+
 export function normalizeLayoutName(value) {
   return Array.from(String(value ?? '').trim().replace(/\s+/gu, ' ').toLocaleUpperCase()).slice(0, CUSTOM_LAYOUT_NAME_MAX).join('')
 }
@@ -33,7 +39,7 @@ export function validateCustomGeometry(cells, { requirePhysical = true, requireM
     if (slot < 0 || slot > 15 || slots.has(slot)) errors.push(slots.has(slot) ? 'duplicate_slot' : 'invalid_slot')
     slots.add(slot)
     if (col < 0 || row < 0 || colSpan < 1 || rowSpan < 1 || col + colSpan > 4 || row + rowSpan > 4) { errors.push('out_of_bounds'); continue }
-    if (requirePhysical && !SUPPORTED_PHYSICAL_GEOMETRIES.has(`${colSpan}x${rowSpan}`)) unsupportedSlots.push(slot)
+    if (requirePhysical && !supportsPhysicalCustomCell(cell)) unsupportedSlots.push(slot)
     if (requireModules && (typeof cell.module !== 'string' || !cell.module.trim())) errors.push('missing_module')
     for (let y = row; y < row + rowSpan; y++) for (let x = col; x < col + colSpan; x++) {
       const index = y * 4 + x
