@@ -13030,7 +13030,6 @@ function RemindersModuleSettingsTab({
 
     try {
       setLoading(true)
-      setAvailableSources(['remind'])
 
       const { data, error } = await supabase
         .from('reminders')
