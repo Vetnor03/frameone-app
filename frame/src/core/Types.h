@@ -23,6 +23,12 @@ struct Cell {
   int x, y, w, h;
   uint8_t slot;
   CellSize size;
+  // Preserve logical 4x4 geometry for responsive physical renderers.
+  // Kept after the legacy fields so existing aggregate initializers remain valid.
+  uint8_t gridCol = 0;
+  uint8_t gridRow = 0;
+  uint8_t colSpan = 0;
+  uint8_t rowSpan = 0;
 };
 
 struct GridCell {
