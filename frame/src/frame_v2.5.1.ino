@@ -652,7 +652,9 @@ static InteractiveModeResult runInteractiveMode(
         // The revision remains pending. Stay interactive and retry with a
         // bounded backoff rather than turning one transient fetch into sleep.
         delay(configRetryMs);
-        configRetryMs = min<uint32_t>(configRetryMs * 2, 5000);
+        configRetryMs = (configRetryMs >= 2500U)
+          ? 5000U
+          : configRetryMs * 2U;
       } else {
         configRetryMs = INTERACTIVE_POLL_MS;
         if (retryRenderedAck(state.displayedRevision)) {

@@ -94,7 +94,15 @@ def test_revision_contract_uses_uint64_and_rejects_invalid_shapes():
 def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
     interactive = MAIN[MAIN.index("static InteractiveModeResult runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
     assert "if (!fetchAndRenderExplicit" in interactive
-    assert "configRetryMs = min<uint32_t>(configRetryMs * 2, 5000)" in interactive
+    assert "configRetryMs >= 2500U" in interactive
+    assert "? 5000U" in interactive
+    assert ": configRetryMs * 2U" in interactive
+    retry_ms = 1500
+    observed = []
+    for _ in range(4):
+        observed.append(retry_ms)
+        retry_ms = 5000 if retry_ms >= 2500 else retry_ms * 2
+    assert observed == [1500, 3000, 5000, 5000]
     assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in interactive
 
 
