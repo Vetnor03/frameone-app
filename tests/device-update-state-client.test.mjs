@@ -25,17 +25,17 @@ test('activity, request, and status use the selected device and bearer session',
 
 test('explicit Update saves before requesting and locks duplicate clicks', () => {
   const flow = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('async function logout'))
-  assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestDeviceUpdate(supabase, deviceId, requestId)'))
+  assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestManualUpdateRevision('))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending\}/)
+  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending \|\| layoutDraftSaving\}/)
 })
 
 test('backend acknowledgement remains diagnostic and does not control visible completion', () => {
   assert.match(client, /DEVICE_UPDATE_POLL_MS = 1_000/)
   assert.match(client, /DEVICE_UPDATE_TIMEOUT_MS = 3 \* 60_000/)
   assert.match(client, /return displayedRevision >= requestedRevision/)
-  assert.match(home, /requestedRevision = await requestDeviceUpdate/)
+  assert.match(home, /requestedRevision = await requestManualUpdateRevision/)
   assert.match(home, /revisionHasBeenDisplayed\(updateStatus\.displayedRevision, operation\.requestedRevision\)/)
   assert.match(home, /revisionHasBeenDisplayed/)
   assert.doesNotMatch(home, /setExplicitUpdateStatus\('updated'\)|setExplicitUpdateStatus\('unconfirmed'\)/)
@@ -50,7 +50,7 @@ test('frame/tab/auth changes invalidate stale Update operations', () => {
 })
 
 test('network errors remain non-destructive until timeout', () => {
-  assert.match(home, /Transient network\/offline failures keep waiting until the bounded deadline/)
-  assert.doesNotMatch(home, /not confirmed|unconfirmed/i)
+  assert.match(home, /Keep polling the exact revision through transient network failures/)
+  assert.match(home, /Frame hasn’t confirmed the update yet\./)
   assert.match(home, /Settings were saved, but the update could not be started\./)
 })

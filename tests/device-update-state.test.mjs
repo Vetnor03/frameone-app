@@ -13,6 +13,7 @@ const legacyRefresh = readFileSync(new URL('../app/api/device/refresh/route.ts',
 const probeMigration = readFileSync(new URL('../supabase/migrations/20260810120000_track_device_update_probes.sql', import.meta.url), 'utf8')
 const updateClient = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+const manualRequestMigration = readFileSync(new URL('../supabase/migrations/20260822120000_manual_request_claims_activity.sql', import.meta.url), 'utf8')
 
 test('app operations authenticate a user and require device membership', () => {
   assert.match(auth, /supabase\.auth\.getUser\(token\)/)
@@ -37,6 +38,15 @@ test('requested revisions use one atomic upsert increment', () => {
   assert.match(increment, /on conflict \(device_id\) do update/)
   assert.match(increment, /requested_revision = device_update_state\.requested_revision \+ 1/)
   assert.match(request, /requested_revision: data/)
+})
+
+test('manual request extends activity and ledger replay cannot increment twice', () => {
+  const activity = manualRequestMigration.indexOf('set app_active_until = greatest')
+  const ledgerLookup = manualRequestMigration.indexOf('select requested_revision into result')
+  const earlyReturn = manualRequestMigration.indexOf('if result is not null then return result')
+  const increment = manualRequestMigration.indexOf('set requested_revision = requested_revision + 1')
+  assert.ok(activity < ledgerLookup && ledgerLookup < earlyReturn && earlyReturn < increment)
+  assert.match(manualRequestMigration, /clock_timestamp\(\) \+ interval '2 minutes'/)
 })
 
 test('device probe and ACK use existing per-device bearer authentication', () => {
@@ -95,30 +105,17 @@ test('physical probes provide a real wake-cycle anchor for the app estimate', ()
   assert.match(updateClient, /lastProbeAt:/)
 })
 
-test('explicit update uses four coarse elapsed phases without exact seconds', () => {
-  assert.match(home, /Update in less than 2 minutes/)
-  assert.match(home, /Update in less than 1 minute/)
-  assert.match(home, /Update in less than 30 seconds/)
-  assert.match(home, /Update in less than 15 seconds/)
-  assert.doesNotMatch(home, /remainingSec|Update in \$\{remainingSec\}/)
-  assert.doesNotMatch(home, /not confirmed|unconfirmed/i)
+test('manual update has no estimated countdown or fabricated timestamp', () => {
+  assert.doesNotMatch(home, /MANUAL_UPDATE_VISIBLE_MS|manualUpdateEstimate|formatExplicitUpdateEstimate/)
+  assert.doesNotMatch(home, /Update in less than|Oppdatering om mindre enn/)
+  assert.doesNotMatch(home, /requestedAt \+.*setLastPhysicalDisplayUpdatedAt/)
 })
 
-test('manual update presentation takes precedence from saving through completion', () => {
-  const handler = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('\n\n  async function logout'))
-  const presentation = home.slice(home.indexOf('const manualUpdateInProgress'), home.indexOf('\n\n  useEffect', home.indexOf('const manualUpdateInProgress')))
-
-  // The click enters the manual state before the first awaited save, so the
-  // render committed for SAVING can never use the scheduled countdown branch.
-  assert.ok(handler.indexOf("setExplicitUpdateStatus('requesting')") < handler.indexOf('await persistSettings(deviceId)'))
-  assert.match(handler, /setManualUpdateRequestedAt\(requestedAt\)[\s\S]*await persistSettings/)
-
-  // Requesting (save/wait), updating (awake/download/display), and updated
-  // (completion) all remain on the manual presentation side of one branch.
-  assert.match(presentation, /manualUpdateInProgress = explicitUpdateStatus === 'requesting' \|\| explicitUpdateStatus === 'updating'/)
-  assert.match(presentation, /manualUpdatePresentationActive = explicitUpdateStatus !== 'idle'/)
-  assert.match(presentation, /idleFreshnessPresentation = lastPhysicalDisplayUpdatedAt[\s\S]*manualUpdateInProgress[\s\S]*formatExplicitUpdateEstimate\(\)[\s\S]*manualUpdatePresentationActive[\s\S]*idleFreshnessPresentation/)
-  assert.match(presentation, /selectUpdatePresentation\([\s\S]*manualUpdatePresentationActive \|\| !manualUpdateStateResolved[\s\S]*manualPresentation,[\s\S]*idleFreshnessPresentation/)
+test('manual update keeps physical freshness visible through every operation phase', () => {
+  assert.match(home, /explicitUpdateStatus[^\n]*'idle' \| 'saving' \| 'requesting' \| 'waiting_for_display'/)
+  assert.match(home, /const updateStatusText = lastPhysicalDisplayUpdatedAt/)
+  assert.match(home, /manualUpdateInProgress = explicitUpdateStatus !== 'idle'/)
+  assert.match(home, /Frame hasn’t confirmed the update yet\./)
 })
 
 test('idle copy ages the last confirmed physical display render and never predicts a refresh', () => {
@@ -130,11 +127,10 @@ test('idle copy ages the last confirmed physical display render and never predic
   assert.doesNotMatch(home, /setLastPhysicalDisplayUpdatedAt\(new Date\(\)\.toISOString\(\)\)/)
 })
 
-test('backend acknowledgement remains available for internal freshness reconciliation', () => {
+test('revision acknowledgement refreshes physical status instead of supplying freshness', () => {
   assert.match(appStatus, /last_displayed_at:/)
-  assert.match(updateClient, /lastDisplayedAt: typeof body\?\.last_displayed_at/)
-  assert.match(home, /revisionHasBeenDisplayed[\s\S]*backend\.lastDisplayedAt[\s\S]*setLastPhysicalDisplayUpdatedAt/)
-  assert.match(home, /revisionHasBeenDisplayed[\s\S]*updateStatus\.lastDisplayedAt[\s\S]*setLastPhysicalDisplayUpdatedAt/)
+  assert.match(home, /revisionHasBeenDisplayed[\s\S]*refreshPhysicalFrameState\(deviceId/)
+  assert.doesNotMatch(home, /lastDisplayedAt[^\n]*setLastPhysicalDisplayUpdatedAt/)
 })
 
 test('API errors do not expose database messages and device IDs are bounded', () => {
