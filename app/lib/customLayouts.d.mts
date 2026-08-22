@@ -3,6 +3,7 @@ export type CustomLayout = { id: string; deviceId: string; ownerUserId: string; 
 export const BUILT_IN_LAYOUT_KEYS: readonly ['default', 'pyramid', 'square', 'full']
 export const CUSTOM_LAYOUT_NAME_MAX: number
 export const SUPPORTED_PHYSICAL_GEOMETRIES: Set<string>
+export function supportsPhysicalCustomCell(cell: CustomLayoutCell & {module?: string}): boolean
 export function normalizeLayoutName(value: unknown): string
 export function nextCustomLayoutName(layouts: Array<{name?:unknown}>): string
 export function orderedLayoutItems(customLayouts: CustomLayout[]): Array<{type: string; key: string; id: string; layout?: CustomLayout}>
