@@ -139,7 +139,7 @@ test('Date composition follows physical geometry and progressively discloses cal
   assert.equal(medium.family,'calendar-split');assert.ok(medium.currentCalendar);assert.equal(medium.nextCalendar,null)
   assert.equal(tallLarge.family,'calendar-split');assert.ok(tallLarge.currentCalendar);assert.equal(tallLarge.nextCalendar,null)
   assert.equal(balanced.family,'calendar-split');assert.ok(balanced.currentCalendar);assert.equal(balanced.nextCalendar,null)
-  assert.equal(expanded.family,'calendar-split');assert.ok(expanded.currentCalendar);assert.equal(expanded.nextCalendar,null)
+  assert.equal(expanded.family,'calendar-split');assert.ok(expanded.currentCalendar);assert.equal(expanded.nextCalendar,null);assert.ok(expanded.holidayRows<=1)
   const expandedLayout=dateLayout(responsiveCellProfile(4,3,784,342),expanded)
   assert.equal(expandedLayout.nextCalendarRect,null);assert.ok(expandedLayout.calendarRect.width>expandedLayout.heroRect.width)
   const sameSpanLandscape=dateComposition(responsiveCellProfile(3,2,600,160),dateStudioPresets.normal)

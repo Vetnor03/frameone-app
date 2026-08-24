@@ -13,7 +13,7 @@ function tiling(w,h,module='date') {
   return cells
 }
 const profile=(colSpan,rowSpan)=>({width:boundsX[colSpan]-9,height:boundsY[rowSpan]-22,
-  orientation:colSpan>rowSpan?'landscape':colSpan<rowSpan?'portrait':'square'})
+  colSpan,rowSpan,orientation:colSpan>rowSpan?'landscape':colSpan<rowSpan?'portrait':'square'})
 
 test('physical geometries select the finished Studio visual policy',()=>{
   const micro=dateComposition(profile(1,1),dateStudioPresets.extreme),microLayout=dateLayout(profile(1,1),micro)
@@ -24,9 +24,9 @@ test('physical geometries select the finished Studio visual policy',()=>{
   for(const [w,h] of [[2,4],[3,3]]){const p=profile(w,h),composition=dateComposition(p,dateStudioPresets.extreme),layout=dateLayout(p,composition);assert.equal(composition.family,'calendar-split');assert.equal(composition.holidayRows,1);assert.ok(layout.holidayRect)}
   const expanded=dateComposition(profile(3,4),dateStudioPresets.extreme),expandedLayout=dateLayout(profile(3,4),expanded)
   assert.equal(expanded.family,'expanded');assert.ok(expanded.currentCalendar);assert.ok(expanded.nextCalendar);assert.equal(expanded.holidayRows,2);assert.ok(expandedLayout.holidayRect)
-  const wideLarge=dateComposition(profile(4,3),dateStudioPresets.extreme),wideLargeLayout=dateLayout(profile(4,3),wideLarge)
-  assert.equal(wideLarge.family,'calendar-split');assert.ok(wideLarge.currentCalendar);assert.equal(wideLarge.nextCalendar,null)
-  assert.equal(wideLargeLayout.nextCalendarRect,null);assert.ok(wideLargeLayout.calendarRect.width>wideLargeLayout.heroRect.width)
+  const fourByThree=dateComposition(profile(4,3),dateStudioPresets.extreme),fourByThreeLayout=dateLayout(profile(4,3),fourByThree)
+  assert.equal(fourByThree.family,'calendar-split');assert.ok(fourByThree.currentCalendar);assert.equal(fourByThree.nextCalendar,null);assert.ok(fourByThree.holidayRows<=1)
+  assert.equal(fourByThreeLayout.nextCalendarRect,null);assert.ok(fourByThreeLayout.calendarRect.width>fourByThreeLayout.heroRect.width)
 })
 
 test('all twelve Date adaptive geometries form complete eligible 4x4 plans with exact resolution',()=>{

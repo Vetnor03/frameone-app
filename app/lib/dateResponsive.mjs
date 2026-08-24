@@ -26,19 +26,19 @@ export function dateComposition(profile,state) {
   const {width,height,orientation}=profile
   const micro=width<150||height<88||(width<230&&height<140)
   const shallow=orientation==='landscape'&&height<170
-  const wideLargeSingleCalendar=width>=700&&height>=330&&height<400
+  const fourByThree=profile.colSpan===4&&profile.rowSpan===3
   let family=micro?'micro':shallow?'horizontal':'stack'
   let currentCalendar=null,nextCalendar=null,holidayRows=0
   if(width>=430&&height>=210){
     family='calendar-split'
-    const calendarWidth=wideLargeSingleCalendar?Math.floor(width*.62)-18:Math.floor(width*.48)-18
+    const calendarWidth=Math.floor(width*(fourByThree ? .62 : .48))-18
     currentCalendar=dateCalendarFeatures(calendarWidth,height-32,{title:height>=300})
   }
   if(!currentCalendar&&width>=330&&height>=400){
     family='calendar-split'
     currentCalendar=dateCalendarFeatures(width-36,Math.floor(height*.44)-18,{title:true})
   }
-  if(!wideLargeSingleCalendar&&((width>=700&&height>=330)||(width>=520&&height>=400))){
+  if(!fourByThree&&((width>=700&&height>=330)||(width>=520&&height>=400))){
     family='expanded'
     const calendarWidth=Math.floor(width*.48)-18,calendarHeight=Math.floor((height-42)/2)
     currentCalendar=dateCalendarFeatures(calendarWidth,calendarHeight,{title:true})
@@ -59,8 +59,7 @@ export function dateLayout(profile,composition) {
   let heroRect=inner,calendarRect=null,nextCalendarRect=null,holidayRect=null
   if(composition.currentCalendar){
     const gap=18,vertical=profile.width<430&&!composition.nextCalendar
-    const wideLargeSingleCalendar=profile.width>=700&&profile.height>=330&&profile.height<400&&!composition.nextCalendar
-    const heroWidth=Math.floor(inner.width*(wideLargeSingleCalendar ? .38 : .48))
+    const heroWidth=Math.floor(inner.width*(profile.colSpan===4&&profile.rowSpan===3 ? .38 : .48))
     heroRect=vertical?rect(inner.x,inner.y,inner.width,Math.floor(inner.height*.52)-gap/2):rect(inner.x,inner.y,heroWidth,inner.height)
     const right=vertical?rect(inner.x,heroRect.y+heroRect.height+gap,inner.width,inner.height-heroRect.height-gap):rect(inner.x+heroWidth+gap,inner.y,inner.width-heroWidth-gap,inner.height)
     if(composition.nextCalendar){
