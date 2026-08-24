@@ -6,7 +6,6 @@ import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, par
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
 
 const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824140000_reconcile_saved_recipe_legacy_schema.sql', import.meta.url), 'utf8')
-const atomicRecipeUpdateMigration = readFileSync(new URL('../supabase/migrations/20260824150000_update_saved_recipe_atomically.sql', import.meta.url), 'utf8')
 
 test('saved recipe repair migration restores the complete schema and access controls', () => {
   for (const column of ['id uuid default gen_random_uuid()', 'device_id text', 'name text', "locale text default 'en'", 'is_active boolean default true', 'source_url text', 'base_servings numeric', 'created_at timestamptz default now()', 'updated_at timestamptz default now()', 'recipe_id uuid', "category text default 'other'", 'is_optional boolean default false', 'quantity numeric', 'unit text', 'sort_order integer default 0', 'amount numeric']) {
@@ -128,7 +127,7 @@ test('recipe library loads alphabetically and supports live name search', async 
   assert.match(ui, /type="search" value=\{recipeSearch\} onChange=\{\(e\) => setRecipeSearch\(e\.target\.value\)\}/)
 })
 
-test('saved recipe previews restore every ingredient selected without a delete action', async () => {
+test('saved recipe previews restore every ingredient selected without ingredient removal controls', async () => {
   const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
   assert.match(recipeSheet, /next\.ingredients\.map\(\(item\) => \(\{ \.\.\.item, selected: true \}\)\)/)
@@ -153,13 +152,19 @@ test('saved recipe retains its ID when opened in preview', async () => {
   assert.match(recipeSheet, /setSavedRecipeId\(recipeId\)/)
 })
 
-test('saving an existing recipe updates atomically instead of inserting', async () => {
+test('saved recipe preview is read-only and offers confirmed cascading deletion', async () => {
   const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
-  const recipeSheet = ui.slice(ui.indexOf('async function saveRecipe()'), ui.indexOf('async function addSelectedIngredients()'))
-  assert.match(recipeSheet, /if \(savedRecipeId\) \{[\s\S]*?supabase\.rpc\('update_grocery_recipe_with_ingredients'/)
-  assert.match(recipeSheet, /\} else \{[\s\S]*?saveRecipeWithRollback/)
-  assert.match(atomicRecipeUpdateMigration, /update public\.grocery_recipes[\s\S]*delete from public\.grocery_recipe_ingredients[\s\S]*insert into public\.grocery_recipe_ingredients/)
-  assert.match(atomicRecipeUpdateMigration, /language plpgsql[\s\S]*security invoker/)
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  assert.match(recipeSheet, /savedRecipeId \? <div className="text-lg font-medium">\{draft\.name\}<\/div> : <input/)
+  assert.match(recipeSheet, /savedRecipeId \? <div>\{item\.name\}<\/div> : <input/)
+  assert.match(recipeSheet, /!savedRecipeId \? <button[^>]*onClick=\{saveRecipe\}/)
+  assert.match(recipeSheet, /savedRecipeId \? <button[^>]*onClick=\{deleteRecipe\}/)
+  assert.match(recipeSheet, /window\.confirm\(language === 'no' \? 'Slette denne oppskriften\?' : 'Delete this recipe\?'/)
+  assert.match(recipeSheet, /from\('grocery_recipes'\)\.delete\(\)\.eq\('id', savedRecipeId\)\.eq\('device_id', deviceId\)/)
+  assert.match(recipeSheet, /await loadSaved\(\{ preservePending: true \}\)/)
+  assert.match(recipeSheet, /'SLETTER OPPSKRIFT…' : 'DELETING RECIPE…'/)
+  assert.match(recipeSheet, /'OPPSKRIFT SLETTET' : 'RECIPE DELETED'/)
+  assert.match(recipeRepairMigration, /foreign key \(recipe_id\) references public\.grocery_recipes\(id\)[\s\S]*on delete cascade not valid/)
 })
 
 test('unchecked state is never persisted when explicitly saving recipe ingredients', async () => {
@@ -175,6 +180,6 @@ test('new imported and manual recipes still use insert with rollback protection'
   const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
   assert.match(recipeSheet, /showPreview\(payload\)/)
   assert.match(recipeSheet, /showPreview\(\{ name: manualName\.trim\(\)/)
-  assert.match(recipeSheet, /else \{[\s\S]*saveRecipeWithRollback\([\s\S]*\.from\('grocery_recipes'\)\.insert/)
+  assert.match(recipeSheet, /if \(!draft \|\| savedRecipeId\) return[\s\S]*saveRecipeWithRollback\([\s\S]*\.from\('grocery_recipes'\)\.insert/)
   assert.match(recipeSheet, /setSavedRecipeId\(created\.id\)/)
 })
