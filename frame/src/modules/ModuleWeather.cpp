@@ -1235,8 +1235,13 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       // Open-Meteo's hourly arrays share timestamps. Preserve the probability
       // for the current applicable hour; precipitation millimetres are never a
       // percentage fallback.
-      if (strcmp(ts, currentTimeIso) == 0 && i < (int)probabilityArr.size()) {
-        out.currentPrecipProbability = probabilityArr[i] | NAN;
+      const bool sameDateAsCurrent = strlen(ts) >= 10 && currentYMD[0] &&
+                                     strncmp(ts, currentYMD, 10) == 0;
+      if (sameDateAsCurrent && hour == currentHour && i < (int)probabilityArr.size()) {
+        const float probability = probabilityArr[i] | NAN;
+        if (!isnan(probability) && probability >= 0.0f && probability <= 100.0f) {
+          out.currentPrecipProbability = probability;
+        }
       }
 
       DayForecast& day = out.days[di];
@@ -2287,7 +2292,8 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool landscape = aspectRatio > 1.12f;
   const bool portrait = aspectRatio < 0.88f;
   const bool showCondition = area >= 2 && cfg.showCondition && data.condition[0];
-  const bool showRange = area >= 3 && (!isnan(data.loC) || !isnan(data.hiC));
+  const bool showRange = area >= 3 && cfg.showHiLo &&
+      (!isnan(data.loC) || !isnan(data.hiC));
   const bool showWind = area >= 3 &&
       (!isnan(data.currentWindMs) || !isnan(data.currentWindDirection));
   const bool showProbability = area >= 4 && !isnan(data.currentPrecipProbability);
