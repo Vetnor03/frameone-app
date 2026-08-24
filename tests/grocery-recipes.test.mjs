@@ -7,12 +7,17 @@ import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } fr
 
 const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824130000_repair_saved_recipe_schema.sql', import.meta.url), 'utf8')
 
-test('saved recipe repair migration restores device schema and access controls', () => {
-  for (const column of ['device_id text', 'source_url text', 'base_servings numeric', 'quantity numeric', 'unit text', 'sort_order integer not null default 0', 'amount numeric']) {
-    assert.match(recipeRepairMigration, new RegExp(`add column if not exists ${column}`))
+test('saved recipe repair migration restores the complete schema and access controls', () => {
+  for (const column of ['id uuid default gen_random_uuid()', 'device_id text', 'name text', "locale text default 'en'", 'is_active boolean default true', 'source_url text', 'base_servings numeric', 'created_at timestamptz default now()', 'updated_at timestamptz default now()', 'recipe_id uuid', "category text default 'other'", 'is_optional boolean default false', 'quantity numeric', 'unit text', 'sort_order integer default 0', 'amount numeric']) {
+    assert.ok(recipeRepairMigration.includes(`add column if not exists ${column}`), `missing repair column: ${column}`)
   }
+  for (const column of ['locale', 'is_active', 'created_at', 'updated_at', 'recipe_id', 'category', 'is_optional', 'sort_order']) {
+    assert.match(recipeRepairMigration, new RegExp(`alter column ${column} set not null`))
+  }
+  assert.match(recipeRepairMigration, /foreign key \(recipe_id\) references public\.grocery_recipes\(id\)[\s\S]*on delete cascade not valid/)
   assert.match(recipeRepairMigration, /grocery_recipes_device_id_idx[\s\S]*on public\.grocery_recipes \(device_id\)/)
   assert.match(recipeRepairMigration, /grocery_recipe_ingredients_recipe_id_idx[\s\S]*on public\.grocery_recipe_ingredients \(recipe_id\)/)
+  assert.match(recipeRepairMigration, /create trigger trg_set_grocery_recipes_updated_at[\s\S]*execute function public\.set_timestamp_updated_at\(\)/)
   assert.match(recipeRepairMigration, /for insert[\s\S]*device_id is not null[\s\S]*dm\.device_id = grocery_recipes\.device_id[\s\S]*dm\.user_id = auth\.uid\(\)/)
   assert.match(recipeRepairMigration, /on public\.grocery_recipe_ingredients for all[\s\S]*join public\.device_members dm on dm\.device_id = gr\.device_id[\s\S]*dm\.user_id = auth\.uid\(\)/)
   assert.match(recipeRepairMigration, /grant select, insert, update, delete on public\.grocery_recipes to authenticated/)
