@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { customPhysicalPayload, duplicateLayout, duplicateLayoutClientState, nextCustomLayoutName, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
+import { customPhysicalPayload, duplicateLayout, duplicateLayoutClientState, nextCustomLayoutName, normalizeLayoutName, orderedLayoutItems, remapAssignmentsAfterGeometryEdit, supportsPhysicalCustomCell, supportsPhysicalCustomLayout, validateCustomGeometry } from '../app/lib/customLayouts.mjs'
 import { sortCells } from '../app/lib/frameLayoutEditor.mjs'
 
 const cell=(slot,col,row,colSpan,rowSpan)=>({slot,col,row,colSpan,rowSpan})
@@ -26,10 +26,10 @@ test('duplicate becomes the visible and active custom layout with independent as
 test('all currently supported physical compositions pass',()=>{for(const cells of [rows,large,medium,full])assert.deepEqual(validateCustomGeometry(cells),{valid:true,errors:[],unsupportedSlots:[]})})
 test('structural persistence accepts an adaptive 1x3 and 3x3 partition',()=>{
   assert.deepEqual(validateCustomGeometry(adaptive,{requirePhysical:false}),{valid:true,errors:[],unsupportedSlots:[]})
-  const physical=validateCustomGeometry(adaptive,{requirePhysical:true});assert.equal(physical.valid,false);assert.deepEqual(physical.unsupportedSlots,[1,2]);assert.ok(physical.errors.includes('unsupported_geometry'))
+  assert.equal(supportsPhysicalCustomLayout(adaptive.map(c=>({...c,module:'date'}))).valid,true)
 })
 test('unsupported cells and malformed geometry are rejected centrally',()=>{
-  assert.equal(validateCustomGeometry(Array.from({length:16},(_,i)=>cell(i,i%4,Math.floor(i/4),1,1))).errors.includes('unsupported_geometry'),true)
+  assert.equal(validateCustomGeometry(Array.from({length:16},(_,i)=>cell(i,i%4,Math.floor(i/4),1,1))).valid,true)
   assert.equal(validateCustomGeometry([cell(0,0,0,4,2),cell(0,0,2,4,2)]).errors.includes('duplicate_slot'),true)
   assert.equal(validateCustomGeometry([cell(0,0,0,4,2),cell(1,0,1,4,2)]).errors.includes('overlap'),true)
   assert.equal(validateCustomGeometry([cell(0,0,0,4,1)]).errors.includes('holes'),true)
@@ -46,8 +46,15 @@ test('create and edit persistence use structural validation while frame writes r
   assert.match(page,/submitLayoutDraft\(\)[\s\S]*validateCustomGeometry\(cells,\{requirePhysical:false\}\)/)
   assert.match(post,/validateCustomGeometry\(body\.cells, \{ requirePhysical: false \}\)/)
   assert.match(patch,/validateCustomGeometry\(body\.cells, \{requirePhysical:false\}\)/)
-  assert.match(settings,/requirePhysical: true, requireModules: true/)
-  assert.match(page,/validateCustomGeometry\(custom\.cells,\{requirePhysical:true\}\)[\s\S]*This layout isn’t supported on the frame yet\./)
+  assert.match(settings,/supportsPhysicalCustomLayout/)
+  assert.match(page,/supportsPhysicalCustomLayout\(assigned\)[\s\S]*This layout isn’t supported on the frame yet\./)
+})
+
+test('physical support is explicitly module-aware',()=>{
+  assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module:'date'}),true)
+  for(const module of ['weather','reminders','countdown','surf','soccer','stocks','groceries','ai-follow','unknown',''])
+    assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),false)
+  assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,4,1),module:'weather'}),true)
 })
 test('editor geometry assigns deterministic slots only at serialization',()=>{const editor=rows.toReversed().map(({slot:ignored,...geometry})=>({...geometry,id:`saved:${ignored}`,moduleId:'empty'}));assert.equal(editor.some(value=>'slot' in value),false);const serialized=sortCells(editor).map((value,slot)=>({slot,col:value.col,row:value.row,colSpan:value.colSpan,rowSpan:value.rowSpan}));assert.deepEqual(serialized,rows)})
 test('no-op edit keeps slot assignments while changed geometry clears ambiguous cells',()=>{const assignments={0:'date',1:'weather',2:'reminders',3:'groceries'};assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,rows,assignments),assignments);assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,large,assignments),{0:null,1:null});const reordered=rows.toReversed().map((value,index)=>({...value,slot:index}));assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,reordered,assignments),{0:'groceries',1:'reminders',2:'weather',3:'date'})})
@@ -153,4 +160,4 @@ test('legacy custom headers display uppercase and blank creates do not show a na
   assert.match(page,/nextCustomLayoutName\(customLayouts\)/)
   assert.doesNotMatch(page,/Enter a name for your layout\./)
 })
-test('schema and routes enforce owner plus frame membership',async()=>{const sql=await readFile(new URL('../supabase/migrations/20260821120000_add_custom_layout_library.sql',import.meta.url),'utf8');assert.match(sql,/owner_user_id = auth\.uid\(\)/);assert.match(sql,/device_members/);assert.match(sql,/enable row level security/);const builder=await readFile(new URL('../app/api/device/frame-config/builder.ts',import.meta.url),'utf8');assert.match(builder,/requirePhysical: true, requireModules: true/);assert.match(builder,/layout: 'default'/)})
+test('schema and routes enforce owner plus frame membership',async()=>{const sql=await readFile(new URL('../supabase/migrations/20260821120000_add_custom_layout_library.sql',import.meta.url),'utf8');assert.match(sql,/owner_user_id = auth\.uid\(\)/);assert.match(sql,/device_members/);assert.match(sql,/enable row level security/);const builder=await readFile(new URL('../app/api/device/frame-config/builder.ts',import.meta.url),'utf8');assert.match(builder,/supportsPhysicalCustomLayout/);assert.match(builder,/layout: 'default'/)})

@@ -116,12 +116,12 @@ test('signed validation precedes casts and firmware derives size without trustin
   assert.doesNotMatch(config, /cell\["size"\]|c\["size"\]/)
 })
 
-test('custom state resets and adaptive geometry remains blocked at runtime', () => {
+test('custom state resets and adaptive geometry is capability-gated at runtime', () => {
   assert.match(config, /resetCustomLayout\(out\);/)
   assert.match(config, /customLayout\.grid\.count = 0[\s\S]*customLayout\.assignCount = 0[\s\S]*customLayout\.valid = false[\s\S]*customLayout\.renderable = false/)
-  assert.match(layout, /if \(staged\.cells\[i\]\.size == CELL_ADAPTIVE/)
+  assert.match(layout, /ModuleRenderer::canRenderCell\(module, cell\)/)
   assert.match(layout, /ModuleRenderer::renderPlaceholders\(assigns, assignCount, cells, n\)/)
-  assert.doesNotMatch(renderer, /CELL_ADAPTIVE|GridLayout|customLayout/)
+  assert.match(renderer, /cell\.size != CELL_ADAPTIVE[\s\S]*"date"/)
 })
 
 test('a realistic maximum payload remains comfortably within both existing 12 KiB limits', () => {

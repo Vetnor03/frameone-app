@@ -328,7 +328,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
                               int todayYear, int todayMonth0, int todayDayNum,
                               bool showMonthTitle,
                               bool showWeekNums,
-                              bool showDowHeader) {
+                              bool showDowHeader,
+                              bool hardBounds = false) {
   auto& d = DisplayCore::get();
   d.setTextSize(1);
 
@@ -495,7 +496,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
       if (isToday) {
         int radius = min(cellW, cellH) / 2 - 2;
-        if (radius < 10) radius = 10;
+        if (hardBounds && radius < 1) radius = 1;
+        else if (!hardBounds && radius < 10) radius = 10;
         if (radius > 16) radius = 16;
 
         d.fillCircle(centerX, centerY, radius, GxEPD_WHITE);
@@ -968,6 +970,98 @@ static void drawLargeDate(const Cell& c,
 
 /* ========================= */
 
+static bool drawAdaptiveFact(const char* text, int x, int y, int w, int h,
+                             const GFXfont* const* fonts, int fontCount) {
+  if (!text || !text[0] || w <= 0 || h <= 0) return false;
+  for (int i = 0; i < fontCount; ++i) {
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(text, fonts[i], x1, y1, tw, th);
+    if ((int)tw > w || (int)th > h) continue;
+    auto& d = DisplayCore::get();
+    d.setTextColor(Theme::ink()); d.setFont(fonts[i]); d.setTextSize(1);
+    d.setCursor(x + (w - (int)tw) / 2 - x1, y + (h - (int)th) / 2 - y1);
+    d.print(text); d.setFont(nullptr);
+    return true;
+  }
+  return false;
+}
+
+// Physical counterpart of app/lib/dateResponsive.mjs.  It selects a composition
+// from both logical shape and measured pixel space; the twelve adaptive shapes
+// share this grammar rather than owning independent render functions.
+static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
+                             int year, int month0, int dayNum) {
+  const int pad = min(18, max(8, min(c.w, c.h) * 7 / 100));
+  const int x = c.x + pad, y = c.y + pad;
+  const int w = c.w - pad * 2, h = c.h - pad * 2;
+  if (w <= 0 || h <= 0) return;
+
+  char day[4], yearText[8];
+  snprintf(day, sizeof(day), "%d", dayNum);
+  snprintf(yearText, sizeof(yearText), "%d", year);
+  const GFXfont* dayFonts[] = {FONT_B24, FONT_B18, FONT_B12, FONT_9};
+  const GFXfont* factFonts[] = {FONT_B18, FONT_B12, FONT_9};
+  const GFXfont* smallFonts[] = {FONT_B12, FONT_9};
+
+  const bool micro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
+  const bool shallow = c.colSpan > c.rowSpan && c.h < 170;
+  const bool expanded = (c.w >= 700 && c.h >= 330) || (c.w >= 520 && c.h >= 400);
+  const bool calendarSplit = expanded || (c.w >= 430 && c.h >= 210) ||
+                             (c.w >= 330 && c.h >= 400);
+
+  int heroX = x, heroY = y, heroW = w, heroH = h;
+  int calX = 0, calY = 0, calW = 0, calH = 0;
+  if (calendarSplit) {
+    const int gap = 18;
+    if (c.w < 430 && !expanded) {
+      heroH = (h * 52 / 100) - gap / 2;
+      calX = x; calY = heroY + heroH + gap; calW = w; calH = h - heroH - gap;
+    } else {
+      heroW = w * 48 / 100;
+      calX = heroX + heroW + gap; calY = y; calW = w - heroW - gap; calH = h;
+    }
+  }
+
+  if (shallow && !calendarSplit) {
+    int weekdayW = min(heroW * 35 / 100, 180);
+    int dayW = min(heroW * 20 / 100, 88);
+    int yearW = c.w >= 500 ? min(70, heroW * 17 / 100) : 0;
+    drawAdaptiveFact(wday, heroX, heroY, weekdayW, heroH, smallFonts, 2);
+    drawAdaptiveFact(day, heroX + weekdayW, heroY, dayW, heroH, dayFonts, 4);
+    int monthW = heroW - weekdayW - dayW - yearW;
+    drawAdaptiveFact(month, heroX + weekdayW + dayW, heroY, monthW, heroH, smallFonts, 2);
+    if (yearW) drawAdaptiveFact(yearText, heroX + heroW - yearW, heroY, yearW, heroH, smallFonts, 2);
+  } else {
+    const int yearH = micro ? 0 : 24;
+    const int monthH = micro && c.h < 105 ? 0 : 30;
+    const int weekdayH = 30;
+    int groupH = min(heroH, yearH + monthH + min(104, max(58, heroW * 38 / 100)) + weekdayH);
+    int top = heroY + (heroH - groupH) / 2;
+    if (yearH) { drawAdaptiveFact(yearText, heroX, top, heroW, yearH, smallFonts, 2); top += yearH; }
+    if (monthH) { drawAdaptiveFact(month, heroX, top, heroW, monthH, factFonts, 3); top += monthH; }
+    int dayH = max(1, heroY + (heroH + groupH) / 2 - top - weekdayH);
+    drawAdaptiveFact(day, heroX, top, heroW, dayH, dayFonts, 4); top += dayH;
+    drawAdaptiveFact(wday, heroX, top, heroW, weekdayH, factFonts, 3);
+  }
+
+  if (calW >= 154 && calH >= 92) {
+    if (expanded) {
+      const int gap = 14, rowH = (calH - gap) / 2;
+      drawMonthCalendar(calX, calY, calW, rowH, year, month0, year, month0, dayNum,
+                        rowH >= 146, calW >= 190 && rowH >= 126, calW >= 168 && rowH >= 112, true);
+      int nextMonth = month0 + 1, nextYear = year;
+      if (nextMonth == 12) { nextMonth = 0; ++nextYear; }
+      drawMonthCalendar(calX, calY + rowH + gap, calW, calH - rowH - gap,
+                        nextYear, nextMonth, year, month0, dayNum,
+                        calH - rowH - gap >= 146, calW >= 190 && calH - rowH - gap >= 126,
+                        calW >= 168 && calH - rowH - gap >= 112, true);
+    } else {
+      drawMonthCalendar(calX, calY, calW, calH, year, month0, year, month0, dayNum,
+                        calH >= 146, calW >= 190 && calH >= 126, calW >= 168 && calH >= 112, true);
+    }
+  }
+}
+
 static void renderDate(const Cell& c) {
 
   tm t;
@@ -986,6 +1080,11 @@ static void renderDate(const Cell& c) {
   int todayYear = year;
   int todayMonth0 = month0;
   int todayDay = dayNum;
+
+  if (c.size == CELL_ADAPTIVE) {
+    drawAdaptiveDate(c, month, wday, year, month0, dayNum);
+    return;
+  }
 
   if (c.size == CELL_SMALL) {
     char line[80];
@@ -1009,8 +1108,8 @@ static void renderDate(const Cell& c) {
     return;
   }
 
-  // safe fallback
-  drawMediumDate(c, month, wday, year, dayNum);
+  // Unknown enum value: keep drawing bounded and minimal.
+  drawCenteredLine(c.x, c.y, c.w, c.h, "DATE", FONT_B12, Theme::ink());
 }
 
 namespace ModuleDate {

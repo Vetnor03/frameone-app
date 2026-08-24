@@ -1,7 +1,7 @@
 // app/api/device/frame-config/builder.ts
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
-import { validateCustomGeometry } from '@/app/lib/customLayouts'
+import { supportsPhysicalCustomLayout } from '@/app/lib/customLayouts'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
@@ -206,7 +206,7 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       }
 
     if (settings_json.layout === 'custom') {
-      const customValidation = validateCustomGeometry(settings_json.cells, { requirePhysical: true, requireModules: true })
+      const customValidation = supportsPhysicalCustomLayout(settings_json.cells)
       if (!customValidation.valid) {
         // Defense in depth: an incomplete or malformed custom plan must never be
         // delivered to firmware, whose deliberate D2 fallback remains unchanged.

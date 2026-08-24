@@ -1,6 +1,7 @@
 export const BUILT_IN_LAYOUT_KEYS = Object.freeze(['default', 'pyramid', 'square', 'full'])
 export const CUSTOM_LAYOUT_NAME_MAX = 40
 export const SUPPORTED_PHYSICAL_GEOMETRIES = new Set(['4x1', '2x2', '4x2', '4x4'])
+export const ADAPTIVE_DATE_GEOMETRIES = new Set(['1x1','1x2','1x3','1x4','2x1','2x3','2x4','3x1','3x2','3x3','3x4','4x3'])
 
 export function normalizeLayoutName(value) {
   return Array.from(String(value ?? '').trim().replace(/\s+/gu, ' ').toLocaleUpperCase()).slice(0, CUSTOM_LAYOUT_NAME_MAX).join('')
@@ -22,7 +23,7 @@ export function orderedLayoutItems(customLayouts) {
   ]
 }
 
-export function validateCustomGeometry(cells, { requirePhysical = true, requireModules = false } = {}) {
+export function validateCustomGeometry(cells, { requireModules = false } = {}) {
   const errors = []
   if (!Array.isArray(cells) || cells.length < 1 || cells.length > 16) return { valid: false, errors: ['cell_count'], unsupportedSlots: [] }
   const occupied = Array(16).fill(false), slots = new Set(), unsupportedSlots = []
@@ -33,7 +34,6 @@ export function validateCustomGeometry(cells, { requirePhysical = true, requireM
     if (slot < 0 || slot > 15 || slots.has(slot)) errors.push(slots.has(slot) ? 'duplicate_slot' : 'invalid_slot')
     slots.add(slot)
     if (col < 0 || row < 0 || colSpan < 1 || rowSpan < 1 || col + colSpan > 4 || row + rowSpan > 4) { errors.push('out_of_bounds'); continue }
-    if (requirePhysical && !SUPPORTED_PHYSICAL_GEOMETRIES.has(`${colSpan}x${rowSpan}`)) unsupportedSlots.push(slot)
     if (requireModules && (typeof cell.module !== 'string' || !cell.module.trim())) errors.push('missing_module')
     for (let y = row; y < row + rowSpan; y++) for (let x = col; x < col + colSpan; x++) {
       const index = y * 4 + x
@@ -42,8 +42,22 @@ export function validateCustomGeometry(cells, { requirePhysical = true, requireM
     }
   }
   if (!occupied.every(Boolean)) errors.push('holes')
-  if (unsupportedSlots.length) errors.push('unsupported_geometry')
   return { valid: errors.length === 0, errors: [...new Set(errors)], unsupportedSlots }
+}
+
+export function supportsPhysicalCustomCell(cell) {
+  if (!cell || typeof cell !== 'object') return false
+  const geometry = `${cell.colSpan}x${cell.rowSpan}`
+  const module = typeof cell.module === 'string' ? cell.module.trim().toLowerCase() : ''
+  if (!module) return false
+  return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && module === 'date')
+}
+
+export function supportsPhysicalCustomLayout(cells) {
+  const structural = validateCustomGeometry(cells, { requireModules: true })
+  if (!structural.valid) return {...structural, unsupportedSlots: structural.unsupportedSlots}
+  const unsupportedSlots = cells.filter(cell => !supportsPhysicalCustomCell(cell)).map(cell => cell.slot)
+  return {valid: unsupportedSlots.length === 0, errors: unsupportedSlots.length ? ['unsupported_physical_cell'] : [], unsupportedSlots}
 }
 
 export function geometryWithAssignments(cells, assignments) {
@@ -52,7 +66,7 @@ export function geometryWithAssignments(cells, assignments) {
 
 export function customPhysicalPayload(layout, assignments) {
   const cells = geometryWithAssignments(layout.cells, assignments)
-  const validation = validateCustomGeometry(cells, { requirePhysical: true, requireModules: true })
+  const validation = supportsPhysicalCustomLayout(cells)
   return validation.valid ? { layout: 'custom', custom_layout_id: layout.id, cells } : null
 }
 

@@ -29,7 +29,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 
@@ -2368,7 +2368,8 @@ export default function HomePage() {
     if (!deviceId || updateActionInFlightRef.current) return
     if (activeCustomLayoutId) {
       const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
-      if (custom && !validateCustomGeometry(custom.cells, { requirePhysical: true }).valid) {
+      const assigned = custom && geometryWithAssignments(custom.cells, customAssignments[activeCustomLayoutId] || {})
+      if (assigned && !supportsPhysicalCustomLayout(assigned).valid) {
         setFrameUpdateError('This layout isn’t supported on the frame yet.')
         return
       }
