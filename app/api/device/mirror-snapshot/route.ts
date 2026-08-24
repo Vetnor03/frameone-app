@@ -5,6 +5,7 @@ import { buildMediumWeatherDetail, buildWeatherPrecipLine, buildWeatherWindLine,
 import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/surf/ratings'
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
+import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
 import { AI_ASSISTANT_FRAME_LIMITS, selectAiAssistantFrameItems, type AiAssistantFrameUpdate } from '@/app/lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, simplifyAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
 import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
@@ -1480,6 +1481,7 @@ async function weatherDetail(cfg: UnknownRecord, language: string, configUpdated
     localHour: localHourFromIso(currentTime),
     todayHours: buildTodayWeatherInsightHours(data),
   })
+  medium.weatherAdvice = await resolveWeatherInsight(data, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
   const dailyTime = Array.isArray(daily.time) ? daily.time : []
   const weatherDays: WeatherMirrorDay[] = Array.from({ length: Math.min(5, Math.max(1, dailyTime.length)) }, (_, index) => {
     const dayLoC = index === 0 && selectedPeriods.restValid ? selectedPeriods.restLoC : arrayNumberAt(daily.temperature_2m_min, index)

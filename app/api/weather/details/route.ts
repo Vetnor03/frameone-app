@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { fetchWeatherForecast, fetchWeatherMarine } from '@/app/lib/server/weatherForecast'
+import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -65,7 +66,7 @@ function pickFields(source: unknown, fields: readonly string[]) {
   return compact
 }
 
-function compactFrameWeatherPayload(payload: unknown, compactVersion = 1) {
+function compactFrameWeatherPayload(payload: unknown, compactVersion = 1, insight = '') {
   if (!payload || typeof payload !== 'object') return payload
 
   const weather = payload as Record<string, unknown>
@@ -81,6 +82,7 @@ function compactFrameWeatherPayload(payload: unknown, compactVersion = 1) {
   }
 
   return {
+    insight,
     current: pickFields(weather.current, FRAME_WEATHER_CURRENT_FIELDS),
     daily: pickFields(weather.daily, FRAME_WEATHER_DAILY_FIELDS),
     hourly,
@@ -133,7 +135,8 @@ export async function GET(req: Request) {
     if (missingFields.length) {
       console.error('[weather-details]', { stage: 'invalid-frame-payload-shape', lat, lon, missingFields })
     }
-    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion))
+    const insight = await resolveWeatherInsight(weather.payload, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
+    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion, insight))
   }
 
   const missingFields = validateAppWeatherPayload(weather.payload)
