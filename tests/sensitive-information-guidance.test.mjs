@@ -40,7 +40,9 @@ test('one localized helper is reused for user-created free text', () => {
   assert.equal((app.match(/<SensitiveInformationHelper language=\{language\}\s*\/>/g) ?? []).length, 4)
 
   const groceriesSheet = app.slice(app.indexOf('function GroceriesDraftSheet'), app.indexOf('function DinnerPlanSheet'))
+  const dinnerPlanSheet = app.slice(app.indexOf('function DinnerPlanSheet'), app.indexOf('function DinnerPlanAddItemSheet'))
   const dinnerItemSheet = app.slice(app.indexOf('function DinnerPlanAddItemSheet'), app.indexOf('function GrocerySuggestionSwipeRow'))
   assert.doesNotMatch(groceriesSheet, /SensitiveInformationHelper/)
+  assert.doesNotMatch(dinnerPlanSheet, /SensitiveInformationHelper/)
   assert.doesNotMatch(dinnerItemSheet, /SensitiveInformationHelper/)
 })

@@ -12793,7 +12793,6 @@ function DinnerPlanSheet({
         </button>
       </div>
       {blocked ? <div className="mt-3 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER'}</div> : null}
-      <SensitiveInformationHelper language={language} />
       <div className="mt-3 overflow-y-auto pr-1">
         {days.map((day) => <div key={day.day} className="mb-3 rounded-2xl border border-[color:var(--bd-10)] p-3">
           <div className="text-[10px] tracking-widest text-[color:var(--fg-45)]">{dinnerPlanDayLabel(language, day.day)}</div>
