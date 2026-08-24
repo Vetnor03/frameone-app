@@ -50,7 +50,9 @@ export function supportsPhysicalCustomCell(cell) {
   const geometry = `${cell.colSpan}x${cell.rowSpan}`
   const module = typeof cell.module === 'string' ? cell.module.trim().toLowerCase() : ''
   if (!module) return false
-  return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && module === 'date')
+  const baseModule = module.split(':', 1)[0]
+  const adaptiveModule = module === 'date' || baseModule === 'weather'
+  return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && adaptiveModule)
 }
 
 export function supportsPhysicalCustomLayout(cells) {

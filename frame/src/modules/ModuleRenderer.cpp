@@ -20,7 +20,9 @@
 bool ModuleRenderer::canRenderCell(const char* module, const Cell& cell) {
   if (!module || module[0] == '\0') return false;
   if (cell.size != CELL_ADAPTIVE) return true; // frozen anchor dispatch/support
-  return strcasecmp(module, "date") == 0;
+  if (strcasecmp(module, "date") == 0) return true;
+  if (strncasecmp(module, "weather", 7) != 0) return false;
+  return module[7] == '\0' || module[7] == ':';
 }
 
 static void measureText(const char* text, const GFXfont* font,

@@ -53,13 +53,16 @@ test('create and edit persistence use structural validation while frame writes r
 
 test('physical support is explicitly module-aware',()=>{
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module:'date'}),true)
-  for(const module of ['weather','reminders','countdown','surf','soccer','stocks','groceries','ai-follow','unknown',''])
+  for(const module of ['weather','weather:1','weather:abc'])
+    assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),true)
+  for(const module of ['weatherfoo','weather-foo','notweather','reminders','countdown','surf','soccer','stocks','groceries','ai-follow','unknown',''])
     assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),false)
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,4,1),module:'weather'}),true)
 })
 test('structural validation API cannot imply physical validation',async()=>{
   const [implementation,wrapper,declaration]=await Promise.all(['../app/lib/customLayouts.mjs','../app/lib/customLayouts.ts','../app/lib/customLayouts.d.mts'].map(path=>readFile(new URL(path,import.meta.url),'utf8')))
   for(const source of [implementation,wrapper,declaration])assert.doesNotMatch(source,/requirePhysical/)
+  for(const source of [implementation,wrapper,declaration])assert.doesNotMatch(source,/ADAPTIVE_WEATHER_GEOMETRIES/)
   assert.match(wrapper,/options\?:\{requireModules\?:boolean\}/);assert.match(declaration,/options\?: \{requireModules\?: boolean\}/)
 })
 test('editor geometry assigns deterministic slots only at serialization',()=>{const editor=rows.toReversed().map(({slot:ignored,...geometry})=>({...geometry,id:`saved:${ignored}`,moduleId:'empty'}));assert.equal(editor.some(value=>'slot' in value),false);const serialized=sortCells(editor).map((value,slot)=>({slot,col:value.col,row:value.row,colSpan:value.colSpan,rowSpan:value.rowSpan}));assert.deepEqual(serialized,rows)})

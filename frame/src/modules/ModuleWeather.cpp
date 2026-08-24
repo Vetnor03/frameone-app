@@ -54,6 +54,9 @@ struct WeatherCache {
   float tempC = NAN;
   float humidity = NAN;
   int currentWmo = -1;
+  float currentWindMs = NAN;
+  float currentWindDirection = NAN;
+  float currentPrecipProbability = NAN;
 
   float hiC = NAN;
   float loC = NAN;
@@ -997,11 +1000,14 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   filter["current"]["temperature_2m"] = true;
   filter["current"]["relative_humidity_2m"] = true;
   filter["current"]["weather_code"] = true;
+  filter["current"]["wind_speed_10m"] = true;
+  filter["current"]["wind_direction_10m"] = true;
   filter["hourly"]["time"] = true;
   filter["hourly"]["temperature_2m"] = true;
   filter["hourly"]["weather_code"] = true;
   filter["hourly"]["wind_speed_10m"] = true;
   filter["hourly"]["precipitation"] = true;
+  filter["hourly"]["precipitation_probability"] = true;
   filter["daily"]["time"] = true;
   filter["daily"]["temperature_2m_max"] = true;
   filter["daily"]["temperature_2m_min"] = true;
@@ -1053,6 +1059,9 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   out.tempC = current["temperature_2m"] | NAN;
   out.humidity = current["relative_humidity_2m"] | NAN;
   out.currentWmo = current["weather_code"] | -1;
+  out.currentWindMs = current["wind_speed_10m"] | NAN;
+  out.currentWindDirection = current["wind_direction_10m"] | NAN;
+  out.currentPrecipProbability = NAN;
 
   out.hiC = NAN; out.loC = NAN; out.windMaxMs = NAN; out.precipMm = NAN;
   out.wmo = out.currentWmo;
@@ -1112,6 +1121,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
     JsonArray wmoArr  = hourly["weather_code"].as<JsonArray>();
     JsonArray windArr = hourly["wind_speed_10m"].as<JsonArray>();
     JsonArray prArr   = hourly["precipitation"].as<JsonArray>();
+    JsonArray probabilityArr = hourly["precipitation_probability"].as<JsonArray>();
 
     const int N = (int)timeArr.size();
     const int START_H = 0;
@@ -1221,6 +1231,18 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       float wind = (i < (int)windArr.size()) ? (windArr[i] | NAN) : NAN;
       float pr   = (i < (int)prArr.size())   ? (prArr[i]   | NAN) : NAN;
       int   wmo  = (i < (int)wmoArr.size())  ? (wmoArr[i]  | -1)  : -1;
+
+      // Open-Meteo's hourly arrays share timestamps. Preserve the probability
+      // for the current applicable hour; precipitation millimetres are never a
+      // percentage fallback.
+      const bool sameDateAsCurrent = strlen(ts) >= 10 && currentYMD[0] &&
+                                     strncmp(ts, currentYMD, 10) == 0;
+      if (sameDateAsCurrent && hour == currentHour && i < (int)probabilityArr.size()) {
+        const float probability = probabilityArr[i] | NAN;
+        if (!isnan(probability) && probability >= 0.0f && probability <= 100.0f) {
+          out.currentPrecipProbability = probability;
+        }
+      }
 
       DayForecast& day = out.days[di];
 
@@ -2240,6 +2262,154 @@ static void renderLargeXL(const Cell& c,
 }
 
 // -----------------------------------------------------------------------------
+// CELL_ADAPTIVE renderer
+//
+// Physical counterpart of app/lib/weatherResponsive.mjs.  The four anchor
+// renderers below remain untouched; only non-anchor custom geometry enters
+// this allocation-free renderer.
+// -----------------------------------------------------------------------------
+struct WeatherRect { int x, y, w, h; };
+
+static const char* compassDirection(float degrees) {
+  if (isnan(degrees)) return "";
+  static const char* labels[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+  int index = ((int)lroundf(degrees / 45.0f)) & 7;
+  return labels[index];
+}
+
+static void renderAdaptiveWeather(const Cell& c,
+                                  const WeatherInstanceConfig& cfg,
+                                  const WeatherCache& data) {
+  const uint16_t ink = Theme::ink();
+  if (!data.valid) {
+    drawCenteredBox(c.x, c.y, c.w, c.h, "Weather unavailable", FONT_B9, ink);
+    return;
+  }
+
+  const int area = (int)c.colSpan * (int)c.rowSpan;
+  // Studio orientation is physical, not inferred from logical grid spans.
+  const float aspectRatio = c.h > 0 ? (float)c.w / (float)c.h : 1.0f;
+  const bool landscape = aspectRatio > 1.12f;
+  const bool portrait = aspectRatio < 0.88f;
+  const bool showCondition = area >= 2 && cfg.showCondition && data.condition[0];
+  const bool showRange = area >= 3 && cfg.showHiLo &&
+      (!isnan(data.loC) || !isnan(data.hiC));
+  const bool showWind = area >= 3 &&
+      (!isnan(data.currentWindMs) || !isnan(data.currentWindDirection));
+  const bool showProbability = area >= 4 && !isnan(data.currentPrecipProbability);
+  const bool showLocation = area >= 3;
+  const bool large = area >= 8 && c.h >= 300;
+  int forecastRows = large ? (c.w >= 500 ? 4 : 3) : 0;
+  const int availableForecast = data.dayCount > 1 ? data.dayCount - 1 : 0;
+  if (forecastRows > availableForecast) forecastRows = availableForecast;
+  char insight[96] = {0};
+  buildWeatherInsight(insight, sizeof(insight), data);
+  const bool showInsight = large && forecastRows == 0 && insight[0];
+  const bool hasDetails = showRange || showWind || showProbability || showInsight;
+
+  int pad = (int)lroundf((float)(c.w < c.h ? c.w : c.h) * 0.08f);
+  if (pad < 9) pad = 9;
+  if (pad > 18) pad = 18;
+  WeatherRect inner = {c.x + pad, c.y + pad, c.w - 2 * pad, c.h - 2 * pad};
+  int headerH = showLocation ? (int)lroundf(inner.h * 0.12f) : 0;
+  if (headerH && headerH < 25) headerH = 25;
+  if (headerH > 34) headerH = 34;
+  int forecastH = forecastRows ? (int)lroundf(inner.h * 0.31f) : 0;
+  if (forecastH && forecastH < 96) forecastH = 96;
+  if (forecastH > 126) forecastH = 126;
+  const int dividerGap = forecastH ? 10 : 0;
+  WeatherRect primary = {inner.x, inner.y + headerH, inner.w,
+                         inner.h - headerH - forecastH - dividerGap};
+  WeatherRect details = {0, 0, 0, 0};
+  if (portrait && hasDetails) {
+    int detailsH = (int)lroundf(primary.h * 0.25f);
+    if (detailsH < 42) detailsH = 42;
+    if (detailsH > 78) detailsH = 78;
+    primary.h -= detailsH;
+    details = {inner.x, primary.y + primary.h, inner.w, detailsH};
+  } else if (hasDetails && c.w >= 420) {
+    int primaryW = (int)lroundf(inner.w * 0.59f);
+    details = {inner.x + primaryW + 8, primary.y, inner.w - primaryW - 8, primary.h};
+    primary.w = primaryW;
+  }
+
+  if (showLocation) {
+    char location[48] = {0};
+    getDisplayLocationName(cfg, location, sizeof(location));
+    drawCenteredBox(inner.x, inner.y, inner.w, headerH, location, FONT_B9, ink);
+  }
+
+  char temperature[16] = {0};
+  formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
+  const int iconSize = primary.h > 120 ? 56 : 38;
+  if (landscape) {
+    ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
+                                 iconSize, data.currentWmo);
+    drawCenteredBox(primary.x + primary.w / 2, primary.y, primary.w / 2,
+                    showCondition ? primary.h * 2 / 3 : primary.h, temperature, FONT_B18, ink);
+    if (showCondition) drawWrappedTextBox(primary.x + primary.w / 2,
+      primary.y + primary.h * 2 / 3, primary.w / 2, primary.h / 3,
+      data.condition, FONT_B9, ink, 2);
+  } else {
+    const int tempH = primary.h / 3;
+    drawCenteredBox(primary.x, primary.y, primary.w, tempH, temperature, FONT_B18, ink);
+    ModuleIcons::drawWeatherIcon(primary.x + primary.w / 2,
+      primary.y + tempH + (primary.h - tempH) / 3, iconSize, data.currentWmo);
+    if (showCondition) drawWrappedTextBox(primary.x, primary.y + primary.h * 2 / 3,
+      primary.w, primary.h / 3, data.condition, FONT_B9, ink, 2);
+  }
+
+  if (details.w > 0) {
+    char lines[3][40] = {{0}};
+    int lineCount = 0;
+    if (showRange) {
+      char low[14] = {0}, high[14] = {0};
+      formatTemp(low, sizeof(low), data.loC, cfg.units);
+      formatTemp(high, sizeof(high), data.hiC, cfg.units);
+      snprintf(lines[lineCount++], sizeof(lines[0]), "Low %s  High %s", low, high);
+    }
+    if (showWind) {
+      char speed[20] = {0};
+      if (!isnan(data.currentWindMs)) snprintf(speed, sizeof(speed), "%.0f m/s", data.currentWindMs);
+      snprintf(lines[lineCount++], sizeof(lines[0]), "Wind %s%s%s", speed,
+        speed[0] && !isnan(data.currentWindDirection) ? " " : "",
+        compassDirection(data.currentWindDirection));
+    }
+    if (showProbability) snprintf(lines[lineCount++], sizeof(lines[0]), "Rain %.0f%%",
+                                  data.currentPrecipProbability);
+    if (showInsight) {
+      drawWrappedTextBox(details.x, details.y, details.w, details.h, insight, FONT_B9, ink, 2);
+    } else if (lineCount) {
+      int rowH = details.h / lineCount;
+      for (int i = 0; i < lineCount; ++i)
+        drawCenteredBox(details.x, details.y + i * rowH, details.w, rowH, lines[i], FONT_B9, ink);
+    }
+  }
+
+  if (forecastRows) {
+    auto& d = DisplayCore::get();
+    const int forecastY = inner.y + inner.h - forecastH;
+    d.drawFastHLine(inner.x, forecastY - dividerGap / 2, inner.w, ink);
+    const int columnW = inner.w / forecastRows;
+    for (int i = 0; i < forecastRows; ++i) {
+      const DayForecast& day = data.days[i + 1];
+      const int x = inner.x + i * columnW;
+      if (i) d.drawFastVLine(x, forecastY + 7, forecastH - 12, ink);
+      char dayLabel[12] = "--";
+      int yy = 0, mm = 0, dd = 0;
+      if (parseYMDFromIso8601(day.dateYMD, yy, mm, dd))
+        strlcpy(dayLabel, weekdayNameShort(weekdayIndex(yy, mm, dd)), sizeof(dayLabel));
+      char high[14] = {0};
+      formatTemp(high, sizeof(high), day.hiC, cfg.units);
+      drawCenteredBox(x, forecastY + 3, columnW, 24, dayLabel, FONT_B9, ink);
+      drawCenteredBox(x, forecastY + 29, columnW, 27, high, FONT_B12, ink);
+      drawWrappedTextBox(x + 3, forecastY + 59, columnW - 6, forecastH - 61,
+                         conditionFromWmo(day.wmo), FONT_B9, ink, 2);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Public API
 // -----------------------------------------------------------------------------
 namespace ModuleWeather {
@@ -2267,7 +2437,8 @@ void render(const Cell& c, const String& moduleName) {
     return;
   }
 
-  if (c.size == CELL_SMALL)       renderSmall(c, cfg, data);
+  if (c.size == CELL_ADAPTIVE)    renderAdaptiveWeather(c, cfg, data);
+  else if (c.size == CELL_SMALL)  renderSmall(c, cfg, data);
   else if (c.size == CELL_MEDIUM) renderMedium(c, cfg, data);
   else if (c.size == CELL_LARGE)  renderLargeXL(c, cfg, data);
   else if (c.size == CELL_XL)     renderLargeXL(c, cfg, data);
