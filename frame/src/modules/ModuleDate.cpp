@@ -1074,7 +1074,8 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
 
   const bool micro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
   const bool shallow = c.colSpan > c.rowSpan && c.h < 170;
-  bool expanded = (c.w >= 700 && c.h >= 330) || (c.w >= 520 && c.h >= 400);
+  const bool fourByThree = c.colSpan == 4 && c.rowSpan == 3;
+  bool expanded = !fourByThree && ((c.w >= 700 && c.h >= 330) || (c.w >= 520 && c.h >= 400));
   bool calendarSplit = false;
   if (expanded) {
     const int featureW = c.w * 48 / 100 - 18;
@@ -1083,7 +1084,7 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
   }
   if (expanded) calendarSplit = true;
   else if (c.w >= 430 && c.h >= 210)
-    calendarSplit = c.w * 48 / 100 - 18 >= 154 && c.h - 32 >= 92;
+    calendarSplit = c.w * (fourByThree ? 62 : 48) / 100 - 18 >= 154 && c.h - 32 >= 92;
   if (!calendarSplit && c.w >= 330 && c.h >= 400)
     calendarSplit = c.w - 36 >= 154 && c.h * 44 / 100 - 18 >= 92;
   const int upcomingHolidays = adaptiveUpcomingHolidayCount(year, month0, dayNum);
@@ -1098,7 +1099,7 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
       heroH = (h * 52 / 100) - gap / 2;
       calX = x; calY = heroY + heroH + gap; calW = w; calH = h - heroH - gap;
     } else {
-      heroW = w * 48 / 100;
+      heroW = w * (fourByThree ? 38 : 48) / 100;
       calX = heroX + heroW + gap; calY = y; calW = w - heroW - gap; calH = h;
     }
     if (holidayRows) heroH -= min(82, 42 + holidayRows * 22) + 12;
