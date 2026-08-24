@@ -12608,6 +12608,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   const [pendingAction, setPendingAction] = useState<'import' | 'load' | 'save' | 'add' | 'delete' | null>(null)
   const [success, setSuccess] = useState<'saved' | 'added' | 'deleted' | null>(null)
   const [error, setError] = useState('')
+  const [recipeLibraryRefreshFailed, setRecipeLibraryRefreshFailed] = useState(false)
 
   const busy = pendingAction !== null
   const waitForConfirmation = () => new Promise((resolve) => window.setTimeout(resolve, 1400))
@@ -12627,12 +12628,24 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       setError(importError instanceof Error ? importError.message : (language === 'no' ? 'Importeringen mislyktes.' : 'Import failed.'))
     } finally { setPendingAction(null) }
   }
-  const loadSaved = useCallback(async (options?: { preservePending?: boolean }) => {
-    setMode('saved'); if (!options?.preservePending) setPendingAction('load'); setSuccess(null); setError('')
-    const { data, error: loadError } = await supabase.from('grocery_recipes').select('id,name,source_url,base_servings,grocery_recipe_ingredients(name,quantity,unit,category,sort_order)').eq('device_id', deviceId).eq('is_active', true).order('name', { ascending: true })
-    if (loadError) setError(`${language === 'no' ? 'Kunne ikke laste oppskrifter' : 'Could not load recipes'}: ${loadError.message}`)
-    else setSavedRecipes([...(data || [])].sort((a, b) => String(a.name).localeCompare(String(b.name), language, { sensitivity: 'base' })))
+  const loadSaved = useCallback(async (options?: { preservePending?: boolean; deferMode?: boolean }) => {
+    if (!options?.deferMode) setMode('saved')
+    if (!options?.preservePending) setPendingAction('load')
+    setSuccess(null); setError(''); setRecipeLibraryRefreshFailed(false)
+    let refreshed = false
+    try {
+      const { data, error: loadError } = await supabase.from('grocery_recipes').select('id,name,source_url,base_servings,grocery_recipe_ingredients(name,quantity,unit,category,sort_order)').eq('device_id', deviceId).eq('is_active', true).order('name', { ascending: true })
+      if (loadError) throw new Error(loadError.message)
+      setSavedRecipes([...(data || [])].sort((a, b) => String(a.name).localeCompare(String(b.name), language, { sensitivity: 'base' })))
+      refreshed = true
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : (language === 'no' ? 'Ukjent feil' : 'Unknown error')
+      setError(`${language === 'no' ? 'Kunne ikke oppdatere oppskriftsbiblioteket' : 'Could not refresh recipe library'}: ${message}`)
+      setRecipeLibraryRefreshFailed(true)
+    }
+    if (options?.deferMode) setMode('saved')
     if (!options?.preservePending) setPendingAction(null)
+    return refreshed
   }, [deviceId, language])
   useEffect(() => { void loadSaved() }, [loadSaved])
   async function saveRecipe() {
@@ -12661,7 +12674,8 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       // The recipe ingredient foreign key cascades, so deleting the parent removes the complete recipe atomically.
       const { error: deleteError } = await supabase.from('grocery_recipes').delete().eq('id', savedRecipeId).eq('device_id', deviceId)
       if (deleteError) throw new Error(deleteError.message)
-      await loadSaved({ preservePending: true })
+      const refreshed = await loadSaved({ preservePending: true, deferMode: true })
+      if (!refreshed) setSavedRecipes((current) => current.filter((recipe) => String(recipe.id) !== savedRecipeId))
       setDraft(null); setSavedRecipeId(null); setIngredients([]); setServings(null); setSuccess('deleted')
       window.setTimeout(() => setSuccess((current) => current === 'deleted' ? null : current), 1800)
     } catch (deleteError) {
@@ -12723,6 +12737,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       </div> : null}
       {success ? <div role="status" aria-live="polite" className="mt-3 text-center text-sm font-medium tracking-wide text-[#2aa3ff]">{success === 'saved' ? (language === 'no' ? 'OPPSKRIFT LAGRET' : 'RECIPE SAVED') : success === 'deleted' ? (language === 'no' ? 'OPPSKRIFT SLETTET' : 'RECIPE DELETED') : (language === 'no' ? 'LAGT TIL I HANDLELISTEN' : 'ADDED TO GROCERIES')}</div> : null}
       {error ? <div role="alert" className="mt-3 text-sm text-red-400">{error}</div> : null}
+      {mode === 'saved' && recipeLibraryRefreshFailed ? <button disabled={busy} onClick={() => { void loadSaved() }} className="mt-3 w-full text-xs tracking-widest text-[color:var(--fg-55)] disabled:opacity-40">{language === 'no' ? 'PRØV Å OPPDATERE IGJEN' : 'RETRY REFRESH'}</button> : null}
       {mode !== 'saved' ? <button onClick={() => { void loadSaved() }} className="mt-4 w-full text-xs text-[color:var(--fg-45)]">← {language === 'no' ? 'TIL OPPSKRIFTER' : 'BACK TO RECIPES'}</button> : null}
     </div>
   </div>

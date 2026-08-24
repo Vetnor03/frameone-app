@@ -161,10 +161,23 @@ test('saved recipe preview is read-only and offers confirmed cascading deletion'
   assert.match(recipeSheet, /savedRecipeId \? <button[^>]*onClick=\{deleteRecipe\}/)
   assert.match(recipeSheet, /window\.confirm\(language === 'no' \? 'Slette denne oppskriften\?' : 'Delete this recipe\?'/)
   assert.match(recipeSheet, /from\('grocery_recipes'\)\.delete\(\)\.eq\('id', savedRecipeId\)\.eq\('device_id', deviceId\)/)
-  assert.match(recipeSheet, /await loadSaved\(\{ preservePending: true \}\)/)
+  assert.match(recipeSheet, /await loadSaved\(\{ preservePending: true, deferMode: true \}\)/)
   assert.match(recipeSheet, /'SLETTER OPPSKRIFT…' : 'DELETING RECIPE…'/)
   assert.match(recipeSheet, /'OPPSKRIFT SLETTET' : 'RECIPE DELETED'/)
   assert.match(recipeRepairMigration, /foreign key \(recipe_id\) references public\.grocery_recipes\(id\)[\s\S]*on delete cascade not valid/)
+})
+
+test('post-delete refresh keeps the deleting preview visible until the library query settles', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  const loadSaved = recipeSheet.slice(recipeSheet.indexOf('const loadSaved = useCallback'), recipeSheet.indexOf('useEffect(() => { void loadSaved()'))
+  const query = loadSaved.indexOf("await supabase.from('grocery_recipes')")
+  const deferredModeSwitch = loadSaved.indexOf("if (options?.deferMode) setMode('saved')")
+  assert.ok(query > -1 && deferredModeSwitch > query, 'deferred library mode must only be entered after the refresh query settles')
+  assert.match(loadSaved, /if \(!options\?\.deferMode\) setMode\('saved'\)/)
+  assert.match(recipeSheet, /const refreshed = await loadSaved\(\{ preservePending: true, deferMode: true \}\)/)
+  assert.match(recipeSheet, /if \(!refreshed\) setSavedRecipes\([^;]*filter\([^;]*savedRecipeId/)
+  assert.match(recipeSheet, /recipeLibraryRefreshFailed \? <button[^>]*onClick=\{\(\) => \{ void loadSaved\(\) \}\}/)
 })
 
 test('unchecked state is never persisted when explicitly saving recipe ingredients', async () => {
