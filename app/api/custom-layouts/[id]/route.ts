@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{id:stri
   const { id } = await params, body = await req.json().catch(() => ({})), ctx = await owner(req, id); if ('error' in ctx) return ctx.error
   const changes: Record<string, unknown> = {}
   if ('name' in body) { const name = normalizeLayoutName(body.name); if (!name) return NextResponse.json({error:'invalid_name'}, {status:400}); changes.name = name }
-  if ('cells' in body) { const validation = validateCustomGeometry(body.cells, {requirePhysical:false}); if (!validation.valid) return NextResponse.json({error:'invalid_geometry', details:validation}, {status:400}); changes.cells = body.cells }
+  if ('cells' in body) { const validation = validateCustomGeometry(body.cells); if (!validation.valid) return NextResponse.json({error:'invalid_geometry', details:validation}, {status:400}); changes.cells = body.cells }
   const result = await ctx.client.from('custom_layouts').update(changes).eq('id', id).eq('owner_user_id', ctx.userId).select('*').single()
   if (result.error) return NextResponse.json({error:result.error.message}, {status:500})
   return NextResponse.json({layout:map(result.data)})

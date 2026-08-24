@@ -2196,7 +2196,7 @@ export default function HomePage() {
   async function submitLayoutDraft(){
     const name=normalizeLayoutName(layoutDraftName)||(layoutFlow?.mode==='create'?nextCustomLayoutName(customLayouts):''),cells=withSlots(layoutDraftCells)
     if(!name)return
-    const validation=validateCustomGeometry(cells,{requirePhysical:false})
+    const validation=validateCustomGeometry(cells)
     if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError('The layout must cover the whole frame without overlapping.');return}
     setLayoutDraftName(name);setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutDraftSaving(true)
     try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}

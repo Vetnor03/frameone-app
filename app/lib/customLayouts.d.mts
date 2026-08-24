@@ -7,7 +7,7 @@ export const ADAPTIVE_DATE_GEOMETRIES: Set<string>
 export function normalizeLayoutName(value: unknown): string
 export function nextCustomLayoutName(layouts: Array<{name?:unknown}>): string
 export function orderedLayoutItems(customLayouts: CustomLayout[]): Array<{type: string; key: string; id: string; layout?: CustomLayout}>
-export function validateCustomGeometry(cells: unknown, options?: {requirePhysical?: boolean; requireModules?: boolean}): {valid: boolean; errors: string[]; unsupportedSlots: number[]}
+export function validateCustomGeometry(cells: unknown, options?: {requireModules?: boolean}): {valid: boolean; errors: string[]; unsupportedSlots: number[]}
 export function supportsPhysicalCustomCell(cell: CustomLayoutCell & {module?: string}): boolean
 export function supportsPhysicalCustomLayout(cells: unknown): {valid: boolean; errors: string[]; unsupportedSlots: number[]}
 export function geometryWithAssignments(cells: CustomLayoutCell[], assignments: Record<number, string | null>): Array<CustomLayoutCell & {module: string}>

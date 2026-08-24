@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import test from 'node:test'
 import {supportsPhysicalCustomLayout,validateCustomGeometry} from '../app/lib/customLayouts.mjs'
+import {dateComposition,dateLayout,dateStudioPresets} from '../app/lib/dateResponsive.mjs'
 
 const adaptive=[[1,1],[1,2],[1,3],[1,4],[2,1],[2,3],[2,4],[3,1],[3,2],[3,3],[3,4],[4,3]]
 const boundsX=[9,205,401,597,794],boundsY=[22,136,251,365,480]
@@ -11,6 +12,20 @@ function tiling(w,h,module='date') {
   for(let row=0;row<4;row++)for(let col=0;col<4;col++)if(!(col<w&&row<h))cells.push({slot:slot++,col,row,colSpan:1,rowSpan:1,module:'date'})
   return cells
 }
+const profile=(colSpan,rowSpan)=>({width:boundsX[colSpan]-9,height:boundsY[rowSpan]-22,
+  orientation:colSpan>rowSpan?'landscape':colSpan<rowSpan?'portrait':'square'})
+
+test('physical geometries select the finished Studio visual policy',()=>{
+  const micro=dateComposition(profile(1,1),dateStudioPresets.extreme),microLayout=dateLayout(profile(1,1),micro)
+  const visibleFacts=micro.family==='micro'?['day','weekday']:['year','month','day','weekday']
+  assert.equal(micro.family,'micro');assert.equal(micro.showYear,false);assert.deepEqual(visibleFacts,['day','weekday'])
+  assert.ok(microLayout.dayRect);assert.ok(microLayout.weekdayRect)
+  assert.equal(dateComposition(profile(2,1),dateStudioPresets.extreme).family,'horizontal')
+  for(const [w,h] of [[2,4],[3,3]]){const p=profile(w,h),composition=dateComposition(p,dateStudioPresets.extreme),layout=dateLayout(p,composition);assert.equal(composition.family,'calendar-split');assert.equal(composition.holidayRows,1);assert.ok(layout.holidayRect)}
+  const expanded=dateComposition(profile(3,4),dateStudioPresets.extreme),expandedLayout=dateLayout(profile(3,4),expanded)
+  assert.equal(expanded.family,'expanded');assert.ok(expanded.currentCalendar);assert.ok(expanded.nextCalendar);assert.equal(expanded.holidayRows,2);assert.ok(expandedLayout.holidayRect)
+  assert.equal(dateComposition(profile(4,3),dateStudioPresets.extreme).family,'expanded')
+})
 
 test('all twelve Date adaptive geometries form complete eligible 4x4 plans with exact resolution',()=>{
   for(const [w,h] of adaptive){const cells=tiling(w,h),target=cells[0]
@@ -45,5 +60,8 @@ test('firmware keeps anchor dispatch frozen and gates only adaptive Date central
   assert.ok(dispatch.indexOf('c.size == CELL_ADAPTIVE')<dispatch.indexOf('c.size == CELL_SMALL'))
   for(const anchor of ['CELL_SMALL','CELL_MEDIUM','CELL_LARGE','CELL_XL'])assert.match(dispatch,new RegExp(`c\\.size == ${anchor}`))
   assert.match(date,/app\/lib\/dateResponsive\.mjs/)
+  assert.match(date,/if \(micro\)[\s\S]*uppercaseAscii\(wday[\s\S]*else if \(shallow/)
+  assert.match(date,/drawAdaptiveWeekdayBadge[\s\S]*GxEPD_WHITE[\s\S]*GxEPD_BLACK/)
+  assert.match(date,/drawAdaptiveHolidays[\s\S]*UPCOMING HOLIDAYS/)
   assert.doesNotMatch(date,/substring|\.substr\(/)
 })

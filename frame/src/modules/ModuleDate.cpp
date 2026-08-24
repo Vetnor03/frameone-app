@@ -971,19 +971,88 @@ static void drawLargeDate(const Cell& c,
 /* ========================= */
 
 static bool drawAdaptiveFact(const char* text, int x, int y, int w, int h,
-                             const GFXfont* const* fonts, int fontCount) {
+                             const GFXfont* const* fonts, int fontCount,
+                             uint16_t color = Theme::ink()) {
   if (!text || !text[0] || w <= 0 || h <= 0) return false;
   for (int i = 0; i < fontCount; ++i) {
     int16_t x1, y1; uint16_t tw, th;
     measureText(text, fonts[i], x1, y1, tw, th);
     if ((int)tw > w || (int)th > h) continue;
     auto& d = DisplayCore::get();
-    d.setTextColor(Theme::ink()); d.setFont(fonts[i]); d.setTextSize(1);
+    d.setTextColor(color); d.setFont(fonts[i]); d.setTextSize(1);
     d.setCursor(x + (w - (int)tw) / 2 - x1, y + (h - (int)th) / 2 - y1);
     d.print(text); d.setFont(nullptr);
     return true;
   }
   return false;
+}
+
+static void uppercaseAscii(const char* input, char* output, size_t outputSize) {
+  if (!output || outputSize == 0) return;
+  size_t i = 0;
+  for (; input && input[i] && i + 1 < outputSize; ++i) {
+    const char value = input[i];
+    output[i] = value >= 'a' && value <= 'z' ? value - ('a' - 'A') : value;
+  }
+  output[i] = '\0';
+}
+
+static void drawAdaptiveWeekdayBadge(const char* weekday, int x, int y, int w, int h) {
+  char uppercase[20];
+  uppercaseAscii(weekday, uppercase, sizeof(uppercase));
+  const GFXfont* fonts[] = {FONT_B12, FONT_9};
+  for (int i = 0; i < 2; ++i) {
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(uppercase, fonts[i], x1, y1, tw, th);
+    if ((int)tw > w - 18 || (int)th > h - 8) continue;
+    const int badgeW = min(w - 4, max(62, (int)tw + 18));
+    const int badgeH = min(h - 4, (int)th + 10);
+    if (badgeW <= 0 || badgeH <= 0) return;
+    const int badgeX = x + (w - badgeW) / 2;
+    const int badgeY = y + (h - badgeH) / 2;
+    DisplayCore::get().fillRect(badgeX, badgeY, badgeW, badgeH, GxEPD_WHITE);
+    drawAdaptiveFact(uppercase, badgeX, badgeY, badgeW, badgeH, &fonts[i], 1, GxEPD_BLACK);
+    return;
+  }
+}
+
+static void drawAdaptiveHolidays(int x, int y, int w, int h, int maxRows,
+                                 int todayYear, int todayMonth0, int todayDay) {
+  if (!g_cfg || maxRows < 1 || g_cfg->date.holidayCount == 0 || w <= 0 || h <= 0) return;
+  const GFXfont* headingFonts[] = {FONT_B12, FONT_9};
+  const GFXfont* rowFonts[] = {FONT_B12, FONT_9};
+  drawAdaptiveFact("UPCOMING HOLIDAYS", x, y, w, min(22, h), headingFonts, 2);
+
+  const int todayKey = ymd(todayYear, todayMonth0, todayDay);
+  int usedKeys[2] = {0, 0};
+  const int rows = min(2, maxRows);
+  for (int row = 0; row < rows; ++row) {
+    const HolidayItem* selected = nullptr;
+    int selectedKey = 99999999;
+    for (int i = 0; i < (int)g_cfg->date.holidayCount; ++i) {
+      const HolidayItem& holiday = g_cfg->date.holidays[i];
+      const int key = holidayYMD(holiday);
+      if (key < todayKey || key >= selectedKey || key == usedKeys[0] || key == usedKeys[1]) continue;
+      selected = &holiday;
+      selectedKey = key;
+    }
+    if (!selected) break;
+    usedKeys[row] = selectedKey;
+    char name[128], line[144];
+    utf8ToLatin1(selected->name, name, sizeof(name));
+    snprintf(line, sizeof(line), "%02d.%02d  %s", (int)selected->day, (int)selected->month, name);
+    const int rowY = y + 25 + row * 22;
+    drawAdaptiveFact(line, x, rowY, w, min(20, y + h - rowY), rowFonts, 2);
+  }
+}
+
+static int adaptiveUpcomingHolidayCount(int todayYear, int todayMonth0, int todayDay) {
+  if (!g_cfg) return 0;
+  const int todayKey = ymd(todayYear, todayMonth0, todayDay);
+  int count = 0;
+  for (int i = 0; i < (int)g_cfg->date.holidayCount && count < 2; ++i)
+    if (holidayYMD(g_cfg->date.holidays[i]) >= todayKey) ++count;
+  return count;
 }
 
 // Physical counterpart of app/lib/dateResponsive.mjs.  It selects a composition
@@ -1005,9 +1074,21 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
 
   const bool micro = c.w < 150 || c.h < 88 || (c.w < 230 && c.h < 140);
   const bool shallow = c.colSpan > c.rowSpan && c.h < 170;
-  const bool expanded = (c.w >= 700 && c.h >= 330) || (c.w >= 520 && c.h >= 400);
-  const bool calendarSplit = expanded || (c.w >= 430 && c.h >= 210) ||
-                             (c.w >= 330 && c.h >= 400);
+  bool expanded = (c.w >= 700 && c.h >= 330) || (c.w >= 520 && c.h >= 400);
+  bool calendarSplit = false;
+  if (expanded) {
+    const int featureW = c.w * 48 / 100 - 18;
+    const int featureH = (c.h - 42) / 2;
+    if (featureW < 154 || featureH < 92) expanded = false;
+  }
+  if (expanded) calendarSplit = true;
+  else if (c.w >= 430 && c.h >= 210)
+    calendarSplit = c.w * 48 / 100 - 18 >= 154 && c.h - 32 >= 92;
+  if (!calendarSplit && c.w >= 330 && c.h >= 400)
+    calendarSplit = c.w - 36 >= 154 && c.h * 44 / 100 - 18 >= 92;
+  const int upcomingHolidays = adaptiveUpcomingHolidayCount(year, month0, dayNum);
+  const int holidayRows = expanded ? min(upcomingHolidays, c.h >= 420 ? 2 : 1)
+                                   : calendarSplit && c.h >= 300 ? min(upcomingHolidays, 1) : 0;
 
   int heroX = x, heroY = y, heroW = w, heroH = h;
   int calX = 0, calY = 0, calW = 0, calH = 0;
@@ -1020,28 +1101,36 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
       heroW = w * 48 / 100;
       calX = heroX + heroW + gap; calY = y; calW = w - heroW - gap; calH = h;
     }
+    if (holidayRows) heroH -= min(82, 42 + holidayRows * 22) + 12;
   }
 
-  if (shallow && !calendarSplit) {
+  if (micro) {
+    const int weekdayH = 30;
+    const int dayH = max(1, heroH - weekdayH);
+    drawAdaptiveFact(day, heroX, heroY, heroW, dayH, dayFonts, 4);
+    char uppercase[20]; uppercaseAscii(wday, uppercase, sizeof(uppercase));
+    drawAdaptiveFact(uppercase, heroX, heroY + dayH, heroW, weekdayH, smallFonts, 2);
+  } else if (shallow && !calendarSplit) {
     int weekdayW = min(heroW * 35 / 100, 180);
     int dayW = min(heroW * 20 / 100, 88);
     int yearW = c.w >= 500 ? min(70, heroW * 17 / 100) : 0;
-    drawAdaptiveFact(wday, heroX, heroY, weekdayW, heroH, smallFonts, 2);
+    drawAdaptiveWeekdayBadge(wday, heroX, heroY, weekdayW, heroH);
     drawAdaptiveFact(day, heroX + weekdayW, heroY, dayW, heroH, dayFonts, 4);
     int monthW = heroW - weekdayW - dayW - yearW;
-    drawAdaptiveFact(month, heroX + weekdayW + dayW, heroY, monthW, heroH, smallFonts, 2);
+    drawAdaptiveFact(month, heroX + weekdayW + dayW, heroY, monthW, heroH, factFonts, 3);
     if (yearW) drawAdaptiveFact(yearText, heroX + heroW - yearW, heroY, yearW, heroH, smallFonts, 2);
   } else {
-    const int yearH = micro ? 0 : 24;
-    const int monthH = micro && c.h < 105 ? 0 : 30;
+    const int yearH = 24;
+    const int monthH = 30;
     const int weekdayH = 30;
     int groupH = min(heroH, yearH + monthH + min(104, max(58, heroW * 38 / 100)) + weekdayH);
     int top = heroY + (heroH - groupH) / 2;
     if (yearH) { drawAdaptiveFact(yearText, heroX, top, heroW, yearH, smallFonts, 2); top += yearH; }
-    if (monthH) { drawAdaptiveFact(month, heroX, top, heroW, monthH, factFonts, 3); top += monthH; }
+    char uppercaseMonth[20]; uppercaseAscii(month, uppercaseMonth, sizeof(uppercaseMonth));
+    drawAdaptiveFact(uppercaseMonth, heroX, top, heroW, monthH, factFonts, 3); top += monthH;
     int dayH = max(1, heroY + (heroH + groupH) / 2 - top - weekdayH);
     drawAdaptiveFact(day, heroX, top, heroW, dayH, dayFonts, 4); top += dayH;
-    drawAdaptiveFact(wday, heroX, top, heroW, weekdayH, factFonts, 3);
+    drawAdaptiveWeekdayBadge(wday, heroX, top, heroW, weekdayH);
   }
 
   if (calW >= 154 && calH >= 92) {
@@ -1059,6 +1148,11 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
       drawMonthCalendar(calX, calY, calW, calH, year, month0, year, month0, dayNum,
                         calH >= 146, calW >= 190 && calH >= 126, calW >= 168 && calH >= 112, true);
     }
+  }
+  if (holidayRows) {
+    const int holidayH = min(82, 42 + holidayRows * 22);
+    drawAdaptiveHolidays(heroX, heroY + heroH + 12, heroW, holidayH, holidayRows,
+                         year, month0, dayNum);
   }
 }
 

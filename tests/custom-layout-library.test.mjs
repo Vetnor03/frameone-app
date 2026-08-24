@@ -25,7 +25,7 @@ test('duplicate gets new UUID, copied geometry, normalized name and following or
 test('duplicate becomes the visible and active custom layout with independent assignments',()=>{const source=layout('original','Morning',0),copy=layout('duplicate','Morning copy',1),sourceAssignments={0:'date',1:'weather'},state=duplicateLayoutClientState([source],{original:sourceAssignments},source.id,copy);assert.deepEqual(state.layouts.map(item=>item.id),['original','duplicate']);assert.equal(state.carouselItemId,'duplicate');assert.equal(state.activeCustomLayoutId,'duplicate');assert.deepEqual(state.assignments.duplicate,sourceAssignments);assert.notEqual(state.assignments.duplicate,sourceAssignments);state.assignments.duplicate[0]='groceries';assert.equal(sourceAssignments[0],'date')})
 test('all currently supported physical compositions pass',()=>{for(const cells of [rows,large,medium,full])assert.deepEqual(validateCustomGeometry(cells),{valid:true,errors:[],unsupportedSlots:[]})})
 test('structural persistence accepts an adaptive 1x3 and 3x3 partition',()=>{
-  assert.deepEqual(validateCustomGeometry(adaptive,{requirePhysical:false}),{valid:true,errors:[],unsupportedSlots:[]})
+  assert.deepEqual(validateCustomGeometry(adaptive),{valid:true,errors:[],unsupportedSlots:[]})
   assert.equal(supportsPhysicalCustomLayout(adaptive.map(c=>({...c,module:'date'}))).valid,true)
 })
 test('unsupported cells and malformed geometry are rejected centrally',()=>{
@@ -35,7 +35,7 @@ test('unsupported cells and malformed geometry are rejected centrally',()=>{
   assert.equal(validateCustomGeometry([cell(0,0,0,4,1)]).errors.includes('holes'),true)
   assert.equal(validateCustomGeometry([cell(0,0,0,5,4)]).errors.includes('out_of_bounds'),true)
   assert.equal(validateCustomGeometry([{slot:0,col:'0',row:0,colSpan:4,rowSpan:4}]).errors.includes('non_integer'),true)
-  for(const invalid of [[cell(0,0,0,4,1)],[cell(0,0,0,4,2),cell(1,0,1,4,2)],[cell(0,0,0,5,4)]])assert.equal(validateCustomGeometry(invalid,{requirePhysical:false}).valid,false)
+  for(const invalid of [[cell(0,0,0,4,1)],[cell(0,0,0,4,2),cell(1,0,1,4,2)],[cell(0,0,0,5,4)]])assert.equal(validateCustomGeometry(invalid).valid,false)
 })
 test('physical contract contains geometry and modules but never CellSize',()=>{const source=layout('layout-uuid','Four rows',0),payload=customPhysicalPayload(source,{0:'date',1:'weather',2:'reminders',3:'groceries'});assert.equal(payload.layout,'custom');assert.equal(payload.custom_layout_id,'layout-uuid');assert.deepEqual(payload.cells[0],{...rows[0],module:'date'});assert.equal(JSON.stringify(payload).includes('CellSize'),false);assert.equal(customPhysicalPayload(source,{0:'date'}),null);assert.equal(customPhysicalPayload({...source,cells:adaptive},{0:'date',1:'weather',2:'surf'}),null)})
 test('create and edit persistence use structural validation while frame writes retain the physical gate',async()=>{
@@ -43,9 +43,10 @@ test('create and edit persistence use structural validation while frame writes r
   const post=await readFile(new URL('../app/api/custom-layouts/route.ts',import.meta.url),'utf8')
   const patch=await readFile(new URL('../app/api/custom-layouts/[id]/route.ts',import.meta.url),'utf8')
   const settings=await readFile(new URL('../app/api/device/save-settings/route.ts',import.meta.url),'utf8')
-  assert.match(page,/submitLayoutDraft\(\)[\s\S]*validateCustomGeometry\(cells,\{requirePhysical:false\}\)/)
-  assert.match(post,/validateCustomGeometry\(body\.cells, \{ requirePhysical: false \}\)/)
-  assert.match(patch,/validateCustomGeometry\(body\.cells, \{requirePhysical:false\}\)/)
+  assert.match(page,/submitLayoutDraft\(\)[\s\S]*validateCustomGeometry\(cells\)/)
+  assert.match(post,/validateCustomGeometry\(body\.cells\)/)
+  assert.match(patch,/validateCustomGeometry\(body\.cells\)/)
+  for(const source of [page,post,patch,settings])assert.doesNotMatch(source,/requirePhysical/)
   assert.match(settings,/supportsPhysicalCustomLayout/)
   assert.match(page,/supportsPhysicalCustomLayout\(assigned\)[\s\S]*This layout isn’t supported on the frame yet\./)
 })
@@ -55,6 +56,11 @@ test('physical support is explicitly module-aware',()=>{
   for(const module of ['weather','reminders','countdown','surf','soccer','stocks','groceries','ai-follow','unknown',''])
     assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),false)
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,4,1),module:'weather'}),true)
+})
+test('structural validation API cannot imply physical validation',async()=>{
+  const [implementation,wrapper,declaration]=await Promise.all(['../app/lib/customLayouts.mjs','../app/lib/customLayouts.ts','../app/lib/customLayouts.d.mts'].map(path=>readFile(new URL(path,import.meta.url),'utf8')))
+  for(const source of [implementation,wrapper,declaration])assert.doesNotMatch(source,/requirePhysical/)
+  assert.match(wrapper,/options\?:\{requireModules\?:boolean\}/);assert.match(declaration,/options\?: \{requireModules\?: boolean\}/)
 })
 test('editor geometry assigns deterministic slots only at serialization',()=>{const editor=rows.toReversed().map(({slot:ignored,...geometry})=>({...geometry,id:`saved:${ignored}`,moduleId:'empty'}));assert.equal(editor.some(value=>'slot' in value),false);const serialized=sortCells(editor).map((value,slot)=>({slot,col:value.col,row:value.row,colSpan:value.colSpan,rowSpan:value.rowSpan}));assert.deepEqual(serialized,rows)})
 test('no-op edit keeps slot assignments while changed geometry clears ambiguous cells',()=>{const assignments={0:'date',1:'weather',2:'reminders',3:'groceries'};assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,rows,assignments),assignments);assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,large,assignments),{0:null,1:null});const reordered=rows.toReversed().map((value,index)=>({...value,slot:index}));assert.deepEqual(remapAssignmentsAfterGeometryEdit(rows,reordered,assignments),{0:'groceries',1:'reminders',2:'weather',3:'date'})})

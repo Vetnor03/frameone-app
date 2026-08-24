@@ -18,7 +18,7 @@ export const ADAPTIVE_DATE_GEOMETRIES = adaptiveGeometries as Set<string>
 export const normalizeLayoutName = normalize as (value:unknown)=>string
 export const nextCustomLayoutName = nextName as (layouts:Array<{name?:unknown}>)=>string
 export const orderedLayoutItems = ordered as (layouts:CustomLayout[])=>Array<{type:'built-in'|'custom'|'add';key:string;id:string;layout?:CustomLayout}>
-export const validateCustomGeometry = validate as (cells:unknown, options?:{requirePhysical?:boolean;requireModules?:boolean})=>{valid:boolean;errors:string[];unsupportedSlots:number[]}
+export const validateCustomGeometry = validate as (cells:unknown, options?:{requireModules?:boolean})=>{valid:boolean;errors:string[];unsupportedSlots:number[]}
 export const geometryWithAssignments = assigned as (cells:CustomLayoutCell[], assignments:Record<number,string|null>)=>Array<CustomLayoutCell&{module:string}>
 export const customPhysicalPayload = payload as (layout:CustomLayout,assignments:Record<number,string|null>)=>{layout:'custom';custom_layout_id:string;cells:Array<CustomLayoutCell&{module:string}>}|null
 export const supportsPhysicalCustomCell = supportsCell as (cell:CustomLayoutCell&{module?:string})=>boolean
