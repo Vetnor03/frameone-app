@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries } from '../app/lib/groceries/recipes.mjs'
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
 
-const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824130000_repair_saved_recipe_schema.sql', import.meta.url), 'utf8')
+const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824140000_reconcile_saved_recipe_legacy_schema.sql', import.meta.url), 'utf8')
 
 test('saved recipe repair migration restores the complete schema and access controls', () => {
   for (const column of ['id uuid default gen_random_uuid()', 'device_id text', 'name text', "locale text default 'en'", 'is_active boolean default true', 'source_url text', 'base_servings numeric', 'created_at timestamptz default now()', 'updated_at timestamptz default now()', 'recipe_id uuid', "category text default 'other'", 'is_optional boolean default false', 'quantity numeric', 'unit text', 'sort_order integer default 0', 'amount numeric']) {
@@ -22,6 +22,11 @@ test('saved recipe repair migration restores the complete schema and access cont
   assert.match(recipeRepairMigration, /on public\.grocery_recipe_ingredients for all[\s\S]*join public\.device_members dm on dm\.device_id = gr\.device_id[\s\S]*dm\.user_id = auth\.uid\(\)/)
   assert.match(recipeRepairMigration, /grant select, insert, update, delete on public\.grocery_recipes to authenticated/)
   assert.match(recipeRepairMigration, /grant select, insert, update, delete on public\.grocery_recipe_ingredients to authenticated/)
+  assert.match(recipeRepairMigration, /rename column ingredient_name to name/)
+  assert.match(recipeRepairMigration, /set name = ingredient_name where name is null and ingredient_name is not null/)
+  assert.match(recipeRepairMigration, /alter column ingredient_name drop not null/)
+  assert.match(recipeRepairMigration, /is_nullable = 'NO'/)
+  assert.match(recipeRepairMigration, /drop column ingredient_name/)
   assert.match(recipeRepairMigration, /notify pgrst, 'reload schema'/)
 })
 
