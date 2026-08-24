@@ -91,12 +91,12 @@ test('non-contiguous slots and shuffled geometry are deterministic by slot', () 
   assert.deepEqual(bySlot(shuffled), bySlot(fourRows)); assert.deepEqual(dividers(shuffled), dividers(fourRows))
   assert.deepEqual(fourRows.map((c) => c.slot), [0, 3, 8, 12])
 })
-test('preflight is atomic, blocks adaptive cells, and routes assignments safely', () => {
+test('preflight is atomic, capability-gates every cell, and routes assignments safely', () => {
   const resolver = source.match(/bool buildGridCells[\s\S]*?\n\}/)[0]
   const preflight = source.match(/static bool prepareCustomRender[\s\S]*?\n\}/)[0]
   assert.ok(resolver.indexOf('g_gridCellStaging') < resolver.indexOf('outCells[i] = staged[i]'))
   assert.match(preflight, /buildGridCells[\s\S]*deriveGridDividers[\s\S]*resolveGridDivider[\s\S]*output = staged/)
-  assert.match(preflight, /CELL_ADAPTIVE/)
+  assert.match(preflight, /ModuleRenderer::canRenderCell\(module, cell\)/)
   assert.match(source, /customReady \? cfg\.customLayout\.assigns : cfg\.assigns/)
   assert.match(source, /key == LAYOUT_CUSTOM && !customReady \? LAYOUT_DEFAULT : key/)
 })

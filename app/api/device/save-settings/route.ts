@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { validateCustomGeometry } from '@/app/lib/customLayouts'
+import { supportsPhysicalCustomLayout } from '@/app/lib/customLayouts'
 
 export const runtime = 'nodejs'
 
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     }
     const settingsRecord = settingsJson as Record<string, unknown>
     if (settingsRecord.layout === 'custom') {
-      const validation = validateCustomGeometry(settingsRecord.cells, { requirePhysical: true, requireModules: true })
+      const validation = supportsPhysicalCustomLayout(settingsRecord.cells)
       if (!validation.valid) return NextResponse.json({ ok: false, error: 'invalid_custom_layout', details: validation }, { status: 400 })
     }
 

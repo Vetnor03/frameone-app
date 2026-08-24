@@ -22,6 +22,7 @@ enum CellSize {
 struct Cell {
   int x, y, w, h;
   uint8_t slot;
+  uint8_t gridCol, gridRow, colSpan, rowSpan;
   CellSize size;
 };
 

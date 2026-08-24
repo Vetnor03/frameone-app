@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({})), deviceId = String(body.deviceId || '').trim()
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
-  const validation = validateCustomGeometry(body.cells, { requirePhysical: false })
+  const validation = validateCustomGeometry(body.cells)
   if (!validation.valid) return NextResponse.json({ error: 'invalid_geometry', details: validation }, { status: 400 })
   const ctx = await context(req, deviceId); if ('error' in ctx) return ctx.error
   let name = normalizeLayoutName(body.name)

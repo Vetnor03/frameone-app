@@ -29,7 +29,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
-import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
+import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 
@@ -2196,7 +2196,7 @@ export default function HomePage() {
   async function submitLayoutDraft(){
     const name=normalizeLayoutName(layoutDraftName)||(layoutFlow?.mode==='create'?nextCustomLayoutName(customLayouts):''),cells=withSlots(layoutDraftCells)
     if(!name)return
-    const validation=validateCustomGeometry(cells,{requirePhysical:false})
+    const validation=validateCustomGeometry(cells)
     if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError('The layout must cover the whole frame without overlapping.');return}
     setLayoutDraftName(name);setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutDraftSaving(true)
     try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}
@@ -2368,7 +2368,8 @@ export default function HomePage() {
     if (!deviceId || updateActionInFlightRef.current) return
     if (activeCustomLayoutId) {
       const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
-      if (custom && !validateCustomGeometry(custom.cells, { requirePhysical: true }).valid) {
+      const assigned = custom && geometryWithAssignments(custom.cells, customAssignments[activeCustomLayoutId] || {})
+      if (assigned && !supportsPhysicalCustomLayout(assigned).valid) {
         setFrameUpdateError('This layout isn’t supported on the frame yet.')
         return
       }

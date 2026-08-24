@@ -9,11 +9,19 @@ struct CustomRenderPlanSizeProbe {
   int dividerCount = 0;
 };
 
-static_assert(sizeof(Cell) == 24);
+struct RenderWorkspaceSizeProbe {
+  CustomRenderPlanSizeProbe prepared;
+  CustomRenderPlanSizeProbe staging;
+  Cell namedCells[MAX_GRID_CELLS];
+  GridDividerLayout logicalDividers;
+};
+
+static_assert(sizeof(Cell) == 28);
 static_assert(sizeof(PixelDivider) == 16);
-static_assert(sizeof(CustomRenderPlanSizeProbe) == 776);
+static_assert(sizeof(CustomRenderPlanSizeProbe) == 840);
 static_assert(sizeof(GridDividerLayout) == 196);
 static_assert(sizeof(GridLayout) == 196);
+static_assert(sizeof(RenderWorkspaceSizeProbe) == 2324);
 
 int main() {
   std::printf("sizeof(Cell)=%zu\n", sizeof(Cell));
@@ -21,5 +29,6 @@ int main() {
   std::printf("sizeof(CustomRenderPlan)=%zu\n", sizeof(CustomRenderPlanSizeProbe));
   std::printf("sizeof(GridDividerLayout)=%zu\n", sizeof(GridDividerLayout));
   std::printf("sizeof(GridLayout)=%zu\n", sizeof(GridLayout));
+  std::printf("sizeof(RenderWorkspace)=%zu\n", sizeof(RenderWorkspaceSizeProbe));
   return 0;
 }

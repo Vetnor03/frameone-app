@@ -148,7 +148,9 @@ static bool stageCustomLayout(FrameConfig& out, JsonArray cells) {
   for (int i = 0; i < count; ++i) out.customLayout.assigns[i] = candidateAssigns[i];
   out.customLayout.assignCount = (uint8_t)count;
   out.customLayout.valid = true;
-  out.customLayout.renderable = Layout::isLegacyRenderableGridLayout(candidateGrid);
+  // Structural acceptance remains independent from physical module capability.
+  // Layout's atomic runtime preflight makes the authoritative capability decision.
+  out.customLayout.renderable = true;
   return true;
 }
 

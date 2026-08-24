@@ -118,7 +118,8 @@ bool setGridLayout(GridLayout& destination, const GridCell* source, int count) {
 bool resolveGridCell(const GridCell& g, Cell& c) {
   if (!isValidGridCell(g)) return false;
   c = Cell{gridX(g.col), gridY(g.row), gridX(g.col + g.colSpan) - gridX(g.col),
-           gridY(g.row + g.rowSpan) - gridY(g.row), g.slot, g.size};
+           gridY(g.row + g.rowSpan) - gridY(g.row), g.slot,
+           g.col, g.row, g.colSpan, g.rowSpan, g.size};
   return true;
 }
 
@@ -289,7 +290,7 @@ static RenderWorkspace g_renderWorkspace;
 static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output) {
   const CustomLayoutConfig& custom = cfg.customLayout;
   if (!cfg.customLayoutRequested || !custom.valid || !custom.renderable ||
-      !isLegacyRenderableGridLayout(custom.grid) || custom.assignCount != custom.grid.count ||
+      !validateGridLayout(custom.grid) || custom.assignCount != custom.grid.count ||
       custom.assignCount > MAX_FRAME_ASSIGNMENTS) return false;
 
   uint16_t assignedSlots = 0;
@@ -304,9 +305,16 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
   CustomRenderPlan& staged = g_renderWorkspace.staging;
   if (!buildGridCells(custom.grid, staged.cells, MAX_GRID_CELLS, staged.cellCount)) return false;
   for (int i = 0; i < staged.cellCount; ++i) {
-    // D2's hard safety boundary: adaptive cells must not reach ModuleRenderer.
-    if (staged.cells[i].size == CELL_ADAPTIVE ||
-        !(assignedSlots & ((uint16_t)1U << staged.cells[i].slot))) return false;
+    const Cell& cell = staged.cells[i];
+    if (!(assignedSlots & ((uint16_t)1U << cell.slot))) return false;
+    const char* module = nullptr;
+    for (uint8_t assignmentIndex = 0; assignmentIndex < custom.assignCount; ++assignmentIndex) {
+      if (custom.assigns[assignmentIndex].slot == cell.slot) {
+        module = custom.assigns[assignmentIndex].module;
+        break;
+      }
+    }
+    if (!ModuleRenderer::canRenderCell(module, cell)) return false;
   }
 
   GridDividerLayout& logical = g_renderWorkspace.logicalDividers;

@@ -34,19 +34,37 @@ coordinates, and fallback behavior.
 - **Phase D1 — complete:** expanded assignment and resolved-cell capacity to
   16, detected custom intent, and staged custom geometry plus assignments using
   complete, all-or-nothing validation while keeping it dormant.
-- **Phase D2 — this PR:** introduces an explicit controlled custom runtime path.
+- **Phase D2 — complete:** introduced an explicit controlled custom runtime path.
   Only fully validated layouts made entirely from the four legacy-anchor cell
   geometries may activate. Custom cells resolve atomically and custom dividers
   use the generic Phase C pipeline, with exact parity against all four named
   layouts. Layouts containing `CELL_ADAPTIVE` remain valid and staged but
   dormant, and any preflight failure falls back completely to `DEFAULT`.
-- **Phase E:** port responsive physical module rules and progressively allow
-  `CELL_ADAPTIVE`, one module at a time. Remove D2's legacy-only gate only after
-  adaptive physical coverage is complete.
+- **Phase E1 — this PR:** enables adaptive physical rendering for the Date
+  module only. Physical capability is module-aware: the four anchor geometries
+  retain their existing module behavior, while a `CELL_ADAPTIVE` cell is
+  accepted only when its assignment is Date. `CELL_ADAPTIVE` is **not**
+  generally supported. Future phases will add other modules one at a time.
+
+### DATE ADAPTIVE LAB
+
+This test/documentation fixture exercises adaptive Date compositions and a
+T-junction; it is not a built-in layout:
+
+```json
+[
+  {"slot":0,"col":0,"row":0,"colSpan":2,"rowSpan":1,"module":"date"},
+  {"slot":1,"col":2,"row":0,"colSpan":2,"rowSpan":1,"module":"date"},
+  {"slot":2,"col":0,"row":1,"colSpan":3,"rowSpan":3,"module":"date"},
+  {"slot":3,"col":3,"row":1,"colSpan":1,"rowSpan":3,"module":"date"}
+]
+```
 
 ## Failure behavior
 
-The custom path validates geometry, legacy renderability, resolved cells,
-logical and pixel dividers, and assignment storage before beginning a display
-update. Any failure uses the unchanged named `DEFAULT` path, so malformed or
-temporarily unsupported geometry cannot produce partial custom output.
+The custom path validates complete geometry, resolves cells, verifies unique
+and complete assignments, checks every cell through the centralized
+module-aware capability decision, and only then derives and resolves dividers.
+The prepared BSS render plan is published after every step succeeds. Any
+failure uses the unchanged named `DEFAULT` path, so malformed or unsupported
+geometry cannot produce partial custom output.
