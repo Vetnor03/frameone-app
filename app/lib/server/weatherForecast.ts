@@ -38,8 +38,10 @@ const WEATHER_CURRENT_FIELDS = [
 
 const WEATHER_HOURLY_FIELDS = [
   'temperature_2m',
+  'apparent_temperature',
   'weather_code',
   'wind_speed_10m',
+  'wind_gusts_10m',
   'precipitation_probability',
   'precipitation',
   'uv_index',

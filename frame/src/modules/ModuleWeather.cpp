@@ -48,6 +48,7 @@ struct DayForecast {
 
 struct WeatherCache {
   bool valid = false;
+  char aiInsight[96] = {0};
   uint32_t fetchedAtMs = 0;
 
   float tempC = NAN;
@@ -934,6 +935,7 @@ static bool rainPred(float pr, float, int wmo) { return hasLightRainSignal(pr, w
 
 static void buildWeatherInsight(char* out, size_t n, const WeatherCache& data) {
   if (!out || n == 0) return;
+  if (data.aiInsight[0]) { strlcpy(out, data.aiInsight, n); return; }
   int first, last, count;
   int currentHour = -1;
   getLocalHourNow(currentHour);
@@ -990,9 +992,24 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
 
   DynamicJsonDocument filter(WEATHER_FILTER_CAPACITY);
   if (filter.capacity() == 0) return false;
-  filter["current"] = true;
-  filter["hourly"] = true;
-  filter["daily"] = true;
+  filter["insight"] = true;
+  filter["current"]["time"] = true;
+  filter["current"]["temperature_2m"] = true;
+  filter["current"]["relative_humidity_2m"] = true;
+  filter["current"]["weather_code"] = true;
+  filter["hourly"]["time"] = true;
+  filter["hourly"]["temperature_2m"] = true;
+  filter["hourly"]["weather_code"] = true;
+  filter["hourly"]["wind_speed_10m"] = true;
+  filter["hourly"]["precipitation"] = true;
+  filter["daily"]["time"] = true;
+  filter["daily"]["temperature_2m_max"] = true;
+  filter["daily"]["temperature_2m_min"] = true;
+  filter["daily"]["weather_code"] = true;
+  filter["daily"]["precipitation_sum"] = true;
+  filter["daily"]["wind_speed_10m_max"] = true;
+  filter["daily"]["sunrise"] = true;
+  filter["daily"]["sunset"] = true;
   DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
   uint32_t heapAfterParse = ESP.getFreeHeap();
   Serial.printf("[weather] heap before parse=%u after parse=%u docCap=%u\n",
@@ -1049,6 +1066,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
 
   out.dayCount = 0;
   out.todayHourCount = 0;
+  strlcpy(out.aiInsight, doc["insight"] | "", sizeof(out.aiInsight));
   for (int i = 0; i < WeatherCache::MAX_DAYS; i++) out.days[i] = DayForecast();
 
   out.sunriseHHMM[0] = 0;

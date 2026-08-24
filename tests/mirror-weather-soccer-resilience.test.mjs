@@ -102,7 +102,7 @@ test('physical frame weather uses server-prepared cached payload instead of dire
   const moduleWeather = readFileSync(new URL('../frame/src/modules/ModuleWeather.cpp', import.meta.url), 'utf8')
   assert.match(moduleWeather, /\/api\/weather\/details\?frame=1&compact=2&days=5&lat=/)
   assert.match(weatherDetailsRoute, /framePayload/)
-  assert.match(weatherDetailsRoute, /return NextResponse\.json\(compactFrameWeatherPayload\(weather\.payload, frameCompactVersion\)\)/)
+  assert.match(weatherDetailsRoute, /return NextResponse\.json\(compactFrameWeatherPayload\(weather\.payload, frameCompactVersion, insight\)\)/)
   assert.doesNotMatch(moduleWeather, /api\.open-meteo\.com/)
   assert.doesNotMatch(moduleWeather, /marine-api\.open-meteo\.com/)
 })
