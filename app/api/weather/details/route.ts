@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { fetchWeatherForecast, fetchWeatherMarine } from '@/app/lib/server/weatherForecast'
+import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic'
 const WEATHER_DETAILS_TIMEOUT_MS = 8000
 const WEATHER_DETAILS_FORECAST_DAYS = 7
 const FRAME_WEATHER_CURRENT_FIELDS = ['time', 'temperature_2m', 'relative_humidity_2m', 'weather_code'] as const
-const FRAME_WEATHER_HOURLY_FIELDS = ['time', 'temperature_2m', 'weather_code', 'wind_speed_10m', 'precipitation'] as const
+const FRAME_WEATHER_HOURLY_FIELDS = ['time', 'temperature_2m', 'apparent_temperature', 'weather_code', 'wind_speed_10m', 'wind_gusts_10m', 'precipitation_probability', 'precipitation'] as const
 const FRAME_WEATHER_DAILY_FIELDS = ['time', 'temperature_2m_max', 'temperature_2m_min', 'weather_code', 'precipitation_sum', 'wind_speed_10m_max', 'sunrise', 'sunset'] as const
 
 function numericParam(url: URL, key: string) {
@@ -65,7 +66,7 @@ function pickFields(source: unknown, fields: readonly string[]) {
   return compact
 }
 
-function compactFrameWeatherPayload(payload: unknown, compactVersion = 1) {
+function compactFrameWeatherPayload(payload: unknown, compactVersion = 1, insight = '') {
   if (!payload || typeof payload !== 'object') return payload
 
   const weather = payload as Record<string, unknown>
@@ -81,6 +82,7 @@ function compactFrameWeatherPayload(payload: unknown, compactVersion = 1) {
   }
 
   return {
+    insight,
     current: pickFields(weather.current, FRAME_WEATHER_CURRENT_FIELDS),
     daily: pickFields(weather.daily, FRAME_WEATHER_DAILY_FIELDS),
     hourly,
@@ -133,7 +135,8 @@ export async function GET(req: Request) {
     if (missingFields.length) {
       console.error('[weather-details]', { stage: 'invalid-frame-payload-shape', lat, lon, missingFields })
     }
-    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion))
+    const insight = await resolveWeatherInsight(weather.payload)
+    return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion, insight))
   }
 
   const missingFields = validateAppWeatherPayload(weather.payload)
