@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { fetchPublicRecipePage, safePublicRecipeUrl } from '@/app/lib/groceries/urlSafety.mjs'
 
 const categories = ['fruit_veg','bread','dairy','cold_cuts','meat_fish','frozen','dry_goods','spices','toiletries','snacks','drinks','household','other']
-
-function safePublicUrl(raw: unknown) {
-  if (typeof raw !== 'string' || raw.length > 2_000) return null
-  let url: URL
-  try { url = new URL(raw) } catch { return null }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null
-  const host = url.hostname.toLowerCase()
-  if (host === 'localhost' || host.endsWith('.local') || /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host === '::1') return null
-  return url
-}
 
 function outputText(payload: any) {
   return payload?.output?.flatMap((item: any) => item?.content || []).find((item: any) => item?.type === 'output_text')?.text || ''
@@ -23,14 +14,14 @@ export async function POST(request: Request) {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   if (!(await admin.auth.getUser(token)).data.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await request.json().catch(() => null)
-  const url = safePublicUrl(body?.url)
+  const url = safePublicRecipeUrl(body?.url)
   if (!url) return NextResponse.json({ error: 'Enter a valid public recipe URL.' }, { status: 400 })
   if (!process.env.OPENAI_API_KEY) return NextResponse.json({ error: 'Recipe import is not configured.' }, { status: 503 })
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   let html = ''
   try {
-    const page = await fetch(url, { signal: controller.signal, redirect: 'follow', headers: { 'User-Agent': 'FrameOne Recipe Importer/1.0' } })
+    const page = await fetchPublicRecipePage(url, fetch, { signal: controller.signal, headers: { 'User-Agent': 'FrameOne Recipe Importer/1.0' } })
     if (!page.ok || !String(page.headers.get('content-type')).includes('text/html')) return NextResponse.json({ error: 'Could not read that recipe page.' }, { status: 422 })
     html = (await page.text()).slice(0, 300_000).replace(/<script(?![^>]*application\/ld\+json)[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
   } catch { return NextResponse.json({ error: 'Could not read that recipe page.' }, { status: 422 }) } finally { clearTimeout(timeout) }

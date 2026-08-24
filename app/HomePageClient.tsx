@@ -14,7 +14,7 @@ import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
 import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
-import { groceryRecipeItem, parseManualIngredients, scaleRecipeQuantity, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes'
+import { parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
@@ -10930,6 +10930,8 @@ type GroceryItem = {
   id: string
   name: string
   quantity: number
+  amount: number | null
+  unit: string | null
   category: GroceryCategory
   isChecked: boolean
   checkedAt: string | null
@@ -11078,7 +11080,7 @@ function checkedItemExpiresAtMs(item: Pick<GroceryItem, 'isChecked' | 'checkedAt
   return checkedAtMs + GROCERY_UNDO_WINDOW_MS
 }
 
-function groceryCheckedExpiresAtMs(item: GroceryItem) {
+function groceryCheckedExpiresAtMs(item: Pick<GroceryItem, 'isChecked' | 'checkedAt'>) {
   return checkedItemExpiresAtMs(item)
 }
 
@@ -11102,7 +11104,7 @@ function groceryCheckedExpiryCutoffIso(nowMs = Date.now()) {
   return new Date(nowMs - GROCERY_UNDO_WINDOW_MS).toISOString()
 }
 
-function groceryCheckedItemIsExpired(item: GroceryItem, nowMs: number) {
+function groceryCheckedItemIsExpired(item: Pick<GroceryItem, 'isChecked' | 'checkedAt'>, nowMs: number) {
   const expiresAtMs = groceryCheckedExpiresAtMs(item)
   return expiresAtMs != null && nowMs >= expiresAtMs
 }
@@ -11164,7 +11166,7 @@ function groceryCategoryLabel(language: AppLanguage, category: GroceryCategory) 
   return language === 'no' ? labelsNo[category] : labelsEn[category]
 }
 
-function groceryIsVisible(item: GroceryItem, nowMs: number) {
+function groceryIsVisible(item: Pick<GroceryItem, 'isChecked' | 'checkedAt'>, nowMs: number) {
   if (!item.isChecked) return true
   return !groceryCheckedItemIsExpired(item, nowMs)
 }
@@ -11232,6 +11234,8 @@ function GroceriesModuleSettingsTab({
       id,
       name,
       quantity: Math.max(1, Number(row.quantity ?? 1) || 1),
+      amount: row.amount == null ? null : Number(row.amount),
+      unit: row.unit ? String(row.unit) : null,
       category: asGroceryCategory(row.category),
       isChecked: !!row.is_checked,
       checkedAt: row.checked_at ? String(row.checked_at) : null,
@@ -11326,7 +11330,7 @@ function GroceriesModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('grocery_items')
-        .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+        .select('id, name, quantity, amount, unit, category, is_checked, checked_at, updated_at')
         .eq('device_id', activeDeviceId)
         .order('updated_at', { ascending: false })
 
@@ -12092,7 +12096,7 @@ function GroceriesModuleSettingsTab({
           checked_at: null,
         })
         .eq('id', existingItem.id)
-        .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+        .select('id, name, quantity, amount, unit, category, is_checked, checked_at, updated_at')
         .single()
 
       if (error) {
@@ -12115,6 +12119,8 @@ function GroceriesModuleSettingsTab({
         id: optimisticId,
         name: normalizedName,
         quantity: nextQty,
+        amount: null,
+        unit: null,
         category,
         isChecked: false,
         checkedAt: null,
@@ -12137,7 +12143,7 @@ function GroceriesModuleSettingsTab({
         is_checked: false,
         checked_at: null,
       })
-      .select('id, name, quantity, category, is_checked, checked_at, updated_at')
+      .select('id, name, quantity, amount, unit, category, is_checked, checked_at, updated_at')
       .single()
 
     if (error) {
@@ -12160,6 +12166,29 @@ function GroceriesModuleSettingsTab({
     })
     await rememberHistoryItem(normalizedName, category, nowIso)
     void markGroceryProbablyOutInsight(normalizedName)
+    await loadHistory()
+  }
+
+  async function addRecipeItems(recipeItems: Array<GroceryRecipeItem & { category: string }>) {
+    if (!activeDeviceId) return
+    const working = items.filter((item) => !isDinnerVirtualId(item.id) && groceryIsVisible(item, Date.now())).map((item) => ({ ...item }))
+    const { data: authData } = await supabase.auth.getUser()
+    for (const incoming of recipeItems) {
+      const decision = recipeMergeDecision(working, incoming)
+      if (decision.type === 'merge') {
+        const existing = working[decision.index]
+        const { error } = await supabase.from('grocery_items').update({ quantity: decision.quantity, amount: decision.amount, unit: decision.unit, is_checked: false, checked_at: null }).eq('id', existing.id)
+        if (error) { alert(error.message); continue }
+        working[decision.index] = { ...existing, quantity: decision.quantity, amount: decision.amount, unit: decision.unit, isChecked: false, checkedAt: null }
+      } else {
+        const { data, error } = await supabase.from('grocery_items').insert({ device_id: activeDeviceId, created_by: authData.user?.id ?? null, name: incoming.name, quantity: incoming.quantity, amount: incoming.amount, unit: incoming.unit, category: asGroceryCategory(incoming.category), is_checked: false, checked_at: null }).select('id, name, quantity, amount, unit, category, is_checked, checked_at, updated_at').single()
+        if (error) { alert(error.message); continue }
+        const inserted = groceryItemFromRow(data)
+        if (inserted) working.push(inserted)
+      }
+      await rememberHistoryItem(incoming.name, asGroceryCategory(incoming.category))
+    }
+    await loadGroceries({ silent: true, preserveScroll: true })
     await loadHistory()
   }
 
@@ -12411,7 +12440,9 @@ function GroceriesModuleSettingsTab({
                     </div>
                   ) : null}
                 </div>
-                <div className="shrink-0 flex items-center gap-2.5">
+                {item.amount != null && item.unit ? (
+                  <div className="shrink-0 text-sm text-[color:var(--fg-55)] [font-variant-numeric:tabular-nums]">{item.amount} {item.unit}</div>
+                ) : <div className="shrink-0 flex items-center gap-2.5">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -12433,7 +12464,7 @@ function GroceriesModuleSettingsTab({
                   >
                     +
                   </button>
-                </div>
+                </div>}
               </li>
             ))}
           </ul>
@@ -12554,7 +12585,7 @@ function GroceriesModuleSettingsTab({
         deviceId={activeDeviceId}
         onClose={() => setRecipeOpen(false)}
         onAdd={async (ingredients) => {
-          for (const ingredient of ingredients) await addItem(ingredient.name, ingredient.quantity, asGroceryCategory(ingredient.category))
+          await addRecipeItems(ingredients)
           setRecipeOpen(false)
         }}
       />
@@ -12565,7 +12596,7 @@ function GroceriesModuleSettingsTab({
 
 type RecipePreviewIngredient = RecipeIngredient & { selected: boolean }
 
-function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLanguage; deviceId: string; onClose: () => void; onAdd: (items: Array<{ name: string; quantity: number; category: string }>) => Promise<void> }) {
+function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLanguage; deviceId: string; onClose: () => void; onAdd: (items: Array<GroceryRecipeItem & { category: string }>) => Promise<void> }) {
   const [mode, setMode] = useState<'start' | 'url' | 'manual' | 'preview' | 'saved'>('start')
   const [url, setUrl] = useState('')
   const [manualName, setManualName] = useState('')
@@ -12612,7 +12643,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       {mode === 'url' ? <div className="mt-5"><input autoFocus type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className="w-full h-12 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 outline-none"/><button disabled={busy || !url.trim()} onClick={importUrl} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-40">{busy ? '…' : (language === 'no' ? 'IMPORTER' : 'IMPORT')}</button></div> : null}
       {mode === 'manual' ? <div className="mt-5 grid gap-3"><input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder={language === 'no' ? 'Navn på oppskrift' : 'Recipe name'} className="h-11 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4"/><textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows={8} placeholder={language === 'no' ? 'Én ingrediens per linje\n2 tomater\n1 l melk' : 'One ingredient per line\n2 tomatoes\n1 L milk'} className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4"/><button disabled={!manualText.trim()} onClick={() => showPreview({ name: manualName.trim() || (language === 'no' ? 'Min oppskrift' : 'My recipe'), sourceUrl: null, servings: null, ingredients: parseManualIngredients(manualText) })} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'FORHÅNDSVIS' : 'PREVIEW'}</button></div> : null}
       {mode === 'saved' ? <div className="mt-4 grid gap-2">{busy ? <div>…</div> : savedRecipes.length ? savedRecipes.map((recipe) => <button key={recipe.id} onClick={() => showPreview({ name: recipe.name, sourceUrl: recipe.source_url, servings: recipe.base_servings == null ? null : Number(recipe.base_servings), ingredients: [...(recipe.grocery_recipe_ingredients || [])].sort((a,b) => a.sort_order-b.sort_order).map((x) => ({ ...x, quantity: x.quantity == null ? null : Number(x.quantity) })) })} className="rounded-2xl border border-[color:var(--bd-10)] p-4 text-left"><div>{recipe.name}</div><div className="mt-1 text-xs text-[color:var(--fg-45)]">{recipe.grocery_recipe_ingredients?.length || 0} {language === 'no' ? 'ingredienser' : 'ingredients'}</div></button>) : <div className="py-8 text-center text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen lagrede oppskrifter' : 'No saved recipes'}</div>}</div> : null}
-      {mode === 'preview' && draft ? <div className="mt-4"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full bg-transparent text-lg font-medium outline-none"/>{draft.servings ? <div className="mt-3 flex items-center gap-3 text-sm"><span>{language === 'no' ? 'Porsjoner' : 'Servings'}</span><button onClick={() => setServings(Math.max(1, (servings || 1)-1))} className="h-8 w-8 rounded-full border">−</button><span>{servings}</span><button onClick={() => setServings((servings || 0)+1)} className="h-8 w-8 rounded-full border">+</button></div> : null}<div className="mt-4 divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)]">{ingredients.map((item, index) => { const qty = scaleRecipeQuantity(item.quantity, draft.servings, servings); return <div key={index} className="flex items-center gap-2 p-3"><input type="checkbox" checked={item.selected} onChange={() => setIngredients((all) => all.map((x,i) => i === index ? { ...x, selected: !x.selected } : x))}/><input value={item.name} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, name: e.target.value } : x))} className="min-w-0 flex-1 bg-transparent outline-none"/><input aria-label="Quantity" type="number" step="any" value={qty ?? ''} onChange={(e) => { const scaled = e.target.value === '' ? null : Number(e.target.value); const base = scaled == null || !draft.servings || !servings ? scaled : scaled * draft.servings / servings; setIngredients((all) => all.map((x,i) => i === index ? { ...x, quantity: base } : x)) }} className="w-14 bg-transparent text-right outline-none"/><input aria-label="Unit" value={item.unit || ''} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, unit: e.target.value || null } : x))} className="w-12 bg-transparent text-[color:var(--fg-55)] outline-none"/><button aria-label="Remove" onClick={() => setIngredients((all) => all.filter((_,i) => i !== index))} className="text-[color:var(--fg-45)]">✕</button></div>})}</div><div className="mt-4 flex gap-2"><button disabled={busy} onClick={saveRecipe} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs">{language === 'no' ? 'LAGRE OPPSKRIFT' : 'SAVE RECIPE'}</button><button disabled={!selected.length || busy} onClick={async () => { setBusy(true); await onAdd(selected.map((item) => ({ ...groceryRecipeItem(item, scaleRecipeQuantity(item.quantity, draft.servings, servings)), category: item.category }))); setBusy(false) }} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs disabled:opacity-40">{language === 'no' ? `LEGG TIL (${selected.length})` : `ADD (${selected.length})`}</button></div></div> : null}
+      {mode === 'preview' && draft ? <div className="mt-4"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full bg-transparent text-lg font-medium outline-none"/>{draft.servings ? <div className="mt-3 flex items-center gap-3 text-sm"><span>{language === 'no' ? 'Porsjoner' : 'Servings'}</span><button onClick={() => setServings(Math.max(1, (servings || 1)-1))} className="h-8 w-8 rounded-full border">−</button><span>{servings}</span><button onClick={() => setServings((servings || 0)+1)} className="h-8 w-8 rounded-full border">+</button></div> : null}<div className="mt-4 divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)]">{ingredients.map((item, index) => { const qty = scaleRecipeQuantity(item.quantity, draft.servings, servings); return <div key={index} className="flex items-center gap-2 p-3"><input type="checkbox" checked={item.selected} onChange={() => setIngredients((all) => all.map((x,i) => i === index ? { ...x, selected: !x.selected } : x))}/><input value={item.name} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, name: e.target.value } : x))} className="min-w-0 flex-1 bg-transparent outline-none"/><input aria-label="Quantity" type="number" step="any" value={qty ?? ''} onChange={(e) => { const scaled = e.target.value === '' ? null : Number(e.target.value); const base = scaled == null || !draft.servings || !servings ? scaled : scaled * draft.servings / servings; setIngredients((all) => all.map((x,i) => i === index ? { ...x, quantity: base } : x)) }} className="w-14 bg-transparent text-right outline-none"/><input aria-label="Unit" value={item.unit || ''} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, unit: e.target.value || null } : x))} className="w-12 bg-transparent text-[color:var(--fg-55)] outline-none"/><button aria-label="Remove" onClick={() => setIngredients((all) => all.filter((_,i) => i !== index))} className="text-[color:var(--fg-45)]">✕</button></div>})}</div><div className="mt-4 flex gap-2"><button disabled={busy} onClick={saveRecipe} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs">{language === 'no' ? 'LAGRE OPPSKRIFT' : 'SAVE RECIPE'}</button><button disabled={!selected.length || busy} onClick={async () => { setBusy(true); await onAdd(selectedRecipeGroceries(ingredients, draft.servings, servings)); setBusy(false) }} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs disabled:opacity-40">{language === 'no' ? `LEGG TIL (${selected.length})` : `ADD (${selected.length})`}</button></div></div> : null}
       {error ? <div className="mt-3 text-sm text-red-400">{error}</div> : null}
       {mode !== 'start' ? <button onClick={() => { setMode('start'); setError('') }} className="mt-4 w-full text-xs text-[color:var(--fg-45)]">← {language === 'no' ? 'TILBAKE' : 'BACK'}</button> : null}
     </div>

@@ -9,3 +9,9 @@ alter table public.grocery_recipe_ingredients
 
 grant insert, update, delete on public.grocery_recipes to authenticated;
 grant insert, update, delete on public.grocery_recipe_ingredients to authenticated;
+
+-- Recipe amounts stay structured instead of being baked into item names. Normal
+-- grocery entry continues to use quantity exactly as before.
+alter table public.grocery_items
+  add column if not exists amount numeric,
+  add column if not exists unit text;
