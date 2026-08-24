@@ -63,6 +63,35 @@ export function isUnmeasuredGroceryItem(item) {
   return item.amount == null && item.unit == null
 }
 
+export function groceryItemEditPayload(name, quantity, category, measurement) {
+  const normalizedName = name.trim()
+  const nextQuantity = Math.max(1, Number(quantity) || 1)
+  return { name: normalizedName, quantity: measurement ? 1 : nextQuantity, amount: measurement?.amount ?? null, unit: measurement?.unit?.trim() || null, category }
+}
+
 export function selectedRecipeGroceries(ingredients, baseServings, servings) {
   return ingredients.filter((item) => item.selected).map((item) => ({ ...groceryRecipeItem(item, scaleRecipeQuantity(item.quantity, baseServings, servings)), category: item.category }))
+}
+
+export function dedupeRecipeIngredients(ingredients) {
+  const seen = new Set()
+  return ingredients.filter((item) => {
+    const key = item.name.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+export async function saveRecipeWithRollback({ createRecipe, createIngredients, deleteRecipe }, recipe, ingredients) {
+  const created = await createRecipe(recipe)
+  try {
+    await createIngredients(created.id, dedupeRecipeIngredients(ingredients))
+    return created
+  } catch (error) {
+    try { await deleteRecipe(created.id) } catch (rollbackError) {
+      throw new Error(`Ingredient save failed and recipe rollback failed: ${rollbackError instanceof Error ? rollbackError.message : 'unknown rollback error'}`, { cause: error })
+    }
+    throw error
+  }
 }

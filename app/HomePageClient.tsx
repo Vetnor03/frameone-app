@@ -14,7 +14,7 @@ import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
 import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
-import { isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
+import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
@@ -11749,7 +11749,7 @@ function GroceriesModuleSettingsTab({
       }
     }
     for (const entry of aggregate.values()) {
-      const groceryItem = { id: `dinner-${entry.category}-${entry.name}`, ...entry }
+      const groceryItem: GroceryItem = { id: `dinner-${entry.category}-${entry.name}`, ...entry, amount: null, unit: null }
       if (!groceryIsVisible(groceryItem, nowMs)) continue
       const list = byCategory.get(entry.category) || []
       list.push(groceryItem)
@@ -12318,16 +12318,16 @@ function GroceriesModuleSettingsTab({
     }
   }
 
-  async function updateItem(id: string, name: string, quantity: number, category: GroceryCategory) {
+  async function updateItem(id: string, name: string, quantity: number, category: GroceryCategory, measurement?: { amount: number; unit: string }) {
     if (!activeDeviceId) return
     const normalizedName = name.trim()
     if (!normalizedName) return
     const nowIso = new Date().toISOString()
-    const nextQty = Math.max(1, Number(quantity) || 1)
+    const edit = groceryItemEditPayload(normalizedName, quantity, category, measurement)
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, name: normalizedName, quantity: nextQty, category, updatedAt: nowIso }
+          ? { ...item, ...edit, updatedAt: nowIso }
           : item
       )
     )
@@ -12336,9 +12336,7 @@ function GroceriesModuleSettingsTab({
     const { error } = await supabase
       .from('grocery_items')
       .update({
-        name: normalizedName,
-        quantity: nextQty,
-        category,
+        ...edit,
       })
       .eq('id', id)
 
@@ -12627,10 +12625,18 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   }
   async function saveRecipe() {
     if (!draft) return
-    setBusy(true)
-    const { data: recipe, error: recipeError } = await supabase.from('grocery_recipes').insert({ device_id: deviceId, name: draft.name, locale: language, source_url: draft.sourceUrl, base_servings: draft.servings }).select('id').single()
-    if (!recipeError && recipe) await supabase.from('grocery_recipe_ingredients').insert(ingredients.map((item, index) => ({ recipe_id: recipe.id, name: item.name, quantity: item.quantity, unit: item.unit, category: asGroceryCategory(item.category), sort_order: index })))
-    setBusy(false); setError(recipeError?.message || '')
+    setBusy(true); setError('')
+    const rows = ingredients.map((item, index) => ({ name: item.name.trim(), quantity: item.quantity, unit: item.unit, category: asGroceryCategory(item.category), sort_order: index }))
+    const recipeRecord = { device_id: deviceId, name: draft.name, locale: language, source_url: draft.sourceUrl, base_servings: draft.servings }
+    try {
+      await saveRecipeWithRollback({
+        createRecipe: async (value: typeof recipeRecord) => { const { data, error } = await supabase.from('grocery_recipes').insert(value).select('id').single(); if (error || !data) throw new Error(error?.message || 'Could not save recipe.'); return data },
+        createIngredients: async (recipeId, values: typeof rows) => { const { error } = await supabase.from('grocery_recipe_ingredients').insert(values.map((item) => ({ ...item, recipe_id: recipeId }))); if (error) throw new Error(error.message) },
+        deleteRecipe: async (recipeId) => { const { error } = await supabase.from('grocery_recipes').delete().eq('id', recipeId); if (error) throw new Error(error.message) },
+      }, recipeRecord, rows)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? `${language === 'no' ? 'Kunne ikke lagre oppskriften' : 'Could not save recipe'}: ${saveError.message}` : (language === 'no' ? 'Kunne ikke lagre oppskriften.' : 'Could not save recipe.'))
+    } finally { setBusy(false) }
   }
   const selected = ingredients.filter((item) => item.selected)
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
@@ -12666,12 +12672,14 @@ function GroceriesDraftSheet({
   onClose: () => void
   onSaved: () => void | Promise<void>
   addItem: (name: string, quantity: number, category: GroceryCategory) => Promise<void>
-  updateItem: (id: string, name: string, quantity: number, category: GroceryCategory) => Promise<void>
+  updateItem: (id: string, name: string, quantity: number, category: GroceryCategory, measurement?: { amount: number; unit: string }) => Promise<void>
   onDeleteSuggestion: (name: string) => Promise<void>
   editingItem: GroceryItem | null
 }) {
   const [name, setName] = useState(editingItem?.name ?? '')
   const [quantity, setQuantity] = useState(editingItem?.quantity ?? 1)
+  const [amount, setAmount] = useState(editingItem?.amount ?? 1)
+  const [unit, setUnit] = useState(editingItem?.unit ?? '')
   const [category, setCategory] = useState<GroceryCategory>(editingItem?.category ?? 'other')
   const [saving, setSaving] = useState(false)
   const instantAddKeyRef = useRef<string | null>(null)
@@ -12679,6 +12687,8 @@ function GroceriesDraftSheet({
   useEffect(() => {
     setName(editingItem?.name ?? '')
     setQuantity(editingItem?.quantity ?? 1)
+    setAmount(editingItem?.amount ?? 1)
+    setUnit(editingItem?.unit ?? '')
     setCategory(editingItem?.category ?? 'other')
   }, [editingItem])
 
@@ -12706,14 +12716,15 @@ function GroceriesDraftSheet({
 
   const matchingSuggestion = useMemo(() => findGrocerySuggestionByExactKey(suggestions, name), [name, suggestions])
 
-  const canSave = !!name.trim() && !saving && (!!editingItem || !matchingSuggestion)
+  const isMeasuredEdit = editingItem?.amount != null && !!editingItem.unit
+  const canSave = !!name.trim() && !saving && (!isMeasuredEdit || (amount > 0 && !!unit.trim())) && (!!editingItem || !matchingSuggestion)
 
   async function save() {
     if (!canSave) return
     setSaving(true)
     try {
       if (editingItem?.id) {
-        await updateItem(editingItem.id, name.trim(), quantity, category)
+        await updateItem(editingItem.id, name.trim(), quantity, category, isMeasuredEdit ? { amount, unit: unit.trim() } : undefined)
       } else {
         await addItem(name.trim(), quantity, category)
       }
@@ -12760,11 +12771,16 @@ function GroceriesDraftSheet({
           className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
         />
 
-        <div className="mt-4 flex items-center justify-center gap-3">
+        {isMeasuredEdit ? (
+          <div className="mt-4 grid grid-cols-[1fr_1fr] gap-3">
+            <input aria-label={language === 'no' ? 'Mengde' : 'Amount'} type="number" min="0.01" step="any" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none" />
+            <input aria-label={language === 'no' ? 'Enhet' : 'Unit'} value={unit} onChange={(e) => setUnit(e.target.value)} className="h-11 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none" />
+          </div>
+        ) : <div className="mt-4 flex items-center justify-center gap-3">
           <button onClick={() => setQuantity((v) => Math.max(1, v - 1))} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">−</button>
           <div className="w-10 text-center text-[color:var(--fg-85)]">{quantity}</div>
           <button onClick={() => setQuantity((v) => v + 1)} className="h-9 w-9 rounded-full border border-[color:var(--bd-15)]">+</button>
-        </div>
+        </div>}
 
         <select
           value={category}

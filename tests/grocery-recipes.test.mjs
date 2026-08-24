@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { groceryRecipeItem, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries } from '../app/lib/groceries/recipes.mjs'
+import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries } from '../app/lib/groceries/recipes.mjs'
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
 
 test('manual ingredient parsing handles fractions, vulgar fractions, and ranges conservatively', () => {
@@ -34,6 +34,21 @@ test('normal grocery add does not merge into a measured recipe row', () => {
   assert.equal(isUnmeasuredGroceryItem(normalMilk), true)
   const rowsEligibleForTheExistingNormalMerge = [recipeMilk, normalMilk].filter(isUnmeasuredGroceryItem)
   assert.deepEqual(rowsEligibleForTheExistingNormalMerge, [normalMilk])
+})
+
+test('editing a measured grocery updates amount and unit without misusing package quantity', () => {
+  assert.deepEqual(groceryItemEditPayload(' Milk ', 2, 'dairy', { amount: 2, unit: ' L ' }), { name: 'Milk', quantity: 1, amount: 2, unit: 'L', category: 'dairy' })
+  assert.deepEqual(groceryItemEditPayload('Milk', 2, 'dairy'), { name: 'Milk', quantity: 2, amount: null, unit: null, category: 'dairy' })
+})
+
+test('failed ingredient persistence rolls back its newly created recipe', async () => {
+  const events = []
+  await assert.rejects(saveRecipeWithRollback({
+    createRecipe: async () => { events.push('recipe-created'); return { id: 'recipe-1' } },
+    createIngredients: async (_id, ingredients) => { events.push(`ingredients:${ingredients.length}`); throw new Error('duplicate ingredient') },
+    deleteRecipe: async (id) => { events.push(`recipe-deleted:${id}`) },
+  }, { name: 'Soup' }, [{ name: 'Salt' }, { name: ' salt ' }]), /duplicate ingredient/)
+  assert.deepEqual(events, ['recipe-created', 'ingredients:1', 'recipe-deleted:recipe-1'])
 })
 
 test('only selected recipe ingredients become grocery inputs', () => {
