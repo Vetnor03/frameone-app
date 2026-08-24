@@ -12490,30 +12490,28 @@ function GroceriesModuleSettingsTab({
         >
           {language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'}
         </button>
-        <button
-          onClick={() => setRecipeOpen(true)}
-          disabled={!activeDeviceId}
-          className="mt-2 text-xs tracking-widest text-[color:var(--fg-55)] disabled:opacity-40"
-        >
-          {language === 'no' ? '+ LEGG TIL OPPSKRIFT' : '+ ADD RECIPE'}
-        </button>
-        <button
-          onClick={() => {
-            if (dinnerPlanLockedByOtherUser) return
-            const nextOffset = defaultDinnerPlanWeekOffset()
-            setDinnerPlanWeekOffset(nextOffset)
-            void loadDinnerPlan(nextOffset)
-            setDinnerPlanOpen(true)
-          }}
-          disabled={!activeDeviceId || dinnerPlanLockedByOtherUser}
-          className={`mt-3 w-[260px] h-[44px] rounded-2xl border text-xs tracking-widest transition ${
-            !activeDeviceId || dinnerPlanLockedByOtherUser ? 'border-[color:var(--bd-10)] text-[color:var(--fg-40)]' : 'border-[color:var(--bd-15)] text-[color:var(--fg-75)]'
-          }`}
-        >
-          {dinnerPlanLockedByOtherUser
-            ? (language === 'no' ? 'LÅST AV ANNEN BRUKER' : 'LOCKED BY OTHER USER')
-            : (language === 'no' ? (hasDinnerPlan ? 'REDIGER MIDDAGSPLAN' : 'LAG MIDDAGSPLAN') : (hasDinnerPlan ? 'EDIT DINNER PLAN' : 'CREATE DINNER PLAN'))}
-        </button>
+        <div className="mt-3 grid w-[260px] grid-cols-2 gap-2">
+          <button
+            onClick={() => {
+              if (dinnerPlanLockedByOtherUser) return
+              const nextOffset = defaultDinnerPlanWeekOffset()
+              setDinnerPlanWeekOffset(nextOffset)
+              void loadDinnerPlan(nextOffset)
+              setDinnerPlanOpen(true)
+            }}
+            disabled={!activeDeviceId || dinnerPlanLockedByOtherUser}
+            className="h-[44px] rounded-2xl border border-[color:var(--bd-15)] text-[10px] tracking-widest text-[color:var(--fg-75)] transition disabled:opacity-40"
+          >
+            {language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'}
+          </button>
+          <button
+            onClick={() => setRecipeOpen(true)}
+            disabled={!activeDeviceId}
+            className="h-[44px] rounded-2xl border border-[color:var(--bd-15)] text-[10px] tracking-widest text-[color:var(--fg-75)] transition disabled:opacity-40"
+          >
+            {language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'}
+          </button>
+        </div>
       </div>
     </div>
     {dinnerPlanOpen && activeDeviceId && (
@@ -12597,7 +12595,7 @@ function GroceriesModuleSettingsTab({
 type RecipePreviewIngredient = RecipeIngredient & { selected: boolean }
 
 function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLanguage; deviceId: string; onClose: () => void; onAdd: (items: Array<GroceryRecipeItem & { category: string }>) => Promise<void> }) {
-  const [mode, setMode] = useState<'start' | 'url' | 'manual' | 'preview' | 'saved'>('start')
+  const [mode, setMode] = useState<'start' | 'url' | 'manual' | 'preview' | 'saved'>('saved')
   const [url, setUrl] = useState('')
   const [manualName, setManualName] = useState('')
   const [manualText, setManualText] = useState('')
@@ -12605,6 +12603,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   const [ingredients, setIngredients] = useState<RecipePreviewIngredient[]>([])
   const [servings, setServings] = useState<number | null>(null)
   const [savedRecipes, setSavedRecipes] = useState<any[]>([])
+  const [recipeSearch, setRecipeSearch] = useState('')
   const [pendingAction, setPendingAction] = useState<'import' | 'load' | 'save' | 'add' | null>(null)
   const [success, setSuccess] = useState<'saved' | 'added' | null>(null)
   const [error, setError] = useState('')
@@ -12627,13 +12626,14 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       setError(importError instanceof Error ? importError.message : (language === 'no' ? 'Importeringen mislyktes.' : 'Import failed.'))
     } finally { setPendingAction(null) }
   }
-  async function loadSaved() {
+  const loadSaved = useCallback(async () => {
     setMode('saved'); setPendingAction('load'); setSuccess(null); setError('')
-    const { data, error: loadError } = await supabase.from('grocery_recipes').select('id,name,source_url,base_servings,grocery_recipe_ingredients(name,quantity,unit,category,sort_order)').eq('device_id', deviceId).eq('is_active', true).order('updated_at', { ascending: false })
+    const { data, error: loadError } = await supabase.from('grocery_recipes').select('id,name,source_url,base_servings,grocery_recipe_ingredients(name,quantity,unit,category,sort_order)').eq('device_id', deviceId).eq('is_active', true).order('name', { ascending: true })
     if (loadError) setError(`${language === 'no' ? 'Kunne ikke laste oppskrifter' : 'Could not load recipes'}: ${loadError.message}`)
-    else setSavedRecipes(data || [])
+    else setSavedRecipes([...(data || [])].sort((a, b) => String(a.name).localeCompare(String(b.name), language, { sensitivity: 'base' })))
     setPendingAction(null)
-  }
+  }, [deviceId, language])
+  useEffect(() => { void loadSaved() }, [loadSaved])
   async function saveRecipe() {
     if (!draft) return
     setPendingAction('save'); setSuccess(null); setError('')
@@ -12665,9 +12665,10 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
     }
   }
   const selected = ingredients.filter((item) => item.selected)
+  const visibleRecipes = savedRecipes.filter((recipe) => String(recipe.name).toLocaleLowerCase(language).includes(recipeSearch.trim().toLocaleLowerCase(language)))
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] max-h-[92vh] overflow-y-auto rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] p-5">
-      <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'OPPSKRIFT' : 'RECIPE'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
+      <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{mode === 'saved' ? (language === 'no' ? 'OPPSKRIFTER' : 'RECIPES') : (language === 'no' ? 'OPPSKRIFT' : 'RECIPE')}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
       {mode === 'start' ? <div className="mt-5 grid gap-3">
         <button onClick={() => setMode('url')} className="h-12 rounded-2xl border border-[color:var(--bd-15)]">{language === 'no' ? 'Lim inn oppskriftslenke' : 'Paste recipe URL'}</button>
         <button onClick={() => setMode('manual')} className="h-12 rounded-2xl border border-[color:var(--bd-15)]">{language === 'no' ? 'Skriv inn ingredienser' : 'Enter ingredients manually'}</button>
@@ -12675,11 +12676,15 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       </div> : null}
       {mode === 'url' ? <div className="mt-5"><input autoFocus type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className="w-full h-12 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 outline-none"/><button disabled={busy || !url.trim()} onClick={importUrl} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-40">{pendingAction === 'import' ? (language === 'no' ? 'IMPORTERER OPPSKRIFT…' : 'IMPORTING RECIPE…') : (language === 'no' ? 'IMPORTER' : 'IMPORT')}</button></div> : null}
       {mode === 'manual' ? <div className="mt-5 grid gap-3"><input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder={language === 'no' ? 'Navn på oppskrift' : 'Recipe name'} className="h-11 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4"/><textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows={8} placeholder={language === 'no' ? 'Én ingrediens per linje\n2 tomater\n1 l melk' : 'One ingredient per line\n2 tomatoes\n1 L milk'} className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4"/><button disabled={!manualText.trim()} onClick={() => showPreview({ name: manualName.trim() || (language === 'no' ? 'Min oppskrift' : 'My recipe'), sourceUrl: null, servings: null, ingredients: parseManualIngredients(manualText) })} className="h-11 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'FORHÅNDSVIS' : 'PREVIEW'}</button></div> : null}
-      {mode === 'saved' ? <div className="mt-4 grid gap-2">{pendingAction === 'load' ? <div role="status" className="py-8 text-center text-sm tracking-wide text-[color:var(--fg-55)]">{language === 'no' ? 'LASTER OPPSKRIFTER…' : 'LOADING RECIPES…'}</div> : savedRecipes.length ? savedRecipes.map((recipe) => <button key={recipe.id} onClick={() => showPreview({ name: recipe.name, sourceUrl: recipe.source_url, servings: recipe.base_servings == null ? null : Number(recipe.base_servings), ingredients: [...(recipe.grocery_recipe_ingredients || [])].sort((a,b) => a.sort_order-b.sort_order).map((x) => ({ ...x, quantity: x.quantity == null ? null : Number(x.quantity) })) })} className="rounded-2xl border border-[color:var(--bd-10)] p-4 text-left"><div>{recipe.name}</div><div className="mt-1 text-xs text-[color:var(--fg-45)]">{recipe.grocery_recipe_ingredients?.length || 0} {language === 'no' ? 'ingredienser' : 'ingredients'}</div></button>) : <div className="py-8 text-center text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen lagrede oppskrifter' : 'No saved recipes'}</div>}</div> : null}
-      {mode === 'preview' && draft ? <div className="mt-4"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full bg-transparent text-lg font-medium outline-none"/>{draft.servings ? <div className="mt-3 flex items-center gap-3 text-sm"><span>{language === 'no' ? 'Porsjoner' : 'Servings'}</span><button onClick={() => setServings(Math.max(1, (servings || 1)-1))} className="h-8 w-8 rounded-full border">−</button><span>{servings}</span><button onClick={() => setServings((servings || 0)+1)} className="h-8 w-8 rounded-full border">+</button></div> : null}<div className="mt-4 divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)]">{ingredients.map((item, index) => { const qty = scaleRecipeQuantity(item.quantity, draft.servings, servings); return <div key={index} className="flex items-center gap-2 p-3"><input type="checkbox" checked={item.selected} onChange={() => setIngredients((all) => all.map((x,i) => i === index ? { ...x, selected: !x.selected } : x))}/><input value={item.name} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, name: e.target.value } : x))} className="min-w-0 flex-1 bg-transparent outline-none"/><input aria-label="Quantity" type="number" step="any" value={qty ?? ''} onChange={(e) => { const scaled = e.target.value === '' ? null : Number(e.target.value); const base = scaled == null || !draft.servings || !servings ? scaled : scaled * draft.servings / servings; setIngredients((all) => all.map((x,i) => i === index ? { ...x, quantity: base } : x)) }} className="w-14 bg-transparent text-right outline-none"/><input aria-label="Unit" value={item.unit || ''} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, unit: e.target.value || null } : x))} className="w-12 bg-transparent text-[color:var(--fg-55)] outline-none"/><button aria-label="Remove" onClick={() => setIngredients((all) => all.filter((_,i) => i !== index))} className="text-[color:var(--fg-45)]">✕</button></div>})}</div><div className="mt-4 flex gap-2"><button disabled={busy} onClick={saveRecipe} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs disabled:opacity-40">{pendingAction === 'save' ? (language === 'no' ? 'LAGRER OPPSKRIFT…' : 'SAVING RECIPE…') : (language === 'no' ? 'LAGRE OPPSKRIFT' : 'SAVE RECIPE')}</button><button disabled={!selected.length || busy} onClick={addSelectedIngredients} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs disabled:opacity-40">{pendingAction === 'add' ? (language === 'no' ? 'LEGGER TIL I HANDLELISTEN…' : 'ADDING TO GROCERIES…') : (language === 'no' ? `LEGG TIL (${selected.length})` : `ADD (${selected.length})`)}</button></div></div> : null}
+      {mode === 'saved' ? <div className="mt-4">
+        <button onClick={() => setMode('start')} className="h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff]">{language === 'no' ? '+ LEGG TIL OPPSKRIFT' : '+ ADD RECIPE'}</button>
+        <input type="search" value={recipeSearch} onChange={(e) => setRecipeSearch(e.target.value)} placeholder={language === 'no' ? 'Søk i oppskrifter' : 'Search recipes'} aria-label={language === 'no' ? 'Søk i oppskrifter' : 'Search recipes'} className="mt-3 h-11 w-full rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 outline-none"/>
+        <div className="mt-3 grid gap-2">{pendingAction === 'load' ? <div role="status" className="py-8 text-center text-sm tracking-wide text-[color:var(--fg-55)]">{language === 'no' ? 'LASTER OPPSKRIFTER…' : 'LOADING RECIPES…'}</div> : visibleRecipes.length ? visibleRecipes.map((recipe) => <button key={recipe.id} onClick={() => showPreview({ name: recipe.name, sourceUrl: recipe.source_url, servings: recipe.base_servings == null ? null : Number(recipe.base_servings), ingredients: [...(recipe.grocery_recipe_ingredients || [])].sort((a,b) => a.sort_order-b.sort_order).map((x) => ({ ...x, quantity: x.quantity == null ? null : Number(x.quantity) })) })} className="rounded-2xl border border-[color:var(--bd-10)] p-4 text-left transition hover:border-[color:var(--bd-30)]"><div className="font-medium">{recipe.name}</div><div className="mt-1 text-xs text-[color:var(--fg-45)]">{recipe.grocery_recipe_ingredients?.length || 0} {language === 'no' ? 'ingredienser' : 'ingredients'}{recipe.base_servings ? ` · ${recipe.base_servings} ${language === 'no' ? 'porsjoner' : 'servings'}` : ''}</div></button>) : savedRecipes.length ? <div className="py-8 text-center text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen oppskrifter matcher søket' : 'No recipes match your search'}</div> : <div className="py-8 text-center"><div className="text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen lagrede oppskrifter ennå' : 'No saved recipes yet'}</div><button onClick={() => setMode('start')} className="mt-4 h-10 rounded-2xl border border-[#2aa3ff] px-5 text-xs tracking-widest text-[#2aa3ff]">{language === 'no' ? '+ LEGG TIL OPPSKRIFT' : '+ ADD RECIPE'}</button></div>}</div>
+      </div> : null}
+      {mode === 'preview' && draft ? <div className="mt-4"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full bg-transparent text-lg font-medium outline-none"/>{draft.servings ? <div className="mt-3 flex items-center gap-3 text-sm"><span>{language === 'no' ? 'Porsjoner' : 'Servings'}</span><button onClick={() => setServings(Math.max(1, (servings || 1)-1))} className="h-8 w-8 rounded-full border">−</button><span>{servings}</span><button onClick={() => setServings((servings || 0)+1)} className="h-8 w-8 rounded-full border">+</button></div> : null}<div className="mt-4 divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)]">{ingredients.map((item, index) => { const qty = scaleRecipeQuantity(item.quantity, draft.servings, servings); return <div key={index} className={`flex items-center gap-2 p-3 transition ${item.selected ? '' : 'bg-[color:var(--panel-05)] text-[color:var(--fg-45)]'}`}><input aria-label={`${item.name}: ${language === 'no' ? 'må kjøpes' : 'needs to be bought'}`} type="checkbox" checked={item.selected} onChange={() => setIngredients((all) => all.map((x,i) => i === index ? { ...x, selected: !x.selected } : x))}/><div className="min-w-0 flex-1"><input value={item.name} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, name: e.target.value } : x))} className="w-full bg-transparent outline-none"/>{!item.selected ? <div className="mt-0.5 text-[10px] uppercase tracking-wider text-[color:var(--fg-45)]">{language === 'no' ? 'Har hjemme' : 'Already have'}</div> : null}</div><input aria-label="Quantity" type="number" step="any" value={qty ?? ''} onChange={(e) => { const scaled = e.target.value === '' ? null : Number(e.target.value); const base = scaled == null || !draft.servings || !servings ? scaled : scaled * draft.servings / servings; setIngredients((all) => all.map((x,i) => i === index ? { ...x, quantity: base } : x)) }} className="w-14 bg-transparent text-right outline-none"/><input aria-label="Unit" value={item.unit || ''} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, unit: e.target.value || null } : x))} className="w-12 bg-transparent text-[color:var(--fg-55)] outline-none"/></div>})}</div><div className="mt-4 flex gap-2"><button disabled={busy} onClick={saveRecipe} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs disabled:opacity-40">{pendingAction === 'save' ? (language === 'no' ? 'LAGRER OPPSKRIFT…' : 'SAVING RECIPE…') : (language === 'no' ? 'LAGRE OPPSKRIFT' : 'SAVE RECIPE')}</button><button disabled={!selected.length || busy} onClick={addSelectedIngredients} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs disabled:opacity-40">{pendingAction === 'add' ? (language === 'no' ? 'LEGGER TIL I HANDLELISTEN…' : 'ADDING TO GROCERIES…') : (language === 'no' ? `LEGG ${selected.length} I HANDLELISTEN` : `ADD ${selected.length} TO GROCERIES`)}</button></div></div> : null}
       {success ? <div role="status" aria-live="polite" className="mt-3 text-center text-sm font-medium tracking-wide text-[#2aa3ff]">{success === 'saved' ? (language === 'no' ? 'OPPSKRIFT LAGRET' : 'RECIPE SAVED') : (language === 'no' ? 'LAGT TIL I HANDLELISTEN' : 'ADDED TO GROCERIES')}</div> : null}
       {error ? <div role="alert" className="mt-3 text-sm text-red-400">{error}</div> : null}
-      {mode !== 'start' ? <button onClick={() => { setMode('start'); setError('') }} className="mt-4 w-full text-xs text-[color:var(--fg-45)]">← {language === 'no' ? 'TILBAKE' : 'BACK'}</button> : null}
+      {mode !== 'saved' ? <button onClick={() => { void loadSaved() }} className="mt-4 w-full text-xs text-[color:var(--fg-45)]">← {language === 'no' ? 'TIL OPPSKRIFTER' : 'BACK TO RECIPES'}</button> : null}
     </div>
   </div>
 }

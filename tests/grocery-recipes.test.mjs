@@ -107,3 +107,39 @@ test('the existing quick ADD ITEM action remains primary and opens its original 
   const recipeAction = ui.indexOf("setRecipeOpen(true)", addItemLabel)
   assert.ok(quickAdd > -1 && addItemLabel > quickAdd && recipeAction > addItemLabel)
 })
+
+test('Dinner Plan and Recipes are equal side-by-side secondary actions below primary ADD ITEM', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const primary = ui.indexOf("language === 'no' ? 'LEGG TIL VARE' : 'ADD ITEM'")
+  const secondaryGrid = ui.indexOf('grid w-[260px] grid-cols-2 gap-2', primary)
+  const dinner = ui.indexOf("language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'", secondaryGrid)
+  const recipes = ui.indexOf("language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'", dinner)
+  const sharedStyle = 'h-[44px] rounded-2xl border border-[color:var(--bd-15)] text-[10px] tracking-widest text-[color:var(--fg-75)] transition disabled:opacity-40'
+  assert.ok(primary > -1 && secondaryGrid > primary && dinner > secondaryGrid && recipes > dinner)
+  assert.equal(ui.slice(secondaryGrid, recipes + 500).split(sharedStyle).length - 1, 2)
+})
+
+test('recipe library loads alphabetically and supports live name search', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(ui, /\.order\('name', \{ ascending: true \}\)/)
+  assert.match(ui, /localeCompare\(String\(b\.name\)/)
+  assert.match(ui, /const visibleRecipes = savedRecipes\.filter\(\(recipe\) => String\(recipe\.name\).*includes\(recipeSearch\.trim\(\)/)
+  assert.match(ui, /type="search" value=\{recipeSearch\} onChange=\{\(e\) => setRecipeSearch\(e\.target\.value\)\}/)
+})
+
+test('saved recipe previews restore every ingredient selected without a delete action', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  assert.match(recipeSheet, /next\.ingredients\.map\(\(item\) => \(\{ \.\.\.item, selected: true \}\)\)/)
+  assert.doesNotMatch(recipeSheet, /aria-label="Remove"|all\.filter\(\(_.*,i\) => i !== index\)/)
+})
+
+test('unchecked recipe ingredients remain visible, are labelled, and only selected items are added', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  assert.match(recipeSheet, /ingredients\.map\(\(item, index\) =>/)
+  assert.match(recipeSheet, /item\.selected \? '' : 'bg-/)
+  assert.match(recipeSheet, /'Har hjemme' : 'Already have'/)
+  assert.match(recipeSheet, /selectedRecipeGroceries\(ingredients, draft\?\.servings \?\? null, servings\)/)
+  assert.match(recipeSheet, /`LEGG \$\{selected\.length\} I HANDLELISTEN` : `ADD \$\{selected\.length\} TO GROCERIES`/)
+})
