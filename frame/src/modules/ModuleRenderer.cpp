@@ -15,12 +15,18 @@
 // Simple smooth placeholder font (keep UI consistent)
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
+#include <string.h>
 #include <strings.h>
+
+static bool hasBaseModule(const char* module, const char* base) {
+  const size_t n = strlen(base);
+  return strncasecmp(module, base, n) == 0 && (module[n] == '\0' || module[n] == ':');
+}
 
 bool ModuleRenderer::canRenderCell(const char* module, const Cell& cell) {
   if (!module || module[0] == '\0') return false;
   if (cell.size != CELL_ADAPTIVE) return true; // frozen anchor dispatch/support
-  return strcasecmp(module, "date") == 0;
+  return hasBaseModule(module, "date") || hasBaseModule(module, "weather");
 }
 
 static void measureText(const char* text, const GFXfont* font,

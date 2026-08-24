@@ -1,7 +1,7 @@
 import {
   BUILT_IN_LAYOUT_KEYS as builtIns, CUSTOM_LAYOUT_NAME_MAX as maxName,
   SUPPORTED_PHYSICAL_GEOMETRIES as geometries, normalizeLayoutName as normalize,
-  ADAPTIVE_DATE_GEOMETRIES as adaptiveGeometries,
+  ADAPTIVE_PHYSICAL_GEOMETRIES as adaptiveGeometries,
   nextCustomLayoutName as nextName,
   orderedLayoutItems as ordered, validateCustomGeometry as validate,
   geometryWithAssignments as assigned, customPhysicalPayload as payload,
@@ -14,7 +14,7 @@ export type CustomLayout = { id: string; deviceId: string; ownerUserId: string; 
 export const BUILT_IN_LAYOUT_KEYS = builtIns as readonly ['default','pyramid','square','full']
 export const CUSTOM_LAYOUT_NAME_MAX = maxName as number
 export const SUPPORTED_PHYSICAL_GEOMETRIES = geometries as Set<string>
-export const ADAPTIVE_DATE_GEOMETRIES = adaptiveGeometries as Set<string>
+export const ADAPTIVE_PHYSICAL_GEOMETRIES = adaptiveGeometries as Set<string>
 export const normalizeLayoutName = normalize as (value:unknown)=>string
 export const nextCustomLayoutName = nextName as (layouts:Array<{name?:unknown}>)=>string
 export const orderedLayoutItems = ordered as (layouts:CustomLayout[])=>Array<{type:'built-in'|'custom'|'add';key:string;id:string;layout?:CustomLayout}>

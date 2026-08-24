@@ -40,11 +40,25 @@ coordinates, and fallback behavior.
   use the generic Phase C pipeline, with exact parity against all four named
   layouts. Layouts containing `CELL_ADAPTIVE` remain valid and staged but
   dormant, and any preflight failure falls back completely to `DEFAULT`.
-- **Phase E1 — this PR:** enables adaptive physical rendering for the Date
-  module only. Physical capability is module-aware: the four anchor geometries
-  retain their existing module behavior, while a `CELL_ADAPTIVE` cell is
-  accepted only when its assignment is Date. `CELL_ADAPTIVE` is **not**
-  generally supported. Future phases will add other modules one at a time.
+- **Phase E1 — complete:** adaptive physical rendering for Date.
+- **Phase E2 — this PR:** adds adaptive physical rendering for Weather while
+  preserving its four handmade anchors. Physical `CELL_ADAPTIVE` support is now
+  limited to the Date and Weather base modules; Reminders, Countdown, Surf,
+  Soccer, Stocks, Groceries, AI Follow, and unknown/empty modules remain unsupported.
+
+### WEATHER ADAPTIVE LAB
+
+This test-only fixture exercises adaptive Weather compositions and a T-junction;
+it is not a user-facing built-in layout:
+
+```json
+[
+  {"slot":0,"col":0,"row":0,"colSpan":2,"rowSpan":1,"module":"weather:1"},
+  {"slot":1,"col":2,"row":0,"colSpan":2,"rowSpan":1,"module":"weather:1"},
+  {"slot":2,"col":0,"row":1,"colSpan":3,"rowSpan":3,"module":"weather:1"},
+  {"slot":3,"col":3,"row":1,"colSpan":1,"rowSpan":3,"module":"weather:1"}
+]
+```
 
 ### DATE ADAPTIVE LAB
 

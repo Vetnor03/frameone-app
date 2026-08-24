@@ -41,9 +41,9 @@ test('all twelve Date adaptive geometries form complete eligible 4x4 plans with 
 })
 
 test('unsupported adaptive assignments reject the whole plan atomically',()=>{
-  for(const [w,h,module] of [[1,1,'weather'],[3,3,'reminders'],[1,4,'countdown']])
+  for(const [w,h,module] of [[1,1,'surf'],[3,3,'reminders'],[1,4,'countdown']])
     assert.equal(supportsPhysicalCustomLayout(tiling(w,h,module)).valid,false)
-  const lab=tiling(3,3);lab.find(c=>c.slot===1).module='weather'
+  const lab=tiling(3,3);lab.find(c=>c.slot===1).module='surf'
   assert.equal(supportsPhysicalCustomLayout(lab).valid,false)
   for(const module of ['', 'unknown'])assert.equal(supportsPhysicalCustomLayout(tiling(3,3,module)).valid,false)
   const anchorWeather=[{slot:0,col:0,row:0,colSpan:4,rowSpan:1,module:'weather'},
@@ -56,7 +56,7 @@ test('firmware keeps anchor dispatch frozen and gates only adaptive Date central
   const [types,layout,renderer,date]=await Promise.all(['frame/src/core/Types.h','frame/src/core/Layout.cpp','frame/src/modules/ModuleRenderer.cpp','frame/src/modules/ModuleDate.cpp'].map(p=>readFile(new URL(`../${p}`,import.meta.url),'utf8')))
   assert.match(types,/uint8_t gridCol, gridRow, colSpan, rowSpan;/)
   assert.match(layout,/g\.col, g\.row, g\.colSpan, g\.rowSpan, g\.size/)
-  assert.match(renderer,/cell\.size != CELL_ADAPTIVE[\s\S]*strcasecmp\(module, "date"\)/)
+  assert.match(renderer,/cell\.size != CELL_ADAPTIVE[\s\S]*hasBaseModule\(module, "date"\)/)
   assert.match(layout,/validateGridLayout\(custom\.grid\)[\s\S]*buildGridCells[\s\S]*canRenderCell[\s\S]*deriveGridDividers[\s\S]*resolveGridDivider[\s\S]*output = staged/)
   const dispatch=date.match(/static void renderDate[\s\S]*?\n\}/)[0]
   assert.ok(dispatch.indexOf('c.size == CELL_ADAPTIVE')<dispatch.indexOf('c.size == CELL_SMALL'))

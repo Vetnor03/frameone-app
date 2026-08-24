@@ -53,6 +53,9 @@ struct WeatherCache {
 
   float tempC = NAN;
   float humidity = NAN;
+  float currentWindMs = NAN;
+  float currentWindDirectionDeg = NAN;
+  int currentPrecipProbability = -1;
   int currentWmo = -1;
 
   float hiC = NAN;
@@ -997,11 +1000,14 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   filter["current"]["temperature_2m"] = true;
   filter["current"]["relative_humidity_2m"] = true;
   filter["current"]["weather_code"] = true;
+  filter["current"]["wind_speed_10m"] = true;
+  filter["current"]["wind_direction_10m"] = true;
   filter["hourly"]["time"] = true;
   filter["hourly"]["temperature_2m"] = true;
   filter["hourly"]["weather_code"] = true;
   filter["hourly"]["wind_speed_10m"] = true;
   filter["hourly"]["precipitation"] = true;
+  filter["hourly"]["precipitation_probability"] = true;
   filter["daily"]["time"] = true;
   filter["daily"]["temperature_2m_max"] = true;
   filter["daily"]["temperature_2m_min"] = true;
@@ -1041,17 +1047,23 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
   requireField(current, "current", "time");
   requireField(current, "current", "temperature_2m");
   requireField(current, "current", "weather_code");
+  requireField(current, "current", "wind_speed_10m");
+  requireField(current, "current", "wind_direction_10m");
   requireField(hourlyForValidation, "hourly", "time");
   requireField(hourlyForValidation, "hourly", "temperature_2m");
   requireField(hourlyForValidation, "hourly", "weather_code");
   requireField(hourlyForValidation, "hourly", "wind_speed_10m");
   requireField(hourlyForValidation, "hourly", "precipitation");
+  requireField(hourlyForValidation, "hourly", "precipitation_probability");
   requireField(dailyForValidation, "daily", "sunrise");
   requireField(dailyForValidation, "daily", "sunset");
   if (missingRequired) return false;
 
   out.tempC = current["temperature_2m"] | NAN;
   out.humidity = current["relative_humidity_2m"] | NAN;
+  out.currentWindMs = current["wind_speed_10m"] | NAN;
+  out.currentWindDirectionDeg = current["wind_direction_10m"] | NAN;
+  out.currentPrecipProbability = -1;
   out.currentWmo = current["weather_code"] | -1;
 
   out.hiC = NAN; out.loC = NAN; out.windMaxMs = NAN; out.precipMm = NAN;
@@ -1112,6 +1124,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
     JsonArray wmoArr  = hourly["weather_code"].as<JsonArray>();
     JsonArray windArr = hourly["wind_speed_10m"].as<JsonArray>();
     JsonArray prArr   = hourly["precipitation"].as<JsonArray>();
+    JsonArray probArr = hourly["precipitation_probability"].as<JsonArray>();
 
     const int N = (int)timeArr.size();
     const int START_H = 0;
@@ -1252,6 +1265,10 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
         out.todayPrecipMm[j] = pr;
         out.todayWindMs[j] = wind;
         out.todayWmo[j] = wmo;
+      }
+      if (sameDateAsCurrent && hour == currentHour && i < (int)probArr.size() && !probArr[i].isNull()) {
+        int probability = probArr[i].as<int>();
+        if (probability >= 0 && probability <= 100) out.currentPrecipProbability = probability;
       }
       bool isRestOfToday = sameDateAsCurrent && currentHour >= 0 && hour >= currentHour;
 
@@ -1448,6 +1465,110 @@ static void buildWindStr(char* out, size_t n, float windMaxMs) {
 // -----------------------------------------------------------------------------
 // Rendering
 // -----------------------------------------------------------------------------
+// Responsive CELL_ADAPTIVE grammar ported from app/lib/weatherResponsive.mjs.
+static const char* cardinalDirection(float degrees) {
+  if (isnan(degrees)) return "";
+  static const char* dirs[] = {"N","NE","E","SE","S","SW","W","NW"};
+  int index = ((int)lroundf(degrees / 45.0f)) & 7;
+  return dirs[index];
+}
+
+static bool drawFitCentered(int x, int y, int w, int h, const char* text,
+                            const GFXfont* preferred, uint16_t ink) {
+  if (!text || !text[0] || w < 8 || h < 8) return false;
+  const GFXfont* choices[] = {preferred, FONT_B12, FONT_B9};
+  for (int i = 0; i < 3; i++) {
+    if (i && choices[i] == choices[i - 1]) continue;
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(text, choices[i], x1, y1, tw, th);
+    if ((int)tw <= w && (int)th <= h) {
+      drawCenteredBox(x, y, w, h, text, choices[i], ink);
+      return true;
+    }
+  }
+  return false; // factual values are omitted rather than split or rewritten
+}
+
+static void renderAdaptive(const Cell& c, const WeatherInstanceConfig& cfg,
+                           const WeatherCache& data) {
+  const uint16_t ink = Theme::ink();
+  auto& d = DisplayCore::get();
+  if (!data.valid || (isnan(data.tempC) && data.condition[0] == 0)) {
+    drawCenteredBox(c.x + 9, c.y + 9, c.w - 18, c.h - 18,
+                    "Weather unavailable", FONT_B9, ink);
+    return;
+  }
+
+  const int area = (int)c.colSpan * (int)c.rowSpan;
+  const bool portrait = c.rowSpan > c.colSpan;
+  const bool landscape = c.colSpan > c.rowSpan;
+  const bool showCondition = area >= 2 && cfg.showCondition && data.condition[0];
+  const bool showRange = area >= 3 && cfg.showHiLo && (!isnan(data.loC) || !isnan(data.hiC));
+  const bool showWind = area >= 3 && (!isnan(data.currentWindMs) || !isnan(data.currentWindDirectionDeg));
+  const bool showProbability = area >= 4 && data.currentPrecipProbability >= 0;
+  const bool large = area >= 8 && c.h >= 300;
+  int forecastCount = large ? min(data.dayCount, c.w >= 500 ? 4 : 3) : 0;
+
+  const int pad = constrain((int)lroundf((float)min(c.w, c.h) * .08f), 9, 18);
+  const int ix = c.x + pad, iy = c.y + pad;
+  const int iw = max(1, c.w - pad * 2), ih = max(1, c.h - pad * 2);
+  char location[48] = {0}; getDisplayLocationName(cfg, location, sizeof(location));
+  const bool showLocation = area >= 3 && location[0];
+  const int headerH = showLocation ? min(34, max(25, (int)(ih * .12f))) : 0;
+  const int forecastH = forecastCount ? min(126, max(96, (int)(ih * .31f))) : 0;
+  const int dividerGap = forecastH ? 10 : 0;
+  const int currentY = iy + headerH;
+  const int currentH = max(1, ih - headerH - forecastH - dividerGap);
+  const bool hasDetails = showRange || showWind || showProbability;
+  int px = ix, py = currentY, pw = iw, ph = currentH;
+  int dx = 0, dy = 0, dw = 0, dh = 0;
+  if (portrait) {
+    dh = hasDetails ? min(78, max(42, (int)(currentH * .25f))) : 0;
+    ph = max(1, currentH - dh); dx = ix; dy = py + ph; dw = iw;
+  } else if (hasDetails && c.w >= 420) {
+    pw = (int)lroundf(iw * .59f); dx = ix + pw + 8; dy = currentY;
+    dw = max(1, iw - pw - 8); dh = currentH;
+  }
+
+  if (showLocation && drawFitCentered(ix, iy, iw, headerH, location, FONT_B12, ink)) {
+    int16_t x1,y1; uint16_t tw,th; measureText(location,FONT_B12,x1,y1,tw,th);
+    int lineW=min((int)(iw*.68f),(int)tw); d.fillRect(ix+(iw-lineW)/2,iy+min(headerH-5,18),lineW,2,ink);
+  }
+
+  char temperature[16] = {0}; formatTemp(temperature, sizeof(temperature), data.tempC, cfg.units);
+  if (portrait) {
+    int tempH=min(58,(int)(ph*.30f)), iconH=min(88,(int)(ph*.40f));
+    drawFitCentered(px,py,pw,tempH,temperature,FONT_B18,ink);
+    int iconSize=min(min((int)(pw*.62f),90),max(1,iconH-8));
+    ModuleIcons::drawWeatherIcon(px+pw/2,py+tempH+iconH/2,iconSize,data.currentWmo);
+    int conditionH=showCondition?max(0,ph-tempH-iconH):0;
+    if(conditionH>=16)drawWrappedTextBox(px,py+tempH+iconH,pw,conditionH,data.condition,FONT_B9,ink,4);
+  } else {
+    int iconW=min((int)(pw*.34f),94), gap=min(12,(int)(pw*.04f));
+    int textX=px+iconW+gap, textW=max(1,pw-iconW-gap);
+    int iconSize=min(iconW,max(1,(int)(ph*.72f)-8));
+    ModuleIcons::drawWeatherIcon(px+iconW/2,py+(int)(ph*.12f)+iconSize/2,iconSize,data.currentWmo);
+    int tempH=showCondition?(int)(ph*.58f):ph;
+    drawFitCentered(textX,py,textW,tempH,temperature,FONT_B18,ink);
+    if(showCondition)drawWrappedTextBox(textX,py+tempH,textW,ph-tempH,data.condition,FONT_B9,ink,3);
+  }
+
+  char detail[3][40] = {{0}}; int detailCount=0;
+  if(showRange){char lo[12]={0},hi[12]={0};formatTemp(lo,sizeof(lo),data.loC,cfg.units);formatTemp(hi,sizeof(hi),data.hiC,cfg.units);snprintf(detail[detailCount++],40,"Low %s  High %s",lo,hi);}
+  if(showWind){const char* dir=cardinalDirection(data.currentWindDirectionDeg);if(!isnan(data.currentWindMs))snprintf(detail[detailCount++],40,"Wind %s%d m/s",dir[0]?dir:"",(int)lroundf(data.currentWindMs));else snprintf(detail[detailCount++],40,"Wind %s",dir);}
+  if(showProbability)snprintf(detail[detailCount++],40,"Rain %d%%",data.currentPrecipProbability);
+  if(dw>0&&detailCount){int rowH=dh/detailCount;for(int i=0;i<detailCount;i++)drawFitCentered(dx,dy+i*rowH,dw,rowH,detail[i],FONT_B9,ink);}
+
+  if(forecastCount){int fy=iy+ih-forecastH;d.drawFastHLine(ix,fy-dividerGap/2,iw,ink);int colW=iw/forecastCount;
+    for(int i=0;i<forecastCount;i++){int cx=ix+i*colW,cw=(i==forecastCount-1)?ix+iw-cx:colW;if(i)d.drawFastVLine(cx,fy+7,forecastH-12,ink);
+      const DayForecast& day=data.days[i];char label[12]={0},temp[12]={0};int yy,mm,dd;if(parseYMDFromIso8601(day.dateYMD,yy,mm,dd))strlcpy(label,weekdayNameShort(weekdayIndex(yy,mm,dd)),sizeof(label));
+      float forecastTemp=!isnan(day.hiC)?day.hiC:day.loC;formatTemp(temp,sizeof(temp),forecastTemp,cfg.units);
+      drawFitCentered(cx+5,fy+4,cw-10,22,label,FONT_B9,ink);drawFitCentered(cx+5,fy+30,cw-10,25,temp,FONT_B12,ink);
+      drawWrappedTextBox(cx+5,fy+59,cw-10,forecastH-61,conditionFromWmo(day.wmo),FONT_B9,ink,2);
+    }
+  } else if(large && data.aiInsight[0] && dw>0) drawWrappedTextBox(dx,dy,dw,dh,data.aiInsight,FONT_B9,ink,3);
+}
+
 static void renderSmall(const Cell& c,
                         const WeatherInstanceConfig& cfg,
                         const WeatherCache& data) {
@@ -2267,7 +2388,8 @@ void render(const Cell& c, const String& moduleName) {
     return;
   }
 
-  if (c.size == CELL_SMALL)       renderSmall(c, cfg, data);
+  if (c.size == CELL_ADAPTIVE)    renderAdaptive(c, cfg, data);
+  else if (c.size == CELL_SMALL)  renderSmall(c, cfg, data);
   else if (c.size == CELL_MEDIUM) renderMedium(c, cfg, data);
   else if (c.size == CELL_LARGE)  renderLargeXL(c, cfg, data);
   else if (c.size == CELL_XL)     renderLargeXL(c, cfg, data);

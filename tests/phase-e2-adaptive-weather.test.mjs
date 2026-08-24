@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict'
+import {readFile} from 'node:fs/promises'
+import test from 'node:test'
+import {supportsPhysicalCustomCell,supportsPhysicalCustomLayout,validateCustomGeometry} from '../app/lib/customLayouts.mjs'
+const adaptive=[[1,1],[1,2],[1,3],[1,4],[2,1],[2,3],[2,4],[3,1],[3,2],[3,3],[3,4],[4,3]]
+const bx=[9,205,401,597,794],by=[22,136,251,365,480]
+function partition(w,h,module='weather:1'){const cells=[{slot:0,col:0,row:0,colSpan:w,rowSpan:h,module}];let slot=1;for(let y=0;y<4;y++)for(let x=0;x<4;x++)if(!(x<w&&y<h))cells.push({slot:slot++,col:x,row:y,colSpan:1,rowSpan:1,module:'date'});return cells}
+test('Weather base-module capability is exact and instance aware',()=>{for(const module of ['weather','weather:1','weather:2','weather:abc'])assert.equal(supportsPhysicalCustomCell({colSpan:3,rowSpan:3,module}),true);for(const module of ['weatherfoo','notweather','weather-foo','','unknown'])assert.equal(supportsPhysicalCustomCell({colSpan:3,rowSpan:3,module}),false)})
+test('all twelve adaptive Weather geometries resolve in complete physical plans',()=>{for(const [w,h] of adaptive){const cells=partition(w,h),target=cells[0];assert.equal(validateCustomGeometry(cells).valid,true);assert.deepEqual([target.col,target.row,target.colSpan,target.rowSpan],[0,0,w,h]);assert.deepEqual([bx[w]-bx[0],by[h]-by[0]],[target.colSpan===w?bx[w]-9:0,by[h]-22]);assert.equal(supportsPhysicalCustomLayout(cells).valid,true)}})
+test('mixed plans remain atomic and module aware',()=>{const supported=[
+ [{slot:0,col:0,row:0,colSpan:2,rowSpan:2,module:'date'},{slot:1,col:2,row:0,colSpan:2,rowSpan:2,module:'weather:2'},{slot:2,col:0,row:2,colSpan:4,rowSpan:2,module:'countdown'}],
+ [{slot:0,col:0,row:0,colSpan:4,rowSpan:1,module:'reminders'},{slot:1,col:0,row:1,colSpan:4,rowSpan:3,module:'weather:1'}]];for(const cells of supported)assert.equal(supportsPhysicalCustomLayout(cells).valid,true)
+ for(const module of ['reminders','countdown','']){const cells=partition(3,3);cells.find(c=>c.slot===1).module=module;assert.equal(supportsPhysicalCustomLayout(cells).valid,false)}})
+test('firmware adds adaptive dispatch without changing four anchor renderer bodies',async()=>{const [renderer,weather,route]=await Promise.all(['frame/src/modules/ModuleRenderer.cpp','frame/src/modules/ModuleWeather.cpp','app/api/weather/details/route.ts'].map(p=>readFile(new URL('../'+p,import.meta.url),'utf8')));assert.match(renderer,/hasBaseModule\(module, "weather"\)/);assert.match(weather,/c\.size == CELL_ADAPTIVE[\s\S]*renderAdaptive/);for(const anchor of ['CELL_SMALL','CELL_MEDIUM','CELL_LARGE','CELL_XL'])assert.match(weather,new RegExp(`c\\.size == ${anchor}`));assert.match(weather,/app\/lib\/weatherResponsive\.mjs/);assert.match(route,/FRAME_WEATHER_CURRENT_FIELDS[^\n]*wind_speed_10m[^\n]*wind_direction_10m/);assert.match(route,/FRAME_WEATHER_HOURLY_FIELDS[^\n]*precipitation_probability/)})

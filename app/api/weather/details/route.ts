@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic'
 
 const WEATHER_DETAILS_TIMEOUT_MS = 8000
 const WEATHER_DETAILS_FORECAST_DAYS = 7
-const FRAME_WEATHER_CURRENT_FIELDS = ['time', 'temperature_2m', 'relative_humidity_2m', 'weather_code'] as const
-const FRAME_WEATHER_HOURLY_FIELDS = ['time', 'temperature_2m', 'weather_code', 'wind_speed_10m', 'precipitation'] as const
+const FRAME_WEATHER_CURRENT_FIELDS = ['time', 'temperature_2m', 'relative_humidity_2m', 'weather_code', 'wind_speed_10m', 'wind_direction_10m'] as const
+const FRAME_WEATHER_HOURLY_FIELDS = ['time', 'temperature_2m', 'weather_code', 'wind_speed_10m', 'precipitation', 'precipitation_probability'] as const
 const FRAME_WEATHER_DAILY_FIELDS = ['time', 'temperature_2m_max', 'temperature_2m_min', 'weather_code', 'precipitation_sum', 'wind_speed_10m_max', 'sunrise', 'sunset'] as const
 
 function numericParam(url: URL, key: string) {
