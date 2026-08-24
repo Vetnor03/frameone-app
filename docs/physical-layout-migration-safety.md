@@ -40,11 +40,15 @@ coordinates, and fallback behavior.
   use the generic Phase C pipeline, with exact parity against all four named
   layouts. Layouts containing `CELL_ADAPTIVE` remain valid and staged but
   dormant, and any preflight failure falls back completely to `DEFAULT`.
-- **Phase E1 — this PR:** enables adaptive physical rendering for the Date
+- **Phase E1 — complete:** enables adaptive physical rendering for the Date
   module only. Physical capability is module-aware: the four anchor geometries
   retain their existing module behavior, while a `CELL_ADAPTIVE` cell is
   accepted only when its assignment is Date. `CELL_ADAPTIVE` is **not**
   generally supported. Future phases will add other modules one at a time.
+- **Phase E2 — this PR:** enables adaptive physical rendering for Weather as
+  the second exact-base-module capability. Weather instance suffixes are
+  accepted, but lookalike prefixes are rejected. All other adaptive modules
+  continue to trigger atomic fallback.
 
 ### DATE ADAPTIVE LAB
 
@@ -57,6 +61,20 @@ T-junction; it is not a built-in layout:
   {"slot":1,"col":2,"row":0,"colSpan":2,"rowSpan":1,"module":"date"},
   {"slot":2,"col":0,"row":1,"colSpan":3,"rowSpan":3,"module":"date"},
   {"slot":3,"col":3,"row":1,"colSpan":1,"rowSpan":3,"module":"date"}
+]
+```
+
+### WEATHER ADAPTIVE LAB
+
+This test-only payload exercises shallow landscape Weather cells, a large
+forecast cell, a narrow portrait cell, and the same T-junction topology:
+
+```json
+[
+  {"slot":0,"col":0,"row":0,"colSpan":2,"rowSpan":1,"module":"weather:1"},
+  {"slot":1,"col":2,"row":0,"colSpan":2,"rowSpan":1,"module":"weather:1"},
+  {"slot":2,"col":0,"row":1,"colSpan":3,"rowSpan":3,"module":"weather:1"},
+  {"slot":3,"col":3,"row":1,"colSpan":1,"rowSpan":3,"module":"weather:1"}
 ]
 ```
 

@@ -2,6 +2,7 @@ export const BUILT_IN_LAYOUT_KEYS = Object.freeze(['default', 'pyramid', 'square
 export const CUSTOM_LAYOUT_NAME_MAX = 40
 export const SUPPORTED_PHYSICAL_GEOMETRIES = new Set(['4x1', '2x2', '4x2', '4x4'])
 export const ADAPTIVE_DATE_GEOMETRIES = new Set(['1x1','1x2','1x3','1x4','2x1','2x3','2x4','3x1','3x2','3x3','3x4','4x3'])
+export const ADAPTIVE_WEATHER_GEOMETRIES = ADAPTIVE_DATE_GEOMETRIES
 
 export function normalizeLayoutName(value) {
   return Array.from(String(value ?? '').trim().replace(/\s+/gu, ' ').toLocaleUpperCase()).slice(0, CUSTOM_LAYOUT_NAME_MAX).join('')
@@ -50,7 +51,9 @@ export function supportsPhysicalCustomCell(cell) {
   const geometry = `${cell.colSpan}x${cell.rowSpan}`
   const module = typeof cell.module === 'string' ? cell.module.trim().toLowerCase() : ''
   if (!module) return false
-  return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && module === 'date')
+  const baseModule = module.split(':', 1)[0]
+  const adaptiveModule = module === 'date' || baseModule === 'weather'
+  return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && adaptiveModule)
 }
 
 export function supportsPhysicalCustomLayout(cells) {

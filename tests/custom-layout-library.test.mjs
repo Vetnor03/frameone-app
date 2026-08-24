@@ -53,7 +53,9 @@ test('create and edit persistence use structural validation while frame writes r
 
 test('physical support is explicitly module-aware',()=>{
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module:'date'}),true)
-  for(const module of ['weather','reminders','countdown','surf','soccer','stocks','groceries','ai-follow','unknown',''])
+  for(const module of ['weather','weather:1','weather:abc'])
+    assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),true)
+  for(const module of ['weatherfoo','weather-foo','notweather','reminders','countdown','surf','soccer','stocks','groceries','ai-follow','unknown',''])
     assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),false)
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,4,1),module:'weather'}),true)
 })
