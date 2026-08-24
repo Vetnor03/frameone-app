@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { fetchWeatherForecast, fetchWeatherMarine } from '@/app/lib/server/weatherForecast'
-import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight'
+import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -135,7 +135,7 @@ export async function GET(req: Request) {
     if (missingFields.length) {
       console.error('[weather-details]', { stage: 'invalid-frame-payload-shape', lat, lon, missingFields })
     }
-    const insight = await resolveWeatherInsight(weather.payload)
+    const insight = await resolveWeatherInsight(weather.payload, { locationKey: `${lat.toFixed(3)},${lon.toFixed(3)}` })
     return NextResponse.json(compactFrameWeatherPayload(weather.payload, frameCompactVersion, insight))
   }
 
