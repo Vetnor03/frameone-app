@@ -2343,7 +2343,7 @@ static void renderAdaptiveWeather(const Cell& c,
   const int iconSize = primary.h > 120 ? 56 : 38;
   if (landscape) {
     ModuleIcons::drawWeatherIcon(primary.x + primary.w / 4, primary.y + primary.h / 2,
-                                 iconSize, data.currentWmo);
+                                 iconSize, data.wmo);
     drawCenteredBox(primary.x + primary.w / 2, primary.y, primary.w / 2,
                     showCondition ? primary.h * 2 / 3 : primary.h, temperature, FONT_B18, ink);
     if (showCondition) drawWrappedTextBox(primary.x + primary.w / 2,
@@ -2353,7 +2353,7 @@ static void renderAdaptiveWeather(const Cell& c,
     const int tempH = primary.h / 3;
     drawCenteredBox(primary.x, primary.y, primary.w, tempH, temperature, FONT_B18, ink);
     ModuleIcons::drawWeatherIcon(primary.x + primary.w / 2,
-      primary.y + tempH + (primary.h - tempH) / 3, iconSize, data.currentWmo);
+      primary.y + tempH + (primary.h - tempH) / 3, iconSize, data.wmo);
     if (showCondition) drawWrappedTextBox(primary.x, primary.y + primary.h * 2 / 3,
       primary.w, primary.h / 3, data.condition, FONT_B9, ink, 2);
   }
