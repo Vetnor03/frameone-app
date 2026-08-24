@@ -1266,7 +1266,6 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
       if (wmo >= 0) bumpWmo(counts[di], countsN[di], wmo);
       anyDay[di] = true;
 
-      bool sameDateAsCurrent = (currentYMD[0] && strlen(ts) >= 10 && strncmp(ts, currentYMD, 10) == 0);
       if (sameDateAsCurrent && out.todayHourCount < WeatherCache::MAX_TODAY_HOURS) {
         int j = out.todayHourCount++;
         out.todayHour[j] = hour;

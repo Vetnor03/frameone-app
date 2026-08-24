@@ -72,6 +72,11 @@ enum PairingResult {
   PAIRING_FAILED = 2
 };
 
+enum InteractiveModeResult {
+  INTERACTIVE_FINISHED,
+  INTERACTIVE_NORMAL_SYNC_DUE,
+};
+
 struct PowerSenseDebug {
   int raw;
   int highCount;
@@ -578,11 +583,6 @@ static bool retryRenderedAck(uint64_t backendDisplayed) {
   Serial.printf("LiveUpdate: ACK %" PRIu64 " failed, retrying without redraw\n", rendered);
   return false;
 }
-
-enum InteractiveModeResult {
-  INTERACTIVE_FINISHED,
-  INTERACTIVE_NORMAL_SYNC_DUE,
-};
 
 static InteractiveModeResult finishInteractiveMode(
   uint32_t startedAtMs,
