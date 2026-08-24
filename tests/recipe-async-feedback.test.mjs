@@ -16,5 +16,8 @@ test('recipe actions expose localized loading and success feedback', () => {
 
   assert.match(home, /disabled=\{busy\}[\s\S]*pendingAction === 'save'/)
   assert.match(home, /disabled=\{!selected\.length \|\| busy\}[\s\S]*pendingAction === 'add'/)
-  assert.match(home, /setSuccess\('added'\)[\s\S]*await waitForConfirmation\(\)[\s\S]*onClose\(\)/)
+  assert.match(home, /setPendingAction\('add'\)[\s\S]*setSuccess\('added'\)[\s\S]*await waitForConfirmation\(\)[\s\S]*setPendingAction\(null\)[\s\S]*onClose\(\)/)
+  const confirmationPeriod = home.match(/setSuccess\('added'\)([\s\S]*?)await waitForConfirmation\(\)/)?.[1]
+  assert.ok(confirmationPeriod, 'the Add success confirmation should remain visible before closing')
+  assert.doesNotMatch(confirmationPeriod, /setPendingAction\(null\)/, 'Add must remain locked during its success confirmation')
 })

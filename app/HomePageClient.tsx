@@ -12655,9 +12655,9 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
     setPendingAction('add'); setSuccess(null); setError('')
     try {
       await onAdd(selectedRecipeGroceries(ingredients, draft?.servings ?? null, servings))
-      setPendingAction(null)
       setSuccess('added')
       await waitForConfirmation()
+      setPendingAction(null)
       onClose()
     } catch (addError) {
       setError(addError instanceof Error ? `${language === 'no' ? 'Kunne ikke legge til i handlelisten' : 'Could not add to groceries'}: ${addError.message}` : (language === 'no' ? 'Kunne ikke legge til i handlelisten.' : 'Could not add to groceries.'))
