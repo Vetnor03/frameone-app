@@ -6,6 +6,7 @@ import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, par
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
 
 const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824140000_reconcile_saved_recipe_legacy_schema.sql', import.meta.url), 'utf8')
+const atomicRecipeUpdateMigration = readFileSync(new URL('../supabase/migrations/20260824150000_update_saved_recipe_atomically.sql', import.meta.url), 'utf8')
 
 test('saved recipe repair migration restores the complete schema and access controls', () => {
   for (const column of ['id uuid default gen_random_uuid()', 'device_id text', 'name text', "locale text default 'en'", 'is_active boolean default true', 'source_url text', 'base_servings numeric', 'created_at timestamptz default now()', 'updated_at timestamptz default now()', 'recipe_id uuid', "category text default 'other'", 'is_optional boolean default false', 'quantity numeric', 'unit text', 'sort_order integer default 0', 'amount numeric']) {
@@ -142,4 +143,38 @@ test('unchecked recipe ingredients remain visible, are labelled, and only select
   assert.match(recipeSheet, /'Har hjemme' : 'Already have'/)
   assert.match(recipeSheet, /selectedRecipeGroceries\(ingredients, draft\?\.servings \?\? null, servings\)/)
   assert.match(recipeSheet, /`LEGG \$\{selected\.length\} I HANDLELISTEN` : `ADD \$\{selected\.length\} TO GROCERIES`/)
+})
+
+test('saved recipe retains its ID when opened in preview', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  assert.match(recipeSheet, /const \[savedRecipeId, setSavedRecipeId\] = useState<string \| null>\(null\)/)
+  assert.match(recipeSheet, /showPreview\(\{ name: recipe\.name,[\s\S]*?\}, String\(recipe\.id\)\)/)
+  assert.match(recipeSheet, /setSavedRecipeId\(recipeId\)/)
+})
+
+test('saving an existing recipe updates atomically instead of inserting', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('async function saveRecipe()'), ui.indexOf('async function addSelectedIngredients()'))
+  assert.match(recipeSheet, /if \(savedRecipeId\) \{[\s\S]*?supabase\.rpc\('update_grocery_recipe_with_ingredients'/)
+  assert.match(recipeSheet, /\} else \{[\s\S]*?saveRecipeWithRollback/)
+  assert.match(atomicRecipeUpdateMigration, /update public\.grocery_recipes[\s\S]*delete from public\.grocery_recipe_ingredients[\s\S]*insert into public\.grocery_recipe_ingredients/)
+  assert.match(atomicRecipeUpdateMigration, /language plpgsql[\s\S]*security invoker/)
+})
+
+test('unchecked state is never persisted when explicitly saving recipe ingredients', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('async function saveRecipe()'), ui.indexOf('async function addSelectedIngredients()'))
+  assert.match(recipeSheet, /const rows = ingredients\.map\(/)
+  assert.doesNotMatch(recipeSheet, /ingredients\.filter\([^)]*selected/)
+  assert.doesNotMatch(recipeSheet, /selected:/)
+})
+
+test('new imported and manual recipes still use insert with rollback protection', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  assert.match(recipeSheet, /showPreview\(payload\)/)
+  assert.match(recipeSheet, /showPreview\(\{ name: manualName\.trim\(\)/)
+  assert.match(recipeSheet, /else \{[\s\S]*saveRecipeWithRollback\([\s\S]*\.from\('grocery_recipes'\)\.insert/)
+  assert.match(recipeSheet, /setSavedRecipeId\(created\.id\)/)
 })

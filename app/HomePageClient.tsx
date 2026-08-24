@@ -12600,6 +12600,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   const [manualName, setManualName] = useState('')
   const [manualText, setManualText] = useState('')
   const [draft, setDraft] = useState<RecipeDraft | null>(null)
+  const [savedRecipeId, setSavedRecipeId] = useState<string | null>(null)
   const [ingredients, setIngredients] = useState<RecipePreviewIngredient[]>([])
   const [servings, setServings] = useState<number | null>(null)
   const [savedRecipes, setSavedRecipes] = useState<any[]>([])
@@ -12611,8 +12612,8 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   const busy = pendingAction !== null
   const waitForConfirmation = () => new Promise((resolve) => window.setTimeout(resolve, 1400))
 
-  async function showPreview(next: RecipeDraft) {
-    setDraft(next); setIngredients(next.ingredients.map((item) => ({ ...item, selected: true }))); setServings(next.servings); setMode('preview'); setError('')
+  async function showPreview(next: RecipeDraft, recipeId: string | null = null) {
+    setDraft(next); setSavedRecipeId(recipeId); setIngredients(next.ingredients.map((item) => ({ ...item, selected: true }))); setServings(next.servings); setMode('preview'); setError('')
   }
   async function importUrl() {
     setPendingAction('import'); setSuccess(null); setError('')
@@ -12637,14 +12638,27 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   async function saveRecipe() {
     if (!draft) return
     setPendingAction('save'); setSuccess(null); setError('')
-    const rows = ingredients.map((item, index) => ({ name: item.name.trim(), quantity: item.quantity, unit: item.unit, category: asGroceryCategory(item.category), sort_order: index }))
+    // Selection is shopping-session state only. Explicit saves persist every ingredient at the currently previewed serving scale.
+    const rows = ingredients.map((item, index) => ({ name: item.name.trim(), quantity: scaleRecipeQuantity(item.quantity, draft.servings, servings), unit: item.unit, category: asGroceryCategory(item.category), sort_order: index }))
     const recipeRecord = { device_id: deviceId, name: draft.name, locale: language, source_url: draft.sourceUrl, base_servings: draft.servings }
     try {
-      await saveRecipeWithRollback({
-        createRecipe: async (value: typeof recipeRecord) => { const { data, error } = await supabase.from('grocery_recipes').insert(value).select('id').single(); if (error || !data) throw new Error(error?.message || 'Could not save recipe.'); return data },
-        createIngredients: async (recipeId, values: typeof rows) => { const { error } = await supabase.from('grocery_recipe_ingredients').insert(values.map((item) => ({ ...item, recipe_id: recipeId }))); if (error) throw new Error(error.message) },
-        deleteRecipe: async (recipeId) => { const { error } = await supabase.from('grocery_recipes').delete().eq('id', recipeId); if (error) throw new Error(error.message) },
-      }, recipeRecord, rows)
+      if (savedRecipeId) {
+        const { error } = await supabase.rpc('update_grocery_recipe_with_ingredients', {
+          p_recipe_id: savedRecipeId,
+          p_name: draft.name,
+          p_source_url: draft.sourceUrl,
+          p_base_servings: servings,
+          p_ingredients: rows,
+        })
+        if (error) throw new Error(error.message)
+      } else {
+        const created = await saveRecipeWithRollback({
+          createRecipe: async (value: typeof recipeRecord) => { const { data, error } = await supabase.from('grocery_recipes').insert(value).select('id').single(); if (error || !data) throw new Error(error?.message || 'Could not save recipe.'); return data },
+          createIngredients: async (recipeId, values: typeof rows) => { const { error } = await supabase.from('grocery_recipe_ingredients').insert(values.map((item) => ({ ...item, recipe_id: recipeId }))); if (error) throw new Error(error.message) },
+          deleteRecipe: async (recipeId) => { const { error } = await supabase.from('grocery_recipes').delete().eq('id', recipeId); if (error) throw new Error(error.message) },
+        }, { ...recipeRecord, base_servings: servings }, rows)
+        setSavedRecipeId(created.id)
+      }
       setSuccess('saved')
       window.setTimeout(() => setSuccess((current) => current === 'saved' ? null : current), 1800)
     } catch (saveError) {
@@ -12679,7 +12693,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       {mode === 'saved' ? <div className="mt-4">
         <button onClick={() => setMode('start')} className="h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff]">{language === 'no' ? '+ LEGG TIL OPPSKRIFT' : '+ ADD RECIPE'}</button>
         <input type="search" value={recipeSearch} onChange={(e) => setRecipeSearch(e.target.value)} placeholder={language === 'no' ? 'Søk i oppskrifter' : 'Search recipes'} aria-label={language === 'no' ? 'Søk i oppskrifter' : 'Search recipes'} className="mt-3 h-11 w-full rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-4 outline-none"/>
-        <div className="mt-3 grid gap-2">{pendingAction === 'load' ? <div role="status" className="py-8 text-center text-sm tracking-wide text-[color:var(--fg-55)]">{language === 'no' ? 'LASTER OPPSKRIFTER…' : 'LOADING RECIPES…'}</div> : visibleRecipes.length ? visibleRecipes.map((recipe) => <button key={recipe.id} onClick={() => showPreview({ name: recipe.name, sourceUrl: recipe.source_url, servings: recipe.base_servings == null ? null : Number(recipe.base_servings), ingredients: [...(recipe.grocery_recipe_ingredients || [])].sort((a,b) => a.sort_order-b.sort_order).map((x) => ({ ...x, quantity: x.quantity == null ? null : Number(x.quantity) })) })} className="rounded-2xl border border-[color:var(--bd-10)] p-4 text-left transition hover:border-[color:var(--bd-30)]"><div className="font-medium">{recipe.name}</div><div className="mt-1 text-xs text-[color:var(--fg-45)]">{recipe.grocery_recipe_ingredients?.length || 0} {language === 'no' ? 'ingredienser' : 'ingredients'}{recipe.base_servings ? ` · ${recipe.base_servings} ${language === 'no' ? 'porsjoner' : 'servings'}` : ''}</div></button>) : savedRecipes.length ? <div className="py-8 text-center text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen oppskrifter matcher søket' : 'No recipes match your search'}</div> : <div className="py-8 text-center"><div className="text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen lagrede oppskrifter ennå' : 'No saved recipes yet'}</div><button onClick={() => setMode('start')} className="mt-4 h-10 rounded-2xl border border-[#2aa3ff] px-5 text-xs tracking-widest text-[#2aa3ff]">{language === 'no' ? '+ LEGG TIL OPPSKRIFT' : '+ ADD RECIPE'}</button></div>}</div>
+        <div className="mt-3 grid gap-2">{pendingAction === 'load' ? <div role="status" className="py-8 text-center text-sm tracking-wide text-[color:var(--fg-55)]">{language === 'no' ? 'LASTER OPPSKRIFTER…' : 'LOADING RECIPES…'}</div> : visibleRecipes.length ? visibleRecipes.map((recipe) => <button key={recipe.id} onClick={() => showPreview({ name: recipe.name, sourceUrl: recipe.source_url, servings: recipe.base_servings == null ? null : Number(recipe.base_servings), ingredients: [...(recipe.grocery_recipe_ingredients || [])].sort((a,b) => a.sort_order-b.sort_order).map((x) => ({ ...x, quantity: x.quantity == null ? null : Number(x.quantity) })) }, String(recipe.id))} className="rounded-2xl border border-[color:var(--bd-10)] p-4 text-left transition hover:border-[color:var(--bd-30)]"><div className="font-medium">{recipe.name}</div><div className="mt-1 text-xs text-[color:var(--fg-45)]">{recipe.grocery_recipe_ingredients?.length || 0} {language === 'no' ? 'ingredienser' : 'ingredients'}{recipe.base_servings ? ` · ${recipe.base_servings} ${language === 'no' ? 'porsjoner' : 'servings'}` : ''}</div></button>) : savedRecipes.length ? <div className="py-8 text-center text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen oppskrifter matcher søket' : 'No recipes match your search'}</div> : <div className="py-8 text-center"><div className="text-sm text-[color:var(--fg-45)]">{language === 'no' ? 'Ingen lagrede oppskrifter ennå' : 'No saved recipes yet'}</div><button onClick={() => setMode('start')} className="mt-4 h-10 rounded-2xl border border-[#2aa3ff] px-5 text-xs tracking-widest text-[#2aa3ff]">{language === 'no' ? '+ LEGG TIL OPPSKRIFT' : '+ ADD RECIPE'}</button></div>}</div>
       </div> : null}
       {mode === 'preview' && draft ? <div className="mt-4"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full bg-transparent text-lg font-medium outline-none"/>{draft.servings ? <div className="mt-3 flex items-center gap-3 text-sm"><span>{language === 'no' ? 'Porsjoner' : 'Servings'}</span><button onClick={() => setServings(Math.max(1, (servings || 1)-1))} className="h-8 w-8 rounded-full border">−</button><span>{servings}</span><button onClick={() => setServings((servings || 0)+1)} className="h-8 w-8 rounded-full border">+</button></div> : null}<div className="mt-4 divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)]">{ingredients.map((item, index) => { const qty = scaleRecipeQuantity(item.quantity, draft.servings, servings); return <div key={index} className={`flex items-center gap-2 p-3 transition ${item.selected ? '' : 'bg-[color:var(--panel-05)] text-[color:var(--fg-45)]'}`}><input aria-label={`${item.name}: ${language === 'no' ? 'må kjøpes' : 'needs to be bought'}`} type="checkbox" checked={item.selected} onChange={() => setIngredients((all) => all.map((x,i) => i === index ? { ...x, selected: !x.selected } : x))}/><div className="min-w-0 flex-1"><input value={item.name} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, name: e.target.value } : x))} className="w-full bg-transparent outline-none"/>{!item.selected ? <div className="mt-0.5 text-[10px] uppercase tracking-wider text-[color:var(--fg-45)]">{language === 'no' ? 'Har hjemme' : 'Already have'}</div> : null}</div><input aria-label="Quantity" type="number" step="any" value={qty ?? ''} onChange={(e) => { const scaled = e.target.value === '' ? null : Number(e.target.value); const base = scaled == null || !draft.servings || !servings ? scaled : scaled * draft.servings / servings; setIngredients((all) => all.map((x,i) => i === index ? { ...x, quantity: base } : x)) }} className="w-14 bg-transparent text-right outline-none"/><input aria-label="Unit" value={item.unit || ''} onChange={(e) => setIngredients((all) => all.map((x,i) => i === index ? { ...x, unit: e.target.value || null } : x))} className="w-12 bg-transparent text-[color:var(--fg-55)] outline-none"/></div>})}</div><div className="mt-4 flex gap-2"><button disabled={busy} onClick={saveRecipe} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs disabled:opacity-40">{pendingAction === 'save' ? (language === 'no' ? 'LAGRER OPPSKRIFT…' : 'SAVING RECIPE…') : (language === 'no' ? 'LAGRE OPPSKRIFT' : 'SAVE RECIPE')}</button><button disabled={!selected.length || busy} onClick={addSelectedIngredients} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-xs disabled:opacity-40">{pendingAction === 'add' ? (language === 'no' ? 'LEGGER TIL I HANDLELISTEN…' : 'ADDING TO GROCERIES…') : (language === 'no' ? `LEGG ${selected.length} I HANDLELISTEN` : `ADD ${selected.length} TO GROCERIES`)}</button></div></div> : null}
       {success ? <div role="status" aria-live="polite" className="mt-3 text-center text-sm font-medium tracking-wide text-[#2aa3ff]">{success === 'saved' ? (language === 'no' ? 'OPPSKRIFT LAGRET' : 'RECIPE SAVED') : (language === 'no' ? 'LAGT TIL I HANDLELISTEN' : 'ADDED TO GROCERIES')}</div> : null}
