@@ -1,8 +1,24 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries } from '../app/lib/groceries/recipes.mjs'
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
+
+const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824130000_repair_saved_recipe_schema.sql', import.meta.url), 'utf8')
+
+test('saved recipe repair migration restores device schema and access controls', () => {
+  for (const column of ['device_id text', 'source_url text', 'base_servings numeric', 'quantity numeric', 'unit text', 'sort_order integer not null default 0', 'amount numeric']) {
+    assert.match(recipeRepairMigration, new RegExp(`add column if not exists ${column}`))
+  }
+  assert.match(recipeRepairMigration, /grocery_recipes_device_id_idx[\s\S]*on public\.grocery_recipes \(device_id\)/)
+  assert.match(recipeRepairMigration, /grocery_recipe_ingredients_recipe_id_idx[\s\S]*on public\.grocery_recipe_ingredients \(recipe_id\)/)
+  assert.match(recipeRepairMigration, /for insert[\s\S]*device_id is not null[\s\S]*dm\.device_id = grocery_recipes\.device_id[\s\S]*dm\.user_id = auth\.uid\(\)/)
+  assert.match(recipeRepairMigration, /on public\.grocery_recipe_ingredients for all[\s\S]*join public\.device_members dm on dm\.device_id = gr\.device_id[\s\S]*dm\.user_id = auth\.uid\(\)/)
+  assert.match(recipeRepairMigration, /grant select, insert, update, delete on public\.grocery_recipes to authenticated/)
+  assert.match(recipeRepairMigration, /grant select, insert, update, delete on public\.grocery_recipe_ingredients to authenticated/)
+  assert.match(recipeRepairMigration, /notify pgrst, 'reload schema'/)
+})
 
 test('manual ingredient parsing handles fractions, vulgar fractions, and ranges conservatively', () => {
   assert.deepEqual(parseManualIngredients('1/2 tsp salt\n½ tsp pepper\n2-3 tomatoes\n2–3 onions'), [
