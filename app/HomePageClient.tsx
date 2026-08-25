@@ -1143,6 +1143,8 @@ export default function HomePage() {
   const [assistantTipsShown, setAssistantTipsShown] = useState<number[]>([])
   const [assistantPreferencesLoaded, setAssistantPreferencesLoaded] = useState(false)
   const [assistantTipPresentedThisSession, setAssistantTipPresentedThisSession] = useState(false)
+  const [assistantVisitId, setAssistantVisitId] = useState(0)
+  const assistantVisitRefreshRef = useRef(0)
 
   const [cellsByLayout, setCellsByLayout] = useState<Record<LayoutKey, Record<number, ModuleKey | null>>>(
     makeEmptyCellsByLayout()
@@ -1299,6 +1301,58 @@ export default function HomePage() {
       if (!cancelled) setNotificationState(state)
     })
     return () => { cancelled = true }
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+
+    let cancelled = false
+    let wasHidden = document.visibilityState === 'hidden'
+
+    const beginForegroundVisit = async () => {
+      if (!wasHidden) return
+      wasHidden = false
+      const refreshId = ++assistantVisitRefreshRef.current
+      setAssistantPreferencesLoaded(false)
+
+      const { data, error } = await supabase
+        .from('user_app_preferences')
+        .select('show_ai_assistant,proactive_assistant_tips,assistant_tips_shown')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (cancelled || refreshId !== assistantVisitRefreshRef.current) return
+      if (error) {
+        console.warn('[assistant-tips:foreground-refresh-failed]', { code: error.code || 'unknown' })
+        return
+      }
+
+      setShowFrameAssistant(data?.show_ai_assistant !== false)
+      setProactiveAssistantTips(data?.proactive_assistant_tips !== false)
+      setAssistantTipsShown(Array.isArray(data?.assistant_tips_shown) ? data.assistant_tips_shown : [])
+      setAssistantTipPresentedThisSession(false)
+      setAssistantVisitId((current) => current + 1)
+      setAssistantPreferencesLoaded(true)
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') wasHidden = true
+      else if (document.visibilityState === 'visible') void beginForegroundVisit()
+    }
+    const onPageHide = () => { wasHidden = true }
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && document.visibilityState === 'visible') void beginForegroundVisit()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
+    }
   }, [userId])
 
   useEffect(() => {
@@ -2515,10 +2569,12 @@ async function handleSelectTab(k: TabKey) {
     void supabase.from('user_app_preferences').upsert({ user_id: userId, app_theme: appTheme, ...(values.show !== undefined ? { show_ai_assistant: values.show } : {}), ...(values.tips !== undefined ? { proactive_assistant_tips: values.tips } : {}), ...(values.shown !== undefined ? { assistant_tips_shown: values.shown } : {}) }, { onConflict: 'user_id' })
   }, [appTheme, userId])
 
-  const markAssistantTipShown = useCallback((index: number) => {
+  const markAssistantTipShown = useCallback(async (index: number) => {
     setAssistantTipPresentedThisSession(true)
     setAssistantTipsShown((current) => current.includes(index) ? current : [...current, index])
-    if (userId) void supabase.rpc('mark_assistant_tip_shown', { p_tip: index })
+    if (!userId) return
+    const { error } = await supabase.rpc('mark_assistant_tip_shown', { p_tip: index })
+    if (error) console.warn('[assistant-tips:mark-shown-failed]', { tip: index, code: error.code || 'unknown' })
   }, [userId])
 
   function navigateFromAssistant(destination: AssistantDestination) {
@@ -2725,7 +2781,7 @@ async function handleSelectTab(k: TabKey) {
             )}
 
             {isPlainFrameAssistantSurface && showFrameAssistant && (
-              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} />
+              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} />
             )}
 
             {pickerOpen && (

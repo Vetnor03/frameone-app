@@ -41,6 +41,33 @@ test('proactive tips load persisted progress before selecting one tip per sessio
   assert.match(home, /supabase\.rpc\('mark_assistant_tip_shown'/)
 })
 
+test('a genuine background to foreground transition starts one new assistant visit', () => {
+  assert.match(home, /document\.addEventListener\('visibilitychange', onVisibilityChange\)/)
+  assert.match(home, /document\.visibilityState === 'hidden'\) wasHidden = true/)
+  assert.match(home, /if \(!wasHidden\) return[\s\S]*wasHidden = false/)
+  assert.match(home, /\.select\('show_ai_assistant,proactive_assistant_tips,assistant_tips_shown'\)[\s\S]*setAssistantTipsShown/)
+  assert.match(home, /setAssistantTipPresentedThisSession\(false\)[\s\S]*setAssistantVisitId/)
+  assert.match(home, /window\.addEventListener\('pageshow', onPageShow\)/)
+  assert.match(home, /event\.persisted && document\.visibilityState === 'visible'/)
+  assert.match(home, /assistantVisitId=\{assistantVisitId\}/)
+  assert.match(ui, /setSessionTip\(null\)[\s\S]*setTipDismissed\(false\)[\s\S]*tipSelected\.current = false[\s\S]*\[assistantVisitId\]/)
+})
+
+test('ordinary app UI and orientation state do not create assistant visits', () => {
+  const visitChanges = [...home.matchAll(/setAssistantVisitId\(/g)]
+  assert.equal(visitChanges.length, 1, 'only the foreground lifecycle advances the visit generation')
+  const tabHandler = home.slice(home.indexOf('async function handleSelectTab'), home.indexOf('const saveAssistantPreferences'))
+  assert.doesNotMatch(tabHandler, /assistantVisit|visibilitychange/)
+  assert.doesNotMatch(ui, /setAssistantVisitId|orientationchange/)
+})
+
+test('exhausted tips remain exhausted and mark failures are diagnosed safely', () => {
+  assert.equal(nextAssistantTip(ASSISTANT_TIPS.map((_, index) => index), 'en'), null)
+  assert.match(home, /const \{ error \} = await supabase\.rpc\('mark_assistant_tip_shown'/)
+  assert.match(home, /\[assistant-tips:mark-shown-failed\]/)
+  assert.doesNotMatch(home, /mark-shown-failed[^\n]*error\.message/)
+})
+
 test('legacy persisted indexes migrate without hiding landscape or repeating groceries', () => {
   const migratedGroceries = [1]
   assert.equal(nextAssistantTip(migratedGroceries, 'en')?.index, 0, 'legacy [0] becomes [1], leaving landscape unseen')

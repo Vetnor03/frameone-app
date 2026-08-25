@@ -5,7 +5,7 @@ import { supabase } from '@/app/lib/supabase'
 import { nextAssistantTip } from '@/app/lib/assistant/tips'
 import type { AssistantDestination, AssistantResult } from '@/app/lib/assistant/types'
 
-export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsShown, tipsLoaded, canSelectTip, onTipShown, onNavigate }: { deviceId: string | null; language: 'en' | 'no'; tipsEnabled: boolean; tipsShown: number[]; tipsLoaded: boolean; canSelectTip: boolean; onTipShown: (index: number) => void; onNavigate: (destination: AssistantDestination) => void }) {
+export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsShown, tipsLoaded, canSelectTip, assistantVisitId, onTipShown, onNavigate }: { deviceId: string | null; language: 'en' | 'no'; tipsEnabled: boolean; tipsShown: number[]; tipsLoaded: boolean; canSelectTip: boolean; assistantVisitId: number; onTipShown: (index: number) => void | Promise<void>; onNavigate: (destination: AssistantDestination) => void }) {
   const [open, setOpen] = useState(false), [text, setText] = useState(''), [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AssistantResult | null>(null), [tipDismissed, setTipDismissed] = useState(false)
   const [sessionTip, setSessionTip] = useState<ReturnType<typeof nextAssistantTip>>(null)
@@ -13,6 +13,12 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
   const [pendingId, setPendingId] = useState<string | null>(null)
   const tip = tipsEnabled && !tipDismissed ? sessionTip : null
   const copy = language === 'no' ? { heading: 'RE:MIND-ASSISTENT', subtitle: 'Korte kommandoer, direkte resultat.', placeholder: 'Legg til melk, egg og brød', send: 'SEND' } : { heading: 'RE:MIND ASSISTANT', subtitle: 'Short commands, direct results.', placeholder: 'Add milk, eggs and bread', send: 'SEND' }
+  useEffect(() => {
+    setSessionTip(null)
+    setTipDismissed(false)
+    tipSelected.current = false
+  }, [assistantVisitId])
+
   useEffect(() => {
     if (!tipsLoaded || !tipsEnabled || !canSelectTip || tipSelected.current) return
     tipSelected.current = true
