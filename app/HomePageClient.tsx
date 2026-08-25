@@ -1311,6 +1311,7 @@ export default function HomePage() {
 
   useEffect(() => {
     setAssistantPreferencesLoaded(false)
+    setAssistantTipPresentedThisSession(false)
     if (!userId) return
 
     let cancelled = false

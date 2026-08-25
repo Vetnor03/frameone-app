@@ -1,3 +1,36 @@
+-- The persisted values created before the landscape tip used indexes 0..2.
+-- Record the version on each preference row so this data rewrite is safe if the
+-- migration body is replayed during recovery.
+alter table public.user_app_preferences
+  add column if not exists assistant_tip_indexes_v2 boolean;
+
+update public.user_app_preferences
+set assistant_tips_shown = (
+      select coalesce(array_agg(mapped_index order by first_position), '{}')
+      from (
+        select case legacy_index
+            when 0 then 1
+            when 1 then 2
+            when 2 then 3
+            else legacy_index
+          end as mapped_index,
+          min(position) as first_position
+        from unnest(assistant_tips_shown) with ordinality as legacy(legacy_index, position)
+        group by case legacy_index
+          when 0 then 1
+          when 1 then 2
+          when 2 then 3
+          else legacy_index
+        end
+      ) deduplicated
+    ),
+    assistant_tip_indexes_v2 = true
+where assistant_tip_indexes_v2 is null;
+
+alter table public.user_app_preferences
+  alter column assistant_tip_indexes_v2 set default true,
+  alter column assistant_tip_indexes_v2 set not null;
+
 create or replace function public.mark_assistant_tip_shown(p_tip integer)
 returns void
 language plpgsql

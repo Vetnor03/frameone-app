@@ -13,6 +13,7 @@ const api = readFileSync(new URL('../app/api/assistant/route.ts', import.meta.ur
 const tips = readFileSync(new URL('../app/lib/assistant/tips.ts', import.meta.url), 'utf8')
 const groceryActions = readFileSync(new URL('../app/lib/groceries/actions.ts', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20260825130000_add_frame_assistant_foundation.sql', import.meta.url), 'utf8')
+const tipProgressionMigration = readFileSync(new URL('../supabase/migrations/20260825170000_mark_assistant_tip_shown.sql', import.meta.url), 'utf8')
 
 test('assistant is mounted only by the FRAME branch and respects its preference', () => {
   assert.match(home, /const isPlainFrameAssistantSurface = activeTab === 'frame'/)
@@ -38,6 +39,16 @@ test('proactive tips load persisted progress before selecting one tip per sessio
   assert.match(home, /canSelectTip=\{!assistantTipPresentedThisSession\}/)
   assert.match(home, /setAssistantTipsShown\(\(current\) => current\.includes\(index\) \? current : \[\.\.\.current, index\]\)/)
   assert.match(home, /supabase\.rpc\('mark_assistant_tip_shown'/)
+})
+
+test('legacy persisted indexes migrate without hiding landscape or repeating groceries', () => {
+  const migratedGroceries = [1]
+  assert.equal(nextAssistantTip(migratedGroceries, 'en')?.index, 0, 'legacy [0] becomes [1], leaving landscape unseen')
+  assert.equal(nextAssistantTip([...migratedGroceries, 0], 'en')?.index, 2, 'after landscape, the next launch advances to reminder')
+  assert.match(tipProgressionMigration, /when 0 then 1[\s\S]*when 1 then 2[\s\S]*when 2 then 3/)
+  assert.match(tipProgressionMigration, /where assistant_tip_indexes_v2 is null/)
+  assert.match(tipProgressionMigration, /group by case legacy_index[\s\S]*when 0 then 1/)
+  assert.match(home, /setAssistantTipPresentedThisSession\(false\)[\s\S]*if \(!userId\) return/)
 })
 
 test('proactive tip copy is exact in English and Norwegian and remains free', () => {
