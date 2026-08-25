@@ -51,7 +51,7 @@ export function supportsPhysicalCustomCell(cell) {
   const module = typeof cell.module === 'string' ? cell.module.trim().toLowerCase() : ''
   if (!module) return false
   const baseModule = module.split(':', 1)[0]
-  const adaptiveModule = module === 'date' || baseModule === 'weather'
+  const adaptiveModule = module === 'date' || baseModule === 'weather' || baseModule === 'reminders'
   return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && adaptiveModule)
 }
 

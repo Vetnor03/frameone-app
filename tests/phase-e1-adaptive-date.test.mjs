@@ -41,7 +41,7 @@ test('all twelve Date adaptive geometries form complete eligible 4x4 plans with 
 })
 
 test('unsupported adaptive assignments reject the whole plan atomically',()=>{
-  for(const [w,h,module] of [[1,1,'weatherfoo'],[3,3,'reminders'],[1,4,'countdown']])
+  for(const [w,h,module] of [[1,1,'weatherfoo'],[3,3,'remindersfoo'],[1,4,'countdown']])
     assert.equal(supportsPhysicalCustomLayout(tiling(w,h,module)).valid,false)
   const lab=tiling(3,3);lab.find(c=>c.slot===1).module='countdown'
   assert.equal(supportsPhysicalCustomLayout(lab).valid,false)
