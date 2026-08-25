@@ -81,4 +81,15 @@ size_t normalizeUtf8ForDisplay(char* out, size_t size, const char* input) {
   out[used] = 0;
   return used;
 }
+
+bool displayEqualsUtf8(const char* display, const char* utf8,
+                       char* scratch, size_t scratchSize) {
+  if (!scratch || scratchSize == 0) return false;
+  normalizeUtf8ForDisplay(scratch, scratchSize, utf8);
+  const char* stored = display ? display : "";
+  for (size_t i = 0;; ++i) {
+    if (stored[i] != scratch[i]) return false;
+    if (stored[i] == 0) return true;
+  }
+}
 }

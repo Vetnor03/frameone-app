@@ -24,7 +24,18 @@ int main() {
   expect("Møte – Lene’s «plan»…", "M\xF8te - Lene's \"plan\"...");
   expect("Fotball ⚽ kl. 18 😊", "Fotball kl. 18");
   expect("Café München", "Cafe Munchen");
+  expect("Bodø/Glimt", "Bod\xF8/Glimt");
+  expect("Tromsø", "Troms\xF8");
+  expect("José María – mål ⚽", "Jose Maria - m\xE5l");
+  expect("Tromsø’s «keeper» 😊", "Troms\xF8's \"keeper\"");
   expect("bad \xF0\x28\x8C\x28 glyph", "bad (( glyph");
+
+  char firstConfig[48];
+  char repeatedConfig[48];
+  FrameText::normalizeUtf8ForDisplay(firstConfig, sizeof(firstConfig), "Bodø/Glimt");
+  FrameText::normalizeUtf8ForDisplay(repeatedConfig, sizeof(repeatedConfig), "Bodø/Glimt");
+  assert(strcmp(firstConfig, repeatedConfig) == 0);
+  assert(FrameText::displayEqualsUtf8(firstConfig, "Bodø/Glimt", repeatedConfig, sizeof(repeatedConfig)));
 
   char question[32];
   FrameText::normalizeUtf8ForDisplay(question, sizeof(question), "Kommer du?");
