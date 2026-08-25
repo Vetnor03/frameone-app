@@ -1,4 +1,4 @@
-export const ASSISTANT_ACTIONS = ['add_grocery_items', 'create_reminder', 'navigate', 'answer_help'] as const
+export const ASSISTANT_ACTIONS = ['add_grocery_items', 'create_reminder', 'log_surf_experience', 'navigate', 'answer_help', 'needs_input'] as const
 export type AssistantActionName = typeof ASSISTANT_ACTIONS[number]
 
 export type AssistantResult = {
@@ -9,10 +9,12 @@ export type AssistantResult = {
   pendingId?: string
 }
 
-export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'settings', 'recipes', 'spond'] as const
+export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'settings', 'recipes', 'spond', 'surf', 'weather'] as const
 export type AssistantDestination = typeof ASSISTANT_DESTINATIONS[number]
 
 export type ResolvedAssistantIntent =
-  | { action: 'add_grocery_items'; arguments: { items: string[] } }
+  | { action: 'add_grocery_items'; arguments: { items: Array<{ name: string; quantity?: number }> } }
   | { action: 'create_reminder'; arguments: { text: string } }
+  | { action: 'log_surf_experience'; arguments: { spot: string; rating: number; date: string; time?: string; comment: string } }
+  | { action: 'needs_input'; arguments: Record<string, never> }
   | { action: 'answer_help'; arguments: { destination: AssistantDestination }; response: AssistantResult }
