@@ -21,6 +21,8 @@ int main() {
   expect("Besøk farmor på Ålgård", "Bes\xF8k farmor p\xE5 \xC5lg\xE5rd");
   expect("Møte med Øyvind", "M\xF8te med \xD8yvind");
   expect("Ærlig talt", "\xC6rlig talt");
+  expect("A\xCC\x8Alesund", "\xC5lesund");
+  expect("pa\xCC\x8A tur", "p\xE5 tur");
   expect("Møte – Lene’s «plan»…", "M\xF8te - Lene's \"plan\"...");
   expect("Fotball ⚽ kl. 18 😊", "Fotball kl. 18");
   expect("Café München", "Cafe Munchen");
@@ -36,6 +38,10 @@ int main() {
   FrameText::normalizeUtf8ForDisplay(repeatedConfig, sizeof(repeatedConfig), "Bodø/Glimt");
   assert(strcmp(firstConfig, repeatedConfig) == 0);
   assert(FrameText::displayEqualsUtf8(firstConfig, "Bodø/Glimt", repeatedConfig, sizeof(repeatedConfig)));
+
+  char decomposedAlesund[48];
+  FrameText::normalizeUtf8ForDisplay(decomposedAlesund, sizeof(decomposedAlesund), "A\xCC\x8Alesund");
+  assert(FrameText::displayEqualsUtf8(decomposedAlesund, "Ålesund", repeatedConfig, sizeof(repeatedConfig)));
 
   // Config names are stored as display bytes. When the API omits its UTF-8
   // name, Soccer must copy that fallback rather than normalize it a second time.
