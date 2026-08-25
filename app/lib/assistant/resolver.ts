@@ -3,16 +3,16 @@ import type { AssistantDestination, ResolvedAssistantIntent } from './types'
 const HELP: Array<{ pattern: RegExp; destination: AssistantDestination; message: string; label: string }> = [
   { pattern: /(?:layout|frame layout|oppsett)/i, destination: 'layout', message: 'Choose a layout from FRAME, or create a custom one there.', label: 'Open Layout Settings' },
   { pattern: /(?:connect|koble).*(?:spond)|spond.*(?:connect|koble)/i, destination: 'spond', message: 'Connect Spond from Reminders.', label: 'Open Spond Connect' },
-  { pattern: /(?:recipe|recipes|oppskrift)/i, destination: 'recipes', message: 'Your saved recipes are in Groceries.', label: 'Open Recipes' },
+  { pattern: /(?:recipe|recipes|oppskrift)/i, destination: 'groceries', message: 'Your saved recipes are in Groceries.', label: 'Open Groceries' },
   { pattern: /(?:settings|innstillinger)/i, destination: 'settings', message: 'You can change app preferences in Settings.', label: 'Open Settings' },
 ]
 
 function groceryItems(text: string) {
-  const match = text.trim().match(/^(?:please\s+)?add\s+(.+?)(?:\s+to\s+(?:my\s+)?(?:grocery|groceries|grocery list|shopping list))?[.!]?$/i)
+  const match = text.trim().match(/^(?:(?:please\s+)?add|legg til)\s+(.+?)(?:\s+(?:to|på)\s+(?:(?:my|min)\s+)?(?:grocery|groceries|grocery list|shopping list|handlelisten|handleliste))?[.!]?$/i)
   if (!match) return null
-  const value = match[1].replace(/\s+(?:to|in)\s+(?:my\s+)?(?:grocery|groceries|grocery list|shopping list)$/i, '')
-  const items = value.split(/\s*(?:,|\band\b|&)\s*/i).map((item) => item.trim()).filter(Boolean)
-  const reserved = /^(?:a\s+)?(?:weather|countdown|reminders?|spond)(?:\s|$)|\b(?:to|on)\s+(?:my\s+)?frame\b/i
+  const value = match[1].replace(/\s+(?:to|in|på)\s+(?:(?:my|min)\s+)?(?:grocery|groceries|grocery list|shopping list|handlelisten|handleliste)$/i, '')
+  const items = value.split(/\s*(?:,|\band\b|\bog\b|&)\s*/i).map((item) => item.trim()).filter(Boolean)
+  const reserved = /^(?:a\s+|en\s+|et\s+)?(?:weather|vær|countdown|nedtelling|reminders?|påminnelser?|spond|layout|oppsett|modules?|moduler?)(?:\s|$)|\b(?:to|on|på)\s+(?:(?:my|min)\s+)?(?:frame|ramme)\b/i
   return items.length && items.length <= 30 && !items.some((item) => reserved.test(item)) ? items : null
 }
 
@@ -26,7 +26,7 @@ export function resolveDeterministicAssistantIntent(text: string): ResolvedAssis
   }
   const items = groceryItems(request)
   if (items) return { action: 'add_grocery_items', arguments: { items } }
-  if (/^(?:please\s+)?remind me\s+/i.test(request)) return { action: 'create_reminder', arguments: { text: request } }
+  if (/^(?:(?:please\s+)?remind me|minn meg på)\s+/i.test(request)) return { action: 'create_reminder', arguments: { text: request } }
   return null
 }
 

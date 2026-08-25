@@ -2511,7 +2511,11 @@ async function handleSelectTab(k: TabKey) {
   }, [appTheme, userId])
 
   function navigateFromAssistant(destination: AssistantDestination) {
-    if (destination === 'settings' || destination === 'layout') setActiveTab(destination === 'settings' ? 'settings' : 'frame')
+    if (destination === 'settings') setActiveTab('settings')
+    else if (destination === 'layout') {
+      setActiveTab('frame')
+      window.requestAnimationFrame(() => document.getElementById('frame-layout-controls')?.focus({ preventScroll: false }))
+    }
     else if (destination === 'groceries' || destination === 'recipes') setActiveTab('groceries')
     else { setActiveTab('reminders'); setRemindersConnectScreenOpen(destination === 'spond') }
   }
@@ -3612,7 +3616,7 @@ function FrameTab(props: {
   const { title, subtitle, layoutKey, cells, onPrev, onNext, onCellTap, language,editorMode,editorName,editorCells,editorUnsupportedSlots,onEditorNameChange,onEditorCellsChange,onCancelEditor,customLayout,customAssignments,isAddCard,onAdd,onEdit } = props
 
   return (
-    <div className="h-full flex flex-col">
+    <div id="frame-layout-controls" tabIndex={-1} className="h-full flex flex-col outline-none">
       <div className="flex items-center justify-between">
         <button aria-label={editorMode?'Cancel layout editing':'Previous layout'} onClick={editorMode?onCancelEditor:onPrev} className="w-10 h-10 flex items-center justify-center text-[color:var(--fg-60)] text-3xl">
           {editorMode?'×':'‹'}
@@ -11247,6 +11251,7 @@ function GroceriesModuleSettingsTab({
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [recipeOpen, setRecipeOpen] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null)
   const [dinnerPlanOpen, setDinnerPlanOpen] = useState(false)
   const [dinnerPlanLockedByOtherUser, setDinnerPlanLockedByOtherUser] = useState(false)
@@ -12112,10 +12117,18 @@ function GroceriesModuleSettingsTab({
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
     const normalizedName = name.trim().replace(/\s+/g, ' ')
     if (!normalizedName || !activeDeviceId) return
+    setAddError(null)
     suppressRealtimeUntilRef.current = Date.now() + 1200
-    await addGroceryItemsCanonical(supabase, activeDeviceId, [{ name: normalizedName, quantity, category }], crypto.randomUUID())
-    await loadGroceries({ silent: true, preserveScroll: true })
-    await loadHistory()
+    try {
+      await addGroceryItemsCanonical(supabase, activeDeviceId, [{ name: normalizedName, quantity, category }], crypto.randomUUID())
+      await loadGroceries({ silent: true, preserveScroll: true })
+      await loadHistory()
+    } catch {
+      await loadGroceries({ silent: true, preserveScroll: true }).catch(() => undefined)
+      await loadHistory().catch(() => undefined)
+      setAddError(language === 'no' ? 'Kunne ikke legge til varen. Prøv igjen.' : "Couldn't add item. Try again.")
+      throw new Error('grocery_add_failed')
+    }
   }
 
   async function addRecipeItems(recipeItems: Array<GroceryRecipeItem & { category: string }>) {
@@ -12425,6 +12438,7 @@ function GroceriesModuleSettingsTab({
       </div>
 
       <div className="py-5 flex flex-col items-center relative z-20">
+        {addError && <p role="alert" className="mb-1 text-center text-sm text-[color:var(--danger)]">{addError}</p>}
         <button
           onClick={() => {
             setEditingItem(null)
@@ -12715,6 +12729,7 @@ function GroceriesDraftSheet({
   const [unit, setUnit] = useState(editingItem?.unit ?? '')
   const [category, setCategory] = useState<GroceryCategory>(editingItem?.category ?? 'other')
   const [saving, setSaving] = useState(false)
+  const [addFailed, setAddFailed] = useState(false)
   const instantAddKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -12755,6 +12770,7 @@ function GroceriesDraftSheet({
   async function save() {
     if (!canSave) return
     setSaving(true)
+    setAddFailed(false)
     try {
       if (editingItem?.id) {
         await updateItem(editingItem.id, name.trim(), quantity, category, isMeasuredEdit ? { amount, unit: unit.trim() } : undefined)
@@ -12762,6 +12778,8 @@ function GroceriesDraftSheet({
         await addItem(name.trim(), quantity, category)
       }
       await onSaved()
+    } catch {
+      setAddFailed(true)
     } finally {
       setSaving(false)
     }
@@ -12773,17 +12791,20 @@ function GroceriesDraftSheet({
     if (instantAddKeyRef.current === suggestionKey) return
     instantAddKeyRef.current = suggestionKey
 
-    const addPromise = addItem(suggestion.name, 1, suggestion.category).catch((error) => {
-      console.error('Failed to add grocery suggestion', error)
-    })
-    setName('')
-    setQuantity(1)
-    setCategory('other')
-    onClose()
-
-    void addPromise.finally(() => {
+    setSaving(true)
+    setAddFailed(false)
+    try {
+      await addItem(suggestion.name, 1, suggestion.category)
+      setName('')
+      setQuantity(1)
+      setCategory('other')
+      onClose()
+    } catch {
+      setAddFailed(true)
+    } finally {
+      setSaving(false)
       instantAddKeyRef.current = null
-    })
+    }
   }
 
   return (
@@ -12803,6 +12824,7 @@ function GroceriesDraftSheet({
           placeholder={tx(language).groceriesInputPlaceholder}
           className="mt-4 w-full h-12 rounded-2xl bg-[color:var(--panel-05)] border border-[color:var(--bd-10)] px-4 text-[color:var(--fg-90)] outline-none"
         />
+        {addFailed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Kunne ikke legge til varen. Prøv igjen.' : "Couldn't add item. Try again."}</p>}
 
         {isMeasuredEdit ? (
           <div className="mt-4 grid grid-cols-[1fr_1fr] gap-3">

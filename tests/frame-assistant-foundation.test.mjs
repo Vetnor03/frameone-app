@@ -37,8 +37,22 @@ test('deterministic help and grocery/reminder commands precede the compact AI fa
 })
 
 test('obvious grocery commands are free while reserved add commands fall through', () => {
-  for (const command of ['Add milk, eggs and bread', 'Add milk and bread to groceries']) assert.equal(resolveDeterministicAssistantIntent(command)?.action, 'add_grocery_items')
-  for (const command of ['Add weather to my frame', 'Add a countdown', 'Add reminders', 'Add Spond']) assert.equal(resolveDeterministicAssistantIntent(command), null)
+  for (const command of ['Add milk, eggs and bread', 'Add milk and bread to groceries', 'Legg til melk, egg og brød', 'Legg til melk og brød på handlelisten']) assert.equal(resolveDeterministicAssistantIntent(command)?.action, 'add_grocery_items')
+  for (const command of ['Add weather to my frame', 'Add a countdown', 'Add reminders', 'Add Spond', 'Legg til vær på min ramme', 'Legg til en nedtelling', 'Legg til påminnelser', 'Legg til Spond']) assert.equal(resolveDeterministicAssistantIntent(command), null)
+  for (const command of ['Remind me to call Mum tomorrow', 'Minn meg på å ringe mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(command)?.action, 'create_reminder')
+})
+
+test('manual and suggestion grocery failures reconcile and remain human-readable', () => {
+  assert.match(home, /catch \{[\s\S]*loadGroceries\(\{ silent: true, preserveScroll: true \}\)\.catch\(\(\) => undefined\)[\s\S]*Couldn't add item\. Try again\./)
+  assert.match(home, /async function addSuggestionInstantly[\s\S]*setSaving\(true\)[\s\S]*await addItem[\s\S]*catch \{[\s\S]*setAddFailed\(true\)[\s\S]*finally \{[\s\S]*setSaving\(false\)/)
+  assert.doesNotMatch(home.slice(home.indexOf('async function addSuggestionInstantly'), home.indexOf('async function addSuggestionInstantly') + 1200), /console\.error|error\.message/)
+})
+
+test('assistant CTAs close the sheet and only promise reachable surfaces', () => {
+  assert.match(ui, /setOpen\(false\); onNavigate/)
+  assert.match(home, /frame-layout-controls/)
+  assert.match(home, /destination === 'layout'[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
+  assert.match(resolver, /destination: 'groceries', message: 'Your saved recipes are in Groceries\.', label: 'Open Groceries'/)
 })
 
 test('a reminder follow-up retains only validated short-lived reminder context', () => {
