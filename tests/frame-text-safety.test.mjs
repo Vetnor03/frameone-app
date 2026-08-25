@@ -8,6 +8,8 @@ test('canonical server sanitizer preserves only the frame character contract', (
   assert.equal(sanitizeFrameText('Besøk farmor på Ålgård'), 'Besøk farmor på Ålgård')
   assert.equal(sanitizeFrameText('Møte med Øyvind'), 'Møte med Øyvind')
   assert.equal(sanitizeFrameText('Ærlig talt'), 'Ærlig talt')
+  assert.equal(sanitizeFrameText('A\u030Alesund'), 'Ålesund')
+  assert.equal(sanitizeFrameText('pa\u030A tur'), 'på tur')
   assert.equal(sanitizeFrameText('Møte – Lene’s «plan»…'), `Møte - Lene's "plan"...`)
   assert.equal(sanitizeFrameText('Fotball ⚽ kl. 18 😊'), 'Fotball kl. 18')
   assert.equal(sanitizeFrameText('Café München'), 'Cafe Munchen')
