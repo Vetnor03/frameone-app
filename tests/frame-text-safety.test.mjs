@@ -46,6 +46,11 @@ test('Soccer compares normalized config and normalizes every API display field',
   }
   assert.match(soccer, /appendDisplayText\(out, n, name\)/)
   assert.match(soccer, /appendDisplayText\(out, n, s\)/)
+  assert.match(soccer, /if \(apiTeamName\[0\]\) copyDisplayText\(out\.teamName/)
+  assert.match(soccer, /else copySafe\(out\.teamName, sizeof\(out\.teamName\), cfg\.teamName\)/)
+  assert.match(soccer, /if \(apiCompetitionName\[0\]\)/)
+  assert.match(soccer, /copySafe\(out\.competitionName, sizeof\(out\.competitionName\), cfg\.competitionName\)/)
+  assert.doesNotMatch(soccer, /copyDisplayText\([^\n]+cfg\.(?:teamName|competitionName)/)
 
   assert.equal(sanitizeFrameText('Bodø/Glimt'), 'Bodø/Glimt')
   assert.equal(sanitizeFrameText('Tromsø'), 'Tromsø')

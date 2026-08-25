@@ -37,6 +37,17 @@ int main() {
   assert(strcmp(firstConfig, repeatedConfig) == 0);
   assert(FrameText::displayEqualsUtf8(firstConfig, "Bodø/Glimt", repeatedConfig, sizeof(repeatedConfig)));
 
+  // Config names are stored as display bytes. When the API omits its UTF-8
+  // name, Soccer must copy that fallback rather than normalize it a second time.
+  char teamFallback[48];
+  char competitionConfig[48];
+  char competitionFallback[48];
+  FrameText::normalizeUtf8ForDisplay(competitionConfig, sizeof(competitionConfig), "Tromsø Liga");
+  strcpy(teamFallback, firstConfig);
+  strcpy(competitionFallback, competitionConfig);
+  assert(strcmp(teamFallback, "Bod\xF8/Glimt") == 0);
+  assert(strcmp(competitionFallback, "Troms\xF8 Liga") == 0);
+
   char question[32];
   FrameText::normalizeUtf8ForDisplay(question, sizeof(question), "Kommer du?");
   assert(strcmp(question, "Kommer du?") == 0);

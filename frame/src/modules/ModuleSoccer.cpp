@@ -766,10 +766,16 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     return false;
   }
 
-  copyDisplayText(out.teamName, sizeof(out.teamName),
-           doc["teamName"] | doc["teamKey"] | cfg.teamName);
-  copyDisplayText(out.competitionName, sizeof(out.competitionName),
-           doc["competitionName"] | doc["domesticCompetitionCode"] | cfg.competitionName);
+  const char* apiTeamName = doc["teamName"] | doc["teamKey"] | "";
+  if (apiTeamName[0]) copyDisplayText(out.teamName, sizeof(out.teamName), apiTeamName);
+  else copySafe(out.teamName, sizeof(out.teamName), cfg.teamName); // Already display-encoded.
+
+  const char* apiCompetitionName = doc["competitionName"] | doc["domesticCompetitionCode"] | "";
+  if (apiCompetitionName[0]) {
+    copyDisplayText(out.competitionName, sizeof(out.competitionName), apiCompetitionName);
+  } else {
+    copySafe(out.competitionName, sizeof(out.competitionName), cfg.competitionName); // Already display-encoded.
+  }
 
   JsonObject nextMatch = doc["next"];
   out.hasNext = !nextMatch.isNull();
