@@ -6,6 +6,16 @@ import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, par
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
 
 const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824140000_reconcile_saved_recipe_legacy_schema.sql', import.meta.url), 'utf8')
+const recipeNameScopeMigration = readFileSync(new URL('../supabase/migrations/20260825120000_scope_saved_recipe_names.sql', import.meta.url), 'utf8')
+
+test('recipe names are scoped to device-owned recipes without weakening RLS', () => {
+  assert.match(recipeNameScopeMigration, /drop constraint if exists grocery_recipes_name_key/)
+  assert.match(recipeNameScopeMigration, /grocery_recipes_global_name_locale_idx[\s\S]*where device_id is null/)
+  assert.match(recipeNameScopeMigration, /grocery_recipes_device_name_locale_idx[\s\S]*where device_id is not null/)
+  assert.match(recipeNameScopeMigration, /security invoker/)
+  assert.doesNotMatch(recipeNameScopeMigration, /drop policy|disable row level security/)
+  assert.match(recipeNameScopeMigration, /exception when unique_violation[\s\S]*select id into saved_id/)
+})
 
 test('saved recipe repair migration restores the complete schema and access controls', () => {
   for (const column of ['id uuid default gen_random_uuid()', 'device_id text', 'name text', "locale text default 'en'", 'is_active boolean default true', 'source_url text', 'base_servings numeric', 'created_at timestamptz default now()', 'updated_at timestamptz default now()', 'recipe_id uuid', "category text default 'other'", 'is_optional boolean default false', 'quantity numeric', 'unit text', 'sort_order integer default 0', 'amount numeric']) {
@@ -188,11 +198,13 @@ test('unchecked state is never persisted when explicitly saving recipe ingredien
   assert.doesNotMatch(recipeSheet, /selected:/)
 })
 
-test('new imported and manual recipes still use insert with rollback protection', async () => {
+test('new imported and manual recipes save independently from grocery adding and replace same-device duplicates', async () => {
   const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
   assert.match(recipeSheet, /showPreview\(payload\)/)
   assert.match(recipeSheet, /showPreview\(\{ name: manualName\.trim\(\)/)
-  assert.match(recipeSheet, /if \(!draft \|\| savedRecipeId\) return[\s\S]*saveRecipeWithRollback\([\s\S]*\.from\('grocery_recipes'\)\.insert/)
-  assert.match(recipeSheet, /setSavedRecipeId\(created\.id\)/)
+  assert.match(recipeSheet, /if \(!draft \|\| savedRecipeId\) return[\s\S]*rpc\('save_grocery_recipe_with_ingredients'/)
+  assert.match(recipeSheet, /setSavedRecipeId\(String\(recipeId\)\)/)
+  assert.doesNotMatch(recipeSheet.slice(recipeSheet.indexOf('async function saveRecipe()'), recipeSheet.indexOf('async function deleteRecipe()')), /onAdd\(/)
+  assert.doesNotMatch(recipeSheet, /saveError\.message/)
 })
