@@ -14,7 +14,7 @@ import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
 import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
-import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
+import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
@@ -12654,18 +12654,17 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
     setPendingAction('save'); setSuccess(null); setError('')
     // Selection is shopping-session state only. Explicit saves persist every ingredient at the currently previewed serving scale.
     const rows = ingredients.map((item, index) => ({ name: item.name.trim(), quantity: scaleRecipeQuantity(item.quantity, draft.servings, servings), unit: item.unit, category: asGroceryCategory(item.category), sort_order: index }))
-    const recipeRecord = { device_id: deviceId, name: draft.name, locale: language, source_url: draft.sourceUrl, base_servings: draft.servings }
     try {
-      const created = await saveRecipeWithRollback({
-        createRecipe: async (value: typeof recipeRecord) => { const { data, error } = await supabase.from('grocery_recipes').insert(value).select('id').single(); if (error || !data) throw new Error(error?.message || 'Could not save recipe.'); return data },
-        createIngredients: async (recipeId, values: typeof rows) => { const { error } = await supabase.from('grocery_recipe_ingredients').insert(values.map((item) => ({ ...item, recipe_id: recipeId }))); if (error) throw new Error(error.message) },
-        deleteRecipe: async (recipeId) => { const { error } = await supabase.from('grocery_recipes').delete().eq('id', recipeId); if (error) throw new Error(error.message) },
-      }, { ...recipeRecord, base_servings: servings }, rows)
-      setSavedRecipeId(created.id)
+      const { data: recipeId, error: saveError } = await supabase.rpc('save_grocery_recipe_with_ingredients', {
+        p_device_id: deviceId, p_name: draft.name, p_locale: language,
+        p_source_url: draft.sourceUrl, p_base_servings: servings, p_ingredients: rows,
+      })
+      if (saveError || !recipeId) throw new Error('save_failed')
+      setSavedRecipeId(String(recipeId))
       setSuccess('saved')
       window.setTimeout(() => setSuccess((current) => current === 'saved' ? null : current), 1800)
-    } catch (saveError) {
-      setError(saveError instanceof Error ? `${language === 'no' ? 'Kunne ikke lagre oppskriften' : 'Could not save recipe'}: ${saveError.message}` : (language === 'no' ? 'Kunne ikke lagre oppskriften.' : 'Could not save recipe.'))
+    } catch {
+      setError(language === 'no' ? 'Kunne ikke lagre oppskriften. Prøv igjen.' : 'Could not save the recipe. Please try again.')
     } finally { setPendingAction(null) }
   }
   async function deleteRecipe() {
