@@ -4,7 +4,9 @@ import { parseReminder, validateParsedReminder } from '@/app/lib/reminders/parse
 import { isReservedAssistantInput, resolveDeterministicAssistantIntent, validateModelIntent } from '@/app/lib/assistant/resolver'
 import type { AssistantResult, ResolvedAssistantIntent } from '@/app/lib/assistant/types'
 import { addGroceryItemsCanonical } from '@/app/lib/groceries/actions'
-import { reminderFollowupContext, validatePendingReminderPayload } from '@/app/lib/assistant/pending'
+import { reminderFollowupContext, surfFollowupTime, validatePendingReminderPayload, validatePendingSurfPayload } from '@/app/lib/assistant/pending'
+import { POST as logSurfExperience } from '@/app/api/surf/experience/log/route'
+import { findSpotByLabel } from '@/app/lib/surf/spots'
 
 export const runtime = 'nodejs'
 
@@ -16,8 +18,8 @@ async function aiIntent(text: string): Promise<ResolvedAssistantIntent | null> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
-      input: [{ role: 'developer', content: [{ type: 'input_text', text: 'Classify one English or Norwegian household request. A very short grocery noun or grocery list means add_grocery_items even without add/legg til. Keep multiword foods intact and extract a leading numeric quantity. Reserved app/navigation concepts (weather/vær, layout/oppsett, settings/innstillinger, Spond, reminders/påminnelser) and genuinely ambiguous text must be needs_input, never groceries. Reminders preserve the complete request in text.' }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
-      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder', 'needs_input'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', maxLength: 80 }, quantity: { type: ['integer', 'null'], minimum: 1, maximum: 99 } }, required: ['name', 'quantity'] }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 } }, required: ['items', 'text'] } }, required: ['action', 'arguments'] } } },
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: 'Route one English or Norwegian household request to a supported module action. Actions: add_grocery_items for clear foods/lists only; create_reminder for task plus date/time phrases even without remind me; log_surf_experience for a surf spot plus an experience rating; needs_input otherwise. Surf ratings are Flat=1, Poor=2, Poor to Fair=3, Fair=4, Good=5, Epic=6. Preserve the original reminder text and surf comment. Never turn module/navigation concepts into groceries. Do not chat or invent actions.' }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
+      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder', 'log_surf_experience', 'needs_input'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', maxLength: 80 }, quantity: { type: ['integer', 'null'], minimum: 1, maximum: 99 } }, required: ['name', 'quantity'] }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 }, spot: { type: 'string', maxLength: 80 }, rating: { type: ['integer', 'null'], minimum: 1, maximum: 6 }, date: { type: 'string', maxLength: 40 }, time: { type: ['string', 'null'], maxLength: 20 }, comment: { type: 'string', maxLength: 1000 } }, required: ['items', 'text', 'spot', 'rating', 'date', 'time', 'comment'] } }, required: ['action', 'arguments'] } } },
     }),
   }).catch(() => null)
   if (!response?.ok) return null
@@ -29,8 +31,31 @@ async function saveReminder(db: SupabaseClient, user: User, deviceId: string, re
   return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: 'Reminder created ✓' }
 }
 
-export async function executeAssistantAction(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, intent: ResolvedAssistantIntent, context: { localNow: string; timezone: string | null; language: 'en' | 'no' }): Promise<AssistantResult> {
+function surfLoggedAt(date: string, time: string, localNow: string, timezone: string | null) {
+  const now = new Date(localNow)
+  const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: timezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now).map((part) => [part.type, part.value]))
+  const localDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`
+  const base = new Date(`${localDate}T${time}:00Z`)
+  if (date === 'yesterday') base.setUTCDate(base.getUTCDate() - 1)
+  if (!timezone) return base.toISOString()
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(base).map((part) => [part.type, part.value]))
+  const shownAsUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute))
+  return new Date(base.getTime() - (shownAsUtc - base.getTime())).toISOString()
+}
+
+async function executeSurfLog(intent: Extract<ResolvedAssistantIntent, { action: 'log_surf_experience' }>, context: { localNow: string; timezone: string | null; language: 'en' | 'no'; authorization: string }): Promise<AssistantResult> {
+  const spot = findSpotByLabel(intent.arguments.spot)
+  const spotLabel = spot?.label || intent.arguments.spot
+  const response = await logSurfExperience(new Request('http://frame.local/api/surf/experience/log', { method: 'POST', headers: { 'content-type': 'application/json', authorization: context.authorization }, body: JSON.stringify({ spotId: spot?.spotId || spotLabel, spot: spotLabel, loggedAt: surfLoggedAt(intent.arguments.date, intent.arguments.time!, context.localNow, context.timezone), rating_1_6: intent.arguments.rating, mode: 'detect', comment: intent.arguments.comment }) }))
+  const result = await response.json().catch(() => null)
+  if (!response.ok && result?.error === 'Unknown surf spot') return { status: 'needs_input', action: 'log_surf_experience', message: context.language === 'no' ? 'Hvilken surfespot mener du?' : 'Which surf spot do you mean?' }
+  if (!response.ok || result?.duplicate) return friendlyError()
+  return { status: 'completed', action: 'log_surf_experience', message: context.language === 'no' ? `Logget surfen på ${spotLabel}.` : `Logged your surf at ${spotLabel}.` }
+}
+
+export async function executeAssistantAction(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, intent: ResolvedAssistantIntent, context: { localNow: string; timezone: string | null; language: 'en' | 'no'; authorization: string }): Promise<AssistantResult> {
   if (intent.action === 'answer_help') return intent.response
+  if (intent.action === 'needs_input') return { status: 'needs_input', action: 'needs_input', message: context.language === 'no' ? 'Kan du si litt mer?' : 'Could you say a little more?' }
   const { data: membership } = await db.from('device_members').select('device_id').eq('device_id', deviceId).eq('user_id', user.id).maybeSingle()
   if (!membership) return friendlyError()
   if (intent.action === 'add_grocery_items') {
@@ -38,6 +63,14 @@ export async function executeAssistantAction(db: SupabaseClient, admin: Supabase
     const names = intent.arguments.items.map(({ name }) => name.toLocaleLowerCase())
     const itemList = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} ${context.language === 'no' ? 'og' : 'and'} ${names.at(-1)}`
     return { status: 'completed', action: 'add_grocery_items', message: `${context.language === 'no' ? 'La til' : 'Added'} ${itemList}.` }
+  }
+  if (intent.action === 'log_surf_experience') {
+    if (!intent.arguments.time) {
+      const question = context.language === 'no' ? `Når var du på ${intent.arguments.spot}?` : `What time were you at ${intent.arguments.spot}?`
+      const { data, error } = await admin.from('assistant_pending_actions').insert({ user_id: user.id, device_id: deviceId, action: 'log_surf_experience', payload: { spot: intent.arguments.spot, rating: intent.arguments.rating, date: intent.arguments.date, comment: intent.arguments.comment } }).select('id').single()
+      return error || !data ? friendlyError() : { status: 'needs_input', action: 'log_surf_experience', message: question, pendingId: data.id }
+    }
+    return executeSurfLog(intent, context)
   }
   const { data: parseAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
   if (!parseAllowed) return { status: 'error', message: 'Please wait a moment and try again.' }
@@ -63,7 +96,16 @@ export async function POST(request: Request) {
   if (body.pendingId !== undefined) {
     if (typeof body.pendingId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.pendingId)) return NextResponse.json({ status: 'error', message: "I can't do that yet." }, { status: 400 })
     const { data: pending } = await admin.from('assistant_pending_actions').select('id,device_id,action,payload,expires_at').eq('id', body.pendingId).eq('user_id', user.id).eq('device_id', body.deviceId).maybeSingle()
-    if (!pending || pending.action !== 'create_reminder' || new Date(pending.expires_at).getTime() <= Date.now()) return NextResponse.json({ status: 'error', message: 'That follow-up expired. Try again.' })
+    if (!pending || !['create_reminder', 'log_surf_experience'].includes(pending.action) || new Date(pending.expires_at).getTime() <= Date.now()) return NextResponse.json({ status: 'error', message: 'That follow-up expired. Try again.' })
+    if (pending.action === 'log_surf_experience') {
+      const payload = validatePendingSurfPayload(pending.payload)
+      const time = surfFollowupTime(body.text)
+      if (!payload || !time) return NextResponse.json({ status: 'needs_input', action: 'log_surf_experience', message: body.language === 'no' ? 'Hvilket klokkeslett var det?' : 'What time was it?' })
+      const intent: ResolvedAssistantIntent = { action: 'log_surf_experience', arguments: { ...payload, time } }
+      const result = await executeSurfLog(intent, { localNow: body.localNow, timezone: body.timezone || null, language: body.language, authorization: auth })
+      if (result.status === 'completed') await admin.from('assistant_pending_actions').delete().eq('id', pending.id).eq('user_id', user.id)
+      return NextResponse.json(result)
+    }
     const payload = validatePendingReminderPayload(pending.payload)
     const followup = payload && reminderFollowupContext(payload, body.text, { localNow: body.localNow, timezone: body.timezone || null, language: body.language })
     if (!followup) return NextResponse.json(friendlyError())
@@ -87,6 +129,6 @@ export async function POST(request: Request) {
     }
   }
   if (!intent) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?' })
-  try { return NextResponse.json(await executeAssistantAction(db, admin, user, body.deviceId, intent, { localNow: body.localNow, timezone: body.timezone || null, language: body.language })) }
+  try { return NextResponse.json(await executeAssistantAction(db, admin, user, body.deviceId, intent, { localNow: body.localNow, timezone: body.timezone || null, language: body.language, authorization: auth })) }
   catch { return NextResponse.json(friendlyError()) }
 }

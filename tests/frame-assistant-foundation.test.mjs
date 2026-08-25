@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolveDeterministicAssistantIntent } from '../app/lib/assistant/resolver.ts'
-import { reminderFollowupContext, validatePendingReminderPayload } from '../app/lib/assistant/pending.ts'
+import { reminderFollowupContext, surfFollowupTime, validatePendingReminderPayload, validatePendingSurfPayload } from '../app/lib/assistant/pending.ts'
 import { canonicalGroceryMergePriority, normalizeCanonicalGroceryAdditions } from '../app/lib/groceries/actions.ts'
 import { ASSISTANT_TIPS, assistantPlaceholder, nextAssistantTip } from '../app/lib/assistant/tips.ts'
 
@@ -14,6 +14,7 @@ const tips = readFileSync(new URL('../app/lib/assistant/tips.ts', import.meta.ur
 const groceryActions = readFileSync(new URL('../app/lib/groceries/actions.ts', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20260825130000_add_frame_assistant_foundation.sql', import.meta.url), 'utf8')
 const tipProgressionMigration = readFileSync(new URL('../supabase/migrations/20260825170000_mark_assistant_tip_shown.sql', import.meta.url), 'utf8')
+const pendingActionsMigration = readFileSync(new URL('../supabase/migrations/20260825180000_expand_assistant_pending_actions.sql', import.meta.url), 'utf8')
 
 test('assistant is mounted only by the FRAME branch and respects its preference', () => {
   assert.match(home, /const isPlainFrameAssistantSurface = activeTab === 'frame'/)
@@ -123,8 +124,24 @@ test('short grocery shorthand is deterministic, quantity-aware, and protects res
   assert.deepEqual(resolveDeterministicAssistantIntent('Egg og brød')?.arguments, { items: [{ name: 'Egg' }, { name: 'brød' }] })
   assert.deepEqual(resolveDeterministicAssistantIntent('2 melk')?.arguments, { items: [{ name: 'melk', quantity: 2 }] })
   assert.deepEqual(resolveDeterministicAssistantIntent('Soy sauce')?.arguments, { items: [{ name: 'Soy sauce' }] })
-  for (const word of ['weather', 'vær', 'layout', 'oppsett', 'settings', 'innstillinger', 'Spond', 'reminders']) assert.equal(resolveDeterministicAssistantIntent(word), null)
+  for (const word of ['weather', 'vær', 'layout', 'oppsett', 'settings', 'innstillinger', 'Spond', 'reminders']) assert.equal(resolveDeterministicAssistantIntent(word)?.action, 'answer_help')
   assert.match(api, /!isReservedAssistantInput\(body\.text\)/)
+})
+
+test('module-aware routing recognizes natural reminders and surf logs before grocery fallback', () => {
+  for (const phrase of ['Call mom tomorrow', 'Dentist Friday at 10', 'Ring mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(phrase)?.action, 'create_reminder')
+  assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø was poor today'), { action: 'log_surf_experience', arguments: { spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' } })
+  assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø was poor at 14:00 today')?.arguments, { spot: 'Hellestø', rating: 2, date: 'today', time: '14:00', comment: 'Hellestø was poor at 14:00 today' })
+  assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø var god kl 14 i dag')?.arguments, { spot: 'Hellestø', rating: 5, date: 'today', time: '14:00', comment: 'Hellestø var god kl 14 i dag' })
+})
+
+test('surf clarification preserves validated pending context and accepts a time-only follow-up', () => {
+  assert.deepEqual(validatePendingSurfPayload({ spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' }), { spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' })
+  assert.equal(surfFollowupTime('around 14:00'), '14:00')
+  assert.match(api, /What time were you at \$\{intent\.arguments\.spot\}/)
+  assert.match(api, /pending\.action === 'log_surf_experience'/)
+  assert.match(api, /POST as logSurfExperience/)
+  assert.match(pendingActionsMigration, /'create_reminder', 'log_surf_experience'/)
 })
 
 test('manual and suggestion grocery failures reconcile and remain human-readable', () => {

@@ -2579,6 +2579,8 @@ async function handleSelectTab(k: TabKey) {
 
   function navigateFromAssistant(destination: AssistantDestination) {
     if (destination === 'settings') setActiveTab('settings')
+    else if (destination === 'surf') setActiveTab('surf')
+    else if (destination === 'weather') setActiveTab('weather')
     else if (destination === 'layout') {
       setActiveTab('frame')
       window.requestAnimationFrame(() => document.getElementById('frame-layout-controls')?.focus({ preventScroll: false }))
