@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolveDeterministicAssistantIntent } from '../app/lib/assistant/resolver.ts'
 import { reminderFollowupContext, validatePendingReminderPayload } from '../app/lib/assistant/pending.ts'
 import { canonicalGroceryMergePriority, normalizeCanonicalGroceryAdditions } from '../app/lib/groceries/actions.ts'
-import { ASSISTANT_TIPS, nextAssistantTip } from '../app/lib/assistant/tips.ts'
+import { ASSISTANT_TIPS, assistantPlaceholder, nextAssistantTip } from '../app/lib/assistant/tips.ts'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const ui = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
@@ -87,6 +87,20 @@ test('proactive tip copy is exact in English and Norwegian and remains free', ()
   ])
   assert.deepEqual(ASSISTANT_TIPS.map(({ id }) => id), ['landscape-frame-preview', 'add-groceries', 'reminder-example', 'settings-help'])
   assert.doesNotMatch(tips, /fetch\(|openai|aiIntent/i)
+})
+
+test('assistant placeholder follows command tips and is neutral for informational tips', () => {
+  const reminderTip = nextAssistantTip([0, 1], 'en')
+  assert.equal(reminderTip?.id, 'reminder-example')
+  assert.equal(assistantPlaceholder(reminderTip?.id, 'en'), 'Remind me to call Mum tomorrow')
+  assert.notEqual(assistantPlaceholder(reminderTip?.id, 'en'), 'Add milk, eggs and bread')
+  assert.equal(assistantPlaceholder('reminder-example', 'no'), 'Minn meg på å ringe mamma i morgen')
+  assert.equal(assistantPlaceholder('add-groceries', 'en'), 'Add milk, eggs and bread')
+  assert.equal(assistantPlaceholder('add-groceries', 'no'), 'Legg til melk, egg og brød')
+  assert.equal(assistantPlaceholder('landscape-frame-preview', 'en'), 'What would you like me to do?')
+  assert.equal(assistantPlaceholder('settings-help', 'no'), 'Hva vil du at jeg skal gjøre?')
+  assert.match(ui, /placeholder=\{placeholder\}/)
+  assert.doesNotMatch(ui, /setText\([^)]*(milk|melk|remind|Minn)/i)
 })
 
 test('deterministic help and grocery/reminder commands precede the compact AI fallback', () => {
