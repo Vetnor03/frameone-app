@@ -117,6 +117,16 @@ test('obvious grocery commands are free while reserved add commands fall through
   for (const command of ['Remind me to call Mum tomorrow', 'Minn meg på å ringe mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(command)?.action, 'create_reminder')
 })
 
+test('short grocery shorthand is deterministic, quantity-aware, and protects reserved navigation words', () => {
+  assert.deepEqual(resolveDeterministicAssistantIntent('Soyasaus')?.arguments, { items: [{ name: 'Soyasaus' }] })
+  assert.deepEqual(resolveDeterministicAssistantIntent('Melk')?.arguments, { items: [{ name: 'Melk' }] })
+  assert.deepEqual(resolveDeterministicAssistantIntent('Egg og brød')?.arguments, { items: [{ name: 'Egg' }, { name: 'brød' }] })
+  assert.deepEqual(resolveDeterministicAssistantIntent('2 melk')?.arguments, { items: [{ name: 'melk', quantity: 2 }] })
+  assert.deepEqual(resolveDeterministicAssistantIntent('Soy sauce')?.arguments, { items: [{ name: 'Soy sauce' }] })
+  for (const word of ['weather', 'vær', 'layout', 'oppsett', 'settings', 'innstillinger', 'Spond', 'reminders']) assert.equal(resolveDeterministicAssistantIntent(word), null)
+  assert.match(api, /!isReservedAssistantInput\(body\.text\)/)
+})
+
 test('manual and suggestion grocery failures reconcile and remain human-readable', () => {
   assert.match(home, /catch \{[\s\S]*loadGroceries\(\{ silent: true, preserveScroll: true \}\)\.catch\(\(\) => undefined\)[\s\S]*Couldn't add item\. Try again\./)
   assert.match(home, /async function addSuggestionInstantly[\s\S]*setSaving\(true\)[\s\S]*await addItem[\s\S]*catch \{[\s\S]*setAddFailed\(true\)[\s\S]*finally \{[\s\S]*setSaving\(false\)/)

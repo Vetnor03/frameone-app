@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import { parseReminder, validateParsedReminder } from '@/app/lib/reminders/parser'
-import { resolveDeterministicAssistantIntent, validateModelIntent } from '@/app/lib/assistant/resolver'
+import { isReservedAssistantInput, resolveDeterministicAssistantIntent, validateModelIntent } from '@/app/lib/assistant/resolver'
 import type { AssistantResult, ResolvedAssistantIntent } from '@/app/lib/assistant/types'
 import { addGroceryItemsCanonical } from '@/app/lib/groceries/actions'
 import { reminderFollowupContext, validatePendingReminderPayload } from '@/app/lib/assistant/pending'
@@ -16,8 +16,8 @@ async function aiIntent(text: string): Promise<ResolvedAssistantIntent | null> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
-      input: [{ role: 'developer', content: [{ type: 'input_text', text: 'Select one RE:MIND action. Never invent operations. Groceries use items; reminders preserve the complete request in text.' }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
-      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'string', maxLength: 80 }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 } }, required: ['items', 'text'] } }, required: ['action', 'arguments'] } } },
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: 'Classify one English or Norwegian household request. A very short grocery noun or grocery list means add_grocery_items even without add/legg til. Keep multiword foods intact and extract a leading numeric quantity. Reserved app/navigation concepts (weather/vær, layout/oppsett, settings/innstillinger, Spond, reminders/påminnelser) and genuinely ambiguous text must be needs_input, never groceries. Reminders preserve the complete request in text.' }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
+      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder', 'needs_input'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', maxLength: 80 }, quantity: { type: ['integer', 'null'], minimum: 1, maximum: 99 } }, required: ['name', 'quantity'] }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 } }, required: ['items', 'text'] } }, required: ['action', 'arguments'] } } },
     }),
   }).catch(() => null)
   if (!response?.ok) return null
@@ -34,8 +34,10 @@ export async function executeAssistantAction(db: SupabaseClient, admin: Supabase
   const { data: membership } = await db.from('device_members').select('device_id').eq('device_id', deviceId).eq('user_id', user.id).maybeSingle()
   if (!membership) return friendlyError()
   if (intent.action === 'add_grocery_items') {
-    const added = await addGroceryItemsCanonical(db, deviceId, intent.arguments.items.map((name) => ({ name })), crypto.randomUUID())
-    return { status: 'completed', action: 'add_grocery_items', message: `Added ${added.count} ${added.count === 1 ? 'item' : 'items'} to Groceries ✓` }
+    await addGroceryItemsCanonical(db, deviceId, intent.arguments.items, crypto.randomUUID())
+    const names = intent.arguments.items.map(({ name }) => name.toLocaleLowerCase())
+    const itemList = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} ${context.language === 'no' ? 'og' : 'and'} ${names.at(-1)}`
+    return { status: 'completed', action: 'add_grocery_items', message: `${context.language === 'no' ? 'La til' : 'Added'} ${itemList}.` }
   }
   const { data: parseAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
   if (!parseAllowed) return { status: 'error', message: 'Please wait a moment and try again.' }
@@ -78,11 +80,13 @@ export async function POST(request: Request) {
   }
   let intent = resolveDeterministicAssistantIntent(body.text)
   if (!intent) {
-    const { data: aiAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
-    if (!aiAllowed) return NextResponse.json({ status: 'error', message: 'Please wait a moment and try again.' }, { status: 429 })
-    intent = await aiIntent(body.text)
+    if (!isReservedAssistantInput(body.text)) {
+      const { data: aiAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
+      if (!aiAllowed) return NextResponse.json({ status: 'error', message: 'Please wait a moment and try again.' }, { status: 429 })
+      intent = await aiIntent(body.text)
+    }
   }
-  if (!intent) return NextResponse.json({ status: 'error', message: "I can't do that yet." })
+  if (!intent) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?' })
   try { return NextResponse.json(await executeAssistantAction(db, admin, user, body.deviceId, intent, { localNow: body.localNow, timezone: body.timezone || null, language: body.language })) }
   catch { return NextResponse.json(friendlyError()) }
 }

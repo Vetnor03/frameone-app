@@ -13,6 +13,6 @@ export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'sett
 export type AssistantDestination = typeof ASSISTANT_DESTINATIONS[number]
 
 export type ResolvedAssistantIntent =
-  | { action: 'add_grocery_items'; arguments: { items: string[] } }
+  | { action: 'add_grocery_items'; arguments: { items: Array<{ name: string; quantity?: number }> } }
   | { action: 'create_reminder'; arguments: { text: string } }
   | { action: 'answer_help'; arguments: { destination: AssistantDestination }; response: AssistantResult }
