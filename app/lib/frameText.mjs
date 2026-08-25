@@ -16,7 +16,8 @@ const SUPPORTED = new Set(['æ', 'ø', 'å', 'Æ', 'Ø', 'Å', '°'])
 /** Canonical, deterministic normalization for text sent to a physical frame. */
 export function sanitizeFrameText(input) {
   let output = ''
-  for (const original of String(input ?? '')) {
+  const value = String(input ?? '').normalize('NFC')
+  for (const original of value) {
     const mapped = TYPOGRAPHY.get(original)
     if (mapped !== undefined) { output += mapped; continue }
     if (SUPPORTED.has(original) || SAFE_ASCII.test(original)) { output += original; continue }
