@@ -12,7 +12,8 @@ function groceryItems(text: string) {
   if (!match) return null
   const value = match[1].replace(/\s+(?:to|in)\s+(?:my\s+)?(?:grocery|groceries|grocery list|shopping list)$/i, '')
   const items = value.split(/\s*(?:,|\band\b|&)\s*/i).map((item) => item.trim()).filter(Boolean)
-  return items.length && items.length <= 30 ? items : null
+  const reserved = /^(?:a\s+)?(?:weather|countdown|reminders?|spond)(?:\s|$)|\b(?:to|on)\s+(?:my\s+)?frame\b/i
+  return items.length && items.length <= 30 && !items.some((item) => reserved.test(item)) ? items : null
 }
 
 export function resolveDeterministicAssistantIntent(text: string): ResolvedAssistantIntent | null {
@@ -42,4 +43,3 @@ export function validateModelIntent(value: unknown): ResolvedAssistantIntent | n
   }
   return null
 }
-

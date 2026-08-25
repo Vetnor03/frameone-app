@@ -16,6 +16,7 @@ import FrameAssistant from './components/FrameAssistant'
 import type { AssistantDestination } from './lib/assistant/types'
 import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
+import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
@@ -2515,6 +2516,10 @@ async function handleSelectTab(k: TabKey) {
     else { setActiveTab('reminders'); setRemindersConnectScreenOpen(destination === 'spond') }
   }
 
+  const isPlainFrameAssistantSurface = activeTab === 'frame'
+    && !layoutFlow && !pickerOpen && !themePickerOpen && !languagePickerOpen
+    && shouldRenderApp && !booting && !showSplash && !shouldShowFirstFrameOnboarding && !setupDeviceId
+
   if (isPhoneLandscapeMirror) {
     return (
       <LandscapeFrameMirror
@@ -2704,7 +2709,7 @@ async function handleSelectTab(k: TabKey) {
               </div>
             )}
 
-            {activeTab === 'frame' && !layoutFlow && !pickerOpen && showFrameAssistant && (
+            {isPlainFrameAssistantSurface && showFrameAssistant && (
               <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} onTipShown={(index) => { if (!assistantTipsShown.includes(index)) saveAssistantPreferences({ shown: [...assistantTipsShown, index] }) }} onNavigate={navigateFromAssistant} />
             )}
 
@@ -8141,9 +8146,9 @@ function SettingsTab({
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
               <div className="py-4">
-                <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">AI ASSISTANT</div>
-                <AssistantPreferenceToggle label="Show AI Assistant" checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
-                <AssistantPreferenceToggle label="Proactive tips" checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
+                <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
+                <AssistantPreferenceToggle label={language === 'no' ? 'Vis KI-assistent' : 'Show AI Assistant'} checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
+                <AssistantPreferenceToggle label={language === 'no' ? 'Proaktive tips' : 'Proactive tips'} checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
               </div>
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
@@ -12107,114 +12112,9 @@ function GroceriesModuleSettingsTab({
   async function addItem(name: string, quantity: number, category: GroceryCategory) {
     const normalizedName = name.trim().replace(/\s+/g, ' ')
     if (!normalizedName || !activeDeviceId) return
-
-    const nowIso = new Date().toISOString()
-    const nextQty = Math.max(1, Number(quantity) || 1)
-    const normalizedKey = normalizeGrocerySuggestionKey(normalizedName)
-    const matchNowMs = Date.now()
-    const matchingVisibleItems = items.filter((item) => (
-      !isDinnerVirtualId(item.id)
-      && isUnmeasuredGroceryItem(item)
-      && normalizeGrocerySuggestionKey(item.name) === normalizedKey
-      && groceryIsVisible(item, matchNowMs)
-    ))
-    const existingItem = matchingVisibleItems.find((item) => !item.isChecked && item.category === category)
-      ?? matchingVisibleItems.find((item) => !item.isChecked)
-      ?? matchingVisibleItems.find((item) => item.category === category)
-
-    if (existingItem) {
-      const mergedQty = existingItem.quantity + nextQty
-      setItems((prev) => prev.map((item) => (
-        item.id === existingItem.id
-          ? {
-              ...item,
-              quantity: mergedQty,
-              isChecked: false,
-              checkedAt: null,
-              updatedAt: nowIso,
-            }
-          : item
-      )))
-      suppressRealtimeUntilRef.current = Date.now() + 1200
-
-      const { data, error } = await supabase
-        .from('grocery_items')
-        .update({
-          quantity: mergedQty,
-          is_checked: false,
-          checked_at: null,
-        })
-        .eq('id', existingItem.id)
-        .select('id, name, quantity, amount, unit, category, is_checked, checked_at, updated_at')
-        .single()
-
-      if (error) {
-        alert(error.message)
-        await loadGroceries({ silent: true, preserveScroll: true })
-        return
-      }
-
-      const updatedItem = groceryItemFromRow(data)
-      if (updatedItem) upsertItemInState(updatedItem)
-      await rememberHistoryItem(updatedItem?.name ?? existingItem.name, updatedItem?.category ?? existingItem.category, nowIso)
-      void markGroceryProbablyOutInsight(updatedItem?.name ?? existingItem.name)
-      await loadHistory()
-      return
-    }
-
-    const optimisticId = `local-${Math.random().toString(36).slice(2)}`
-    setItems((prev) => [
-      {
-        id: optimisticId,
-        name: normalizedName,
-        quantity: nextQty,
-        amount: null,
-        unit: null,
-        category,
-        isChecked: false,
-        checkedAt: null,
-        updatedAt: nowIso,
-      },
-      ...prev,
-    ])
-
-    const { data: authData } = await supabase.auth.getUser()
-    const createdBy = authData.user?.id ?? null
     suppressRealtimeUntilRef.current = Date.now() + 1200
-    const { data, error } = await supabase
-      .from('grocery_items')
-      .insert({
-        device_id: activeDeviceId,
-        created_by: createdBy,
-        name: normalizedName,
-        quantity: nextQty,
-        category,
-        is_checked: false,
-        checked_at: null,
-      })
-      .select('id, name, quantity, amount, unit, category, is_checked, checked_at, updated_at')
-      .single()
-
-    if (error) {
-      setItems((prev) => prev.filter((item) => item.id !== optimisticId))
-      alert(error.message)
-      return
-    }
-
-    const insertedItem = groceryItemFromRow(data)
-    setItems((prev) => {
-      const withoutOptimistic = prev.filter((item) => item.id !== optimisticId)
-      if (!insertedItem) return withoutOptimistic
-
-      const existingIndex = withoutOptimistic.findIndex((item) => item.id === insertedItem.id)
-      if (existingIndex === -1) return [insertedItem, ...withoutOptimistic]
-
-      const copy = [...withoutOptimistic]
-      copy[existingIndex] = { ...copy[existingIndex], ...insertedItem }
-      return copy
-    })
-    await rememberHistoryItem(normalizedName, category, nowIso)
-    void markGroceryProbablyOutInsight(normalizedName)
+    await addGroceryItemsCanonical(supabase, activeDeviceId, [{ name: normalizedName, quantity, category }], crypto.randomUUID())
+    await loadGroceries({ silent: true, preserveScroll: true })
     await loadHistory()
   }
 
