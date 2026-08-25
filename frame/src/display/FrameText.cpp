@@ -49,6 +49,17 @@ size_t normalizeUtf8ForDisplay(char* out, size_t size, const char* input) {
   };
   while (*p && used + 1 < size) {
     const uint32_t cp = decode(p);
+
+    // Preserve canonically decomposed Å/å (A/a + U+030A) just like precomposed UTF-8.
+    if (cp == 'A' || cp == 'a') {
+      const unsigned char* next = p;
+      if (*next && decode(next) == 0x030A) {
+        p = next;
+        emit(static_cast<char>(cp == 'A' ? 0xC5 : 0xE5));
+        continue;
+      }
+    }
+
     if (safeAscii(cp)) { emit(static_cast<char>(cp)); continue; }
     switch (cp) {
       case 0x00E6: emit(static_cast<char>(0xE6)); break; case 0x00C6: emit(static_cast<char>(0xC6)); break;
