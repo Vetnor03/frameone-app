@@ -1,4 +1,5 @@
 import { buildWeatherInsight } from '../weatherMirror.ts'
+import { sanitizeFrameText } from '../frameText.mjs'
 
 const CACHE_TTL_MS = 150 * 60 * 1000
 const AI_TIMEOUT_MS = 4500
@@ -50,7 +51,7 @@ function severeInsight(input) {
 
 function safeInsight(value) {
   if (typeof value !== 'string') return ''
-  const clean = value.replace(/\s+/g, ' ').trim()
+  const clean = sanitizeFrameText(value)
   if (!clean || clean.toUpperCase() === 'NONE' || clean.length > MAX_INSIGHT_CHARS || /[\r\n]/.test(value)) return ''
   return clean
 }
@@ -99,10 +100,10 @@ export function clearWeatherInsightCache() { cache.clear() }
 export async function resolveWeatherInsight(payload, options = {}) {
   const fallbackInput = deterministicInput(payload)
   const severe = severeInsight(fallbackInput)
-  if (severe) return severe
+  if (severe) return sanitizeFrameText(severe)
   const compact = compactWeatherInsightForecast(payload)
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY
-  if (!compact || !apiKey) return buildWeatherInsight(fallbackInput)
+  if (!compact || !apiKey) return sanitizeFrameText(buildWeatherInsight(fallbackInput))
   const model = options.model ?? process.env.FRAME_AI_MODEL ?? 'gpt-5.6'
   const locationKey = options.locationKey || 'default'
   const cached = cache.get(locationKey)
@@ -115,7 +116,7 @@ export async function resolveWeatherInsight(payload, options = {}) {
   try {
     const response = await fetcher('https://api.openai.com/v1/responses', { method: 'POST', signal: controller.signal, headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
       model, store: false,
-      input: [{ role: 'system', content: [{ type: 'input_text', text: `Decide whether the supplied upcoming forecast contains anything genuinely useful or noteworthy for someone glancing at a household information display. Prioritize meaningful changes, inconvenience, timing, unusual conditions, or particularly notable pleasant weather. Avoid ordinary descriptions and never mention weather before localNow. Use only supplied values; do not infer unsupported events. Return one very short natural sentence (maximum ${MAX_INSIGHT_CHARS} characters), or exactly NONE.` }] }, { role: 'user', content: [{ type: 'input_text', text: JSON.stringify(compact) }] }],
+      input: [{ role: 'system', content: [{ type: 'input_text', text: `Use plain typography: no emoji, decorative Unicode, smart quotes, or en/em dashes. Preserve Norwegian æ/ø/å; the degree symbol is allowed. Keep wording concise and glanceable. Decide whether the supplied upcoming forecast contains anything genuinely useful or noteworthy for someone glancing at a household information display. Prioritize meaningful changes, inconvenience, timing, unusual conditions, or particularly notable pleasant weather. Avoid ordinary descriptions and never mention weather before localNow. Use only supplied values; do not infer unsupported events. Return one very short natural sentence (maximum ${MAX_INSIGHT_CHARS} characters), or exactly NONE.` }] }, { role: 'user', content: [{ type: 'input_text', text: JSON.stringify(compact) }] }],
       max_output_tokens: 60,
     }) })
     if (!response.ok) throw new Error(`OpenAI status ${response.status}`)
@@ -124,6 +125,6 @@ export async function resolveWeatherInsight(payload, options = {}) {
     return insight
   } catch (error) {
     console.warn('[weather-insight] AI unavailable; using deterministic fallback', { error: error instanceof Error ? error.message : 'unknown' })
-    return buildWeatherInsight(fallbackInput)
+    return sanitizeFrameText(buildWeatherInsight(fallbackInput))
   } finally { clearTimeout(timeout) }
 }

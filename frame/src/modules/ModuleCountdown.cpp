@@ -1,3 +1,4 @@
+#include "../display/FrameText.h"
 // ===============================
 // ModuleCountdown.cpp (FULL FILE - copy/paste)
 // ===============================
@@ -77,36 +78,7 @@ static void safeCopy(char* dst, size_t dstSize, const char* src) {
 }
 
 static void utf8ToLatin1(char* out, size_t n, const char* in) {
-  if (!out || n == 0) return;
-  size_t oi = 0;
-
-  for (size_t i = 0; in && in[i] && oi + 1 < n; i++) {
-    uint8_t c = (uint8_t)in[i];
-
-    if (c < 0x80) {
-      out[oi++] = (char)c;
-      continue;
-    }
-
-    if (c == 0xC3 && in[i + 1]) {
-      uint8_t d = (uint8_t)in[i + 1];
-      i++;
-      switch (d) {
-        case 0xB8: out[oi++] = (char)0xF8; break; // ø
-        case 0x98: out[oi++] = (char)0xD8; break; // Ø
-        case 0xA5: out[oi++] = (char)0xE5; break; // å
-        case 0x85: out[oi++] = (char)0xC5; break; // Å
-        case 0xA6: out[oi++] = (char)0xE6; break; // æ
-        case 0x86: out[oi++] = (char)0xC6; break; // Æ
-        default:   out[oi++] = '?'; break;
-      }
-      continue;
-    }
-
-    out[oi++] = '?';
-  }
-
-  out[oi] = 0;
+  FrameText::normalizeUtf8ForDisplay(out, n, in);
 }
 
 static void clearCache() {

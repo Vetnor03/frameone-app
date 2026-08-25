@@ -1,3 +1,4 @@
+#include "../display/FrameText.h"
 #include "ModuleDate.h"
 #include "DisplayCore.h"
 #include "Theme.h"
@@ -44,61 +45,9 @@ namespace ModuleDate {
   void setConfig(const FrameConfig* cfg) { g_cfg = cfg; }
 }
 
-/* =========================
-   UTF-8 -> Latin-1 converter
-   - Converts U+00A0..U+00FF (2-byte UTF-8) into single byte 0xA0..0xFF
-   - Leaves ASCII as-is
-   - Replaces unsupported sequences with '?'
-   - ALSO normalizes decomposed Å/å: A/a + U+030A (UTF-8: CC 8A)
-   ========================= */
+/* Shared physical-frame UTF-8 safety boundary. */
 static void utf8ToLatin1(const char* in, char* out, size_t outSize) {
-  if (!out || outSize == 0) return;
-  if (!in) { out[0] = 0; return; }
-
-  size_t oi = 0;
-  for (size_t i = 0; in[i] && oi + 1 < outSize; ) {
-    uint8_t c = (uint8_t)in[i];
-
-    // ASCII
-    if (c < 0x80) {
-      // Handle decomposed Å/å: "A/a" + U+030A (UTF-8: CC 8A)
-      if ((c == 'A' || c == 'a') &&
-          (uint8_t)in[i + 1] == 0xCC &&
-          (uint8_t)in[i + 2] == 0x8A) {
-        out[oi++] = (c == 'A') ? (char)0xC5 : (char)0xE5; // Å / å
-        i += 3;
-        continue;
-      }
-
-      out[oi++] = (char)c;
-      i++;
-      continue;
-    }
-
-    // Two-byte UTF-8: 110xxxxx 10xxxxxx
-    if ((c & 0xE0) == 0xC0) {
-      uint8_t c2 = (uint8_t)in[i + 1];
-      if ((c2 & 0xC0) == 0x80) {
-        uint16_t code = ((uint16_t)(c & 0x1F) << 6) | (uint16_t)(c2 & 0x3F);
-
-        // Only map U+00A0..U+00FF to Latin-1 bytes 0xA0..0xFF
-        if (code >= 0x00A0 && code <= 0x00FF) {
-          out[oi++] = (char)code;
-        } else {
-          out[oi++] = '?';
-        }
-
-        i += 2;
-        continue;
-      }
-    }
-
-    // Anything else (3/4 byte sequences etc.) -> '?'
-    out[oi++] = '?';
-    i++;
-  }
-
-  out[oi] = 0;
+  FrameText::normalizeUtf8ForDisplay(out, outSize, in);
 }
 
 /* ========================= */

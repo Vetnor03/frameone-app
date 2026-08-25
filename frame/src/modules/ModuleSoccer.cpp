@@ -1,3 +1,4 @@
+#include "../display/FrameText.h"
 // ===============================
 // ModuleSoccer.cpp
 // FULL REPLACEMENT
@@ -290,7 +291,7 @@ static void applyConfigFromFrameConfig() {
 
     dst.id = src.id;
     strlcpy(dst.teamId, src.teamId, sizeof(dst.teamId));
-    strlcpy(dst.teamName, src.teamName, sizeof(dst.teamName));
+    FrameText::normalizeUtf8ForDisplay(dst.teamName, sizeof(dst.teamName), src.teamName);
     strlcpy(dst.competitionId, src.competitionId, sizeof(dst.competitionId));
     strlcpy(dst.competitionName, src.competitionName, sizeof(dst.competitionName));
     dst.refreshMs = src.refreshMs ? src.refreshMs : 1800000UL;

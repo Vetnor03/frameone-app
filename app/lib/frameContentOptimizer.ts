@@ -1,3 +1,5 @@
+import { sanitizeFrameText } from './frameText.mjs'
+
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
 export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow'
 
@@ -56,6 +58,8 @@ Rewrite each title so it is immediately understandable at a glance.
 - Never invent, infer or change facts.
 - Never turn a specific title into a vague generic title.
 - Do not add emojis or decorative punctuation.
+- Use plain typography: no smart quotes, en/em dashes, emoji, or decorative Unicode.
+- Preserve Norwegian æ/ø/å. The degree symbol is allowed.
 - Respect maxTitleChars for every item.
 - Follow the contentType-specific rules:
   - reminder: retain the action or event needed for a useful reminder.
@@ -78,7 +82,7 @@ function truncateAtWordBoundary(value: string, maxChars: number) {
 }
 
 function fallbackTitle(title: string, maxChars: number) {
-  return truncateAtWordBoundary(title, maxChars)
+  return truncateAtWordBoundary(sanitizeFrameText(title), maxChars)
 }
 
 function optimizationEnabled() {
@@ -225,7 +229,7 @@ export async function optimizeFrameContent(
   const maxTitleChars = Math.max(16, Math.floor(options.maxTitleChars || DEFAULT_MAX_TITLE_CHARS))
   const model = String(process.env.FRAME_AI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL
 
-  const normalized = items.map((item) => ({ ...item, title: normalizeText(item.title) }))
+  const normalized = items.map((item) => ({ ...item, title: sanitizeFrameText(item.title) }))
   const fallback = normalized.map((item) => ({ id: item.id, title: fallbackTitle(item.title, maxTitleChars) }))
   if (normalized.length === 0 || !optimizationEnabled()) return fallback
 

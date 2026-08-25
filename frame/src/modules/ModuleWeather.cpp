@@ -1,3 +1,4 @@
+#include "../display/FrameText.h"
 // ModuleWeather.cpp
 #include "ModuleWeather.h"
 #include "DisplayCore.h"
@@ -188,33 +189,7 @@ static bool isShowersLikeWmo(int code) {
 }
 
 static void utf8ToLatin1(char* out, size_t n, const char* in) {
-  if (!out || n == 0) return;
-  size_t oi = 0;
-
-  for (size_t i = 0; in && in[i] && oi + 1 < n; i++) {
-    uint8_t c = (uint8_t)in[i];
-
-    if (c < 0x80) { out[oi++] = (char)c; continue; }
-
-    if (c == 0xC3 && in[i + 1]) {
-      uint8_t d = (uint8_t)in[i + 1];
-      i++;
-      switch (d) {
-        case 0xB8: out[oi++] = (char)0xF8; break;
-        case 0x98: out[oi++] = (char)0xD8; break;
-        case 0xA5: out[oi++] = (char)0xE5; break;
-        case 0x85: out[oi++] = (char)0xC5; break;
-        case 0xA6: out[oi++] = (char)0xE6; break;
-        case 0x86: out[oi++] = (char)0xC6; break;
-        default:   out[oi++] = '?'; break;
-      }
-      continue;
-    }
-
-    out[oi++] = '?';
-  }
-
-  out[oi] = 0;
+  FrameText::normalizeUtf8ForDisplay(out, n, in);
 }
 
 static void getDisplayLocationName(const WeatherInstanceConfig& cfg, char* out, size_t n) {
@@ -1075,7 +1050,7 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
 
   out.dayCount = 0;
   out.todayHourCount = 0;
-  strlcpy(out.aiInsight, doc["insight"] | "", sizeof(out.aiInsight));
+  FrameText::normalizeUtf8ForDisplay(out.aiInsight, sizeof(out.aiInsight), doc["insight"] | "");
   for (int i = 0; i < WeatherCache::MAX_DAYS; i++) out.days[i] = DayForecast();
 
   out.sunriseHHMM[0] = 0;
