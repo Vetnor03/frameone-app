@@ -1,3 +1,4 @@
+#include "../display/FrameText.h"
 // ===============================
 // ModuleSoccer.cpp
 // FULL REPLACEMENT
@@ -253,11 +254,15 @@ static bool cfgChanged(const SoccerInstanceConfig& oldCfg,
                        const char* competitionId,
                        const char* competitionName,
                        uint32_t refreshMs) {
+  char normalizedTeamName[sizeof(oldCfg.teamName)] = {0};
+  char normalizedCompetitionName[sizeof(oldCfg.competitionName)] = {0};
   if (strcmp(oldCfg.teamId, teamId ? teamId : "") != 0) return true;
-  if (strcmp(oldCfg.teamName, teamName ? teamName : "") != 0) return true;
+  if (!FrameText::displayEqualsUtf8(oldCfg.teamName, teamName,
+                                    normalizedTeamName, sizeof(normalizedTeamName))) return true;
   if (strcmp(oldCfg.competitionId, competitionId ? competitionId : "") != 0) return true;
-  if (strcmp(oldCfg.competitionName, competitionName ? competitionName : "") != 0) return true;
-  if (oldCfg.refreshMs != refreshMs) return true;
+  if (!FrameText::displayEqualsUtf8(oldCfg.competitionName, competitionName,
+                                    normalizedCompetitionName, sizeof(normalizedCompetitionName))) return true;
+  if (oldCfg.refreshMs != (refreshMs ? refreshMs : 1800000UL)) return true;
   return false;
 }
 
@@ -290,9 +295,9 @@ static void applyConfigFromFrameConfig() {
 
     dst.id = src.id;
     strlcpy(dst.teamId, src.teamId, sizeof(dst.teamId));
-    strlcpy(dst.teamName, src.teamName, sizeof(dst.teamName));
+    FrameText::normalizeUtf8ForDisplay(dst.teamName, sizeof(dst.teamName), src.teamName);
     strlcpy(dst.competitionId, src.competitionId, sizeof(dst.competitionId));
-    strlcpy(dst.competitionName, src.competitionName, sizeof(dst.competitionName));
+    FrameText::normalizeUtf8ForDisplay(dst.competitionName, sizeof(dst.competitionName), src.competitionName);
     dst.refreshMs = src.refreshMs ? src.refreshMs : 1800000UL;
 
     if (changed) {
@@ -304,6 +309,17 @@ static void applyConfigFromFrameConfig() {
 static void copySafe(char* dst, size_t n, const char* src) {
   if (!dst || n == 0) return;
   strlcpy(dst, (src && src[0]) ? src : "", n);
+}
+
+static void copyDisplayText(char* dst, size_t n, const char* src) {
+  FrameText::normalizeUtf8ForDisplay(dst, n, src);
+}
+
+static void appendDisplayText(char* dst, size_t n, const char* src) {
+  if (!dst || n == 0 || !src || !src[0]) return;
+  char normalized[80] = {0};
+  FrameText::normalizeUtf8ForDisplay(normalized, sizeof(normalized), src);
+  strlcat(dst, normalized, n);
 }
 
 static int weekdayFromYMD(int y, int m, int d) {
@@ -602,7 +618,7 @@ static void parseLastScorers(JsonVariant v, char* out, size_t n) {
   if (v.isNull()) return;
 
   if (v.is<const char*>()) {
-    copySafe(out, n, v.as<const char*>());
+    copyDisplayText(out, n, v.as<const char*>());
     return;
   }
 
@@ -614,13 +630,13 @@ static void parseLastScorers(JsonVariant v, char* out, size_t n) {
         const char* name = item["name"] | "";
         if (!name || !name[0]) continue;
         if (!first) strlcat(out, ", ", n);
-        strlcat(out, name, n);
+        appendDisplayText(out, n, name);
         first = false;
       } else {
         const char* s = item.as<const char*>();
         if (!s || !s[0]) continue;
         if (!first) strlcat(out, ", ", n);
-        strlcat(out, s, n);
+        appendDisplayText(out, n, s);
         first = false;
       }
     }
@@ -634,7 +650,7 @@ static void buildFormString(JsonVariant v, char* out, size_t n) {
   if (v.isNull()) return;
 
   if (v.is<const char*>()) {
-    copySafe(out, n, v.as<const char*>());
+    copyDisplayText(out, n, v.as<const char*>());
     return;
   }
 
@@ -645,7 +661,7 @@ static void buildFormString(JsonVariant v, char* out, size_t n) {
       const char* s = item.as<const char*>();
       if (!s || !s[0]) continue;
       if (!first) strlcat(out, " ", n);
-      strlcat(out, s, n);
+      appendDisplayText(out, n, s);
       first = false;
     }
   }
@@ -750,17 +766,23 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     return false;
   }
 
-  copySafe(out.teamName, sizeof(out.teamName),
-           doc["teamName"] | doc["teamKey"] | cfg.teamName);
-  copySafe(out.competitionName, sizeof(out.competitionName),
-           doc["competitionName"] | doc["domesticCompetitionCode"] | cfg.competitionName);
+  const char* apiTeamName = doc["teamName"] | doc["teamKey"] | "";
+  if (apiTeamName[0]) copyDisplayText(out.teamName, sizeof(out.teamName), apiTeamName);
+  else copySafe(out.teamName, sizeof(out.teamName), cfg.teamName); // Already display-encoded.
+
+  const char* apiCompetitionName = doc["competitionName"] | doc["domesticCompetitionCode"] | "";
+  if (apiCompetitionName[0]) {
+    copyDisplayText(out.competitionName, sizeof(out.competitionName), apiCompetitionName);
+  } else {
+    copySafe(out.competitionName, sizeof(out.competitionName), cfg.competitionName); // Already display-encoded.
+  }
 
   JsonObject nextMatch = doc["next"];
   out.hasNext = !nextMatch.isNull();
   if (out.hasNext) {
     out.nextHome = nextMatch["isHome"] | true;
-    copySafe(out.nextHomeShort, sizeof(out.nextHomeShort), nextMatch["homeShort"] | nextMatch["home"] | "--");
-    copySafe(out.nextAwayShort, sizeof(out.nextAwayShort), nextMatch["awayShort"] | nextMatch["away"] | "--");
+    copyDisplayText(out.nextHomeShort, sizeof(out.nextHomeShort), nextMatch["homeShort"] | nextMatch["home"] | "--");
+    copyDisplayText(out.nextAwayShort, sizeof(out.nextAwayShort), nextMatch["awayShort"] | nextMatch["away"] | "--");
     copySafe(out.nextKickoffIso, sizeof(out.nextKickoffIso), nextMatch["utc"] | "");
     formatIsoKickoffPretty(out.nextKickoffIso, out.nextKickoffPretty, sizeof(out.nextKickoffPretty));
   } else {
@@ -775,8 +797,8 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
   out.hasPrev = !prevMatch.isNull();
   if (out.hasPrev) {
     out.prevHome = prevMatch["isHome"] | true;
-    copySafe(out.prevHomeShort, sizeof(out.prevHomeShort), prevMatch["homeShort"] | prevMatch["home"] | "--");
-    copySafe(out.prevAwayShort, sizeof(out.prevAwayShort), prevMatch["awayShort"] | prevMatch["away"] | "--");
+    copyDisplayText(out.prevHomeShort, sizeof(out.prevHomeShort), prevMatch["homeShort"] | prevMatch["home"] | "--");
+    copyDisplayText(out.prevAwayShort, sizeof(out.prevAwayShort), prevMatch["awayShort"] | prevMatch["away"] | "--");
     parseScoreString(prevMatch["score"] | "", out.prevHome, out.prevGoalsFor, out.prevGoalsAgainst);
     parseScoreHomeAway(prevMatch["score"] | "", out.prevGoalsHome, out.prevGoalsAway);
   } else {
@@ -807,8 +829,8 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
     out.gapAbove = standing["gapAbove"] | 0;
     out.gapBelow = standing["gapBelow"] | 0;
 
-    copySafe(out.teamAbove, sizeof(out.teamAbove), standing["teamAbove"] | "");
-    copySafe(out.teamBelow, sizeof(out.teamBelow), standing["teamBelow"] | "");
+    copyDisplayText(out.teamAbove, sizeof(out.teamAbove), standing["teamAbove"] | "");
+    copyDisplayText(out.teamBelow, sizeof(out.teamBelow), standing["teamBelow"] | "");
     buildFormString(standing["form"], out.form, sizeof(out.form));
   } else {
     out.position = -1;
@@ -838,7 +860,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
       SoccerTableRow& r = out.table[out.tableCount];
       r = SoccerTableRow();
       r.position = row["position"] | -1;
-      copySafe(r.teamShort, sizeof(r.teamShort), row["teamShort"] | "--");
+      copyDisplayText(r.teamShort, sizeof(r.teamShort), row["teamShort"] | "--");
       r.points = row["points"] | -1;
       r.hasGoalDifference = !row["goalDifference"].isNull();
       r.goalDifference = row["goalDifference"] | 0;
@@ -853,7 +875,7 @@ static bool fetchFrameData(const SoccerInstanceConfig& cfg, SoccerCache& out) {
   JsonObject topScorer = doc["topScorer"];
   out.hasTopScorer = !topScorer.isNull();
   if (out.hasTopScorer) {
-    copySafe(out.topScorerName, sizeof(out.topScorerName), topScorer["name"] | "--");
+    copyDisplayText(out.topScorerName, sizeof(out.topScorerName), topScorer["name"] | "--");
     out.topScorerGoals = topScorer["goals"] | -1;
   } else {
     out.topScorerName[0] = 0;
