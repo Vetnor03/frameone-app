@@ -144,6 +144,18 @@ static void drawBolt(int x, int y, int s, uint16_t col) {
   thickLine(x0 + (int)(w*0.55f), y0, x0 + w, y0 + (int)(h*0.40f), clampi(s/28,2,4), col);
 }
 
+static int wmoToIconKind(int wmo) {
+  if (wmo == 0) return 0;
+  if (wmo == 1 || wmo == 2) return 1;
+  if (wmo == 3) return 2;
+  if (wmo == 45 || wmo == 48) return 7;
+  if ((wmo >= 51 && wmo <= 65) || (wmo >= 80 && wmo <= 82)) return 3;
+  if (wmo == 66 || wmo == 67) return 6;
+  if ((wmo >= 71 && wmo <= 77) || wmo == 85 || wmo == 86) return 4;
+  if (wmo == 95 || wmo == 96 || wmo == 99) return 5;
+  return 2;
+}
+
 // =========================================================
 // Dice helpers
 // =========================================================
@@ -246,14 +258,14 @@ void drawWeatherIcon(int cx, int cy, int size, int wmo) {
   int sleetExtra   = clampi((int)lroundf(s * 0.040f), 1, 10);
   int fogExtra     = clampi((int)lroundf(s * 0.035f), 1, 9);
 
-  WeatherIconKind kind = weatherIconKindForWmo(wmo);
+  int kind = wmoToIconKind(wmo);
 
   switch (kind) {
-    case WEATHER_ICON_CLEAR: {
+    case 0: {
       drawSun(cx, cy, s, col);
     } break;
 
-    case WEATHER_ICON_PARTLY_CLOUDY: {
+    case 1: {
       int sunCx = x + (int)(s * 0.62f);
       int sunCy = y + (int)(s * 0.30f);
       drawSun(sunCx, sunCy, s, col);
@@ -261,11 +273,11 @@ void drawWeatherIcon(int cx, int cy, int size, int wmo) {
       drawCloud4Bumps(x, y, s, col);
     } break;
 
-    case WEATHER_ICON_OVERCAST: {
+    case 2: {
       drawCloud4Bumps(x, y, s, col);
     } break;
 
-    case WEATHER_ICON_RAIN: {
+    case 3: { // rain
       drawCloud4Bumps(x, y, s, col);
       int dropH = (int)(s * 0.18f);
       int dropW = (int)(s * 0.09f);
@@ -276,7 +288,7 @@ void drawWeatherIcon(int cx, int cy, int size, int wmo) {
       drawRaindrop(x + (int)(s * 0.70f), y0,                    dropH, dropW, col);
     } break;
 
-    case WEATHER_ICON_SNOW: {
+    case 4: { // snow
       drawCloud4Bumps(x, y, s, col);
       int r = (int)(s * 0.08f);
       int y0 = y + (int)(s * 0.82f) + belowGap + snowExtra;
@@ -286,7 +298,7 @@ void drawWeatherIcon(int cx, int cy, int size, int wmo) {
       drawSnowflake(x + (int)(s * 0.72f), y0, r, s, col);
     } break;
 
-    case WEATHER_ICON_THUNDER: {
+    case 5: { // thunder
       drawCloud4Bumps(x, y, s, col);
       int boltS = (int)(s * 0.36f);
       drawBolt(x + (s - boltS)/2,
@@ -294,7 +306,7 @@ void drawWeatherIcon(int cx, int cy, int size, int wmo) {
                boltS, col);
     } break;
 
-    case WEATHER_ICON_SLEET: {
+    case 6: { // sleet
       drawCloud4Bumps(x, y, s, col);
       int dropH = (int)(s * 0.18f);
       int dropW = (int)(s * 0.09f);
@@ -305,7 +317,7 @@ void drawWeatherIcon(int cx, int cy, int size, int wmo) {
       drawRaindrop(x + (int)(s * 0.72f), y0, dropH,            dropW, col);
     } break;
 
-    case WEATHER_ICON_FOG: {
+    case 7: { // fog
       drawCloud4Bumps(x, y, s, col);
       int t = clampi(s / 28, 2, 4);
       int y1 = y + (int)(s * 0.80f) + belowGap + fogExtra;

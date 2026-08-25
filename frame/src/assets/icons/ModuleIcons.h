@@ -1,6 +1,5 @@
 #pragma once
 #include <Arduino.h>
-#include "WeatherIconKind.h"
 
 namespace ModuleIcons {
 
