@@ -2201,12 +2201,70 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   if (footerH) drawAdaptiveOverflow({rect.x, rect.y + rect.h - footerH, rect.w, footerH}, overflow);
 }
 
+static void buildAdaptiveFallbackHeading(const ReminderBucket& bucket, char* out, size_t outSize) {
+  if (!out || outSize == 0) return;
+  out[0] = '\0';
+  if (bucket.isOverdue || bucket.daysUntil < 0) {
+    buildRelativeDateText(bucket.daysUntil, true, out, outSize);
+    return;
+  }
+  const int firstItemIdx = bucket.count > 0 ? bucket.itemIdx[0] : -1;
+  if (firstItemIdx >= 0 && firstItemIdx < g_cache.count) {
+    const ReminderItem& item = g_cache.items[firstItemIdx];
+    int y = 0, m = 0, day = 0;
+    if (parseYMD10(item.occurrenceDate, y, m, day)) {
+      const char* weekday = weekdayNameFull(weekdayIndexYMD(y, m, day));
+      if (bucket.daysUntil <= 7) snprintf(out, outSize, "On %s", weekday);
+      else if (bucket.daysUntil <= 14) snprintf(out, outSize, "%s next week", weekday);
+      else if (item.displayDate[0]) safeCopy(out, outSize, item.displayDate);
+    } else if (item.displayDate[0]) {
+      safeCopy(out, outSize, item.displayDate);
+    }
+  }
+  if (!out[0]) buildRelativeDateText(bucket.daysUntil, false, out, outSize);
+  if (!out[0]) safeCopy(out, outSize, "Upcoming");
+}
+
+static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bucket) {
+  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
+  const bool shallow = c.h <= 150 && c.w > c.h;
+  const int area = (int)c.colSpan * (int)c.rowSpan;
+  const int capacity = shallow ? min(3, max(1, c.w / 180)) : area <= 2 ? 2 : area <= 4 ? 3 : area <= 8 ? 4 : 6;
+  const int visible = min(bucket.count, capacity), overflow = max(0, bucket.count - visible);
+  const int headingH = min(30, max(20, inner.h / 4));
+  char heading[40]; buildAdaptiveFallbackHeading(bucket, heading, sizeof(heading));
+  drawAdaptiveLabel({inner.x, inner.y, inner.w, headingH}, heading, FONT_B12);
+  const int footerH = overflow ? 22 : 0;
+  ReminderRect content = {inner.x, inner.y + headingH, inner.w,
+                          max(1, inner.h - headingH - footerH - (footerH ? 4 : 0))};
+  if (shallow) {
+    const int gap = visible > 1 ? 12 : 0;
+    for (int i = 0; i < visible; i++) {
+      const int x0 = content.x + (content.w * i) / visible + (i ? gap / 2 : 0);
+      const int x1 = content.x + (content.w * (i + 1)) / visible - (i + 1 < visible ? gap / 2 : 0);
+      const int itemIdx = bucket.itemIdx[i];
+      if (itemIdx >= 0 && itemIdx < g_cache.count)
+        drawAdaptiveItem(g_cache.items[itemIdx], {x0, content.y, x1 - x0, content.h}, false);
+    }
+  } else {
+    drawAdaptiveSection(&bucket, visible, 0, content, false, c.w < 230, heading, false);
+  }
+  drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH, inner.w, footerH}, overflow);
+}
+
 static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets, int bucketCount) {
+  if (!g_cache.ok) { drawEmptyState(c, "No reminders", "Fetch failed"); return; }
+  if (bucketCount == 0) { drawEmptyState(c, "No reminders", "Nothing upcoming"); return; }
   const int todayIdx = findBucketByDaysUntil(buckets, bucketCount, 0);
   const int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
   const int todayCount = todayIdx >= 0 ? buckets[todayIdx].count : 0;
   const int tomorrowCount = tomorrowIdx >= 0 ? buckets[tomorrowIdx].count : 0;
-  if (todayCount + tomorrowCount == 0) { drawEmptyState(c, "No reminders", "You're all caught up"); return; }
+  if (todayCount + tomorrowCount == 0) {
+    const int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
+    if (primaryIdx >= 0) renderAdaptiveFallbackBucket(c, buckets[primaryIdx]);
+    return;
+  }
   const AdaptiveReminderComposition comp = adaptiveComposition(c, todayCount, tomorrowCount);
   const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
   ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};

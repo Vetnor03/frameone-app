@@ -45,6 +45,31 @@ test('Today-only, Tomorrow-only, empty, and mixed disclosure follow Studio polic
   assert.ok(mixed.todayItems>0);assert.ok(mixed.tomorrowItems>0)
 })
 
+test('future-only adaptive data falls back to the primary upcoming bucket',async()=>{
+  const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(reminders,/todayCount \+ tomorrowCount == 0[\s\S]*findPrimaryBucketIndex\(buckets, bucketCount\)[\s\S]*renderAdaptiveFallbackBucket/)
+  assert.match(reminders,/bucket\.daysUntil <= 7[\s\S]*"On %s"[\s\S]*bucket\.daysUntil <= 14[\s\S]*next week/)
+  assert.match(reminders,/buildRelativeDateText\(bucket\.daysUntil, false, out, outSize\)/)
+})
+
+test('overdue-only adaptive data renders a relative overdue heading',async()=>{
+  const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(reminders,/bucket\.isOverdue \|\| bucket\.daysUntil < 0[\s\S]*buildRelativeDateText\(bucket\.daysUntil, true, out, outSize\)/)
+})
+
+test('adaptive empty state is reserved for an unavailable or genuinely empty feed',async()=>{
+  const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(reminders,/if \(!g_cache\.ok\)[\s\S]*"Fetch failed"/)
+  assert.match(reminders,/if \(bucketCount == 0\)[\s\S]*"Nothing upcoming"/)
+  assert.doesNotMatch(reminders,/todayCount \+ tomorrowCount == 0\) \{ drawEmptyState/)
+})
+
+test('Today and Tomorrow buckets still enter the responsive composition unchanged',async()=>{
+  const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(reminders,/findBucketByDaysUntil\(buckets, bucketCount, 0\)[\s\S]*findBucketByDaysUntil\(buckets, bucketCount, 1\)/)
+  assert.match(reminders,/AdaptiveReminderComposition comp = adaptiveComposition\(c, todayCount, tomorrowCount\)/)
+})
+
 test('overflow owns a separate footer and never consumes a visible reminder row',()=>{
   for(const [w,h] of [[1,1],[1,3],[3,2]]){const p=profile(w,h),composition=reminderComposition(p,reminderStudioPresets.extreme),layout=reminderLayout(p,composition)
     assert.ok(composition.overflow>0)
