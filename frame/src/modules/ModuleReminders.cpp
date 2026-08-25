@@ -218,6 +218,29 @@ static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWi
   safeCopy(dst, dstSize, ell);
 }
 
+// Adaptive cells use word-safe fitting. Keep the legacy character fitter above
+// untouched because the four handmade anchor renderers are deliberately frozen.
+static void fitAdaptiveText(const char* src, char* dst, size_t dstSize,
+                            int maxWidth, const GFXfont* font) {
+  if (!dst || dstSize == 0) return;
+  dst[0] = '\0';
+  if (!src || !src[0] || maxWidth <= 0) return;
+  if (textWidth(src, font) <= maxWidth) { safeCopy(dst, dstSize, src); return; }
+  const char* ellipsis = "...";
+  if (textWidth(ellipsis, font) > maxWidth) return;
+  size_t limit = strlen(src);
+  if (limit > dstSize - 4) limit = dstSize - 4;
+  while (limit > 0) {
+    while (limit > 0 && src[limit] != ' ' && src[limit - 1] != ' ') limit--;
+    while (limit > 0 && src[limit - 1] == ' ') limit--;
+    if (limit == 0) break;
+    memcpy(dst, src, limit); dst[limit] = '\0'; strlcat(dst, ellipsis, dstSize);
+    if (textWidth(dst, font) <= maxWidth) return;
+    limit--;
+  }
+  safeCopy(dst, dstSize, ellipsis);
+}
+
 static void buildRelativeDateText(int daysUntil, bool isOverdue, char* out, size_t outSize) {
   if (!out || outSize == 0) return;
   out[0] = '\0';
@@ -2091,6 +2114,202 @@ static void renderXL(const Cell& c, const ReminderBucket* buckets, int bucketCou
 // =========================================================
 // Public API
 // =========================================================
+// Adaptive physical composition mirrors app/lib/remindersResponsive.mjs. All
+// regions are derived from the resolved pixel cell; no heap-backed containers
+// or temporary String values are used by this renderer.
+enum AdaptiveReminderFamily { REM_VERTICAL_LIST, REM_SHALLOW_HORIZONTAL, REM_SPLIT_SECTIONS };
+
+struct AdaptiveReminderComposition {
+  AdaptiveReminderFamily family = REM_VERTICAL_LIST;
+  bool showHeading = false;
+  bool showTomorrow = false;
+  int todayItems = 0, tomorrowItems = 0;
+  int todayOverflow = 0, tomorrowOverflow = 0;
+};
+
+struct ReminderRect { int x = 0, y = 0, w = 0, h = 0; };
+
+static AdaptiveReminderComposition adaptiveComposition(const Cell& c, int todayCount, int tomorrowCount) {
+  AdaptiveReminderComposition out;
+  const float ratio = c.h > 0 ? (float)c.w / (float)c.h : 1.0f;
+  const bool landscape = ratio > 1.12f;
+  const int area = (int)c.colSpan * (int)c.rowSpan;
+  const bool shallow = landscape && c.h <= 150;
+  const bool split = !shallow && landscape && c.w >= 500 && c.h >= 200 && area >= 6;
+  out.family = shallow ? REM_SHALLOW_HORIZONTAL : split ? REM_SPLIT_SECTIONS : REM_VERTICAL_LIST;
+  const bool large = split || (!shallow && area >= 8 && c.h >= 300);
+  out.showHeading = !shallow && c.h >= 150;
+  out.showTomorrow = todayCount == 0 ? tomorrowCount > 0 : large && tomorrowCount > 0;
+  const int capacity = shallow ? min(3, max(1, c.w / 180)) : area <= 2 ? 2 : area <= 4 ? 3 : area <= 8 ? 4 : 6;
+  const int splitCapacity = max(1, (c.h - 60) / 42);
+  out.tomorrowItems = out.showTomorrow ? min(tomorrowCount, split ? splitCapacity : large ? 2 : capacity) : 0;
+  out.todayItems = min(todayCount, split ? splitCapacity : max(0, capacity - out.tomorrowItems));
+  if (large && !split && todayCount) {
+    out.todayItems = min(todayCount, max(1, capacity - out.tomorrowItems));
+    out.tomorrowItems = min(tomorrowCount, max(0, capacity - out.todayItems));
+  }
+  out.todayOverflow = max(0, todayCount - out.todayItems);
+  out.tomorrowOverflow = max(0, tomorrowCount - out.tomorrowItems);
+  return out;
+}
+
+static void drawAdaptiveLabel(const ReminderRect& rect, const char* label, const GFXfont* font) {
+  if (rect.w <= 0 || rect.h <= 0 || !label || !label[0]) return;
+  int16_t x1, y1; uint16_t tw, th; measureText(label, font, x1, y1, tw, th);
+  const int baseline = rect.y + max(0, (rect.h - (int)th) / 2) - y1;
+  drawLeft(rect.x, baseline, label, font, Theme::ink());
+}
+
+static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, bool stacked) {
+  if (row.w < 1 || row.h < 1) return;
+  const int inset = 2, x = row.x + inset, y = row.y + inset;
+  const int w = max(1, row.w - inset * 2), h = max(1, row.h - inset * 2);
+  ReminderRect timeRect, titleRect;
+  if (stacked) {
+    const int timeH = min(18, max(1, (h * 38) / 100));
+    timeRect = {x, y, w, timeH}; titleRect = {x, y + timeH, w, max(1, h - timeH)};
+  } else {
+    const int timeW = min(48, max(38, (w * 22) / 100)), gap = 7;
+    timeRect = {x, y, timeW, h}; titleRect = {x + timeW + gap, y, max(1, w - timeW - gap), h};
+  }
+  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
+  char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, FONT_B9);
+  drawAdaptiveLabel(titleRect, fitted, FONT_B9);
+}
+
+static void drawAdaptiveOverflow(const ReminderRect& rect, int count) {
+  if (count <= 0 || rect.w <= 0 || rect.h <= 0) return;
+  char text[20]; snprintf(text, sizeof(text), "+%d more", count);
+  drawAdaptiveLabel(rect, text, FONT_B9);
+}
+
+static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int overflow,
+                                const ReminderRect& rect, bool heading, bool stacked,
+                                const char* headingText, bool sectionFooter) {
+  if (!bucket || visible <= 0 || rect.w <= 0 || rect.h <= 0) return;
+  const int headingH = heading ? 30 : 0;
+  const int footerH = sectionFooter && overflow ? 24 : 0;
+  if (heading) drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
+  const int rowsH = max(1, rect.h - headingH - footerH);
+  for (int i = 0; i < visible; i++) {
+    const int y0 = rect.y + headingH + (rowsH * i) / visible;
+    const int y1 = rect.y + headingH + (rowsH * (i + 1)) / visible;
+    const int itemIdx = bucket->itemIdx[i];
+    if (itemIdx >= 0 && itemIdx < g_cache.count)
+      drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, y1 - y0}, stacked);
+  }
+  if (footerH) drawAdaptiveOverflow({rect.x, rect.y + rect.h - footerH, rect.w, footerH}, overflow);
+}
+
+static void buildAdaptiveFallbackHeading(const ReminderBucket& bucket, char* out, size_t outSize) {
+  if (!out || outSize == 0) return;
+  out[0] = '\0';
+  if (bucket.isOverdue || bucket.daysUntil < 0) {
+    buildRelativeDateText(bucket.daysUntil, true, out, outSize);
+    return;
+  }
+  const int firstItemIdx = bucket.count > 0 ? bucket.itemIdx[0] : -1;
+  if (firstItemIdx >= 0 && firstItemIdx < g_cache.count) {
+    const ReminderItem& item = g_cache.items[firstItemIdx];
+    int y = 0, m = 0, day = 0;
+    if (parseYMD10(item.occurrenceDate, y, m, day)) {
+      const char* weekday = weekdayNameFull(weekdayIndexYMD(y, m, day));
+      if (bucket.daysUntil <= 7) snprintf(out, outSize, "On %s", weekday);
+      else if (bucket.daysUntil <= 14) snprintf(out, outSize, "%s next week", weekday);
+      else if (item.displayDate[0]) safeCopy(out, outSize, item.displayDate);
+    } else if (item.displayDate[0]) {
+      safeCopy(out, outSize, item.displayDate);
+    }
+  }
+  if (!out[0]) buildRelativeDateText(bucket.daysUntil, false, out, outSize);
+  if (!out[0]) safeCopy(out, outSize, "Upcoming");
+}
+
+static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bucket) {
+  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
+  const bool shallow = c.h <= 150 && c.w > c.h;
+  const int area = (int)c.colSpan * (int)c.rowSpan;
+  const int capacity = shallow ? min(3, max(1, c.w / 180)) : area <= 2 ? 2 : area <= 4 ? 3 : area <= 8 ? 4 : 6;
+  const int visible = min(bucket.count, capacity), overflow = max(0, bucket.count - visible);
+  const int headingH = min(30, max(20, inner.h / 4));
+  char heading[40]; buildAdaptiveFallbackHeading(bucket, heading, sizeof(heading));
+  drawAdaptiveLabel({inner.x, inner.y, inner.w, headingH}, heading, FONT_B12);
+  const int footerH = overflow ? 22 : 0;
+  ReminderRect content = {inner.x, inner.y + headingH, inner.w,
+                          max(1, inner.h - headingH - footerH - (footerH ? 4 : 0))};
+  if (shallow) {
+    const int gap = visible > 1 ? 12 : 0;
+    for (int i = 0; i < visible; i++) {
+      const int x0 = content.x + (content.w * i) / visible + (i ? gap / 2 : 0);
+      const int x1 = content.x + (content.w * (i + 1)) / visible - (i + 1 < visible ? gap / 2 : 0);
+      const int itemIdx = bucket.itemIdx[i];
+      if (itemIdx >= 0 && itemIdx < g_cache.count)
+        drawAdaptiveItem(g_cache.items[itemIdx], {x0, content.y, x1 - x0, content.h}, false);
+    }
+  } else {
+    drawAdaptiveSection(&bucket, visible, 0, content, false, c.w < 230, heading, false);
+  }
+  drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH, inner.w, footerH}, overflow);
+}
+
+static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets, int bucketCount) {
+  if (!g_cache.ok) { drawEmptyState(c, "No reminders", "Fetch failed"); return; }
+  if (bucketCount == 0) { drawEmptyState(c, "No reminders", "Nothing upcoming"); return; }
+  const int todayIdx = findBucketByDaysUntil(buckets, bucketCount, 0);
+  const int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
+  const int todayCount = todayIdx >= 0 ? buckets[todayIdx].count : 0;
+  const int tomorrowCount = tomorrowIdx >= 0 ? buckets[tomorrowIdx].count : 0;
+  if (todayCount + tomorrowCount == 0) {
+    const int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
+    if (primaryIdx >= 0) renderAdaptiveFallbackBucket(c, buckets[primaryIdx]);
+    return;
+  }
+  const AdaptiveReminderComposition comp = adaptiveComposition(c, todayCount, tomorrowCount);
+  const int pad = max(9, min(18, (int)lroundf(min(c.w, c.h) * .08f)));
+  ReminderRect inner = {c.x + pad, c.y + pad, max(1, c.w - pad * 2), max(1, c.h - pad * 2)};
+  const ReminderBucket* today = todayIdx >= 0 ? &buckets[todayIdx] : nullptr;
+  const ReminderBucket* tomorrow = tomorrowIdx >= 0 ? &buckets[tomorrowIdx] : nullptr;
+  if (comp.family == REM_SPLIT_SECTIONS) {
+    const bool hasToday = comp.todayItems > 0, hasTomorrow = comp.tomorrowItems > 0;
+    const int gap = hasToday && hasTomorrow ? 18 : 0;
+    const int todayWidth = !hasToday ? 0 : !hasTomorrow ? inner.w :
+      ((inner.w - gap) * (comp.tomorrowItems == 1 ? 70 : 60) + 50) / 100;
+    ReminderRect left = {inner.x, inner.y, todayWidth, inner.h};
+    ReminderRect right = {inner.x + todayWidth + gap, inner.y, max(0, inner.w - todayWidth - gap), inner.h};
+    drawAdaptiveSection(today, comp.todayItems, comp.todayOverflow, left, comp.showHeading, false, "Today", true);
+    drawAdaptiveSection(tomorrow, comp.tomorrowItems, comp.tomorrowOverflow, right, comp.showHeading, false, "Tomorrow", true);
+    return;
+  }
+  const int overflow = comp.todayOverflow + comp.tomorrowOverflow;
+  if (comp.family == REM_SHALLOW_HORIZONTAL) {
+    const int footerW = overflow ? min(58, max(42, (inner.w * 13) / 100)) : 0;
+    const int contentW = max(1, inner.w - footerW - (footerW ? 8 : 0));
+    const int count = max(1, comp.todayItems + comp.tomorrowItems), gap = count > 1 ? 12 : 0;
+    int drawn = 0;
+    for (int i = 0; i < comp.todayItems; i++, drawn++) {
+      int x0 = inner.x + (contentW * drawn) / count + (drawn ? gap / 2 : 0);
+      int x1 = inner.x + (contentW * (drawn + 1)) / count - (drawn + 1 < count ? gap / 2 : 0);
+      drawAdaptiveItem(g_cache.items[today->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false);
+    }
+    for (int i = 0; i < comp.tomorrowItems; i++, drawn++) {
+      int x0 = inner.x + (contentW * drawn) / count + (drawn ? gap / 2 : 0);
+      int x1 = inner.x + (contentW * (drawn + 1)) / count - (drawn + 1 < count ? gap / 2 : 0);
+      drawAdaptiveItem(g_cache.items[tomorrow->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false);
+    }
+    drawAdaptiveOverflow({inner.x + inner.w - footerW, inner.y, footerW, inner.h}, overflow); return;
+  }
+  const int footerH = overflow ? 22 : 0, contentH = max(1, inner.h - footerH - (footerH ? 6 : 0));
+  const int headingH = comp.showHeading ? 30 : 0;
+  const int tomorrowH = comp.tomorrowItems ? min((contentH * 42) / 100, headingH + comp.tomorrowItems * 48) : 0;
+  const int sectionGap = tomorrowH ? 10 : 0;
+  const int todayH = comp.todayItems ? max(1, contentH - tomorrowH - sectionGap) : 0;
+  const bool stacked = c.w < 230;
+  drawAdaptiveSection(today, comp.todayItems, 0, {inner.x, inner.y, inner.w, todayH}, comp.showHeading, stacked, "Today", false);
+  drawAdaptiveSection(tomorrow, comp.tomorrowItems, 0, {inner.x, inner.y + todayH + sectionGap, inner.w, tomorrowH}, comp.showHeading, stacked, "Tomorrow", false);
+  drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH, inner.w, footerH}, overflow);
+}
+
 void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
   (void)g_cfg;
@@ -2112,6 +2331,12 @@ void render(const Cell& c, const String& moduleName) {
   int bucketCount = buildBuckets(buckets, MAX_BUCKETS);
   int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
   logMemoryStats("after_buckets");
+
+  if (c.size == CELL_ADAPTIVE) {
+    renderAdaptiveReminders(c, buckets, bucketCount);
+    Serial.println("REM render complete");
+    return;
+  }
 
   if (c.size == CELL_SMALL) {
     renderSmall(c, buckets, bucketCount, primaryIdx);

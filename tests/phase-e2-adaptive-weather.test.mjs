@@ -29,7 +29,7 @@ test('all twelve adaptive Weather geometries are complete physical plans with ex
 
 test('capability accepts exact Weather bases and rejects lookalike prefixes atomically',()=>{
   for(const module of ['weather','weather:1','weather:2','weather:abc'])assert.equal(supportsPhysicalCustomLayout(tiling(3,3,module)).valid,true,module)
-  for(const module of ['weatherfoo','weather-foo','notweather','reminders'])assert.equal(supportsPhysicalCustomLayout(tiling(3,3,module)).valid,false,module)
+  for(const module of ['weatherfoo','weather-foo','notweather','remindersfoo'])assert.equal(supportsPhysicalCustomLayout(tiling(3,3,module)).valid,false,module)
   const mixed=tiling(3,3);mixed[1].module='date';assert.equal(supportsPhysicalCustomLayout(mixed).valid,true)
   mixed[1].module='countdown';assert.deepEqual(supportsPhysicalCustomLayout(mixed).errors,['unsupported_physical_cell'])
 })
