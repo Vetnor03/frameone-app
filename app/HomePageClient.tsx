@@ -12,6 +12,8 @@ import { normalizeSurfRating1to6, surfRatingColor, surfRatingIsExperienceBased, 
 import SoccerTeamSheet from './components/SoccerTeamSheet'
 import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
+import FrameAssistant from './components/FrameAssistant'
+import type { AssistantDestination } from './lib/assistant/types'
 import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
@@ -1135,6 +1137,9 @@ export default function HomePage() {
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [fontSize, setFontSize] = useState<AppFontSize>('normal')
+  const [showFrameAssistant, setShowFrameAssistant] = useState(true)
+  const [proactiveAssistantTips, setProactiveAssistantTips] = useState(true)
+  const [assistantTipsShown, setAssistantTipsShown] = useState<number[]>([])
 
   const [cellsByLayout, setCellsByLayout] = useState<Record<LayoutKey, Record<number, ModuleKey | null>>>(
     makeEmptyCellsByLayout()
@@ -1309,7 +1314,7 @@ export default function HomePage() {
     async function loadAccountAppTheme() {
       const { data, error } = await supabase
         .from('user_app_preferences')
-        .select('app_theme')
+        .select('app_theme,show_ai_assistant,proactive_assistant_tips,assistant_tips_shown')
         .eq('user_id', userId)
         .maybeSingle()
 
@@ -1320,6 +1325,9 @@ export default function HomePage() {
       }
 
       const accountTheme: AppTheme = isAppTheme(data?.app_theme) ? data.app_theme : 'light'
+      setShowFrameAssistant(data?.show_ai_assistant !== false)
+      setProactiveAssistantTips(data?.proactive_assistant_tips !== false)
+      setAssistantTipsShown(Array.isArray(data?.assistant_tips_shown) ? data.assistant_tips_shown : [])
 
       if (!data) {
         const { error: insertError } = await supabase
@@ -2493,6 +2501,20 @@ async function handleSelectTab(k: TabKey) {
   setActiveTab(k)
 }
 
+  const saveAssistantPreferences = useCallback((values: { show?: boolean; tips?: boolean; shown?: number[] }) => {
+    if (values.show !== undefined) setShowFrameAssistant(values.show)
+    if (values.tips !== undefined) setProactiveAssistantTips(values.tips)
+    if (values.shown !== undefined) setAssistantTipsShown(values.shown)
+    if (!userId) return
+    void supabase.from('user_app_preferences').upsert({ user_id: userId, app_theme: appTheme, ...(values.show !== undefined ? { show_ai_assistant: values.show } : {}), ...(values.tips !== undefined ? { proactive_assistant_tips: values.tips } : {}), ...(values.shown !== undefined ? { assistant_tips_shown: values.shown } : {}) }, { onConflict: 'user_id' })
+  }, [appTheme, userId])
+
+  function navigateFromAssistant(destination: AssistantDestination) {
+    if (destination === 'settings' || destination === 'layout') setActiveTab(destination === 'settings' ? 'settings' : 'frame')
+    else if (destination === 'groceries' || destination === 'recipes') setActiveTab('groceries')
+    else { setActiveTab('reminders'); setRemindersConnectScreenOpen(destination === 'spond') }
+  }
+
   if (isPhoneLandscapeMirror) {
     return (
       <LandscapeFrameMirror
@@ -2576,6 +2598,9 @@ async function handleSelectTab(k: TabKey) {
                   initialSubpage={settingsSubpage}
                   notificationState={notificationState}
                   onNotificationStateChange={setNotificationState}
+                  showAssistant={showFrameAssistant}
+                  proactiveAssistantTips={proactiveAssistantTips}
+                  onAssistantPreferenceChange={saveAssistantPreferences}
                 />
               )}
 
@@ -2677,6 +2702,10 @@ async function handleSelectTab(k: TabKey) {
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'frame' && !layoutFlow && !pickerOpen && showFrameAssistant && (
+              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} onTipShown={(index) => { if (!assistantTipsShown.includes(index)) saveAssistantPreferences({ shown: [...assistantTipsShown, index] }) }} onNavigate={navigateFromAssistant} />
             )}
 
             {pickerOpen && (
@@ -7996,6 +8025,9 @@ function SettingsTab({
   initialSubpage,
   notificationState,
   onNotificationStateChange,
+  showAssistant,
+  proactiveAssistantTips,
+  onAssistantPreferenceChange,
 }: {
   language: AppLanguage
   appTheme: AppTheme
@@ -8011,6 +8043,9 @@ function SettingsTab({
   initialSubpage?: 'subscription' | null
   notificationState: NotificationState
   onNotificationStateChange: (state: NotificationState) => void
+  showAssistant: boolean
+  proactiveAssistantTips: boolean
+  onAssistantPreferenceChange: (values: { show?: boolean; tips?: boolean }) => void
 }) {
   const from = '?from=settings'
   const t = tx(language)
@@ -8105,6 +8140,11 @@ function SettingsTab({
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
+              <div className="py-4">
+                <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">AI ASSISTANT</div>
+                <AssistantPreferenceToggle label="Show AI Assistant" checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
+                <AssistantPreferenceToggle label="Proactive tips" checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
+              </div>
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
@@ -8128,6 +8168,13 @@ function SettingsTab({
       </div>
     </>
   )
+}
+
+function AssistantPreferenceToggle({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
+  return <div className="flex min-h-12 items-center justify-between gap-4">
+    <span className={`text-sm ${disabled ? 'text-[color:var(--fg-30)]' : 'text-[color:var(--fg-80)]'}`}>{label}</span>
+    <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={`relative h-7 w-12 rounded-full border transition disabled:opacity-40 ${checked ? 'border-[#2aa3ff] bg-[#2aa3ff]/20' : 'border-[color:var(--bd-20)]'}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-current transition ${checked ? 'left-6 text-[#2aa3ff]' : 'left-1 text-[color:var(--fg-40)]'}`} /></button>
+  </div>
 }
 
 
