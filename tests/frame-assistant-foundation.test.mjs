@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolveDeterministicAssistantIntent } from '../app/lib/assistant/resolver.ts'
 import { reminderFollowupContext, validatePendingReminderPayload } from '../app/lib/assistant/pending.ts'
 import { canonicalGroceryMergePriority, normalizeCanonicalGroceryAdditions } from '../app/lib/groceries/actions.ts'
+import { ASSISTANT_TIPS, nextAssistantTip } from '../app/lib/assistant/tips.ts'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const ui = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
@@ -26,6 +27,28 @@ test('tips are curated, limited, persisted and dismissible without AI', () => {
   assert.doesNotMatch(tips, /fetch\(|openai/i)
   assert.match(home, /assistant_tips_shown/)
   assert.match(ui, /Dismiss assistant tip/)
+})
+
+test('proactive tips load persisted progress before selecting one tip per session', () => {
+  assert.equal(nextAssistantTip([], 'en')?.index, 0, 'orientation is first for a new user')
+  assert.equal(nextAssistantTip([0], 'en')?.index, 1, 'loaded persisted progress advances to groceries')
+  assert.equal(nextAssistantTip([0, 1], 'en')?.index, 2, 'a reopened app does not repeat its previous tip')
+  assert.match(ui, /if \(!tipsLoaded \|\| !tipsEnabled \|\| !canSelectTip \|\| tipSelected\.current\) return/)
+  assert.match(ui, /tipSelected\.current = true/)
+  assert.match(home, /canSelectTip=\{!assistantTipPresentedThisSession\}/)
+  assert.match(home, /setAssistantTipsShown\(\(current\) => current\.includes\(index\) \? current : \[\.\.\.current, index\]\)/)
+  assert.match(home, /supabase\.rpc\('mark_assistant_tip_shown'/)
+})
+
+test('proactive tip copy is exact in English and Norwegian and remains free', () => {
+  assert.deepEqual(ASSISTANT_TIPS.map(({ en, no }) => ({ en, no })), [
+    { en: 'Turn your phone sideways to preview your frame.', no: 'Snu telefonen sidelengs for å se hva som vises på rammen.' },
+    { en: 'You can ask me to add groceries.', no: 'Du kan be meg legge til dagligvarer.' },
+    { en: 'Try: “Remind me to call Mum tomorrow.”', no: 'Prøv: «Minn meg på å ringe mamma i morgen.»' },
+    { en: 'I can help you find settings too.', no: 'Jeg kan også hjelpe deg å finne innstillinger.' },
+  ])
+  assert.deepEqual(ASSISTANT_TIPS.map(({ id }) => id), ['landscape-frame-preview', 'add-groceries', 'reminder-example', 'settings-help'])
+  assert.doesNotMatch(tips, /fetch\(|openai|aiIntent/i)
 })
 
 test('deterministic help and grocery/reminder commands precede the compact AI fallback', () => {

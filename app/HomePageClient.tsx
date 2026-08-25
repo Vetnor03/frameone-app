@@ -1141,6 +1141,8 @@ export default function HomePage() {
   const [showFrameAssistant, setShowFrameAssistant] = useState(true)
   const [proactiveAssistantTips, setProactiveAssistantTips] = useState(true)
   const [assistantTipsShown, setAssistantTipsShown] = useState<number[]>([])
+  const [assistantPreferencesLoaded, setAssistantPreferencesLoaded] = useState(false)
+  const [assistantTipPresentedThisSession, setAssistantTipPresentedThisSession] = useState(false)
 
   const [cellsByLayout, setCellsByLayout] = useState<Record<LayoutKey, Record<number, ModuleKey | null>>>(
     makeEmptyCellsByLayout()
@@ -1308,6 +1310,7 @@ export default function HomePage() {
   }, [appTheme])
 
   useEffect(() => {
+    setAssistantPreferencesLoaded(false)
     if (!userId) return
 
     let cancelled = false
@@ -1329,6 +1332,7 @@ export default function HomePage() {
       setShowFrameAssistant(data?.show_ai_assistant !== false)
       setProactiveAssistantTips(data?.proactive_assistant_tips !== false)
       setAssistantTipsShown(Array.isArray(data?.assistant_tips_shown) ? data.assistant_tips_shown : [])
+      setAssistantPreferencesLoaded(true)
 
       if (!data) {
         const { error: insertError } = await supabase
@@ -2510,6 +2514,12 @@ async function handleSelectTab(k: TabKey) {
     void supabase.from('user_app_preferences').upsert({ user_id: userId, app_theme: appTheme, ...(values.show !== undefined ? { show_ai_assistant: values.show } : {}), ...(values.tips !== undefined ? { proactive_assistant_tips: values.tips } : {}), ...(values.shown !== undefined ? { assistant_tips_shown: values.shown } : {}) }, { onConflict: 'user_id' })
   }, [appTheme, userId])
 
+  const markAssistantTipShown = useCallback((index: number) => {
+    setAssistantTipPresentedThisSession(true)
+    setAssistantTipsShown((current) => current.includes(index) ? current : [...current, index])
+    if (userId) void supabase.rpc('mark_assistant_tip_shown', { p_tip: index })
+  }, [userId])
+
   function navigateFromAssistant(destination: AssistantDestination) {
     if (destination === 'settings') setActiveTab('settings')
     else if (destination === 'layout') {
@@ -2714,7 +2724,7 @@ async function handleSelectTab(k: TabKey) {
             )}
 
             {isPlainFrameAssistantSurface && showFrameAssistant && (
-              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} onTipShown={(index) => { if (!assistantTipsShown.includes(index)) saveAssistantPreferences({ shown: [...assistantTipsShown, index] }) }} onNavigate={navigateFromAssistant} />
+              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} />
             )}
 
             {pickerOpen && (
