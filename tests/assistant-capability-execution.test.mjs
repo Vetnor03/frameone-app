@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ASSISTANT_CAPABILITY_HANDLERS, executeCapability } from '../app/lib/assistant/handlers.ts'
-import { resolveDeterministicAssistantIntent } from '../app/lib/assistant/resolver.ts'
+import { resolveDeterministicAssistantIntent, resolveDeterministicCapabilityRequest } from '../app/lib/assistant/resolver.ts'
 import { ASSISTANT_CAPABILITIES } from '../app/lib/assistant/capabilities.ts'
+import { normalizeCapabilityArgument } from '../app/lib/assistant/normalize.ts'
 
 function dbMock(rows = {}) {
   const calls = []
@@ -49,6 +50,17 @@ test('structured capability validators reject invalid values before execution', 
   assert.equal(ASSISTANT_CAPABILITY_HANDLERS['surf.log_experience'].validate({ spot: 'Hellestø', rating: 7, date: 'today', time: '14:00' }).ok, false)
 })
 
+test('generic follow-up values normalize before handler validation', () => {
+  const context = { localNow: '2026-08-26T12:00:00Z', timezone: 'Europe/Oslo' }
+  assert.equal(normalizeCapabilityArgument('targetDate', '10. september', context), '2026-09-10')
+  assert.equal(normalizeCapabilityArgument('time', 'kl. 14.30', context), '14:30')
+  assert.equal(normalizeCapabilityArgument('rating', 'det var 5 av 6', context), 5)
+  assert.equal(normalizeCapabilityArgument('theme', 'mørkt', context), 'dark')
+  assert.equal(normalizeCapabilityArgument('language', 'norsk', context), 'no')
+  assert.equal(normalizeCapabilityArgument('layout', 'layout 2', context), 'pyramid')
+  assert.equal(normalizeCapabilityArgument('targetDate', 'en gang senere', context), null)
+})
+
 test('countdown uses the UI schema and missing arguments create generic pending state', async () => {
   const db = dbMock()
   await executeCapability('countdown.create', { title: 'Trip', targetDate: '2026-10-10' }, context(db))
@@ -71,4 +83,29 @@ test('exact module names navigate while general questions do not invent capabili
     assert.equal(resolveDeterministicAssistantIntent(input)?.action, 'answer_help', input)
   }
   assert.equal(resolveDeterministicAssistantIntent('Why do birds migrate?'), null)
+})
+
+test('natural language routes through capability selection into real handlers', async () => {
+  const now = { localNow: '2026-08-26T12:00:00Z', timezone: 'Europe/Oslo' }
+  const cases = [
+    ['Bytt fotballag til Dortmund', 'football.set_team'],
+    ['Hvilket fotballag følger jeg?', 'football.read'],
+    ['Hvordan blir været i morgen?', 'weather.read'],
+    ['Hva står på handlelisten?', 'groceries.read'],
+    ['Lag nedtelling til ferie 10. september', 'countdown.create'],
+    ['Bytt appen til dark mode', 'settings.set_app_theme'],
+    ['Bytt språk til norsk', 'frame.set_language'],
+    ['Bytt til layout 2', 'frame.set_layout'],
+    ['Hvordan blir Hellestø i morgen?', 'surf.read'],
+  ]
+  const db = dbMock({ device_settings: { data: { settings_json: { modules: { soccer: [{ id: 1, teamName: 'Arsenal' }], weather: [{ lat: 58.9, lon: 5.7 }], surf: [{ spotId: 'hellesto' }] } } }, error: null }, grocery_items: { data: [{ name: 'Milk' }], error: null } })
+  for (const [input, expected] of cases) {
+    const request = resolveDeterministicCapabilityRequest(input, now)
+    assert.equal(request?.capabilityId, expected, input)
+    assert.ok(ASSISTANT_CAPABILITY_HANDLERS[request.capabilityId], input)
+  }
+  const countdown = resolveDeterministicCapabilityRequest(cases[4][0], now)
+  assert.deepEqual(countdown.arguments, { title: 'ferie', targetDate: '2026-09-10' })
+  await executeCapability(countdown.capabilityId, countdown.arguments, context(db))
+  assert.ok(db.calls.some((call) => call.table === 'countdown_events' && call.operation === 'insert'))
 })

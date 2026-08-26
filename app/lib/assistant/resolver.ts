@@ -1,6 +1,10 @@
 import type { AssistantDestination, ResolvedAssistantIntent } from './types'
 import { SURF_SPOTS } from '../surf/spots.ts'
 import { ALL_TEAMS } from '../soccer/teams.ts'
+import type { AssistantCapabilityId } from './capabilities.ts'
+import { normalizeAssistantDate } from './normalize.ts'
+
+export type CapabilityRequest = { capabilityId: AssistantCapabilityId; arguments: Record<string, unknown> }
 
 const RESERVED_INPUT = /^(?:weather|vær|surf|layout|oppsett|settings|innstillinger|spond|reminders?|påminnelser?|groceries|grocery|dagligvarer|handleliste|countdown|nedtelling|frame|ramme|modules?|moduler?)$/i
 const GROCERY_WORDS = new Set([
@@ -66,7 +70,7 @@ function naturalReminder(text: string) {
 }
 
 export function resolveDeterministicAssistantIntent(text: string): ResolvedAssistantIntent | null {
-  const request = text.trim()
+  const request = text.trim().replace(/[?!.,]+$/u, '')
   if (!request || request.length > 1_000) return null
   // Resolve against the same team catalogue as the Football picker. This is
   // data-driven: adding a team to the UI automatically makes it addressable.
@@ -103,6 +107,40 @@ export function resolveDeterministicAssistantIntent(text: string): ResolvedAssis
   if (reminder) return reminder
   const shorthandItems = shorthandGroceryItems(request)
   return shorthandItems ? { action: 'add_grocery_items', arguments: { items: shorthandItems } } : null
+}
+
+/** Cheap, deterministic capability routing runs before the model fallback. */
+export function resolveDeterministicCapabilityRequest(text: string, context: { localNow: string; timezone: string | null } = { localNow: new Date().toISOString(), timezone: 'UTC' }): CapabilityRequest | null {
+  const request = text.trim().replace(/[?!.,]+$/u, '')
+  if (!request || request.length > 1_000) return null
+  const legacy = resolveDeterministicAssistantIntent(request)
+  if (legacy?.action === 'add_grocery_items') return { capabilityId: 'groceries.add', arguments: legacy.arguments }
+  if (legacy?.action === 'create_reminder') return { capabilityId: 'reminders.create', arguments: legacy.arguments }
+  if (legacy?.action === 'log_surf_experience') return { capabilityId: 'surf.log_experience', arguments: legacy.arguments }
+  if (legacy?.action === 'set_football_team') return { capabilityId: 'football.set_team', arguments: { team: legacy.arguments.teamId } }
+  if (legacy?.action === 'answer_help') {
+    const ids = { settings: 'settings.open', weather: 'weather.open', surf: 'surf.open', reminders: 'reminders.open', groceries: 'groceries.open', recipes: 'recipes.open', layout: 'layout.open', spond: 'spond.open' } as const
+    const capabilityId = ids[legacy.arguments.destination as keyof typeof ids]
+    if (capabilityId) return { capabilityId, arguments: {} }
+  }
+  if (/\b(?:which|what|hvilket)\b.*\b(?:football|soccer|fotball)(?:team|lag)?\b|\bhvilket fotballag følger jeg\b/i.test(request)) return { capabilityId: 'football.read', arguments: {} }
+  if (/(?:what(?:'s| is)? on|show|read|hva står på|vis).*?(?:shopping list|grocery list|handlelisten?)/i.test(request)) return { capabilityId: 'groceries.read', arguments: {} }
+  if (/\b(?:my reminders|open reminders|mine påminnelser|hvilke påminnelser)\b/i.test(request)) return { capabilityId: 'reminders.read', arguments: {} }
+  if (/\b(?:weather|vær(?:et)?)\b.*\b(?:tomorrow|i morgen)\b/i.test(request)) return { capabilityId: 'weather.read', arguments: {} }
+  const surfSpot = Object.values(SURF_SPOTS).find((spot) => request.toLocaleLowerCase().includes(spot.label.toLocaleLowerCase()))
+  if (surfSpot && /\b(?:tomorrow|i morgen|forecast|varsel|hvordan blir)\b/i.test(request)) return { capabilityId: 'surf.read', arguments: { spot: surfSpot.label } }
+  const countdown = request.match(/^(?:create (?:a )?countdown (?:to|for)|lag nedtelling til)\s+(.+)$/iu)
+  if (countdown) {
+    const dateTail = countdown[1].match(/^(.*?)(?:\s+)(\d{1,2}\.?(?:\s+)[\p{L}]+(?:\s+\d{4})?|\d{4}-\d{2}-\d{2})$/u)
+    return { capabilityId: 'countdown.create', arguments: { title: (dateTail?.[1] ?? countdown[1]).trim(), ...(dateTail ? { targetDate: normalizeAssistantDate(dateTail[2], context.localNow, context.timezone) ?? dateTail[2] } : {}) } }
+  }
+  const theme = request.match(/(?:change|switch|set|bytt|endre).*?(?:app(?:en)?|app theme|apptema).*?\b(dark(?: mode)?|light(?: mode)?|mørk(?:t)?|lys(?:t)?)\b/i)
+  if (theme) return { capabilityId: 'settings.set_app_theme', arguments: { theme: /dark|mørk/i.test(theme[1]) ? 'dark' : 'light' } }
+  const language = request.match(/(?:change|switch|set|bytt|endre).*?(?:language|språk).*?\b(norsk|norwegian|no|engelsk|english|en)\b/i)
+  if (language) return { capabilityId: 'frame.set_language', arguments: { language: /norsk|norwegian|^no$/i.test(language[1]) ? 'no' : 'en' } }
+  const layout = request.match(/(?:change|switch|set|bytt|endre).*?layout\s*(default|pyramid|square|full|[1-4])/i)
+  if (layout) return { capabilityId: 'frame.set_layout', arguments: { layout: ({ '1': 'default', '2': 'pyramid', '3': 'square', '4': 'full' } as Record<string, string>)[layout[1]] ?? layout[1].toLowerCase() } }
+  return null
 }
 
 export function validateModelIntent(value: unknown): ResolvedAssistantIntent | null {

@@ -24,6 +24,7 @@ export type CapabilityContext = {
   timezone: string | null
   authorization: string
   executeSurfLog?: (args: ValidSurfLog) => Promise<AssistantResult>
+  executeReminder?: (text: string) => Promise<AssistantResult>
   weatherDetails?: (request: Request) => Promise<Response>
   surfScore?: (request: Request) => Promise<Response>
 }
@@ -97,7 +98,8 @@ export const ASSISTANT_CAPABILITY_HANDLERS: Record<string, Handler> = {
     const { data, error } = await ctx.db.from('grocery_items').select('name,quantity').eq('device_id', ctx.deviceId).eq('is_checked', false).order('created_at'); if (error) throw error
     const names = (data ?? []).map((row: any) => row.name); return completed(names.length ? names.join(', ') : (ctx.language === 'no' ? 'Handlelisten er tom.' : 'Your grocery list is empty.'))
   } },
-  'reminders.read': { scope: 'device_member', destructive: false, missingQuestion: {}, validate: () => ok({}), run: async (ctx) => {
+  'reminders.create': { scope: 'device_member', destructive: false, missingQuestion: { text: { en: 'What should I remind you about?', no: 'Hva skal jeg minne deg på?' } }, validate: (args) => typeof args.text === 'string' && args.text.trim() ? ok({ text: args.text.trim() }) : required('text'), run: async (ctx, args) => { if (!ctx.executeReminder) throw new Error('reminder_adapter_missing'); return ctx.executeReminder(String(args.text)) } },
+    'reminders.read': { scope: 'device_member', destructive: false, missingQuestion: {}, validate: () => ok({}), run: async (ctx) => {
     const { data, error } = await ctx.db.from('reminders').select('title,due_date,due_time').eq('device_id', ctx.deviceId).eq('is_done', false).order('due_date'); if (error) throw error
     const titles = (data ?? []).map((row: any) => row.title); return completed(titles.length ? titles.join(', ') : (ctx.language === 'no' ? 'Du har ingen åpne påminnelser.' : 'You have no open reminders.'))
   } },
@@ -121,9 +123,9 @@ export const ASSISTANT_CAPABILITY_HANDLERS: Record<string, Handler> = {
     if (!response.ok || !payload?.weather?.current) throw new Error('weather_unavailable')
     const temperature = payload.weather.current.temperature_2m; return completed(ctx.language === 'no' ? `Det er ${temperature}° nå.` : `It is ${temperature}° now.`)
   } },
-  'surf.read': { scope: 'device_member', destructive: false, missingQuestion: {}, validate: () => ok({}), run: async (ctx) => {
+  'surf.read': { scope: 'device_member', destructive: false, missingQuestion: {}, validate: (args) => ok(typeof args.spot === 'string' ? { spot: args.spot } : {}), run: async (ctx, args) => {
     if (!ctx.surfScore) throw new Error('surf_score_adapter_missing')
-    const config = await firstModuleConfig(ctx, 'surf'); const spot = typeof config?.spotId === 'string' ? config.spotId : typeof config?.spot === 'string' ? config.spot : ''
+    const config = await firstModuleConfig(ctx, 'surf'); const requested = typeof args.spot === 'string' ? findSpotByLabel(args.spot) : null; const spot = requested?.spotId ?? (typeof config?.spotId === 'string' ? config.spotId : typeof config?.spot === 'string' ? config.spot : '')
     if (!spot) return { status: 'needs_input', message: ctx.language === 'no' ? 'Velg en surfespot først.' : 'Choose a surf spot first.', cta: { label: 'Open surf', destination: 'surf' } }
     const response = await ctx.surfScore(new Request(`http://frame.local/api/surf/score?spotId=${encodeURIComponent(spot)}&compact=1`, { headers: { authorization: ctx.authorization } })); const payload = await response.json() as any
     if (!response.ok || (!Number.isFinite(Number(payload?.rating)) && !Number.isFinite(Number(payload?.score)))) throw new Error('surf_unavailable')
@@ -136,7 +138,10 @@ export const ASSISTANT_CAPABILITY_HANDLERS: Record<string, Handler> = {
 // navigation capabilities, not prompt-only metadata. This keeps registry and
 // dispatcher exhaustive while never pretending an unsupported write occurred.
 for (const capability of ASSISTANT_CAPABILITIES) {
-  if (!ASSISTANT_CAPABILITY_HANDLERS[capability.id]) ASSISTANT_CAPABILITY_HANDLERS[capability.id] = navigation(capability.destination)
+  if (!ASSISTANT_CAPABILITY_HANDLERS[capability.id]) {
+    if (capability.kind !== 'navigation') throw new Error(`Missing Assistant handler: ${capability.id}`)
+    ASSISTANT_CAPABILITY_HANDLERS[capability.id] = navigation(capability.destination)
+  }
 }
 
 async function firstModuleConfig(ctx: CapabilityContext, module: string): Promise<Record<string, unknown> | null> {
