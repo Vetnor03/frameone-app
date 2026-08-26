@@ -22,18 +22,18 @@ html[data-theme="dark"] {
   --fg-50: rgba(255, 255, 255, 0.5);
   --fg-55: rgba(255, 255, 255, 0.55);
   --fg-65: rgba(255, 255, 255, 0.65);
-  --fg-45: rgba(255, 255, 255, 0.45);
-  --fg-35: rgba(255, 255, 255, 0.35);
-  --fg-40: rgba(255, 255, 255, 0.4);
+  --fg-45: rgba(255, 255, 255, 0.56);
+  --fg-35: rgba(255, 255, 255, 0.48);
+  --fg-40: rgba(255, 255, 255, 0.52);
   --fg-30: rgba(255, 255, 255, 0.3);
   --fg-15: rgba(255, 255, 255, 0.15);
 
   /* borders */
   --bd-40: rgba(255, 255, 255, 0.4);
   --bd-30: rgba(255, 255, 255, 0.3);
-  --bd-20: rgba(255, 255, 255, 0.2);
-  --bd-15: rgba(255, 255, 255, 0.15);
-  --bd-10: rgba(255, 255, 255, 0.10);
+  --bd-20: rgba(255, 255, 255, 0.3);
+  --bd-15: rgba(255, 255, 255, 0.24);
+  --bd-10: rgba(255, 255, 255, 0.18);
 
   /* surfaces */
   --panel-05: rgba(255, 255, 255, 0.05);
@@ -44,6 +44,18 @@ html[data-theme="dark"] {
   --panel-20: rgba(255, 255, 255, 0.20);
   --card-bg: #0b2733;
   --input-bg: rgba(255, 255, 255, 0.08);
+
+  /* interactive controls */
+  --control-bg: rgba(255, 255, 255, 0.09);
+  --control-bg-hover: rgba(255, 255, 255, 0.14);
+  --control-border: rgba(255, 255, 255, 0.28);
+  --control-fg: rgba(255, 255, 255, 0.9);
+  --action-fg: #03131d;
+  --disabled-bg: rgba(255, 255, 255, 0.06);
+  --disabled-fg: rgba(255, 255, 255, 0.5);
+  --disabled-border: rgba(255, 255, 255, 0.14);
+  --focus-ring: rgba(42, 163, 255, 0.42);
+  --switch-thumb: #ffffff;
 
   --overlay-55: rgba(0, 0, 0, 0.55);
   --toast-bg: rgba(0, 0, 0, 0.35);
@@ -66,6 +78,17 @@ html[data-theme="light"] {
   --accent: #168de2;
   --card-bg: #ffffff;
   --input-bg: #f3f4f6;
+
+  --control-bg: #f0f1f3;
+  --control-bg-hover: #e7e9ec;
+  --control-border: rgba(29, 37, 44, 0.2);
+  --control-fg: rgba(29, 37, 44, 0.9);
+  --action-fg: #ffffff;
+  --disabled-bg: #e7e9ec;
+  --disabled-fg: rgba(29, 37, 44, 0.52);
+  --disabled-border: rgba(29, 37, 44, 0.1);
+  --focus-ring: rgba(22, 141, 226, 0.3);
+  --switch-thumb: #ffffff;
 
   /* Dark text ladder */
   --fg: #1d252c;
@@ -140,7 +163,7 @@ html[data-theme="light"] .remind-app :is(section, article, div)[class*="rounded-
 /* Soft, Notes-like controls with a focus treatment that appears only in use. */
 html[data-theme="light"] .remind-app :is(input, textarea, select) {
   border-color: transparent !important;
-  background-color: #f3f4f6 !important;
+  background-color: var(--input-bg) !important;
   box-shadow: inset 0 0 0 1px transparent;
   transition: background-color 160ms ease, box-shadow 160ms ease;
 }
@@ -158,20 +181,59 @@ html[data-theme="light"] .remind-app textarea[data-assistant-composer]:focus {
 }
 
 html[data-theme="light"] .remind-app :is(input, textarea)::placeholder {
-  color: rgba(29, 37, 44, 0.38);
+  color: var(--fg-50);
 }
 
 /* Outlined utility actions become calm secondary controls. Blue actions remain blue. */
 html[data-theme="light"] .remind-app button[class*="border-"]:not([data-nav-tab]):not([data-settings-row]):not([class*="border-[#2aa3ff]"]):not([class*="bg-[#2aa3ff]"]) {
   border-color: transparent;
-  background-color: #f0f1f3;
+  background-color: var(--control-bg);
 }
 
 html[data-theme="light"] .remind-app button[class*="border-[#2aa3ff]"]:not([data-nav-tab]) {
-  border-color: #2aa3ff;
-  background-color: #2aa3ff !important;
-  color: #ffffff !important;
+  border-color: var(--accent);
+  background-color: var(--accent) !important;
+  color: var(--action-fg) !important;
   box-shadow: 0 4px 12px rgba(42, 163, 255, 0.2);
+}
+
+/* Shared control primitives. These deliberately use semantic tokens so map flows,
+   sheets and ordinary pages have the same contrast in either app theme. */
+.remind-app [data-ui="button"] {
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--control-fg);
+  transition: background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+.remind-app [data-ui="button"]:hover:not(:disabled) { background: var(--control-bg-hover); }
+.remind-app [data-ui="button-primary"] {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--action-fg);
+}
+.remind-app :is([data-ui="button"], [data-ui="button-primary"]):disabled {
+  border-color: var(--disabled-border);
+  background: var(--disabled-bg);
+  color: var(--disabled-fg);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.remind-app :is([data-ui="button"], [data-ui="button-primary"]):focus-visible,
+.remind-app [data-ui="input"]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.remind-app [data-ui="input"] {
+  border: 1px solid var(--control-border);
+  background: var(--input-bg);
+  color: var(--fg-90);
+}
+.remind-app [data-ui="input"]::placeholder { color: var(--fg-50); }
+.remind-app [data-ui="sheet"] {
+  border: 1px solid var(--control-border);
+  background: color-mix(in srgb, var(--sheet-bg) 94%, transparent);
+  color: var(--fg);
+  box-shadow: 0 18px 50px var(--overlay-55);
 }
 
 html[data-theme="light"] .remind-app button:focus-visible,

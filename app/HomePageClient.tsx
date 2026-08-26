@@ -16911,8 +16911,8 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (next: bool
       style={{ padding: 2 }}
     >
       <span
-        className={`block h-6 w-6 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}
-        style={{ boxShadow: '0 6px 18px rgba(0,0,0,0.25)' }}
+        className={`block h-6 w-6 rounded-full bg-[color:var(--switch-thumb)] transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}
+        style={{ boxShadow: '0 6px 18px var(--overlay-55)' }}
       />
     </button>
   )
@@ -17250,17 +17250,17 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
     onClose()
   }
 
-  return <div className="fixed inset-0 z-[60] bg-[#0c1117] flex flex-col">
-    <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl bg-black/45 p-4 backdrop-blur-sm border border-white/10">
-      <div className="text-xs tracking-[0.14em] text-white/80">{isEdit ? (language === 'no' ? 'REDIGER HEMMELIG SPOT' : 'EDIT SECRET SPOT') : (language === 'no' ? 'LEGG TIL HEMMELIG SPOT' : 'ADD SECRET SPOT')}</div>
-      <div className="mt-1 text-[11px] text-white/70">
+  return <div className="fixed inset-0 z-[60] bg-[color:var(--app-bg)] text-[color:var(--fg)] flex flex-col">
+    <div data-ui="sheet" className="absolute left-4 right-4 top-4 z-20 rounded-2xl p-4 backdrop-blur-sm">
+      <div className="text-xs tracking-[0.14em] text-[color:var(--fg-80)]">{isEdit ? (language === 'no' ? 'REDIGER HEMMELIG SPOT' : 'EDIT SECRET SPOT') : (language === 'no' ? 'LEGG TIL HEMMELIG SPOT' : 'ADD SECRET SPOT')}</div>
+      <div className="mt-1 text-[11px] text-[color:var(--fg-65)]">
         {language === 'no' ? 'Kun synlig for deg — denne spoten deles ikke med andre.' : 'Private to your account — this spot is not shared with other users.'}
       </div>
-      {step === 1 ? <><input value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="mt-2 w-full h-11 rounded-xl border border-white/20 bg-black/35 px-3 text-white" />
-        <div className="mt-3 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'BØLGE' : 'WAVE'}</div>
-        <div className="mt-1 text-sm text-white/90">• Move the map to center your surf spot</div><div className="text-sm text-white/90">• Drag the handles to set swell exposure</div><div className="text-sm text-white/90">• Drag the arrow to set best swell direction</div></> : null}
-      {step === 2 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'VIND' : 'WIND'}</div><div className="mt-1 text-sm text-white/90">• Drag the handles to set good wind directions</div><div className="text-sm text-white/90">• Drag the arrow to set best wind direction</div></> : null}
-      {step === 3 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-white/75">{language === 'no' ? 'PARKERING' : 'PARKING'}</div><div className="mt-1 text-sm text-white/90">• Move the map to the closest parking spot</div><div className="text-sm text-white/90">• Place the marker where you usually park</div></> : null}
+      {step === 1 ? <><input data-ui="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={language === 'no' ? 'Spotnavn' : 'Spot name'} className="mt-2 w-full h-11 rounded-xl px-3 outline-none" />
+        <div className="mt-3 text-[11px] tracking-[0.14em] text-[color:var(--fg-70)]">{language === 'no' ? 'BØLGE' : 'WAVE'}</div>
+        <div className="mt-1 text-sm text-[color:var(--fg-90)]">• Move the map to center your surf spot</div><div className="text-sm text-[color:var(--fg-90)]">• Drag the handles to set swell exposure</div><div className="text-sm text-[color:var(--fg-90)]">• Drag the arrow to set best swell direction</div></> : null}
+      {step === 2 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-[color:var(--fg-70)]">{language === 'no' ? 'VIND' : 'WIND'}</div><div className="mt-1 text-sm text-[color:var(--fg-90)]">• Drag the handles to set good wind directions</div><div className="text-sm text-[color:var(--fg-90)]">• Drag the arrow to set best wind direction</div></> : null}
+      {step === 3 ? <><div className="mt-2 text-[11px] tracking-[0.14em] text-[color:var(--fg-70)]">{language === 'no' ? 'PARKERING' : 'PARKING'}</div><div className="mt-1 text-sm text-[color:var(--fg-90)]">• Move the map to the closest parking spot</div><div className="text-sm text-[color:var(--fg-90)]">• Place the marker where you usually park</div></> : null}
     </div>
     <div className="flex-1 relative">
       <RealTileMap
@@ -17277,11 +17277,12 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
     </div>
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-[max(20px,calc(env(safe-area-inset-bottom)+10px))]">
       <div className="pointer-events-auto grid grid-cols-2 gap-3">
-        {step === 1 ? <button className="h-12 rounded-xl border border-white/60 bg-black/40 text-white" onClick={onClose}>{language === 'no' ? 'Lukk' : 'Close'}</button> : <button className="h-12 rounded-xl border border-white/60 bg-black/40 text-white" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
+        {step === 1 ? <button data-ui="button" className="h-12 rounded-xl" onClick={onClose}>{language === 'no' ? 'Lukk' : 'Close'}</button> : <button data-ui="button" className="h-12 rounded-xl" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>{language === 'no' ? 'Tilbake' : 'Back'}</button>}
         {step < 3 ? (
           <button
             disabled={step === 1 && !name.trim()}
-            className={`h-12 rounded-xl border border-[#2aa3ff] ${step === 1 && !name.trim() ? 'cursor-not-allowed bg-[#2aa3ff]/30 text-[#7caed6]' : 'bg-[#2aa3ff] text-[#07131f]'}`}
+            data-ui="button-primary"
+            className="h-12 rounded-xl"
             onClick={() => {
               if (step === 1 && !name.trim()) return
               setStep((step + 1) as 1 | 2 | 3)
@@ -17290,7 +17291,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
             {language === 'no' ? 'Neste' : 'Next'}
           </button>
         ) : (
-          <button disabled={saving || !name.trim()} className="h-12 rounded-xl border border-[#2aa3ff] bg-[#2aa3ff] text-[#07131f] disabled:cursor-not-allowed disabled:bg-[#2aa3ff]/30 disabled:text-[#7caed6]" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre endringer' : 'Save changes')}</button>
+          <button data-ui="button-primary" disabled={saving || !name.trim()} className="h-12 rounded-xl" onClick={save}>{saving ? 'Saving…' : (language === 'no' ? 'Lagre endringer' : 'Save changes')}</button>
         )}
       </div>
       {isEdit ? <div className="pointer-events-auto pt-3"><button disabled={deleting || saving} className="w-full h-12 rounded-xl border border-[color:var(--danger-bd)] bg-[color:var(--danger)]/18 text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-45" onClick={onDelete}>{deleting ? '…' : (language === 'no' ? 'Slett spot' : 'Delete spot')}</button></div> : null}
