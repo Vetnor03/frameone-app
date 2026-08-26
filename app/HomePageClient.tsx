@@ -8251,8 +8251,14 @@ function SettingsTab({
 function AssistantPreferenceToggle({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
   return <div className="flex min-h-12 items-center justify-between gap-4">
     <span className={`text-sm ${disabled ? 'text-[color:var(--fg-30)]' : 'text-[color:var(--fg-80)]'}`}>{label}</span>
-    <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={`relative h-7 w-12 rounded-full border transition disabled:opacity-40 ${checked ? 'border-[#2aa3ff] bg-[#2aa3ff]/20' : 'border-[color:var(--bd-20)]'}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-current transition ${checked ? 'left-6 text-[#2aa3ff]' : 'left-1 text-[color:var(--fg-40)]'}`} /></button>
+    <SettingsToggle label={label} checked={checked} disabled={disabled} onClick={() => onChange(!checked)} />
   </div>
+}
+
+function SettingsToggle({ label, checked, disabled = false, onClick }: { label: string; checked: boolean; disabled?: boolean; onClick: () => void }) {
+  return <button type="button" role="switch" aria-label={label} aria-checked={checked} disabled={disabled} onClick={onClick} className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-40 ${checked ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`}>
+    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-[left] ${checked ? 'left-6' : 'left-1'}`} />
+  </button>
 }
 
 
@@ -8385,9 +8391,7 @@ function NotificationsSetting({ language, state, onStateChange }: { language: Ap
           <div className="text-[color:var(--fg-70)]">{isNo ? 'Varsler' : 'Notifications'}</div>
           {loading ? <div className="mt-2 h-3 w-36 animate-pulse rounded bg-[color:var(--bd-10)]" aria-label={isNo ? 'Laster varslingsstatus' : 'Loading notification status'} /> : <div className="mt-1 text-xs text-[color:var(--fg-45)]">{enabled ? (deviceReady ? (isNo ? 'På for denne enheten' : 'Turned on for this device') : (isNo ? 'På for kontoen · aktiver denne enheten' : 'On for account · enable this device')) : (isNo ? 'Av' : 'Off')}</div>}
         </div>
-        {loading ? <div className="h-7 w-12 animate-pulse rounded-full bg-[color:var(--bd-10)]" aria-hidden="true" /> : <button type="button" disabled={busy} onClick={enabled ? disableNotifications : enableNotifications} className={`relative h-7 w-12 rounded-full transition ${enabled ? 'bg-[color:var(--accent)]' : 'bg-[color:var(--bd-20)]'}`} aria-label={isNo ? 'Varsler' : 'Notifications'}>
-          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${enabled ? 'left-6' : 'left-1'}`} />
-        </button>}
+        {loading ? <div className="h-7 w-12 animate-pulse rounded-full bg-[color:var(--bd-10)]" aria-hidden="true" /> : <SettingsToggle label={isNo ? 'Varsler' : 'Notifications'} checked={enabled} disabled={busy} onClick={enabled ? disableNotifications : enableNotifications} />}
       </div>
       {!loading && !enabled && permission !== 'denied' && permission !== 'unsupported' && (
         <div className="mt-3 border-t border-[color:var(--bd-10)] pt-3">

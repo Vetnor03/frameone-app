@@ -148,7 +148,7 @@ test('account-on but unregistered devices are not shown as ready and need explic
 test('global switch works both ways without automatic permission prompts', () => {
   assert.match(home, /onClick=\{enabled \? disableNotifications : enableNotifications\}/)
   assert.match(home, /const granted = Notification\.permission === 'granted' \? 'granted' : await Notification\.requestPermission\(\)/)
-  assert.match(home, /type="button" disabled=\{busy\}/)
+  assert.match(home, /checked=\{enabled\} disabled=\{busy\}/)
 })
 
 test('settings prefetches notification state and renders a neutral cold-load skeleton', () => {
