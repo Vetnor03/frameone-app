@@ -54,15 +54,18 @@ test('structured capability validators reject invalid values before execution', 
 
 test('app theme capability returns the saved theme for immediate client state synchronization', async () => {
   const db = dbMock()
-  const result = await executeCapability('settings.set_app_theme', { theme: 'dark' }, context(db))
-  assert.equal(result.status, 'completed')
-  assert.equal(result.appTheme, 'dark')
-  assert.deepEqual(db.calls.find((call) => call.table === 'user_app_preferences').value, { user_id: 'user', app_theme: 'dark' })
+  for (const theme of ['dark', 'light']) {
+    const result = await executeCapability('settings.set_app_theme', { theme }, context(db))
+    assert.equal(result.status, 'completed')
+    assert.equal(result.appTheme, theme)
+    assert.deepEqual(db.calls.at(-1).value, { user_id: 'user', app_theme: theme })
+  }
 
   const assistant = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(assistant, /isAppTheme\(value\.appTheme\)\) onAppThemeChange\(value\.appTheme\)/)
   assert.match(home, /onAppThemeChange=\{\(theme\) => \{ persistTheme\(theme\); setAppTheme\(theme\) \}\}/)
+  assert.doesNotMatch(`${assistant}\n${home}`, /window\.location\.reload|location\.reload/)
 })
 
 test('countdown uses the UI schema and missing arguments create generic pending state', async () => {
