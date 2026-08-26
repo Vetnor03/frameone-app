@@ -2781,7 +2781,7 @@ async function handleSelectTab(k: TabKey) {
             )}
 
             {isPlainFrameAssistantSurface && showFrameAssistant && (
-              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} />
+              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { persistTheme(theme); setAppTheme(theme) }} />
             )}
 
             {pickerOpen && (

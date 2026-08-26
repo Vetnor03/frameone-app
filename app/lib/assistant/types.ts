@@ -7,6 +7,7 @@ export type AssistantResult = {
   action?: AssistantActionName
   cta?: { label: string; destination: AssistantDestination }
   pendingId?: string
+  appTheme?: 'dark' | 'light'
 }
 
 export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'settings', 'recipes', 'spond', 'surf', 'weather', 'countdown', 'date', 'football', 'stocks', 'assistant'] as const

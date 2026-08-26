@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/app/lib/supabase'
 import { assistantPlaceholder, nextAssistantTip } from '@/app/lib/assistant/tips'
 import type { AssistantDestination, AssistantResult } from '@/app/lib/assistant/types'
+import { isAppTheme, type AppTheme } from '@/app/lib/theme'
 
-export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsShown, tipsLoaded, canSelectTip, assistantVisitId, onTipShown, onNavigate }: { deviceId: string | null; language: 'en' | 'no'; tipsEnabled: boolean; tipsShown: number[]; tipsLoaded: boolean; canSelectTip: boolean; assistantVisitId: number; onTipShown: (index: number) => void | Promise<void>; onNavigate: (destination: AssistantDestination) => void }) {
+export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsShown, tipsLoaded, canSelectTip, assistantVisitId, onTipShown, onNavigate, onAppThemeChange }: { deviceId: string | null; language: 'en' | 'no'; tipsEnabled: boolean; tipsShown: number[]; tipsLoaded: boolean; canSelectTip: boolean; assistantVisitId: number; onTipShown: (index: number) => void | Promise<void>; onNavigate: (destination: AssistantDestination) => void; onAppThemeChange: (theme: AppTheme) => void }) {
   const [open, setOpen] = useState(false), [text, setText] = useState(''), [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AssistantResult | null>(null), [tipDismissed, setTipDismissed] = useState(false)
   const [sessionTip, setSessionTip] = useState<ReturnType<typeof nextAssistantTip>>(null)
@@ -37,7 +38,10 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
       const value = await response.json().catch(() => null)
       setResult(value && typeof value.message === 'string' ? value : { status: 'error', message: "I couldn't do that. Try again." })
       setPendingId(value?.status === 'needs_input' && typeof value.pendingId === 'string' ? value.pendingId : null)
-      if (value?.status === 'completed') setText('')
+      if (value?.status === 'completed') {
+        if (isAppTheme(value.appTheme)) onAppThemeChange(value.appTheme)
+        setText('')
+      }
     } catch { setResult({ status: 'error', message: "I couldn't do that. Try again." }) } finally { setBusy(false) }
   }
 
