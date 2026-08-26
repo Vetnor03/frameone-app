@@ -21,7 +21,7 @@ import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
-import { initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
+import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
   DEVICE_UPDATE_POLL_MS,
@@ -1358,11 +1358,7 @@ export default function HomePage() {
   }, [userId])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = appTheme
-    document.documentElement.style.colorScheme = appTheme
-
-    const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null
-    if (meta) meta.content = appTheme === 'dark' ? '#061b24' : '#f5f6f8'
+    applyDocumentTheme(appTheme)
   }, [appTheme])
 
   useEffect(() => {
@@ -2781,7 +2777,7 @@ async function handleSelectTab(k: TabKey) {
             )}
 
             {isPlainFrameAssistantSurface && showFrameAssistant && (
-              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { persistTheme(theme); setAppTheme(theme) }} />
+              <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { applyDocumentTheme(theme); persistTheme(theme); setAppTheme(theme) }} />
             )}
 
             {pickerOpen && (
@@ -2803,6 +2799,7 @@ async function handleSelectTab(k: TabKey) {
                 frameTheme={frameTheme}
                 onClose={() => setThemePickerOpen(false)}
                 onPickApp={(t) => {
+                  applyDocumentTheme(t)
                   persistTheme(t)
                   setAppTheme(t)
                   if (userId) {

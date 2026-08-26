@@ -24,6 +24,6 @@ test('light material treatments stay scoped away from dark mode', () => {
 })
 
 test('browser chrome and mirror share the new light canvas', () => {
-  assert.match(home, /meta\.content = appTheme === 'dark' \? '#061b24' : '#f5f6f8'/)
+  assert.match(home, /applyDocumentTheme\(appTheme\)/)
   assert.match(home, /const background = isDark \? '#061b24' : '#f5f6f8'/)
 })

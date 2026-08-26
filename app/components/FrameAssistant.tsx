@@ -13,7 +13,7 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
   const tipSelected = useRef(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const tip = tipsEnabled && !tipDismissed ? sessionTip : null
-  const copy = language === 'no' ? { heading: 'RE:MIND-ASSISTENT', subtitle: 'Korte kommandoer, direkte resultat.', send: 'SEND' } : { heading: 'RE:MIND ASSISTANT', subtitle: 'Short commands, direct results.', send: 'SEND' }
+  const copy = language === 'no' ? { heading: 'RE:MIND-ASSISTENT', subtitle: 'Korte kommandoer, direkte resultat.', send: 'SEND', working: 'Jobber…' } : { heading: 'RE:MIND ASSISTANT', subtitle: 'Short commands, direct results.', send: 'SEND', working: 'Working…' }
   const placeholder = assistantPlaceholder(sessionTip?.id, language)
   useEffect(() => {
     setSessionTip(null)
@@ -51,6 +51,7 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
     {open && <div role="dialog" aria-label="RE:MIND Assistant" className="pointer-events-auto fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
       <section className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5">
         <div className="flex items-center justify-between"><div><h2 className="text-sm tracking-widest text-[color:var(--fg-80)]">{copy.heading}</h2><p className="mt-1 text-xs text-[color:var(--fg-50)]">{copy.subtitle}</p></div><button aria-label="Close assistant" onClick={() => setOpen(false)} className="h-9 w-9 text-xl text-[color:var(--fg-60)]">✕</button></div>
+        {busy && <div role="status" aria-live="polite" className="mt-5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-sm text-[color:var(--fg-60)]"><span className="inline-block animate-pulse">{copy.working}</span></div>}
         {result && <div aria-live="polite" className="mt-5 rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-sm text-[color:var(--fg-80)]">{result.message}{result.cta && <button onClick={() => { setOpen(false); onNavigate(result.cta!.destination) }} className="mt-3 block text-xs tracking-widest text-[#2aa3ff]">{result.cta.label}</button>}</div>}
         <form onSubmit={submit} className="mt-5 flex gap-2"><input autoFocus value={text} onChange={(event) => setText(event.target.value)} maxLength={1000} placeholder={placeholder} className="h-12 min-w-0 flex-1 rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] px-4 text-sm outline-none"/><button disabled={busy || !text.trim() || !deviceId} className="h-12 rounded-2xl border border-[#2aa3ff] px-4 text-xs tracking-widest text-[#2aa3ff] disabled:opacity-40">{busy ? '…' : copy.send}</button></form>
       </section>
