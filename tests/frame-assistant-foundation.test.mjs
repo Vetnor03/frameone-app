@@ -108,7 +108,7 @@ test('deterministic help and grocery/reminder commands precede the compact AI fa
   assert.match(resolver, /add_grocery_items/)
   assert.match(resolver, /create_reminder/)
   assert.match(resolver, /answer_help/)
-  assert.match(api, /let intent = resolveDeterministicAssistantIntent\(body\.text\)/)
+  assert.match(api, /let capability = resolveDeterministicCapabilityRequest\(body\.text\)/)
   assert.doesNotMatch(tips, /aiIntent|OPENAI_API_KEY/)
 })
 
@@ -125,7 +125,7 @@ test('short grocery shorthand is deterministic, quantity-aware, and protects res
   assert.deepEqual(resolveDeterministicAssistantIntent('2 melk')?.arguments, { items: [{ name: 'melk', quantity: 2 }] })
   assert.deepEqual(resolveDeterministicAssistantIntent('Soy sauce')?.arguments, { items: [{ name: 'Soy sauce' }] })
   for (const word of ['weather', 'vær', 'layout', 'oppsett', 'settings', 'innstillinger', 'Spond', 'reminders']) assert.equal(resolveDeterministicAssistantIntent(word)?.action, 'answer_help')
-  assert.match(api, /!isReservedAssistantInput\(body\.text\)/)
+  assert.match(api, /if \(!capability\)[\s\S]*aiIntent\(body\.text\)/)
 })
 
 test('module-aware routing recognizes natural reminders and surf logs before grocery fallback', () => {
@@ -153,7 +153,7 @@ test('manual and suggestion grocery failures reconcile and remain human-readable
 test('assistant CTAs close the sheet and only promise reachable surfaces', () => {
   assert.match(ui, /setOpen\(false\); onNavigate/)
   assert.match(home, /frame-layout-controls/)
-  assert.match(home, /destination === 'layout'[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
+  assert.match(home, /case 'layout':[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
   assert.match(resolver, /destination: 'groceries', message: 'Your saved recipes are in Groceries\.', label: 'Open Groceries'/)
 })
 
@@ -168,7 +168,8 @@ test('a reminder follow-up retains only validated short-lived reminder context',
 test('assistant and Groceries share one normalized transactional add path', () => {
   assert.deepEqual(normalizeCanonicalGroceryAdditions([{ name: ' Milk  ' }, { name: 'milk' }, { name: 'Bread', quantity: 2 }]), [{ name: 'Milk', quantity: 1, category: 'other' }, { name: 'Bread', quantity: 2, category: 'other' }])
   assert.match(home, /addGroceryItemsCanonical\(supabase, activeDeviceId/)
-  assert.match(api, /addGroceryItemsCanonical\(db, deviceId/)
+  const handlers = readFileSync(new URL('../app/lib/assistant/handlers.ts', import.meta.url), 'utf8')
+  assert.match(handlers, /addGroceryItemsCanonical\(ctx\.db, ctx\.deviceId/)
   assert.match(groceryActions, /add_grocery_items_canonical/)
   assert.match(migration, /for entry in select \* from jsonb_array_elements\(p_items\)/)
   assert.match(migration, /grocery_item_history/)
@@ -194,8 +195,9 @@ test('canonical history records the effective grocery row category', () => {
 })
 
 test('action execution validates membership, allowlists actions and masks raw errors', () => {
-  assert.match(api, /from\('device_members'\)/)
-  assert.match(api, /\.eq\('device_id', deviceId\)\.eq\('user_id', user\.id\)/)
+  const handlers = readFileSync(new URL('../app/lib/assistant/handlers.ts', import.meta.url), 'utf8')
+  assert.match(handlers, /from\('device_members'\)/)
+  assert.match(handlers, /\.eq\('device_id', ctx\.deviceId\)\.eq\('user_id', ctx\.user\.id\)/)
   assert.match(resolver, /input\.action === 'add_grocery_items'/)
   assert.match(resolver, /input\.action === 'create_reminder'/)
   assert.match(api, /I couldn't do that\. Try again\./)
@@ -211,5 +213,5 @@ test('rate limits are durable and AI is reached only after deterministic resolut
   assert.doesNotMatch(api, /new Map/)
   assert.match(api, /consume_assistant_request/)
   assert.match(migration, /assistant_request_limits/)
-  assert.match(api, /if \(!intent\)[\s\S]*aiIntent\(body\.text\)/)
+  assert.match(api, /if \(!capability\)[\s\S]*aiIntent\(body\.text\)/)
 })
