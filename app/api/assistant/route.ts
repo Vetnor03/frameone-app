@@ -13,13 +13,14 @@ import { surfLoggedAt } from '@/app/lib/assistant/time'
 import { GET as weatherDetails } from '@/app/api/weather/details/route'
 import { GET as surfScore } from '@/app/api/surf/score/route'
 import { ASSISTANT_HELP_TOPIC_IDS, assistantHelpPrompt, assistantHelpResult, resolveDeterministicAssistantHelp, validateAssistantHelpTopicId, type AssistantHelpTopicId } from '@/app/lib/assistant/help'
+import { normalizeAssistantGapText, sanitizeAssistantGapText } from '@/app/lib/assistant/gapSanitization.mjs'
 
 export const runtime = 'nodejs'
 
 function friendlyError(): AssistantResult { return { status: 'error', message: "I couldn't do that. Try again." } }
 function outputText(payload: any) { for (const item of payload?.output ?? []) for (const content of item?.content ?? []) if (content?.type === 'output_text') return content.text; return '' }
 
-type ClassifiedIntent = CapabilityRequest | { helpTopicId: AssistantHelpTopicId }
+type ClassifiedIntent = CapabilityRequest | { helpTopicId: AssistantHelpTopicId } | { unsupported: true }
 
 async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
   if (!process.env.OPENAI_API_KEY) return null
@@ -33,6 +34,7 @@ async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
   if (!response?.ok) return null
   try {
     const parsed = JSON.parse(outputText(await response.json())) as { intentId?: unknown; arguments?: unknown }
+    if (parsed.intentId === 'unsupported') return { unsupported: true }
     const helpId = typeof parsed.intentId === 'string' && parsed.intentId.startsWith('help:') ? validateAssistantHelpTopicId(parsed.intentId.slice(5)) : null
     if (helpId) return { helpTopicId: helpId }
     return validateCapabilityClassification({ capabilityId: parsed.intentId, arguments: parsed.arguments })
@@ -41,7 +43,7 @@ async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
 
 async function saveReminder(db: SupabaseClient, user: User, deviceId: string, reminder: NonNullable<ReturnType<typeof validateParsedReminder>>, language: 'en' | 'no'): Promise<AssistantResult> {
   const { error } = await db.from('reminders').insert({ device_id: deviceId, created_by_user_id: user.id, updated_by_user_id: user.id, title: reminder.title, due_date: reminder.due_date, due_time: reminder.due_time, end_date: reminder.end_date, end_time: reminder.end_time, tag: reminder.tag, repeat_type: reminder.repeat_type, custom_repeat_days: reminder.custom_repeat_days, is_done: false })
-  return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: language === 'no' ? 'Påminnelse opprettet ✓' : 'Reminder created ✓' }
+  return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: language === 'no' ? 'Påminnelse opprettet ✓' : 'Reminder created ✓', analytics: { recurring: reminder.repeat_type !== 'none' } }
 }
 
 async function executeReminderRequest(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, text: string, context: { localNow: string; timezone: string | null; language: 'en' | 'no' }): Promise<AssistantResult> {
@@ -159,6 +161,7 @@ export async function POST(request: Request) {
     return NextResponse.json(await saveReminder(db, user, body.deviceId, parsed.reminder, requestLanguage))
   }
   let capability = resolveDeterministicCapabilityRequest(body.text)
+  let resolver: 'deterministic' | 'ai' = 'deterministic'
   if (!capability) {
     const deterministicHelp = resolveDeterministicAssistantHelp(body.text, requestLanguage)
     if (deterministicHelp) return NextResponse.json(deterministicHelp)
@@ -169,10 +172,25 @@ export async function POST(request: Request) {
     if (!aiAllowed) return NextResponse.json({ status: 'error', message: 'Please wait a moment and try again.' }, { status: 429 })
     const classified = await aiIntent(body.text)
     if (classified && 'helpTopicId' in classified) classifiedHelpTopic = classified.helpTopicId
-    else capability = classified
+    else if (classified && 'unsupported' in classified) {
+      const requestText = sanitizeAssistantGapText(body.text)
+      if (requestText) {
+        try {
+          const { error: gapError } = await admin.from('assistant_capability_gaps').insert({ request_text: requestText, normalized_text: normalizeAssistantGapText(requestText), language: requestLanguage, reason: 'classifier_unsupported' })
+          if (gapError) console.warn('[assistant-gap:insert-failed]', { code: gapError.code || 'unknown' })
+        } catch {
+          console.warn('[assistant-gap:insert-failed]', { code: 'unexpected' })
+        }
+      }
+      return NextResponse.json({ status: 'unsupported', message: body.language === 'no' ? 'Dette kan jeg ikke hjelpe med ennå.' : "I can't help with that yet.", analytics: { resolver: 'ai', outcome: 'unsupported' } })
+    } else if (classified) { capability = classified; resolver = 'ai' }
+    else return NextResponse.json({ ...friendlyError(), analytics: { resolver: 'ai', outcome: 'error' } })
   }
-  if (classifiedHelpTopic) return NextResponse.json(assistantHelpResult(classifiedHelpTopic, requestLanguage))
-  if (!capability) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?' })
-  try { return NextResponse.json(await executeCapabilityRequest(capability, capabilityContext(db, admin, user, requestDeviceId, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }))) }
-  catch { return NextResponse.json(friendlyError()) }
+  if (classifiedHelpTopic) return NextResponse.json({ ...assistantHelpResult(classifiedHelpTopic, requestLanguage), analytics: { resolver: 'ai', outcome: 'completed', helpTopicId: classifiedHelpTopic } })
+  if (!capability) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?', analytics: { resolver, outcome: 'needs_input' } })
+  try {
+    const result = await executeCapabilityRequest(capability, capabilityContext(db, admin, user, requestDeviceId, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }))
+    const outcome = result.status === 'completed' ? 'completed' : result.status === 'needs_input' || result.status === 'needs_confirmation' ? 'needs_input' : 'error'
+    return NextResponse.json({ ...result, analytics: { ...result.analytics, resolver, outcome, capabilityId: capability.capabilityId } })
+  } catch { return NextResponse.json({ ...friendlyError(), analytics: { resolver, outcome: 'error', capabilityId: capability.capabilityId } }) }
 }

@@ -55,7 +55,7 @@ export function resolveDeterministicAssistantHelp(text: string, language: 'en' |
   const asksForGuidance = /(?:\b(?:where|how|find|open|connect|see|view|preview|hvor|hvordan|finn|åpne|koble|se|forhåndsvis)\b|\bwhat\b.*\b(?:shown|showing)\b|\bhva\b.*\bvises\b)/i.test(request)
   if (!asksForGuidance && !/^(?:settings|innstillinger|spond|weather|vær|surf|reminders?|påminnelser?|groceries|handleliste|layout|oppsett)$/i.test(request)) return null
   const topic = ASSISTANT_HELP_TOPICS.find((candidate) => candidate.patterns.some((pattern) => pattern.test(request)))
-  return topic ? assistantHelpResult(topic.id, language) : null
+  return topic ? { ...assistantHelpResult(topic.id, language), analytics: { resolver: 'deterministic', outcome: 'completed', helpTopicId: topic.id } } : null
 }
 
 export function assistantHelpPrompt() {

@@ -22,6 +22,7 @@ import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
+import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
 import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
   DEVICE_UPDATE_POLL_MS,
@@ -1105,6 +1106,7 @@ function ReMindSplash({ language }: { language: AppLanguage }) {
 }
 
 export default function HomePage() {
+  useEffect(() => initializeProductAnalytics(), [])
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -1116,6 +1118,13 @@ export default function HomePage() {
   const physicalFrameSnapshotSignatureRef = useRef<string | null>(null)
   const pendingFrameConfigUpdatedAtRef = useRef<string | null>(null)
   const isPhoneLandscapeMirror = usePhoneLandscapeMirror()
+  const previewTrackedRef = useRef(false)
+  useEffect(() => {
+    if (isPhoneLandscapeMirror && !previewTrackedRef.current) {
+      previewTrackedRef.current = true
+      trackProductEvent({ event: 'frame_preview_opened', surface: 'frame' })
+    } else if (!isPhoneLandscapeMirror) previewTrackedRef.current = false
+  }, [isPhoneLandscapeMirror])
 
   const [activeTab, setActiveTab] = useState<TabKey>('frame')
   const [assistantDeepLink, setAssistantDeepLink] = useState<{ watchId: string; updateId: string | null } | null>(null)
@@ -2271,7 +2280,7 @@ export default function HomePage() {
     setLayoutFlow(null)
   }
   async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
-  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
+  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);trackProductEvent({event:'layout_selected',surface:'frame',metadata:{layoutType:custom?'custom':'built_in'}});if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
   function prevLayout() {
@@ -2433,6 +2442,7 @@ export default function HomePage() {
 
     setFrameUpdateError('')
     updateActionInFlightRef.current = true
+    trackProductEvent({ event: 'frame_update_requested', surface: 'frame' })
     const operationId = ++updateOperationIdRef.current
     setExplicitUpdateStatus('saving')
 
@@ -2546,6 +2556,9 @@ async function handleSelectTab(k: TabKey) {
   // Re-read device-scoped state in the navigation event, before React is
   // allowed to mount the Frame subtree and consider scheduled presentation.
   if (k === 'frame') restoreManualUpdateState(activeDeviceId)
+  trackProductEvent({ event: 'tab_opened', surface: k, metadata: { tab: k } })
+  if (k === 'surf') trackProductEvent({ event: 'surf_opened', surface: 'surf' })
+  if (k === 'assistant') trackProductEvent({ event: 'assistant_opened', surface: 'assistant' })
   setActiveTab(k)
 }
 
@@ -2799,6 +2812,7 @@ async function handleSelectTab(k: TabKey) {
                 frameTheme={frameTheme}
                 onClose={() => setThemePickerOpen(false)}
                 onPickApp={(t) => {
+                  trackProductEvent({ event: 'theme_changed', surface: 'settings' })
                   applyDocumentTheme(t)
                   persistTheme(t)
                   setAppTheme(t)
@@ -2823,6 +2837,7 @@ async function handleSelectTab(k: TabKey) {
                 current={language}
                 onClose={() => setLanguagePickerOpen(false)}
                 onPick={(next) => {
+                  trackProductEvent({ event: 'language_changed', surface: 'settings' })
                   setLanguage(next)
                   setLanguagePickerOpen(false)
                   markDirty({ language: next })
@@ -2956,6 +2971,7 @@ function ConnectAppsScreen({
       return
     }
     setTeamsLoading(true)
+    trackProductEvent({ event: 'connection_started', surface: 'settings', metadata: { provider: 'teams' } })
     setStatus(null)
     setStatusTone('info')
     try {
@@ -2968,6 +2984,7 @@ function ConnectAppsScreen({
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       setTeamsLoading(false)
+      trackProductEvent({ event: 'connection_failed', surface: 'settings', metadata: { provider: 'teams' } })
       setStatusTone('error')
       setStatus(message || (language === 'no' ? 'Kunne ikke starte Teams-tilkobling' : 'Could not start Teams connection'))
     }
@@ -2983,6 +3000,7 @@ function ConnectAppsScreen({
       return
     }
     setSpondLoading(true)
+    trackProductEvent({ event: 'connection_started', surface: 'settings', metadata: { provider: 'spond' } })
     setStatus(null)
     setStatusTone('info')
     try {
@@ -3001,8 +3019,10 @@ function ConnectAppsScreen({
       setSpondModalOpen(false)
       setStatusTone('success')
       setStatus(language === 'no' ? 'Spond er tilkoblet' : 'Spond connected')
+      trackProductEvent({ event: 'connection_completed', surface: 'settings', metadata: { provider: 'spond' } })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
+      trackProductEvent({ event: 'connection_failed', surface: 'settings', metadata: { provider: 'spond' } })
       setStatusTone('error')
       setStatus(message || (language === 'no' ? 'Kunne ikke koble til Spond' : 'Could not connect Spond'))
     } finally {
@@ -12189,6 +12209,7 @@ function GroceriesModuleSettingsTab({
     suppressRealtimeUntilRef.current = Date.now() + 1200
     try {
       await addGroceryItemsCanonical(supabase, activeDeviceId, [{ name: normalizedName, quantity, category }], crypto.randomUUID())
+      trackProductEvent({ event: 'grocery_item_added', surface: 'groceries', source: 'manual' })
       await loadGroceries({ silent: true, preserveScroll: true })
       await loadHistory()
     } catch {
@@ -12528,6 +12549,7 @@ function GroceriesModuleSettingsTab({
               const nextOffset = defaultDinnerPlanWeekOffset()
               setDinnerPlanWeekOffset(nextOffset)
               void loadDinnerPlan(nextOffset)
+              trackProductEvent({ event: 'dinner_plan_opened', surface: 'groceries' })
               setDinnerPlanOpen(true)
             }}
             disabled={!activeDeviceId || dinnerPlanLockedByOtherUser}
@@ -12692,6 +12714,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       })
       if (saveError || !recipeId) throw new Error('save_failed')
       setSavedRecipeId(String(recipeId))
+      trackProductEvent({ event: 'recipe_created', surface: 'groceries', source: 'manual' })
       setSuccess('saved')
       window.setTimeout(() => setSuccess((current) => current === 'saved' ? null : current), 1800)
     } catch {
@@ -12717,6 +12740,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
     setPendingAction('add'); setSuccess(null); setError('')
     try {
       await onAdd(selectedRecipeGroceries(ingredients, draft?.servings ?? null, servings))
+      trackProductEvent({ event: 'recipe_added_to_groceries', surface: 'groceries', source: 'manual' })
       setSuccess('added')
       await waitForConfirmation()
       setPendingAction(null)
@@ -14100,6 +14124,7 @@ function NaturalReminderComposer({ language, activeDeviceId, fallbackDate, selec
         repeat_type: parsed.repeat_type, custom_repeat_days: parsed.custom_repeat_days, is_done: false,
       })
       if (error) throw error
+      trackProductEvent({ event: 'reminder_created', surface: 'reminders', source: 'manual', metadata: { recurring: parsed.repeat_type !== 'none' } })
       await onSaved()
     } catch { setFailed(true) } finally { setSaving(false) }
   }
@@ -17062,7 +17087,7 @@ function SurfSpotSheet({
 
         <div className="mt-4">
           <button
-            onClick={() => setWizardOpen(true)}
+            onClick={() => { trackProductEvent({ event: 'custom_spot_started', surface: 'surf' }); setWizardOpen(true) }}
             className="mb-3 h-11 w-full rounded-2xl border border-[#2aa3ff] text-[#2aa3ff] text-sm font-semibold"
           >
             + {language === 'no' ? 'Legg til hemmelig spot' : 'Add secret spot'}
@@ -17235,6 +17260,7 @@ function CustomSurfSpotWizard({ language, onClose, onSaved, editingSpot = null, 
     setSaving(false)
     if (!resp.ok) return
     const json: any = await resp.json()
+    if (!isEdit) trackProductEvent({ event: 'custom_spot_completed', surface: 'surf' })
     onSaved({ spot: name.trim(), spotId: `custom:${json?.item?.id}`, lat, lon })
     onClose()
   }

@@ -2,12 +2,13 @@ export const ASSISTANT_ACTIONS = ['add_grocery_items', 'create_reminder', 'log_s
 export type AssistantActionName = typeof ASSISTANT_ACTIONS[number]
 
 export type AssistantResult = {
-  status: 'completed' | 'needs_confirmation' | 'needs_input' | 'error'
+  status: 'completed' | 'needs_confirmation' | 'needs_input' | 'unsupported' | 'error'
   message: string
   action?: AssistantActionName
   cta?: { label: string; destination: AssistantDestination }
   pendingId?: string
   appTheme?: 'dark' | 'light'
+  analytics?: { resolver?: 'deterministic' | 'ai'; outcome?: 'completed' | 'needs_input' | 'unsupported' | 'error'; capabilityId?: string; helpTopicId?: string; recurring?: boolean }
 }
 
 export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'settings', 'recipes', 'spond', 'surf', 'weather', 'countdown', 'date', 'football', 'stocks', 'assistant'] as const
