@@ -8,7 +8,7 @@ export type AssistantResult = {
   cta?: { label: string; destination: AssistantDestination }
   pendingId?: string
   appTheme?: 'dark' | 'light'
-  analytics?: { resolver: 'deterministic' | 'ai'; outcome: 'completed' | 'needs_input' | 'unsupported' | 'error'; capabilityId?: string; helpTopicId?: string }
+  analytics?: { resolver?: 'deterministic' | 'ai'; outcome?: 'completed' | 'needs_input' | 'unsupported' | 'error'; capabilityId?: string; helpTopicId?: string; recurring?: boolean }
 }
 
 export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'settings', 'recipes', 'spond', 'surf', 'weather', 'countdown', 'date', 'football', 'stocks', 'assistant'] as const

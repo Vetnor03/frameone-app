@@ -13,7 +13,7 @@ import { surfLoggedAt } from '@/app/lib/assistant/time'
 import { GET as weatherDetails } from '@/app/api/weather/details/route'
 import { GET as surfScore } from '@/app/api/surf/score/route'
 import { ASSISTANT_HELP_TOPIC_IDS, assistantHelpPrompt, assistantHelpResult, resolveDeterministicAssistantHelp, validateAssistantHelpTopicId, type AssistantHelpTopicId } from '@/app/lib/assistant/help'
-import { sanitizeAssistantGapText } from '@/app/lib/assistant/gapSanitization.mjs'
+import { normalizeAssistantGapText, sanitizeAssistantGapText } from '@/app/lib/assistant/gapSanitization.mjs'
 
 export const runtime = 'nodejs'
 
@@ -43,7 +43,7 @@ async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
 
 async function saveReminder(db: SupabaseClient, user: User, deviceId: string, reminder: NonNullable<ReturnType<typeof validateParsedReminder>>, language: 'en' | 'no'): Promise<AssistantResult> {
   const { error } = await db.from('reminders').insert({ device_id: deviceId, created_by_user_id: user.id, updated_by_user_id: user.id, title: reminder.title, due_date: reminder.due_date, due_time: reminder.due_time, end_date: reminder.end_date, end_time: reminder.end_time, tag: reminder.tag, repeat_type: reminder.repeat_type, custom_repeat_days: reminder.custom_repeat_days, is_done: false })
-  return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: language === 'no' ? 'Påminnelse opprettet ✓' : 'Reminder created ✓' }
+  return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: language === 'no' ? 'Påminnelse opprettet ✓' : 'Reminder created ✓', analytics: { recurring: reminder.repeat_type !== 'none' } }
 }
 
 async function executeReminderRequest(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, text: string, context: { localNow: string; timezone: string | null; language: 'en' | 'no' }): Promise<AssistantResult> {
@@ -174,7 +174,14 @@ export async function POST(request: Request) {
     if (classified && 'helpTopicId' in classified) classifiedHelpTopic = classified.helpTopicId
     else if (classified && 'unsupported' in classified) {
       const requestText = sanitizeAssistantGapText(body.text)
-      if (requestText) void admin.from('assistant_capability_gaps').insert({ request_text: requestText, normalized_text: requestText.toLocaleLowerCase(requestLanguage), language: requestLanguage, user_id: user.id, device_id: requestDeviceId, reason: 'classifier_unsupported' })
+      if (requestText) {
+        try {
+          const { error: gapError } = await admin.from('assistant_capability_gaps').insert({ request_text: requestText, normalized_text: normalizeAssistantGapText(requestText), language: requestLanguage, reason: 'classifier_unsupported' })
+          if (gapError) console.warn('[assistant-gap:insert-failed]', { code: gapError.code || 'unknown' })
+        } catch {
+          console.warn('[assistant-gap:insert-failed]', { code: 'unexpected' })
+        }
+      }
       return NextResponse.json({ status: 'unsupported', message: body.language === 'no' ? 'Dette kan jeg ikke hjelpe med ennå.' : "I can't help with that yet.", analytics: { resolver: 'ai', outcome: 'unsupported' } })
     } else if (classified) { capability = classified; resolver = 'ai' }
     else return NextResponse.json({ ...friendlyError(), analytics: { resolver: 'ai', outcome: 'error' } })
@@ -184,6 +191,6 @@ export async function POST(request: Request) {
   try {
     const result = await executeCapabilityRequest(capability, capabilityContext(db, admin, user, requestDeviceId, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }))
     const outcome = result.status === 'completed' ? 'completed' : result.status === 'needs_input' || result.status === 'needs_confirmation' ? 'needs_input' : 'error'
-    return NextResponse.json({ ...result, analytics: { resolver, outcome, capabilityId: capability.capabilityId } })
+    return NextResponse.json({ ...result, analytics: { ...result.analytics, resolver, outcome, capabilityId: capability.capabilityId } })
   } catch { return NextResponse.json({ ...friendlyError(), analytics: { resolver, outcome: 'error', capabilityId: capability.capabilityId } }) }
 }

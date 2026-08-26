@@ -48,7 +48,7 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
       const value = await response.json().catch(() => null)
       const outcome = value?.status === 'completed' ? 'completed' : value?.status === 'needs_input' ? 'needs_input' : value?.status === 'unsupported' ? 'unsupported' : 'error'
       trackProductEvent({ event: `assistant_request_${outcome}` as 'assistant_request_completed'|'assistant_request_needs_input'|'assistant_request_unsupported'|'assistant_request_error', surface: 'assistant', metadata: value?.analytics })
-      if (outcome === 'completed' && value?.action === 'create_reminder') trackProductEvent({ event: 'reminder_created', surface: 'reminders', source: 'assistant', metadata: { recurring: false } })
+      if (outcome === 'completed' && value?.action === 'create_reminder' && typeof value?.analytics?.recurring === 'boolean') trackProductEvent({ event: 'reminder_created', surface: 'reminders', source: 'assistant', metadata: { recurring: value.analytics.recurring } })
       setResult(value && typeof value.message === 'string' ? value : { status: 'error', message: "I couldn't do that. Try again." })
       setPendingId(value?.status === 'needs_input' && typeof value.pendingId === 'string' ? value.pendingId : null)
       if (value?.status === 'needs_input' || value?.status === 'completed') setText('')

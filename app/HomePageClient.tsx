@@ -2280,7 +2280,7 @@ export default function HomePage() {
     setLayoutFlow(null)
   }
   async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
-  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);trackProductEvent({event:'layout_changed',surface:'frame',metadata:{layoutType:custom?'custom':'built_in'}});if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
+  function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);trackProductEvent({event:'layout_selected',surface:'frame',metadata:{layoutType:custom?'custom':'built_in'}});if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
   function prevLayout() {
@@ -2431,7 +2431,6 @@ export default function HomePage() {
   async function handleExplicitUpdate() {
     const deviceId = activeDeviceId
     if (!deviceId || updateActionInFlightRef.current) return
-    trackProductEvent({ event: 'frame_update_requested', surface: 'frame' })
     if (activeCustomLayoutId) {
       const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
       const assigned = custom && geometryWithAssignments(custom.cells, customAssignments[activeCustomLayoutId] || {})
@@ -2443,6 +2442,7 @@ export default function HomePage() {
 
     setFrameUpdateError('')
     updateActionInFlightRef.current = true
+    trackProductEvent({ event: 'frame_update_requested', surface: 'frame' })
     const operationId = ++updateOperationIdRef.current
     setExplicitUpdateStatus('saving')
 

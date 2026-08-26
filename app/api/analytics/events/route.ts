@@ -14,7 +14,8 @@ export async function POST(request: Request) {
   if (!body || !isProductEvent(body.event) || typeof body.sessionId !== 'string' || !body.sessionId || body.sessionId.length > 80) return NextResponse.json({ ok: false }, { status: 400 })
   const { error } = await db.rpc('record_product_analytics_event', {
     p_event_name: body.event, p_session_id: body.sessionId,
-    p_device_id: typeof body.deviceId === 'string' ? body.deviceId : null,
+    p_client_id: typeof body.clientInstallId === 'string' ? body.clientInstallId : null,
+    p_frame_device_id: typeof body.frameDeviceId === 'string' ? body.frameDeviceId : null,
     p_surface: typeof body.surface === 'string' ? body.surface : null,
     p_source: body.source === 'manual' || body.source === 'assistant' ? body.source : null,
     p_metadata: safeAnalyticsMetadata(body.metadata),

@@ -8,14 +8,14 @@ export const PRODUCT_EVENTS = [
   'assistant_opened', 'assistant_request_completed', 'assistant_request_needs_input',
   'assistant_request_unsupported', 'assistant_request_error', 'reminder_created',
   'grocery_item_added', 'recipe_created', 'recipe_added_to_groceries', 'dinner_plan_opened',
-  'surf_opened', 'custom_spot_started', 'custom_spot_completed', 'layout_changed',
+  'surf_opened', 'custom_spot_started', 'custom_spot_completed', 'layout_selected',
   'frame_update_requested', 'theme_changed', 'language_changed', 'connection_started',
   'connection_completed', 'connection_failed',
 ]
 
 const EVENT_SET = new Set(PRODUCT_EVENTS)
 const SESSION_KEY = 'remind.analytics.session.v1'
-const DEVICE_KEY = 'remind.analytics.device.v1'
+const CLIENT_INSTALL_KEY = 'remind.analytics.client-install.v1'
 export const ANALYTICS_INACTIVITY_MS = 30 * 60 * 1000
 const SAFE_KEYS = new Set(['tab', 'provider', 'recurring', 'layoutType', 'capabilityId', 'helpTopicId', 'resolver', 'followupCount', 'outcome', 'errorType'])
 const SAFE_ENUMS = {
@@ -30,9 +30,11 @@ export function safeAnalyticsMetadata(value) {
   const clean = {}
   for (const [key, item] of Object.entries(value)) {
     if (!SAFE_KEYS.has(key)) continue
-    if (typeof item === 'boolean') clean[key] = item
-    else if (Number.isInteger(item) && item >= 0 && item <= 100) clean[key] = item
-    else if (typeof item === 'string' && item.length <= 80 && (!SAFE_ENUMS[key] || SAFE_ENUMS[key].has(item))) clean[key] = item
+    if (key === 'recurring' && typeof item === 'boolean') clean[key] = item
+    else if (key === 'followupCount' && Number.isInteger(item) && item >= 0 && item <= 100) clean[key] = item
+    else if (SAFE_ENUMS[key] && typeof item === 'string' && SAFE_ENUMS[key].has(item)) clean[key] = item
+    else if ((key === 'capabilityId' || key === 'helpTopicId') && typeof item === 'string' && item.length <= 80 && /^[a-z][a-z0-9_.:-]*$/.test(item)) clean[key] = item
+    else if (key === 'errorType' && typeof item === 'string' && item.length <= 40 && /^[a-z][a-z0-9_-]*$/.test(item)) clean[key] = item
   }
   return clean
 }
@@ -49,17 +51,17 @@ export function getAnalyticsSession(storage, now = Date.now()) {
   return { ...session, started: !reused }
 }
 
-function deviceId(storage) {
-  const existing = storage.getItem(DEVICE_KEY)
+function clientInstallId(storage) {
+  const existing = storage.getItem(CLIENT_INSTALL_KEY)
   if (existing) return existing
-  const id = randomId(); storage.setItem(DEVICE_KEY, id); return id
+  const id = randomId(); storage.setItem(CLIENT_INSTALL_KEY, id); return id
 }
 
 export function trackProductEvent({ event, surface, source, metadata }, options = {}) {
   if (!isProductEvent(event) || typeof window === 'undefined') return
   const clean = safeAnalyticsMetadata(metadata)
   const session = getAnalyticsSession(window.localStorage)
-  const payload = { event, sessionId: session.id, deviceId: deviceId(window.localStorage), ...(typeof surface === 'string' && surface.length <= 40 ? { surface } : {}), ...(source === 'manual' || source === 'assistant' ? { source } : {}), metadata: clean }
+  const payload = { event, sessionId: session.id, clientInstallId: clientInstallId(window.localStorage), ...(typeof surface === 'string' && surface.length <= 40 ? { surface } : {}), ...(source === 'manual' || source === 'assistant' ? { source } : {}), metadata: clean }
   const send = options.send || ((body) => fetch('/api/analytics/events', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), keepalive: true }))
   // Deliberately detached: telemetry can never delay or reject a product action.
   Promise.resolve().then(() => send(payload)).catch(() => {})

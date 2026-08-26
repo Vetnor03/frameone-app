@@ -11,3 +11,14 @@ export function sanitizeAssistantGapText(input) {
     .trim()
     .slice(0, ASSISTANT_GAP_MAX_LENGTH)
 }
+
+/** Stable, conservative grouping key; sanitization always happens first. */
+export function normalizeAssistantGapText(input) {
+  return sanitizeAssistantGapText(input)
+    .toLocaleLowerCase()
+    .replace(/[“”"'`]/g, '')
+    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, ASSISTANT_GAP_MAX_LENGTH)
+}
