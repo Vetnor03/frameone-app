@@ -1,21 +1,20 @@
-export const ASSISTANT_ACTIONS = ['add_grocery_items', 'create_reminder', 'log_surf_experience', 'set_football_team', 'navigate', 'answer_help', 'needs_input'] as const
-export type AssistantActionName = typeof ASSISTANT_ACTIONS[number]
-
-export type AssistantResult = {
-  status: 'completed' | 'needs_confirmation' | 'needs_input' | 'error'
-  message: string
-  action?: AssistantActionName
-  cta?: { label: string; destination: AssistantDestination }
-  pendingId?: string
-}
+import type { AssistantCapabilityId } from './capabilities.ts'
+import type { CapabilityArguments } from './handlers.ts'
 
 export const ASSISTANT_DESTINATIONS = ['layout', 'groceries', 'reminders', 'settings', 'recipes', 'spond', 'surf', 'weather', 'countdown', 'date', 'football', 'stocks', 'assistant'] as const
 export type AssistantDestination = typeof ASSISTANT_DESTINATIONS[number]
 
-export type ResolvedAssistantIntent =
-  | { action: 'add_grocery_items'; arguments: { items: Array<{ name: string; quantity?: number }> } }
-  | { action: 'create_reminder'; arguments: { text: string } }
-  | { action: 'log_surf_experience'; arguments: { spot: string; rating: number; date: string; time?: string; comment: string } }
-  | { action: 'set_football_team'; arguments: { teamId: string; teamName: string; competitionId?: string; competitionName?: string } }
-  | { action: 'needs_input'; arguments: Record<string, never> }
-  | { action: 'answer_help'; arguments: { destination: AssistantDestination }; response: AssistantResult }
+export type AssistantResult = {
+  status: 'completed' | 'needs_confirmation' | 'needs_input' | 'error'
+  message: string
+  capabilityId?: AssistantCapabilityId
+  action?: string // backwards-compatible UI/telemetry field
+  cta?: { label: string; destination: AssistantDestination }
+  pendingId?: string
+}
+
+export type ResolvedAssistantIntent = {
+  capabilityId: AssistantCapabilityId
+  arguments: CapabilityArguments
+  missingArguments?: string[]
+}

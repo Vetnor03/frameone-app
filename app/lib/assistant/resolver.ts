@@ -1,4 +1,5 @@
 import type { AssistantDestination, ResolvedAssistantIntent } from './types'
+import { capabilityById, type AssistantCapabilityId } from './capabilities.ts'
 import { SURF_SPOTS } from '../surf/spots.ts'
 import { ALL_TEAMS } from '../soccer/teams.ts'
 
@@ -56,18 +57,38 @@ function surfExperience(text: string): ResolvedAssistantIntent | null {
   const time = text.match(/\b(?:at|kl\.?|around|rundt)\s*(?:ca\.?\s*)?(\d{1,2})(?::|\.)(\d{2})\b/i)
     || text.match(/\b(?:at|kl\.?|around|rundt)\s*(\d{1,2})\b/i)
   const date = /\b(?:yesterday|i går)\b/i.test(text) ? 'yesterday' : 'today'
-  return { action: 'log_surf_experience', arguments: { spot: spot.label, rating, date, ...(time ? { time: `${time[1].padStart(2, '0')}:${(time[2] || '00').padStart(2, '0')}` } : {}), comment: text.trim() } }
+  return { capabilityId: 'surf.log_experience', arguments: { spot: spot.label, rating, date, ...(time ? { time: `${time[1].padStart(2, '0')}:${(time[2] || '00').padStart(2, '0')}` } : {}), comment: text.trim() } }
 }
 
 function naturalReminder(text: string) {
   const hasDate = /\b(?:today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|i dag|i morgen|mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag)\b/i.test(text)
   const taskLike = /^(?:call|phone|dentist|doctor|appointment|ring|tannlege|lege|møte)\b/i.test(text)
-  return hasDate && taskLike ? { action: 'create_reminder' as const, arguments: { text: text.trim() } } : null
+  return hasDate && taskLike ? { capabilityId: 'reminders.create' as const, arguments: { text: text.trim() } } : null
 }
 
 export function resolveDeterministicAssistantIntent(text: string): ResolvedAssistantIntent | null {
   const request = text.trim()
   if (!request || request.length > 1_000) return null
+  const lower = request.toLocaleLowerCase()
+  if (/(?:hvilket|which|what).*(?:fotballag|football team|soccer team).*(?:følger|follow)/i.test(request)) return { capabilityId: 'football.read', arguments: {} }
+  if (/(?:hvordan|how|what).*(?:vær|weather)/i.test(request)) return { capabilityId: 'weather.read', arguments: { date: /(?:i morgen|tomorrow)/i.test(request) ? 'tomorrow' : 'today' } }
+  if (/(?:hva|what).*(?:handlelist|shopping list|grocer)/i.test(request)) return { capabilityId: 'groceries.read', arguments: {} }
+  if (/(?:hva|what).*(?:påminn|reminder)/i.test(request)) return { capabilityId: 'reminders.read', arguments: {} }
+  if (/^(?:bytt|endre|set|switch).*(?:appen|app).*(?:dark|dark mode|mørk)/i.test(request)) return { capabilityId: 'settings.set_app_theme', arguments: { theme: 'dark' } }
+  if (/^(?:bytt|endre|set|switch).*(?:appen|app).*(?:light|light mode|lys)/i.test(request)) return { capabilityId: 'settings.set_app_theme', arguments: { theme: 'light' } }
+  if (/^(?:bytt|endre|set|switch).*(?:språk|language).*(?:norsk|norwegian)/i.test(request)) return { capabilityId: 'frame.set_language', arguments: { language: 'no' } }
+  if (/^(?:bytt|endre|set|switch).*(?:språk|language).*(?:engelsk|english)/i.test(request)) return { capabilityId: 'frame.set_language', arguments: { language: 'en' } }
+  const layout = request.match(/(?:layout|oppsett)\s*(?:nummer\s*)?([1-4])\b/i)
+  if (layout && /\b(?:bytt|endre|set|switch|velg)\b/i.test(request)) return { capabilityId: 'frame.set_layout', arguments: { layout: ['default', 'pyramid', 'square', 'full'][Number(layout[1]) - 1] } }
+  if (/^(?:lag|create|make)\s+(?:en\s+|a\s+)?(?:nedtelling|countdown)/i.test(request)) {
+    const dateMatch = lower.match(/\b(\d{1,2})[.\s]+(januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|january|february|march|may|june|july|october|december)\b/i)
+    const months = ['januar january', 'februar february', 'mars march', 'april', 'mai may', 'juni june', 'juli july', 'august', 'september', 'oktober october', 'november', 'desember december']
+    const date = dateMatch ? `${new Date().getUTCFullYear()}-${String(months.findIndex((month) => month.includes(dateMatch[2])) + 1).padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}` : undefined
+    const title = request.replace(/^(?:lag|create|make)\s+(?:en\s+|a\s+)?(?:nedtelling|countdown)(?:\s+(?:til|for))?\s*/i, '').replace(/\s+\d{1,2}[.\s]+\p{L}+.*$/u, '').trim() || undefined
+    return { capabilityId: 'countdown.create', arguments: { title, date } }
+  }
+  const requestedSpot = Object.values(SURF_SPOTS).find((candidate) => lower.includes(candidate.label.toLocaleLowerCase()))
+  if (requestedSpot && /(?:hvordan|how|forhold|conditions|i morgen|tomorrow)/i.test(request)) return { capabilityId: 'surf.read', arguments: { spot: requestedSpot.label, spotId: requestedSpot.spotId, date: /(?:i morgen|tomorrow)/i.test(request) ? 'tomorrow' : 'today' } }
   // Resolve against the same team catalogue as the Football picker. This is
   // data-driven: adding a team to the UI automatically makes it addressable.
   if (/\b(?:change|switch|set|bytt|endre|velg)\b/i.test(request) && /(?:football|soccer|fotball|team|lag)/i.test(request)) {
@@ -77,7 +98,8 @@ export function resolveDeterministicAssistantIntent(text: string): ResolvedAssis
       const names = [candidate.teamName, candidate.teamId.replaceAll('_', ' '), ...(words.length > 1 ? [words.at(-1)!] : [])]
       return names.some((name) => normalized.includes(name.toLocaleLowerCase()))
     })
-    if (team) return { action: 'set_football_team', arguments: team }
+    if (team) return { capabilityId: 'football.set_team', arguments: { team: team.teamName, ...team } }
+    return { capabilityId: 'football.set_team', arguments: {} }
   }
   const module = [
     { pattern: /^(?:weather|vær)$/i, destination: 'weather' as const, label: 'Open Weather' },
@@ -88,43 +110,27 @@ export function resolveDeterministicAssistantIntent(text: string): ResolvedAssis
     { pattern: /^(?:layout|oppsett)$/i, destination: 'layout' as const, label: 'Open Layout Settings' },
     { pattern: /^spond$/i, destination: 'spond' as const, label: 'Open Spond Connect' },
   ].find((entry) => entry.pattern.test(request))
-  if (module) return { action: 'answer_help', arguments: { destination: module.destination }, response: { status: 'completed', action: 'answer_help', message: `Open ${module.destination}.`, cta: { label: module.label, destination: module.destination } } }
+  if (module) return null
   for (const entry of HELP) {
     if (entry.pattern.test(request) && /(?:where|how|open|find|change|connect|koble|hvor|hvordan)/i.test(request)) {
-      return { action: 'answer_help', arguments: { destination: entry.destination }, response: { status: 'completed', action: 'answer_help', message: entry.message, cta: { label: entry.label, destination: entry.destination } } }
+      return null
     }
   }
   const items = groceryItems(request)
-  if (items) return { action: 'add_grocery_items', arguments: { items } }
-  if (/^(?:(?:please\s+)?remind me|minn meg på)\s+/i.test(request)) return { action: 'create_reminder', arguments: { text: request } }
+  if (items) return { capabilityId: 'groceries.add', arguments: { items } }
+  if (/^(?:(?:please\s+)?remind me|minn meg på)\s+/i.test(request)) return { capabilityId: 'reminders.create', arguments: { text: request } }
   const surf = surfExperience(request)
   if (surf) return surf
   const reminder = naturalReminder(request)
   if (reminder) return reminder
   const shorthandItems = shorthandGroceryItems(request)
-  return shorthandItems ? { action: 'add_grocery_items', arguments: { items: shorthandItems } } : null
+  return shorthandItems ? { capabilityId: 'groceries.add', arguments: { items: shorthandItems } } : null
 }
 
 export function validateModelIntent(value: unknown): ResolvedAssistantIntent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const input = value as Record<string, unknown>
-  if (input.action === 'needs_input') return { action: 'needs_input', arguments: {} }
-  if (input.action === 'add_grocery_items' && input.arguments && typeof input.arguments === 'object') {
-    const items = (input.arguments as Record<string, unknown>).items
-    if (Array.isArray(items) && items.length > 0 && items.length <= 30 && items.every((item) => item && typeof item === 'object' && typeof (item as Record<string, unknown>).name === 'string' && String((item as Record<string, unknown>).name).trim().length > 0 && String((item as Record<string, unknown>).name).length <= 80)) return { action: 'add_grocery_items', arguments: { items: items.map((item) => ({ name: String((item as Record<string, unknown>).name).trim(), ...(Number.isInteger((item as Record<string, unknown>).quantity) && Number((item as Record<string, unknown>).quantity) > 0 ? { quantity: Number((item as Record<string, unknown>).quantity) } : {}) })) } }
-  }
-  if (input.action === 'create_reminder' && input.arguments && typeof input.arguments === 'object') {
-    const text = (input.arguments as Record<string, unknown>).text
-    if (typeof text === 'string' && text.trim() && text.length <= 1_000) return { action: 'create_reminder', arguments: { text: text.trim() } }
-  }
-  if (input.action === 'set_football_team' && input.arguments && typeof input.arguments === 'object') {
-    const requested = String((input.arguments as Record<string, unknown>).team || '').trim().toLocaleLowerCase()
-    const team = requested && ALL_TEAMS.find((candidate) => [candidate.teamName, candidate.teamId.replaceAll('_', ' '), candidate.teamName.split(/\s+/).at(-1)!].some((name) => name.toLocaleLowerCase() === requested))
-    if (team) return { action: 'set_football_team', arguments: team }
-  }
-  if (input.action === 'log_surf_experience' && input.arguments && typeof input.arguments === 'object') {
-    const args = input.arguments as Record<string, unknown>
-    if (typeof args.spot === 'string' && args.spot.trim() && Number.isInteger(args.rating) && Number(args.rating) >= 1 && Number(args.rating) <= 6 && typeof args.date === 'string' && typeof args.comment === 'string') return { action: 'log_surf_experience', arguments: { spot: args.spot.trim(), rating: Number(args.rating), date: args.date.trim(), ...(typeof args.time === 'string' && args.time.trim() ? { time: args.time.trim() } : {}), comment: args.comment.trim() } }
-  }
-  return null
+  if (typeof input.capabilityId !== 'string' || !capabilityById(input.capabilityId)) return null
+  const args = input.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments) ? input.arguments as Record<string, unknown> : {}
+  return { capabilityId: input.capabilityId as AssistantCapabilityId, arguments: args }
 }

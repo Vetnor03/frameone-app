@@ -105,17 +105,16 @@ test('assistant placeholder follows command tips and is neutral for informationa
 })
 
 test('deterministic help and grocery/reminder commands precede the compact AI fallback', () => {
-  assert.match(resolver, /add_grocery_items/)
-  assert.match(resolver, /create_reminder/)
-  assert.match(resolver, /answer_help/)
-  assert.match(api, /let intent = resolveDeterministicAssistantIntent\(body\.text\)/)
+  assert.match(resolver, /groceries\.add/)
+  assert.match(resolver, /reminders\.create/)
+  assert.match(api, /intent = resolveDeterministicAssistantIntent\(body\.text\)/)
   assert.doesNotMatch(tips, /aiIntent|OPENAI_API_KEY/)
 })
 
 test('obvious grocery commands are free while reserved add commands fall through', () => {
-  for (const command of ['Add milk, eggs and bread', 'Add milk and bread to groceries', 'Legg til melk, egg og brød', 'Legg til melk og brød på handlelisten']) assert.equal(resolveDeterministicAssistantIntent(command)?.action, 'add_grocery_items')
+  for (const command of ['Add milk, eggs and bread', 'Add milk and bread to groceries', 'Legg til melk, egg og brød', 'Legg til melk og brød på handlelisten']) assert.equal(resolveDeterministicAssistantIntent(command)?.capabilityId, 'groceries.add')
   for (const command of ['Add weather to my frame', 'Add a countdown', 'Add reminders', 'Add Spond', 'Legg til vær på min ramme', 'Legg til en nedtelling', 'Legg til påminnelser', 'Legg til Spond']) assert.equal(resolveDeterministicAssistantIntent(command), null)
-  for (const command of ['Remind me to call Mum tomorrow', 'Minn meg på å ringe mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(command)?.action, 'create_reminder')
+  for (const command of ['Remind me to call Mum tomorrow', 'Minn meg på å ringe mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(command)?.capabilityId, 'reminders.create')
 })
 
 test('short grocery shorthand is deterministic, quantity-aware, and protects reserved navigation words', () => {
@@ -124,13 +123,13 @@ test('short grocery shorthand is deterministic, quantity-aware, and protects res
   assert.deepEqual(resolveDeterministicAssistantIntent('Egg og brød')?.arguments, { items: [{ name: 'Egg' }, { name: 'brød' }] })
   assert.deepEqual(resolveDeterministicAssistantIntent('2 melk')?.arguments, { items: [{ name: 'melk', quantity: 2 }] })
   assert.deepEqual(resolveDeterministicAssistantIntent('Soy sauce')?.arguments, { items: [{ name: 'Soy sauce' }] })
-  for (const word of ['weather', 'vær', 'layout', 'oppsett', 'settings', 'innstillinger', 'Spond', 'reminders']) assert.equal(resolveDeterministicAssistantIntent(word)?.action, 'answer_help')
-  assert.match(api, /!isReservedAssistantInput\(body\.text\)/)
+  for (const word of ['weather', 'vær', 'layout', 'oppsett', 'settings', 'innstillinger', 'Spond', 'reminders']) assert.equal(resolveDeterministicAssistantIntent(word), null)
+  assert.match(api, /if \(!intent\)/)
 })
 
 test('module-aware routing recognizes natural reminders and surf logs before grocery fallback', () => {
-  for (const phrase of ['Call mom tomorrow', 'Dentist Friday at 10', 'Ring mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(phrase)?.action, 'create_reminder')
-  assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø was poor today'), { action: 'log_surf_experience', arguments: { spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' } })
+  for (const phrase of ['Call mom tomorrow', 'Dentist Friday at 10', 'Ring mamma i morgen']) assert.equal(resolveDeterministicAssistantIntent(phrase)?.capabilityId, 'reminders.create')
+  assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø was poor today'), { capabilityId: 'surf.log_experience', arguments: { spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' } })
   assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø was poor at 14:00 today')?.arguments, { spot: 'Hellestø', rating: 2, date: 'today', time: '14:00', comment: 'Hellestø was poor at 14:00 today' })
   assert.deepEqual(resolveDeterministicAssistantIntent('Hellestø var god kl 14 i dag')?.arguments, { spot: 'Hellestø', rating: 5, date: 'today', time: '14:00', comment: 'Hellestø var god kl 14 i dag' })
 })
@@ -138,8 +137,8 @@ test('module-aware routing recognizes natural reminders and surf logs before gro
 test('surf clarification preserves validated pending context and accepts a time-only follow-up', () => {
   assert.deepEqual(validatePendingSurfPayload({ spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' }), { spot: 'Hellestø', rating: 2, date: 'today', comment: 'Hellestø was poor today' })
   assert.equal(surfFollowupTime('around 14:00'), '14:00')
-  assert.match(api, /What time were you at \$\{intent\.arguments\.spot\}/)
-  assert.match(api, /pending\.action === 'log_surf_experience'/)
+  assert.match(api, /surfFollowupTime\(answer\)/)
+  assert.match(api, /missingQuestion/)
   assert.match(api, /POST as logSurfExperience/)
   assert.match(pendingActionsMigration, /'create_reminder', 'log_surf_experience'/)
 })
@@ -153,8 +152,8 @@ test('manual and suggestion grocery failures reconcile and remain human-readable
 test('assistant CTAs close the sheet and only promise reachable surfaces', () => {
   assert.match(ui, /setOpen\(false\); onNavigate/)
   assert.match(home, /frame-layout-controls/)
-  assert.match(home, /destination === 'layout'[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
-  assert.match(resolver, /destination: 'groceries', message: 'Your saved recipes are in Groceries\.', label: 'Open Groceries'/)
+  assert.match(home, /case 'layout':[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
+  assert.match(api, /destination: 'recipes'/)
 })
 
 test('a reminder follow-up retains only validated short-lived reminder context', () => {
@@ -195,9 +194,9 @@ test('canonical history records the effective grocery row category', () => {
 
 test('action execution validates membership, allowlists actions and masks raw errors', () => {
   assert.match(api, /from\('device_members'\)/)
-  assert.match(api, /\.eq\('device_id', deviceId\)\.eq\('user_id', user\.id\)/)
-  assert.match(resolver, /input\.action === 'add_grocery_items'/)
-  assert.match(resolver, /input\.action === 'create_reminder'/)
+  assert.match(api, /\.eq\('device_id', body\.deviceId\)\.eq\('user_id', user\.id\)/)
+  assert.match(resolver, /capabilityById\(input\.capabilityId\)/)
+  assert.match(api, /ASSISTANT_CAPABILITY_HANDLERS\[intent\.capabilityId\]/)
   assert.match(api, /I couldn't do that\. Try again\./)
   assert.doesNotMatch(ui, /error\.message|stack/)
 })
