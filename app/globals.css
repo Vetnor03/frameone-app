@@ -45,6 +45,16 @@ html[data-theme="dark"] {
   --card-bg: #0b2733;
   --input-bg: rgba(255, 255, 255, 0.08);
 
+  /* controls */
+  --control-secondary-bg: rgba(255, 255, 255, 0.08);
+  --control-secondary-border: rgba(255, 255, 255, 0.24);
+  --control-secondary-fg: rgba(255, 255, 255, 0.82);
+  --control-disabled-bg: rgba(255, 255, 255, 0.035);
+  --control-disabled-border: rgba(255, 255, 255, 0.1);
+  --control-disabled-fg: rgba(255, 255, 255, 0.32);
+  --primary-action-fg: #07131f;
+  --focus-ring: rgba(42, 163, 255, 0.28);
+
   --overlay-55: rgba(0, 0, 0, 0.55);
   --toast-bg: rgba(0, 0, 0, 0.35);
 
@@ -66,6 +76,16 @@ html[data-theme="light"] {
   --accent: #168de2;
   --card-bg: #ffffff;
   --input-bg: #f3f4f6;
+
+  /* controls */
+  --control-secondary-bg: #f0f1f3;
+  --control-secondary-border: rgba(29, 37, 44, 0.12);
+  --control-secondary-fg: rgba(29, 37, 44, 0.76);
+  --control-disabled-bg: #f3f4f6;
+  --control-disabled-border: rgba(29, 37, 44, 0.06);
+  --control-disabled-fg: rgba(29, 37, 44, 0.32);
+  --primary-action-fg: #07131f;
+  --focus-ring: rgba(22, 141, 226, 0.24);
 
   /* Dark text ladder */
   --fg: #1d252c;
@@ -162,9 +182,30 @@ html[data-theme="light"] .remind-app :is(input, textarea)::placeholder {
 }
 
 /* Outlined utility actions become calm secondary controls. Blue actions remain blue. */
-html[data-theme="light"] .remind-app button[class*="border-"]:not([data-nav-tab]):not([data-settings-row]):not([class*="border-[#2aa3ff]"]):not([class*="bg-[#2aa3ff]"]) {
+html[data-theme="light"] .remind-app button[class*="border-"]:not([data-nav-tab]):not([data-settings-row]):not([data-ui="secondary-control"]):not([class*="border-[#2aa3ff]"]):not([class*="bg-[#2aa3ff]"]) {
   border-color: transparent;
   background-color: #f0f1f3;
+}
+
+/* Shared quiet controls retain a readable surface and boundary in either theme. */
+.remind-app [data-ui="secondary-control"] {
+  border-color: var(--control-secondary-border);
+  background-color: var(--control-secondary-bg);
+  color: var(--control-secondary-fg);
+}
+
+.remind-app [data-ui="secondary-control"]:disabled {
+  border-color: var(--control-disabled-border);
+  background-color: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.remind-app [data-ui="secondary-control"]:focus-visible,
+.remind-app [data-ui="themed-input"]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 html[data-theme="light"] .remind-app button[class*="border-[#2aa3ff]"]:not([data-nav-tab]) {
