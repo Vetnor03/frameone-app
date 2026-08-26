@@ -209,6 +209,24 @@ test('assistant requests contain compact context only', () => {
   assert.doesNotMatch(ui, /modulesJson|cellsByLayout|grocery_items|reminders:/)
 })
 
+test('assistant clears accepted answers and only auto-closes created reminders', () => {
+  assert.match(ui, /value\?\.status === 'needs_input' \|\| value\?\.status === 'completed'\) setText\(''\)/)
+  assert.match(ui, /value\.action === 'create_reminder'[\s\S]*setTimeout\([\s\S]*setOpen\(false\)[\s\S]*setResult\(null\)[\s\S]*setPendingId\(null\)[\s\S]*}, 750\)/)
+  assert.doesNotMatch(ui, /value\.action === 'read_/)
+})
+
+test('manual close and reopen cancel a pending reminder auto-close', () => {
+  assert.match(ui, /function cancelCloseTimer\(\)[\s\S]*clearTimeout\(closeTimer\.current\)[\s\S]*closeTimer\.current = null/)
+  assert.match(ui, /Open RE:MIND Assistant[\s\S]*onClick=\{\(\) => \{ cancelCloseTimer\(\); setOpen\(true\)/)
+  assert.match(ui, /Close assistant[\s\S]*onClick=\{\(\) => \{ cancelCloseTimer\(\); setOpen\(false\)/)
+})
+
+test('reminder creation confirmation uses the current Assistant language', () => {
+  assert.match(api, /language === 'no' \? 'Påminnelse opprettet ✓' : 'Reminder created ✓'/)
+  assert.match(api, /saveReminder\(db, user, deviceId, parsed\.reminder, context\.language\)/)
+  assert.match(api, /saveReminder\(db, user, body\.deviceId, parsed\.reminder, requestLanguage\)/)
+})
+
 test('rate limits are durable and AI is reached only after deterministic resolution', () => {
   assert.doesNotMatch(api, /new Map/)
   assert.match(api, /consume_assistant_request/)

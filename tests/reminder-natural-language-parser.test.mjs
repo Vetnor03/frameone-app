@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { parseReminder, reminderParseJsonSchema, validateParsedReminder, validateReminderParseResult, REMINDER_PARSE_VERSION } from '../app/lib/reminders/parser.ts'
+import { inferRecurringReminderStartDate, parseReminder, reminderParseJsonSchema, validateParsedReminder, validateReminderParseResult, REMINDER_PARSE_VERSION } from '../app/lib/reminders/parser.ts'
 
 const originalKey = process.env.OPENAI_API_KEY
 process.env.OPENAI_API_KEY = 'test-key'
@@ -15,11 +15,37 @@ const responseFor = (result, inspect) => async (_url, options) => {
   assert.equal(request.store, false)
   assert.deepEqual(request.reasoning, { effort: 'minimal' })
   assert.equal(request.max_output_tokens, 450)
-  assert.equal(request.input[1].content[0].text.includes('2026-08-19T10:00:00'), true)
-  inspect?.(JSON.parse(request.input[1].content[0].text))
+  const payload = JSON.parse(request.input[1].content[0].text)
+  assert.equal(Number.isNaN(Date.parse(payload.localNow)), false)
+  inspect?.(payload)
   return new Response(JSON.stringify({ output: [{ content: [{ type: 'output_text', text: JSON.stringify(result) }] }] }), { status: 200 })
 }
 const context = (text, language = 'en') => ({ text, language, localNow: '2026-08-19T10:00:00+02:00', timezone: 'Europe/Oslo' })
+
+test('daily reminders infer today or tomorrow from the user-local requested time', () => {
+  const daily = { ...base, due_date: null, due_time: '22:00', repeat_type: 'daily' }
+  assert.equal(inferRecurringReminderStartDate(daily, '2026-08-26T16:30:00.000Z', 'Europe/Oslo').due_date, '2026-08-26')
+  assert.equal(inferRecurringReminderStartDate(daily, '2026-08-26T20:01:00.000Z', 'Europe/Oslo').due_date, '2026-08-27')
+  assert.equal(inferRecurringReminderStartDate(daily, '2026-08-26T20:00:00.000Z', 'Europe/Oslo').due_date, '2026-08-26')
+})
+
+test('daily follow-ups complete as soon as recurrence and time are known', async () => {
+  const initial = { ...base, title: 'Leggetid', due_date: null, due_time: null, repeat_type: 'none' }
+  const dailyWithoutTime = { ...initial, repeat_type: 'daily' }
+  const firstContext = { text: 'Leggetid', language: 'no', localNow: '2026-08-26T16:30:00.000Z', timezone: 'Europe/Oslo', partial: initial, clarificationQuestion: 'Når skal jeg minne deg på det?', clarificationAnswer: 'Hver dag' }
+  const firstResult = await parseReminder(firstContext, responseFor(candidate(dailyWithoutTime, ['due_date', 'due_time'], 'Når på dagen?')))
+  assert.deepEqual(firstResult, clarify(dailyWithoutTime, ['due_date', 'due_time'], 'Når på dagen?'))
+  const ctx = { ...firstContext, partial: firstResult.partial, clarificationQuestion: firstResult.question, clarificationAnswer: '22' }
+  const parsed = { ...dailyWithoutTime, due_time: '22:00' }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(parsed, ['due_date'], 'Hvilken dag?'))), ready({ ...parsed, due_date: '2026-08-26' }))
+})
+
+test('one follow-up can supply daily recurrence and time together', async () => {
+  const partial = { ...base, title: 'Leggetid', due_date: null, due_time: null, repeat_type: 'none' }
+  const parsed = { ...partial, repeat_type: 'daily', due_time: '22:00' }
+  const ctx = { text: 'Leggetid', language: 'en', localNow: '2026-08-26T16:30:00.000Z', timezone: 'Europe/Oslo', partial, clarificationQuestion: 'When should I remind you?', clarificationAnswer: 'Every day 22' }
+  assert.deepEqual(await parseReminder(ctx, responseFor(candidate(parsed, ['due_date'], 'Which day?'))), ready({ ...parsed, due_date: '2026-08-26' }))
+})
 
 for (const [name, text, language, reminder] of [
   ['explicit date/time', 'Dentist 25 August at 14:30', 'en', base],
