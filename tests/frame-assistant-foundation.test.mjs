@@ -168,7 +168,8 @@ test('a reminder follow-up retains only validated short-lived reminder context',
 test('assistant and Groceries share one normalized transactional add path', () => {
   assert.deepEqual(normalizeCanonicalGroceryAdditions([{ name: ' Milk  ' }, { name: 'milk' }, { name: 'Bread', quantity: 2 }]), [{ name: 'Milk', quantity: 1, category: 'other' }, { name: 'Bread', quantity: 2, category: 'other' }])
   assert.match(home, /addGroceryItemsCanonical\(supabase, activeDeviceId/)
-  assert.match(api, /addGroceryItemsCanonical\(db, deviceId/)
+  const handlers = readFileSync(new URL('../app/lib/assistant/handlers.ts', import.meta.url), 'utf8')
+  assert.match(handlers, /addGroceryItemsCanonical\(ctx\.db, ctx\.deviceId/)
   assert.match(groceryActions, /add_grocery_items_canonical/)
   assert.match(migration, /for entry in select \* from jsonb_array_elements\(p_items\)/)
   assert.match(migration, /grocery_item_history/)
@@ -194,8 +195,9 @@ test('canonical history records the effective grocery row category', () => {
 })
 
 test('action execution validates membership, allowlists actions and masks raw errors', () => {
-  assert.match(api, /from\('device_members'\)/)
-  assert.match(api, /\.eq\('device_id', deviceId\)\.eq\('user_id', user\.id\)/)
+  const handlers = readFileSync(new URL('../app/lib/assistant/handlers.ts', import.meta.url), 'utf8')
+  assert.match(handlers, /from\('device_members'\)/)
+  assert.match(handlers, /\.eq\('device_id', ctx\.deviceId\)\.eq\('user_id', ctx\.user\.id\)/)
   assert.match(resolver, /input\.action === 'add_grocery_items'/)
   assert.match(resolver, /input\.action === 'create_reminder'/)
   assert.match(api, /I couldn't do that\. Try again\./)
