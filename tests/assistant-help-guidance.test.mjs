@@ -63,6 +63,19 @@ test('concrete configuration commands remain executable capabilities', () => {
   assert.match(route, /Choose a capability for a concrete request to perform a supported action/)
 })
 
+test('theme imperatives execute while question-shaped requests return help', () => {
+  for (const request of ['Bytt tema til mørk', 'Endre tema til lyst', 'Change theme to dark', 'Switch theme to light']) {
+    assert.equal(resolveDeterministicCapabilityRequest(request)?.capabilityId, 'settings.set_app_theme', request)
+    assert.equal(resolveDeterministicAssistantHelp(request, 'no'), null, request)
+  }
+  for (const request of ['Hvordan bytter jeg tema?', 'Hvor endrer jeg tema?', 'How do I change the theme?']) {
+    assert.equal(resolveDeterministicCapabilityRequest(request), null, request)
+    const help = resolveDeterministicAssistantHelp(request, request.startsWith('How') ? 'en' : 'no')
+    assert.equal(help?.action, 'answer_help', request)
+    assert.equal(help?.cta?.destination, 'settings', request)
+  }
+})
+
 test('recipes CTA truthfully opens the Groceries surface', () => {
   const result = resolveDeterministicAssistantHelp('Hvor finner jeg oppskrifter?', 'no')
   assert.deepEqual(result?.cta, { label: 'Åpne Handleliste', destination: 'groceries' })

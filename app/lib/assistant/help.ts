@@ -52,7 +52,7 @@ export function validateAssistantHelpTopicId(value: unknown): AssistantHelpTopic
 export function resolveDeterministicAssistantHelp(text: string, language: 'en' | 'no' = 'en'): AssistantResult | null {
   const request = text.trim()
   if (!request || request.length > 1_000) return null
-  const asksForGuidance = /(?:\b(?:where|how|find|open|change|switch|connect|see|view|preview|hvor|hvordan|finn|åpne|endre|bytt|koble|se|forhåndsvis)\b|\bwhat\b.*\b(?:shown|showing)\b|\bhva\b.*\bvises\b)/i.test(request)
+  const asksForGuidance = /(?:\b(?:where|how|find|open|connect|see|view|preview|hvor|hvordan|finn|åpne|koble|se|forhåndsvis)\b|\bwhat\b.*\b(?:shown|showing)\b|\bhva\b.*\bvises\b)/i.test(request)
   if (!asksForGuidance && !/^(?:settings|innstillinger|spond|weather|vær|surf|reminders?|påminnelser?|groceries|handleliste|layout|oppsett)$/i.test(request)) return null
   const topic = ASSISTANT_HELP_TOPICS.find((candidate) => candidate.patterns.some((pattern) => pattern.test(request)))
   return topic ? assistantHelpResult(topic.id, language) : null

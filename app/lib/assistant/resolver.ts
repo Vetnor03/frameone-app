@@ -130,7 +130,9 @@ export function resolveDeterministicCapabilityRequest(text: string): CapabilityR
     const title = request.replace(/^.*?\b(?:nedtelling|countdown)\b\s*(?:til|for)?\s*/i, '').replace(date ?? /$^/, '').trim()
     return { capabilityId: 'countdown.create', arguments: { title, ...(date ? { targetDate: date } : {}) } }
   }
-  if (/\b(?:app|appen)\b.*\b(?:dark|light|mørk|lys)/i.test(request)) return { capabilityId: 'settings.set_app_theme', arguments: { theme: request } }
+  const explicitThemeChange = /\b(?:change|switch|set|bytt|endre)\b.*\b(?:theme|tema|apptema)\b.*\b(?:dark|light|mørk(?:t)?|lys(?:t)?)\b/i.test(request)
+    || /\b(?:app|appen)\b.*\b(?:dark|light|mørk|lys)/i.test(request)
+  if (explicitThemeChange) return { capabilityId: 'settings.set_app_theme', arguments: { theme: request } }
   if (/\b(?:språk|language)\b.*\b(?:norsk|norwegian|engelsk|english)/i.test(request)) return { capabilityId: 'frame.set_language', arguments: { language: request } }
   const layout = request.match(/\b(?:layout|oppsett)\s*[1-4]\b/i)?.[0]
   if (layout && /\b(?:bytt|change|switch|set)\b/i.test(request)) return { capabilityId: 'frame.set_layout', arguments: { layout } }
