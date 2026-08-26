@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ASSISTANT_CAPABILITY_HANDLERS, executeCapability } from '../app/lib/assistant/handlers.ts'
-import { resolveDeterministicAssistantIntent } from '../app/lib/assistant/resolver.ts'
+import { resolveDeterministicAssistantIntent, resolveDeterministicCapabilityRequest, validateCapabilityClassification } from '../app/lib/assistant/resolver.ts'
 import { ASSISTANT_CAPABILITIES } from '../app/lib/assistant/capabilities.ts'
 import { transitionBuiltInLayoutSettings } from '../app/lib/frameLayoutTransition.ts'
+import { normalizeCapabilityArgument, normalizeCapabilityArguments } from '../app/lib/assistant/normalization.ts'
+import { readFileSync } from 'node:fs'
 
 function dbMock(rows = {}) {
   const calls = []
@@ -100,4 +102,42 @@ test('exact module names navigate while general questions do not invent capabili
   assert.equal(resolveDeterministicAssistantIntent('Why do birds migrate?'), null)
   assert.deepEqual(resolveDeterministicAssistantIntent('Hvordan blir været i morgen?'), { action: 'capability', arguments: { id: 'weather.read', values: { period: 'tomorrow' } } })
   assert.deepEqual(resolveDeterministicAssistantIntent('Hvordan blir Hellestø i morgen?'), { action: 'capability', arguments: { id: 'surf.read', values: { spot: 'Hellestø', period: 'tomorrow' } } })
+})
+
+test('natural requests resolve to control-plane capability IDs and normalized arguments', () => {
+  const cases = [
+    ['Bytt fotballag til Dortmund', 'football.set_team'], ['Hvilket fotballag følger jeg?', 'football.read'],
+    ['Soyasaus', 'groceries.add'], ['Hva står på handlelisten?', 'groceries.read'], ['Ring mamma i morgen', 'reminders.create'],
+    ['Hvordan blir været i morgen?', 'weather.read'], ['Hvordan blir Hellestø i morgen?', 'surf.read'], ['Hellestø var dårlig i dag', 'surf.log_experience'],
+    ['Lag nedtelling til ferie 10. september', 'countdown.create'], ['Bytt appen til dark mode', 'settings.set_app_theme'],
+    ['Bytt språk til norsk', 'frame.set_language'], ['Bytt til layout 2', 'frame.set_layout'],
+  ]
+  for (const [request, capabilityId] of cases) assert.equal(resolveDeterministicCapabilityRequest(request)?.capabilityId, capabilityId, request)
+  const countdown = resolveDeterministicCapabilityRequest('Lag nedtelling til ferie 10. september')
+  assert.equal(normalizeCapabilityArguments(countdown.arguments, { localNow: '2026-08-26T10:00:00Z', timezone: 'Europe/Oslo' }).targetDate, '2026-09-10')
+})
+
+test('generic follow-up normalization covers app argument vocabulary', () => {
+  const context = { localNow: '2026-08-26T10:00:00Z', timezone: 'Europe/Oslo' }
+  assert.equal(normalizeCapabilityArgument('targetDate', '10. september', context), '2026-09-10')
+  assert.equal(normalizeCapabilityArgument('time', 'kl 14.30', context), '14:30')
+  assert.equal(normalizeCapabilityArgument('theme', 'mørkt', context), 'dark')
+  assert.equal(normalizeCapabilityArgument('language', 'norsk', context), 'no')
+  assert.equal(normalizeCapabilityArgument('layout', 'oppsett 2', context), 'pyramid')
+  assert.equal(normalizeCapabilityArgument('rating', 'det var 3', context), 3)
+  assert.equal(normalizeCapabilityArgument('date', 'i går', context), 'yesterday')
+})
+
+test('Assistant navigation exhaustively handles every destination', () => {
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  for (const destination of ['settings', 'surf', 'weather', 'groceries', 'recipes', 'reminders', 'spond', 'countdown', 'date', 'football', 'stocks', 'assistant', 'layout']) assert.match(home, new RegExp(`case '${destination}'`))
+  assert.match(home, /const exhaustive: never = destination/)
+})
+
+test('registry-driven AI fallback accepts registered paraphrase classifications only', () => {
+  assert.deepEqual(validateCapabilityClassification({ capabilityId: 'football.read', arguments: {} }), { capabilityId: 'football.read', arguments: {} })
+  assert.deepEqual(validateCapabilityClassification({ capabilityId: 'settings.set_app_theme', arguments: { theme: 'make the interface nocturnal', spot: null } }), { capabilityId: 'settings.set_app_theme', arguments: { theme: 'make the interface nocturnal' } })
+  assert.deepEqual(validateCapabilityClassification({ capabilityId: 'countdown.create', arguments: { title: 'Summer break', targetDate: '10 September' } }), { capabilityId: 'countdown.create', arguments: { title: 'Summer break', targetDate: '10 September' } })
+  assert.equal(validateCapabilityClassification({ capabilityId: 'made.up', arguments: {} }), null)
+  assert.equal(validateCapabilityClassification({ capabilityId: 'unsupported', arguments: {} }), null)
 })

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import { parseReminder, validateParsedReminder } from '@/app/lib/reminders/parser'
-import { isReservedAssistantInput, resolveDeterministicAssistantIntent, validateModelIntent } from '@/app/lib/assistant/resolver'
+import { resolveDeterministicCapabilityRequest, validateCapabilityClassification } from '@/app/lib/assistant/resolver'
 import type { AssistantResult, ResolvedAssistantIntent } from '@/app/lib/assistant/types'
 import { reminderFollowupContext, surfFollowupTime, validatePendingReminderPayload, validatePendingSurfPayload } from '@/app/lib/assistant/pending'
 import { POST as logSurfExperience } from '@/app/api/surf/experience/log/route'
 import { findSpotByLabel } from '@/app/lib/surf/spots'
-import { assistantCapabilityPrompt } from '@/app/lib/assistant/capabilities'
-import { executeCapability, type ValidSurfLog } from '@/app/lib/assistant/handlers'
+import { ASSISTANT_CAPABILITY_IDS, assistantCapabilityPrompt, type CapabilityArgument } from '@/app/lib/assistant/capabilities'
+import { ASSISTANT_CAPABILITY_HANDLERS, executeCapability, executeCapabilityRequest, type CapabilityContext, type CapabilityRequest, type ValidSurfLog } from '@/app/lib/assistant/handlers'
+import { normalizeCapabilityArgument } from '@/app/lib/assistant/normalization'
 import { surfLoggedAt } from '@/app/lib/assistant/time'
 import { GET as weatherDetails } from '@/app/api/weather/details/route'
 import { GET as surfScore } from '@/app/api/surf/score/route'
@@ -17,22 +18,34 @@ export const runtime = 'nodejs'
 function friendlyError(): AssistantResult { return { status: 'error', message: "I couldn't do that. Try again." } }
 function outputText(payload: any) { for (const item of payload?.output ?? []) for (const content of item?.content ?? []) if (content?.type === 'output_text') return content.text; return '' }
 
-async function aiIntent(text: string): Promise<ResolvedAssistantIntent | null> {
+async function aiIntent(text: string): Promise<CapabilityRequest | null> {
   if (!process.env.OPENAI_API_KEY) return null
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
-      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Route one English or Norwegian request to a RE:MIND capability. Executable actions: add_grocery_items for clear foods/lists only; create_reminder for task plus date/time phrases; log_surf_experience for a surf spot plus rating; set_football_team when changing the selected football team; needs_input when an executable operation or required argument cannot be resolved. App capability registry:\n${assistantCapabilityPrompt()}\nSurf ratings are Flat=1, Poor=2, Poor to Fair=3, Fair=4, Good=5, Epic=6. Preserve original reminder text and surf comment. Never turn module/navigation concepts into groceries. Do not chat or invent actions.` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
-      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder', 'log_surf_experience', 'set_football_team', 'needs_input'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', maxLength: 80 }, quantity: { type: ['integer', 'null'], minimum: 1, maximum: 99 } }, required: ['name', 'quantity'] }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 }, spot: { type: 'string', maxLength: 80 }, rating: { type: ['integer', 'null'], minimum: 1, maximum: 6 }, date: { type: 'string', maxLength: 40 }, time: { type: ['string', 'null'], maxLength: 20 }, comment: { type: 'string', maxLength: 1000 }, team: { type: 'string', maxLength: 80 } }, required: ['items', 'text', 'spot', 'rating', 'date', 'time', 'comment', 'team'] } }, required: ['action', 'arguments'] } } },
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Classify one English or Norwegian request as exactly one registered RE:MIND capability. Return unsupported for general questions. Preserve useful argument text; never invent app data or operations.\n${assistantCapabilityPrompt()}` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
+      text: { format: { type: 'json_schema', name: 'assistant_capability', strict: true, schema: { type: 'object', additionalProperties: false, properties: { capabilityId: { type: 'string', enum: [...ASSISTANT_CAPABILITY_IDS, 'unsupported'] }, arguments: { type: 'object', additionalProperties: false, properties: { team: { type: ['string', 'null'] }, spot: { type: ['string', 'null'] }, rating: { type: ['integer', 'null'] }, date: { type: ['string', 'null'] }, period: { type: ['string', 'null'] }, time: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] }, title: { type: ['string', 'null'] }, targetDate: { type: ['string', 'null'] }, theme: { type: ['string', 'null'] }, language: { type: ['string', 'null'] }, layout: { type: ['string', 'null'] }, text: { type: ['string', 'null'] }, items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' }, quantity: { type: ['integer', 'null'] } }, required: ['name', 'quantity'] } } }, required: ['team', 'spot', 'rating', 'date', 'period', 'time', 'comment', 'title', 'targetDate', 'theme', 'language', 'layout', 'text', 'items'] } }, required: ['capabilityId', 'arguments'] } } },
     }),
   }).catch(() => null)
   if (!response?.ok) return null
-  try { return validateModelIntent(JSON.parse(outputText(await response.json()))) } catch { return null }
+  try { return validateCapabilityClassification(JSON.parse(outputText(await response.json()))) } catch { return null }
 }
 
 async function saveReminder(db: SupabaseClient, user: User, deviceId: string, reminder: NonNullable<ReturnType<typeof validateParsedReminder>>): Promise<AssistantResult> {
   const { error } = await db.from('reminders').insert({ device_id: deviceId, created_by_user_id: user.id, updated_by_user_id: user.id, title: reminder.title, due_date: reminder.due_date, due_time: reminder.due_time, end_date: reminder.end_date, end_time: reminder.end_time, tag: reminder.tag, repeat_type: reminder.repeat_type, custom_repeat_days: reminder.custom_repeat_days, is_done: false })
   return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: 'Reminder created ✓' }
+}
+
+async function executeReminderRequest(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, text: string, context: { localNow: string; timezone: string | null; language: 'en' | 'no' }): Promise<AssistantResult> {
+  const { data: parseAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
+  if (!parseAllowed) return { status: 'error', message: 'Please wait a moment and try again.' }
+  const parsed = await parseReminder({ text, ...context })
+  if (!parsed) return { status: 'error', message: "I couldn't create that reminder. Try again." }
+  if (parsed.status === 'needs_clarification') {
+    const { data, error } = await admin.from('assistant_pending_actions').insert({ user_id: user.id, device_id: deviceId, action: 'create_reminder', payload: { originalText: text, partial: parsed.partial, question: parsed.question } }).select('id').single()
+    return error || !data ? friendlyError() : { status: 'needs_input', message: parsed.question, pendingId: data.id }
+  }
+  return saveReminder(db, user, deviceId, parsed.reminder)
 }
 
 async function executeSurfLog(intent: Extract<ResolvedAssistantIntent, { action: 'log_surf_experience' }>, context: { localNow: string; timezone: string | null; language: 'en' | 'no'; authorization: string }): Promise<AssistantResult> {
@@ -45,10 +58,17 @@ async function executeSurfLog(intent: Extract<ResolvedAssistantIntent, { action:
   return { status: 'completed', action: 'log_surf_experience', message: context.language === 'no' ? `Logget surfen på ${spotLabel}.` : `Logged your surf at ${spotLabel}.` }
 }
 
+function capabilityContext(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, context: { localNow: string; timezone: string | null; language: 'en' | 'no'; authorization: string }): CapabilityContext {
+  return { db, admin, user, deviceId, ...context, weatherDetails, surfScore,
+    executeSurfLog: (args) => executeSurfLog({ action: 'log_surf_experience', arguments: args }, context),
+    executeReminder: (text) => executeReminderRequest(db, admin, user, deviceId, text, context),
+  }
+}
+
 export async function executeAssistantAction(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, intent: ResolvedAssistantIntent, context: { localNow: string; timezone: string | null; language: 'en' | 'no'; authorization: string }): Promise<AssistantResult> {
   if (intent.action === 'answer_help') return intent.response
   if (intent.action === 'needs_input') return { status: 'needs_input', action: 'needs_input', message: context.language === 'no' ? 'Kan du si litt mer?' : 'Could you say a little more?' }
-  if (intent.action === 'capability') return executeCapability(intent.arguments.id, intent.arguments.values, { db, admin, user, deviceId, ...context, weatherDetails, surfScore, executeSurfLog: (args) => executeSurfLog({ action: 'log_surf_experience', arguments: args }, context) })
+  if (intent.action === 'capability') return executeCapabilityRequest({ capabilityId: intent.arguments.id, arguments: intent.arguments.values }, capabilityContext(db, admin, user, deviceId, context))
   const capability = intent.action === 'add_grocery_items'
     ? { id: 'groceries.add', arguments: { items: intent.arguments.items } }
     : intent.action === 'set_football_team'
@@ -96,13 +116,16 @@ export async function POST(request: Request) {
     if (pending.action.startsWith('capability:')) {
       const payload = pending.payload && typeof pending.payload === 'object' && !Array.isArray(pending.payload) ? pending.payload as Record<string, unknown> : null
       const capabilityId = typeof payload?.capabilityId === 'string' ? payload.capabilityId : ''
-      const missing = typeof payload?.missing === 'string' ? payload.missing : ''
+      const missing = typeof payload?.missing === 'string' && ['team', 'spot', 'rating', 'date', 'period', 'time', 'comment', 'title', 'targetDate', 'theme', 'language', 'layout', 'items', 'text'].includes(payload.missing) ? payload.missing as CapabilityArgument : null
       const previous = payload?.arguments && typeof payload.arguments === 'object' && !Array.isArray(payload.arguments) ? payload.arguments as Record<string, unknown> : {}
       if (!capabilityId || !missing) return NextResponse.json(friendlyError())
       const clean = body.text.trim()
-      const value: unknown = missing === 'rating' ? Number(clean) : clean
-      await admin.from('assistant_pending_actions').delete().eq('id', pending.id).eq('user_id', user.id)
-      return NextResponse.json(await executeCapability(capabilityId, { ...previous, [missing]: value }, { db, admin, user, deviceId: requestDeviceId, language: requestLanguage, localNow: requestLocalNow, timezone: requestTimezone, authorization: auth, executeSurfLog: (args) => executeSurfLog({ action: 'log_surf_experience', arguments: args }, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }) }))
+      const value = normalizeCapabilityArgument(missing, clean, { localNow: requestLocalNow, timezone: requestTimezone })
+      const handler = ASSISTANT_CAPABILITY_HANDLERS[capabilityId]
+      if (value == null || !handler) return NextResponse.json({ status: 'needs_input', message: handler?.missingQuestion[missing]?.[requestLanguage] ?? 'Please provide the missing information.', pendingId: pending.id })
+      const result = await executeCapabilityRequest({ capabilityId, arguments: { ...previous, [missing]: value } }, capabilityContext(db, admin, user, requestDeviceId, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }))
+      if (result.status === 'completed' || (result.pendingId && result.pendingId !== pending.id)) await admin.from('assistant_pending_actions').delete().eq('id', pending.id).eq('user_id', user.id)
+      return NextResponse.json(result.status === 'needs_input' && !result.pendingId ? { ...result, pendingId: pending.id } : result)
     }
     if (pending.action === 'log_surf_experience') {
       const payload = validatePendingSurfPayload(pending.payload)
@@ -127,15 +150,13 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(await saveReminder(db, user, body.deviceId, parsed.reminder))
   }
-  let intent = resolveDeterministicAssistantIntent(body.text)
-  if (!intent) {
-    if (!isReservedAssistantInput(body.text)) {
-      const { data: aiAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
-      if (!aiAllowed) return NextResponse.json({ status: 'error', message: 'Please wait a moment and try again.' }, { status: 429 })
-      intent = await aiIntent(body.text)
-    }
+  let capability = resolveDeterministicCapabilityRequest(body.text)
+  if (!capability) {
+    const { data: aiAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
+    if (!aiAllowed) return NextResponse.json({ status: 'error', message: 'Please wait a moment and try again.' }, { status: 429 })
+    capability = await aiIntent(body.text)
   }
-  if (!intent) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?' })
-  try { return NextResponse.json(await executeAssistantAction(db, admin, user, body.deviceId, intent, { localNow: body.localNow, timezone: body.timezone || null, language: body.language, authorization: auth })) }
+  if (!capability) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?' })
+  try { return NextResponse.json(await executeCapabilityRequest(capability, capabilityContext(db, admin, user, requestDeviceId, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }))) }
   catch { return NextResponse.json(friendlyError()) }
 }

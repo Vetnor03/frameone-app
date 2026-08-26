@@ -2570,15 +2570,21 @@ async function handleSelectTab(k: TabKey) {
   }, [userId])
 
   function navigateFromAssistant(destination: AssistantDestination) {
-    if (destination === 'settings') setActiveTab('settings')
-    else if (destination === 'surf') setActiveTab('surf')
-    else if (destination === 'weather') setActiveTab('weather')
-    else if (destination === 'layout') {
-      setActiveTab('frame')
-      window.requestAnimationFrame(() => document.getElementById('frame-layout-controls')?.focus({ preventScroll: false }))
+    switch (destination) {
+      case 'settings': setActiveTab('settings'); return
+      case 'surf': setActiveTab('surf'); return
+      case 'weather': setActiveTab('weather'); return
+      case 'groceries': case 'recipes': setActiveTab('groceries'); return
+      case 'reminders': setRemindersConnectScreenOpen(false); setActiveTab('reminders'); return
+      case 'spond': setRemindersConnectScreenOpen(true); setActiveTab('reminders'); return
+      case 'countdown': setActiveTab('countdown'); return
+      case 'date': setActiveTab('date'); return
+      case 'football': setActiveTab('soccer'); return
+      case 'stocks': setActiveTab('stocks'); return
+      case 'assistant': setActiveTab('assistant'); return
+      case 'layout': setActiveTab('frame'); window.requestAnimationFrame(() => document.getElementById('frame-layout-controls')?.focus({ preventScroll: false })); return
+      default: { const exhaustive: never = destination; return exhaustive }
     }
-    else if (destination === 'groceries' || destination === 'recipes') setActiveTab('groceries')
-    else { setActiveTab('reminders'); setRemindersConnectScreenOpen(destination === 'spond') }
   }
 
   const isPlainFrameAssistantSurface = activeTab === 'frame'

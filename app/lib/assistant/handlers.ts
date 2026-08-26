@@ -5,10 +5,11 @@ import { findSpotByLabel } from '../surf/spots.ts'
 import { ALL_TEAMS, type SoccerTeamItem } from '../soccer/teams.ts'
 import type { AssistantDestination, AssistantResult } from './types.ts'
 import { ASSISTANT_CAPABILITIES, type CapabilityArgument } from './capabilities.ts'
+import { normalizeCapabilityArguments } from './normalization.ts'
 
 export type CapabilityId =
   | 'football.set_team' | 'football.read' | 'groceries.add' | 'groceries.read'
-  | 'reminders.read' | 'countdown.create' | 'settings.set_app_theme'
+  | 'reminders.create' | 'reminders.read' | 'countdown.create' | 'settings.set_app_theme'
   | 'frame.set_language' | 'frame.set_layout' | 'surf.log_experience'
   | 'weather.read' | 'surf.read' | `${string}.open`
 
@@ -26,10 +27,11 @@ export type CapabilityContext = {
   executeSurfLog?: (args: ValidSurfLog) => Promise<AssistantResult>
   weatherDetails?: (request: Request) => Promise<Response>
   surfScore?: (request: Request) => Promise<Response>
+  executeReminder?: (text: string) => Promise<AssistantResult>
 }
 
 type Validation = { ok: true; arguments: Record<string, unknown> } | { ok: false; missing?: CapabilityArgument[]; message?: string }
-type Handler = {
+export type Handler = {
   scope: CapabilityScope
   destructive: boolean
   missingQuestion: Partial<Record<CapabilityArgument, Record<'en' | 'no', string>>>
@@ -77,6 +79,7 @@ function forecastReadValidator(withSpot: boolean): Handler['validate'] {
 export type ValidSurfLog = { spot: string; rating: number; date: 'today' | 'yesterday'; time: string; comment: string }
 
 export const ASSISTANT_CAPABILITY_HANDLERS: Record<string, Handler> = {
+  'reminders.create': { scope: 'device_member', destructive: false, missingQuestion: { text: { en: 'What should I remind you about?', no: 'Hva skal jeg minne deg på?' } }, validate: (args) => typeof args.text === 'string' && args.text.trim() ? ok({ text: args.text.trim() }) : required('text'), run: async (ctx, args) => { if (!ctx.executeReminder) throw new Error('reminder_adapter_missing'); return ctx.executeReminder(String(args.text)) } },
   'football.set_team': { scope: 'device_member', destructive: false, missingQuestion: { team: { en: 'Which football team?', no: 'Hvilket fotballag?' } }, validate: (args) => {
     if (!args.team) return required('team'); const team = canonicalTeam(args.team); return team ? ok({ team }) : invalid('Unknown football team.')
   }, run: async (ctx, args) => {
@@ -196,4 +199,10 @@ export async function executeCapability(id: string, args: CapabilityArguments, c
     return { status: 'needs_input', message: handler.missingQuestion[missing]?.[ctx.language] ?? 'Please provide the missing information.', pendingId: data.id }
   }
   return handler.run(ctx, validation.arguments)
+}
+
+export type CapabilityRequest = { capabilityId: string; arguments: Record<string, unknown> }
+
+export function executeCapabilityRequest(request: CapabilityRequest, ctx: CapabilityContext) {
+  return executeCapability(request.capabilityId, normalizeCapabilityArguments(request.arguments, ctx), ctx)
 }

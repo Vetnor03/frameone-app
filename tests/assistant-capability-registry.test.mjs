@@ -31,3 +31,11 @@ test('football execution preserves settings and uses the canonical settings RPC'
   assert.match(handlers, /rpc\('upsert_device_settings'/)
   assert.match(handlers, /Fotballaget er byttet til/)
 })
+
+test('AI schema and execution are registry-derived capability requests', () => {
+  const route = readFileSync(new URL('../app/api/assistant/route.ts', import.meta.url), 'utf8')
+  assert.match(route, /enum: \[\.\.\.ASSISTANT_CAPABILITY_IDS, 'unsupported'\]/)
+  assert.match(route, /resolveDeterministicCapabilityRequest\(body\.text\)/)
+  assert.match(route, /executeCapabilityRequest\(capability, capabilityContext/)
+  assert.doesNotMatch(route, /enum: \['add_grocery_items'/)
+})

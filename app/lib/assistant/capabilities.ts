@@ -12,6 +12,7 @@ export const ASSISTANT_CAPABILITIES = [
   { id: 'frame.set_layout', domain: 'frame', operation: 'set_layout', kind: 'configuration', aliases: ['layout', 'oppsett'], requiredArguments: ['layout'], destination: 'layout', executor: 'device_settings' },
   { id: 'frame.set_language', domain: 'frame', operation: 'set_language', kind: 'configuration', aliases: ['language', 'språk'], requiredArguments: ['language'], destination: 'settings', executor: 'device_settings' },
   { id: 'frame.device_settings', domain: 'frame', operation: 'device_settings', kind: 'navigation', aliases: ['device settings', 'frame settings'], requiredArguments: [], destination: 'settings' },
+  { id: 'reminders.create', domain: 'reminders', operation: 'create', kind: 'write', aliases: ['remind me', 'minn meg', 'ring i morgen'], requiredArguments: ['text'], destination: 'reminders', executor: 'reminder_parser' },
   { id: 'reminders.read', domain: 'reminders', operation: 'read', kind: 'read', aliases: ['my reminders', 'mine påminnelser'], requiredArguments: [], destination: 'reminders' },
   { id: 'groceries.add', domain: 'groceries', operation: 'add', kind: 'write', aliases: ['shopping list', 'handleliste'], requiredArguments: ['items'], destination: 'groceries', executor: 'groceries' },
   { id: 'groceries.read', domain: 'groceries', operation: 'read', kind: 'read', aliases: ['groceries', 'dagligvarer'], requiredArguments: [], destination: 'groceries' },
@@ -35,6 +36,9 @@ export const ASSISTANT_CAPABILITIES = [
   { id: 'countdown.create', domain: 'countdown', operation: 'create', kind: 'write', aliases: ['countdown', 'nedtelling'], requiredArguments: ['title', 'targetDate'], destination: 'countdown', executor: 'countdowns' },
   { id: 'settings.set_app_theme', domain: 'settings', operation: 'set_app_theme', kind: 'configuration', aliases: ['app theme', 'apptema'], requiredArguments: ['theme'], destination: 'settings', executor: 'app_preferences' },
 ] as const
+
+export const ASSISTANT_CAPABILITY_IDS = ASSISTANT_CAPABILITIES.map((capability) => capability.id)
+export type AssistantCapabilityId = typeof ASSISTANT_CAPABILITIES[number]['id']
 
 export type AssistantCapability = typeof ASSISTANT_CAPABILITIES[number]
 

@@ -1,6 +1,8 @@
 import type { AssistantDestination, ResolvedAssistantIntent } from './types'
 import { SURF_SPOTS } from '../surf/spots.ts'
 import { ALL_TEAMS } from '../soccer/teams.ts'
+import type { CapabilityRequest } from './handlers.ts'
+import { ASSISTANT_CAPABILITY_IDS } from './capabilities.ts'
 
 const RESERVED_INPUT = /^(?:weather|vær|surf|layout|oppsett|settings|innstillinger|spond|reminders?|påminnelser?|groceries|grocery|dagligvarer|handleliste|countdown|nedtelling|frame|ramme|modules?|moduler?)$/i
 const GROCERY_WORDS = new Set([
@@ -135,4 +137,40 @@ export function validateModelIntent(value: unknown): ResolvedAssistantIntent | n
     if (typeof args.spot === 'string' && args.spot.trim() && Number.isInteger(args.rating) && Number(args.rating) >= 1 && Number(args.rating) <= 6 && typeof args.date === 'string' && typeof args.comment === 'string') return { action: 'log_surf_experience', arguments: { spot: args.spot.trim(), rating: Number(args.rating), date: args.date.trim(), ...(typeof args.time === 'string' && args.time.trim() ? { time: args.time.trim() } : {}), comment: args.comment.trim() } }
   }
   return null
+}
+
+export function resolveDeterministicCapabilityRequest(text: string): CapabilityRequest | null {
+  const request = text.trim()
+  if (!request || request.length > 1_000) return null
+  if (/\b(?:hvilket|which|what)\b.*\b(?:fotballag|football team|soccer team)\b|\b(?:fotballag|football team)\b.*\b(?:følger|selected|follow)/i.test(request)) return { capabilityId: 'football.read', arguments: {} }
+  if (/\b(?:hva|what)\b.*\b(?:handlelisten|shopping list|grocer)/i.test(request)) return { capabilityId: 'groceries.read', arguments: {} }
+  if (/\b(?:lag|create|start)\b.*\b(?:nedtelling|countdown)\b/i.test(request)) {
+    const date = request.match(/\b\d{1,2}\.?\s+[\p{L}]+(?:\s+20\d{2})?/u)?.[0]
+    const title = request.replace(/^.*?\b(?:nedtelling|countdown)\b\s*(?:til|for)?\s*/i, '').replace(date ?? /$^/, '').trim()
+    return { capabilityId: 'countdown.create', arguments: { title, ...(date ? { targetDate: date } : {}) } }
+  }
+  if (/\b(?:app|appen)\b.*\b(?:dark|light|mørk|lys)/i.test(request)) return { capabilityId: 'settings.set_app_theme', arguments: { theme: request } }
+  if (/\b(?:språk|language)\b.*\b(?:norsk|norwegian|engelsk|english)/i.test(request)) return { capabilityId: 'frame.set_language', arguments: { language: request } }
+  const layout = request.match(/\b(?:layout|oppsett)\s*[1-4]\b/i)?.[0]
+  if (layout && /\b(?:bytt|change|switch|set)\b/i.test(request)) return { capabilityId: 'frame.set_layout', arguments: { layout } }
+  const legacy = resolveDeterministicAssistantIntent(request)
+  if (!legacy) return null
+  if (legacy.action === 'capability') return { capabilityId: legacy.arguments.id, arguments: legacy.arguments.values }
+  if (legacy.action === 'add_grocery_items') return { capabilityId: 'groceries.add', arguments: legacy.arguments }
+  if (legacy.action === 'create_reminder') return { capabilityId: 'reminders.create', arguments: legacy.arguments }
+  if (legacy.action === 'log_surf_experience') return { capabilityId: 'surf.log_experience', arguments: legacy.arguments }
+  if (legacy.action === 'set_football_team') return { capabilityId: 'football.set_team', arguments: { team: legacy.arguments.teamId } }
+  if (legacy.action === 'answer_help') {
+    const openIds: Partial<Record<AssistantDestination, string>> = { settings: 'settings.open', surf: 'surf.open', weather: 'weather.open', groceries: 'groceries.open', recipes: 'recipes.manage', reminders: 'reminders.open', spond: 'spond.open', countdown: 'countdown.open', date: 'date.open', stocks: 'stocks.open', assistant: 'ai_follow.manage', layout: 'layout.open' }
+    const capabilityId = openIds[legacy.arguments.destination]
+    return capabilityId ? { capabilityId, arguments: {} } : null
+  }
+  return null
+}
+
+export function validateCapabilityClassification(value: unknown): CapabilityRequest | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const row = value as Record<string, unknown>
+  if (row.capabilityId === 'unsupported' || typeof row.capabilityId !== 'string' || !ASSISTANT_CAPABILITY_IDS.includes(row.capabilityId as never) || !row.arguments || typeof row.arguments !== 'object' || Array.isArray(row.arguments)) return null
+  return { capabilityId: row.capabilityId, arguments: Object.fromEntries(Object.entries(row.arguments as Record<string, unknown>).filter(([, argument]) => argument != null)) }
 }
