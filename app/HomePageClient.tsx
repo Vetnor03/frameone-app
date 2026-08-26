@@ -102,6 +102,7 @@ const UI = {
     privacyPolicy: 'Privacy policy',
     termsAndConditions: 'Terms and conditions',
     contact: 'Contact',
+    shop: 'Shop',
     logout: 'Log out',
 
     myFrames: 'MY FRAMES',
@@ -221,6 +222,7 @@ const UI = {
     privacyPolicy: 'Personvern',
     termsAndConditions: 'Vilkår og betingelser',
     contact: 'Kontakt',
+    shop: 'Butikk',
     logout: 'Logg ut',
 
     myFrames: 'MINE FRAMES',
@@ -8206,29 +8208,25 @@ function SettingsTab({
           )}
 
           <div ref={scrollRef} className="settings-scroll h-full overflow-y-auto pr-1 pb-4">
-            <SettingsGroup label={language === 'no' ? 'GENERELT' : 'GENERAL'} className="mt-2">
+            <div className="mt-2 divide-y divide-[color:var(--bd-10)]">
+              <SettingRow label={t.shop} value="" onClick={() => onGo('/shop')} />
               <SettingRow
                 label={t.themeRow}
                 value={`${t.appThemeTab}: ${appTheme === 'dark' ? t.dark : t.light} · ${t.frameThemeTab}: ${frameTheme === 'dark' ? t.dark : t.light}`}
                 onClick={onOpenTheme}
               />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
-            </SettingsGroup>
-
-            <SettingsGroup label={language === 'no' ? 'KONTO' : 'ACCOUNT'}>
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
-            </SettingsGroup>
-
-            <SettingsGroup label={language === 'no' ? 'VARSLER' : 'NOTIFICATIONS'}>
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
-            </SettingsGroup>
-
-            <SettingsGroup label={language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}>
-              <div className="py-2">
+              <div className="py-4">
+                <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
                 <AssistantPreferenceToggle label={language === 'no' ? 'Vis KI-assistent' : 'Show AI Assistant'} checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
                 <AssistantPreferenceToggle label={language === 'no' ? 'Proaktive tips' : 'Proactive tips'} checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
               </div>
-            </SettingsGroup>
+              <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
+              <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
+              <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
+            </div>
 
             <div className="mt-8">
               <MyFramesSection
@@ -8239,12 +8237,6 @@ function SettingsTab({
                 onFramesChanged={onFramesChanged}
               />
             </div>
-
-            <SettingsGroup label={language === 'no' ? 'HJELP OG JURIDISK' : 'HELP & LEGAL'}>
-              <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
-              <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
-              <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
-            </SettingsGroup>
           </div>
         </div>
 
@@ -8254,13 +8246,6 @@ function SettingsTab({
       </div>
     </>
   )
-}
-
-function SettingsGroup({ label, className = 'mt-8', children }: { label: string; className?: string; children: React.ReactNode }) {
-  return <section className={className} aria-label={label}>
-    <div className="mb-1 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{label}</div>
-    <div className="divide-y divide-[color:var(--bd-10)]">{children}</div>
-  </section>
 }
 
 function AssistantPreferenceToggle({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
