@@ -52,6 +52,19 @@ test('structured capability validators reject invalid values before execution', 
   assert.equal(ASSISTANT_CAPABILITY_HANDLERS['surf.log_experience'].validate({ spot: 'Hellestø', rating: 7, date: 'today', time: '14:00' }).ok, false)
 })
 
+test('app theme capability returns the saved theme for immediate client state synchronization', async () => {
+  const db = dbMock()
+  const result = await executeCapability('settings.set_app_theme', { theme: 'dark' }, context(db))
+  assert.equal(result.status, 'completed')
+  assert.equal(result.appTheme, 'dark')
+  assert.deepEqual(db.calls.find((call) => call.table === 'user_app_preferences').value, { user_id: 'user', app_theme: 'dark' })
+
+  const assistant = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(assistant, /isAppTheme\(value\.appTheme\)\) onAppThemeChange\(value\.appTheme\)/)
+  assert.match(home, /onAppThemeChange=\{\(theme\) => \{ persistTheme\(theme\); setAppTheme\(theme\) \}\}/)
+})
+
 test('countdown uses the UI schema and missing arguments create generic pending state', async () => {
   const db = dbMock()
   await executeCapability('countdown.create', { title: 'Trip', targetDate: '2026-10-10' }, context(db))
