@@ -31,9 +31,9 @@ async function aiIntent(text: string): Promise<CapabilityRequest | null> {
   try { return validateCapabilityClassification(JSON.parse(outputText(await response.json()))) } catch { return null }
 }
 
-async function saveReminder(db: SupabaseClient, user: User, deviceId: string, reminder: NonNullable<ReturnType<typeof validateParsedReminder>>): Promise<AssistantResult> {
+async function saveReminder(db: SupabaseClient, user: User, deviceId: string, reminder: NonNullable<ReturnType<typeof validateParsedReminder>>, language: 'en' | 'no'): Promise<AssistantResult> {
   const { error } = await db.from('reminders').insert({ device_id: deviceId, created_by_user_id: user.id, updated_by_user_id: user.id, title: reminder.title, due_date: reminder.due_date, due_time: reminder.due_time, end_date: reminder.end_date, end_time: reminder.end_time, tag: reminder.tag, repeat_type: reminder.repeat_type, custom_repeat_days: reminder.custom_repeat_days, is_done: false })
-  return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: 'Reminder created ✓' }
+  return error ? { status: 'error', action: 'create_reminder', message: "I couldn't create that reminder. Try again." } : { status: 'completed', action: 'create_reminder', message: language === 'no' ? 'Påminnelse opprettet ✓' : 'Reminder created ✓' }
 }
 
 async function executeReminderRequest(db: SupabaseClient, admin: SupabaseClient, user: User, deviceId: string, text: string, context: { localNow: string; timezone: string | null; language: 'en' | 'no' }): Promise<AssistantResult> {
@@ -45,7 +45,7 @@ async function executeReminderRequest(db: SupabaseClient, admin: SupabaseClient,
     const { data, error } = await admin.from('assistant_pending_actions').insert({ user_id: user.id, device_id: deviceId, action: 'create_reminder', payload: { originalText: text, partial: parsed.partial, question: parsed.question } }).select('id').single()
     return error || !data ? friendlyError() : { status: 'needs_input', message: parsed.question, pendingId: data.id }
   }
-  return saveReminder(db, user, deviceId, parsed.reminder)
+  return saveReminder(db, user, deviceId, parsed.reminder, context.language)
 }
 
 async function executeSurfLog(intent: Extract<ResolvedAssistantIntent, { action: 'log_surf_experience' }>, context: { localNow: string; timezone: string | null; language: 'en' | 'no'; authorization: string }): Promise<AssistantResult> {
@@ -92,7 +92,7 @@ export async function executeAssistantAction(db: SupabaseClient, admin: Supabase
     const { data, error } = await admin.from('assistant_pending_actions').insert({ user_id: user.id, device_id: deviceId, action: 'create_reminder', payload: { originalText: intent.arguments.text, partial: parsed.partial, question: parsed.question } }).select('id').single()
     return error || !data ? friendlyError() : { status: 'needs_input', action: 'create_reminder', message: parsed.question, pendingId: data.id }
   }
-  return saveReminder(db, user, deviceId, parsed.reminder)
+  return saveReminder(db, user, deviceId, parsed.reminder, context.language)
 }
 
 export async function POST(request: Request) {
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
       const { data: nextPending } = await admin.from('assistant_pending_actions').insert({ user_id: user.id, device_id: body.deviceId, action: 'create_reminder', payload: { originalText: payload.originalText, partial: parsed.partial, question: parsed.question } }).select('id').single()
       return NextResponse.json(nextPending ? { status: 'needs_input', action: 'create_reminder', message: parsed.question, pendingId: nextPending.id } : friendlyError())
     }
-    return NextResponse.json(await saveReminder(db, user, body.deviceId, parsed.reminder))
+    return NextResponse.json(await saveReminder(db, user, body.deviceId, parsed.reminder, requestLanguage))
   }
   let capability = resolveDeterministicCapabilityRequest(body.text)
   if (!capability) {
