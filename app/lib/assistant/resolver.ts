@@ -1,4 +1,4 @@
-import type { AssistantDestination, ResolvedAssistantIntent } from './types'
+import type { ResolvedAssistantIntent } from './types'
 import { SURF_SPOTS } from '../surf/spots.ts'
 import { ALL_TEAMS } from '../soccer/teams.ts'
 import type { CapabilityRequest } from './handlers.ts'
@@ -141,11 +141,9 @@ export function resolveDeterministicCapabilityRequest(text: string): CapabilityR
   if (legacy.action === 'create_reminder') return { capabilityId: 'reminders.create', arguments: legacy.arguments }
   if (legacy.action === 'log_surf_experience') return { capabilityId: 'surf.log_experience', arguments: legacy.arguments }
   if (legacy.action === 'set_football_team') return { capabilityId: 'football.set_team', arguments: { team: legacy.arguments.teamId } }
-  if (legacy.action === 'answer_help') {
-    const openIds: Partial<Record<AssistantDestination, string>> = { settings: 'settings.open', surf: 'surf.open', weather: 'weather.open', groceries: 'groceries.open', recipes: 'recipes.manage', reminders: 'reminders.open', spond: 'spond.open', countdown: 'countdown.open', date: 'date.open', stocks: 'stocks.open', assistant: 'ai_follow.manage', layout: 'layout.open' }
-    const capabilityId = openIds[legacy.arguments.destination]
-    return capabilityId ? { capabilityId, arguments: {} } : null
-  }
+  // Help is resolved separately so trusted registry copy is never degraded to
+  // a generic navigation capability response.
+  if (legacy.action === 'answer_help') return null
   return null
 }
 

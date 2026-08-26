@@ -26,7 +26,7 @@ async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
-      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Classify one English or Norwegian request as a registered RE:MIND capability or help topic. Product-navigation questions must use a help topic. Return unsupported for general knowledge. Never write an answer; only classify. Preserve useful capability arguments and never invent app data.\nCapabilities:\n${assistantCapabilityPrompt()}\nHelp topics:\n${assistantHelpPrompt()}` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Classify one English or Norwegian request as a registered RE:MIND capability or help topic. Choose a capability for a concrete request to perform a supported action. Choose a help topic for a question asking where or how to use the product. Return unsupported for general knowledge. Never write an answer; only classify. Preserve useful capability arguments and never invent app data.\nCapabilities:\n${assistantCapabilityPrompt()}\nHelp topics:\n${assistantHelpPrompt()}` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
       text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { intentId: { type: 'string', enum: [...ASSISTANT_CAPABILITY_IDS, ...ASSISTANT_HELP_TOPIC_IDS.map((id) => `help:${id}`), 'unsupported'] }, arguments: { type: 'object', additionalProperties: false, properties: { team: { type: ['string', 'null'] }, spot: { type: ['string', 'null'] }, rating: { type: ['integer', 'null'] }, date: { type: ['string', 'null'] }, period: { type: ['string', 'null'] }, time: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] }, title: { type: ['string', 'null'] }, targetDate: { type: ['string', 'null'] }, theme: { type: ['string', 'null'] }, language: { type: ['string', 'null'] }, layout: { type: ['string', 'null'] }, text: { type: ['string', 'null'] }, items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' }, quantity: { type: ['integer', 'null'] } }, required: ['name', 'quantity'] } } }, required: ['team', 'spot', 'rating', 'date', 'period', 'time', 'comment', 'title', 'targetDate', 'theme', 'language', 'layout', 'text', 'items'] } }, required: ['intentId', 'arguments'] } } },
     }),
   }).catch(() => null)
@@ -158,9 +158,11 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(await saveReminder(db, user, body.deviceId, parsed.reminder, requestLanguage))
   }
-  const deterministicHelp = resolveDeterministicAssistantHelp(body.text, requestLanguage)
-  if (deterministicHelp) return NextResponse.json(deterministicHelp)
   let capability = resolveDeterministicCapabilityRequest(body.text)
+  if (!capability) {
+    const deterministicHelp = resolveDeterministicAssistantHelp(body.text, requestLanguage)
+    if (deterministicHelp) return NextResponse.json(deterministicHelp)
+  }
   let classifiedHelpTopic: AssistantHelpTopicId | null = null
   if (!capability) {
     const { data: aiAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })

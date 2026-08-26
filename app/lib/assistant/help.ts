@@ -1,6 +1,5 @@
 import type { AssistantDestination, AssistantResult } from './types.ts'
 
-export type AssistantHelpTopicId = typeof ASSISTANT_HELP_TOPICS[number]['id']
 type Copy = Record<'en' | 'no', string>
 
 export type AssistantHelpTopic = {
@@ -13,10 +12,12 @@ export type AssistantHelpTopic = {
 }
 
 /** Trusted product copy and destinations for Assistant guidance. */
-export const ASSISTANT_HELP_TOPICS = [
+const defineHelpTopics = <const Topics extends readonly AssistantHelpTopic[]>(topics: Topics) => topics
+
+export const ASSISTANT_HELP_TOPICS = defineHelpTopics([
   { id: 'frame_preview', intents: ['preview the frame', 'what is on the frame screen', 'se rammen på mobilen'], patterns: [/(?:what|hva).*(?:shown|showing|vises|på).*(?:frame|screen|skjerm|ramm)/i, /(?:see|view|preview|se|forhåndsvis).*(?:frame|screen|skjerm|ramm)/i, /(?:frame|ramm).*(?:on (?:my )?phone|på mobilen)/i], answer: { en: 'Turn your phone sideways to see what is currently shown on your frame.', no: 'Snu telefonen sidelengs for å se hva som vises på rammen akkurat nå.' } },
   { id: 'custom_surf_spot', intents: ['add custom surf spot', 'add secret spot'], patterns: [/(?:add|create|legg(?:er)?(?: jeg)? til|lag).*(?:custom|secret|egen|hemmelig)?\s*(?:a |an |en |et )?(?:surf ?spot|spot)/i], destination: 'surf', answer: { en: 'Open Surf, tap the spot selector, then add a custom spot.', no: 'Gå til Surf, trykk på spotvelgeren og legg til en egen spot.' }, cta: { en: 'Open Surf', no: 'Åpne Surf' } },
-  { id: 'recipes', intents: ['find recipes', 'saved recipes'], patterns: [/(?:recipe|recipes|oppskrift|oppskrifter)/i], destination: 'recipes', answer: { en: 'You’ll find recipes under Groceries → Recipes.', no: 'Du finner oppskrifter under Handleliste → Oppskrifter.' }, cta: { en: 'Open Recipes', no: 'Åpne Oppskrifter' } },
+  { id: 'recipes', intents: ['find recipes', 'saved recipes'], patterns: [/(?:recipe|recipes|oppskrift|oppskrifter)/i], destination: 'groceries', answer: { en: 'You’ll find recipes under Groceries → Recipes.', no: 'Du finner oppskrifter under Handleliste → Oppskrifter.' }, cta: { en: 'Open Groceries', no: 'Åpne Handleliste' } },
   { id: 'dinner_plan', intents: ['find dinner plan', 'meal plan'], patterns: [/(?:dinner|meal) plan|middagsplan/i], destination: 'groceries', answer: { en: 'You’ll find Dinner Plan under Groceries.', no: 'Du finner Middagsplan under Handleliste.' }, cta: { en: 'Open Groceries', no: 'Åpne Handleliste' } },
   { id: 'football_team', intents: ['change football team', 'team selector'], patterns: [/(?:football|soccer|fotball).*(?:team|lag)|fotballag|(?:team|lag).*(?:football|soccer|fotball)/i], destination: 'football', answer: { en: 'Open Football and tap the team to choose a new one.', no: 'Gå til Football og trykk på laget for å velge et nytt.' }, cta: { en: 'Open Football', no: 'Åpne Football' } },
   { id: 'spond', intents: ['connect Spond'], patterns: [/spond/i], destination: 'spond', answer: { en: 'Open Reminders, tap Connect, then choose Spond.', no: 'Gå til Påminnelser, trykk Koble til og velg Spond.' }, cta: { en: 'Open Spond Connect', no: 'Åpne Spond-tilkobling' } },
@@ -32,12 +33,15 @@ export const ASSISTANT_HELP_TOPICS = [
   { id: 'ai_follow', intents: ['configure AI Follow', 'view AI Follow'], patterns: [/(?:ai follow|radar)/i], destination: 'assistant', answer: { en: 'Open Assistant to view or configure AI Follow.', no: 'Gå til Assistent for å se eller konfigurere AI Follow.' }, cta: { en: 'Open Assistant', no: 'Åpne Assistent' } },
   { id: 'stocks', intents: ['find stocks', 'investments'], patterns: [/(?:stocks|investments|aksjer|investeringer)/i], destination: 'stocks', answer: { en: 'Open Stocks to view your investments.', no: 'Gå til Aksjer for å se investeringene dine.' }, cta: { en: 'Open Stocks', no: 'Åpne Aksjer' } },
   { id: 'settings', intents: ['find settings'], patterns: [/(?:settings|innstillinger)/i], destination: 'settings', answer: { en: 'Open Settings to change app preferences.', no: 'Gå til Innstillinger for å endre appinnstillinger.' }, cta: { en: 'Open Settings', no: 'Åpne Innstillinger' } },
-] as const satisfies readonly AssistantHelpTopic[]
+])
+
+export type AssistantHelpTopicId = typeof ASSISTANT_HELP_TOPICS[number]['id']
 
 export const ASSISTANT_HELP_TOPIC_IDS = ASSISTANT_HELP_TOPICS.map((topic) => topic.id) as AssistantHelpTopicId[]
 
 export function assistantHelpResult(id: AssistantHelpTopicId, language: 'en' | 'no'): AssistantResult {
-  const topic = ASSISTANT_HELP_TOPICS.find((candidate) => candidate.id === id)!
+  const topic: AssistantHelpTopic | undefined = ASSISTANT_HELP_TOPICS.find((candidate) => candidate.id === id)
+  if (!topic) throw new Error(`Unknown Assistant help topic: ${id}`)
   return { status: 'completed', action: 'answer_help', message: topic.answer[language], ...(topic.destination && topic.cta ? { cta: { label: topic.cta[language], destination: topic.destination } } : {}) }
 }
 

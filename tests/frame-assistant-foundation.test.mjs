@@ -155,7 +155,7 @@ test('assistant CTAs close the sheet and only promise reachable surfaces', () =>
   assert.match(ui, /setOpen\(false\); onNavigate/)
   assert.match(home, /frame-layout-controls/)
   assert.match(home, /case 'layout':[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
-  assert.match(help, /id: 'recipes'[\s\S]*destination: 'recipes'/)
+  assert.match(help, /id: 'recipes'[\s\S]*destination: 'groceries'/)
 })
 
 test('a reminder follow-up retains only validated short-lived reminder context', () => {

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { assistantHelpResult, resolveDeterministicAssistantHelp, validateAssistantHelpTopicId } from '../app/lib/assistant/help.ts'
+import { resolveDeterministicCapabilityRequest } from '../app/lib/assistant/resolver.ts'
 
 test('frame preview guidance is localized and never offers navigation', () => {
   const no = resolveDeterministicAssistantHelp('Hvordan ser jeg hva som er på skjermen min akkurat nå?', 'no')
@@ -14,11 +15,12 @@ test('frame preview guidance is localized and never offers navigation', () => {
 
 test('common Norwegian product questions resolve locally with canonical CTAs', () => {
   const cases = [
-    ['Hvor finner jeg oppskrifter?', 'Du finner oppskrifter under Handleliste → Oppskrifter.', 'recipes'],
+    ['Hvor finner jeg oppskrifter?', 'Du finner oppskrifter under Handleliste → Oppskrifter.', 'groceries'],
     ['Hvordan endrer jeg fotballag?', 'Gå til Football og trykk på laget for å velge et nytt.', 'football'],
     ['Hvor legger jeg til en surfspot?', 'Gå til Surf, trykk på spotvelgeren og legg til en egen spot.', 'surf'],
     ['Hvordan kobler jeg Spond?', 'Gå til Påminnelser, trykk Koble til og velg Spond.', 'spond'],
     ['Hvor bytter jeg tema?', 'Gå til Innstillinger → Tema for å endre apptema.', 'settings'],
+    ['Hvor endrer jeg språk?', 'Gå til Innstillinger → Språk for å endre språk.', 'settings'],
   ]
   for (const [question, message, destination] of cases) {
     const result = resolveDeterministicAssistantHelp(question, 'no')
@@ -32,7 +34,7 @@ test('fuzzy AI output can select only registry copy, never generated prose', () 
   assert.equal(resolveDeterministicAssistantHelp('Could you take me to the place where meals inspire my cooking?', 'en'), null)
   const classified = validateAssistantHelpTopicId('recipes')
   assert.equal(classified, 'recipes')
-  assert.deepEqual(assistantHelpResult(classified, 'en'), { status: 'completed', action: 'answer_help', message: 'You’ll find recipes under Groceries → Recipes.', cta: { label: 'Open Recipes', destination: 'recipes' } })
+  assert.deepEqual(assistantHelpResult(classified, 'en'), { status: 'completed', action: 'answer_help', message: 'You’ll find recipes under Groceries → Recipes.', cta: { label: 'Open Groceries', destination: 'groceries' } })
   assert.equal(validateAssistantHelpTopicId('general_knowledge'), null)
 
   const route = readFileSync(new URL('../app/api/assistant/route.ts', import.meta.url), 'utf8')
@@ -44,4 +46,26 @@ test('fuzzy AI output can select only registry copy, never generated prose', () 
 
 test('general knowledge remains outside deterministic RE:MIND help', () => {
   assert.equal(resolveDeterministicAssistantHelp('Why do birds migrate?', 'en'), null)
+})
+
+test('concrete configuration commands remain executable capabilities', () => {
+  const cases = [
+    ['Bytt appen til dark mode', 'settings.set_app_theme'],
+    ['Bytt fotballag til Dortmund', 'football.set_team'],
+    ['Bytt språk til norsk', 'frame.set_language'],
+    ['Bytt til layout 2', 'frame.set_layout'],
+  ]
+  for (const [request, capabilityId] of cases) {
+    assert.equal(resolveDeterministicCapabilityRequest(request)?.capabilityId, capabilityId, request)
+  }
+  const route = readFileSync(new URL('../app/api/assistant/route.ts', import.meta.url), 'utf8')
+  assert.ok(route.indexOf('resolveDeterministicCapabilityRequest(body.text)') < route.indexOf('resolveDeterministicAssistantHelp(body.text'))
+  assert.match(route, /Choose a capability for a concrete request to perform a supported action/)
+})
+
+test('recipes CTA truthfully opens the Groceries surface', () => {
+  const result = resolveDeterministicAssistantHelp('Hvor finner jeg oppskrifter?', 'no')
+  assert.deepEqual(result?.cta, { label: 'Åpne Handleliste', destination: 'groceries' })
+  const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  assert.match(home, /case 'groceries': case 'recipes': setActiveTab\('groceries'\)/)
 })
