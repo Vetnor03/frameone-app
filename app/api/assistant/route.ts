@@ -12,23 +12,31 @@ import { normalizeCapabilityArgument } from '@/app/lib/assistant/normalization'
 import { surfLoggedAt } from '@/app/lib/assistant/time'
 import { GET as weatherDetails } from '@/app/api/weather/details/route'
 import { GET as surfScore } from '@/app/api/surf/score/route'
+import { ASSISTANT_HELP_TOPIC_IDS, assistantHelpPrompt, assistantHelpResult, resolveDeterministicAssistantHelp, validateAssistantHelpTopicId, type AssistantHelpTopicId } from '@/app/lib/assistant/help'
 
 export const runtime = 'nodejs'
 
 function friendlyError(): AssistantResult { return { status: 'error', message: "I couldn't do that. Try again." } }
 function outputText(payload: any) { for (const item of payload?.output ?? []) for (const content of item?.content ?? []) if (content?.type === 'output_text') return content.text; return '' }
 
-async function aiIntent(text: string): Promise<CapabilityRequest | null> {
+type ClassifiedIntent = CapabilityRequest | { helpTopicId: AssistantHelpTopicId }
+
+async function aiIntent(text: string): Promise<ClassifiedIntent | null> {
   if (!process.env.OPENAI_API_KEY) return null
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
-      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Classify one English or Norwegian request as exactly one registered RE:MIND capability. Return unsupported for general questions. Preserve useful argument text; never invent app data or operations.\n${assistantCapabilityPrompt()}` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
-      text: { format: { type: 'json_schema', name: 'assistant_capability', strict: true, schema: { type: 'object', additionalProperties: false, properties: { capabilityId: { type: 'string', enum: [...ASSISTANT_CAPABILITY_IDS, 'unsupported'] }, arguments: { type: 'object', additionalProperties: false, properties: { team: { type: ['string', 'null'] }, spot: { type: ['string', 'null'] }, rating: { type: ['integer', 'null'] }, date: { type: ['string', 'null'] }, period: { type: ['string', 'null'] }, time: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] }, title: { type: ['string', 'null'] }, targetDate: { type: ['string', 'null'] }, theme: { type: ['string', 'null'] }, language: { type: ['string', 'null'] }, layout: { type: ['string', 'null'] }, text: { type: ['string', 'null'] }, items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' }, quantity: { type: ['integer', 'null'] } }, required: ['name', 'quantity'] } } }, required: ['team', 'spot', 'rating', 'date', 'period', 'time', 'comment', 'title', 'targetDate', 'theme', 'language', 'layout', 'text', 'items'] } }, required: ['capabilityId', 'arguments'] } } },
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Classify one English or Norwegian request as a registered RE:MIND capability or help topic. Choose a capability for a concrete request to perform a supported action. Choose a help topic for a question asking where or how to use the product. Return unsupported for general knowledge. Never write an answer; only classify. Preserve useful capability arguments and never invent app data.\nCapabilities:\n${assistantCapabilityPrompt()}\nHelp topics:\n${assistantHelpPrompt()}` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
+      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { intentId: { type: 'string', enum: [...ASSISTANT_CAPABILITY_IDS, ...ASSISTANT_HELP_TOPIC_IDS.map((id) => `help:${id}`), 'unsupported'] }, arguments: { type: 'object', additionalProperties: false, properties: { team: { type: ['string', 'null'] }, spot: { type: ['string', 'null'] }, rating: { type: ['integer', 'null'] }, date: { type: ['string', 'null'] }, period: { type: ['string', 'null'] }, time: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] }, title: { type: ['string', 'null'] }, targetDate: { type: ['string', 'null'] }, theme: { type: ['string', 'null'] }, language: { type: ['string', 'null'] }, layout: { type: ['string', 'null'] }, text: { type: ['string', 'null'] }, items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' }, quantity: { type: ['integer', 'null'] } }, required: ['name', 'quantity'] } } }, required: ['team', 'spot', 'rating', 'date', 'period', 'time', 'comment', 'title', 'targetDate', 'theme', 'language', 'layout', 'text', 'items'] } }, required: ['intentId', 'arguments'] } } },
     }),
   }).catch(() => null)
   if (!response?.ok) return null
-  try { return validateCapabilityClassification(JSON.parse(outputText(await response.json()))) } catch { return null }
+  try {
+    const parsed = JSON.parse(outputText(await response.json())) as { intentId?: unknown; arguments?: unknown }
+    const helpId = typeof parsed.intentId === 'string' && parsed.intentId.startsWith('help:') ? validateAssistantHelpTopicId(parsed.intentId.slice(5)) : null
+    if (helpId) return { helpTopicId: helpId }
+    return validateCapabilityClassification({ capabilityId: parsed.intentId, arguments: parsed.arguments })
+  } catch { return null }
 }
 
 async function saveReminder(db: SupabaseClient, user: User, deviceId: string, reminder: NonNullable<ReturnType<typeof validateParsedReminder>>, language: 'en' | 'no'): Promise<AssistantResult> {
@@ -152,10 +160,18 @@ export async function POST(request: Request) {
   }
   let capability = resolveDeterministicCapabilityRequest(body.text)
   if (!capability) {
+    const deterministicHelp = resolveDeterministicAssistantHelp(body.text, requestLanguage)
+    if (deterministicHelp) return NextResponse.json(deterministicHelp)
+  }
+  let classifiedHelpTopic: AssistantHelpTopicId | null = null
+  if (!capability) {
     const { data: aiAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
     if (!aiAllowed) return NextResponse.json({ status: 'error', message: 'Please wait a moment and try again.' }, { status: 429 })
-    capability = await aiIntent(body.text)
+    const classified = await aiIntent(body.text)
+    if (classified && 'helpTopicId' in classified) classifiedHelpTopic = classified.helpTopicId
+    else capability = classified
   }
+  if (classifiedHelpTopic) return NextResponse.json(assistantHelpResult(classifiedHelpTopic, requestLanguage))
   if (!capability) return NextResponse.json({ status: 'needs_input', message: body.language === 'no' ? 'Hva vil du at jeg skal gjøre?' : 'What would you like me to do?' })
   try { return NextResponse.json(await executeCapabilityRequest(capability, capabilityContext(db, admin, user, requestDeviceId, { localNow: requestLocalNow, timezone: requestTimezone, language: requestLanguage, authorization: auth }))) }
   catch { return NextResponse.json(friendlyError()) }

@@ -9,6 +9,7 @@ import { ASSISTANT_TIPS, assistantPlaceholder, nextAssistantTip } from '../app/l
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const ui = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
 const resolver = readFileSync(new URL('../app/lib/assistant/resolver.ts', import.meta.url), 'utf8')
+const help = readFileSync(new URL('../app/lib/assistant/help.ts', import.meta.url), 'utf8')
 const api = readFileSync(new URL('../app/api/assistant/route.ts', import.meta.url), 'utf8')
 const tips = readFileSync(new URL('../app/lib/assistant/tips.ts', import.meta.url), 'utf8')
 const groceryActions = readFileSync(new URL('../app/lib/groceries/actions.ts', import.meta.url), 'utf8')
@@ -154,7 +155,7 @@ test('assistant CTAs close the sheet and only promise reachable surfaces', () =>
   assert.match(ui, /setOpen\(false\); onNavigate/)
   assert.match(home, /frame-layout-controls/)
   assert.match(home, /case 'layout':[\s\S]*requestAnimationFrame[\s\S]*frame-layout-controls/)
-  assert.match(resolver, /destination: 'groceries', message: 'Your saved recipes are in Groceries\.', label: 'Open Groceries'/)
+  assert.match(help, /id: 'recipes'[\s\S]*destination: 'groceries'/)
 })
 
 test('a reminder follow-up retains only validated short-lived reminder context', () => {

@@ -1,8 +1,9 @@
-import type { AssistantDestination, ResolvedAssistantIntent } from './types'
+import type { ResolvedAssistantIntent } from './types'
 import { SURF_SPOTS } from '../surf/spots.ts'
 import { ALL_TEAMS } from '../soccer/teams.ts'
 import type { CapabilityRequest } from './handlers.ts'
 import { ASSISTANT_CAPABILITY_IDS } from './capabilities.ts'
+import { resolveDeterministicAssistantHelp } from './help.ts'
 
 const RESERVED_INPUT = /^(?:weather|vær|surf|layout|oppsett|settings|innstillinger|spond|reminders?|påminnelser?|groceries|grocery|dagligvarer|handleliste|countdown|nedtelling|frame|ramme|modules?|moduler?)$/i
 const GROCERY_WORDS = new Set([
@@ -27,13 +28,6 @@ function parseGroceryParts(value: string) {
   })
   return items.some(({ name }) => isReservedAssistantInput(name)) ? null : items
 }
-
-const HELP: Array<{ pattern: RegExp; destination: AssistantDestination; message: string; label: string }> = [
-  { pattern: /(?:layout|frame layout|oppsett)/i, destination: 'layout', message: 'Choose a layout from FRAME, or create a custom one there.', label: 'Open Layout Settings' },
-  { pattern: /(?:connect|koble).*(?:spond)|spond.*(?:connect|koble)/i, destination: 'spond', message: 'Connect Spond from Reminders.', label: 'Open Spond Connect' },
-  { pattern: /(?:recipe|recipes|oppskrift)/i, destination: 'groceries', message: 'Your saved recipes are in Groceries.', label: 'Open Groceries' },
-  { pattern: /(?:settings|innstillinger)/i, destination: 'settings', message: 'You can change app preferences in Settings.', label: 'Open Settings' },
-]
 
 function groceryItems(text: string) {
   const match = text.trim().match(/^(?:(?:please\s+)?add|legg til)\s+(.+?)(?:\s+(?:to|på)\s+(?:(?:my|min)\s+)?(?:grocery|groceries|grocery list|shopping list|handlelisten|handleliste))?[.!]?$/i)
@@ -89,21 +83,8 @@ export function resolveDeterministicAssistantIntent(text: string): ResolvedAssis
     })
     if (team) return { action: 'set_football_team', arguments: team }
   }
-  const module = [
-    { pattern: /^(?:weather|vær)$/i, destination: 'weather' as const, label: 'Open Weather' },
-    { pattern: /^surf$/i, destination: 'surf' as const, label: 'Open Surf' },
-    { pattern: /^(?:groceries|grocery|dagligvarer|handleliste)$/i, destination: 'groceries' as const, label: 'Open Groceries' },
-    { pattern: /^(?:reminders?|påminnelser?)$/i, destination: 'reminders' as const, label: 'Open Reminders' },
-    { pattern: /^(?:settings|innstillinger)$/i, destination: 'settings' as const, label: 'Open Settings' },
-    { pattern: /^(?:layout|oppsett)$/i, destination: 'layout' as const, label: 'Open Layout Settings' },
-    { pattern: /^spond$/i, destination: 'spond' as const, label: 'Open Spond Connect' },
-  ].find((entry) => entry.pattern.test(request))
-  if (module) return { action: 'answer_help', arguments: { destination: module.destination }, response: { status: 'completed', action: 'answer_help', message: `Open ${module.destination}.`, cta: { label: module.label, destination: module.destination } } }
-  for (const entry of HELP) {
-    if (entry.pattern.test(request) && /(?:where|how|open|find|change|connect|koble|hvor|hvordan)/i.test(request)) {
-      return { action: 'answer_help', arguments: { destination: entry.destination }, response: { status: 'completed', action: 'answer_help', message: entry.message, cta: { label: entry.label, destination: entry.destination } } }
-    }
-  }
+  const help = resolveDeterministicAssistantHelp(request)
+  if (help) return { action: 'answer_help', arguments: { destination: help.cta?.destination ?? 'assistant' }, response: help }
   const items = groceryItems(request)
   if (items) return { action: 'add_grocery_items', arguments: { items } }
   if (/^(?:(?:please\s+)?remind me|minn meg på)\s+/i.test(request)) return { action: 'create_reminder', arguments: { text: request } }
@@ -149,7 +130,9 @@ export function resolveDeterministicCapabilityRequest(text: string): CapabilityR
     const title = request.replace(/^.*?\b(?:nedtelling|countdown)\b\s*(?:til|for)?\s*/i, '').replace(date ?? /$^/, '').trim()
     return { capabilityId: 'countdown.create', arguments: { title, ...(date ? { targetDate: date } : {}) } }
   }
-  if (/\b(?:app|appen)\b.*\b(?:dark|light|mørk|lys)/i.test(request)) return { capabilityId: 'settings.set_app_theme', arguments: { theme: request } }
+  const explicitThemeChange = /\b(?:change|switch|set|bytt|endre)\b.*\b(?:theme|tema|apptema)\b.*\b(?:dark|light|mørk(?:t)?|lys(?:t)?)\b/i.test(request)
+    || /\b(?:app|appen)\b.*\b(?:dark|light|mørk|lys)/i.test(request)
+  if (explicitThemeChange) return { capabilityId: 'settings.set_app_theme', arguments: { theme: request } }
   if (/\b(?:språk|language)\b.*\b(?:norsk|norwegian|engelsk|english)/i.test(request)) return { capabilityId: 'frame.set_language', arguments: { language: request } }
   const layout = request.match(/\b(?:layout|oppsett)\s*[1-4]\b/i)?.[0]
   if (layout && /\b(?:bytt|change|switch|set)\b/i.test(request)) return { capabilityId: 'frame.set_layout', arguments: { layout } }
@@ -160,11 +143,9 @@ export function resolveDeterministicCapabilityRequest(text: string): CapabilityR
   if (legacy.action === 'create_reminder') return { capabilityId: 'reminders.create', arguments: legacy.arguments }
   if (legacy.action === 'log_surf_experience') return { capabilityId: 'surf.log_experience', arguments: legacy.arguments }
   if (legacy.action === 'set_football_team') return { capabilityId: 'football.set_team', arguments: { team: legacy.arguments.teamId } }
-  if (legacy.action === 'answer_help') {
-    const openIds: Partial<Record<AssistantDestination, string>> = { settings: 'settings.open', surf: 'surf.open', weather: 'weather.open', groceries: 'groceries.open', recipes: 'recipes.manage', reminders: 'reminders.open', spond: 'spond.open', countdown: 'countdown.open', date: 'date.open', stocks: 'stocks.open', assistant: 'ai_follow.manage', layout: 'layout.open' }
-    const capabilityId = openIds[legacy.arguments.destination]
-    return capabilityId ? { capabilityId, arguments: {} } : null
-  }
+  // Help is resolved separately so trusted registry copy is never degraded to
+  // a generic navigation capability response.
+  if (legacy.action === 'answer_help') return null
   return null
 }
 
