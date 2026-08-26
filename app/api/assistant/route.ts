@@ -7,6 +7,8 @@ import { addGroceryItemsCanonical } from '@/app/lib/groceries/actions'
 import { reminderFollowupContext, surfFollowupTime, validatePendingReminderPayload, validatePendingSurfPayload } from '@/app/lib/assistant/pending'
 import { POST as logSurfExperience } from '@/app/api/surf/experience/log/route'
 import { findSpotByLabel } from '@/app/lib/surf/spots'
+import { assistantCapabilityPrompt } from '@/app/lib/assistant/capabilities'
+import { ALL_TEAMS } from '@/app/lib/soccer/teams'
 
 export const runtime = 'nodejs'
 
@@ -18,8 +20,8 @@ async function aiIntent(text: string): Promise<ResolvedAssistantIntent | null> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.ASSISTANT_INTENT_MODEL || 'gpt-5-mini', store: false, reasoning: { effort: 'minimal' }, max_output_tokens: 180,
-      input: [{ role: 'developer', content: [{ type: 'input_text', text: 'Route one English or Norwegian household request to a supported module action. Actions: add_grocery_items for clear foods/lists only; create_reminder for task plus date/time phrases even without remind me; log_surf_experience for a surf spot plus an experience rating; needs_input otherwise. Surf ratings are Flat=1, Poor=2, Poor to Fair=3, Fair=4, Good=5, Epic=6. Preserve the original reminder text and surf comment. Never turn module/navigation concepts into groceries. Do not chat or invent actions.' }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
-      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder', 'log_surf_experience', 'needs_input'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', maxLength: 80 }, quantity: { type: ['integer', 'null'], minimum: 1, maximum: 99 } }, required: ['name', 'quantity'] }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 }, spot: { type: 'string', maxLength: 80 }, rating: { type: ['integer', 'null'], minimum: 1, maximum: 6 }, date: { type: 'string', maxLength: 40 }, time: { type: ['string', 'null'], maxLength: 20 }, comment: { type: 'string', maxLength: 1000 } }, required: ['items', 'text', 'spot', 'rating', 'date', 'time', 'comment'] } }, required: ['action', 'arguments'] } } },
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: `Route one English or Norwegian request to a RE:MIND capability. Executable actions: add_grocery_items for clear foods/lists only; create_reminder for task plus date/time phrases; log_surf_experience for a surf spot plus rating; set_football_team when changing the selected football team; needs_input when an executable operation or required argument cannot be resolved. App capability registry:\n${assistantCapabilityPrompt()}\nSurf ratings are Flat=1, Poor=2, Poor to Fair=3, Fair=4, Good=5, Epic=6. Preserve original reminder text and surf comment. Never turn module/navigation concepts into groceries. Do not chat or invent actions.` }] }, { role: 'user', content: [{ type: 'input_text', text }] }],
+      text: { format: { type: 'json_schema', name: 'assistant_intent', strict: true, schema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['add_grocery_items', 'create_reminder', 'log_surf_experience', 'set_football_team', 'needs_input'] }, arguments: { type: 'object', additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', maxLength: 80 }, quantity: { type: ['integer', 'null'], minimum: 1, maximum: 99 } }, required: ['name', 'quantity'] }, maxItems: 30 }, text: { type: 'string', maxLength: 1000 }, spot: { type: 'string', maxLength: 80 }, rating: { type: ['integer', 'null'], minimum: 1, maximum: 6 }, date: { type: 'string', maxLength: 40 }, time: { type: ['string', 'null'], maxLength: 20 }, comment: { type: 'string', maxLength: 1000 }, team: { type: 'string', maxLength: 80 } }, required: ['items', 'text', 'spot', 'rating', 'date', 'time', 'comment', 'team'] } }, required: ['action', 'arguments'] } } },
     }),
   }).catch(() => null)
   if (!response?.ok) return null
@@ -71,6 +73,27 @@ export async function executeAssistantAction(db: SupabaseClient, admin: Supabase
       return error || !data ? friendlyError() : { status: 'needs_input', action: 'log_surf_experience', message: question, pendingId: data.id }
     }
     return executeSurfLog(intent, context)
+  }
+  if (intent.action === 'set_football_team') {
+    const { data: row, error: readError } = await db.from('device_settings').select('settings_json').eq('device_id', deviceId).maybeSingle()
+    if (readError) return friendlyError()
+    const settings = row?.settings_json && typeof row.settings_json === 'object' && !Array.isArray(row.settings_json)
+      ? { ...(row.settings_json as Record<string, unknown>) }
+      : {}
+    const modules = settings.modules && typeof settings.modules === 'object' && !Array.isArray(settings.modules)
+      ? { ...(settings.modules as Record<string, unknown>) }
+      : {}
+    const current = Array.isArray(modules.soccer) ? [...modules.soccer] : []
+    const team = { id: 1, ...intent.arguments }
+    const first = current.findIndex((value) => value && typeof value === 'object' && Number((value as Record<string, unknown>).id) === 1)
+    if (first >= 0) current[first] = { ...(current[first] as Record<string, unknown>), ...team }
+    else current.push(team)
+    modules.soccer = current
+    settings.modules = modules
+    // The settings screen uses this membership-aware RPC as its canonical save.
+    const { data: saved, error } = await db.rpc('upsert_device_settings', { p_device_id: deviceId, p_settings: settings })
+    if (error || saved !== true) return friendlyError()
+    return { status: 'completed', action: 'set_football_team', message: context.language === 'no' ? `Fotballaget er byttet til ${intent.arguments.teamName}.` : `Football team changed to ${intent.arguments.teamName}.` }
   }
   const { data: parseAllowed } = await db.rpc('consume_assistant_request', { p_kind: 'intent', p_limit: 4 })
   if (!parseAllowed) return { status: 'error', message: 'Please wait a moment and try again.' }

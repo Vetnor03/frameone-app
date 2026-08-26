@@ -1,5 +1,6 @@
 import type { AssistantDestination, ResolvedAssistantIntent } from './types'
 import { SURF_SPOTS } from '../surf/spots.ts'
+import { ALL_TEAMS } from '../soccer/teams.ts'
 
 const RESERVED_INPUT = /^(?:weather|vær|surf|layout|oppsett|settings|innstillinger|spond|reminders?|påminnelser?|groceries|grocery|dagligvarer|handleliste|countdown|nedtelling|frame|ramme|modules?|moduler?)$/i
 const GROCERY_WORDS = new Set([
@@ -67,6 +68,17 @@ function naturalReminder(text: string) {
 export function resolveDeterministicAssistantIntent(text: string): ResolvedAssistantIntent | null {
   const request = text.trim()
   if (!request || request.length > 1_000) return null
+  // Resolve against the same team catalogue as the Football picker. This is
+  // data-driven: adding a team to the UI automatically makes it addressable.
+  if (/\b(?:change|switch|set|bytt|endre|velg)\b/i.test(request) && /(?:football|soccer|fotball|team|lag)/i.test(request)) {
+    const normalized = request.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')
+    const team = [...ALL_TEAMS].sort((a, b) => b.teamName.length - a.teamName.length).find((candidate) => {
+      const words = candidate.teamName.split(/\s+/)
+      const names = [candidate.teamName, candidate.teamId.replaceAll('_', ' '), ...(words.length > 1 ? [words.at(-1)!] : [])]
+      return names.some((name) => normalized.includes(name.toLocaleLowerCase()))
+    })
+    if (team) return { action: 'set_football_team', arguments: team }
+  }
   const module = [
     { pattern: /^(?:weather|vær)$/i, destination: 'weather' as const, label: 'Open Weather' },
     { pattern: /^surf$/i, destination: 'surf' as const, label: 'Open Surf' },
@@ -104,6 +116,11 @@ export function validateModelIntent(value: unknown): ResolvedAssistantIntent | n
   if (input.action === 'create_reminder' && input.arguments && typeof input.arguments === 'object') {
     const text = (input.arguments as Record<string, unknown>).text
     if (typeof text === 'string' && text.trim() && text.length <= 1_000) return { action: 'create_reminder', arguments: { text: text.trim() } }
+  }
+  if (input.action === 'set_football_team' && input.arguments && typeof input.arguments === 'object') {
+    const requested = String((input.arguments as Record<string, unknown>).team || '').trim().toLocaleLowerCase()
+    const team = requested && ALL_TEAMS.find((candidate) => [candidate.teamName, candidate.teamId.replaceAll('_', ' '), candidate.teamName.split(/\s+/).at(-1)!].some((name) => name.toLocaleLowerCase() === requested))
+    if (team) return { action: 'set_football_team', arguments: team }
   }
   if (input.action === 'log_surf_experience' && input.arguments && typeof input.arguments === 'object') {
     const args = input.arguments as Record<string, unknown>
