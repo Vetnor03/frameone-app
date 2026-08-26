@@ -124,9 +124,10 @@ test('Dinner Plan and Recipes are equal side-by-side secondary actions below pri
   const secondaryGrid = ui.indexOf('grid w-[260px] grid-cols-2 gap-2', primary)
   const dinner = ui.indexOf("language === 'no' ? 'MIDDAGSPLAN' : 'DINNER PLAN'", secondaryGrid)
   const recipes = ui.indexOf("language === 'no' ? 'OPPSKRIFTER' : 'RECIPES'", dinner)
-  const sharedStyle = 'h-[44px] rounded-2xl border border-[color:var(--bd-15)] text-[10px] tracking-widest text-[color:var(--fg-75)] transition disabled:opacity-40'
+  const sharedStyle = 'h-[44px] rounded-2xl border text-[10px] tracking-widest transition'
   assert.ok(primary > -1 && secondaryGrid > primary && dinner > secondaryGrid && recipes > dinner)
   assert.equal(ui.slice(secondaryGrid, recipes + 500).split(sharedStyle).length - 1, 2)
+  assert.equal(ui.slice(secondaryGrid, recipes + 500).split('data-ui="secondary-control"').length - 1, 2)
 })
 
 test('recipe library loads alphabetically and supports live name search', async () => {
