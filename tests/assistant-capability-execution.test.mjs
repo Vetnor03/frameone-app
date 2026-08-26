@@ -5,6 +5,7 @@ import { resolveDeterministicAssistantIntent, resolveDeterministicCapabilityRequ
 import { ASSISTANT_CAPABILITIES } from '../app/lib/assistant/capabilities.ts'
 import { transitionBuiltInLayoutSettings } from '../app/lib/frameLayoutTransition.ts'
 import { normalizeCapabilityArgument, normalizeCapabilityArguments } from '../app/lib/assistant/normalization.ts'
+import { applyDocumentTheme } from '../app/lib/theme.ts'
 import { readFileSync } from 'node:fs'
 
 function dbMock(rows = {}) {
@@ -64,8 +65,37 @@ test('app theme capability returns the saved theme for immediate client state sy
   const assistant = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
   const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
   assert.match(assistant, /isAppTheme\(value\.appTheme\)\) onAppThemeChange\(value\.appTheme\)/)
-  assert.match(home, /onAppThemeChange=\{\(theme\) => \{ persistTheme\(theme\); setAppTheme\(theme\) \}\}/)
+  assert.match(home, /onAppThemeChange=\{\(theme\) => \{ applyDocumentTheme\(theme\); persistTheme\(theme\); setAppTheme\(theme\) \}\}/)
   assert.doesNotMatch(`${assistant}\n${home}`, /window\.location\.reload|location\.reload/)
+  const completedResponse = assistant.match(/if \(value\?\.status === 'completed'\) \{([\s\S]*?)\n      \}/)?.[1] ?? ''
+  assert.doesNotMatch(completedResponse, /setOpen\(false\)/)
+})
+
+test('canonical document theme application updates browser and safe-area backing immediately', () => {
+  const meta = { content: '' }
+  const originalDocument = globalThis.document
+  globalThis.document = { documentElement: { dataset: {}, style: {} }, body: { style: {} }, querySelector: () => meta }
+  try {
+    for (const [theme, color] of [['dark', '#061b24'], ['light', '#f5f6f8']]) {
+      applyDocumentTheme(theme)
+      assert.equal(document.documentElement.dataset.theme, theme)
+      assert.equal(document.documentElement.style.colorScheme, theme)
+      assert.equal(document.documentElement.style.backgroundColor, color)
+      assert.equal(document.body.style.backgroundColor, color)
+      assert.equal(meta.content, color)
+    }
+  } finally {
+    globalThis.document = originalDocument
+  }
+})
+
+test('Assistant exposes localized working state only while a request is busy', () => {
+  const assistant = readFileSync(new URL('../app/components/FrameAssistant.tsx', import.meta.url), 'utf8')
+  assert.match(assistant, /working: 'Jobber…'/)
+  assert.match(assistant, /working: 'Working…'/)
+  assert.match(assistant, /busy && <div role="status" aria-live="polite"[\s\S]*\{copy\.working\}/)
+  assert.match(assistant, /finally \{ setBusy\(false\) \}/)
+  assert.match(assistant, /\{result && <div aria-live="polite"/)
 })
 
 test('countdown uses the UI schema and missing arguments create generic pending state', async () => {
