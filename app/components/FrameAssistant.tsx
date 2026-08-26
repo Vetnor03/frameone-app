@@ -11,6 +11,7 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
   const [result, setResult] = useState<AssistantResult | null>(null), [tipDismissed, setTipDismissed] = useState(false)
   const [sessionTip, setSessionTip] = useState<ReturnType<typeof nextAssistantTip>>(null)
   const tipSelected = useRef(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const tip = tipsEnabled && !tipDismissed ? sessionTip : null
   const copy = language === 'no' ? { heading: 'RE:MIND-ASSISTENT', subtitle: 'Korte kommandoer, direkte resultat.', send: 'SEND', working: 'Jobber…' } : { heading: 'RE:MIND ASSISTANT', subtitle: 'Short commands, direct results.', send: 'SEND', working: 'Working…' }
@@ -29,6 +30,8 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
     if (selected) onTipShown(selected.index)
   }, [canSelectTip, language, onTipShown, tipsEnabled, tipsLoaded, tipsShown])
 
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
+
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (!text.trim() || !deviceId || busy) return
     setBusy(true); setResult(null)
@@ -38,9 +41,16 @@ export default function FrameAssistant({ deviceId, language, tipsEnabled, tipsSh
       const value = await response.json().catch(() => null)
       setResult(value && typeof value.message === 'string' ? value : { status: 'error', message: "I couldn't do that. Try again." })
       setPendingId(value?.status === 'needs_input' && typeof value.pendingId === 'string' ? value.pendingId : null)
+      if (value?.status === 'needs_input' || value?.status === 'completed') setText('')
       if (value?.status === 'completed') {
         if (isAppTheme(value.appTheme)) onAppThemeChange(value.appTheme)
-        setText('')
+        if (value.action === 'create_reminder') closeTimer.current = setTimeout(() => {
+          setOpen(false)
+          setResult(null)
+          setPendingId(null)
+          setText('')
+          closeTimer.current = null
+        }, 750)
       }
     } catch { setResult({ status: 'error', message: "I couldn't do that. Try again." }) } finally { setBusy(false) }
   }

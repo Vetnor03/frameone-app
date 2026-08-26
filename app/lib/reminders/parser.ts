@@ -68,6 +68,28 @@ function isRealYmd(value: unknown): value is string {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
 }
 
+export function inferRecurringReminderStartDate(reminder: ParsedReminder, localNow: string, timezone: string | null | undefined): ParsedReminder {
+  if (reminder.repeat_type !== 'daily' || reminder.due_date || !reminder.due_time) return reminder
+  const now = new Date(localNow)
+  if (Number.isNaN(now.getTime())) return reminder
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(now)
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value
+    const year = Number(part('year')), month = Number(part('month')), day = Number(part('day'))
+    const localTime = `${part('hour')}:${part('minute')}`
+    if (!year || !month || !day || !HM.test(localTime)) return reminder
+    const localDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    if (localTime <= reminder.due_time) return { ...reminder, due_date: localDate }
+    const tomorrow = new Date(Date.UTC(year, month - 1, day + 1))
+    return { ...reminder, due_date: tomorrow.toISOString().slice(0, 10) }
+  } catch {
+    return reminder
+  }
+}
+
 export function validateParsedReminder(value: unknown): ParsedReminder | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
@@ -201,6 +223,8 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
       const output = decoded as Record<string, unknown>
       output.reminder = mergeExistingReminder(context.partial, output.reminder, context.clarificationAnswer)
       if (output.reminder && typeof output.reminder === 'object' && !Array.isArray(output.reminder)) {
+        const validatedReminder = validateParsedReminder(output.reminder)
+        if (validatedReminder) output.reminder = inferRecurringReminderStartDate(validatedReminder, context.localNow, context.timezone)
         const reminder = output.reminder as Record<string, unknown>
         if (reminder.due_date != null && Array.isArray(output.missing_fields)) {
           output.missing_fields = output.missing_fields.filter((field) => field !== 'due_date')

@@ -209,6 +209,12 @@ test('assistant requests contain compact context only', () => {
   assert.doesNotMatch(ui, /modulesJson|cellsByLayout|grocery_items|reminders:/)
 })
 
+test('assistant clears accepted answers and only auto-closes created reminders', () => {
+  assert.match(ui, /value\?\.status === 'needs_input' \|\| value\?\.status === 'completed'\) setText\(''\)/)
+  assert.match(ui, /value\.action === 'create_reminder'[\s\S]*setTimeout\([\s\S]*setOpen\(false\)[\s\S]*setResult\(null\)[\s\S]*setPendingId\(null\)[\s\S]*}, 750\)/)
+  assert.doesNotMatch(ui, /value\.action === 'read_/)
+})
+
 test('rate limits are durable and AI is reached only after deterministic resolution', () => {
   assert.doesNotMatch(api, /new Map/)
   assert.match(api, /consume_assistant_request/)
