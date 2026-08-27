@@ -96,10 +96,11 @@ function drawResponsiveReminders(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
     const itemRect=absolute(itemLayout.itemRect),timeRect=absolute(itemLayout.timeRect)
     let titleRect=absolute(itemLayout.titleRect)
     if(!item.time)titleRect={...itemRect,x:itemRect.x+2,width:Math.max(1,itemRect.width-4)}
-    const font=p.density==='micro'?'bold 13px sans-serif':'14px sans-serif';ctx.font=font;ctx.textAlign='left'
-    if(composition.showTime&&item.time){ctx.save();ctx.beginPath();ctx.rect(timeRect.x,timeRect.y,timeRect.width,timeRect.height);ctx.clip();ctx.fillText(item.time,timeRect.x,timeRect.y+Math.min(15,timeRect.height));ctx.restore()}
+    const font=`bold ${itemLayout.density.fontSize}px sans-serif`;ctx.font=font;ctx.textAlign='left'
+    const baseline=Math.min(itemLayout.density.fontSize+2,timeRect.height)
+    if(composition.showTime&&item.time){ctx.save();ctx.beginPath();ctx.rect(timeRect.x,timeRect.y,timeRect.width,timeRect.height);ctx.clip();ctx.fillText(item.time,timeRect.x,timeRect.y+baseline);ctx.restore()}
     const selected=chooseReminderTextVariant(item,titleRect.width,value=>ctx.measureText(value).width)
-    ctx.save();ctx.beginPath();ctx.rect(titleRect.x,titleRect.y,titleRect.width,titleRect.height);ctx.clip();ctx.fillText(selected.text,titleRect.x,titleRect.y+Math.min(15,titleRect.height));ctx.restore()
+    ctx.save();ctx.beginPath();ctx.rect(titleRect.x,titleRect.y,titleRect.width,titleRect.height);ctx.clip();ctx.fillText(selected.text,titleRect.x,titleRect.y+Math.min(itemLayout.density.fontSize+2,titleRect.height));ctx.restore()
   }
   visible.forEach((item,index)=>drawItem(item,layout.items[index]))
   if(composition.direction==='horizontal')layout.items.slice(1).forEach(item=>{const r=absolute(item.itemRect);line(ctx,r.x-6,r.y+5,r.x-6,r.y+r.height-5)})

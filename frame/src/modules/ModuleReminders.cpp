@@ -2130,6 +2130,21 @@ struct AdaptiveReminderComposition {
 
 struct ReminderRect { int x = 0, y = 0, w = 0, h = 0; };
 
+struct AdaptiveReminderDensity {
+  const GFXfont* font;
+  int rowH;
+  int rowGap;
+};
+
+// Keep these pixel thresholds and metrics in sync with reminderDensity() in
+// app/lib/remindersResponsive.mjs. B9 is the readability floor, not default.
+static AdaptiveReminderDensity adaptiveReminderDensity(int availablePixels, int requiredRows) {
+  const int pixelsPerRow = requiredRows > 0 ? availablePixels / requiredRows : availablePixels;
+  if (pixelsPerRow >= 62) return {FONT_B18, 56, 6};
+  if (pixelsPerRow >= 44) return {FONT_B12, 42, 5};
+  return {FONT_B9, 34, 4};
+}
+
 static AdaptiveReminderComposition adaptiveComposition(const Cell& c, int todayCount, int tomorrowCount) {
   AdaptiveReminderComposition out;
   const FrameLayout::Rect bounds = {c.x, c.y, c.w, c.h};
@@ -2215,9 +2230,11 @@ static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, 
     const int timeW = min(48, max(38, (w * 22) / 100)), gap = 7;
     timeRect = {x, y, timeW, h}; titleRect = {x + timeW + gap, y, max(1, w - timeW - gap), h};
   }
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
-  char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, FONT_B9);
-  drawAdaptiveLabel(titleRect, fitted, FONT_B9);
+  const AdaptiveReminderDensity density = adaptiveReminderDensity(row.h, 1);
+  const GFXfont* font = stacked && density.font == FONT_B18 ? FONT_B12 : density.font;
+  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, font);
+  char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, font);
+  drawAdaptiveLabel(titleRect, fitted, font);
 }
 
 static void drawAdaptiveOverflow(const ReminderRect& rect, int count) {
@@ -2233,14 +2250,16 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   const int headingH = heading ? 30 : 0;
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
-  const int rowGap = 4;
-  const int rowsH = max(1, rect.h - headingH - footerH - max(0, visible - 1) * rowGap);
+  const int available = max(1, rect.h - headingH - footerH);
+  const AdaptiveReminderDensity density = adaptiveReminderDensity(available, visible);
+  const int rowGap = density.rowGap;
+  const int rowH = min(density.rowH,
+    max(1, (available - max(0, visible - 1) * rowGap) / visible));
   for (int i = 0; i < visible; i++) {
-    const int y0 = rect.y + headingH + (rowsH * i) / visible + i * rowGap;
-    const int y1 = rect.y + headingH + (rowsH * (i + 1)) / visible + i * rowGap;
+    const int y0 = rect.y + headingH + i * (rowH + rowGap);
     const int itemIdx = bucket->itemIdx[i];
     if (itemIdx >= 0 && itemIdx < g_cache.count)
-      drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, y1 - y0}, stacked);
+      drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, rowH}, stacked);
   }
   if (footerH) drawAdaptiveOverflow({rect.x, rect.y + rect.h - footerH, rect.w, footerH}, overflow);
 }

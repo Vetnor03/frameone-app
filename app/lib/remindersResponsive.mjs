@@ -1,6 +1,14 @@
 export const REMINDER_TEXT_ORDER=Object.freeze(['full','compact','short','tiny'])
 export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extreme','empty'])
 
+/** Pixel-derived type and row metrics shared with the physical renderer. */
+export function reminderDensity(availablePixels,requiredRows) {
+  const pixelsPerRow=requiredRows>0?availablePixels/requiredRows:availablePixels
+  if(pixelsPerRow>=62)return Object.freeze({name:'spacious',font:'B18',fontSize:24,rowHeight:56,rowGap:6})
+  if(pixelsPerRow>=44)return Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5})
+  return Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4})
+}
+
 /** Selects verbosity only after composition has allocated a real pixel width. */
 export function chooseReminderTextVariant(item,availableWidth,measure) {
   const {text,protectedFacts=[]}=item
@@ -127,18 +135,19 @@ export function reminderLayout(profile,composition) {
 
 function addSectionItems(items,rect,count,headingHeight,stacked,footerHeight=0) {
   if(!rect||!count)return
-  const rowGap=4,rowsTop=rect.y+headingHeight,rowHeight=Math.max(1,(rect.height-headingHeight-footerHeight-rowGap*Math.max(0,count-1))/count)
-  for(let index=0;index<count;index++)items.push(itemRegions({x:rect.x,y:rowsTop+index*(rowHeight+rowGap),width:rect.width,height:rowHeight},stacked))
+  const available=Math.max(1,rect.height-headingHeight-footerHeight),density=reminderDensity(available,count)
+  const rowHeight=Math.min(density.rowHeight,Math.max(1,(available-density.rowGap*Math.max(0,count-1))/count)),rowsTop=rect.y+headingHeight
+  for(let index=0;index<count;index++)items.push(itemRegions({x:rect.x,y:rowsTop+index*(rowHeight+density.rowGap),width:rect.width,height:rowHeight},stacked,density))
 }
 
-function itemRegions(itemRect,stacked) {
+function itemRegions(itemRect,stacked,density=reminderDensity(itemRect.height,1)) {
   const inset=2,box={x:itemRect.x+inset,y:itemRect.y+inset,width:Math.max(1,itemRect.width-inset*2),height:Math.max(1,itemRect.height-inset*2)}
   if(stacked) {
     const timeHeight=Math.min(18,Math.max(1,box.height*.38))
-    return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:box.width,height:timeHeight},titleRect:{x:box.x,y:box.y+timeHeight,width:box.width,height:Math.max(1,box.height-timeHeight)},stacked:true})
+    return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:box.width,height:timeHeight},titleRect:{x:box.x,y:box.y+timeHeight,width:box.width,height:Math.max(1,box.height-timeHeight)},stacked:true,density})
   }
   const timeWidth=Math.min(48,Math.max(38,box.width*.22)),gap=7
-  return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:timeWidth,height:box.height},titleRect:{x:box.x+timeWidth+gap,y:box.y,width:Math.max(1,box.width-timeWidth-gap),height:box.height},stacked:false})
+  return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:timeWidth,height:box.height},titleRect:{x:box.x+timeWidth+gap,y:box.y,width:Math.max(1,box.width-timeWidth-gap),height:box.height},stacked:false,density})
 }
 
 // Time remains structured. Title facts describe only atomic tokens that may be

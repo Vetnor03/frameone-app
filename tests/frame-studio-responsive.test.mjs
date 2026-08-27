@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { legacyStudioVariant, responsiveCellProfile, STUDIO_MODULES, studioRenderStrategy } from '../app/lib/responsiveCellProfile.mjs'
 import { moduleResponsivePolicies } from '../app/lib/moduleResponsivePolicies.mjs'
-import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderComposition, reminderLayout, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
+import { chooseReminderTextVariant, REMINDER_STUDIO_PRESET_VALUES, REMINDER_TEXT_ORDER, reminderComposition, reminderDensity, reminderLayout, reminderStudioPresets } from '../app/lib/remindersResponsive.mjs'
 import { weatherComposition, weatherLayout, weatherStudioPresets } from '../app/lib/weatherResponsive.mjs'
 import { countdownComposition, countdownLayout, countdownStudioPresets, fitCountdownStructuredText } from '../app/lib/countdownResponsive.mjs'
 import { DATE_CALENDAR_MIN, dateCalendarFeatures, dateComposition, dateLayout, dateStudioPresets, fitDateFact } from '../app/lib/dateResponsive.mjs'
@@ -553,6 +553,24 @@ test('Reminders runtime exports have matching declarations', async () => {
   const declarations=await readFile(new URL('../app/lib/remindersResponsive.d.mts',import.meta.url),'utf8')
   const exports=[...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1])
   for(const name of exports)assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
+})
+
+test('Reminders typography follows pixels per required row and rows keep natural height', async () => {
+  assert.equal(reminderDensity(300,3).name,'spacious')
+  assert.equal(reminderDensity(150,3).name,'normal')
+  assert.equal(reminderDensity(150,6).name,'dense')
+  assert.equal(reminderDensity(150,30).fontSize,13)
+
+  const sparseState={today:reminderStudioPresets.normal.today.slice(0,3),tomorrow:[]}
+  const profile=responsiveCellProfile(2,4,392,500)
+  const layout=reminderLayout(profile,reminderComposition(profile,sparseState))
+  assert.ok(layout.items.every((item)=>item.density.name==='spacious'))
+  assert.ok(layout.items.every((item)=>item.itemRect.height===56))
+  assert.ok(layout.items.at(-1).itemRect.y+layout.items.at(-1).itemRect.height<layout.todayRect.y+layout.todayRect.height)
+
+  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(firmware,/pixelsPerRow >= 62[\s\S]*FONT_B18, 56, 6/)
+  assert.match(firmware,/pixelsPerRow >= 44[\s\S]*FONT_B12, 42, 5[\s\S]*FONT_B9, 34, 4/)
 })
 
 test('Studio sample-data options keep lowercase state values separate from labels', async () => {
