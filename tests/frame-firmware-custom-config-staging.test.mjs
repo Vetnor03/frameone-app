@@ -25,7 +25,7 @@ function stage(cells) {
     for (const key of ['slot', 'col', 'row', 'colSpan', 'rowSpan']) {
       if (!Number.isInteger(c[key])) return null
     }
-    if (typeof c.module !== 'string' || c.module.length === 0 ||
+    if (typeof c.module !== 'string' ||
         c.slot < 0 || c.slot > 15 || c.col < 0 || c.col > 3 || c.row < 0 || c.row > 3 ||
         c.colSpan < 1 || c.colSpan > 4 || c.rowSpan < 1 || c.rowSpan > 4 ||
         c.col + c.colSpan > 4 || c.row + c.rowSpan > 4 || slots.has(c.slot)) return null
@@ -91,13 +91,18 @@ test('valid legacy-equivalent, 16-cell, shuffled non-contiguous, and adaptive ti
   assert.deepEqual(stage(shuffled).map((c) => c.size), ['ADAPTIVE', 'ADAPTIVE', 'SMALL', 'ADAPTIVE'])
 })
 
+test('blank assignments stage without weakening complete geometry validation', () => {
+  assert.ok(stage(named.default.map((cell, index) => ({ ...cell, module: index === 1 ? '' : cell.module }))))
+  assert.equal(stage(named.default.slice(0, 2)), null)
+})
+
 test('malformed custom layouts fail atomically in the modeled firmware contract', () => {
   const invalid = [
     [], [...singles, singles[0]],
     [{ ...named.full[0], slot: -1 }], [{ ...named.full[0], col: -1 }],
     [{ ...named.full[0], row: 4 }], [{ ...named.full[0], colSpan: 0 }],
     [{ ...named.full[0], rowSpan: 5 }], [{ ...named.full[0], col: 1 }],
-    [{ ...named.full[0], module: '' }], [{ ...named.full[0], slot: 0.5 }],
+    [{ ...named.full[0], slot: 0.5 }],
     [singles[0], { ...singles[1], col: 0, slot: 1 }], singles.slice(1),
     [singles[0], { ...singles[1], slot: 0 }, ...singles.slice(2)],
   ]

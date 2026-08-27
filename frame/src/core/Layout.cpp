@@ -296,7 +296,7 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
   uint16_t assignedSlots = 0;
   for (uint8_t i = 0; i < custom.assignCount; ++i) {
     const SlotModule& assignment = custom.assigns[i];
-    if (assignment.slot >= MAX_GRID_CELLS || assignment.module[0] == '\0') return false;
+    if (assignment.slot >= MAX_GRID_CELLS) return false;
     const uint16_t mask = (uint16_t)1U << assignment.slot;
     if (assignedSlots & mask) return false;
     assignedSlots |= mask;
@@ -314,7 +314,9 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
         break;
       }
     }
-    if (!ModuleRenderer::canRenderCell(module, cell)) return false;
+    // Empty assignments are renderable placeholders. Geometry/module
+    // compatibility only applies once a module has actually been assigned.
+    if (module && module[0] != '\0' && !ModuleRenderer::canRenderCell(module, cell)) return false;
   }
 
   GridDividerLayout& logical = g_renderWorkspace.logicalDividers;

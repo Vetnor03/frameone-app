@@ -123,7 +123,7 @@ static bool stageCustomLayout(FrameConfig& out, JsonArray cells) {
         !readRequiredInt(cell, "colSpan", colSpan) ||
         !readRequiredInt(cell, "rowSpan", rowSpan)) return false;
     const char* module = cell["module"] | "";
-    if (!module || module[0] == '\0' || slot < 0 || slot >= MAX_GRID_CELLS ||
+    if (slot < 0 || slot >= MAX_GRID_CELLS ||
         col < 0 || col >= Layout::GRID_SIZE || row < 0 || row >= Layout::GRID_SIZE ||
         colSpan < 1 || colSpan > Layout::GRID_SIZE ||
         rowSpan < 1 || rowSpan > Layout::GRID_SIZE) return false;

@@ -97,6 +97,7 @@ test('preflight is atomic, capability-gates every cell, and routes assignments s
   assert.ok(resolver.indexOf('g_gridCellStaging') < resolver.indexOf('outCells[i] = staged[i]'))
   assert.match(preflight, /buildGridCells[\s\S]*deriveGridDividers[\s\S]*resolveGridDivider[\s\S]*output = staged/)
   assert.match(preflight, /ModuleRenderer::canRenderCell\(module, cell\)/)
+  assert.match(preflight, /module && module\[0\] != '\\0' && !ModuleRenderer::canRenderCell\(module, cell\)/)
   assert.match(source, /customReady \? cfg\.customLayout\.assigns : cfg\.assigns/)
   assert.match(source, /key == LAYOUT_CUSTOM && !customReady \? LAYOUT_DEFAULT : key/)
 })

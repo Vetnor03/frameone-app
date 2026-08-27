@@ -49,14 +49,16 @@ export function supportsPhysicalCustomCell(cell) {
   if (!cell || typeof cell !== 'object') return false
   const geometry = `${cell.colSpan}x${cell.rowSpan}`
   const module = typeof cell.module === 'string' ? cell.module.trim().toLowerCase() : ''
-  if (!module) return false
+  // An unassigned cell still has valid physical geometry. Capability checks
+  // only become relevant after the user assigns a module to it.
+  if (!module) return true
   const baseModule = module.split(':', 1)[0]
   const adaptiveModule = module === 'date' || baseModule === 'weather' || baseModule === 'reminders'
   return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && adaptiveModule)
 }
 
 export function supportsPhysicalCustomLayout(cells) {
-  const structural = validateCustomGeometry(cells, { requireModules: true })
+  const structural = validateCustomGeometry(cells)
   if (!structural.valid) return {...structural, unsupportedSlots: structural.unsupportedSlots}
   const unsupportedSlots = cells.filter(cell => !supportsPhysicalCustomCell(cell)).map(cell => cell.slot)
   return {valid: unsupportedSlots.length === 0, errors: unsupportedSlots.length ? ['unsupported_physical_cell'] : [], unsupportedSlots}
