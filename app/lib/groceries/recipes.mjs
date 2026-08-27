@@ -73,6 +73,17 @@ export function selectedRecipeGroceries(ingredients, baseServings, servings) {
   return ingredients.filter((item) => item.selected).map((item) => ({ ...groceryRecipeItem(item, scaleRecipeQuantity(item.quantity, baseServings, servings)), category: item.category }))
 }
 
+export function recipeSourceLink(sourceUrl) {
+  if (typeof sourceUrl !== 'string' || !sourceUrl.trim()) return null
+  try {
+    const url = new URL(sourceUrl.trim())
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return { href: url.toString(), domain: url.hostname.replace(/^www\./i, '') }
+  } catch {
+    return null
+  }
+}
+
 export function dedupeRecipeIngredients(ingredients) {
   const seen = new Set()
   return ingredients.filter((item) => {

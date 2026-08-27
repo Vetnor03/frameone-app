@@ -1,5 +1,6 @@
 export type RecipeIngredient = { name: string; quantity: number | null; unit: string | null; category: string }
 export type RecipeDraft = { name: string; sourceUrl: string | null; servings: number | null; ingredients: RecipeIngredient[] }
+export function recipeSourceLink(sourceUrl: unknown): { href: string; domain: string } | null
 export type GroceryRecipeItem = { name: string; quantity: number; amount: number | null; unit: string | null }
 export function normalizeRecipeUnit(unit: string | null): string | null
 export function parseManualIngredients(value: string): RecipeIngredient[]

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries } from '../app/lib/groceries/recipes.mjs'
+import { groceryItemEditPayload, groceryRecipeItem, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, saveRecipeWithRollback, scaleRecipeQuantity, selectedRecipeGroceries } from '../app/lib/groceries/recipes.mjs'
 import { assertPublicRecipeHost, fetchPublicRecipePage, safePublicRecipeUrl } from '../app/lib/groceries/urlSafety.mjs'
 
 const recipeRepairMigration = readFileSync(new URL('../supabase/migrations/20260824140000_reconcile_saved_recipe_legacy_schema.sql', import.meta.url), 'utf8')
@@ -108,6 +108,24 @@ test('URL validation rejects local targets and validates every redirect', async 
   assert.equal(calls, 2)
   await assert.rejects(assertPublicRecipeHost(new URL('https://innocent.example/recipe'), async () => [{ address: '127.0.0.1', family: 4 }]), /unsafe_address/)
   await assert.rejects(fetchPublicRecipePage('https://public.example/recipe', async () => new Response('should not fetch'), {}, async () => [{ address: '10.0.0.7', family: 4 }]), /unsafe_address/)
+})
+
+test('recipe source links derive a concise domain only from valid web URLs', () => {
+  assert.deepEqual(recipeSourceLink(' https://www.matprat.no/oppskrifter/familien/wok?portion=4 '), {
+    href: 'https://www.matprat.no/oppskrifter/familien/wok?portion=4',
+    domain: 'matprat.no',
+  })
+  for (const value of [null, '', 'not a URL', 'javascript:alert(1)', 'file:///recipe']) assert.equal(recipeSourceLink(value), null)
+})
+
+test('recipe preview presents persisted source URLs as an understated full-row link', async () => {
+  const ui = await readFile(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+  const recipeSheet = ui.slice(ui.indexOf('function RecipeSheet('), ui.indexOf('function GroceriesDraftSheet('))
+  assert.match(recipeSheet, /const sourceLink = recipeSourceLink\(draft\?\.sourceUrl\)/)
+  assert.match(recipeSheet, /href=\{sourceLink\.href\} target="_blank" rel="noopener noreferrer"/)
+  assert.match(recipeSheet, /min-h-11[\s\S]*?'Se originaloppskrift'[\s\S]*?sourceLink\.domain/)
+  assert.match(recipeSheet, /source_url,base_servings/)
+  assert.match(recipeSheet, /p_source_url: draft\.sourceUrl/)
 })
 
 test('the existing quick ADD ITEM action remains primary and opens its original sheet directly', async () => {
