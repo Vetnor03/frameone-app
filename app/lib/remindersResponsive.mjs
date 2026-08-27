@@ -35,26 +35,49 @@ export function reminderComposition(profile,state) {
   if(!total)return Object.freeze({available:false,direction:'vertical',family:'vertical-list',showHeading:false,showTime:false,showTomorrow:false,todayItems:0,tomorrowItems:0,todayOverflow:0,tomorrowOverflow:0,maxItems:0,overflow:0})
   // Composition follows the rendered rectangle. Grid spans are deliberately not
   // consulted: the same logical shape can be shallow, square, or tall at runtime.
-  const shallow=profile.orientation==='landscape'&&profile.height<=150
-  const split=!shallow&&profile.orientation==='landscape'&&profile.width>=500&&profile.height>=200&&profile.area>=6
+  const pad=Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
+  const usable={width:Math.max(0,profile.width-pad*2),height:Math.max(0,profile.height-pad*2)}
+  const landscape=profile.height>0&&profile.width/profile.height>1.12
+  const shallow=landscape&&usable.height<126
+  const split=!shallow&&landscape&&usable.width>=464&&usable.height>=164
   const family=shallow?'shallow-horizontal':split?'split-sections':'vertical-list'
   const direction=shallow?'horizontal':split?'split':'vertical'
-  const large=split||(direction==='vertical'&&profile.area>=8&&profile.height>=300)
-  // A Tomorrow-only state is still meaningful at every size. Otherwise the
-  // secondary section is progressively disclosed only in genuinely large cells.
-  const showTomorrow=state.today.length===0?state.tomorrow.length>0:large&&state.tomorrow.length>0
-  const capacity=direction==='horizontal'?Math.min(3,Math.max(1,Math.floor(profile.width/180))):profile.area<=2?2:profile.area<=4?3:profile.area<=8?4:6
-  const splitCapacity=Math.max(1,Math.floor((profile.height-60)/42))
-  let tomorrowItems=showTomorrow?Math.min(state.tomorrow.length,split?splitCapacity:large?2:capacity):0
-  let todayItems=Math.min(state.today.length,split?splitCapacity:Math.max(0,capacity-tomorrowItems))
-  if(large&&!split&&state.today.length) {
-    todayItems=Math.min(state.today.length,Math.max(1,capacity-tomorrowItems))
-    tomorrowItems=Math.min(state.tomorrow.length,Math.max(0,capacity-todayItems))
+  const showHeading=!shallow&&usable.height>=104
+  const headingH=showHeading?30:0,footerH=24,rowH=38,rowGap=4,sectionGap=10
+  const rowCapacity=(available,minimum=rowH,gap=rowGap)=>available<minimum?0:1+Math.floor((available-minimum)/(minimum+gap))
+  let showTomorrow=state.tomorrow.length>0,todayItems=0,tomorrowItems=0
+  if(shallow) {
+    const initial=rowCapacity(usable.width,142,12),canFitFooter=usable.width>=142+12+42
+    const contentWidth=usable.width-(total>initial&&canFitFooter?66:0),capacity=rowCapacity(contentWidth,142,12)
+    showTomorrow=state.today.length===0&&state.tomorrow.length>0
+    todayItems=Math.min(state.today.length,capacity)
+    tomorrowItems=showTomorrow?Math.min(state.tomorrow.length,capacity-todayItems):0
+  } else if(split) {
+    const rowsArea=usable.height-headingH,initial=rowCapacity(rowsArea)
+    const capacity=rowCapacity(rowsArea-((state.today.length>initial||state.tomorrow.length>initial)?footerH:0))
+    todayItems=Math.min(state.today.length,capacity);tomorrowItems=Math.min(state.tomorrow.length,capacity)
+  } else {
+    let sectionCount=(state.today.length?1:0)+(showTomorrow?1:0)
+    let chrome=sectionCount*headingH+(sectionCount>1?sectionGap:0)
+    let initial=rowCapacity(usable.height-chrome),footerReserve=total>initial?footerH+6:0
+    let capacity=rowCapacity(usable.height-chrome-footerReserve)
+    if(state.today.length&&showTomorrow&&capacity<2) {
+      showTomorrow=false;sectionCount=1;chrome=headingH
+      initial=rowCapacity(usable.height-chrome);footerReserve=total>initial?footerH+6:0
+      capacity=rowCapacity(usable.height-chrome-footerReserve)
+    }
+    let remaining=capacity
+    while(remaining>0) {
+      let spent=false
+      if(todayItems<state.today.length&&remaining){todayItems++;remaining--;spent=true}
+      if(showTomorrow&&tomorrowItems<state.tomorrow.length&&remaining){tomorrowItems++;remaining--;spent=true}
+      if(!spent)break
+    }
   }
   const maxItems=todayItems+tomorrowItems
   const todayOverflow=Math.max(0,state.today.length-todayItems)
   const tomorrowOverflow=Math.max(0,state.tomorrow.length-tomorrowItems)
-  return Object.freeze({available:true,direction,family,showHeading:direction!=='horizontal'&&profile.height>=150,showTime:true,showTomorrow,todayItems,tomorrowItems,todayOverflow,tomorrowOverflow,maxItems,overflow:todayOverflow+tomorrowOverflow})
+  return Object.freeze({available:true,direction,family,showHeading,showTime:true,showTomorrow,todayItems,tomorrowItems,todayOverflow,tomorrowOverflow,maxItems,overflow:todayOverflow+tomorrowOverflow})
 }
 
 /** Allocate every drawable Reminders region before Canvas rendering begins. */
@@ -64,7 +87,7 @@ export function reminderLayout(profile,composition) {
   if(!composition.available)return Object.freeze({pad,emptyRect:inner,todayRect:null,tomorrowRect:null,footerRect:null,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze([])})
   if(composition.direction==='split') {
     const gap=composition.todayItems&&composition.tomorrowItems?18:0,hasToday=composition.todayItems>0,hasTomorrow=composition.tomorrowItems>0
-    const todayShare=!hasTomorrow?1:!hasToday?0:composition.tomorrowItems===1?.7:.6
+    const todayShare=!hasTomorrow?1:!hasToday?0:.7
     const todayWidth=hasToday?(hasTomorrow?Math.max(1,Math.round((inner.width-gap)*todayShare)):inner.width):0
     const tomorrowWidth=hasTomorrow?Math.max(1,inner.width-gap-todayWidth):0
     const todayRect=composition.todayItems?{x:inner.x,y:inner.y,width:todayWidth,height:inner.height}:null
@@ -77,9 +100,10 @@ export function reminderLayout(profile,composition) {
     addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,false,tomorrowFooterRect?footerHeight+4:0)
     return Object.freeze({pad,emptyRect:null,todayRect,tomorrowRect,footerRect:null,todayFooterRect,tomorrowFooterRect,items:Object.freeze(items)})
   }
-  const footerWidth=composition.direction==='horizontal'&&composition.overflow?Math.min(58,Math.max(42,inner.width*.13)):0
+  const horizontalFooterFits=inner.width>=142+12+42
+  const footerWidth=composition.direction==='horizontal'&&composition.overflow&&horizontalFooterFits?Math.min(58,Math.max(42,inner.width*.13)):0
   const footerHeight=composition.direction==='vertical'&&composition.overflow?22:0
-  const footerRect=composition.overflow?(composition.direction==='horizontal'
+  const footerRect=composition.overflow&&(composition.direction!=='horizontal'||footerWidth)?(composition.direction==='horizontal'
     ?{x:inner.x+inner.width-footerWidth,y:inner.y,width:footerWidth,height:inner.height}
     :{x:inner.x,y:inner.y+inner.height-footerHeight,width:inner.width,height:footerHeight}):null
   const content={x:inner.x,y:inner.y,width:Math.max(1,inner.width-footerWidth-(footerWidth?8:0)),height:Math.max(1,inner.height-footerHeight-(footerHeight?6:0))}
@@ -89,7 +113,8 @@ export function reminderLayout(profile,composition) {
     return Object.freeze({pad,emptyRect:null,todayRect:content,tomorrowRect:null,footerRect,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze(items)})
   }
   const headingHeight=composition.showHeading?30:0
-  const tomorrowHeight=composition.tomorrowItems?Math.min(content.height*.42,headingHeight+composition.tomorrowItems*48):0
+  const minimumRowHeight=38,rowGap=4
+  const tomorrowHeight=composition.tomorrowItems?headingHeight+composition.tomorrowItems*minimumRowHeight+Math.max(0,composition.tomorrowItems-1)*rowGap:0
   const sectionGap=tomorrowHeight?10:0
   const todayHeight=composition.todayItems?Math.max(1,content.height-tomorrowHeight-sectionGap):0
   const todayRect=composition.todayItems?{x:content.x,y:content.y,width:content.width,height:todayHeight}:null
@@ -102,8 +127,8 @@ export function reminderLayout(profile,composition) {
 
 function addSectionItems(items,rect,count,headingHeight,stacked,footerHeight=0) {
   if(!rect||!count)return
-  const rowsTop=rect.y+headingHeight,rowHeight=Math.max(1,(rect.height-headingHeight-footerHeight)/count)
-  for(let index=0;index<count;index++)items.push(itemRegions({x:rect.x,y:rowsTop+index*rowHeight,width:rect.width,height:rowHeight},stacked))
+  const rowGap=4,rowsTop=rect.y+headingHeight,rowHeight=Math.max(1,(rect.height-headingHeight-footerHeight-rowGap*Math.max(0,count-1))/count)
+  for(let index=0;index<count;index++)items.push(itemRegions({x:rect.x,y:rowsTop+index*(rowHeight+rowGap),width:rect.width,height:rowHeight},stacked))
 }
 
 function itemRegions(itemRect,stacked) {

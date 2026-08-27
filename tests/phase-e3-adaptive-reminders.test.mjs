@@ -37,7 +37,7 @@ test('pixel dimensions select shallow, vertical, and split Studio families',()=>
 test('Today-only, Tomorrow-only, empty, and mixed disclosure follow Studio policy',()=>{
   const today={today:reminderStudioPresets.normal.today,tomorrow:[]}
   const tomorrow={today:[],tomorrow:reminderStudioPresets.normal.tomorrow}
-  assert.equal(reminderComposition(profile(1,2),today).todayItems,2)
+  assert.equal(reminderComposition(profile(1,2),today).todayItems,3)
   const tomorrowComposition=reminderComposition(profile(1,2),tomorrow)
   assert.equal(tomorrowComposition.showTomorrow,true);assert.equal(tomorrowComposition.todayItems,0);assert.equal(tomorrowComposition.tomorrowItems,1)
   assert.equal(reminderComposition(profile(3,3),reminderStudioPresets.empty).available,false)
@@ -74,7 +74,27 @@ test('overflow owns a separate footer and never consumes a visible reminder row'
   for(const [w,h] of [[1,1],[1,3],[3,2]]){const p=profile(w,h),composition=reminderComposition(p,reminderStudioPresets.extreme),layout=reminderLayout(p,composition)
     assert.ok(composition.overflow>0)
     assert.equal(layout.items.length,composition.maxItems)
-    assert.ok(layout.footerRect||layout.todayFooterRect||layout.tomorrowFooterRect)
+    const usableWidth=p.width-layout.pad*2
+    assert.ok(layout.footerRect||layout.todayFooterRect||layout.tomorrowFooterRect||usableWidth<196)
+  }
+})
+
+test('large vertical Today and Tomorrow sections preserve every geometry floor',()=>{
+  const p={...profile(2,4),width:300,height:500,orientation:'portrait'}
+  const source=reminderStudioPresets.extreme
+  const state={today:[...source.today,...source.today],tomorrow:[...source.tomorrow,...source.tomorrow]}
+  const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
+  assert.equal(composition.family,'vertical-list')
+  assert.ok(composition.todayItems>1&&composition.tomorrowItems>1&&layout.footerRect)
+  assert.ok(layout.todayRect&&layout.tomorrowRect)
+  assert.ok(layout.todayRect.y+layout.todayRect.height+10<=layout.tomorrowRect.y)
+  assert.ok(layout.tomorrowRect.y+layout.tomorrowRect.height+6<=layout.footerRect.y)
+  assert.ok(layout.todayRect.height>=30+composition.todayItems*38+(composition.todayItems-1)*4)
+  assert.ok(layout.tomorrowRect.height>=30+composition.tomorrowItems*38+(composition.tomorrowItems-1)*4)
+  for(const item of layout.items)assert.ok(item.itemRect.height>=38)
+  for(let i=1;i<layout.items.length;i++) {
+    const previous=layout.items[i-1].itemRect,current=layout.items[i].itemRect
+    if(previous.y<current.y&&previous.y+previous.height<=current.y)assert.ok(current.y-(previous.y+previous.height)>=4)
   }
 })
 

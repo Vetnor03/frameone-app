@@ -340,7 +340,7 @@ export function buildLocalEventFrameItem(
     })
     .filter(Boolean) as Array<{ row: IntegrationItemRow; kind: 'all-day'; startMs: number; occurrenceDate: string; displayTime: null; titleKey: string }>)
 
-  const selection = [...timed, ...allDay]
+  const selections = [...timed, ...allDay]
     .sort((a, b) => {
       if (a.occurrenceDate !== b.occurrenceDate) return a.occurrenceDate.localeCompare(b.occurrenceDate)
       const at = a.displayTime || '99:99'
@@ -348,12 +348,12 @@ export function buildLocalEventFrameItem(
       if (at !== bt) return at.localeCompare(bt)
       if (a.kind !== b.kind) return a.kind === 'timed' ? -1 : 1
       return a.titleKey.localeCompare(b.titleKey, 'nb-NO') || String(a.row.external_id).localeCompare(String(b.row.external_id))
-    })[0]
+    })
 
-  if (!selection) return []
-  const title = String(selection.row.title || '').trim()
-  const allDaySelection = selection.kind === 'all-day'
-  return [{
+  return selections.map((selection) => {
+    const title = String(selection.row.title || '').trim()
+    const allDaySelection = selection.kind === 'all-day'
+    return {
     reminder_id: `local-events:${selection.row.external_id}`,
     title,
     occurrence_date: selection.occurrenceDate,
@@ -367,7 +367,8 @@ export function buildLocalEventFrameItem(
     provider: LOCAL_EVENTS_FRAME_PROVIDER,
     external_id: String(selection.row.external_id),
     raw: { ...(selection.row.raw || {}), all_day: allDaySelection },
-  }]
+    }
+  })
 }
 
 function sortTimeValue(value: string | null) {
@@ -385,12 +386,19 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   const selectedGroupKeys: string[] = []
   const selectedItems: DeviceReminderItem[] = []
 
-  for (const item of items) {
+  // Local Events are useful discovery content, but must consume only space left
+  // after personal reminders and calendar integrations have been selected.
+  const prioritized = [
+    ...items.filter((item) => item.source !== 'local-events'),
+    ...items.filter((item) => item.source === 'local-events'),
+  ]
+
+  for (const item of prioritized) {
     const groupKey = item.occurrence_date || item.display_date
     if (!groupKey) continue
 
     if (!selectedGroupKeys.includes(groupKey)) {
-      if (selectedGroupKeys.length >= 2) break
+      if (selectedGroupKeys.length >= 2) continue
       selectedGroupKeys.push(groupKey)
     }
 

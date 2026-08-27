@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLocalEventFrameItem, compareReminderItems } from '../app/lib/device/remindersFeed.ts'
+import { buildLocalEventFrameItem, compareReminderItems, selectReminderDisplayGroups } from '../app/lib/device/remindersFeed.ts'
 
 const provider = 'edge-of-norway'
 const today = '2026-07-12'
@@ -19,13 +19,27 @@ const row = (id, title, starts_at, raw = {}) => ({
 })
 const skip = (external_event_id, device_id = 'frame-a') => ({ device_id, provider, external_event_id, skipped: true })
 
-test('Local Events frame selection returns at most one nearest future timed event', () => {
+test('Local Events frame selection returns every eligible event in deterministic order', () => {
   const items = buildLocalEventFrameItem([
     row('later', 'Later', '2026-07-12T18:00:00+02:00'),
     row('first', 'First', '2026-07-12T17:00:00+02:00'),
   ], [], today, at('2026-07-12T14:00:00Z'))
-  assert.equal(items.length, 1)
+  assert.equal(items.length, 2)
   assert.equal(items[0].external_id, 'first')
+  assert.equal(items[1].external_id, 'later')
+})
+
+test('Local Events use only the content budget left after personal reminders', () => {
+  const personal = [
+    { reminder_id: 'p1', title: 'Personal today', occurrence_date: today, display_date: 'Today', days_until: 0, is_overdue: false, repeat: 'none', due_time: '19:00', display_time: '19:00', source: 'remind' },
+    { reminder_id: 'p2', title: 'Personal tomorrow', occurrence_date: '2026-07-13', display_date: 'Tomorrow', days_until: 1, is_overdue: false, repeat: 'none', due_time: null, display_time: null, source: 'remind' },
+  ]
+  const local = buildLocalEventFrameItem([
+    row('early', 'Local before personal', '2026-07-12T17:00:00+02:00'),
+    row('later', 'Local after personal', '2026-07-13T17:00:00+02:00'),
+  ], [], today, at('2026-07-12T14:00:00Z'))
+  assert.deepEqual(selectReminderDisplayGroups([...local, ...personal].sort(compareReminderItems), 2).map((item) => item.reminder_id), ['p1', 'p2'])
+  assert.equal(selectReminderDisplayGroups(local, 2).length, 2)
 })
 
 test('timed Local Event several days in the future is eligible without same-day or lead-time filters', () => {
