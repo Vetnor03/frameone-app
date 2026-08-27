@@ -4,9 +4,9 @@ export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extre
 /** Pixel-derived type and row metrics shared with the physical renderer. */
 export function reminderDensity(availablePixels,requiredRows) {
   const pixelsPerRow=requiredRows>0?availablePixels/requiredRows:availablePixels
-  if(pixelsPerRow>=62)return Object.freeze({name:'spacious',font:'B18',fontSize:24,rowHeight:56,rowGap:6})
-  if(pixelsPerRow>=44)return Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5})
-  return Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4})
+  if(pixelsPerRow>=62)return Object.freeze({name:'spacious',font:'B18',fontSize:24,rowHeight:56,rowGap:6,timeWidth:88})
+  if(pixelsPerRow>=44)return Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5,timeWidth:62})
+  return Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4,timeWidth:48})
 }
 
 /** Selects verbosity only after composition has allocated a real pixel width. */
@@ -150,7 +150,9 @@ function itemRegions(itemRect,stacked,density=reminderDensity(itemRect.height,1)
     const timeHeight=density.font==='B18'?Math.max(1,box.height/2):Math.min(18,Math.max(1,box.height*.38))
     return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:box.width,height:timeHeight},titleRect:{x:box.x,y:box.y+timeHeight,width:box.width,height:Math.max(1,box.height-timeHeight)},stacked:true,density})
   }
-  const timeWidth=Math.min(48,Math.max(38,box.width*.22)),gap=7
+  // Sized for the selected font's HH:MM glyph advances; non-stacked cells have
+  // already met the width floor, so the remainder stays available to the title.
+  const timeWidth=density.timeWidth,gap=7
   return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:timeWidth,height:box.height},titleRect:{x:box.x+timeWidth+gap,y:box.y,width:Math.max(1,box.width-timeWidth-gap),height:box.height},stacked:false,density})
 }
 

@@ -580,9 +580,19 @@ test('Reminders typography follows pixels per required row and rows keep natural
   const mixedMedium=reminderLayout(mixedMediumProfile,reminderComposition(mixedMediumProfile,reminderStudioPresets.normal))
   assert.deepEqual(new Set(mixedMedium.items.map((item)=>item.density.name)),new Set(['normal']))
 
+  const timedState={today:[reminderStudioPresets.normal.today.find((item)=>item.time==='18:00')],tomorrow:[]}
+  const timedLayout=reminderLayout(profile,reminderComposition(profile,timedState))
+  const timedItem=timedLayout.items[0]
+  assert.equal(timedItem.stacked,false)
+  assert.equal(timedItem.density.name,'spacious')
+  assert.equal(timedItem.timeRect.width,88)
+  assert.ok(timedItem.timeRect.x+timedItem.timeRect.width<timedItem.titleRect.x)
+  assert.ok(timedItem.titleRect.width>timedItem.timeRect.width)
+
   const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  assert.match(firmware,/pixelsPerRow >= 62[\s\S]*FONT_B18, 56, 6/)
-  assert.match(firmware,/pixelsPerRow >= 44[\s\S]*FONT_B12, 42, 5[\s\S]*FONT_B9, 34, 4/)
+  assert.match(firmware,/pixelsPerRow >= 62[\s\S]*FONT_B18, 56, 6, 88/)
+  assert.match(firmware,/pixelsPerRow >= 44[\s\S]*FONT_B12, 42, 5, 62[\s\S]*FONT_B9, 34, 4, 48/)
+  assert.match(firmware,/const int timeW = density\.timeW, gap = 7/)
   assert.match(firmware,/drawAdaptiveItem\([^)]*const AdaptiveReminderDensity& density\)/)
   assert.doesNotMatch(firmware,/adaptiveReminderDensity\(row\.h, 1\)/)
   assert.match(firmware,/rowsAvailable[\s\S]*adaptiveReminderDensity\(rowsAvailable, totalRows\)[\s\S]*drawAdaptiveSection\(today[\s\S]*&density\)[\s\S]*drawAdaptiveSection\(tomorrow[\s\S]*&density\)/)

@@ -4,7 +4,7 @@ export type ReminderItem={time:string|null;text:Record<'full'|'compact'|'short'|
 export type ReminderState={today:readonly ReminderItem[];tomorrow:readonly ReminderItem[]}
 export type ReminderRect={x:number;y:number;width:number;height:number}
 export type ReminderComposition={available:boolean;direction:'horizontal'|'vertical'|'split';family:'shallow-horizontal'|'vertical-list'|'split-sections';showHeading:boolean;showTime:boolean;showTomorrow:boolean;todayItems:number;tomorrowItems:number;todayOverflow:number;tomorrowOverflow:number;maxItems:number;overflow:number}
-export type ReminderDensity={name:'spacious'|'normal'|'dense';font:'B18'|'B12'|'B9';fontSize:number;rowHeight:number;rowGap:number}
+export type ReminderDensity={name:'spacious'|'normal'|'dense';font:'B18'|'B12'|'B9';fontSize:number;rowHeight:number;rowGap:number;timeWidth:number}
 export type ReminderItemLayout={itemRect:ReminderRect;timeRect:ReminderRect;titleRect:ReminderRect;stacked:boolean;density:ReminderDensity}
 export type ReminderLayout={pad:number;emptyRect:ReminderRect|null;todayRect:ReminderRect|null;tomorrowRect:ReminderRect|null;footerRect:ReminderRect|null;todayFooterRect:ReminderRect|null;tomorrowFooterRect:ReminderRect|null;items:readonly ReminderItemLayout[]}
 export const REMINDER_TEXT_ORDER:readonly string[]

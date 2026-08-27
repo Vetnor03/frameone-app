@@ -2134,15 +2134,16 @@ struct AdaptiveReminderDensity {
   const GFXfont* font;
   int rowH;
   int rowGap;
+  int timeW;
 };
 
 // Keep these pixel thresholds and metrics in sync with reminderDensity() in
 // app/lib/remindersResponsive.mjs. B9 is the readability floor, not default.
 static AdaptiveReminderDensity adaptiveReminderDensity(int availablePixels, int requiredRows) {
   const int pixelsPerRow = requiredRows > 0 ? availablePixels / requiredRows : availablePixels;
-  if (pixelsPerRow >= 62) return {FONT_B18, 56, 6};
-  if (pixelsPerRow >= 44) return {FONT_B12, 42, 5};
-  return {FONT_B9, 34, 4};
+  if (pixelsPerRow >= 62) return {FONT_B18, 56, 6, 88};
+  if (pixelsPerRow >= 44) return {FONT_B12, 42, 5, 62};
+  return {FONT_B9, 34, 4, 48};
 }
 
 static AdaptiveReminderComposition adaptiveComposition(const Cell& c, int todayCount, int tomorrowCount) {
@@ -2228,7 +2229,9 @@ static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, 
     const int timeH = density.font == FONT_B18 ? max(1, h / 2) : min(18, max(1, (h * 38) / 100));
     timeRect = {x, y, w, timeH}; titleRect = {x, y + timeH, w, max(1, h - timeH)};
   } else {
-    const int timeW = min(48, max(38, (w * 22) / 100)), gap = 7;
+    // timeW covers HH:MM at this profile's font; adaptive non-stacked cells
+    // retain the remaining width for the fitted title.
+    const int timeW = density.timeW, gap = 7;
     timeRect = {x, y, timeW, h}; titleRect = {x + timeW + gap, y, max(1, w - timeW - gap), h};
   }
   if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, density.font);
