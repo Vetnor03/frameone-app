@@ -2239,9 +2239,14 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
           for (int i = 0; i < mi; i++) { const int s = adaptiveUsefulTitleScore(g_cache.items[tomorrow->itemIdx[i]], tomorrowTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           if (!useful) continue;
           const int fontRank = dense ? 0 : 1, count = ti + mi, average = readable / max(1,count);
-          const bool better = fontRank > bestFont || (fontRank == bestFont && (count > bestCount ||
+          // B12 receives a one-item calmness bonus. Dense B9 wins only when it
+          // exposes at least two more useful reminders than the best B12 option.
+          const int informationRank = count + fontRank;
+          const int bestInformationRank = bestCount + bestFont;
+          const bool better = informationRank > bestInformationRank || (informationRank == bestInformationRank &&
+            (fontRank > bestFont || (fontRank == bestFont && (count > bestCount ||
             (count == bestCount && (minimum > bestMinimum || (minimum == bestMinimum &&
-            (average > bestAverage || (average == bestAverage && ti > bestToday)))))));
+            (average > bestAverage || (average == bestAverage && ti > bestToday)))))))));
           if (better) { bestMinimum=minimum;bestAverage=average;bestFont=fontRank;bestToday=ti;bestCount=count;
             out.family=vertical?REM_VERTICAL_LIST:REM_SPLIT_SECTIONS;out.splitPercent=ratioPercent;out.denseFont=dense;
             out.todayItems=ti;out.tomorrowItems=mi;out.readabilityScore=readable; }

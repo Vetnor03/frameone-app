@@ -124,6 +124,31 @@ test('pathological titles use a safe non-empty dense fallback',()=>{
   assert.equal(composition.selectedFont,'B9');assert.ok(composition.maxItems>=1);assert.equal(composition.readabilityScore,0)
 })
 
+test('B9 wins when it reveals several additional useful reminders',()=>{
+  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
+  const state={today:Array.from({length:3},(_,index)=>item(`${'X'.repeat(70)}${index}`)),tomorrow:Array.from({length:3},(_,index)=>item(`${'X'.repeat(70)}${index}`))}
+  const profile={width:500,height:230,colSpan:3,rowSpan:2,area:6,orientation:'landscape'}
+  const composition=reminderComposition(profile,state)
+  assert.equal(composition.selectedFont,'B9');assert.equal(composition.maxItems,6);assert.equal(composition.overflow,0)
+  // At B12 the split title floor fails and the stacked height holds only two;
+  // B9's four-item information gain is therefore meaningful rather than marginal.
+  const usableHeight=profile.height-2*Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
+  const b12StackedRows=usableHeight-60-10-24
+  assert.ok(2*42+5<=b12StackedRows);assert.ok(3*42+2*5>b12StackedRows)
+})
+
+test('B12 remains selected when dense typography gains only one item',()=>{
+  const item=(title)=>({time:'18:00',text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
+  const state={today:[item('Today')],tomorrow:Array.from({length:4},(_,index)=>item(`Tomorrow ${index}`))}
+  const composition=reminderComposition({width:500,height:230,colSpan:3,rowSpan:2,area:6,orientation:'landscape'},state)
+  assert.equal(composition.selectedFont,'B12');assert.equal(composition.maxItems,4);assert.equal(composition.overflow,1)
+})
+
+test('firmware mirrors the one-item B12 calmness bonus',async()=>{
+  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(firmware,/informationRank = count \+ fontRank[\s\S]*bestInformationRank = bestCount \+ bestFont/)
+})
+
 test('overflow owns a separate footer and never consumes a visible reminder row',()=>{
   for(const [w,h] of [[1,1],[1,3],[3,2]]){const p=profile(w,h),composition=reminderComposition(p,reminderStudioPresets.extreme),layout=reminderLayout(p,composition)
     assert.ok(composition.overflow>0)

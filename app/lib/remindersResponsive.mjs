@@ -56,10 +56,11 @@ function selectLandscapeCandidate(usable,state,showHeading) {
         if(scores.some(x=>x===0))continue
         const readability=scores.reduce((a,b)=>a+b,0)
         const minimum=Math.min(...scores),average=Math.floor(readability/scores.length)
-        // The score above is a quality gate. Once every title is useful, prefer
-        // B12 and useful information count before using fit and Today as ties.
+        // The score above is a quality gate. B12 gets a one-item calmness bonus:
+        // B9 must reveal at least two additional useful reminders to beat it.
+        const fontRank=font==='B12'?1:0,itemCount=todayItems+tomorrowItems
         candidates.push({direction,splitRatio,font,todayItems,tomorrowItems,readability,
-          rank:[font==='B12'?1:0,todayItems+tomorrowItems,minimum,average,todayItems]})
+          rank:[itemCount+fontRank,fontRank,itemCount,minimum,average,todayItems]})
       }
   }
   candidates.sort((a,b)=>{for(let i=0;i<a.rank.length;i++)if(a.rank[i]!==b.rank[i])return b.rank[i]-a.rank[i];return a.direction.localeCompare(b.direction)})
