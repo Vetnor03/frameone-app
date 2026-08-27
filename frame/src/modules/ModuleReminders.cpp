@@ -2218,23 +2218,22 @@ static void drawAdaptiveLabel(const ReminderRect& rect, const char* label, const
   drawLeft(rect.x, baseline, label, font, Theme::ink());
 }
 
-static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, bool stacked) {
+static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, bool stacked,
+                             const AdaptiveReminderDensity& density) {
   if (row.w < 1 || row.h < 1) return;
   const int inset = 2, x = row.x + inset, y = row.y + inset;
   const int w = max(1, row.w - inset * 2), h = max(1, row.h - inset * 2);
   ReminderRect timeRect, titleRect;
   if (stacked) {
-    const int timeH = min(18, max(1, (h * 38) / 100));
+    const int timeH = density.font == FONT_B18 ? max(1, h / 2) : min(18, max(1, (h * 38) / 100));
     timeRect = {x, y, w, timeH}; titleRect = {x, y + timeH, w, max(1, h - timeH)};
   } else {
     const int timeW = min(48, max(38, (w * 22) / 100)), gap = 7;
     timeRect = {x, y, timeW, h}; titleRect = {x + timeW + gap, y, max(1, w - timeW - gap), h};
   }
-  const AdaptiveReminderDensity density = adaptiveReminderDensity(row.h, 1);
-  const GFXfont* font = stacked && density.font == FONT_B18 ? FONT_B12 : density.font;
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, font);
-  char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, font);
-  drawAdaptiveLabel(titleRect, fitted, font);
+  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, density.font);
+  char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, density.font);
+  drawAdaptiveLabel(titleRect, fitted, density.font);
 }
 
 static void drawAdaptiveOverflow(const ReminderRect& rect, int count) {
@@ -2245,13 +2244,15 @@ static void drawAdaptiveOverflow(const ReminderRect& rect, int count) {
 
 static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int overflow,
                                 const ReminderRect& rect, bool heading, bool stacked,
-                                const char* headingText, bool sectionFooter) {
+                                const char* headingText, bool sectionFooter,
+                                const AdaptiveReminderDensity* selectedDensity = nullptr) {
   if (!bucket || visible <= 0 || rect.w <= 0 || rect.h <= 0) return;
   const int headingH = heading ? 30 : 0;
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
   const int available = max(1, rect.h - headingH - footerH);
-  const AdaptiveReminderDensity density = adaptiveReminderDensity(available, visible);
+  const AdaptiveReminderDensity density = selectedDensity
+    ? *selectedDensity : adaptiveReminderDensity(available, visible);
   const int rowGap = density.rowGap;
   const int rowH = min(density.rowH,
     max(1, (available - max(0, visible - 1) * rowGap) / visible));
@@ -2259,7 +2260,7 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
     const int y0 = rect.y + headingH + i * (rowH + rowGap);
     const int itemIdx = bucket->itemIdx[i];
     if (itemIdx >= 0 && itemIdx < g_cache.count)
-      drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, rowH}, stacked);
+      drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, rowH}, stacked, density);
   }
   if (footerH) drawAdaptiveOverflow({rect.x, rect.y + rect.h - footerH, rect.w, footerH}, overflow);
 }
@@ -2304,12 +2305,13 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
                           max(1, inner.h - headingH - footerH - (footerH ? 4 : 0))};
   if (shallow) {
     const int gap = visible > 1 ? 12 : 0;
+    const AdaptiveReminderDensity density = adaptiveReminderDensity(content.h, 1);
     for (int i = 0; i < visible; i++) {
       const int x0 = content.x + (content.w * i) / visible + (i ? gap / 2 : 0);
       const int x1 = content.x + (content.w * (i + 1)) / visible - (i + 1 < visible ? gap / 2 : 0);
       const int itemIdx = bucket.itemIdx[i];
       if (itemIdx >= 0 && itemIdx < g_cache.count)
-        drawAdaptiveItem(g_cache.items[itemIdx], {x0, content.y, x1 - x0, content.h}, false);
+        drawAdaptiveItem(g_cache.items[itemIdx], {x0, content.y, x1 - x0, content.h}, false, density);
     }
   } else {
     drawAdaptiveSection(&bucket, visible, 0, content, false, c.w < 230, heading, false);
@@ -2351,28 +2353,36 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
     const int footerW = overflow && footerFits ? min(58, max(42, (inner.w * 13) / 100)) : 0;
     const int contentW = max(1, inner.w - footerW - (footerW ? 8 : 0));
     const int count = max(1, comp.todayItems + comp.tomorrowItems), gap = count > 1 ? 12 : 0;
+    const AdaptiveReminderDensity density = adaptiveReminderDensity(inner.h, 1);
     int drawn = 0;
     for (int i = 0; i < comp.todayItems; i++, drawn++) {
       int x0 = inner.x + (contentW * drawn) / count + (drawn ? gap / 2 : 0);
       int x1 = inner.x + (contentW * (drawn + 1)) / count - (drawn + 1 < count ? gap / 2 : 0);
-      drawAdaptiveItem(g_cache.items[today->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false);
+      drawAdaptiveItem(g_cache.items[today->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false, density);
     }
     for (int i = 0; i < comp.tomorrowItems; i++, drawn++) {
       int x0 = inner.x + (contentW * drawn) / count + (drawn ? gap / 2 : 0);
       int x1 = inner.x + (contentW * (drawn + 1)) / count - (drawn + 1 < count ? gap / 2 : 0);
-      drawAdaptiveItem(g_cache.items[tomorrow->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false);
+      drawAdaptiveItem(g_cache.items[tomorrow->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false, density);
     }
     drawAdaptiveOverflow({inner.x + inner.w - footerW, inner.y, footerW, inner.h}, overflow); return;
   }
   const int footerH = overflow ? 22 : 0, contentH = max(1, inner.h - footerH - (footerH ? 6 : 0));
   const int headingH = comp.showHeading ? 30 : 0;
-  const int minimumRowH = 38, rowGap = 4;
-  const int tomorrowH = comp.tomorrowItems ? headingH + comp.tomorrowItems * minimumRowH + max(0, comp.tomorrowItems - 1) * rowGap : 0;
-  const int sectionGap = tomorrowH ? 10 : 0;
-  const int todayH = comp.todayItems ? max(1, contentH - tomorrowH - sectionGap) : 0;
+  const int sectionCount = (comp.todayItems ? 1 : 0) + (comp.tomorrowItems ? 1 : 0);
+  const int sectionGap = sectionCount > 1 ? 10 : 0;
+  const int totalRows = comp.todayItems + comp.tomorrowItems;
+  const int rowsAvailable = max(1, contentH - sectionCount * headingH - sectionGap);
+  const AdaptiveReminderDensity density = adaptiveReminderDensity(rowsAvailable, totalRows);
+  const int sharedRowH = min(density.rowH,
+    max(1, (rowsAvailable - max(0, totalRows - sectionCount) * density.rowGap) / totalRows));
+  const int todayH = comp.todayItems
+    ? headingH + comp.todayItems * sharedRowH + max(0, comp.todayItems - 1) * density.rowGap : 0;
+  const int tomorrowH = comp.tomorrowItems
+    ? headingH + comp.tomorrowItems * sharedRowH + max(0, comp.tomorrowItems - 1) * density.rowGap : 0;
   const bool stacked = c.w < 230;
-  drawAdaptiveSection(today, comp.todayItems, 0, {inner.x, inner.y, inner.w, todayH}, comp.showHeading, stacked, "Today", false);
-  drawAdaptiveSection(tomorrow, comp.tomorrowItems, 0, {inner.x, inner.y + todayH + sectionGap, inner.w, tomorrowH}, comp.showHeading, stacked, "Tomorrow", false);
+  drawAdaptiveSection(today, comp.todayItems, 0, {inner.x, inner.y, inner.w, todayH}, comp.showHeading, stacked, "Today", false, &density);
+  drawAdaptiveSection(tomorrow, comp.tomorrowItems, 0, {inner.x, inner.y + todayH + sectionGap, inner.w, tomorrowH}, comp.showHeading, stacked, "Tomorrow", false, &density);
   drawAdaptiveOverflow({inner.x, inner.y + inner.h - footerH, inner.w, footerH}, overflow);
 }
 
