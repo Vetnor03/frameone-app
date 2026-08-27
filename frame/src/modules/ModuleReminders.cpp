@@ -2150,8 +2150,19 @@ static AdaptiveReminderDensity adaptiveReminderDensity(int availablePixels, int 
 
 static int adaptiveEstimatedTextWidth(const char* value, bool dense) {
   int units = 0;
-  for (const char* p = value; p && *p; ++p) {
-    const char ch = *p;
+  for (const uint8_t* p = (const uint8_t*)value; p && *p;) {
+    const uint8_t lead = *p;
+    // Decode only far enough to advance exactly one Unicode code point. The
+    // weighting model distinguishes ASCII classes; every non-ASCII code point
+    // intentionally receives the same six units as Studio.
+    uint32_t codepoint = lead;
+    int advance = 1;
+    if ((lead & 0xE0) == 0xC0 && (p[1]&0xC0)==0x80) { codepoint=((lead&0x1F)<<6)|(p[1]&0x3F);advance=2; }
+    else if ((lead & 0xF0) == 0xE0 && (p[1]&0xC0)==0x80 && (p[2]&0xC0)==0x80) { codepoint=((lead&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F);advance=3; }
+    else if ((lead & 0xF8) == 0xF0 && (p[1]&0xC0)==0x80 && (p[2]&0xC0)==0x80 && (p[3]&0xC0)==0x80) { codepoint=((lead&7)<<18)|((p[1]&0x3F)<<12)|((p[2]&0x3F)<<6)|(p[3]&0x3F);advance=4; }
+    p += advance;
+    if (codepoint > 0x7F) { units += 6; continue; }
+    const char ch = (char)codepoint;
     if (ch == ' ') units += 3;
     else if (strchr("ilI1.,:;!'|", ch)) units += 3;
     else if (strchr("MW@%&", ch)) units += 9;
@@ -2200,11 +2211,11 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
     // width splits using the real titles. A technically fitting row with only
     // a one-word prefix is rejected rather than rewarded as another item.
     int bestMinimum = -1, bestAverage = -1, bestFont = -1, bestToday = -1, bestCount = -1;
-    const int splitPercents[] = {50, 55, 60, 65};
+    const int splitPercents[] = {35, 40, 45, 50, 55, 60, 65};
     for (int dense = 0; dense <= 1; dense++) for (int vertical = 0; vertical <= 1; vertical++) {
       const AdaptiveReminderDensity density = dense ? AdaptiveReminderDensity{FONT_B9,34,4,48}
                                                      : AdaptiveReminderDensity{FONT_B12,42,5,62};
-      const int ratioCount = vertical ? 1 : 4;
+      const int ratioCount = vertical ? 1 : 7;
       for (int ratioIndex = 0; ratioIndex < ratioCount; ratioIndex++) {
         const int ratioPercent = vertical ? 100 : splitPercents[ratioIndex];
         for (int ti = todayCount; ti >= min(1, todayCount); ti--) for (int mi = tomorrowCount; mi >= min(1, tomorrowCount); mi--) {
@@ -2228,14 +2239,24 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
           for (int i = 0; i < mi; i++) { const int s = adaptiveUsefulTitleScore(g_cache.items[tomorrow->itemIdx[i]], tomorrowTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           if (!useful) continue;
           const int fontRank = dense ? 0 : 1, count = ti + mi, average = readable / max(1,count);
-          const bool better = minimum > bestMinimum || (minimum == bestMinimum && (average > bestAverage ||
-            (average == bestAverage && (fontRank > bestFont || (fontRank == bestFont &&
-            (ti > bestToday || (ti == bestToday && count > bestCount)))))));
+          const bool better = fontRank > bestFont || (fontRank == bestFont && (count > bestCount ||
+            (count == bestCount && (minimum > bestMinimum || (minimum == bestMinimum &&
+            (average > bestAverage || (average == bestAverage && ti > bestToday)))))));
           if (better) { bestMinimum=minimum;bestAverage=average;bestFont=fontRank;bestToday=ti;bestCount=count;
             out.family=vertical?REM_VERTICAL_LIST:REM_SPLIT_SECTIONS;out.splitPercent=ratioPercent;out.denseFont=dense;
             out.todayItems=ti;out.tomorrowItems=mi;out.readabilityScore=readable; }
         }
       }
+    }
+    if (bestCount < 0) {
+      // Extremely long text may fail every fit threshold. Never render a blank
+      // module: use the widest dense vertical fallback and preserve chronology.
+      const AdaptiveReminderDensity density = {FONT_B9,34,4,48};
+      const int sections = (todayCount && tomorrowCount) ? 2 : 1;
+      const int rowsSpace = usable.height - sections * headingH - (sections > 1 ? 10 : 0) - footerH;
+      const bool twoSections = sections == 2 && 2 * density.rowH <= rowsSpace;
+      out.family=REM_VERTICAL_LIST;out.denseFont=true;out.splitPercent=100;
+      out.todayItems=todayCount?1:0;out.tomorrowItems=tomorrowCount&&(!todayCount||twoSections)?1:0;
     }
   } else {
     out.showTomorrow = tomorrowCount > 0;

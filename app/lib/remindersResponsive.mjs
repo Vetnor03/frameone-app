@@ -25,9 +25,9 @@ function itemTitle(item){return item?.text?.full||item?.text?.compact||''}
 function usefulTitleScore(item,width,font) {
   const full=estimateReminderTextWidth(itemTitle(item),font)
   if(width<54||full<=0)return 0
-  const fraction=Math.min(1,width/full)
+  const fraction=Math.min(100,Math.floor(width*100/full))
   // One-word ellipses are not useful merely because a row technically fits.
-  return fraction<.28?0:fraction<.42?Math.round(fraction*35):Math.round(fraction*100)
+  return fraction<28?0:fraction<42?Math.floor(fraction*35/100):fraction
 }
 
 function selectLandscapeCandidate(usable,state,showHeading) {
@@ -35,7 +35,7 @@ function selectLandscapeCandidate(usable,state,showHeading) {
   const candidates=[]
   for(const font of ['B12','B9'])for(const direction of ['split','vertical']) {
     const density=DENSITIES[font]
-    const ratios=direction==='split'?[.5,.55,.6,.65]:[1]
+    const ratios=direction==='split'?[.35,.4,.45,.5,.55,.6,.65]:[1]
     for(const splitRatio of ratios)for(let todayItems=state.today.length;todayItems>=Math.min(1,state.today.length);todayItems--)
       for(let tomorrowItems=state.tomorrow.length;tomorrowItems>=Math.min(1,state.tomorrow.length);tomorrowItems--) {
         const sections=(todayItems?1:0)+(tomorrowItems?1:0),overflow=state.today.length+state.tomorrow.length-todayItems-tomorrowItems
@@ -54,16 +54,24 @@ function selectLandscapeCandidate(usable,state,showHeading) {
         }
         const scores=[...state.today.slice(0,todayItems).map(x=>usefulTitleScore(x,titleWidths[0],font)),...state.tomorrow.slice(0,tomorrowItems).map(x=>usefulTitleScore(x,titleWidths[1],font))]
         if(scores.some(x=>x===0))continue
-        const meaningful=scores.filter(x=>x>=42).length,readability=scores.reduce((a,b)=>a+b,0)
-        const minimum=Math.min(...scores),average=Math.round(readability/scores.length)
-        // Lexicographic policy: weakest title, average readability, B12, earlier
-        // content, then count. Item count can never buy unreadable text.
-        candidates.push({direction,splitRatio,font,todayItems,tomorrowItems,meaningful,readability,
-          rank:[minimum,average,font==='B12'?1:0,todayItems,todayItems+tomorrowItems]})
+        const readability=scores.reduce((a,b)=>a+b,0)
+        const minimum=Math.min(...scores),average=Math.floor(readability/scores.length)
+        // The score above is a quality gate. Once every title is useful, prefer
+        // B12 and useful information count before using fit and Today as ties.
+        candidates.push({direction,splitRatio,font,todayItems,tomorrowItems,readability,
+          rank:[font==='B12'?1:0,todayItems+tomorrowItems,minimum,average,todayItems]})
       }
   }
   candidates.sort((a,b)=>{for(let i=0;i<a.rank.length;i++)if(a.rank[i]!==b.rank[i])return b.rank[i]-a.rank[i];return a.direction.localeCompare(b.direction)})
-  return candidates[0]||null
+  if(candidates.length)return candidates[0]
+  // Pathological titles must not make the module blank. Fall back to the
+  // widest B9 composition with one earliest item (and Tomorrow too when the
+  // vertical geometry can retain both complete sections).
+  const density=DENSITIES.B9,sections=state.today.length&&state.tomorrow.length?2:1
+  const rowsSpace=usable.height-sections*(showHeading?30:0)-(sections>1?10:0)-footerH
+  const twoSections=sections===2&&2*density.rowHeight<=rowsSpace
+  return {direction:'vertical',splitRatio:1,font:'B9',todayItems:state.today.length?1:0,
+    tomorrowItems:state.tomorrow.length&&(!state.today.length||twoSections)?1:0,readability:0,rank:[]}
 }
 
 /** Selects verbosity only after composition has allocated a real pixel width. */
