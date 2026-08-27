@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import test from 'node:test'
 import {supportsPhysicalCustomLayout,validateCustomGeometry} from '../app/lib/customLayouts.mjs'
-import {reminderComposition,reminderLayout,reminderStudioPresets} from '../app/lib/remindersResponsive.mjs'
+import {estimateReminderTextWidth,reminderComposition,reminderLayout,reminderStudioPresets} from '../app/lib/remindersResponsive.mjs'
 
 const adaptive=[[1,1],[1,2],[1,3],[1,4],[2,1],[2,3],[2,4],[3,1],[3,2],[3,3],[3,4],[4,3]]
 const boundsX=[9,205,401,597,794],boundsY=[22,136,251,365,480]
@@ -31,7 +31,7 @@ test('exact Reminders instances are accepted and lookalikes rejected atomically'
 test('pixel dimensions select shallow, vertical, and split Studio families',()=>{
   assert.equal(reminderComposition(profile(2,1),reminderStudioPresets.normal).family,'shallow-horizontal')
   assert.equal(reminderComposition(profile(1,3),reminderStudioPresets.normal).family,'vertical-list')
-  assert.equal(reminderComposition(profile(3,2),reminderStudioPresets.normal).family,'split-sections')
+  assert.ok(['split-sections','vertical-list'].includes(reminderComposition(profile(3,2),reminderStudioPresets.normal).family))
 })
 
 test('Today-only, Tomorrow-only, empty, and mixed disclosure follow Studio policy',()=>{
@@ -67,7 +67,22 @@ test('adaptive empty state is reserved for an unavailable or genuinely empty fee
 test('Today and Tomorrow buckets still enter the responsive composition unchanged',async()=>{
   const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
   assert.match(reminders,/findBucketByDaysUntil\(buckets, bucketCount, 0\)[\s\S]*findBucketByDaysUntil\(buckets, bucketCount, 1\)/)
-  assert.match(reminders,/AdaptiveReminderComposition comp = adaptiveComposition\(c, todayCount, tomorrowCount\)/)
+  assert.match(reminders,/AdaptiveReminderComposition comp = adaptiveComposition\(c, today, tomorrow\)/)
+})
+
+test('physical long-title regression makes the same content-aware Studio and firmware decision',async()=>{
+  const item=(title,time='18:00')=>({time,text:{full:title,compact:title,short:title,tiny:title},protectedFacts:[]})
+  const state={today:[item('3 menn og en bobil - live // Stavangeren'),item('Discussion Evening: Prejudice Then and Now'),item('Gorrlaus at Tou in Stavanger East'),item('Torsdag på Tungenes: Bare Egil Band')],tomorrow:[item('Ice cider tasting at Sandalen gard','12:15'),item('The Talling Sisters – Live & Terrified'),item('A final particularly descriptive concert title')]}
+  const p={width:776,height:343,colSpan:4,rowSpan:3,area:12,orientation:'landscape'}
+  const composition=reminderComposition(p,state),layout=reminderLayout(p,composition)
+  assert.equal(composition.selectedFont,'B12');assert.notEqual(composition.splitRatio,.7)
+  assert.ok((layout.tomorrowRect?.width||0)>(p.width-layout.pad*2)*.3)
+  assert.ok(layout.items.every(row=>row.density.font!=='B18'&&row.titleRect.width>=54))
+  assert.ok(composition.overflow>0);assert.ok(composition.readabilityScore>0)
+  assert.ok(estimateReminderTextWidth(state.tomorrow[0].text.full,'B12')>layout.items.at(-1).titleRect.width)
+  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  for(const token of ['adaptiveEstimatedTextWidth','adaptiveUsefulTitleScore','splitPercents[] = {50, 55, 60, 65}','bestMinimum','comp.splitPercent'])assert.ok(firmware.includes(token),token)
+  assert.doesNotMatch(firmware,/\(inner\.w - gap\) \* 70/)
 })
 
 test('overflow owns a separate footer and never consumes a visible reminder row',()=>{

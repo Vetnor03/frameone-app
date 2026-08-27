@@ -4,9 +4,66 @@ export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extre
 /** Pixel-derived type and row metrics shared with the physical renderer. */
 export function reminderDensity(availablePixels,requiredRows) {
   const pixelsPerRow=requiredRows>0?availablePixels/requiredRows:availablePixels
-  if(pixelsPerRow>=62)return Object.freeze({name:'spacious',font:'B18',fontSize:24,rowHeight:56,rowGap:6,timeWidth:88})
   if(pixelsPerRow>=44)return Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5,timeWidth:62})
   return Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4,timeWidth:48})
+}
+
+const DENSITIES=Object.freeze({
+  B12:Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5,timeWidth:62}),
+  B9:Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4,timeWidth:48}),
+})
+
+// This deliberately uses the same cheap, integer-friendly model as firmware.
+// It is not used for drawing: it makes candidate selection independent of the
+// browser's font rasterizer while still responding to the actual title text.
+export function estimateReminderTextWidth(value,font='B12') {
+  const units=[...String(value)].reduce((sum,ch)=>sum+(ch===' '?3:/[ilI1.,:;!'|]/.test(ch)?3:/[MW@%&]/.test(ch)?9:/[A-Z0-9]/.test(ch)?7:6),0)
+  return Math.ceil(units*(font==='B12'?1.42:1.08))
+}
+
+function itemTitle(item){return item?.text?.full||item?.text?.compact||''}
+function usefulTitleScore(item,width,font) {
+  const full=estimateReminderTextWidth(itemTitle(item),font)
+  if(width<54||full<=0)return 0
+  const fraction=Math.min(1,width/full)
+  // One-word ellipses are not useful merely because a row technically fits.
+  return fraction<.28?0:fraction<.42?Math.round(fraction*35):Math.round(fraction*100)
+}
+
+function selectLandscapeCandidate(usable,state,showHeading) {
+  const headingH=showHeading?30:0,gap=18,footerH=24
+  const candidates=[]
+  for(const font of ['B12','B9'])for(const direction of ['split','vertical']) {
+    const density=DENSITIES[font]
+    const ratios=direction==='split'?[.5,.55,.6,.65]:[1]
+    for(const splitRatio of ratios)for(let todayItems=state.today.length;todayItems>=Math.min(1,state.today.length);todayItems--)
+      for(let tomorrowItems=state.tomorrow.length;tomorrowItems>=Math.min(1,state.tomorrow.length);tomorrowItems--) {
+        const sections=(todayItems?1:0)+(tomorrowItems?1:0),overflow=state.today.length+state.tomorrow.length-todayItems-tomorrowItems
+        const footer=overflow?footerH:0
+        let titleWidths,rowSpace
+        if(direction==='split') {
+          const contentW=usable.width-(sections===2?gap:0)
+          const widths=sections===2?[Math.round(contentW*splitRatio),contentW-Math.round(contentW*splitRatio)]:[usable.width,usable.width]
+          rowSpace=usable.height-headingH-footer
+          titleWidths=[widths[0]-density.timeWidth-11,widths[1]-density.timeWidth-11]
+          if(Math.max(todayItems,tomorrowItems)*(density.rowHeight+density.rowGap)-density.rowGap>rowSpace)continue
+        } else {
+          rowSpace=usable.height-sections*headingH-(sections>1?10:0)-footer
+          titleWidths=[usable.width-density.timeWidth-11,usable.width-density.timeWidth-11]
+          if((todayItems+tomorrowItems)*(density.rowHeight+density.rowGap)-sections*density.rowGap>rowSpace)continue
+        }
+        const scores=[...state.today.slice(0,todayItems).map(x=>usefulTitleScore(x,titleWidths[0],font)),...state.tomorrow.slice(0,tomorrowItems).map(x=>usefulTitleScore(x,titleWidths[1],font))]
+        if(scores.some(x=>x===0))continue
+        const meaningful=scores.filter(x=>x>=42).length,readability=scores.reduce((a,b)=>a+b,0)
+        const minimum=Math.min(...scores),average=Math.round(readability/scores.length)
+        // Lexicographic policy: weakest title, average readability, B12, earlier
+        // content, then count. Item count can never buy unreadable text.
+        candidates.push({direction,splitRatio,font,todayItems,tomorrowItems,meaningful,readability,
+          rank:[minimum,average,font==='B12'?1:0,todayItems,todayItems+tomorrowItems]})
+      }
+  }
+  candidates.sort((a,b)=>{for(let i=0;i<a.rank.length;i++)if(a.rank[i]!==b.rank[i])return b.rank[i]-a.rank[i];return a.direction.localeCompare(b.direction)})
+  return candidates[0]||null
 }
 
 /** Selects verbosity only after composition has allocated a real pixel width. */
@@ -40,7 +97,7 @@ function escapeRegExp(value){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 
 export function reminderComposition(profile,state) {
   const total=state.today.length+state.tomorrow.length
-  if(!total)return Object.freeze({available:false,direction:'vertical',family:'vertical-list',showHeading:false,showTime:false,showTomorrow:false,todayItems:0,tomorrowItems:0,todayOverflow:0,tomorrowOverflow:0,maxItems:0,overflow:0})
+  if(!total)return Object.freeze({available:false,direction:'vertical',family:'vertical-list',showHeading:false,showTime:false,showTomorrow:false,todayItems:0,tomorrowItems:0,todayOverflow:0,tomorrowOverflow:0,maxItems:0,overflow:0,selectedFont:null,splitRatio:null,readabilityScore:0})
   // Composition follows the rendered rectangle. Grid spans are deliberately not
   // consulted: the same logical shape can be shallow, square, or tall at runtime.
   const pad=Math.max(9,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.08)))
@@ -48,12 +105,13 @@ export function reminderComposition(profile,state) {
   const landscape=profile.height>0&&profile.width/profile.height>1.12
   const shallow=landscape&&usable.height<126
   const split=!shallow&&landscape&&usable.width>=464&&usable.height>=164
-  const family=shallow?'shallow-horizontal':split?'split-sections':'vertical-list'
-  const direction=shallow?'horizontal':split?'split':'vertical'
+  let family=shallow?'shallow-horizontal':split?'split-sections':'vertical-list'
+  let direction=shallow?'horizontal':split?'split':'vertical'
   const showHeading=!shallow&&usable.height>=104
   const headingH=showHeading?30:0,footerH=24,rowH=38,rowGap=4,sectionGap=10
   const rowCapacity=(available,minimum=rowH,gap=rowGap)=>available<minimum?0:1+Math.floor((available-minimum)/(minimum+gap))
   let showTomorrow=state.tomorrow.length>0,todayItems=0,tomorrowItems=0
+  let selectedFont=null,splitRatio=null,readabilityScore=0
   if(shallow) {
     const initial=rowCapacity(usable.width,142,12),canFitFooter=usable.width>=142+12+42
     const contentWidth=usable.width-(total>initial&&canFitFooter?66:0),capacity=rowCapacity(contentWidth,142,12)
@@ -61,9 +119,12 @@ export function reminderComposition(profile,state) {
     todayItems=Math.min(state.today.length,capacity)
     tomorrowItems=showTomorrow?Math.min(state.tomorrow.length,capacity-todayItems):0
   } else if(split) {
-    const rowsArea=usable.height-headingH,initial=rowCapacity(rowsArea)
-    const capacity=rowCapacity(rowsArea-((state.today.length>initial||state.tomorrow.length>initial)?footerH:0))
-    todayItems=Math.min(state.today.length,capacity);tomorrowItems=Math.min(state.tomorrow.length,capacity)
+    const selected=selectLandscapeCandidate(usable,state,showHeading)
+    if(selected){
+      direction=selected.direction;family=selected.direction==='split'?'split-sections':'vertical-list'
+      todayItems=selected.todayItems;tomorrowItems=selected.tomorrowItems
+      selectedFont=selected.font;splitRatio=selected.splitRatio;readabilityScore=selected.readability
+    }
   } else {
     let sectionCount=(state.today.length?1:0)+(showTomorrow?1:0)
     let chrome=sectionCount*headingH+(sectionCount>1?sectionGap:0)
@@ -85,7 +146,7 @@ export function reminderComposition(profile,state) {
   const maxItems=todayItems+tomorrowItems
   const todayOverflow=Math.max(0,state.today.length-todayItems)
   const tomorrowOverflow=Math.max(0,state.tomorrow.length-tomorrowItems)
-  return Object.freeze({available:true,direction,family,showHeading,showTime:true,showTomorrow,todayItems,tomorrowItems,todayOverflow,tomorrowOverflow,maxItems,overflow:todayOverflow+tomorrowOverflow})
+  return Object.freeze({available:true,direction,family,showHeading,showTime:true,showTomorrow,todayItems,tomorrowItems,todayOverflow,tomorrowOverflow,maxItems,overflow:todayOverflow+tomorrowOverflow,selectedFont:selectedFont||null,splitRatio:splitRatio||null,readabilityScore:readabilityScore||0})
 }
 
 /** Allocate every drawable Reminders region before Canvas rendering begins. */
@@ -95,7 +156,7 @@ export function reminderLayout(profile,composition) {
   if(!composition.available)return Object.freeze({pad,emptyRect:inner,todayRect:null,tomorrowRect:null,footerRect:null,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze([])})
   if(composition.direction==='split') {
     const gap=composition.todayItems&&composition.tomorrowItems?18:0,hasToday=composition.todayItems>0,hasTomorrow=composition.tomorrowItems>0
-    const todayShare=!hasTomorrow?1:!hasToday?0:.7
+    const todayShare=!hasTomorrow?1:!hasToday?0:(composition.splitRatio||.5)
     const todayWidth=hasToday?(hasTomorrow?Math.max(1,Math.round((inner.width-gap)*todayShare)):inner.width):0
     const tomorrowWidth=hasTomorrow?Math.max(1,inner.width-gap-todayWidth):0
     const todayRect=composition.todayItems?{x:inner.x,y:inner.y,width:todayWidth,height:inner.height}:null
@@ -104,8 +165,9 @@ export function reminderLayout(profile,composition) {
     const todayFooterRect=composition.todayOverflow&&todayRect?{x:todayRect.x,y:todayRect.y+todayRect.height-footerHeight,width:todayRect.width,height:footerHeight}:null
     const tomorrowFooterRect=composition.tomorrowOverflow&&tomorrowRect?{x:tomorrowRect.x,y:tomorrowRect.y+tomorrowRect.height-footerHeight,width:tomorrowRect.width,height:footerHeight}:null
     const items=[]
-    addSectionItems(items,todayRect,composition.todayItems,headingHeight,false,todayFooterRect?footerHeight+4:0)
-    addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,false,tomorrowFooterRect?footerHeight+4:0)
+    const selectedDensity=composition.selectedFont?DENSITIES[composition.selectedFont]:null
+    addSectionItems(items,todayRect,composition.todayItems,headingHeight,false,todayFooterRect?footerHeight+4:0,selectedDensity)
+    addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,false,tomorrowFooterRect?footerHeight+4:0,selectedDensity)
     return Object.freeze({pad,emptyRect:null,todayRect,tomorrowRect,footerRect:null,todayFooterRect,tomorrowFooterRect,items:Object.freeze(items)})
   }
   const horizontalFooterFits=inner.width>=142+12+42
@@ -124,7 +186,7 @@ export function reminderLayout(profile,composition) {
   const sectionCount=(composition.todayItems?1:0)+(composition.tomorrowItems?1:0)
   const sectionGap=sectionCount>1?10:0,totalRows=composition.todayItems+composition.tomorrowItems
   const rowsAvailable=Math.max(1,content.height-sectionCount*headingHeight-sectionGap)
-  const density=reminderDensity(rowsAvailable,totalRows)
+  const density=composition.selectedFont?DENSITIES[composition.selectedFont]:reminderDensity(rowsAvailable,totalRows)
   const sharedRowHeight=Math.min(density.rowHeight,Math.max(1,(rowsAvailable-Math.max(0,totalRows-sectionCount)*density.rowGap)/totalRows))
   const sectionHeight=(count)=>count?headingHeight+count*sharedRowHeight+Math.max(0,count-1)*density.rowGap:0
   const todayHeight=sectionHeight(composition.todayItems)
@@ -147,7 +209,7 @@ function addSectionItems(items,rect,count,headingHeight,stacked,footerHeight=0,s
 function itemRegions(itemRect,stacked,density=reminderDensity(itemRect.height,1)) {
   const inset=2,box={x:itemRect.x+inset,y:itemRect.y+inset,width:Math.max(1,itemRect.width-inset*2),height:Math.max(1,itemRect.height-inset*2)}
   if(stacked) {
-    const timeHeight=density.font==='B18'?Math.max(1,box.height/2):Math.min(18,Math.max(1,box.height*.38))
+    const timeHeight=Math.min(18,Math.max(1,box.height*.38))
     return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:box.width,height:timeHeight},titleRect:{x:box.x,y:box.y+timeHeight,width:box.width,height:Math.max(1,box.height-timeHeight)},stacked:true,density})
   }
   // Sized for the selected font's HH:MM glyph advances; non-stacked cells have
