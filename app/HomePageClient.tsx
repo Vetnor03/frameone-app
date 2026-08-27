@@ -17,7 +17,7 @@ import type { AssistantDestination } from './lib/assistant/types'
 import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { addGroceryItemsCanonical } from './lib/groceries/actions'
-import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
+import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
@@ -12752,6 +12752,7 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
   }
   const selected = ingredients.filter((item) => item.selected)
   const visibleRecipes = savedRecipes.filter((recipe) => String(recipe.name).toLocaleLowerCase(language).includes(recipeSearch.trim().toLocaleLowerCase(language)))
+  const sourceLink = recipeSourceLink(draft?.sourceUrl)
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]">
     <div className="w-full max-w-[420px] max-h-[92vh] overflow-y-auto rounded-t-3xl bg-[color:var(--sheet-bg)] border-t border-[color:var(--bd-10)] p-5">
       <div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{mode === 'saved' ? (language === 'no' ? 'OPPSKRIFTER' : 'RECIPES') : (language === 'no' ? 'OPPSKRIFT' : 'RECIPE')}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div>
@@ -12769,6 +12770,13 @@ function RecipeSheet({ language, deviceId, onClose, onAdd }: { language: AppLang
       </div> : null}
       {mode === 'preview' && draft ? <div className="mt-4">
         {savedRecipeId ? <div className="text-lg font-medium">{draft.name}</div> : <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="w-full bg-transparent text-lg font-medium outline-none"/>}
+        {sourceLink ? <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" aria-label={`${language === 'no' ? 'Se originaloppskrift' : 'View original recipe'} · ${sourceLink.domain}`} className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-left text-sm text-[color:var(--fg-70)] transition-colors hover:bg-[color:var(--panel-05)] hover:text-[color:var(--fg-92)] active:bg-[color:var(--panel-10)]">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 13.5l3-3m-5.25 6.75-1.5 1.5a3.182 3.182 0 01-4.5-4.5l3-3a3.182 3.182 0 014.5 0m6-4.5 1.5-1.5a3.182 3.182 0 014.5 4.5l-3 3a3.182 3.182 0 01-4.5 0"/></svg>
+          <span className="font-medium">{language === 'no' ? 'Se originaloppskrift' : 'View original recipe'}</span>
+          <span aria-hidden="true" className="text-[color:var(--fg-30)]">·</span>
+          <span className="min-w-0 truncate text-xs text-[color:var(--fg-45)]">{sourceLink.domain}</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="ml-auto h-3.5 w-3.5 shrink-0 text-[color:var(--fg-45)]"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5h6v6m0-6-9 9M19.5 13.5v4.75a1.25 1.25 0 01-1.25 1.25H5.75a1.25 1.25 0 01-1.25-1.25V5.75A1.25 1.25 0 015.75 4.5h4.75"/></svg>
+        </a> : null}
         {draft.servings ? <div className="mt-3 flex items-center gap-3 text-sm"><span>{language === 'no' ? 'Porsjoner' : 'Servings'}</span><button onClick={() => setServings(Math.max(1, (servings || 1)-1))} className="h-8 w-8 rounded-full border">−</button><span>{servings}</span><button onClick={() => setServings((servings || 0)+1)} className="h-8 w-8 rounded-full border">+</button></div> : null}
         <div className="mt-4 divide-y divide-[color:var(--bd-10)] rounded-2xl border border-[color:var(--bd-10)]">{ingredients.map((item, index) => {
           const qty = scaleRecipeQuantity(item.quantity, draft.servings, servings)
