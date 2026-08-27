@@ -456,7 +456,7 @@ test('Reminders progressively discloses sections and calm item counts', () => {
   const small=reminderComposition(smallProfile,reminderStudioPresets.extreme)
   const large=reminderComposition(largeProfile,reminderStudioPresets.extreme)
   assert.equal(small.direction,'horizontal');assert.equal(small.showTomorrow,false);assert.equal(small.todayItems,1)
-  assert.equal(large.direction,'split');assert.equal(large.family,'split-sections');assert.equal(large.showTomorrow,true);assert.ok(large.maxItems>small.maxItems)
+  assert.ok(['split','vertical'].includes(large.direction));assert.equal(large.showTomorrow,true);assert.ok(large.maxItems>small.maxItems)
   assert.ok(large.todayItems>0);assert.ok(large.tomorrowItems>0);assert.ok(large.maxItems<=9)
 })
 
@@ -474,14 +474,14 @@ test('Reminders vertical layout reserves disjoint sections and footer before row
   }
 })
 
-test('large-landscape Reminders use physical orientation and split bounded sections', () => {
+test('large-landscape Reminders select a bounded split or stacked candidate from content', () => {
   for(const [colSpan,rowSpan,width,height] of [[4,3,785,343],[3,2,588,229],[3,3,588,343]]){
     const profile=responsiveCellProfile(colSpan,rowSpan,width,height)
     const composition=reminderComposition(profile,reminderStudioPresets.extreme),layout=reminderLayout(profile,composition)
-    assert.equal(profile.orientation,'landscape');assert.equal(composition.family,'split-sections');assert.equal(composition.direction,'split')
+    assert.equal(profile.orientation,'landscape');assert.ok(['split-sections','vertical-list'].includes(composition.family))
     assert.ok(layout.todayRect&&layout.tomorrowRect)
-    assert.ok(layout.todayRect.x+layout.todayRect.width<layout.tomorrowRect.x)
-    assert.equal(layout.todayRect.y,layout.tomorrowRect.y)
+    if(composition.direction==='split'){assert.ok(layout.todayRect.x+layout.todayRect.width<layout.tomorrowRect.x);assert.equal(layout.todayRect.y,layout.tomorrowRect.y)}
+    else assert.ok(layout.todayRect.y+layout.todayRect.height<=layout.tomorrowRect.y)
   }
   const sameSpansPortrait=reminderComposition(responsiveCellProfile(3,2,300,500),reminderStudioPresets.extreme)
   const square=reminderComposition(responsiveCellProfile(3,3,400,400),reminderStudioPresets.extreme)
@@ -494,30 +494,26 @@ test('shallow physical cells keep the horizontal item strip while tall cells sta
   assert.equal(reminderComposition(responsiveCellProfile(1,3,196,343),reminderStudioPresets.extreme).direction,'vertical')
 })
 
-test('split sections expand Today and avoid wasting width on a small Tomorrow section', () => {
+test('split sections choose content-aware widths instead of a fixed 70/30 allocation', () => {
   const profile=responsiveCellProfile(4,3,785,343)
   const normal=reminderLayout(profile,reminderComposition(profile,reminderStudioPresets.normal))
-  assert.ok(normal.todayRect.width>normal.tomorrowRect.width*2)
+  assert.ok(normal.todayRect.width/normal.tomorrowRect.width<=1.9)
+  assert.notEqual(reminderComposition(profile,reminderStudioPresets.normal).splitRatio,.7)
   const todayOnly={today:reminderStudioPresets.extreme.today,tomorrow:[]}
   const expanded=reminderLayout(profile,reminderComposition(profile,todayOnly))
-  assert.equal(expanded.tomorrowRect,null);assert.ok(expanded.todayRect.width>normal.todayRect.width)
+  assert.equal(expanded.tomorrowRect,null);assert.equal(expanded.todayRect.width,profile.width-expanded.pad*2)
 })
 
-test('split overflow remains inside its owning section footer', () => {
+test('candidate overflow remains inside its owning footer', () => {
   const profile=responsiveCellProfile(4,3,785,343),items=reminderStudioPresets.extreme.today
   const state={today:[...items,...items],tomorrow:[...items,...items]}
   const composition=reminderComposition(profile,state),layout=reminderLayout(profile,composition)
   assert.ok(composition.todayOverflow>0&&composition.tomorrowOverflow>0)
-  for(const [section,footer] of [[layout.todayRect,layout.todayFooterRect],[layout.tomorrowRect,layout.tomorrowFooterRect]]){
+  if(composition.direction==='split')for(const [section,footer] of [[layout.todayRect,layout.todayFooterRect],[layout.tomorrowRect,layout.tomorrowFooterRect]]){
     assert.ok(footer.x>=section.x&&footer.x+footer.width<=section.x+section.width)
     assert.ok(footer.y>=section.y&&footer.y+footer.height<=section.y+section.height)
   }
-  for(const item of layout.items){
-    const section=item.itemRect.x<layout.tomorrowRect.x?layout.todayRect:layout.tomorrowRect
-    const footer=item.itemRect.x<layout.tomorrowRect.x?layout.todayFooterRect:layout.tomorrowFooterRect
-    assert.ok(item.itemRect.x>=section.x&&item.itemRect.x+item.itemRect.width<=section.x+section.width)
-    assert.ok(item.itemRect.y+item.itemRect.height<=footer.y)
-  }
+  else {assert.ok(layout.footerRect);for(const item of layout.items)assert.ok(item.itemRect.y+item.itemRect.height<=layout.footerRect.y)}
 })
 
 test('Reminders horizontal items, time, title, and overflow own disjoint regions', () => {
@@ -555,8 +551,8 @@ test('Reminders runtime exports have matching declarations', async () => {
   for(const name of exports)assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
 })
 
-test('Reminders typography follows pixels per required row and rows keep natural height', async () => {
-  assert.equal(reminderDensity(300,3).name,'spacious')
+test('Reminders item typography is capped at B12 with B9 as its dense fallback', async () => {
+  assert.equal(reminderDensity(300,3).name,'normal')
   assert.equal(reminderDensity(150,3).name,'normal')
   assert.equal(reminderDensity(150,6).name,'dense')
   assert.equal(reminderDensity(150,30).fontSize,13)
@@ -564,17 +560,17 @@ test('Reminders typography follows pixels per required row and rows keep natural
   const sparseState={today:reminderStudioPresets.normal.today.slice(0,3),tomorrow:[]}
   const profile=responsiveCellProfile(2,4,392,500)
   const layout=reminderLayout(profile,reminderComposition(profile,sparseState))
-  assert.ok(layout.items.every((item)=>item.density.name==='spacious'))
-  assert.ok(layout.items.every((item)=>item.itemRect.height===56))
+  assert.ok(layout.items.every((item)=>item.density.name==='normal'))
+  assert.ok(layout.items.every((item)=>item.itemRect.height===42))
   assert.ok(layout.todayRect.y+layout.todayRect.height<profile.height-layout.pad)
 
   const mixedLargeProfile=responsiveCellProfile(2,4,392,500)
   const mixedLarge=reminderLayout(mixedLargeProfile,reminderComposition(mixedLargeProfile,reminderStudioPresets.normal))
-  assert.deepEqual(new Set(mixedLarge.items.map((item)=>item.density.name)),new Set(['spacious']))
+  assert.deepEqual(new Set(mixedLarge.items.map((item)=>item.density.name)),new Set(['normal']))
   const todayItems=mixedLarge.items.slice(0,3),tomorrowItems=mixedLarge.items.slice(3)
   assert.ok(todayItems.length&&tomorrowItems.length)
-  assert.ok(todayItems.every((item)=>item.density.font==='B18'))
-  assert.ok(tomorrowItems.every((item)=>item.density.font==='B18'))
+  assert.ok(todayItems.every((item)=>item.density.font==='B12'))
+  assert.ok(tomorrowItems.every((item)=>item.density.font==='B12'))
 
   const mixedMediumProfile=responsiveCellProfile(2,3,392,330)
   const mixedMedium=reminderLayout(mixedMediumProfile,reminderComposition(mixedMediumProfile,reminderStudioPresets.normal))
@@ -584,13 +580,13 @@ test('Reminders typography follows pixels per required row and rows keep natural
   const timedLayout=reminderLayout(profile,reminderComposition(profile,timedState))
   const timedItem=timedLayout.items[0]
   assert.equal(timedItem.stacked,false)
-  assert.equal(timedItem.density.name,'spacious')
-  assert.equal(timedItem.timeRect.width,88)
+  assert.equal(timedItem.density.name,'normal')
+  assert.equal(timedItem.timeRect.width,62)
   assert.ok(timedItem.timeRect.x+timedItem.timeRect.width<timedItem.titleRect.x)
   assert.ok(timedItem.titleRect.width>timedItem.timeRect.width)
 
   const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  assert.match(firmware,/pixelsPerRow >= 62[\s\S]*FONT_B18, 56, 6, 88/)
+  assert.doesNotMatch(firmware,/pixelsPerRow >= 62[\s\S]*FONT_B18, 56, 6, 88/)
   assert.match(firmware,/pixelsPerRow >= 44[\s\S]*FONT_B12, 42, 5, 62[\s\S]*FONT_B9, 34, 4, 48/)
   assert.match(firmware,/const int timeW = density\.timeW, gap = 7/)
   assert.match(firmware,/drawAdaptiveItem\([^)]*const AdaptiveReminderDensity& density\)/)
