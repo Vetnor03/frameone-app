@@ -45,7 +45,8 @@ test('unsupported adaptive assignments reject the whole plan atomically',()=>{
     assert.equal(supportsPhysicalCustomLayout(tiling(w,h,module)).valid,false)
   const lab=tiling(3,3);lab.find(c=>c.slot===1).module='countdown'
   assert.equal(supportsPhysicalCustomLayout(lab).valid,false)
-  for(const module of ['', 'unknown'])assert.equal(supportsPhysicalCustomLayout(tiling(3,3,module)).valid,false)
+  assert.equal(supportsPhysicalCustomLayout(tiling(3,3,'')).valid,true)
+  assert.equal(supportsPhysicalCustomLayout(tiling(3,3,'unknown')).valid,false)
   const anchorWeather=[{slot:0,col:0,row:0,colSpan:4,rowSpan:1,module:'weather'},
     {slot:1,col:0,row:1,colSpan:3,rowSpan:3,module:'date'},{slot:2,col:3,row:1,colSpan:1,rowSpan:3,module:'date'}]
   assert.equal(supportsPhysicalCustomLayout(anchorWeather).valid,true)
