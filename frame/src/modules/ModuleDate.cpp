@@ -1,4 +1,4 @@
-#include "../display/FrameText.h"
+#include "FrameText.h"
 #include "ModuleDate.h"
 #include "DisplayCore.h"
 #include "Theme.h"

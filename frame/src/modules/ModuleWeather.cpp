@@ -1,4 +1,4 @@
-#include "../display/FrameText.h"
+#include "FrameText.h"
 // ModuleWeather.cpp
 #include "ModuleWeather.h"
 #include "DisplayCore.h"
