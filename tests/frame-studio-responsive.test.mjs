@@ -524,11 +524,13 @@ test('Reminders horizontal items, time, title, and overflow own disjoint regions
   for(const colSpan of [1,2,3]){
     const profile=responsiveCellProfile(colSpan,1,colSpan*196,114)
     const composition=reminderComposition(profile,reminderStudioPresets.extreme),layout=reminderLayout(profile,composition)
-    assert.equal(composition.showTomorrow,false);assert.ok(layout.footerRect)
+    assert.equal(composition.showTomorrow,false)
+    const footerFits=profile.width-layout.pad*2>=196
+    assert.equal(Boolean(layout.footerRect),footerFits)
     for(let index=1;index<layout.items.length;index++)assert.ok(layout.items[index-1].itemRect.x+layout.items[index-1].itemRect.width<=layout.items[index].itemRect.x)
     for(const item of layout.items){
       assert.ok(item.timeRect.y+item.timeRect.height<=item.titleRect.y||item.timeRect.x+item.timeRect.width<=item.titleRect.x)
-      assert.ok(item.itemRect.x+item.itemRect.width<=layout.footerRect.x)
+      if(layout.footerRect)assert.ok(item.itemRect.x+item.itemRect.width<=layout.footerRect.x)
     }
   }
 })

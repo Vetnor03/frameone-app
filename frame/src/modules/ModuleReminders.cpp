@@ -2147,7 +2147,8 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, int todayC
   const int footerH = 24, rowH = 38, rowGap = 4, sectionGap = 10;
   if (shallow) {
     const int initial = FrameLayout::rowCapacity(usable.width, 142, 12);
-    const int contentWidth = usable.width - (totalCount > initial ? 66 : 0);
+    const bool canFitFooter = usable.width >= 142 + 12 + 42;
+    const int contentWidth = usable.width - (totalCount > initial && canFitFooter ? 66 : 0);
     const int capacity = FrameLayout::rowCapacity(contentWidth, 142, 12);
     out.showTomorrow = todayCount == 0 && tomorrowCount > 0;
     out.todayItems = min(todayCount, capacity);
@@ -2160,17 +2161,35 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, int todayC
     out.todayItems = min(todayCount, capacity);
     out.tomorrowItems = min(tomorrowCount, capacity);
   } else {
-    const int baseArea = usable.height - headingH;
-    const int initial = FrameLayout::rowCapacity(baseArea, rowH, rowGap);
-    const int rowsArea = baseArea - (totalCount > initial ? footerH + 6 : 0);
-    const int capacity = FrameLayout::rowCapacity(rowsArea, rowH, rowGap);
-    // Tomorrow becomes useful only when a complete section heading and row fit
-    // after at least one higher-priority Today row.
-    out.showTomorrow = tomorrowCount > 0 && (todayCount == 0 ||
-      FrameLayout::fitsRows(rowsArea - sectionGap - headingH, 2, rowH, rowGap));
-    const int tomorrowBudget = out.showTomorrow ? min(tomorrowCount, 1) : 0;
-    out.todayItems = min(todayCount, max(0, capacity - tomorrowBudget));
-    out.tomorrowItems = min(tomorrowCount, max(0, capacity - out.todayItems));
+    out.showTomorrow = tomorrowCount > 0;
+    int sectionCount = (todayCount > 0 ? 1 : 0) + (out.showTomorrow ? 1 : 0);
+    int chrome = sectionCount * headingH + (sectionCount > 1 ? sectionGap : 0);
+    int initial = FrameLayout::rowCapacity(usable.height - chrome, rowH, rowGap);
+    int footerReserve = totalCount > initial ? footerH + 6 : 0;
+    int capacity = FrameLayout::rowCapacity(usable.height - chrome - footerReserve, rowH, rowGap);
+
+    // If two complete sections cannot meet their quality floors, Today retains
+    // priority. Otherwise spend pixel-derived rows in Today-first rounds so
+    // neither useful section is starved.
+    if (todayCount > 0 && out.showTomorrow && capacity < 2) {
+      out.showTomorrow = false;
+      sectionCount = 1;
+      chrome = headingH;
+      initial = FrameLayout::rowCapacity(usable.height - chrome, rowH, rowGap);
+      footerReserve = totalCount > initial ? footerH + 6 : 0;
+      capacity = FrameLayout::rowCapacity(usable.height - chrome - footerReserve, rowH, rowGap);
+    }
+    int remaining = capacity;
+    while (remaining > 0) {
+      bool spent = false;
+      if (out.todayItems < todayCount && remaining > 0) {
+        out.todayItems++; remaining--; spent = true;
+      }
+      if (out.showTomorrow && out.tomorrowItems < tomorrowCount && remaining > 0) {
+        out.tomorrowItems++; remaining--; spent = true;
+      }
+      if (!spent) break;
+    }
   }
   out.todayOverflow = max(0, todayCount - out.todayItems);
   out.tomorrowOverflow = max(0, tomorrowCount - out.tomorrowItems);
@@ -2214,10 +2233,11 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   const int headingH = heading ? 30 : 0;
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
-  const int rowsH = max(1, rect.h - headingH - footerH);
+  const int rowGap = 4;
+  const int rowsH = max(1, rect.h - headingH - footerH - max(0, visible - 1) * rowGap);
   for (int i = 0; i < visible; i++) {
-    const int y0 = rect.y + headingH + (rowsH * i) / visible;
-    const int y1 = rect.y + headingH + (rowsH * (i + 1)) / visible;
+    const int y0 = rect.y + headingH + (rowsH * i) / visible + i * rowGap;
+    const int y1 = rect.y + headingH + (rowsH * (i + 1)) / visible + i * rowGap;
     const int itemIdx = bucket->itemIdx[i];
     if (itemIdx >= 0 && itemIdx < g_cache.count)
       drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, y1 - y0}, stacked);
@@ -2299,7 +2319,7 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
     const bool hasToday = comp.todayItems > 0, hasTomorrow = comp.tomorrowItems > 0;
     const int gap = hasToday && hasTomorrow ? 18 : 0;
     const int todayWidth = !hasToday ? 0 : !hasTomorrow ? inner.w :
-      ((inner.w - gap) * (comp.tomorrowItems == 1 ? 70 : 60) + 50) / 100;
+      ((inner.w - gap) * 70 + 50) / 100;
     ReminderRect left = {inner.x, inner.y, todayWidth, inner.h};
     ReminderRect right = {inner.x + todayWidth + gap, inner.y, max(0, inner.w - todayWidth - gap), inner.h};
     drawAdaptiveSection(today, comp.todayItems, comp.todayOverflow, left, comp.showHeading, false, "Today", true);
@@ -2308,7 +2328,8 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   }
   const int overflow = comp.todayOverflow + comp.tomorrowOverflow;
   if (comp.family == REM_SHALLOW_HORIZONTAL) {
-    const int footerW = overflow ? min(58, max(42, (inner.w * 13) / 100)) : 0;
+    const bool footerFits = inner.w >= 142 + 12 + 42;
+    const int footerW = overflow && footerFits ? min(58, max(42, (inner.w * 13) / 100)) : 0;
     const int contentW = max(1, inner.w - footerW - (footerW ? 8 : 0));
     const int count = max(1, comp.todayItems + comp.tomorrowItems), gap = count > 1 ? 12 : 0;
     int drawn = 0;
@@ -2326,7 +2347,8 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
   }
   const int footerH = overflow ? 22 : 0, contentH = max(1, inner.h - footerH - (footerH ? 6 : 0));
   const int headingH = comp.showHeading ? 30 : 0;
-  const int tomorrowH = comp.tomorrowItems ? min((contentH * 42) / 100, headingH + comp.tomorrowItems * 48) : 0;
+  const int minimumRowH = 38, rowGap = 4;
+  const int tomorrowH = comp.tomorrowItems ? headingH + comp.tomorrowItems * minimumRowH + max(0, comp.tomorrowItems - 1) * rowGap : 0;
   const int sectionGap = tomorrowH ? 10 : 0;
   const int todayH = comp.todayItems ? max(1, contentH - tomorrowH - sectionGap) : 0;
   const bool stacked = c.w < 230;
