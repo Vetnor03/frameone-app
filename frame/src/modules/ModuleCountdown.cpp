@@ -1,3 +1,4 @@
+#include "FrameLayout.h"
 #include "FrameText.h"
 // ===============================
 // ModuleCountdown.cpp (FULL FILE - copy/paste)
@@ -1715,6 +1716,60 @@ drawCountdownCalendarMonth(
 );
 }
 
+
+// =========================================================
+// Exact-pixel adaptive renderer
+// =========================================================
+struct AdaptiveCountdownRect { int x, y, w, h; };
+struct AdaptiveCountdownComposition {
+  enum Family { HORIZONTAL, STACK, SPLIT_HORIZONTAL, EXPANDED_VERTICAL } family = STACK;
+  bool showTitle = false, showDate = false, showCalendar = false;
+  int upcomingRows = 0, overflow = 0, splitPercent = 0;
+};
+
+// This deliberately mirrors estimateCountdownTextWidth() in Studio. Measuring the
+// final strings below still uses GFX bounds; this estimate is only candidate scoring.
+static int adaptiveCountdownEstimatedWidth(const char* value, const GFXfont* font) {
+  int units = 0; const uint8_t* p = (const uint8_t*)(value ? value : "");
+  while (*p) {
+    uint32_t cp = *p++; if ((cp & 0xE0) == 0xC0 && *p) { cp = ((cp & 31) << 6) | (*p++ & 63); }
+    else if ((cp & 0xF0) == 0xE0 && p[0] && p[1]) { cp = ((cp & 15) << 12) | ((p[0] & 63) << 6) | (p[1] & 63); p += 2; }
+    if (cp > 127) units += 6; else { char ch=(char)cp; if (ch==' ') units+=3; else if (strchr("ilI1.,:;!'|",ch)) units+=3; else if (strchr("MW@%&",ch)) units+=9; else if ((ch>='A'&&ch<='Z')||(ch>='0'&&ch<='9')) units+=7; else units+=6; }
+  }
+  const int scale = font == FONT_B18 ? 205 : font == FONT_B12 ? 142 : 108;
+  return (units * scale + 99) / 100;
+}
+static int adaptiveCountdownUseful(const char* value, int width, const GFXfont* font) {
+  if (!value || !value[0]) return 0; return min(100, width * 100 / max(1, adaptiveCountdownEstimatedWidth(value, font)));
+}
+static void adaptiveCountdownMetric(const CountdownItem& item, char* out, size_t outSize) { char number[16], unit[16]; formatDaysNumber(item.daysLeft, number, sizeof(number)); formatDaysUnit(item.daysLeft, unit, sizeof(unit)); snprintf(out, outSize, "%s %s", number, unit); }
+static int collectAdaptiveUpcoming(int heroIdx, const CountdownItem** out, int limit) {
+  int n=0; for(int i=0;i<g_cache.count&&n<limit;i++) if(i!=heroIdx&&g_cache.items[i].used&&!g_cache.items[i].isPast) out[n++]=&g_cache.items[i]; return n;
+}
+static AdaptiveCountdownComposition adaptiveCountdownComposition(const Cell& c, const CountdownItem& hero, const CountdownItem** events, int eventCount) {
+  AdaptiveCountdownComposition out; const int pad=max(8,min(18,min(c.w,c.h)*7/100)), iw=c.w-pad*2, ih=c.h-pad*2;
+  char number[16],unit[16]; formatDaysNumber(hero.daysLeft,number,sizeof(number)); formatDaysUnit(hero.daysLeft,unit,sizeof(unit));
+  const int numberNeeds=max(30,adaptiveCountdownEstimatedWidth(number,FONT_B18)+8), unitNeeds=max(32,adaptiveCountdownEstimatedWidth(unit,FONT_B9)+8);
+  if(ih<92||(c.w>c.h&&ih<170)){out.family=AdaptiveCountdownComposition::HORIZONTAL;const int dateNeeds=hero.displayDate[0]?adaptiveCountdownEstimatedWidth(hero.displayDate,FONT_B9)+18:0;const int titleRoom=iw-numberNeeds-unitNeeds-dateNeeds-30;out.showTitle=hero.title[0]&&titleRoom>=70&&adaptiveCountdownUseful(hero.title,titleRoom,FONT_B12)>=28;out.showDate=hero.displayDate[0]&&iw-numberNeeds-unitNeeds-(out.showTitle?max(70,titleRoom):0)>=dateNeeds+8;out.overflow=eventCount;return out;}
+  const int heroMinH=hero.title[0]?118:91,rowH=28,headerH=25,gap=14; int bestScore=-1;
+  if(iw>=390&&ih>=240&&eventCount&&!(iw>=430&&ih>=390&&abs(iw-ih)<100)) for(const int percent : {40,45,50,55,60}) { const int heroW=(iw-gap)*percent/100,listW=iw-gap-heroW;if(heroW<numberNeeds+12||listW<130||ih<heroMinH)continue;const int capacity=max(0,(ih-headerH+4)/(rowH+4)),metricW=min(120,max(62,listW*38/100)),titleW=listW-metricW-10;int rows=0,score=adaptiveCountdownUseful(hero.title,heroW,FONT_B12);for(int i=0;i<min(eventCount,capacity);i++){char metric[48];adaptiveCountdownMetric(*events[i],metric,sizeof(metric));if(titleW>=54&&adaptiveCountdownUseful(events[i]->title,titleW,FONT_B9)>=22&&adaptiveCountdownEstimatedWidth(metric,FONT_B9)<=metricW){rows++;score+=80+adaptiveCountdownUseful(events[i]->title,titleW,FONT_B9);}else break;}if(rows&&score>bestScore){bestScore=score;out.family=AdaptiveCountdownComposition::SPLIT_HORIZONTAL;out.splitPercent=percent;out.upcomingRows=rows;}}
+  if(bestScore>=0){out.showTitle=hero.title[0];out.showDate=hero.displayDate[0]&&ih>=145;out.overflow=max(0,eventCount-out.upcomingRows);return out;}
+  out.showTitle=hero.title[0]&&ih>=105;out.showDate=hero.displayDate[0]&&ih>=130;out.showCalendar=iw>=430&&ih>=390&&eventCount<=max(0,(ih-heroMinH-gap-headerH)/(rowH+4))&&iw/7>=42;const int calendarH=out.showCalendar?min(190,ih*42/100):0;int capacity=max(0,(ih-heroMinH-(calendarH?calendarH+gap:0)-gap-headerH+4)/(rowH+4));const int metricW=min(120,max(62,iw*30/100)),titleW=iw-metricW-10;if(iw<300||(c.w>c.h&&ih<240))capacity=0;for(int i=0;i<min(eventCount,capacity);i++){char metric[48];adaptiveCountdownMetric(*events[i],metric,sizeof(metric));if(titleW>=54&&adaptiveCountdownUseful(events[i]->title,titleW,FONT_B9)>=22&&adaptiveCountdownEstimatedWidth(metric,FONT_B9)<=metricW)out.upcomingRows++;else break;}out.family=out.upcomingRows?AdaptiveCountdownComposition::EXPANDED_VERTICAL:AdaptiveCountdownComposition::STACK;out.overflow=max(0,eventCount-out.upcomingRows);return out;
+}
+static const GFXfont* adaptiveNumberFont(const char* value, int w, int h) { for(const GFXfont* font : {FONT_B18,FONT_B12,FONT_B9}){int16_t x,y;uint16_t tw,th;measureText(value,font,x,y,tw,th);if((int)tw<=w&&(int)th<=h)return font;}return FONT_B9; }
+static void adaptiveCenteredFitted(const AdaptiveCountdownRect& r,const char* value,const GFXfont* preferred,bool ellipsis=true){if(!value||!value[0]||r.w<=0||r.h<=0)return;const GFXfont* font=preferred;if(font==FONT_B12&&(textWidth(value,font)>r.w||fontLineHeight(font)>r.h))font=FONT_B9;char buf[128];if(ellipsis)fitTextToWidth(value,buf,sizeof(buf),r.w,font);else safeCopy(buf,sizeof(buf),value);drawCenteredLine(r.x,r.y,r.w,r.h,buf,font,Theme::ink());}
+static void renderAdaptiveCountdown(const Cell& c) {
+  if(!g_cache.ok){drawEmptyState(c,"No Countdown","Fetch failed");return;}const int heroIdx=findNearestIdx();if(heroIdx<0){drawEmptyState(c,"No Countdown","No events yet");return;}const CountdownItem& hero=g_cache.items[heroIdx];const CountdownItem* events[MAX_EVENTS];const int eventCount=collectAdaptiveUpcoming(heroIdx,events,MAX_EVENTS);const AdaptiveCountdownComposition comp=adaptiveCountdownComposition(c,hero,events,eventCount);
+  const int pad=max(8,min(18,min(c.w,c.h)*7/100)),ix=c.x+pad,iy=c.y+pad,iw=max(1,c.w-pad*2),ih=max(1,c.h-pad*2),gap=14;AdaptiveCountdownRect primary{ix,iy,iw,ih},upcoming{0,0,0,0},calendar{0,0,0,0};
+  if(comp.family==AdaptiveCountdownComposition::SPLIT_HORIZONTAL){primary.w=(iw-gap)*comp.splitPercent/100;upcoming={ix+primary.w+gap,iy,iw-primary.w-gap,ih};}else if(comp.upcomingRows||comp.showCalendar){const listH=comp.upcomingRows?25+comp.upcomingRows*28+(comp.upcomingRows-1)*4+(comp.overflow?18:0):0,calH=comp.showCalendar?min(190,ih*42/100):0;primary.h=max(91,ih-listH-calH-(listH?gap:0)-(calH?gap:0));if(listH)upcoming={ix,iy+primary.h+gap,iw,listH};if(calH)calendar={ix,iy+ih-calH,iw,calH};}
+  char number[16],unit[16],date[32];formatDaysNumber(hero.daysLeft,number,sizeof(number));formatDaysUnit(hero.daysLeft,unit,sizeof(unit));if(hero.displayDate[0])safeCopy(date,sizeof(date),hero.displayDate);else formatDateShort(hero.targetDate,date,sizeof(date));AdaptiveCountdownRect title{0,0,0,0},count,unitRect,dateRect{0,0,0,0};
+  if(comp.family==AdaptiveCountdownComposition::HORIZONTAL){const dateW=comp.showDate?min(150,max(70,primary.w*23/100)):0,titleW=comp.showTitle?min(primary.w*38/100,max(70,primary.w-dateW-145)):0,metricX=primary.x+titleW+(titleW?10:0),metricW=primary.w-titleW-(titleW?10:0)-dateW-(dateW?10:0),countW=max(30,metricW*58/100);if(titleW)title={primary.x,primary.y,titleW,primary.h};count={metricX,primary.y,countW,primary.h};unitRect={metricX+countW,primary.y,metricW-countW,primary.h};if(dateW)dateRect={primary.x+primary.w-dateW,primary.y,dateW,primary.h};}
+  else {const titleH=comp.showTitle?min(38,max(24,primary.h*20/100)):0,dateH=comp.showDate?24:0,unitH=22;if(titleH)title={primary.x,primary.y,primary.w,titleH};count={primary.x,primary.y+titleH,primary.w,max(30,primary.h-titleH-unitH-dateH)};unitRect={primary.x,count.y+count.h,primary.w,unitH};if(dateH)dateRect={primary.x,unitRect.y+unitRect.h,primary.w,dateH};}
+  if(title.w)adaptiveCenteredFitted(title,hero.title,FONT_B12);const GFXfont* numberFont=adaptiveNumberFont(number,count.w-2,count.h-2);drawCenteredLine(count.x,count.y,count.w,count.h,number,numberFont,Theme::ink());adaptiveCenteredFitted(unitRect,unit,FONT_B12,false);if(dateRect.w&&textWidth(date,FONT_B9)<=dateRect.w-8)adaptiveCenteredFitted(dateRect,date,FONT_B9,false);
+  if(upcoming.w){AdaptiveCountdownRect header{upcoming.x,upcoming.y,upcoming.w,21};adaptiveCenteredFitted(header,"COMING UP",FONT_B9,false);for(int i=0;i<comp.upcomingRows;i++){AdaptiveCountdownRect row{upcoming.x,upcoming.y+25+i*32,upcoming.w,28};const int metricW=min(120,max(62,row.w*30/100));AdaptiveCountdownRect tr{row.x,row.y,row.w-metricW-10,row.h},mr{row.x+row.w-metricW,row.y,metricW,row.h};char metric[48];adaptiveCountdownMetric(*events[i],metric,sizeof(metric));adaptiveCenteredFitted(tr,events[i]->title,FONT_B9);adaptiveCenteredFitted(mr,metric,FONT_B9,false);}if(comp.overflow){char more[24];snprintf(more,sizeof(more),"+%d more",comp.overflow);AdaptiveCountdownRect fr{upcoming.x,upcoming.y+upcoming.h-18,upcoming.w,18};adaptiveCenteredFitted(fr,more,FONT_B9,false);}}
+  if(calendar.w){tm nowTm;if(getLocalTmQuick(nowTm))drawCountdownCalendarMonth(calendar.x,calendar.y,calendar.w,calendar.h,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_mday,hero,true,true);}
+}
+
 // =========================================================
 // Public API
 // =========================================================
@@ -1728,6 +1783,11 @@ void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
 
   ensureLoaded();
+
+  if (c.size == CELL_ADAPTIVE) {
+    renderAdaptiveCountdown(c);
+    return;
+  }
 
   if (c.size == CELL_SMALL) {
     renderSmall(c);
