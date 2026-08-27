@@ -72,9 +72,9 @@ test('physical capability accepts exact Countdown instances but rejects lookalik
 })
 test('firmware adaptive capability and custom preflight accept exact Countdown bases',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'module-capability-')),cpp=join(directory,'capability.cpp'),binary=join(directory,'capability')
- await writeFile(cpp,`#include <iostream>\n#include "AdaptiveModuleCapability.h"\nint main(){const char* values[]={"countdown","countdown:event-id","countdownfoo","countdowns"};for(const char* value:values)std::cout<<AdaptiveModuleCapability::supports(value)<<'\\n';const char* plan[]={"date","weather:home","reminders","countdown:event-id"};bool ready=true;for(const char* value:plan)ready=ready&&AdaptiveModuleCapability::supports(value);std::cout<<ready<<'\\n';}`)
+ await writeFile(cpp,`#include <iostream>\n#include "AdaptiveModuleCapability.h"\nint main(){const char* values[]={"date","date:foo","countdown","countdown:id","countdownfoo","countdowns"};for(const char* value:values)std::cout<<AdaptiveModuleCapability::supports(value)<<'\\n';const char* plan[]={"date","weather:home","reminders","countdown:event-id"};bool ready=true;for(const char* value:plan)ready=ready&&AdaptiveModuleCapability::supports(value);std::cout<<ready<<'\\n';}`)
  execFileSync('g++',['-std=c++17','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/modules/',import.meta.url).pathname,cpp,'-o',binary])
- assert.deepEqual(execFileSync(binary,{encoding:'utf8'}).trim().split('\n').map(Number),[1,1,0,0,1])
+ assert.deepEqual(execFileSync(binary,{encoding:'utf8'}).trim().split('\n').map(Number),[1,0,1,1,0,0,1])
  const renderer=await readFile(new URL('../frame/src/modules/ModuleRenderer.cpp',import.meta.url),'utf8')
  assert.match(renderer,/cell\.size != CELL_ADAPTIVE[\s\S]*AdaptiveModuleCapability::supports\(module\)/)
  assert.doesNotMatch(renderer,/startsWith\("countdown"\)[\s\S]*canRenderCell/)

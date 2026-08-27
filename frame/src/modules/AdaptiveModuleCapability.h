@@ -17,8 +17,18 @@ inline bool exactBase(const char* module, const char* base) {
   return module[index] == '\0' || module[index] == ':';
 }
 
+inline bool exactOnly(const char* module, const char* expected) {
+  if (!module || !expected) return false;
+  int index = 0;
+  while (module[index] && expected[index]) {
+    if (asciiLower(module[index]) != asciiLower(expected[index])) return false;
+    ++index;
+  }
+  return module[index] == '\0' && expected[index] == '\0';
+}
+
 inline bool supports(const char* module) {
-  return exactBase(module, "date") || exactBase(module, "weather") ||
+  return exactOnly(module, "date") || exactBase(module, "weather") ||
          exactBase(module, "reminders") || exactBase(module, "countdown");
 }
 
