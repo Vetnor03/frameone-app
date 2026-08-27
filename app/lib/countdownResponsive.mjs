@@ -19,10 +19,11 @@ export function countdownComposition(profile,state){
  const available=state.count!=null&&state.count!==''&&state.unit!=null&&state.unit!==''
  if(!available)return Object.freeze({available:false,family:'unavailable',showTitle:false,showCount:false,showUnit:false,showTargetDate:false,upcomingRows:0,overflow:0,showCalendar:false,splitPercent:0})
  const w=profile.width,h=profile.height,pad=Math.max(8,Math.min(18,Math.floor(Math.min(w,h)*7/100))),iw=w-pad*2,ih=h-pad*2
- const title=Boolean(state.title),date=Boolean(state.targetDate),events=state.upcoming??[]
+ const effectiveDate=state.displayDate||state.targetDate
+ const title=Boolean(state.title),date=Boolean(effectiveDate),events=state.upcoming??[]
  const numberNeeds=Math.max(30,estimateCountdownTextWidth(state.count,'B18')+8),unitNeeds=Math.max(32,estimateCountdownTextWidth(state.unit,'B9')+8)
  if(ih<92||(profile.orientation==='landscape'&&ih<170)){
-  const metricNeeds=numberNeeds+unitNeeds+8,dateNeeds=date?estimateCountdownTextWidth(state.targetDate,'B9')+18:0
+  const metricNeeds=numberNeeds+unitNeeds+8,dateNeeds=date?estimateCountdownTextWidth(effectiveDate,'B9')+18:0
   const titleRoom=iw-metricNeeds-(dateNeeds?dateNeeds+12:0)-12
   const showTitle=title&&titleRoom>=70&&useful(state.title,titleRoom,'B12')>=28
   const showTargetDate=date&&iw-metricNeeds-(showTitle?Math.max(70,titleRoom):0)>=dateNeeds+8

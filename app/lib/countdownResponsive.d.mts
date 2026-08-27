@@ -1,6 +1,6 @@
 import type { ResponsiveCellProfile } from './responsiveCellProfile.mjs'
 export type CountdownUpcoming={title:string;count:string;unit:string}
-export type CountdownState={title:string|null;count:string|null;unit:string|null;targetDate:string|null;upcoming?:readonly CountdownUpcoming[]}
+export type CountdownState={title:string|null;count:string|null;unit:string|null;targetDate:string|null;displayDate?:string|null;upcoming?:readonly CountdownUpcoming[]}
 export type CountdownFamily='unavailable'|'horizontal'|'stack'|'split-horizontal'|'expanded-vertical'
 export type CountdownComposition={available:boolean;family:CountdownFamily;showTitle:boolean;showCount:boolean;showUnit:boolean;showTargetDate:boolean;upcomingRows:number;overflow:number;showCalendar:boolean;splitPercent:number}
 export type CountdownRect={x:number;y:number;width:number;height:number}

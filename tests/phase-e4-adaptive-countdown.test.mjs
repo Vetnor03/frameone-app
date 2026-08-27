@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
+import {execFileSync} from 'node:child_process'
+import {mkdtemp,writeFile} from 'node:fs/promises'
 import {readFile} from 'node:fs/promises'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
 import test from 'node:test'
 import {countdownComposition,countdownLayout,countdownStudioPresets,fitCountdownStructuredText} from '../app/lib/countdownResponsive.mjs'
 import {supportsPhysicalCustomLayout} from '../app/lib/customLayouts.mjs'
@@ -31,10 +35,35 @@ test('empty state and optional calendar obey independent space floors',()=>{
  assert.equal(countdownComposition(p(420,380),state()).showCalendar,false)
  assert.equal(countdownComposition(p(500,500),state()).showCalendar,true)
 })
-test('Studio policy tokens and adaptive firmware route remain in parity',async()=>{
- const firmware=await readFile(new URL('../frame/src/modules/ModuleCountdown.cpp',import.meta.url),'utf8')
- for(const token of ['adaptiveCountdownComposition','splitPercent','{40,45,50,55,60}','adaptiveCountdownEstimatedWidth','adaptiveNumberFont','showCalendar','CELL_ADAPTIVE'])assert.ok(firmware.includes(token),token)
- assert.match(firmware,/if \(c\.size == CELL_ADAPTIVE\)[\s\S]*renderAdaptiveCountdown/)
+test('executable firmware policy and Studio choose identical compositions',async()=>{
+ const many=Array.from({length:12},(_,i)=>({title:`Useful event ${i}`,count:String(i+2),unit:'days'}))
+ const cases=[
+  [776,100,state()],[150,430,state()],[776,343,countdownStudioPresets.extreme],[380,440,state()],
+  [300,300,state({count:'99999'})],[500,300,state({title:'An exceptionally long family event title '.repeat(8)})],
+  [500,300,state({unit:'exceptionally long working days remaining'})],[380,440,state({upcoming:[]})],
+  [380,460,state({upcoming:many})],[500,300,state({displayDate:'',targetDate:'30.06.2027'})],[500,500,state()],
+ ]
+ const q=value=>JSON.stringify(value??'')
+ const eventDeclarations=[],caseDeclarations=[]
+ cases.forEach(([width,height,value],index)=>{
+  const events=value.upcoming??[]
+  eventDeclarations.push(`static const Event e${index}[]={${events.map(item=>`{${q(item.title)},${q(`${item.count} ${item.unit}`)}}`).join(',')}};`)
+  // The fallback case deliberately gives firmware an ISO target while Studio gets
+  // its equivalent presentation string and an empty optional display date.
+  const firmwareTarget=index===9?'2027-06-30':value.targetDate
+  caseDeclarations.push(`{${width},${height},${q(value.title)},${q(value.count)},${q(value.unit)},${q(value.displayDate)},${q(firmwareTarget)},e${index},${events.length}}`)
+ })
+ const source=`#include <iostream>\n#include "CountdownAdaptivePolicy.h"\nusing namespace CountdownAdaptivePolicy;\n${eventDeclarations.join('\n')}\nint main(){const Input cases[]={${caseDeclarations.join(',')}};for(const auto& input:cases){const Result r=compose(input);std::cout<<int(r.family)<<','<<r.showTitle<<','<<r.showDate<<','<<r.upcomingRows<<','<<r.overflow<<','<<r.showCalendar<<','<<r.splitPercent<<'\\n';}}`
+ const directory=await mkdtemp(join(tmpdir(),'countdown-policy-')),cpp=join(directory,'policy.cpp'),binary=join(directory,'policy')
+ await writeFile(cpp,source)
+ execFileSync('g++',['-std=c++17','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/modules/',import.meta.url).pathname,cpp,'-o',binary])
+ const firmware=execFileSync(binary,{encoding:'utf8'}).trim().split('\n').map(line=>line.split(',').map(Number))
+ const family={horizontal:0,stack:1,'split-horizontal':2,'expanded-vertical':3}
+ const studio=cases.map(([width,height,value])=>{const result=countdownComposition(p(width,height),value);return [family[result.family],+result.showTitle,+result.showTargetDate,result.upcomingRows,result.overflow,+result.showCalendar,result.splitPercent]})
+ assert.deepEqual(firmware,studio)
+ assert.equal(studio[9][2],1,'target date survives an empty display date')
+ const renderer=await readFile(new URL('../frame/src/modules/ModuleCountdown.cpp',import.meta.url),'utf8')
+ assert.match(renderer,/if \(c\.size == CELL_ADAPTIVE\)[\s\S]*renderAdaptiveCountdown/)
 })
 test('physical capability accepts exact Countdown instances but rejects lookalikes',()=>{
  const cells=module=>[{slot:0,col:0,row:0,colSpan:1,rowSpan:4,module},{slot:1,col:1,row:0,colSpan:3,rowSpan:4,module:'date'}]

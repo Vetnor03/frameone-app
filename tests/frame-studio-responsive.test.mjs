@@ -345,7 +345,7 @@ test('Countdown structured facts fit whole or are omitted whole', async () => {
   const responsive=source.slice(source.indexOf('function drawResponsiveCountdown'),source.indexOf('function drawCountdown'))
   assert.match(responsive,/structured\(metric,metricRect/);assert.match(responsive,/structured\(state\.unit!/)
   assert.doesNotMatch(responsive,/fitted\(metric|fitted\(state\.unit/)
-  assert.match(responsive,/ellipsize\(item\.title/);assert.match(responsive,/measureText\(state\.targetDate\)/)
+  assert.match(responsive,/ellipsize\(item\.title/);assert.match(responsive,/effectiveDate=state\.displayDate\|\|state\.targetDate/);assert.match(responsive,/measureText\(effectiveDate\)/)
 })
 
 test('all Weather states compose safely for all 16 geometries', () => {

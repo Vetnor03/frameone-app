@@ -219,6 +219,7 @@ function drawWeather(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[]){
 }
 function drawResponsiveCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,p:ResponsiveCellProfile,state:CountdownState){
   const composition=countdownComposition(p,state),layout=countdownLayout(p,composition)
+  const effectiveDate=state.displayDate||state.targetDate
   const absolute=(rect:CountdownRect|null)=>rect&&({x:c.x+rect.x,y:c.y+rect.y,width:rect.width,height:rect.height})
   if(!composition.available){centered(ctx,'No countdown',c.x,c.y+c.h/2+5,c.w,'14px sans-serif');return}
   const title=absolute(layout.titleRect),count=absolute(layout.countRect)!,unit=absolute(layout.unitRect)!,date=absolute(layout.targetDateRect),upcomingGroup=absolute(layout.upcomingGroupRect)
@@ -238,7 +239,7 @@ function drawResponsiveCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   let countSize=maxCount;for(;countSize>minCount;countSize--){ctx.font=`bold ${countSize}px sans-serif`;if(ctx.measureText(countValue).width<=count.width-2&&countSize<=count.height*.88)break}
   ctx.font=`bold ${countSize}px sans-serif`;ctx.textAlign='center';ctx.fillText(countValue,count.x+count.width/2,count.y+(count.height+countSize*.72)/2)
   structured(state.unit!,unit,{max:composition.family==='horizontal'?15:16,min:9})
-  if(date&&state.targetDate){ctx.font='bold 12px sans-serif';if(ctx.measureText(state.targetDate).width<=date.width-12){const badgeW=Math.min(date.width,ctx.measureText(state.targetDate).width+18),badgeH=Math.min(25,date.height),bx=date.x+(date.width-badgeW)/2,by=date.y+(date.height-badgeH)/2;ctx.save();ctx.fillStyle='#fff';ctx.fillRect(bx,by,badgeW,badgeH);ctx.fillStyle='#000';centered(ctx,state.targetDate,bx,by+17,badgeW,'bold 12px sans-serif');ctx.restore()}}
+  if(date&&effectiveDate){ctx.font='bold 12px sans-serif';if(ctx.measureText(effectiveDate).width<=date.width-12){const badgeW=Math.min(date.width,ctx.measureText(effectiveDate).width+18),badgeH=Math.min(25,date.height),bx=date.x+(date.width-badgeW)/2,by=date.y+(date.height-badgeH)/2;ctx.save();ctx.fillStyle='#fff';ctx.fillRect(bx,by,badgeW,badgeH);ctx.fillStyle='#000';centered(ctx,effectiveDate,bx,by+17,badgeW,'bold 12px sans-serif');ctx.restore()}}
   if(upcomingGroup){centered(ctx,'COMING UP',upcomingGroup.x,upcomingGroup.y+15,upcomingGroup.width,'bold 12px sans-serif');layout.upcomingRows.forEach((local,index)=>{const item=state.upcoming?.[index];if(!item)return;const titleRect=absolute(local.titleRect)!,metricRect=absolute(local.metricRect)!,metric=`${item.count} ${item.unit}`;ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(ellipsize(item.title,titleRect.width),titleRect.x,titleRect.y+(titleRect.height+12*.72)/2);structured(metric,metricRect,{max:12,min:9})})}
 }
 function drawCountdown(ctx:CanvasRenderingContext2D,c:PixelCell,d:string[],preset:Preset){
