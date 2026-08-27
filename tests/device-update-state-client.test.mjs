@@ -28,7 +28,16 @@ test('explicit Update saves before requesting and locks duplicate clicks', () =>
   assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestManualUpdateRevision('))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending \|\| layoutDraftSaving\}/)
+  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId \|\| persisting \|\| manualUpdatePending/)
+  assert.match(home, /disabled=\{actionDisabled\}/)
+})
+
+test('layout saves are independent from pending frame updates and settings persistence', () => {
+  const disabledLogic = home.slice(home.indexOf('const actionDisabled'), home.indexOf('const updateStatusText'))
+  assert.match(disabledLogic, /layoutFlow[\s\S]*layoutDraftSaving/)
+  assert.match(disabledLogic, /layoutFlow\.mode === 'create' && !activeDeviceId/)
+  assert.doesNotMatch(disabledLogic.slice(disabledLogic.indexOf('?'), disabledLogic.indexOf(':')), /persisting|manualUpdatePending/)
+  assert.match(disabledLogic.slice(disabledLogic.indexOf(':')), /persisting \|\| manualUpdatePending/)
 })
 
 test('backend acknowledgement remains diagnostic and does not control visible completion', () => {
