@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const client = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+const disabledLogic = home.slice(home.indexOf('const actionDisabled'), home.indexOf('const updateStatusText'))
 
 test('selected Frame tab heartbeats every 45 seconds and pauses while hidden', () => {
   assert.match(client, /DEVICE_ACTIVITY_HEARTBEAT_MS = 45_000/)
@@ -28,7 +29,31 @@ test('explicit Update saves before requesting and locks duplicate clicks', () =>
   assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestManualUpdateRevision('))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /disabled=\{!activeDeviceId \|\| persisting \|\| manualUpdatePending \|\| layoutDraftSaving\}/)
+  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId \|\| persisting \|\| manualUpdatePending/)
+  assert.match(home, /disabled=\{actionDisabled\}/)
+})
+
+test('layout saves are independent from pending frame updates and settings persistence', () => {
+  assert.match(disabledLogic, /layoutFlow[\s\S]*layoutDraftSaving/)
+  assert.doesNotMatch(disabledLogic.slice(disabledLogic.indexOf('?'), disabledLogic.indexOf(':')), /persisting|manualUpdatePending/)
+  assert.match(disabledLogic.slice(disabledLogic.indexOf(':')), /persisting \|\| manualUpdatePending/)
+})
+
+test('creating a layout without an active device is disabled and reports the prerequisite', () => {
+  assert.match(disabledLogic, /layoutFlow\.mode === 'create' && !activeDeviceId/)
+  assert.match(home, /if\(!activeDeviceId\)throw new Error\('Select a frame before creating a layout\.'\)/)
+})
+
+test('editing a layout without an active device stays enabled and can PATCH', () => {
+  const layoutDisabledBranch = disabledLogic.slice(disabledLogic.indexOf('?'), disabledLogic.indexOf(':'))
+  const saveFlow = home.slice(home.indexOf('async function saveCustomLayout'), home.indexOf('async function deleteCustom'))
+  assert.doesNotMatch(layoutDisabledBranch, /^\?\s*!activeDeviceId/)
+  assert.match(saveFlow, /if\(layoutFlow\?\.mode==='edit'\)[\s\S]*method:'PATCH'/)
+  assert.ok(saveFlow.indexOf("method:'PATCH'") < saveFlow.indexOf('if(!activeDeviceId)'))
+})
+
+test('layoutDraftSaving disables both create and edit layout saves', () => {
+  assert.match(disabledLogic, /\? layoutDraftSaving \|\| \(layoutFlow\.mode === 'create' && !activeDeviceId\)/)
 })
 
 test('backend acknowledgement remains diagnostic and does not control visible completion', () => {

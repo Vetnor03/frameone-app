@@ -1769,6 +1769,9 @@ export default function HomePage() {
 
   const manualUpdateInProgress = explicitUpdateStatus !== 'idle'
   const manualUpdatePending = manualUpdateInProgress
+  const actionDisabled = layoutFlow
+    ? layoutDraftSaving || (layoutFlow.mode === 'create' && !activeDeviceId)
+    : !activeDeviceId || persisting || manualUpdatePending
   const updateStatusText = lastPhysicalDisplayUpdatedAt
     ? formatRelative(lastPhysicalDisplayUpdatedAt)
     : (language === 'no' ? 'Sist oppdatert —' : 'Updated —')
@@ -2255,24 +2258,24 @@ export default function HomePage() {
     const response=await fetch(path,{...init,headers:{'content-type':'application/json',Authorization:`Bearer ${token}`,...init?.headers}})
     const json=await response.json().catch(()=>({}));if(!response.ok)throw new Error(json.error||'Unable to update layout.');return json
   }
-  function beginCreateLayout(){setLayoutDraftName('');setLayoutDraftCells(initialEditorCells());setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'create'})}
+  function beginCreateLayout(){setLayoutDraftName(nextCustomLayoutName(customLayouts));setLayoutDraftCells(initialEditorCells());setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'create'})}
   function beginEditLayout(layout:CustomLayout){setLayoutDraftName(layout.name);setLayoutDraftCells(editorCells(layout.cells));setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutFlow({mode:'edit',layout})}
   function cancelLayoutEditor(){setLayoutFlow(null);setLayoutDraftError('');setLayoutDraftUnsupported([])}
   async function submitLayoutDraft(){
-    const name=normalizeLayoutName(layoutDraftName)||(layoutFlow?.mode==='create'?nextCustomLayoutName(customLayouts):''),cells=withSlots(layoutDraftCells)
-    if(!name)return
+    const name=normalizeLayoutName(layoutDraftName),cells=withSlots(layoutDraftCells)
+    if(!name){setLayoutDraftError('Enter a name for this layout.');return}
     const validation=validateCustomGeometry(cells)
     if(!validation.valid){setLayoutDraftUnsupported(validation.unsupportedSlots);setLayoutDraftError('The layout must cover the whole frame without overlapping.');return}
     setLayoutDraftName(name);setLayoutDraftError('');setLayoutDraftUnsupported([]);setLayoutDraftSaving(true)
     try{await saveCustomLayout(name,cells)}catch(error){setLayoutDraftError(error instanceof Error?error.message:'Unable to save layout.')}finally{setLayoutDraftSaving(false)}
   }
   async function saveCustomLayout(name:string,cells:CustomLayoutCell[]) {
-    if(!activeDeviceId)return
     if(layoutFlow?.mode==='edit'){
       const json=await customLayoutRequest(`/api/custom-layouts/${layoutFlow.layout.id}`,{method:'PATCH',body:JSON.stringify({name,cells})})
       setCustomLayouts(items=>items.map(item=>item.id===json.layout.id?json.layout:item));setCarouselItemId(json.layout.id);setActiveCustomLayoutId(json.layout.id);setActiveTab('frame')
       setCustomAssignments(items=>({...items,[json.layout.id]:remapAssignmentsAfterGeometryEdit(layoutFlow.layout.cells,cells,items[json.layout.id]||{})}))
     }else{
+      if(!activeDeviceId)throw new Error('Select a frame before creating a layout.')
       const json=await customLayoutRequest('/api/custom-layouts',{method:'POST',body:JSON.stringify({deviceId:activeDeviceId,name,cells})})
       setCustomLayouts(items=>[...items,json.layout]);setActiveCustomLayoutId(json.layout.id);setCarouselItemId(json.layout.id)
       setCustomAssignments(items=>({...items,[json.layout.id]:Object.fromEntries(cells.map(cell=>[cell.slot,null]))}))
@@ -2765,7 +2768,7 @@ async function handleSelectTab(k: TabKey) {
                       : 'border-[color:var(--bd-30)] text-[color:var(--fg-50)]'
                   }`}
                   style={{ backgroundColor: 'var(--app-bg)' }}
-                  disabled={!activeDeviceId || persisting || manualUpdatePending || layoutDraftSaving}
+                  disabled={actionDisabled}
                 >
                   {layoutFlow ? (layoutDraftSaving?'Saving…':'SAVE LAYOUT') : persisting
                     ? tx(language).saving
