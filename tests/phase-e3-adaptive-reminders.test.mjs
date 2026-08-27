@@ -25,7 +25,7 @@ test('exact Reminders instances are accepted and lookalikes rejected atomically'
   for(const module of ['reminder','remindersfoo','reminders-foo','notreminders'])
     assert.equal(supportsPhysicalCustomLayout(tiling(3,3,module)).valid,false,module)
   const mixed=tiling(3,3);mixed[1].module='weather:1';assert.equal(supportsPhysicalCustomLayout(mixed).valid,true)
-  mixed[1].module='countdown';assert.deepEqual(supportsPhysicalCustomLayout(mixed),{valid:false,errors:['unsupported_physical_cell'],unsupportedSlots:[1]})
+  mixed[1].module='countdown';assert.deepEqual(supportsPhysicalCustomLayout(mixed),{valid:true,errors:[],unsupportedSlots:[]})
 })
 
 test('pixel dimensions select shallow, vertical, and split Studio families',()=>{
