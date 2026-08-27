@@ -42,6 +42,21 @@ test('Local Events use only the content budget left after personal reminders', (
   assert.equal(selectReminderDisplayGroups(local, 2).length, 2)
 })
 
+test('date groups are chosen before source priority so Local Events today remain renderable', () => {
+  const localToday = buildLocalEventFrameItem([
+    row('today-local', 'Local Event Today', '2026-07-12T18:00:00+02:00'),
+  ], [], today, at('2026-07-12T14:00:00Z'))
+  const personal = [
+    { reminder_id: 'tomorrow', title: 'Personal tomorrow', occurrence_date: '2026-07-13', display_date: 'Tomorrow', days_until: 1, is_overdue: false, repeat: 'none', due_time: null, display_time: null, source: 'remind' },
+    { reminder_id: 'later-1', title: 'Personal later', occurrence_date: '2026-07-14', display_date: '14.07.2026', days_until: 2, is_overdue: false, repeat: 'none', due_time: null, display_time: null, source: 'remind' },
+    { reminder_id: 'later-2', title: 'Personal much later', occurrence_date: '2026-07-15', display_date: '15.07.2026', days_until: 3, is_overdue: false, repeat: 'none', due_time: null, display_time: null, source: 'remind' },
+  ]
+  const selected = selectReminderDisplayGroups([...personal, ...localToday], 6)
+  assert.deepEqual(new Set(selected.map((item) => item.occurrence_date)), new Set([today, '2026-07-13']))
+  assert.ok(selected.some((item) => item.reminder_id === 'local-events:today-local'))
+  assert.ok(selected.some((item) => item.reminder_id === 'tomorrow'))
+})
+
 test('timed Local Event several days in the future is eligible without same-day or lead-time filters', () => {
   const items = buildLocalEventFrameItem([
     row('far', 'Future Festival', '2026-07-20T17:00:00+02:00'),

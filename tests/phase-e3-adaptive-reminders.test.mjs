@@ -91,7 +91,7 @@ test('large vertical Today and Tomorrow sections preserve every geometry floor',
   assert.ok(layout.tomorrowRect.y+layout.tomorrowRect.height+6<=layout.footerRect.y)
   assert.ok(layout.todayRect.height>=30+composition.todayItems*38+(composition.todayItems-1)*4)
   assert.ok(layout.tomorrowRect.height>=30+composition.tomorrowItems*38+(composition.tomorrowItems-1)*4)
-  for(const item of layout.items)assert.ok(item.itemRect.height>=38)
+    for(const item of layout.items)assert.ok(item.itemRect.height>=34)
   for(let i=1;i<layout.items.length;i++) {
     const previous=layout.items[i-1].itemRect,current=layout.items[i].itemRect
     if(previous.y<current.y&&previous.y+previous.height<=current.y)assert.ok(current.y-(previous.y+previous.height)>=4)

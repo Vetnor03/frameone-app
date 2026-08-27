@@ -1,6 +1,14 @@
 export const REMINDER_TEXT_ORDER=Object.freeze(['full','compact','short','tiny'])
 export const REMINDER_STUDIO_PRESET_VALUES=Object.freeze(['normal','long','extreme','empty'])
 
+/** Pixel-derived type and row metrics shared with the physical renderer. */
+export function reminderDensity(availablePixels,requiredRows) {
+  const pixelsPerRow=requiredRows>0?availablePixels/requiredRows:availablePixels
+  if(pixelsPerRow>=62)return Object.freeze({name:'spacious',font:'B18',fontSize:24,rowHeight:56,rowGap:6,timeWidth:88})
+  if(pixelsPerRow>=44)return Object.freeze({name:'normal',font:'B12',fontSize:17,rowHeight:42,rowGap:5,timeWidth:62})
+  return Object.freeze({name:'dense',font:'B9',fontSize:13,rowHeight:34,rowGap:4,timeWidth:48})
+}
+
 /** Selects verbosity only after composition has allocated a real pixel width. */
 export function chooseReminderTextVariant(item,availableWidth,measure) {
   const {text,protectedFacts=[]}=item
@@ -113,32 +121,39 @@ export function reminderLayout(profile,composition) {
     return Object.freeze({pad,emptyRect:null,todayRect:content,tomorrowRect:null,footerRect,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze(items)})
   }
   const headingHeight=composition.showHeading?30:0
-  const minimumRowHeight=38,rowGap=4
-  const tomorrowHeight=composition.tomorrowItems?headingHeight+composition.tomorrowItems*minimumRowHeight+Math.max(0,composition.tomorrowItems-1)*rowGap:0
-  const sectionGap=tomorrowHeight?10:0
-  const todayHeight=composition.todayItems?Math.max(1,content.height-tomorrowHeight-sectionGap):0
+  const sectionCount=(composition.todayItems?1:0)+(composition.tomorrowItems?1:0)
+  const sectionGap=sectionCount>1?10:0,totalRows=composition.todayItems+composition.tomorrowItems
+  const rowsAvailable=Math.max(1,content.height-sectionCount*headingHeight-sectionGap)
+  const density=reminderDensity(rowsAvailable,totalRows)
+  const sharedRowHeight=Math.min(density.rowHeight,Math.max(1,(rowsAvailable-Math.max(0,totalRows-sectionCount)*density.rowGap)/totalRows))
+  const sectionHeight=(count)=>count?headingHeight+count*sharedRowHeight+Math.max(0,count-1)*density.rowGap:0
+  const todayHeight=sectionHeight(composition.todayItems)
+  const tomorrowHeight=sectionHeight(composition.tomorrowItems)
   const todayRect=composition.todayItems?{x:content.x,y:content.y,width:content.width,height:todayHeight}:null
   const tomorrowRect=composition.tomorrowItems?{x:content.x,y:content.y+todayHeight+sectionGap,width:content.width,height:tomorrowHeight}:null
   const items=[]
-  addSectionItems(items,todayRect,composition.todayItems,headingHeight,profile.width<230)
-  addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,profile.width<230)
+  addSectionItems(items,todayRect,composition.todayItems,headingHeight,profile.width<230,0,density)
+  addSectionItems(items,tomorrowRect,composition.tomorrowItems,headingHeight,profile.width<230,0,density)
   return Object.freeze({pad,emptyRect:null,todayRect,tomorrowRect,footerRect,todayFooterRect:null,tomorrowFooterRect:null,items:Object.freeze(items)})
 }
 
-function addSectionItems(items,rect,count,headingHeight,stacked,footerHeight=0) {
+function addSectionItems(items,rect,count,headingHeight,stacked,footerHeight=0,selectedDensity=null) {
   if(!rect||!count)return
-  const rowGap=4,rowsTop=rect.y+headingHeight,rowHeight=Math.max(1,(rect.height-headingHeight-footerHeight-rowGap*Math.max(0,count-1))/count)
-  for(let index=0;index<count;index++)items.push(itemRegions({x:rect.x,y:rowsTop+index*(rowHeight+rowGap),width:rect.width,height:rowHeight},stacked))
+  const available=Math.max(1,rect.height-headingHeight-footerHeight),density=selectedDensity||reminderDensity(available,count)
+  const rowHeight=Math.min(density.rowHeight,Math.max(1,(available-density.rowGap*Math.max(0,count-1))/count)),rowsTop=rect.y+headingHeight
+  for(let index=0;index<count;index++)items.push(itemRegions({x:rect.x,y:rowsTop+index*(rowHeight+density.rowGap),width:rect.width,height:rowHeight},stacked,density))
 }
 
-function itemRegions(itemRect,stacked) {
+function itemRegions(itemRect,stacked,density=reminderDensity(itemRect.height,1)) {
   const inset=2,box={x:itemRect.x+inset,y:itemRect.y+inset,width:Math.max(1,itemRect.width-inset*2),height:Math.max(1,itemRect.height-inset*2)}
   if(stacked) {
-    const timeHeight=Math.min(18,Math.max(1,box.height*.38))
-    return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:box.width,height:timeHeight},titleRect:{x:box.x,y:box.y+timeHeight,width:box.width,height:Math.max(1,box.height-timeHeight)},stacked:true})
+    const timeHeight=density.font==='B18'?Math.max(1,box.height/2):Math.min(18,Math.max(1,box.height*.38))
+    return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:box.width,height:timeHeight},titleRect:{x:box.x,y:box.y+timeHeight,width:box.width,height:Math.max(1,box.height-timeHeight)},stacked:true,density})
   }
-  const timeWidth=Math.min(48,Math.max(38,box.width*.22)),gap=7
-  return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:timeWidth,height:box.height},titleRect:{x:box.x+timeWidth+gap,y:box.y,width:Math.max(1,box.width-timeWidth-gap),height:box.height},stacked:false})
+  // Sized for the selected font's HH:MM glyph advances; non-stacked cells have
+  // already met the width floor, so the remainder stays available to the title.
+  const timeWidth=density.timeWidth,gap=7
+  return Object.freeze({itemRect,timeRect:{x:box.x,y:box.y,width:timeWidth,height:box.height},titleRect:{x:box.x+timeWidth+gap,y:box.y,width:Math.max(1,box.width-timeWidth-gap),height:box.height},stacked:false,density})
 }
 
 // Time remains structured. Title facts describe only atomic tokens that may be

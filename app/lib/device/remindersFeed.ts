@@ -383,32 +383,21 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   if (!Number.isFinite(maxItems) || maxItems <= 0) return []
 
   const cap = Math.floor(maxItems)
+  const orderedItems = [...items].sort(compareReminderItems)
+  // Dates are selected before source priority. Otherwise an optional event today
+  // can disappear merely because personal content exists on two later dates.
   const selectedGroupKeys: string[] = []
-  const selectedItems: DeviceReminderItem[] = []
-
-  // Local Events are useful discovery content, but must consume only space left
-  // after personal reminders and calendar integrations have been selected.
-  const prioritized = [
-    ...items.filter((item) => item.source !== 'local-events'),
-    ...items.filter((item) => item.source === 'local-events'),
-  ]
-
-  for (const item of prioritized) {
+  for (const item of orderedItems) {
     const groupKey = item.occurrence_date || item.display_date
     if (!groupKey) continue
-
-    if (!selectedGroupKeys.includes(groupKey)) {
-      if (selectedGroupKeys.length >= 2) continue
-      selectedGroupKeys.push(groupKey)
-    }
-
-    if (selectedGroupKeys.includes(groupKey)) {
-      selectedItems.push(item)
-      if (selectedItems.length >= cap) break
-    }
+    if (!selectedGroupKeys.includes(groupKey)) selectedGroupKeys.push(groupKey)
+    if (selectedGroupKeys.length >= 2) break
   }
 
-  return selectedItems
+  const relevant = orderedItems.filter((item) => selectedGroupKeys.includes(item.occurrence_date || item.display_date))
+  const personal = relevant.filter((item) => item.source !== 'local-events')
+  const localEvents = relevant.filter((item) => item.source === 'local-events')
+  return [...personal, ...localEvents].slice(0, cap)
 }
 
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
