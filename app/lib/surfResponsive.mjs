@@ -66,36 +66,42 @@ const rect=(x,y,width,height)=>({x,y,width:Math.max(1,width),height:Math.max(1,h
 
 export function surfLayout(profile,composition) {
   const {width:w,height:h}=profile,pad=Math.max(10,Math.min(18,w*.04))
-  if(!composition.available)return {emptyRect:rect(pad,pad,w-pad*2,h-pad*2),headerRect:null,heroRect:null,ratingRect:null,ratingBlocksRect:null,waveRect:null,detailsRect:null,bestWindowRect:null,environmentRect:null,forecastRect:null,forecastColumns:[]}
-  const headerH=composition.showSpot?Math.min(48,Math.max(34,h*.13)):0
-  const headerRect=composition.showSpot?rect(pad,pad,w-pad*2,headerH):null
-  const top=pad+headerH+(headerH?6:0),bottom=h-pad
-  const forecastH=composition.forecastDays?Math.min(150,Math.max(118,h*.34)):0
-  const forecastRect=forecastH?rect(pad,bottom-forecastH,w-pad*2,forecastH):null
-  const contentBottom=forecastRect?forecastRect.y-10:bottom
-  let heroRect,detailsRect=null,bestWindowRect=null,environmentRect=null
+  const empty={emptyRect:rect(pad,pad,w-pad*2,h-pad*2),headerRect:null,heroRect:null,ratingRect:null,ratingBlocksRect:null,waveRect:null,detailsRect:null,bestWindowRect:null,environmentRect:null,daypartRect:null,dailyRect:null,forecastRect:null,daypartColumns:[],dailyColumns:[],forecastColumns:[]}
+  if(!composition.available)return empty
+  const bestH=composition.showTodaysBestLabel?22:0
+  const bestWindowRect=bestH?rect(pad,pad,w-pad*2,bestH):null
+  const headerH=composition.showSpot?Math.min(42,Math.max(30,h*.11)):0
+  const headerY=pad+bestH+(bestH?4:0)
+  const headerRect=composition.showSpot?rect(pad,headerY,w-pad*2,headerH):null
+  const top=headerY+headerH+(headerH?6:0),bottom=h-pad
+  const dailyH=composition.dailyCount?Math.min(145,Math.max(104,h*.32)):0
+  const dailyRect=dailyH?rect(pad,bottom-dailyH,w-pad*2,dailyH):null
+  const contentBottom=dailyRect?dailyRect.y-10:bottom
+  let heroRect,detailsRect=null,daypartRect=null,environmentRect=null
   if(['split','daypart-enhanced','expanded-daily'].includes(composition.family)&&w>=330){
     const gap=12,heroW=(w-pad*2-gap)*composition.splitPercent/100
     heroRect=rect(pad,top,heroW,contentBottom-top)
     const detailX=heroRect.x+heroRect.width+gap
-    detailsRect=rect(detailX,top,w-pad-detailX,contentBottom-top)
+    const sideW=w-pad-detailX
+    if(composition.daypartCount)daypartRect=rect(detailX,top,sideW,contentBottom-top)
+    else if(composition.showDetails)detailsRect=rect(detailX,top,sideW,contentBottom-top)
+    if(composition.daypartCount&&composition.showDetails){const detailH=Math.min(78,Math.max(50,(contentBottom-top)*.3));detailsRect=rect(detailX,top,sideW,detailH);daypartRect=rect(detailX,top+detailH+6,sideW,contentBottom-top-detailH-6)}
   }else heroRect=rect(pad,top,w-pad*2,contentBottom-top)
   if(composition.family==='stacked'&&composition.showDetails){const detailH=Math.min(72,heroRect.height*.27);detailsRect=rect(heroRect.x,heroRect.y+heroRect.height-detailH,heroRect.width,detailH);heroRect=rect(heroRect.x,heroRect.y,heroRect.width,heroRect.height-detailH-6)}
-  if(composition.showBestWindow&&detailsRect){const bh=Math.min(48,detailsRect.height*.25);bestWindowRect=rect(detailsRect.x,detailsRect.y,detailsRect.width,bh);detailsRect=rect(detailsRect.x,detailsRect.y+bh+6,detailsRect.width,detailsRect.height-bh-6)}
   if(composition.showEnvironment&&detailsRect){const eh=Math.min(56,detailsRect.height*.35);environmentRect=rect(detailsRect.x,detailsRect.y+detailsRect.height-eh,detailsRect.width,eh);detailsRect=rect(detailsRect.x,detailsRect.y,detailsRect.width,detailsRect.height-eh-6)}
   if(composition.family==='shallow-wide'){
-    const y=heroRect.y,height=heroRect.height,fullWidth=heroRect.width,detailW=composition.showPeriod?fullWidth*.15:0,primaryW=fullWidth-detailW,ratingW=primaryW*.21,blocksW=primaryW*.45,waveW=primaryW-ratingW-blocksW
+    const y=heroRect.y,height=heroRect.height,fullWidth=heroRect.width,detailW=composition.showDetails?fullWidth*.15:0,primaryW=fullWidth-detailW,ratingW=primaryW*.21,blocksW=primaryW*.45,waveW=primaryW-ratingW-blocksW
     heroRect=rect(heroRect.x,y,primaryW,height)
     const ratingRect=composition.showRating?rect(heroRect.x,y,ratingW,height):null,ratingBlocksRect=composition.showBlocks?rect(heroRect.x+ratingW,y,blocksW,height):null,waveRect=composition.showWave?rect(heroRect.x+ratingW+blocksW,y,waveW,height):null
-    detailsRect=composition.showPeriod?rect(heroRect.x+primaryW,y,detailW,height):null
-    return {emptyRect:null,headerRect,heroRect,ratingRect,ratingBlocksRect,waveRect,detailsRect,bestWindowRect:null,environmentRect:null,forecastRect:null,forecastColumns:[]}
+    detailsRect=composition.showDetails?rect(heroRect.x+primaryW,y,detailW,height):null
+    return {emptyRect:null,headerRect,heroRect,ratingRect,ratingBlocksRect,waveRect,detailsRect,bestWindowRect,environmentRect:null,daypartRect:null,dailyRect:null,forecastRect:null,daypartColumns:[],dailyColumns:[],forecastColumns:[]}
   }
-  const groupH=Math.min(heroRect.height,composition.family==='micro'?heroRect.height:Math.max(104,Math.min(180,heroRect.height*.78))),groupY=heroRect.y+(heroRect.height-groupH)/2
+  const groupH=Math.min(heroRect.height,Math.max(104,Math.min(180,heroRect.height*.78))),groupY=heroRect.y+(heroRect.height-groupH)/2
   const ratingH=Math.max(24,groupH*.32),blocksH=composition.showBlocks?Math.min(22,groupH*.16):0,waveH=Math.max(22,groupH*.25),gaps=composition.showBlocks?8:4,total=ratingH+blocksH+waveH+gaps*2,start=groupY+Math.max(0,(groupH-total)/2)
   const ratingRect=composition.showRating?rect(heroRect.x,start,heroRect.width,ratingH):null
   const ratingBlocksRect=composition.showBlocks?rect(heroRect.x,start+ratingH+4,heroRect.width,blocksH):null
   const waveRect=composition.showWave?rect(heroRect.x,start+ratingH+blocksH+gaps,heroRect.width,waveH):null
-  const forecastColumns=[]
-  if(forecastRect){const colW=forecastRect.width/composition.forecastDays;for(let i=0;i<composition.forecastDays;i++){const x=forecastRect.x+i*colW;forecastColumns.push({columnRect:rect(x,forecastRect.y,colW,forecastRect.height),dayRect:rect(x,forecastRect.y,colW,24),ratingRect:rect(x,forecastRect.y+27,colW,25),blocksRect:rect(x,forecastRect.y+56,colW,20),waveRect:rect(x,forecastRect.y+80,colW,25),periodRect:forecastRect.height>=135?rect(x,forecastRect.y+108,colW,20):null})}}
-  return {emptyRect:null,headerRect,heroRect,ratingRect,ratingBlocksRect,waveRect,detailsRect,bestWindowRect,environmentRect,forecastRect,forecastColumns}
+  const columns=(region,count)=>{if(!region||!count)return[];const colW=region.width/count;return Array.from({length:count},(_,i)=>{const x=region.x+i*colW;return {columnRect:rect(x,region.y,colW,region.height),dayRect:rect(x,region.y,colW,22),ratingRect:rect(x,region.y+24,colW,23),blocksRect:rect(x,region.y+49,colW,18),waveRect:rect(x,region.y+69,colW,23),periodRect:region.height>=118?rect(x,region.y+94,colW,18):null}})}
+  const daypartColumns=columns(daypartRect,composition.daypartCount),dailyColumns=columns(dailyRect,composition.dailyCount)
+  return {emptyRect:null,headerRect,heroRect,ratingRect,ratingBlocksRect,waveRect,detailsRect,bestWindowRect,environmentRect,daypartRect,dailyRect,forecastRect:dailyRect,daypartColumns,dailyColumns,forecastColumns:dailyColumns}
 }

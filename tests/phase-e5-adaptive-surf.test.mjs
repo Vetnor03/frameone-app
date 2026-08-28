@@ -4,7 +4,7 @@ import {mkdtemp,readFile,writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import test from 'node:test'
-import {surfComposition,surfStudioPresets} from '../app/lib/surfResponsive.mjs'
+import {surfComposition,surfLayout,surfStudioPresets} from '../app/lib/surfResponsive.mjs'
 import {supportsPhysicalCustomLayout} from '../app/lib/customLayouts.mjs'
 
 const profile=(width,height)=>({width,height,colSpan:1,rowSpan:1,area:1,orientation:width>height?'landscape':'portrait'})
@@ -95,4 +95,38 @@ test('firmware keeps legacy dispatch/fetch needs and allocates every disclosed a
  assert.match(geometry,/comp\.dailyCount > 0[\s\S]*AdaptiveSurfRect daily/)
  assert.match(source,/if \(comp\.showDirections[\s\S]*drawSurfDirectionArrow/)
  assert.match(source,/if \(comp\.showTodaysBestLabel\)[\s\S]*Best next 4hrs/)
+})
+
+test('Studio allocates every daypart, daily, and Today’s Best disclosure',()=>{
+ const daypartComposition=surfComposition(profile(589,343),state())
+ const daypartLayout=surfLayout(profile(589,343),daypartComposition)
+ assert.ok(daypartComposition.daypartCount>0);assert.ok(daypartLayout.daypartRect)
+ assert.equal(daypartLayout.daypartColumns.length,daypartComposition.daypartCount)
+ const dailyComposition=surfComposition(profile(785,458),state())
+ const dailyLayout=surfLayout(profile(785,458),dailyComposition)
+ assert.ok(dailyComposition.dailyCount>0);assert.ok(dailyLayout.dailyRect)
+ assert.equal(dailyLayout.dailyColumns.length,dailyComposition.dailyCount)
+ const shallowComposition=surfComposition(profile(776,114),state())
+ assert.equal(shallowComposition.showTodaysBestLabel,true)
+ assert.ok(surfLayout(profile(776,114),shallowComposition).bestWindowRect)
+ const stackedState=state({period:null,windSpeed:null,swellDirection:null,windDirection:null})
+ const stackedComposition=surfComposition(profile(196,343),stackedState)
+ assert.equal(stackedComposition.showDetails,false);assert.equal(stackedComposition.showTodaysBestLabel,true)
+ assert.ok(surfLayout(profile(196,343),stackedComposition).bestWindowRect)
+})
+
+test('Studio Surf renders explicit data families and experience dice without stale family names',async()=>{
+ const simulator=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
+ const responsive=simulator.slice(simulator.indexOf('function drawResponsiveSurf'),simulator.indexOf('function drawSurf'))
+ const visuals=simulator.slice(simulator.indexOf('function experienceDice'),simulator.indexOf('function arrowIcon'))
+ const policy=await readFile(new URL('../app/lib/surfResponsive.mjs',import.meta.url),'utf8')
+ const declaration=await readFile(new URL('../app/lib/surfResponsive.d.mts',import.meta.url),'utf8')
+ assert.match(responsive,/state\.dayparts\?\?state\.forecast/)
+ assert.match(responsive,/state\.daily\?\?state\.forecast/)
+ assert.match(responsive,/layout\.daypartColumns/);assert.match(responsive,/layout\.dailyColumns/)
+ assert.match(visuals,/if\(experience\)experienceDice/)
+ assert.match(responsive,/ratingFromExperience\|\|state\.rating\.experienceBased/)
+ assert.doesNotMatch(responsive,/family\s*===?\s*['"]micro/)
+ assert.doesNotMatch(policy,/family\s*===?\s*['"]micro/)
+ for(const field of ['dayparts','daily','trend','ratingFromExperience','experienceDiceValue'])assert.match(declaration,new RegExp(`\\b${field}\\b`))
 })
