@@ -10,7 +10,7 @@ test('manual frame save sends and confirms the selected legacy frame theme befor
     events.push(['saved', submitted.settings_json.theme])
     return {
       ok: true,
-      json: async () => ({ ok: true, saved_settings_json: submitted.settings_json, updated_at: 'now' }),
+      json: async () => ({ ok: true, saved_settings_json: submitted.settings_json, updated_at: 'now', requested_revision: 1 }),
     }
   }
 
@@ -24,7 +24,7 @@ test('manual frame save blocks the revision when persisted theme does not match'
   let revisionRequested = false
   const fetchImpl = async () => ({
     ok: true,
-    json: async () => ({ ok: true, saved_settings_json: { theme: 'dark' }, updated_at: 'now' }),
+    json: async () => ({ ok: true, saved_settings_json: { theme: 'dark' }, updated_at: 'now', requested_revision: 1 }),
   })
 
   await assert.rejects(async () => {
@@ -42,7 +42,7 @@ test('app theme is not part of the device settings save contract', async () => {
     accessToken: 'token',
     fetchImpl: async (_url, init) => {
       submitted = JSON.parse(init.body)
-      return { ok: true, json: async () => ({ ok: true, saved_settings_json: submitted.settings_json }) }
+      return { ok: true, json: async () => ({ ok: true, saved_settings_json: submitted.settings_json, requested_revision: 1 }) }
     },
   })
   assert.deepEqual(submitted.settings_json, { theme: 'light', layout: 'default' })

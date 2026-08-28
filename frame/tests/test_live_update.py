@@ -38,13 +38,18 @@ def test_live_update_declares_its_wifi_dependency():
 def test_elapsed_scheduler_is_approximately_15_minutes():
     elapsed = 0
     due_at = []
-    for wake in range(1, 61):
-        elapsed += 120
+    for wake in range(1, 361):
+        elapsed += 10
         if elapsed >= 900:
             elapsed -= 900
-            due_at.append(wake * 120)
-    assert due_at[:4] == [960, 1800, 2760, 3600]
-    assert all(b - a in (840, 960) for a, b in zip(due_at, due_at[1:]))
+            due_at.append(wake * 10)
+    assert due_at[:4] == [900, 1800, 2700, 3600]
+    assert all(b - a == 900 for a, b in zip(due_at, due_at[1:]))
+
+
+def test_sleeping_probe_is_ten_seconds_and_awake_interactive_poll_is_fast():
+    assert "static const uint32_t PROBE_WAKE_SECONDS = 10" in MAIN
+    assert "static const uint32_t INTERACTIVE_POLL_MS = 1500" in MAIN
 
 
 def test_probe_wakes_do_not_advance_forced_refresh_counter():
@@ -104,6 +109,19 @@ def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
         retry_ms = 5000 if retry_ms >= 2500 else retry_ms * 2
     assert observed == [1500, 3000, 5000, 5000]
     assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in interactive
+
+
+def test_newer_revision_arriving_during_render_remains_pending_for_next_probe():
+    interactive = MAIN[MAIN.index("static InteractiveModeResult runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
+    render = interactive.index("fetchAndRenderExplicit(batt, pwr, revisionToDisplay)")
+    acknowledge = interactive.index("retryRenderedAck(state.displayedRevision)", render)
+    next_probe = interactive.index("LiveUpdate::probe(DeviceIdentity::getToken(), next)", acknowledge)
+    adopt_newest = interactive.index("state = next", next_probe)
+    pending_check = interactive.index("state.requestedRevision > state.displayedRevision")
+    assert pending_check < render < acknowledge < next_probe < adopt_newest
+    # The loop continues with `state = next`, so a revision newer than the one
+    # just ACKed is rendered on the following serial iteration, never overlapped.
+    assert "while (WiFi.status() == WL_CONNECTED)" in interactive
 
 
 def test_interactive_probe_requires_three_consecutive_failures():

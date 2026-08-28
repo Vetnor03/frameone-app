@@ -15,5 +15,8 @@ export async function saveFrameSettings({ deviceId, settingsJson, accessToken, f
   if (result?.saved_settings_json?.theme !== settingsJson.theme) {
     throw new Error('Saved frame theme did not match the selected frame theme.')
   }
+  if (!Number.isSafeInteger(Number(result?.requested_revision)) || Number(result.requested_revision) < 0) {
+    throw new Error('Saved frame state was not published for display.')
+  }
   return result
 }

@@ -38,7 +38,9 @@ static const char* FW_VER = "v2.5.7";
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 
 // Cheap live-update discovery wake. The normal full sync has its own RTC clock.
-static const uint32_t PROBE_WAKE_SECONDS = 120;
+// Keep this isolated from the normal-sync scheduler so the active-use wake
+// cadence can be tuned independently when battery policy is revisited.
+static const uint32_t PROBE_WAKE_SECONDS = 10;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
 static const uint32_t NORMAL_SYNC_SECONDS = 900;
 static const uint32_t INTERACTIVE_POLL_MS = 1500;
