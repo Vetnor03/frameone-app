@@ -145,7 +145,7 @@ There are **two update-related mechanisms** in code:
   - HIGH => USB present,
   - LOW => battery only (per in-code comments/logging assumptions).
 - Deep sleep wake sources:
-  - timer wake (5 min when USB present, 15 min otherwise),
+  - 10-second live-update probe wake while paired (normal sync remains independent),
   - EXT1 wake on power-sense edge direction depending on current power source.
 
 ## Current module list in this codebase

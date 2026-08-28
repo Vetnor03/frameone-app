@@ -65,11 +65,22 @@ export async function POST(req: Request) {
 
     if (save.error) return NextResponse.json({ ok: false, error: save.error.message }, { status: 500 })
 
+    // Saving desired state and publishing its revision happen in one API
+    // operation. The physical frame still renders only one revision at a time,
+    // but every completed save immediately supersedes older desired state.
+    const requestId = crypto.randomUUID()
+    const revision = await supabase.rpc('request_device_display_revision', {
+      p_device_id: deviceId,
+      p_request_id: requestId,
+    })
+    if (revision.error) return NextResponse.json({ ok: false, error: 'update_request_failed' }, { status: 500 })
+
     return NextResponse.json({
       ok: true,
       storage: { table: 'device_settings', key: `device_id=${deviceId}` },
       saved_settings_json: save.data?.settings_json ?? null,
       updated_at: save.data?.updated_at ?? null,
+      requested_revision: revision.data,
     })
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 })
