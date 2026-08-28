@@ -29,7 +29,8 @@ inline bool exactOnly(const char* module, const char* expected) {
 
 inline bool supports(const char* module) {
   return exactOnly(module, "date") || exactBase(module, "weather") ||
-         exactBase(module, "reminders") || exactBase(module, "countdown");
+         exactBase(module, "reminders") || exactBase(module, "countdown") ||
+         exactBase(module, "surf");
 }
 
 } // namespace AdaptiveModuleCapability

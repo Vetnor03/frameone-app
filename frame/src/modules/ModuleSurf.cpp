@@ -9,6 +9,7 @@
 #include "NetClient.h"
 #include "Config.h"
 #include "ModuleIcons.h"
+#include "SurfAdaptivePolicy.h"
 
 #include <ArduinoJson.h>
 #include <math.h>
@@ -1203,14 +1204,21 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   return true;
 }
 
-static void tick(int idx, CellSize wantSize) {
+static SurfAdaptivePolicy::DataNeeds legacyDataNeeds(CellSize wantSize) {
+  SurfAdaptivePolicy::DataNeeds needs = {false, false};
+  needs.dayparts = wantSize == CELL_MEDIUM || wantSize == CELL_LARGE;
+  needs.daily = wantSize == CELL_XL;
+  return needs;
+}
+
+static void tick(int idx, const SurfAdaptivePolicy::DataNeeds& requested) {
   SurfInstanceConfig& cfg = g_inst[idx];
   SurfCache& cache = g_cache[idx];
 
   const uint32_t now = millis();
 
-  const bool wantDayparts = (wantSize == CELL_MEDIUM || wantSize == CELL_LARGE);
-  const bool wantDaily = (wantSize == CELL_XL);
+  const bool wantDayparts = requested.dayparts;
+  const bool wantDaily = requested.daily;
 
   bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
 
@@ -1850,6 +1858,161 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
 // =========================================================
 // TAB 8 — Rendering
 // =========================================================
+static int countValidDayparts(const SurfCache& data) {
+  int count = 0;
+  for (int i = 0; i < 4; ++i) if (data.day[i].valid) ++count;
+  return count;
+}
+
+static int countValidDaily(const SurfCache& data) {
+  int count = 0;
+  for (int i = 0; i < 5; ++i) if (data.daily[i].valid) ++count;
+  return count;
+}
+
+static void drawAdaptiveRatingVisual(int x, int y, int w, int h,
+                                     int rating, bool experience, int dice,
+                                     uint16_t ink) {
+  const int gap = clampi(w / 40, 2, 5);
+  const int diceSize = clampi((w - gap) / 2, 14, min(w / 2, h));
+  const int blockW = clampi((w - gap * 5) / 6, 7, 24);
+  const int blockH = clampi(h, 8, 18);
+  const int visualW = ratingVisualWidthPxSized(experience, blockW, gap, diceSize);
+  const int visualH = ratingVisualHeightPxSized(experience, blockH, diceSize);
+  drawRatingVisualSized(x + (w - visualW) / 2, y + (h - visualH) / 2,
+                        rating, experience, dice, ink,
+                        blockW, blockH, gap, 2, diceSize);
+}
+
+static void renderAdaptiveSurf(const Cell& c,
+                               const SurfInstanceConfig& cfg,
+                               const SurfCache& data) {
+  const uint16_t ink = Theme::ink();
+  if (!cfg.spot[0] && !cfg.spotId[0]) {
+    drawCenteredBox(c.x, c.y, c.w, c.h, "Set spot", FONT_B12, ink);
+    return;
+  }
+  if (!data.valid) {
+    drawCenteredBox(c.x, c.y, c.w, c.h, "Surf", FONT_B12, ink);
+    return;
+  }
+
+  char spot[64] = {0};
+  char wave[24] = {0};
+  char period[12] = {0};
+  char wind[12] = {0};
+  getDisplaySpotName(cfg, data, spot, sizeof(spot));
+  getWaveRangeLabel(data, wave, sizeof(wave));
+  if (isfinite(data.swellPeriodS) && data.swellPeriodS > 0) {
+    snprintf(period, sizeof(period), "%.0f s", data.swellPeriodS);
+  }
+  if (isfinite(data.windSpeedMs) && data.windSpeedMs >= 0) {
+    snprintf(wind, sizeof(wind), "%.0f m/s", data.windSpeedMs);
+  }
+  const char trend = surfTrendSymbol(data);
+  SurfAdaptivePolicy::Input input = {
+    c.w, c.h, spot, ratingToWord(data.rating), wave, period, wind,
+    data.rating >= 1, data.ratingFromExperience, trend != 0,
+    isTodaysBestConfig(cfg), countValidDayparts(data), countValidDaily(data)
+  };
+  const SurfAdaptivePolicy::Result comp = SurfAdaptivePolicy::compose(input);
+  const int pad = clampi(min(c.w, c.h) * 6 / 100, 8, 16);
+  const int left = c.x + pad;
+  const int top = c.y + pad;
+  const int innerW = c.w - pad * 2;
+  const int innerH = c.h - pad * 2;
+  int titleH = comp.showSpot ? 28 : 0;
+  if (comp.showSpot) drawCenteredBox(left, top, innerW, titleH, spot, FONT_B12, ink);
+  if (isTodaysBestConfig(cfg)) {
+    const char* best = innerW >= 300 ? "Best next 4hrs" : "Today's Best";
+    drawCenteredBox(left, top + titleH, innerW, 18, best, FONT_B9, ink);
+    titleH += 18;
+  }
+  if (comp.showTrend) drawSurfTrendIndicator(left + innerW - 12, top + 3, trend, ink);
+
+  int dailyH = comp.dailyCount > 0 ? clampi(innerH * 34 / 100, 105, 145) : 0;
+  int contentBottom = top + innerH - (dailyH ? dailyH + 8 : 0);
+  int contentTop = top + titleH;
+  int contentH = max(1, contentBottom - contentTop);
+  int heroW = innerW;
+  int sideX = left + innerW;
+  int sideW = 0;
+  if (comp.family == SurfAdaptivePolicy::SPLIT ||
+      comp.family == SurfAdaptivePolicy::DAYPARTS ||
+      comp.family == SurfAdaptivePolicy::EXPANDED) {
+    heroW = innerW * comp.splitPercent / 100;
+    if (heroW <= 0) heroW = innerW * 58 / 100;
+    sideX = left + heroW + 10;
+    sideW = innerW - heroW - 10;
+  }
+
+  if (comp.family == SurfAdaptivePolicy::SHALLOW) {
+    int ratingW = max(55, innerW * 20 / 100);
+    int visualW = max(58, innerW * 30 / 100);
+    int waveW = innerW - ratingW - visualW;
+    drawCenteredBox(left, contentTop, ratingW, contentH,
+                    ratingToWord(data.rating), FONT_B12, ink);
+    drawAdaptiveRatingVisual(left + ratingW, contentTop, visualW, contentH,
+                             data.rating, data.ratingFromExperience,
+                             data.experienceDiceValue, ink);
+    drawCenteredBox(left + ratingW + visualW, contentTop, waveW, contentH,
+                    wave, FONT_B12, ink);
+  } else {
+    const int ratingH = min(42, max(25, contentH * 27 / 100));
+    const int visualH = min(28, max(14, contentH * 18 / 100));
+    const int waveH = min(30, max(20, contentH * 20 / 100));
+    int groupH = ratingH + visualH + waveH + 8;
+    int groupY = contentTop + max(0, (contentH - groupH) / 2);
+    drawCenteredBox(left, groupY, heroW, ratingH,
+                    ratingToWord(data.rating), contentH >= 155 ? FONT_B18 : FONT_B12, ink);
+    drawAdaptiveRatingVisual(left, groupY + ratingH, heroW, visualH,
+                             data.rating, data.ratingFromExperience,
+                             data.experienceDiceValue, ink);
+    drawCenteredBox(left, groupY + ratingH + visualH + 8, heroW, waveH,
+                    wave, FONT_B12, ink);
+  }
+
+  if (comp.showDetails && sideW > 0) {
+    int detailY = contentTop;
+    if (period[0]) { drawCenteredBox(sideX, detailY, sideW, 26, period, FONT_B9, ink); detailY += 28; }
+    if (wind[0]) drawCenteredBox(sideX, detailY, sideW, 26, wind, FONT_B9, ink);
+  }
+  if (comp.daypartCount > 0 && sideW > 0) {
+    static const char* titles[4] = {"Morning", "Noon", "Afternoon", "Evening"};
+    const int rowH = max(45, contentH / comp.daypartCount);
+    int shown = 0;
+    for (int i = 0; i < 4 && shown < comp.daypartCount; ++i) {
+      if (!data.day[i].valid) continue;
+      const int y = contentTop + shown * rowH;
+      drawCenteredBox(sideX, y, sideW, 18, titles[i], FONT_B9, ink);
+      drawCenteredBox(sideX, y + 18, sideW / 2, rowH - 18,
+                      ratingToWord(data.day[i].rating), FONT_B9, ink);
+      drawCenteredBox(sideX + sideW / 2, y + 18, sideW - sideW / 2, rowH - 18,
+                      data.day[i].waveRange, FONT_B9, ink);
+      ++shown;
+    }
+  }
+  if (comp.dailyCount > 0) {
+    const int y = top + innerH - dailyH;
+    const int colW = innerW / comp.dailyCount;
+    int shown = 0;
+    for (int i = 0; i < 5 && shown < comp.dailyCount; ++i) {
+      if (!data.daily[i].valid) continue;
+      const int x = left + shown * colW;
+      drawCenteredBox(x, y, colW, 22, data.daily[i].label, FONT_B9, ink);
+      drawCenteredBox(x, y + 23, colW, 24,
+                      ratingToWord(data.daily[i].rating), FONT_B9, ink);
+      drawAdaptiveRatingVisual(x + 5, y + 49, colW - 10, 18,
+                               data.daily[i].rating,
+                               data.daily[i].ratingFromExperience,
+                               data.daily[i].experienceDiceValue, ink);
+      drawCenteredBox(x, y + 70, colW, dailyH - 70,
+                      data.daily[i].waveRange, FONT_B9, ink);
+      ++shown;
+    }
+  }
+}
+
 static void renderCommon(const Cell& c,
                          const SurfInstanceConfig& cfg,
                          const SurfCache& data,
@@ -2598,7 +2761,10 @@ void render(const Cell& c, const String& moduleName) {
   uint8_t id = parseInstanceId(moduleName);
   int idx = instIndex(id);
 
-  tick(idx, c.size);
+  SurfAdaptivePolicy::DataNeeds needs = c.size == CELL_ADAPTIVE
+    ? SurfAdaptivePolicy::dataNeeds(c.w, c.h)
+    : legacyDataNeeds(c.size);
+  tick(idx, needs);
 
   const SurfInstanceConfig& cfg = g_inst[idx];
   const SurfCache& data = g_cache[idx];
@@ -2626,6 +2792,10 @@ void render(const Cell& c, const String& moduleName) {
   }
 #endif
 
+  if (c.size == CELL_ADAPTIVE) {
+    renderAdaptiveSurf(c, cfg, data);
+    return;
+  }
   renderCommon(c, cfg, data, moduleName);
 }
 

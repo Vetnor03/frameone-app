@@ -53,7 +53,7 @@ export function supportsPhysicalCustomCell(cell) {
   // only become relevant after the user assigns a module to it.
   if (!module) return true
   const baseModule = module.split(':', 1)[0]
-  const adaptiveModule = module === 'date' || baseModule === 'weather' || baseModule === 'reminders' || baseModule === 'countdown'
+  const adaptiveModule = module === 'date' || baseModule === 'weather' || baseModule === 'reminders' || baseModule === 'countdown' || baseModule === 'surf'
   return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && adaptiveModule)
 }
 
