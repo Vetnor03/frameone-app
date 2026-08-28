@@ -1,7 +1,7 @@
 import type { ResponsiveCellProfile } from './responsiveCellProfile.mjs'
 export type SurfRect={x:number;y:number;width:number;height:number}
 export type SurfForecast={day:string;ratingScore:number;ratingLabel:string;waveHeight:string;period?:string|null;ratingFromExperience?:boolean;experienceDiceValue?:number|null}
-export type SurfState={spot:string|null;rating:{score:number|null;max:number;label:string|null;experienceBased?:boolean};ratingFromExperience?:boolean;experienceDiceValue?:number|null;waveHeight:string|null;period:string|null;swellDirection:string|null;windDirection:string|null;windSpeed:string|null;trend?:string|null;bestWindow?:{label:string;time?:string|null}|null;airTemperature?:string|null;waterTemperature?:string|null;sunrise?:string|null;sunset?:string|null;dayparts?:readonly SurfForecast[];daily?:readonly SurfForecast[];forecast?:readonly SurfForecast[]}
+export type SurfState={spot:string|null;rating:{score:number|null;max:number;label:string|null;experienceBased?:boolean};ratingFromExperience?:boolean;experienceDiceValue?:number|null;waveHeight:string|null;period:string|null;swellDirection:string|null;windDirection:string|null;windSpeed:string|null;trend?:string|null;todaysBest?:boolean;bestWindow?:{label:string;time?:string|null}|null;airTemperature?:string|null;waterTemperature?:string|null;sunrise?:string|null;sunset?:string|null;dayparts?:readonly SurfForecast[];daily?:readonly SurfForecast[];forecast?:readonly SurfForecast[]}
 export const SURF_FORECAST_MIN_COLUMN_WIDTH:number
 export function surfRatingWord(score:unknown):string|null
 export const surfStudioPresets:Record<'normal'|'long'|'extreme'|'empty',SurfState>

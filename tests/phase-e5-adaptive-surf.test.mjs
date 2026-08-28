@@ -45,10 +45,17 @@ test('daypart and daily capacities are pixel-derived and chronological counts ar
 })
 
 test("Today's Best uses compact and spacious labels without displacing primary content",()=>{
- const compact=surfComposition(profile(392,160),state())
- const spacious=surfComposition(profile(589,343),state())
+ const compact=surfComposition(profile(392,160),state({todaysBest:true}))
+ const spacious=surfComposition(profile(589,343),state({todaysBest:true}))
  assert.equal(compact.todaysBestLabelMode,'compact');assert.equal(spacious.todaysBestLabelMode,'spacious')
  assert.equal(compact.showWaveRange,true);assert.equal(compact.showRatingVisual,true)
+})
+
+test("Today's Best identity is explicit and independent from an ordinary best window",()=>{
+ const ordinary=surfComposition(profile(589,343),state({todaysBest:false,bestWindow:{label:"TODAY'S BEST",time:'14:00–18:00'}}))
+ const special=surfComposition(profile(589,343),state({todaysBest:true,bestWindow:null}))
+ assert.equal(ordinary.showTodaysBestLabel,false);assert.equal(ordinary.todaysBestLabelMode,'none')
+ assert.equal(special.showTodaysBestLabel,true);assert.equal(special.todaysBestLabelMode,'spacious')
 })
 
 test('geometry drives allocation-free network needs',()=>{
@@ -61,9 +68,10 @@ test('Studio and executable GNU C++11 policy agree field-for-field',async()=>{
  const cases=[[776,114,state()],[196,343,state()],[589,229,state()],[589,343,state()],[785,458,state()],
   [360,120,state({spot:'Extremely long surf spot name',rating:{score:3,max:6,label:'Poor to Fair'},waveHeight:'8.0–12.0 metres'})],
   [589,229,state({ratingFromExperience:true})],[589,229,state({period:null,windSpeed:null,swellDirection:null,windDirection:null})],
-  [589,343,state({dayparts:[{}],forecast:[]})],[589,343,state({dayparts:[{},{}],forecast:[]})]]
+  [589,343,state({dayparts:[{}],forecast:[]})],[589,343,state({dayparts:[{},{}],forecast:[]})],
+  [589,343,state({todaysBest:false,bestWindow:{label:"TODAY'S BEST"}})],[589,343,state({todaysBest:true,bestWindow:null})]]
  const q=value=>JSON.stringify(value??'')
- const inputs=cases.map(([w,h,s])=>`{${w},${h},${q(s.spot)},${q(s.rating.label)},${q(s.waveHeight)},${!!s.ratingFromExperience},${!!s.period},${!!s.windSpeed},${!!s.swellDirection},${!!s.windDirection},${!!s.trend},${!!s.bestWindow},${s.dayparts?.length??s.forecast?.length??0},${s.daily?.length??s.forecast?.length??0}}`)
+ const inputs=cases.map(([w,h,s])=>`{${w},${h},${q(s.spot)},${q(s.rating.label)},${q(s.waveHeight)},${!!s.ratingFromExperience},${!!s.period},${!!s.windSpeed},${!!s.swellDirection},${!!s.windDirection},${!!s.trend},${!!s.todaysBest},${s.dayparts?.length??0},${s.daily?.length??s.forecast?.length??0}}`)
  const source=`#include <iostream>\n#include "SurfAdaptivePolicy.h"\nusing namespace SurfAdaptivePolicy;\nint main(){const Input v[]={${inputs.join(',')}};for(const auto&i:v){Result r=compose(i);std::cout<<int(r.family)<<','<<r.showSpot<<','<<r.showRatingWord<<','<<r.showRatingVisual<<','<<r.showWaveRange<<','<<r.showDetails<<','<<r.showDirections<<','<<r.showTrend<<','<<r.showTodaysBestLabel<<','<<int(r.todaysBestLabelMode)<<','<<r.daypartCount<<','<<r.dailyCount<<','<<r.splitPercent<<','<<r.requestedDataNeeds.dayparts<<','<<r.requestedDataNeeds.daily<<'\\n';}}`
  const directory=await mkdtemp(join(tmpdir(),'surf-policy-')),cpp=join(directory,'policy.cpp'),binary=join(directory,'policy')
  await writeFile(cpp,source);execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/modules/',import.meta.url).pathname,cpp,'-o',binary])
@@ -106,10 +114,10 @@ test('Studio allocates every daypart, daily, and Today’s Best disclosure',()=>
  const dailyLayout=surfLayout(profile(785,458),dailyComposition)
  assert.ok(dailyComposition.dailyCount>0);assert.ok(dailyLayout.dailyRect)
  assert.equal(dailyLayout.dailyColumns.length,dailyComposition.dailyCount)
- const shallowComposition=surfComposition(profile(776,114),state())
+ const shallowComposition=surfComposition(profile(776,114),state({todaysBest:true}))
  assert.equal(shallowComposition.showTodaysBestLabel,true)
  assert.ok(surfLayout(profile(776,114),shallowComposition).bestWindowRect)
- const stackedState=state({period:null,windSpeed:null,swellDirection:null,windDirection:null})
+ const stackedState=state({todaysBest:true,period:null,windSpeed:null,swellDirection:null,windDirection:null})
  const stackedComposition=surfComposition(profile(196,343),stackedState)
  assert.equal(stackedComposition.showDetails,false);assert.equal(stackedComposition.showTodaysBestLabel,true)
  assert.ok(surfLayout(profile(196,343),stackedComposition).bestWindowRect)
@@ -121,12 +129,20 @@ test('Studio Surf renders explicit data families and experience dice without sta
  const visuals=simulator.slice(simulator.indexOf('function experienceDice'),simulator.indexOf('function arrowIcon'))
  const policy=await readFile(new URL('../app/lib/surfResponsive.mjs',import.meta.url),'utf8')
  const declaration=await readFile(new URL('../app/lib/surfResponsive.d.mts',import.meta.url),'utf8')
- assert.match(responsive,/state\.dayparts\?\?state\.forecast/)
+ assert.match(responsive,/state\.dayparts\?\?\[\]/)
  assert.match(responsive,/state\.daily\?\?state\.forecast/)
  assert.match(responsive,/layout\.daypartColumns/);assert.match(responsive,/layout\.dailyColumns/)
  assert.match(visuals,/if\(experience\)experienceDice/)
  assert.match(responsive,/ratingFromExperience\|\|state\.rating\.experienceBased/)
  assert.doesNotMatch(responsive,/family\s*===?\s*['"]micro/)
  assert.doesNotMatch(policy,/family\s*===?\s*['"]micro/)
- for(const field of ['dayparts','daily','trend','ratingFromExperience','experienceDiceValue'])assert.match(declaration,new RegExp(`\\b${field}\\b`))
+ for(const field of ['dayparts','daily','trend','todaysBest','ratingFromExperience','experienceDiceValue'])assert.match(declaration,new RegExp(`\\b${field}\\b`))
+})
+
+test('daily compatibility forecast never fabricates dayparts',()=>{
+ const dailyOnly=state({dayparts:undefined,daily:undefined,forecast:surfStudioPresets.normal.forecast})
+ const composition=surfComposition(profile(589,343),dailyOnly),layout=surfLayout(profile(589,343),composition)
+ assert.equal(composition.daypartCount,0);assert.equal(layout.daypartRect,null);assert.deepEqual(layout.daypartColumns,[])
+ const expanded=surfComposition(profile(785,458),dailyOnly),expandedLayout=surfLayout(profile(785,458),expanded)
+ assert.ok(expanded.dailyCount>0);assert.ok(expandedLayout.dailyRect)
 })

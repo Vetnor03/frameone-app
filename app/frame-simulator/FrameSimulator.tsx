@@ -269,7 +269,7 @@ function drawResponsiveSurf(ctx:CanvasRenderingContext2D,c:PixelCell,p:Responsiv
  if(layout.bestWindowRect&&composition.showTodaysBestLabel)fact(composition.todaysBestLabelMode==='spacious'?'Best next 4hrs':"Today's Best",layout.bestWindowRect,12,true)
  if(layout.environmentRect){const values=[state.airTemperature&&`Air ${state.airTemperature}`,state.waterTemperature&&`Water ${state.waterTemperature}`,state.sunrise&&state.sunset&&`Sun ${state.sunrise} / ${state.sunset}`].filter((v):v is string=>Boolean(v)),r=layout.environmentRect,rowH=r.height/Math.max(1,values.length);values.forEach((value,index)=>fact(value,{x:r.x,y:r.y+index*rowH,width:r.width,height:rowH},12))}
  const renderForecastColumns=(columns:typeof layout.daypartColumns,entries:readonly SurfForecast[])=>columns.forEach((column,index)=>{const entry=entries[index];if(!entry)return;const r=absolute(column.columnRect);if(index)line(ctx,r.x,r.y+5,r.x,r.y+r.height-5);fact(entry.day,column.dayRect,13,true);fact(surfRatingWord(entry.ratingScore),column.ratingRect,13,true);const blocks=absolute(column.blocksRect),bw=Math.min(90,blocks.width-18),experience=Boolean(entry.ratingFromExperience||entry.experienceDiceValue);adaptiveSurfRatingVisual(ctx,blocks.x+(blocks.width-bw)/2,blocks.y+blocks.height/2-4,bw,entry.ratingScore,experience);fact(entry.waveHeight,column.waveRect,13,true);if(column.periodRect)fact(entry.period,column.periodRect,11)})
- const dayparts=state.dayparts??state.forecast??[],daily=state.daily??state.forecast??[]
+ const dayparts=state.dayparts??[],daily=state.daily??state.forecast??[]
  renderForecastColumns(layout.daypartColumns,dayparts.slice(0,composition.daypartCount))
  renderForecastColumns(layout.dailyColumns,daily.slice(0,composition.dailyCount))
 }

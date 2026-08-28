@@ -20,10 +20,10 @@ const forecast = [
 ]
 
 export const surfStudioPresets = {
-  normal:{spot:'Hoddevik',rating:{score:4,max:6,label:surfRatingWord(4)},waveHeight:'1.2–1.8 m',period:'12 s',swellDirection:'W',windDirection:'N',windSpeed:'5 m/s',bestWindow:{label:"TODAY'S BEST",time:'14:00–18:00'},airTemperature:'12° / 19°',waterTemperature:'14° / 16°',sunrise:'06:01',sunset:'20:32',forecast},
-  long:{spot:'Unstad Beach, Lofoten',rating:{score:5,max:6,label:surfRatingWord(5)},waveHeight:'2.0–3.5 m',period:'15 s',swellDirection:'NW',windDirection:'E',windSpeed:'8 m/s',bestWindow:{label:"TODAY'S BEST",time:'15:30–19:00'},airTemperature:'8° / 14°',waterTemperature:'11° / 13°',sunrise:'05:42',sunset:'21:18',forecast:forecast.map((entry,index)=>{const ratingScore=[5,4,3,5][index];return {...entry,ratingScore,ratingLabel:surfRatingWord(ratingScore),waveHeight:['2.0–3.5 m','1.8–3.0 m','1.5–2.4 m','2.2–3.8 m'][index]}})},
-  extreme:{spot:'An exceptionally long surf spot name',rating:{score:6,max:6,label:surfRatingWord(6)},waveHeight:'8.0–12.0 m',period:'22 s',swellDirection:'WNW',windDirection:'SSE',windSpeed:'18 m/s',bestWindow:{label:"TODAY'S BEST",time:'13:45–17:15'},airTemperature:'2° / 7°',waterTemperature:'7° / 9°',sunrise:'08:12',sunset:'16:04',forecast:forecast.map((entry,index)=>{const ratingScore=[6,5,4,3][index];return {...entry,ratingScore,ratingLabel:surfRatingWord(ratingScore),waveHeight:['8.0–12.0 m','6.5–9.0 m','4.0–6.5 m','3.0–4.5 m'][index],period:['22 s','20 s','18 s','16 s'][index]}})},
-  empty:{spot:null,rating:{score:null,max:6,label:null},waveHeight:null,period:null,swellDirection:null,windDirection:null,windSpeed:null,bestWindow:null,airTemperature:null,waterTemperature:null,sunrise:null,sunset:null,forecast:[]},
+  normal:{spot:'Hoddevik',rating:{score:4,max:6,label:surfRatingWord(4)},waveHeight:'1.2–1.8 m',period:'12 s',swellDirection:'W',windDirection:'N',windSpeed:'5 m/s',todaysBest:false,bestWindow:{label:"TODAY'S BEST",time:'14:00–18:00'},airTemperature:'12° / 19°',waterTemperature:'14° / 16°',sunrise:'06:01',sunset:'20:32',forecast},
+  long:{spot:'Unstad Beach, Lofoten',rating:{score:5,max:6,label:surfRatingWord(5)},waveHeight:'2.0–3.5 m',period:'15 s',swellDirection:'NW',windDirection:'E',windSpeed:'8 m/s',todaysBest:false,bestWindow:{label:"TODAY'S BEST",time:'15:30–19:00'},airTemperature:'8° / 14°',waterTemperature:'11° / 13°',sunrise:'05:42',sunset:'21:18',forecast:forecast.map((entry,index)=>{const ratingScore=[5,4,3,5][index];return {...entry,ratingScore,ratingLabel:surfRatingWord(ratingScore),waveHeight:['2.0–3.5 m','1.8–3.0 m','1.5–2.4 m','2.2–3.8 m'][index]}})},
+  extreme:{spot:'An exceptionally long surf spot name',rating:{score:6,max:6,label:surfRatingWord(6)},waveHeight:'8.0–12.0 m',period:'22 s',swellDirection:'WNW',windDirection:'SSE',windSpeed:'18 m/s',todaysBest:false,bestWindow:{label:"TODAY'S BEST",time:'13:45–17:15'},airTemperature:'2° / 7°',waterTemperature:'7° / 9°',sunrise:'08:12',sunset:'16:04',forecast:forecast.map((entry,index)=>{const ratingScore=[6,5,4,3][index];return {...entry,ratingScore,ratingLabel:surfRatingWord(ratingScore),waveHeight:['8.0–12.0 m','6.5–9.0 m','4.0–6.5 m','3.0–4.5 m'][index],period:['22 s','20 s','18 s','16 s'][index]}})},
+  empty:{spot:null,rating:{score:null,max:6,label:null},waveHeight:null,period:null,swellDirection:null,windDirection:null,windSpeed:null,todaysBest:false,bestWindow:null,airTemperature:null,waterTemperature:null,sunrise:null,sunset:null,forecast:[]},
 }
 
 export function fitSurfFact(value,width,height,measure,options={}) {
@@ -39,7 +39,7 @@ export function surfComposition(profile,state) {
   if(!available)return empty
   const {width,height}=profile,pad=Math.max(8,Math.min(18,Math.min(width,height)*.06)),innerW=Math.max(1,width-pad*2),innerH=Math.max(1,height-pad*2)
   const requestedDataNeeds={dayparts:(width>=330&&height>=210)||(width>=250&&height>=300),daily:width>=500&&height>=390&&width*height>=210000};if(requestedDataNeeds.daily)requestedDataNeeds.dayparts=true
-  const availableDayparts=Math.min(4,state.dayparts?.length??state.forecast?.length??0),availableDaily=Math.min(5,state.daily?.length??state.forecast?.length??0)
+  const availableDayparts=Math.min(4,state.dayparts?.length??0),availableDaily=Math.min(5,state.daily?.length??state.forecast?.length??0)
   let family
   if(innerH<145&&innerW>=300)family='shallow-wide'
   else if(requestedDataNeeds.daily)family='expanded-daily'
@@ -54,7 +54,7 @@ export function surfComposition(profile,state) {
   const anyDetail=Boolean(state.period||state.windSpeed),showDetails=family==='shallow-wide'?anyDetail&&innerW-primaryInline>=62:family==='stacked'?anyDetail&&innerH>=205:anyDetail&&innerW-heroW>=120
   const showDirections=showDetails&&Boolean(state.swellDirection||state.windDirection)&&((family==='stacked'&&innerH>=270)||['split','daypart-enhanced','expanded-daily'].includes(family))
   const showTrend=Boolean(state.trend)&&innerW>=300&&innerH>=175
-  let showTodaysBestLabel=Boolean(state.bestWindow)&&innerH>=90,todaysBestLabelMode=showTodaysBestLabel&&(innerW>=430&&innerH>=220)?'spacious':showTodaysBestLabel?'compact':'none'
+  let showTodaysBestLabel=Boolean(state.todaysBest)&&innerH>=90,todaysBestLabelMode=showTodaysBestLabel&&(innerW>=430&&innerH>=220)?'spacious':showTodaysBestLabel?'compact':'none'
   if(family==='shallow-wide'&&innerW<primaryInline+90){showTodaysBestLabel=false;todaysBestLabelMode='none'}
   let daypartCount=0;if(['daypart-enhanced','expanded-daily'].includes(family)){const panelW=Math.floor(innerW*.46)-10,byWidth=panelW>=360?4:panelW>=190?2:panelW>=92?1:0,byHeight=innerH>=250?4:innerH>=150?2:innerH>=82?1:0;daypartCount=Math.min(availableDayparts,byWidth,byHeight)}
   let dailyCount=0;if(family==='expanded-daily'){const capacity=Math.floor(innerW/SURF_FORECAST_MIN_COLUMN_WIDTH);dailyCount=capacity>=2?Math.min(availableDaily,5,capacity):0}
