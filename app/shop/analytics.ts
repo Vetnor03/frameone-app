@@ -1,9 +1,10 @@
 'use client'
 
 import { track } from '@vercel/analytics'
+import { remindProduct } from './productData'
 
 export const SHOP_CURRENCY = 'NOK' as const
-export const REMIND_BASE_PRICE = 2299 as const
+export const REMIND_BASE_PRICE = remindProduct.price
 
 type Availability = 'in-stock' | 'low-stock' | 'out-of-stock' | 'coming-soon'
 
