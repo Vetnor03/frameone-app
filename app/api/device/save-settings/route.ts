@@ -55,12 +55,12 @@ export async function POST(req: Request) {
           .from('device_settings')
           .update({ settings_json: settingsJson })
           .eq('device_id', deviceId)
-          .select('updated_at')
+          .select('settings_json, updated_at')
           .maybeSingle()
       : await supabase
           .from('device_settings')
           .insert({ device_id: deviceId, settings_json: settingsJson })
-          .select('updated_at')
+          .select('settings_json, updated_at')
           .maybeSingle()
 
     if (save.error) return NextResponse.json({ ok: false, error: save.error.message }, { status: 500 })
@@ -68,6 +68,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       storage: { table: 'device_settings', key: `device_id=${deviceId}` },
+      saved_settings_json: save.data?.settings_json ?? null,
       updated_at: save.data?.updated_at ?? null,
     })
   } catch (error) {
