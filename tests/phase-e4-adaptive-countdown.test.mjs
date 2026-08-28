@@ -65,6 +65,43 @@ test('executable firmware policy and Studio choose identical compositions',async
  const renderer=await readFile(new URL('../frame/src/modules/ModuleCountdown.cpp',import.meta.url),'utf8')
  assert.match(renderer,/if \(c\.size == CELL_ADAPTIVE\)[\s\S]*renderAdaptiveCountdown/)
 })
+test('adaptive renderer geometry remains explicit and Arduino C++11 compatible',async()=>{
+ const renderer=await readFile(new URL('../frame/src/modules/ModuleCountdown.cpp',import.meta.url),'utf8')
+ const invalidDeclaration=/\bconst\s+(?:listH|calH|dateW|titleW|metricX|metricW|countW|titleH|dateH|unitH)\s*=/
+ assert.doesNotMatch(renderer,invalidDeclaration)
+ for(const name of ['upcoming','calendar','title','count','unitRect','dateRect']){
+  assert.match(renderer,new RegExp(`${name}\\s*=\\s*AdaptiveCountdownRect\\s*\\{`))
+ }
+
+ const begin='// BEGIN ADAPTIVE COUNTDOWN GEOMETRY'
+ const end='// END ADAPTIVE COUNTDOWN GEOMETRY'
+ const geometry=renderer.slice(renderer.indexOf(begin)+begin.length,renderer.indexOf(end))
+ assert.ok(geometry.length>0,'marked renderer geometry block is present')
+ const source=`
+template <typename T> constexpr T min(T a,T b){return a<b?a:b;}
+template <typename T> constexpr T max(T a,T b){return a>b?a:b;}
+struct Cell{int x,y,w,h;};
+struct AdaptiveCountdownRect{int x,y,w,h;};
+struct AdaptiveCountdownComposition{
+ enum Family{HORIZONTAL,STACK,SPLIT_HORIZONTAL,EXPANDED_VERTICAL} family;
+ bool showTitle,showDate,showCalendar;
+ int upcomingRows,overflow,splitPercent;
+};
+int geometry(const Cell& c,const AdaptiveCountdownComposition& comp){
+${geometry}
+ return primary.x+upcoming.y+calendar.w+title.h+count.w+unitRect.h+dateRect.w;
+}
+int main(){
+ Cell c{0,0,776,343};
+ AdaptiveCountdownComposition comp{AdaptiveCountdownComposition::SPLIT_HORIZONTAL,true,true,false,2,1,58};
+ return geometry(c,comp)==0;
+}`
+ const directory=await mkdtemp(join(tmpdir(),'countdown-geometry-'))
+ const cpp=join(directory,'geometry.cpp'),binary=join(directory,'geometry')
+ await writeFile(cpp,source)
+ execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror',cpp,'-o',binary])
+ execFileSync(binary)
+})
 test('physical capability accepts exact Countdown instances but rejects lookalikes',()=>{
  const cells=module=>[{slot:0,col:0,row:0,colSpan:1,rowSpan:4,module},{slot:1,col:1,row:0,colSpan:3,rowSpan:4,module:'date'}]
  for(const module of ['countdown','countdown:calendar-id'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,true)
