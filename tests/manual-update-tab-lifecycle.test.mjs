@@ -72,7 +72,7 @@ test('request state is persisted only after settings save succeeds', () => {
 })
 
 test('freshness is physical and remains separate from timeout errors', () => {
-  assert.match(home, /const updateStatusText = lastPhysicalDisplayUpdatedAt/)
+  assert.match(home, /const updateStatusText = manualUpdateInProgress[\s\S]*lastPhysicalDisplayUpdatedAt/)
   assert.match(home, /last_render_at/)
   assert.doesNotMatch(home, /MANUAL_UPDATE_VISIBLE_MS|Update in less than|next update/i)
   assert.match(home, /role="alert"[\s\S]*frameUpdateError[\s\S]*updateStatusText/)

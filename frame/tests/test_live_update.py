@@ -38,13 +38,18 @@ def test_live_update_declares_its_wifi_dependency():
 def test_elapsed_scheduler_is_approximately_15_minutes():
     elapsed = 0
     due_at = []
-    for wake in range(1, 61):
-        elapsed += 120
+    for wake in range(1, 361):
+        elapsed += 10
         if elapsed >= 900:
             elapsed -= 900
-            due_at.append(wake * 120)
-    assert due_at[:4] == [960, 1800, 2760, 3600]
-    assert all(b - a in (840, 960) for a, b in zip(due_at, due_at[1:]))
+            due_at.append(wake * 10)
+    assert due_at[:4] == [900, 1800, 2700, 3600]
+    assert all(b - a == 900 for a, b in zip(due_at, due_at[1:]))
+
+
+def test_active_use_probe_and_interactive_poll_are_ten_seconds():
+    assert "static const uint32_t PROBE_WAKE_SECONDS = 10" in MAIN
+    assert "static const uint32_t INTERACTIVE_POLL_MS = 10000" in MAIN
 
 
 def test_probe_wakes_do_not_advance_forced_refresh_counter():
@@ -94,15 +99,15 @@ def test_revision_contract_uses_uint64_and_rejects_invalid_shapes():
 def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
     interactive = MAIN[MAIN.index("static InteractiveModeResult runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
     assert "if (!fetchAndRenderExplicit" in interactive
-    assert "configRetryMs >= 2500U" in interactive
-    assert "? 5000U" in interactive
+    assert "configRetryMs >= 5000U" in interactive
+    assert "? INTERACTIVE_POLL_MS" in interactive
     assert ": configRetryMs * 2U" in interactive
-    retry_ms = 1500
+    retry_ms = 10000
     observed = []
     for _ in range(4):
         observed.append(retry_ms)
-        retry_ms = 5000 if retry_ms >= 2500 else retry_ms * 2
-    assert observed == [1500, 3000, 5000, 5000]
+        retry_ms = 10000 if retry_ms >= 5000 else retry_ms * 2
+    assert observed == [10000, 10000, 10000, 10000]
     assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in interactive
 
 

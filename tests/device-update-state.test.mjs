@@ -113,9 +113,17 @@ test('manual update has no estimated countdown or fabricated timestamp', () => {
 
 test('manual update keeps physical freshness visible through every operation phase', () => {
   assert.match(home, /explicitUpdateStatus[^\n]*'idle' \| 'saving' \| 'requesting' \| 'waiting_for_display'/)
-  assert.match(home, /const updateStatusText = lastPhysicalDisplayUpdatedAt/)
-  assert.match(home, /manualUpdateInProgress = explicitUpdateStatus !== 'idle'/)
+  assert.match(home, /const updateStatusText = manualUpdateInProgress[\s\S]*lastPhysicalDisplayUpdatedAt/)
+  assert.match(home, /manualUpdateInProgress = explicitUpdateStatus === 'saving' \|\| explicitUpdateStatus === 'requesting'/)
   assert.match(home, /Frame hasn’t confirmed the update yet\./)
+})
+
+test('desired state stays editable and pending while exact rendered revisions remain monotonic', () => {
+  assert.match(home, /setDirty\(desiredStateRef\.current !== persistedSignature\)/)
+  assert.match(home, /frameChangesPending = updateRevisions\.requested > updateRevisions\.displayed/)
+  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId/)
+  assert.match(migration, /greatest\(displayed_revision, p_displayed_revision\)/)
+  assert.match(migration, /p_displayed_revision <= requested_revision/)
 })
 
 test('idle copy ages the last confirmed physical display render and never predicts a refresh', () => {

@@ -38,10 +38,12 @@ static const char* FW_VER = "v2.5.7";
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 
 // Cheap live-update discovery wake. The normal full sync has its own RTC clock.
-static const uint32_t PROBE_WAKE_SECONDS = 120;
+// Keep this isolated from the normal-sync scheduler so the active-use wake
+// cadence can be tuned independently when battery policy is revisited.
+static const uint32_t PROBE_WAKE_SECONDS = 10;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
 static const uint32_t NORMAL_SYNC_SECONDS = 900;
-static const uint32_t INTERACTIVE_POLL_MS = 1500;
+static const uint32_t INTERACTIVE_POLL_MS = 10000;
 
 // 3 hours refresh: 12 * 15min = 180min
 static const uint16_t WAKES_PER_REFRESH = 12;
@@ -652,8 +654,8 @@ static InteractiveModeResult runInteractiveMode(
         // The revision remains pending. Stay interactive and retry with a
         // bounded backoff rather than turning one transient fetch into sleep.
         delay(configRetryMs);
-        configRetryMs = (configRetryMs >= 2500U)
-          ? 5000U
+        configRetryMs = (configRetryMs >= 5000U)
+          ? INTERACTIVE_POLL_MS
           : configRetryMs * 2U;
       } else {
         configRetryMs = INTERACTIVE_POLL_MS;

@@ -4,11 +4,12 @@ import { readFileSync } from 'node:fs'
 
 const client = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
+const saveRoute = readFileSync(new URL('../app/api/device/save-settings/route.ts', import.meta.url), 'utf8')
 const disabledLogic = home.slice(home.indexOf('const actionDisabled'), home.indexOf('const updateStatusText'))
 
-test('selected Frame tab heartbeats every 45 seconds and pauses while hidden', () => {
+test('active frame editing surfaces heartbeat every 45 seconds and pause while hidden', () => {
   assert.match(client, /DEVICE_ACTIVITY_HEARTBEAT_MS = 45_000/)
-  assert.match(home, /activeTab !== 'frame'/)
+  assert.match(home, /activeTab === 'settings'/)
   assert.match(home, /sendDeviceActivity\(supabase, activeDeviceId\)/)
   assert.match(home, /document\.visibilityState !== 'visible'/)
   assert.match(home, /window\.clearInterval\(heartbeatTimer\)/)
@@ -24,19 +25,42 @@ test('activity, request, and status use the selected device and bearer session',
   assert.match(client, /status\?device_id=\$\{encodeURIComponent\(deviceId\)\}/)
 })
 
-test('explicit Update saves before requesting and locks duplicate clicks', () => {
+test('explicit Update saves before requesting while its control remains available', () => {
   const flow = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('async function logout'))
   assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestManualUpdateRevision('))
   assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
   assert.match(flow, /updateActionInFlightRef\.current/)
-  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId \|\| persisting \|\| manualUpdatePending/)
+  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId/)
+  assert.doesNotMatch(disabledLogic, /persisting|manualUpdatePending|manualUpdateInProgress/)
   assert.match(home, /disabled=\{actionDisabled\}/)
 })
 
 test('layout saves are independent from pending frame updates and settings persistence', () => {
   assert.match(disabledLogic, /layoutFlow[\s\S]*layoutDraftSaving/)
   assert.doesNotMatch(disabledLogic.slice(disabledLogic.indexOf('?'), disabledLogic.indexOf(':')), /persisting|manualUpdatePending/)
-  assert.match(disabledLogic.slice(disabledLogic.indexOf(':')), /persisting \|\| manualUpdatePending/)
+  assert.doesNotMatch(disabledLogic.slice(disabledLogic.indexOf(':')), /persisting|manualUpdatePending/)
+})
+
+test('live edits debounce briefly, persist immediately, and request a newest-state revision', () => {
+  assert.match(client, /LIVE_UPDATE_SAVE_DEBOUNCE_MS = 250/)
+  assert.match(home, /activeTab === 'settings' \|\| !dirty \|\| persisting/)
+  assert.match(home, /await persistSettings\(deviceId\)/)
+  assert.match(saveRoute, /request_device_display_revision/)
+  assert.match(saveRoute, /requested_revision: revision\.data/)
+  assert.match(home, /requested: Math\.max\(current\.requested, requestedRevision\)/)
+})
+
+test('a change arriving during persistence remains dirty for the next latest-state pass', () => {
+  assert.match(home, /desiredStateRef\.current = serialized/)
+  assert.match(home, /setDirty\(desiredStateRef\.current !== persistedSignature\)/)
+  assert.match(home, /newer edit may have landed while this request was in flight/)
+})
+
+test('simple status derives pending from desired and confirmed revisions without locking edits', () => {
+  assert.match(home, /updateRevisions\.requested > updateRevisions\.displayed/)
+  assert.match(home, /'Changes pending'/)
+  assert.match(home, /'Updating…'/)
+  assert.match(home, /setInterval\(\(\) => void refresh\(\), DEVICE_UPDATE_POLL_MS\)/)
 })
 
 test('creating a layout without an active device is disabled and reports the prerequisite', () => {
