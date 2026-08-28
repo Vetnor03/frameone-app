@@ -25,14 +25,34 @@ test('activity, request, and status use the selected device and bearer session',
   assert.match(client, /status\?device_id=\$\{encodeURIComponent\(deviceId\)\}/)
 })
 
-test('explicit Update saves before requesting while its control remains available', () => {
-  const flow = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('async function logout'))
-  assert.ok(flow.indexOf('persistSettings(deviceId)') < flow.indexOf('requestManualUpdateRevision('))
-  assert.match(flow, /if \(!saved[^)]*\)[\s\S]*return/)
+test('explicit Update reuses the revision published by settings save', () => {
+  const flow = home.slice(home.indexOf('function handleExplicitUpdate'), home.indexOf('async function logout'))
+  assert.match(flow, /requestedRevision \?\?= await persistSettings\(deviceId\)/)
+  assert.doesNotMatch(flow, /requestManualUpdateRevision|requestDeviceUpdate/)
+  assert.match(flow, /requestId: `desired-\$\{requestedRevision\}`/)
   assert.match(flow, /updateActionInFlightRef\.current/)
   assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId/)
   assert.doesNotMatch(disabledLogic, /persisting|manualUpdatePending|manualUpdateInProgress/)
   assert.match(home, /disabled=\{actionDisabled\}/)
+})
+
+test('one settings change publishes exactly one display revision', () => {
+  assert.equal(saveRoute.match(/\.rpc\('request_device_display_revision'/g)?.length, 1)
+  assert.match(saveRoute, /saved_settings_json:[\s\S]*requested_revision: revision\.data/)
+})
+
+test('manual Update reuses a pending newest revision instead of rendering identical state twice', () => {
+  const flow = home.slice(home.indexOf('async function runExplicitUpdate'), home.indexOf('async function logout'))
+  assert.match(flow, /status\.requestedRevision > status\.displayedRevision/)
+  assert.match(flow, /requestedRevision = status\.requestedRevision/)
+  assert.match(flow, /requestedRevision \?\?= await persistSettings\(deviceId\)/)
+})
+
+test('repeated Update presses join the active operation and never silently hit an in-flight guard', () => {
+  const handler = home.slice(home.indexOf('function handleExplicitUpdate'), home.indexOf('async function runExplicitUpdate'))
+  assert.match(handler, /manualUpdateCompletionRef\.current/)
+  assert.match(handler, /void existing\.promise/)
+  assert.doesNotMatch(handler, /updateActionInFlightRef\.current\) return/)
 })
 
 test('layout saves are independent from pending frame updates and settings persistence', () => {
@@ -54,6 +74,7 @@ test('a change arriving during persistence remains dirty for the next latest-sta
   assert.match(home, /desiredStateRef\.current = serialized/)
   assert.match(home, /setDirty\(desiredStateRef\.current !== persistedSignature\)/)
   assert.match(home, /newer edit may have landed while this request was in flight/)
+  assert.match(home, /settingsSaveCompletionRef\.current/)
 })
 
 test('simple status derives pending from desired and confirmed revisions without locking edits', () => {
@@ -84,7 +105,8 @@ test('backend acknowledgement remains diagnostic and does not control visible co
   assert.match(client, /DEVICE_UPDATE_POLL_MS = 1_000/)
   assert.match(client, /DEVICE_UPDATE_TIMEOUT_MS = 3 \* 60_000/)
   assert.match(client, /return displayedRevision >= requestedRevision/)
-  assert.match(home, /requestedRevision = await requestManualUpdateRevision/)
+  assert.match(home, /updateOperationRef\.current = \{ id: operationId, deviceId, requestedRevision \}/)
+  assert.match(home, /requestId: `desired-\$\{requestedRevision\}`/)
   assert.match(home, /revisionHasBeenDisplayed\(updateStatus\.displayedRevision, operation\.requestedRevision\)/)
   assert.match(home, /revisionHasBeenDisplayed/)
   assert.doesNotMatch(home, /setExplicitUpdateStatus\('updated'\)|setExplicitUpdateStatus\('unconfirmed'\)/)

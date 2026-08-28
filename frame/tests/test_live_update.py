@@ -47,9 +47,9 @@ def test_elapsed_scheduler_is_approximately_15_minutes():
     assert all(b - a == 900 for a, b in zip(due_at, due_at[1:]))
 
 
-def test_active_use_probe_and_interactive_poll_are_ten_seconds():
+def test_sleeping_probe_is_ten_seconds_and_awake_interactive_poll_is_fast():
     assert "static const uint32_t PROBE_WAKE_SECONDS = 10" in MAIN
-    assert "static const uint32_t INTERACTIVE_POLL_MS = 10000" in MAIN
+    assert "static const uint32_t INTERACTIVE_POLL_MS = 1500" in MAIN
 
 
 def test_probe_wakes_do_not_advance_forced_refresh_counter():
@@ -99,16 +99,29 @@ def test_revision_contract_uses_uint64_and_rejects_invalid_shapes():
 def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
     interactive = MAIN[MAIN.index("static InteractiveModeResult runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
     assert "if (!fetchAndRenderExplicit" in interactive
-    assert "configRetryMs >= 5000U" in interactive
-    assert "? INTERACTIVE_POLL_MS" in interactive
+    assert "configRetryMs >= 2500U" in interactive
+    assert "? 5000U" in interactive
     assert ": configRetryMs * 2U" in interactive
-    retry_ms = 10000
+    retry_ms = 1500
     observed = []
     for _ in range(4):
         observed.append(retry_ms)
-        retry_ms = 10000 if retry_ms >= 5000 else retry_ms * 2
-    assert observed == [10000, 10000, 10000, 10000]
+        retry_ms = 5000 if retry_ms >= 2500 else retry_ms * 2
+    assert observed == [1500, 3000, 5000, 5000]
     assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in interactive
+
+
+def test_newer_revision_arriving_during_render_remains_pending_for_next_probe():
+    interactive = MAIN[MAIN.index("static InteractiveModeResult runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
+    render = interactive.index("fetchAndRenderExplicit(batt, pwr, revisionToDisplay)")
+    acknowledge = interactive.index("retryRenderedAck(state.displayedRevision)", render)
+    next_probe = interactive.index("LiveUpdate::probe(DeviceIdentity::getToken(), next)", acknowledge)
+    adopt_newest = interactive.index("state = next", next_probe)
+    pending_check = interactive.index("state.requestedRevision > state.displayedRevision")
+    assert pending_check < render < acknowledge < next_probe < adopt_newest
+    # The loop continues with `state = next`, so a revision newer than the one
+    # just ACKed is rendered on the following serial iteration, never overlapped.
+    assert "while (WiFi.status() == WL_CONNECTED)" in interactive
 
 
 def test_interactive_probe_requires_three_consecutive_failures():

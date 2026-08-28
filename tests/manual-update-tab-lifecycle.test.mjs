@@ -65,10 +65,11 @@ test('request acceptance timeout returns null without changing physical freshnes
   assert.doesNotMatch(home, /requestedRevision == null[\s\S]{0,500}setLastPhysicalDisplayUpdatedAt/)
 })
 
-test('request state is persisted only after settings save succeeds', () => {
-  const flow = home.slice(home.indexOf('async function handleExplicitUpdate'), home.indexOf('async function logout'))
+test('manual state observes the revision already published by settings save', () => {
+  const flow = home.slice(home.indexOf('async function runExplicitUpdate'), home.indexOf('async function logout'))
   assert.ok(flow.indexOf('await persistSettings(deviceId)') < flow.indexOf('writeManualUpdate(window.localStorage'))
-  assert.ok(flow.indexOf('writeManualUpdate(window.localStorage') < flow.indexOf('requestManualUpdateRevision('))
+  assert.doesNotMatch(flow, /requestManualUpdateRevision|requestDeviceUpdate/)
+  assert.match(flow, /phase: 'waiting_for_display'/)
 })
 
 test('freshness is physical and remains separate from timeout errors', () => {

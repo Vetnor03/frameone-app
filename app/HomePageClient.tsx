@@ -1185,6 +1185,8 @@ export default function HomePage() {
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'saving' | 'requesting' | 'waiting_for_display'>('idle')
   const [updateRevisions, setUpdateRevisions] = useState({ requested: 0, displayed: 0 })
   const updateActionInFlightRef = useRef(false)
+  const manualUpdateCompletionRef = useRef<{ deviceId: string; promise: Promise<void> } | null>(null)
+  const settingsSaveCompletionRef = useRef<{ deviceId: string; promise: Promise<number | null> } | null>(null)
   const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
@@ -2385,9 +2387,22 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function persistSettings(deviceId = activeDeviceId) {
-    if (!deviceId) return false
-    if (persisting) return false
+  function persistSettings(deviceId = activeDeviceId): Promise<number | null> {
+    if (!deviceId) return Promise.resolve(null)
+    const existing = settingsSaveCompletionRef.current
+    if (existing?.deviceId === deviceId) return existing.promise
+
+    const promise = performSettingsSave(deviceId)
+    settingsSaveCompletionRef.current = { deviceId, promise }
+    void promise.finally(() => {
+      if (settingsSaveCompletionRef.current?.promise === promise) {
+        settingsSaveCompletionRef.current = null
+      }
+    })
+    return promise
+  }
+
+  async function performSettingsSave(deviceId: string): Promise<number | null> {
 
     try {
       setPersisting(true)
@@ -2419,7 +2434,7 @@ export default function HomePage() {
         pinned_tabs: pinnedModuleTabs,
         layout_module_memory: nextLayoutModuleMemory,
       }
-      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return false}settingsJson={...settingsJson,...payload}}
+      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return null}settingsJson={...settingsJson,...payload}}
 
       const session = await supabase.auth.getSession()
       const accessToken = session.data.session?.access_token
@@ -2433,7 +2448,7 @@ export default function HomePage() {
 
       // A frame switch may finish loading while this save is in flight. The save
       // still belongs to its captured device, so never apply its UI state to the new frame.
-      if (activeDeviceIdRef.current !== deviceId) return true
+      if (activeDeviceIdRef.current !== deviceId) return requestedRevision
 
       const savedCellsForLayout = { ...currentCellsForLayout }
 
@@ -2462,10 +2477,10 @@ export default function HomePage() {
       pendingFrameConfigUpdatedAtRef.current = new Date().toISOString()
       await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
 
-      return true
+      return requestedRevision
     } catch (e: any) {
       alert(String(e?.message || e))
-      return false
+      return null
     } finally {
       setPersisting(false)
     }
@@ -2494,9 +2509,29 @@ export default function HomePage() {
     }
   }, [activeDeviceId, activeTab, dirty, persisting, userId])
 
-  async function handleExplicitUpdate() {
+  function handleExplicitUpdate() {
     const deviceId = activeDeviceId
-    if (!deviceId || updateActionInFlightRef.current) return
+    if (!deviceId) return
+
+    const existing = manualUpdateCompletionRef.current
+    if (existing?.deviceId === deviceId) {
+      // The enabled button genuinely joins the durable operation already
+      // watching the newest desired revision; it never queues another render.
+      setExplicitUpdateStatus('waiting_for_display')
+      void existing.promise
+      return
+    }
+
+    const promise = runExplicitUpdate(deviceId)
+    manualUpdateCompletionRef.current = { deviceId, promise }
+    void promise.finally(() => {
+      if (manualUpdateCompletionRef.current?.promise === promise) {
+        manualUpdateCompletionRef.current = null
+      }
+    })
+  }
+
+  async function runExplicitUpdate(deviceId: string) {
     if (activeCustomLayoutId) {
       const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
       const assigned = custom && geometryWithAssignments(custom.cells, customAssignments[activeCustomLayoutId] || {})
@@ -2512,8 +2547,19 @@ export default function HomePage() {
     const operationId = ++updateOperationIdRef.current
     setExplicitUpdateStatus('saving')
 
-    const saved = await persistSettings(deviceId)
-    if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
+    let requestedRevision: number | null = null
+    if (!dirty) {
+      try {
+        const status = await getDeviceUpdateStatus(supabase, deviceId)
+        if (status.requestedRevision > status.displayedRevision) {
+          requestedRevision = status.requestedRevision
+        }
+      } catch {
+        // Falling through to save is safe: it publishes one newest revision.
+      }
+    }
+    requestedRevision ??= await persistSettings(deviceId)
+    if (requestedRevision == null || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
         setExplicitUpdateStatus('idle')
       }
@@ -2522,42 +2568,22 @@ export default function HomePage() {
     }
 
     const requestedAt = Date.now()
-    const requestId = crypto.randomUUID()
-    const persistedRequest: PersistedManualUpdate = {
-      phase: 'requesting',
-      requestId,
-      requestedRevision: null,
+    const persistedUpdate: PersistedManualUpdate = {
+      phase: 'waiting_for_display',
+      requestId: `desired-${requestedRevision}`,
+      requestedRevision,
       requestedAt,
       deadline: requestedAt + DEVICE_UPDATE_TIMEOUT_MS,
     }
-    // A durable display operation only exists after settings are committed.
-    writeManualUpdate(window.localStorage, deviceId, persistedRequest)
-    setExplicitUpdateStatus('requesting')
+    // save-settings already published this exact desired revision. Manual
+    // Update observes it instead of publishing an identical second revision.
+    writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
+    setExplicitUpdateStatus('waiting_for_display')
 
     try {
-      const requestedRevision = await requestManualUpdateRevision(
-        requestId,
-        persistedRequest.deadline,
-        (id) => requestDeviceUpdate(supabase, deviceId, id)
-      )
-      if (requestedRevision == null) {
-        clearManualUpdate(window.localStorage, deviceId)
-        setExplicitUpdateStatus('idle')
-        setFrameUpdateError(language === 'no'
-          ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.'
-          : 'Settings were saved, but the update could not be started.')
-        return
-      }
       if (activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) return
 
       updateOperationRef.current = { id: operationId, deviceId, requestedRevision }
-      const persistedUpdate: PersistedManualUpdate = {
-        ...persistedRequest,
-        phase: 'waiting_for_display',
-        requestedRevision,
-      }
-      writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
-      setExplicitUpdateStatus('waiting_for_display')
 
       while (Date.now() < persistedUpdate.deadline) {
         const operation = updateOperationRef.current
