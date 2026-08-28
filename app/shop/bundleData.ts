@@ -13,9 +13,9 @@ export type ShopBundle = {
 }
 
 export const shopBundles: ShopBundle[] = [
-  { id: 'complete-home', name: 'The Complete Home', eyebrow: 'Our best value', description: 'One complete RE:MIND plus an extra frame and matte, ready to change with your room or season.', deviceCount: 1, frameCount: 2, matteCount: 2, price: 2499, colors: ['#6d4935', '#e6e2d9', '#87927e'] },
-  { id: 'frame-pair', name: 'The Frame Pair', eyebrow: 'Two fresh looks', description: 'Two interchangeable frames and one matte for an existing RE:MIND display.', deviceCount: 0, frameCount: 2, matteCount: 1, price: 749, colors: ['#202120', '#c69762', '#f1eee7'] },
-  { id: 'style-library', name: 'The Style Library', eyebrow: 'Maximum flexibility', description: 'Three frames and three mattes to build a flexible collection around the RE:MIND you own.', deviceCount: 0, frameCount: 3, matteCount: 3, price: 1399, colors: ['#304238', '#a9744a', '#c6b8a5'] },
+  { id: 'complete-home', name: 'The Complete Home', eyebrow: 'Our best value', description: 'One complete RE:MIND plus an extra frame and matte, ready to change with your room or season.', deviceCount: 1, frameCount: 2, matteCount: 2, price: 6390, colors: ['#6d4935', '#e6e2d9', '#87927e'] },
+  { id: 'frame-pair', name: 'The Frame Pair', eyebrow: 'Two fresh looks', description: 'Two interchangeable frames and one matte for an existing RE:MIND display.', deviceCount: 0, frameCount: 2, matteCount: 1, price: 1799, colors: ['#202120', '#c69762', '#f1eee7'] },
+  { id: 'style-library', name: 'The Style Library', eyebrow: 'Maximum flexibility', description: 'Three frames and three mattes to build a flexible collection around the RE:MIND you own.', deviceCount: 0, frameCount: 3, matteCount: 3, price: 3190, colors: ['#304238', '#a9744a', '#c6b8a5'] },
 ]
 
 const pricedFrames = shopFrames.filter((item): item is typeof item & { price: number } => item.price !== null && !item.id.startsWith('custom-') && isFramePurchasable(item))
