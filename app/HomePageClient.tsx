@@ -34,6 +34,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
+import { createFrameThemeSelection, withSelectedFrameTheme } from './lib/device/frameThemeSelection.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
@@ -1146,6 +1147,7 @@ export default function HomePage() {
 
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
+  const frameThemeSelectionRef = useRef(createFrameThemeSelection('dark'))
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -1994,6 +1996,7 @@ export default function HomePage() {
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
       : []
 
+    frameThemeSelectionRef.current.load(nextFrameTheme)
     setFrameTheme(nextFrameTheme)
     setLanguage(nextLanguage)
     setFontSize(nextFontSize)
@@ -2354,6 +2357,10 @@ export default function HomePage() {
     try {
       setPersisting(true)
 
+      // Unlike React presentation state, this snapshot is updated synchronously
+      // by the theme picker. An Update click can therefore never serialize the
+      // preceding theme while the setFrameTheme render is still pending.
+      const frameThemeForSave = frameThemeSelectionRef.current.snapshot()
       const modulesForSave = normalizeModulesForSave(modulesJson)
       const currentCellsForLayout = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
       const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
@@ -2362,8 +2369,7 @@ export default function HomePage() {
         currentCellsForLayout
       )
 
-      let settingsJson: SettingsJson = {
-        theme: frameTheme,
+      let settingsJson: SettingsJson = withSelectedFrameTheme({
         language,
         fontSize,
         layout: layoutKey,
@@ -2371,8 +2377,8 @@ export default function HomePage() {
         modules: modulesForSave,
         pinned_tabs: pinnedModuleTabs,
         layout_module_memory: nextLayoutModuleMemory,
-      }
-      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return false}settingsJson={...settingsJson,...payload}}
+      }, frameThemeSelectionRef.current)
+      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return false}settingsJson=withSelectedFrameTheme({...settingsJson,...payload},frameThemeSelectionRef.current)}
 
       const { data, error } = await supabase.rpc('upsert_device_settings', {
         p_device_id: deviceId,
@@ -2399,7 +2405,7 @@ export default function HomePage() {
       setModulesJson(modulesForSave)
 
       savedStateRef.current = serializeComparableState({
-        frameTheme,
+        frameTheme: frameThemeForSave,
         language,
         fontSize,
         layoutKey,
@@ -2408,7 +2414,7 @@ export default function HomePage() {
         pinnedModuleTabs,
       })
       savedFrameStateRef.current = {
-        frameTheme,
+        frameTheme: frameThemeForSave,
         language,
         fontSize,
         layoutKey,
@@ -2826,6 +2832,7 @@ async function handleSelectTab(k: TabKey) {
                   }
                 }}
                 onPickFrame={(t) => {
+                  frameThemeSelectionRef.current.select(t)
                   setFrameTheme(t)
                   markDirty({ frameTheme: t })
                 }}

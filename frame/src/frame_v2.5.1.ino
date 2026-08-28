@@ -537,8 +537,13 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   ModuleStocks::setConfig(&g_cfg);
   ModuleReminders::preload();
 
-  ensureDisplay();
+  // Apply the fetched device theme before DisplayCore::begin(): begin performs
+  // a real full-panel paint, so setting the theme afterwards made the first
+  // physical paint of every boot use the static dark default.
   Theme::set(g_cfg.theme);
+  ensureDisplay();
+  Serial.printf("FrameConfig: rendering theme=%s\n",
+                g_cfg.theme == THEME_LIGHT ? "light" : "dark");
   resetTextStateForDashboard();
 
   // GxEPD2's paged update is synchronous: returning from drawWithContent means

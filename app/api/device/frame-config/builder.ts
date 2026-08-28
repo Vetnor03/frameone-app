@@ -2,6 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { spotIdFromLabel } from '@/app/lib/surf/spots'
 import { supportsPhysicalCustomLayout } from '@/app/lib/customLayouts'
+import { normalizeFrameTheme } from '@/app/lib/device/frameThemeSelection.mjs'
 
 // Keep payload tiny (ESP-friendly)
 const MAX_UPCOMING_HOLIDAYS = 6
@@ -42,11 +43,6 @@ function asNumber(v: unknown): number | null {
 function asString(v: unknown, def: string) {
   return typeof v === 'string' ? v : def
 }
-
-function normalizeFrameTheme(value: unknown): 'light' | 'dark' {
-  return value === 'light' ? 'light' : 'dark'
-}
-
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 

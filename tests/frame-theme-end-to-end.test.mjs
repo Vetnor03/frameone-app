@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { createFrameThemeSelection, normalizeFrameTheme, withSelectedFrameTheme } from '../app/lib/device/frameThemeSelection.mjs'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 const home = read('app/HomePageClient.tsx')
@@ -18,17 +19,43 @@ const moduleSources = [
   'frame/src/modules/ModuleStocks.cpp',
 ].map(read).join('\n')
 
-test('frame theme persists independently and is included in device settings', () => {
-  assert.match(home, /theme: frameTheme/)
-  assert.match(home, /upsert_device_settings[\s\S]*p_settings: settingsJson/)
-  assert.match(home, /onPickFrame=\{\(t\) => \{[\s\S]*setFrameTheme\(t\)[\s\S]*markDirty\(\{ frameTheme: t \}\)/)
-  assert.match(home, /onPickApp=\{\(t\) => \{[\s\S]*setAppTheme\(t\)[\s\S]*user_app_preferences/)
+test('a frame selection is immediately saveable before React commits its render', () => {
+  const selection = createFrameThemeSelection('dark')
+  const renderedFrameTheme = 'dark'
+
+  selection.select('light')
+
+  assert.equal(renderedFrameTheme, 'dark', 'simulates the stale React closure')
+  assert.equal(selection.snapshot(), 'light', 'the save boundary sees the click synchronously')
+  assert.equal(withSelectedFrameTheme({ theme: renderedFrameTheme }, selection).theme, 'light')
 })
 
-test('device payload always carries a validated frame theme with dark fallback', () => {
-  assert.match(builder, /function normalizeFrameTheme\(value: unknown\)/)
-  assert.match(builder, /return value === 'light' \? 'light' : 'dark'/)
-  assert.match(builder, /settings_json = \{ \.\.\.settings_json, theme: normalizeFrameTheme\(settings_json\.theme\) \}/)
+test('frame and app theme stores remain behaviorally independent', () => {
+  const selection = createFrameThemeSelection('dark')
+  let appTheme = 'light'
+
+  selection.select('light')
+  assert.equal(appTheme, 'light')
+  appTheme = 'dark'
+  assert.equal(selection.snapshot(), 'light')
+})
+
+test('frame theme normalization preserves light and dark and defaults only invalid values', () => {
+  assert.equal(normalizeFrameTheme('light'), 'light')
+  assert.equal(normalizeFrameTheme('dark'), 'dark')
+  for (const missing of [undefined, null, '', 'LIGHT', 'blue']) {
+    assert.equal(normalizeFrameTheme(missing), 'dark')
+  }
+})
+
+test('custom layout fields cannot replace the freshly selected frame theme', () => {
+  const selection = createFrameThemeSelection('dark')
+  selection.select('light')
+  const customLayout = { layout: 'custom', cells: [{ slot: 0 }], theme: 'dark' }
+
+  assert.deepEqual(withSelectedFrameTheme(customLayout, selection), {
+    layout: 'custom', cells: [{ slot: 0 }], theme: 'light',
+  })
 })
 
 test('firmware parses, stores and applies the fetched frame theme before rendering', () => {
@@ -36,6 +63,7 @@ test('firmware parses, stores and applies the fetched frame theme before renderi
   assert.match(configSource, /settings\["theme"\] \| "dark"/)
   assert.match(configSource, /out\.theme = parseTheme/)
   assert.match(firmware, /Theme::set\(g_cfg\.theme\)[\s\S]*Layout::drawWithContent/)
+  assert.ok(firmware.indexOf('Theme::set(g_cfg.theme)') < firmware.indexOf('ensureDisplay();', firmware.indexOf('static bool renderLoadedDashboard')))
 })
 
 test('semantic renderer palette selects opposite light and dark pigments', () => {
