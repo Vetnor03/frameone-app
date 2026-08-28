@@ -1146,6 +1146,8 @@ export default function HomePage() {
 
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
+  const frameThemeRef = useRef<AppTheme>(frameTheme)
+  frameThemeRef.current = frameTheme
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -1994,6 +1996,7 @@ export default function HomePage() {
       ? ((json as any).pinned_tabs as unknown[]).filter((m): m is ModuleKey => isModuleKey(m) && m !== 'date')
       : []
 
+    frameThemeRef.current = nextFrameTheme
     setFrameTheme(nextFrameTheme)
     setLanguage(nextLanguage)
     setFontSize(nextFontSize)
@@ -2354,6 +2357,7 @@ export default function HomePage() {
     try {
       setPersisting(true)
 
+      const frameThemeForSave = frameThemeRef.current
       const modulesForSave = normalizeModulesForSave(modulesJson)
       const currentCellsForLayout = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
       const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
@@ -2363,7 +2367,7 @@ export default function HomePage() {
       )
 
       let settingsJson: SettingsJson = {
-        theme: frameTheme,
+        theme: frameThemeForSave,
         language,
         fontSize,
         layout: layoutKey,
@@ -2399,7 +2403,7 @@ export default function HomePage() {
       setModulesJson(modulesForSave)
 
       savedStateRef.current = serializeComparableState({
-        frameTheme,
+        frameTheme: frameThemeForSave,
         language,
         fontSize,
         layoutKey,
@@ -2408,7 +2412,7 @@ export default function HomePage() {
         pinnedModuleTabs,
       })
       savedFrameStateRef.current = {
-        frameTheme,
+        frameTheme: frameThemeForSave,
         language,
         fontSize,
         layoutKey,
@@ -2826,6 +2830,7 @@ async function handleSelectTab(k: TabKey) {
                   }
                 }}
                 onPickFrame={(t) => {
+                  frameThemeRef.current = t
                   setFrameTheme(t)
                   markDirty({ frameTheme: t })
                 }}

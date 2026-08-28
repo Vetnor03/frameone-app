@@ -48,6 +48,18 @@ test('frame theme remains device-backed and only becomes a pending frame change'
   assert.match(home, /const settingsJson: SettingsJson = \{[\s\S]*?theme: frameTheme/)
 })
 
+test('a pending light frame theme is the value sent by Update', () => {
+  const picker = home.slice(home.indexOf('<ThemePickerModal'), home.indexOf('{languagePickerOpen'))
+  const persist = home.slice(home.indexOf('async function persistSettings'), home.indexOf('async function handleExplicitUpdate'))
+
+  assert.match(home, /const nextFrameTheme = isAppTheme\(json\.theme\) \? json\.theme : 'dark'[\s\S]*frameThemeRef\.current = nextFrameTheme/)
+  assert.match(home, /onClick=\{\(\) => onPick\('light'\)\}/)
+  assert.match(picker, /onPickFrame=\{\(t\) => \{\s*frameThemeRef\.current = t\s*setFrameTheme\(t\)\s*markDirty\(\{ frameTheme: t \}\)/)
+  assert.match(persist, /const frameThemeForSave = frameThemeRef\.current/)
+  assert.match(persist, /let settingsJson: SettingsJson = \{\s*theme: frameThemeForSave/)
+  assert.match(persist, /upsert_device_settings[\s\S]*p_settings: settingsJson/)
+})
+
 test('landscape mirror consumes the global app theme rather than frame snapshot theme', () => {
   const landscapeStart = home.indexOf('if (isPhoneLandscapeMirror)')
   const landscape = home.slice(landscapeStart, home.indexOf('\n  return (\n    <main', landscapeStart))
