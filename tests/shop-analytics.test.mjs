@@ -9,7 +9,7 @@ test('shop analytics has typed, consistent funnel definitions and the correct co
   for (const event of ['shop_view', 'product_view', 'configurator_open', 'frame_selected', 'matte_selected', 'add_to_cart', 'cart_view', 'begin_checkout']) {
     assert.match(analytics, new RegExp(`\\b${event}:`))
   }
-  assert.match(analytics, /REMIND_BASE_PRICE = 2299/)
+  assert.match(analytics, /REMIND_BASE_PRICE = remindProduct\.price/)
   assert.match(analytics, /SHOP_CURRENCY = 'NOK'/)
   assert.doesNotMatch(analytics, /2229/)
   assert.doesNotMatch(analytics, /email|phone|address|prompt|reminder_text/i)

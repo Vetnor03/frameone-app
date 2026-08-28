@@ -21,7 +21,7 @@ test('main product structured data exposes only verified product facts', () => {
   assert.match(page, /'@type': 'Product'/)
   assert.match(page, /priceCurrency: 'NOK'/)
   assert.match(page, /availability: 'https:\/\/schema\.org\/InStock'/)
-  assert.match(products, /price: 2299/)
+  assert.match(products, /price: 5990/)
   assert.doesNotMatch(page, /aggregateRating|reviewCount|gtin|mpn|sku/i)
 })
 

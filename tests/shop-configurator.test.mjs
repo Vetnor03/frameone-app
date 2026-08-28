@@ -219,7 +219,7 @@ test('shop and configurator consume one shared frame source', () => {
 })
 
 test('RE:MIND base price has one shared shop source', () => {
-  assert.match(productData, /name: 'RE:MIND',[\s\S]*price: 2299,/)
+  assert.match(productData, /name: 'RE:MIND',[\s\S]*price: 5990,/)
   assert.match(shopPage, /formatNok\(remindProduct\.price\)/)
   assert.match(configurator, /configurationTotal\(remindProduct\.price, frameUpgrade, matteUpgrade\)/)
   assert.match(configurator, /basePrice: remindProduct\.price/)

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import ShopLegalPage from '../../components/ShopLegalPage'
 import { shopMetadata } from '../seo'
-import { formatNok, pickShopLocale } from '../productData'
+import { formatNok, pickShopLocale, remindProduct } from '../productData'
 
 export const metadata: Metadata = shopMetadata({
   title: 'FAQ | RE:MIND',
@@ -29,7 +29,7 @@ export default async function FaqPage({ searchParams }: { searchParams?: Promise
         },
         {
           title: isNorwegian ? 'Hva følger med RE:MIND?' : 'What comes with RE:MIND?',
-          text: isNorwegian ? `En komplett RE:MIND koster fra ${formatNok(2299, language)} og inkluderer RE:MIND-enheten, én valgfri ramme, ett valgfritt innlegg, ladekabel og oppstartsveiledning. Enkelte premiumvalg kan øke totalprisen, og flere rammer og innlegg kan kjøpes separat senere.` : `A complete RE:MIND starts at ${formatNok(2299, language)} and includes the RE:MIND display, one selected frame, one selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total, and additional styles can be purchased separately later.`,
+          text: isNorwegian ? `En komplett RE:MIND koster fra ${formatNok(remindProduct.price, language)} og inkluderer RE:MIND-enheten, én valgfri ramme, ett valgfritt innlegg, ladekabel og oppstartsveiledning. Enkelte premiumvalg kan øke totalprisen, og flere rammer og innlegg kan kjøpes separat senere.` : `A complete RE:MIND starts at ${formatNok(remindProduct.price, language)} and includes the RE:MIND display, one selected frame, one selected matte, a charging cable and a setup guide. Premium frame or matte choices may add to the total, and additional styles can be purchased separately later.`,
         },
         {
           title: isNorwegian ? 'Hvordan setter jeg den opp?' : 'How do I set it up?',
