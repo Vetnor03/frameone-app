@@ -17,5 +17,11 @@ void Theme::set(ThemeKey t) {
 }
 
 ThemeKey Theme::get() { return g_theme; }
-uint16_t Theme::paper() { return g_paper; }
-uint16_t Theme::ink() { return g_ink; }
+uint16_t Theme::background() { return g_paper; }
+uint16_t Theme::foreground() { return g_ink; }
+uint16_t Theme::secondaryText() { return g_ink; }
+uint16_t Theme::divider() { return g_ink; }
+uint16_t Theme::fill() { return g_ink; }
+uint16_t Theme::onFill() { return g_paper; }
+uint16_t Theme::paper() { return background(); }
+uint16_t Theme::ink() { return foreground(); }

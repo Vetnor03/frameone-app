@@ -1497,8 +1497,8 @@ static void drawReminderMonthCalendarRows(int x, int y, int w, int h,
         if (radius < 10) radius = 10;
         if (radius > 16) radius = 16;
 
-        d.fillCircle(centerX, centerY, radius, GxEPD_WHITE);
-        d.setTextColor(GxEPD_BLACK);
+        d.fillCircle(centerX, centerY, radius, Theme::fill());
+        d.setTextColor(Theme::onFill());
       } else {
         d.setTextColor(ink);
       }
@@ -1939,12 +1939,12 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     int rectX = c.x + (c.w - rectW) / 2;
     rectY = c.y + c.h - bottomPad - rectH;
 
-    d.fillRect(rectX, rectY, rectW, rectH, GxEPD_WHITE);
+    d.fillRect(rectX, rectY, rectW, rectH, Theme::fill());
 
     int textX = rectX + (rectW - (int)bw) / 2;
     int textY = rectY + (rectH - (int)bh) / 2;
 
-    d.setTextColor(GxEPD_BLACK);
+    d.setTextColor(Theme::onFill());
     d.setFont(FONT_B9);
     d.setCursor(textX - bx1, textY - by1);
     d.print(badgeBuf);

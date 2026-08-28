@@ -1369,13 +1369,13 @@ static void renderMedium(const Cell& c) {
   int rectTop = unitTop + (int)uh + gap3;
   int rectX = c.x + (c.w - rectW) / 2;
 
-  d.fillRect(rectX, rectTop, rectW, rectH, GxEPD_WHITE);
+  d.fillRect(rectX, rectTop, rectW, rectH, Theme::fill());
 
   {
     int bx = rectX + (rectW - (int)bw) / 2;
     int by = rectTop + (rectH - (int)bh) / 2;
 
-    d.setTextColor(GxEPD_BLACK);
+    d.setTextColor(Theme::onFill());
     d.setFont(FONT_B12);
     d.setTextSize(1);
     d.setCursor(bx - bx1, by - by1);

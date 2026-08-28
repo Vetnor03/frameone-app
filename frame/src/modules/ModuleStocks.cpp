@@ -405,8 +405,8 @@ static void drawRangeSelectorRow(int centerX, int baselineY, const char* selecte
       const int rectY = baselineY + y1 - padY;
       const int rectW = (int)tw + (padX * 2);
       const int rectH = (int)th + (padY * 2);
-      d.fillRoundRect(rectX, rectY, rectW, rectH, 6, GxEPD_WHITE);
-      drawLeft(cursorX, baselineY, labels[i], FONT_B9, GxEPD_BLACK);
+      d.fillRoundRect(rectX, rectY, rectW, rectH, 6, Theme::fill());
+      drawLeft(cursorX, baselineY, labels[i], FONT_B9, Theme::onFill());
     } else {
       drawLeft(cursorX, baselineY, labels[i], FONT_B9, textColor);
     }

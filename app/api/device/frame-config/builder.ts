@@ -43,6 +43,10 @@ function asString(v: unknown, def: string) {
   return typeof v === 'string' ? v : def
 }
 
+function normalizeFrameTheme(value: unknown): 'light' | 'dark' {
+  return value === 'light' ? 'light' : 'dark'
+}
+
 
 type StockChartRange = 'day' | 'week' | 'month' | 'year'
 
@@ -204,6 +208,10 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
         ],
         modules: {},
       }
+
+    // Keep the device contract explicit and safe for legacy/malformed rows.
+    // App theme lives in user_app_preferences and must never enter this payload.
+    settings_json = { ...settings_json, theme: normalizeFrameTheme(settings_json.theme) }
 
     if (settings_json.layout === 'custom') {
       const customValidation = supportsPhysicalCustomLayout(settings_json.cells)

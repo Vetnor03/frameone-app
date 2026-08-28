@@ -180,13 +180,13 @@ static void drawMediumDate(const Cell& c,
   int rectTop = dayTop + (int)dh + gap3;
   int rectX = c.x + (c.w - rectW) / 2;
 
-  d.fillRect(rectX, rectTop, rectW, rectH, GxEPD_WHITE);
+  d.fillRect(rectX, rectTop, rectW, rectH, Theme::fill());
 
   {
     int bx = rectX + (rectW - (int)ww) / 2;
     int by = rectTop + (rectH - (int)wh) / 2;
 
-    d.setTextColor(GxEPD_BLACK);
+    d.setTextColor(Theme::onFill());
     d.setFont(FONT_B12);
     d.setCursor(bx - wx1, by - wy1);
     d.print(wday);
@@ -449,8 +449,8 @@ static void drawMonthCalendar(int x, int y, int w, int h,
         else if (!hardBounds && radius < 10) radius = 10;
         if (radius > 16) radius = 16;
 
-        d.fillCircle(centerX, centerY, radius, GxEPD_WHITE);
-        d.setTextColor(GxEPD_BLACK);
+        d.fillCircle(centerX, centerY, radius, Theme::fill());
+        d.setTextColor(Theme::onFill());
       } else {
         d.setTextColor(ink);
       }
@@ -462,7 +462,7 @@ static void drawMonthCalendar(int x, int y, int w, int h,
 
       if (isHol) {
         int dotY = cellY + cellH - 3;
-        d.fillCircle(centerX, dotY, 2, isToday ? GxEPD_BLACK : ink);
+        d.fillCircle(centerX, dotY, 2, isToday ? Theme::onFill() : ink);
       }
     }
   }
@@ -641,8 +641,8 @@ static void drawMonthCalendarRows(int x, int y, int w, int h,
         if (radius < 10) radius = 10;
         if (radius > 16) radius = 16;
 
-        d.fillCircle(centerX, centerY, radius, GxEPD_WHITE);
-        d.setTextColor(GxEPD_BLACK);
+        d.fillCircle(centerX, centerY, radius, Theme::fill());
+        d.setTextColor(Theme::onFill());
       } else {
         d.setTextColor(ink);
       }
@@ -656,7 +656,7 @@ static void drawMonthCalendarRows(int x, int y, int w, int h,
         bool isHol = isHolidayInMonth(year, month0, day);
         if (isHol) {
           int dotY = cellY + cellH - 3;
-          d.fillCircle(centerX, dotY, 2, isToday ? GxEPD_BLACK : ink);
+          d.fillCircle(centerX, dotY, 2, isToday ? Theme::onFill() : ink);
         }
       }
     }
@@ -959,8 +959,8 @@ static void drawAdaptiveWeekdayBadge(const char* weekday, int x, int y, int w, i
     if (badgeW <= 0 || badgeH <= 0) return;
     const int badgeX = x + (w - badgeW) / 2;
     const int badgeY = y + (h - badgeH) / 2;
-    DisplayCore::get().fillRect(badgeX, badgeY, badgeW, badgeH, GxEPD_WHITE);
-    drawAdaptiveFact(uppercase, badgeX, badgeY, badgeW, badgeH, &fonts[i], 1, GxEPD_BLACK);
+    DisplayCore::get().fillRect(badgeX, badgeY, badgeW, badgeH, Theme::fill());
+    drawAdaptiveFact(uppercase, badgeX, badgeY, badgeW, badgeH, &fonts[i], 1, Theme::onFill());
     return;
   }
 }
