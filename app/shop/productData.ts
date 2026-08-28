@@ -59,12 +59,12 @@ export const displayOptions: Array<{ id: DisplayMode; name: string; previewSrc: 
 export const remindProduct = {
   id: 'remind',
   name: 'RE:MIND',
-  price: 2299,
+  price: 5990,
 } as const
 
 const shopFrameDefinitions: Array<Omit<ShopFrame, 'availability'>> = [
   {
-    id: 'midnight-black', name: 'Midnight Black', price: 349, subtitle: 'Matte aluminum',
+    id: 'midnight-black', name: 'Midnight Black', price: 899, subtitle: 'Matte aluminum',
     palette: ['#111214', '#252628', '#3c3d40'], swatches: ['#111214', '#d5d5d5'],
     imageSrc: '/shop/frames/midnight-black.png',
     configuratorPreviewSrc: '/shop/products/frames/Dark.png',
@@ -76,34 +76,34 @@ const shopFrameDefinitions: Array<Omit<ShopFrame, 'availability'>> = [
     configuratorPreviewSrc: '/shop/products/frames/Metal.png',
   },
   {
-    id: 'natural-oak', name: 'Natural Oak', price: 399, subtitle: 'Real oak',
+    id: 'natural-oak', name: 'Natural Oak', price: 899, subtitle: 'Real oak',
     palette: ['#b5824f', '#cb9b67', '#deb57e'], swatches: ['#bb8d5f', '#d8be9f'],
     imageSrc: '/shop/frames/natural-oak.png',
     configuratorPreviewSrc: '/shop/products/frames/Oak.png',
   },
   {
-    id: 'walnut-wood', name: 'Walnut Wood', price: 399, subtitle: 'Real walnut',
+    id: 'walnut-wood', name: 'Walnut Wood', price: 899, subtitle: 'Real walnut',
     palette: ['#5a3a2a', '#7a513c', '#946550'], swatches: ['#6a4633', '#8a624a'],
     imageSrc: '/shop/frames/walnut-wood.png',
     configuratorPreviewSrc: '/shop/products/frames/Walnut.png',
   },
   {
-    id: 'cloud-white', name: 'Cloud White', price: 349, subtitle: 'Matte aluminum',
+    id: 'cloud-white', name: 'Cloud White', price: 899, subtitle: 'Matte aluminum',
     palette: ['#e8e7e3', '#f2f2ee', '#dbdad5'], swatches: ['#f0f0ef', '#cfcfcf'],
     imageSrc: '/shop/frames/cloud-white.png',
     configuratorPreviewSrc: '/shop/products/frames/White.png',
   },
   ...[
-    ['brushed-silver', 'Brushed Silver', 369, '#aeb1b2'],
-    ['charcoal-grey', 'Charcoal Grey', 349, '#3d4042'],
-    ['smoked-oak', 'Smoked Oak', 419, '#604b3b'],
-    ['honey-oak', 'Honey Oak', 399, '#b77c3d'],
-    ['espresso-wood', 'Espresso Wood', 419, '#30251f'],
-    ['sandstone', 'Sandstone', 369, '#c7b7a1'],
-    ['sage-green', 'Sage Green', 369, '#788372'],
-    ['deep-navy', 'Deep Navy', 369, '#24313d'],
-    ['terracotta', 'Terracotta', 369, '#9c5943'],
-    ['limited-birch', 'Limited Birch', 429, '#cfaa78'],
+    ['brushed-silver', 'Brushed Silver', 899, '#aeb1b2'],
+    ['charcoal-grey', 'Charcoal Grey', 899, '#3d4042'],
+    ['smoked-oak', 'Smoked Oak', 899, '#604b3b'],
+    ['honey-oak', 'Honey Oak', 899, '#b77c3d'],
+    ['espresso-wood', 'Espresso Wood', 899, '#30251f'],
+    ['sandstone', 'Sandstone', 899, '#c7b7a1'],
+    ['sage-green', 'Sage Green', 899, '#788372'],
+    ['deep-navy', 'Deep Navy', 899, '#24313d'],
+    ['terracotta', 'Terracotta', 899, '#9c5943'],
+    ['limited-birch', 'Limited Birch', 899, '#cfaa78'],
   ].map(([id, name, price, color]) => ({
     id: String(id), name: String(name), price: Number(price), subtitle: '',
     palette: [String(color), String(color), String(color)] as [string, string, string],
@@ -124,7 +124,7 @@ export const shopFrames: ShopFrame[] = shopFrameDefinitions.map((frame) => ({
   availability: frameAvailability(frame.id),
 }))
 
-// Matte prices have not been commercially defined, so they remain explicitly null.
+// Preview-only and custom matte entries remain unpriced until they are sold as products.
 export const shopMattes: ShopMatte[] = [
   ['beige', 'Beige', 'Beige.png'],
   ['black', 'Black', 'Black.png'],
@@ -143,20 +143,20 @@ export const shopMattes: ShopMatte[] = [
   configuratorPreviewSrc: `/shop/products/mattes/${filename}`,
   availability: matteAvailability(id),
 })).concat([
-  ['classic-white', 'Classic White', 149],
-  ['soft-black', 'Soft Black', 149],
-  ['warm-beige', 'Warm Beige', 149],
-  ['cocoa-brown', 'Cocoa Brown', 149],
-  ['sage-green', 'Sage Green', 159],
-  ['white---black', 'White / Black', 179],
-  ['black---white', 'Black / White', 179],
-  ['mist-grey', 'Mist Grey', 149],
-  ['dusty-blue', 'Dusty Blue', 159],
-  ['blush-pink', 'Blush Pink', 159],
-  ['ochre', 'Ochre', 159],
-  ['forest-green', 'Forest Green', 159],
-  ['burgundy', 'Burgundy', 159],
-  ['natural-linen', 'Natural Linen', 179],
+  ['classic-white', 'Classic White', 229],
+  ['soft-black', 'Soft Black', 229],
+  ['warm-beige', 'Warm Beige', 229],
+  ['cocoa-brown', 'Cocoa Brown', 229],
+  ['sage-green', 'Sage Green', 229],
+  ['white---black', 'White / Black', 229],
+  ['black---white', 'Black / White', 229],
+  ['mist-grey', 'Mist Grey', 229],
+  ['dusty-blue', 'Dusty Blue', 229],
+  ['blush-pink', 'Blush Pink', 229],
+  ['ochre', 'Ochre', 229],
+  ['forest-green', 'Forest Green', 229],
+  ['burgundy', 'Burgundy', 229],
+  ['natural-linen', 'Natural Linen', 229],
 ].map<ShopMatte>(([id, name, price]) => ({
   id: String(id),
   name: String(name),
