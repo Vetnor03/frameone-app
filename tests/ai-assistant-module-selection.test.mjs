@@ -16,9 +16,7 @@ test('AI Assistant uses the stable assistant module identifier, not a permanent 
 })
 
 test('AI Assistant navigation and pinning are driven by selected or pinned module state', () => {
-  assert.match(home, /activeModules = Array\.from\([\s\S]*Object\.values\(cellsByLayout\[layoutKey\]\)/)
-  assert.match(home, /pinnedInactive = pinnedModuleTabs\.filter/)
-  assert.match(home, /activeUnpinned = activeModules\.filter/)
+  assert.match(home, /deriveDynamicModuleKeys<ModuleKey>\(activeLayoutModules, pinnedModuleTabs\)/)
   assert.match(home, /setPinnedModuleTabs\(\(prev\) => \{[\s\S]*markDirty\(\{ pinnedModuleTabs: nextPinned \}\)/)
   assert.match(home, /activeTab === 'assistant' \? \(\s*<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
   assert.match(home, /if \(tabs\.some\(\(tab\) => tab\.key === activeTab\)\) return/)

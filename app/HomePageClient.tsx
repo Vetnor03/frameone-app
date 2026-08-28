@@ -22,6 +22,7 @@ import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
+import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
 import {
   DEVICE_ACTIVITY_HEARTBEAT_MS,
@@ -1537,19 +1538,15 @@ export default function HomePage() {
   }, [])
 
   const dynamicTabs = useMemo(() => {
-    const activeModules = Array.from(
-      new Set((Object.values(cellsByLayout[layoutKey]).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date'))
-    )
+    const activeLayoutModules = activeCustomLayoutId
+      ? customAssignments[activeCustomLayoutId]
+      : cellsByLayout[layoutKey]
 
-    const pinnedInactive = pinnedModuleTabs.filter((m) => m !== 'date' && !activeModules.includes(m))
-    const pinnedActive = pinnedModuleTabs.filter((m) => m !== 'date' && activeModules.includes(m))
-    const activeUnpinned = activeModules.filter((m) => !pinnedActive.includes(m))
-
-    return [...pinnedActive, ...activeUnpinned, ...pinnedInactive].map((m) => ({
+    return deriveDynamicModuleKeys<ModuleKey>(activeLayoutModules, pinnedModuleTabs).map((m) => ({
       key: m as ModuleKey,
       label: moduleLabel(language, m),
     }))
-  }, [cellsByLayout, layoutKey, language, pinnedModuleTabs])
+  }, [activeCustomLayoutId, cellsByLayout, customAssignments, language, layoutKey, pinnedModuleTabs])
 
   const tabs = useMemo(() => {
     return [
