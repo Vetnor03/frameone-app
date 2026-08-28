@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { reconcilePersistedDesiredState } from '../app/lib/device/desiredStateReconciliation.mjs'
+import { createLatestStateDebouncer } from '../app/lib/device/liveUpdateDebounce.mjs'
 
 const client = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
@@ -88,6 +89,39 @@ test('live edits debounce briefly, persist immediately, and request a newest-sta
   assert.match(saveRoute, /request_device_display_revision/)
   assert.match(saveRoute, /requested_revision: revision\.data/)
   assert.match(home, /requested: Math\.max\(current\.requested, requestedRevision\)/)
+  assert.match(home, /setDesiredEditVersion\(\(version\) => version \+ 1\)/)
+  assert.match(home, /\[activeDeviceId, activeTab, desiredEditVersion, dirty, persisting, userId\]/)
+})
+
+test('edit B supersedes edit A before debounce and publishes exactly one revision', async () => {
+  let nextTimer = 0
+  const callbacks = new Map()
+  const debouncer = createLatestStateDebouncer(250, {
+    setTimer(callback) {
+      const id = ++nextTimer
+      callbacks.set(id, callback)
+      return id
+    },
+    clearTimer(id) {
+      callbacks.delete(id)
+    },
+  })
+  const persisted = []
+  let revisions = 0
+
+  debouncer.schedule(async () => {
+    persisted.push('A')
+    revisions += 1
+  })
+  debouncer.schedule(async () => {
+    persisted.push('B')
+    revisions += 1
+  })
+
+  assert.equal(callbacks.size, 1)
+  await [...callbacks.values()][0]()
+  assert.deepEqual(persisted, ['B'])
+  assert.equal(revisions, 1)
 })
 
 test('a change arriving during persistence remains dirty for the next latest-state pass', () => {
@@ -113,6 +147,24 @@ test('completion of save A never restores its captured UI over newer desired sta
   assert.match(save, /setDirty\(reconciliation\.dirty\)/)
   assert.doesNotMatch(save.replace(/if \(reconciliation\.applyPersistedValues\) \{[\s\S]*?\n      \}/, ''), /setCellsByLayout\(nextCellsByLayout\)|setModulesJson\(modulesForSave\)/)
   assert.match(home, /desiredStateRef\.current = serializeDesiredState\(next\)/)
+})
+
+test('edit B after request A starts remains dirty, publishes next, and then becomes clean', () => {
+  let displayedUiState = 'B'
+  let desiredState = 'B'
+  let revisions = 1 // request A has already published
+
+  const afterA = reconcilePersistedDesiredState(desiredState, 'A')
+  if (afterA.applyPersistedValues) displayedUiState = 'A'
+  assert.equal(displayedUiState, 'B')
+  assert.equal(afterA.dirty, true)
+
+  revisions += 1 // the dirty follow-up publishes desired state B
+  const afterB = reconcilePersistedDesiredState(desiredState, 'B')
+  if (afterB.applyPersistedValues) displayedUiState = 'B'
+  assert.equal(displayedUiState, 'B')
+  assert.equal(afterB.dirty, false)
+  assert.equal(revisions, 2)
 })
 
 test('simple status derives pending from desired and confirmed revisions without locking edits', () => {

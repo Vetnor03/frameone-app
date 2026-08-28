@@ -37,6 +37,7 @@ import {
 import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
 import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
+import { createLatestStateDebouncer, type LatestStateDebouncer } from './lib/device/liveUpdateDebounce.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
@@ -1185,9 +1186,11 @@ export default function HomePage() {
   const [frameUpdateError, setFrameUpdateError] = useState('')
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'saving' | 'requesting' | 'waiting_for_display'>('idle')
   const [updateRevisions, setUpdateRevisions] = useState({ requested: 0, displayed: 0 })
+  const [desiredEditVersion, setDesiredEditVersion] = useState(0)
   const updateActionInFlightRef = useRef(false)
   const manualUpdateCompletionRef = useRef<{ deviceId: string; promise: Promise<void> } | null>(null)
   const settingsSaveCompletionRef = useRef<{ deviceId: string; promise: Promise<number | null> } | null>(null)
+  const liveUpdateDebounceRef = useRef<LatestStateDebouncer | null>(null)
   const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
@@ -1687,6 +1690,7 @@ export default function HomePage() {
     // Record desired state synchronously. An older network save may resolve
     // before the next animation frame and must still see that a newer edit won.
     desiredStateRef.current = serializeDesiredState(next)
+    setDesiredEditVersion((version) => version + 1)
     pendingDirtyStateRef.current = next ?? null
     if (dirtyFrameRef.current != null) return
     dirtyFrameRef.current = window.requestAnimationFrame(() => {
@@ -2496,25 +2500,22 @@ export default function HomePage() {
   useEffect(() => {
     if (!activeDeviceId || !userId || activeTab === 'settings' || !dirty || persisting) return
     const deviceId = activeDeviceId
-    let cancelled = false
-    let started = false
+    const debouncer = liveUpdateDebounceRef.current
+      ?? createLatestStateDebouncer(LIVE_UPDATE_SAVE_DEBOUNCE_MS)
+    liveUpdateDebounceRef.current = debouncer
 
-    const timer = window.setTimeout(async () => {
-      started = true
+    debouncer.schedule(async () => {
       const saved = await persistSettings(deviceId)
-      if (!saved || cancelled || activeDeviceIdRef.current !== deviceId) return
+      if (!saved || activeDeviceIdRef.current !== deviceId) return
 
       // persistSettings publishes the newest desired revision in the same API
       // operation. Status polling now only observes its eventual confirmation.
-    }, LIVE_UPDATE_SAVE_DEBOUNCE_MS)
+    })
 
     return () => {
-      if (!started) {
-        cancelled = true
-        window.clearTimeout(timer)
-      }
+      debouncer.cancel()
     }
-  }, [activeDeviceId, activeTab, dirty, persisting, userId])
+  }, [activeDeviceId, activeTab, desiredEditVersion, dirty, persisting, userId])
 
   function handleExplicitUpdate() {
     const deviceId = activeDeviceId
