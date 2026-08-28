@@ -1765,11 +1765,94 @@ static const GFXfont* adaptiveNumberFont(const char* value, int w, int h) { for(
 static void adaptiveCenteredFitted(const AdaptiveCountdownRect& r,const char* value,const GFXfont* preferred,bool ellipsis=true){if(!value||!value[0]||r.w<=0||r.h<=0)return;const GFXfont* font=preferred;if(font==FONT_B12&&(textWidth(value,font)>r.w||fontLineHeight(font)>r.h))font=FONT_B9;char buf[128];if(ellipsis)fitTextToWidth(value,buf,sizeof(buf),r.w,font);else safeCopy(buf,sizeof(buf),value);drawCenteredLine(r.x,r.y,r.w,r.h,buf,font,Theme::ink());}
 static void renderAdaptiveCountdown(const Cell& c) {
   if(!g_cache.ok){drawEmptyState(c,"No Countdown","Fetch failed");return;}const int heroIdx=findNearestIdx();if(heroIdx<0){drawEmptyState(c,"No Countdown","No events yet");return;}const CountdownItem& hero=g_cache.items[heroIdx];const CountdownItem* events[MAX_EVENTS];const int eventCount=collectAdaptiveUpcoming(heroIdx,events,MAX_EVENTS);const AdaptiveCountdownComposition comp=adaptiveCountdownComposition(c,hero,events,eventCount);
-  const int pad=max(8,min(18,min(c.w,c.h)*7/100)),ix=c.x+pad,iy=c.y+pad,iw=max(1,c.w-pad*2),ih=max(1,c.h-pad*2),gap=14;AdaptiveCountdownRect primary{ix,iy,iw,ih},upcoming{0,0,0,0},calendar{0,0,0,0};
-  if(comp.family==AdaptiveCountdownComposition::SPLIT_HORIZONTAL){primary.w=(iw-gap)*comp.splitPercent/100;upcoming={ix+primary.w+gap,iy,iw-primary.w-gap,ih};}else if(comp.upcomingRows||comp.showCalendar){const listH=comp.upcomingRows?25+comp.upcomingRows*28+(comp.upcomingRows-1)*4+(comp.overflow?18:0):0,calH=comp.showCalendar?min(190,ih*42/100):0;primary.h=max(91,ih-listH-calH-(listH?gap:0)-(calH?gap:0));if(listH)upcoming={ix,iy+primary.h+gap,iw,listH};if(calH)calendar={ix,iy+ih-calH,iw,calH};}
-  char number[16],unit[16],date[32];formatDaysNumber(hero.daysLeft,number,sizeof(number));formatDaysUnit(hero.daysLeft,unit,sizeof(unit));adaptiveEffectiveDate(hero,date,sizeof(date));AdaptiveCountdownRect title{0,0,0,0},count,unitRect,dateRect{0,0,0,0};
-  if(comp.family==AdaptiveCountdownComposition::HORIZONTAL){const dateW=comp.showDate?min(150,max(70,primary.w*23/100)):0,titleW=comp.showTitle?min(primary.w*38/100,max(70,primary.w-dateW-145)):0,metricX=primary.x+titleW+(titleW?10:0),metricW=primary.w-titleW-(titleW?10:0)-dateW-(dateW?10:0),countW=max(30,metricW*58/100);if(titleW)title={primary.x,primary.y,titleW,primary.h};count={metricX,primary.y,countW,primary.h};unitRect={metricX+countW,primary.y,metricW-countW,primary.h};if(dateW)dateRect={primary.x+primary.w-dateW,primary.y,dateW,primary.h};}
-  else {const titleH=comp.showTitle?min(38,max(24,primary.h*20/100)):0,dateH=comp.showDate?24:0,unitH=22;if(titleH)title={primary.x,primary.y,primary.w,titleH};count={primary.x,primary.y+titleH,primary.w,max(30,primary.h-titleH-unitH-dateH)};unitRect={primary.x,count.y+count.h,primary.w,unitH};if(dateH)dateRect={primary.x,unitRect.y+unitRect.h,primary.w,dateH};}
+  char number[16],unit[16],date[32];formatDaysNumber(hero.daysLeft,number,sizeof(number));formatDaysUnit(hero.daysLeft,unit,sizeof(unit));adaptiveEffectiveDate(hero,date,sizeof(date));
+  // BEGIN ADAPTIVE COUNTDOWN GEOMETRY
+  const int pad = max(8, min(18, min(c.w, c.h) * 7 / 100));
+  const int ix = c.x + pad;
+  const int iy = c.y + pad;
+  const int iw = max(1, c.w - pad * 2);
+  const int ih = max(1, c.h - pad * 2);
+  const int gap = 14;
+  AdaptiveCountdownRect primary{ix, iy, iw, ih};
+  AdaptiveCountdownRect upcoming{0, 0, 0, 0};
+  AdaptiveCountdownRect calendar{0, 0, 0, 0};
+
+  if (comp.family == AdaptiveCountdownComposition::SPLIT_HORIZONTAL) {
+    primary.w = (iw - gap) * comp.splitPercent / 100;
+    upcoming = AdaptiveCountdownRect{
+      ix + primary.w + gap, iy, iw - primary.w - gap, ih
+    };
+  } else if (comp.upcomingRows || comp.showCalendar) {
+    const int listH = comp.upcomingRows
+      ? 25 + comp.upcomingRows * 28 + (comp.upcomingRows - 1) * 4
+          + (comp.overflow ? 18 : 0)
+      : 0;
+    const int calH = comp.showCalendar ? min(190, ih * 42 / 100) : 0;
+    primary.h = max(
+      91,
+      ih - listH - calH - (listH ? gap : 0) - (calH ? gap : 0)
+    );
+    if (listH) {
+      upcoming = AdaptiveCountdownRect{
+        ix, iy + primary.h + gap, iw, listH
+      };
+    }
+    if (calH) {
+      calendar = AdaptiveCountdownRect{ix, iy + ih - calH, iw, calH};
+    }
+  }
+  AdaptiveCountdownRect title{0, 0, 0, 0};
+  AdaptiveCountdownRect count{0, 0, 0, 0};
+  AdaptiveCountdownRect unitRect{0, 0, 0, 0};
+  AdaptiveCountdownRect dateRect{0, 0, 0, 0};
+  if (comp.family == AdaptiveCountdownComposition::HORIZONTAL) {
+    const int dateW = comp.showDate
+      ? min(150, max(70, primary.w * 23 / 100))
+      : 0;
+    const int titleW = comp.showTitle
+      ? min(primary.w * 38 / 100, max(70, primary.w - dateW - 145))
+      : 0;
+    const int metricX = primary.x + titleW + (titleW ? 10 : 0);
+    const int metricW = primary.w - titleW - (titleW ? 10 : 0)
+      - dateW - (dateW ? 10 : 0);
+    const int countW = max(30, metricW * 58 / 100);
+    if (titleW) {
+      title = AdaptiveCountdownRect{primary.x, primary.y, titleW, primary.h};
+    }
+    count = AdaptiveCountdownRect{metricX, primary.y, countW, primary.h};
+    unitRect = AdaptiveCountdownRect{
+      metricX + countW, primary.y, metricW - countW, primary.h
+    };
+    if (dateW) {
+      dateRect = AdaptiveCountdownRect{
+        primary.x + primary.w - dateW, primary.y, dateW, primary.h
+      };
+    }
+  } else {
+    const int titleH = comp.showTitle
+      ? min(38, max(24, primary.h * 20 / 100))
+      : 0;
+    const int dateH = comp.showDate ? 24 : 0;
+    const int unitH = 22;
+    if (titleH) {
+      title = AdaptiveCountdownRect{primary.x, primary.y, primary.w, titleH};
+    }
+    count = AdaptiveCountdownRect{
+      primary.x,
+      primary.y + titleH,
+      primary.w,
+      max(30, primary.h - titleH - unitH - dateH)
+    };
+    unitRect = AdaptiveCountdownRect{
+      primary.x, count.y + count.h, primary.w, unitH
+    };
+    if (dateH) {
+      dateRect = AdaptiveCountdownRect{
+        primary.x, unitRect.y + unitRect.h, primary.w, dateH
+      };
+    }
+  }
+  // END ADAPTIVE COUNTDOWN GEOMETRY
   if(title.w)adaptiveCenteredFitted(title,hero.title,FONT_B12);const GFXfont* numberFont=adaptiveNumberFont(number,count.w-2,count.h-2);drawCenteredLine(count.x,count.y,count.w,count.h,number,numberFont,Theme::ink());adaptiveCenteredFitted(unitRect,unit,FONT_B12,false);if(dateRect.w&&textWidth(date,FONT_B9)<=dateRect.w-8)adaptiveCenteredFitted(dateRect,date,FONT_B9,false);
   if(upcoming.w){AdaptiveCountdownRect header{upcoming.x,upcoming.y,upcoming.w,21};adaptiveCenteredFitted(header,"COMING UP",FONT_B9,false);for(int i=0;i<comp.upcomingRows;i++){AdaptiveCountdownRect row{upcoming.x,upcoming.y+25+i*32,upcoming.w,28};const int metricW=min(120,max(62,row.w*30/100));AdaptiveCountdownRect tr{row.x,row.y,row.w-metricW-10,row.h},mr{row.x+row.w-metricW,row.y,metricW,row.h};char metric[48];adaptiveCountdownMetric(*events[i],metric,sizeof(metric));adaptiveCenteredFitted(tr,events[i]->title,FONT_B9);adaptiveCenteredFitted(mr,metric,FONT_B9,false);}if(comp.overflow){char more[24];snprintf(more,sizeof(more),"+%d more",comp.overflow);AdaptiveCountdownRect fr{upcoming.x,upcoming.y+upcoming.h-18,upcoming.w,18};adaptiveCenteredFitted(fr,more,FONT_B9,false);}}
   if(calendar.w){tm nowTm;if(getLocalTmQuick(nowTm))drawCountdownCalendarMonth(calendar.x,calendar.y,calendar.w,calendar.h,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_mday,hero,true,true);}
