@@ -27,9 +27,35 @@ inline bool exactOnly(const char* module, const char* expected) {
   return module[index] == '\0' && expected[index] == '\0';
 }
 
+inline bool hasPrefix(const char* module, const char* prefix) {
+  if (!module || !prefix) return false;
+  for (int index = 0; prefix[index]; ++index)
+    if (!module[index] || asciiLower(module[index]) != asciiLower(prefix[index])) return false;
+  return true;
+}
+
+inline bool numericInstance(const char* module, const char* base) {
+  if (!module || !base) return false;
+  int index = 0;
+  while (base[index]) {
+    if (!module[index] || asciiLower(module[index]) != asciiLower(base[index])) return false;
+    ++index;
+  }
+  if (module[index] == '\0') return true;
+  if (module[index++] != ':' || module[index] == '\0') return false;
+  int value = 0;
+  for (; module[index]; ++index) {
+    if (module[index] < '0' || module[index] > '9') return false;
+    value = value * 10 + module[index] - '0';
+    if (value > 255) return false;
+  }
+  return value >= 1;
+}
+
 inline bool supports(const char* module) {
   return exactOnly(module, "date") || exactBase(module, "weather") ||
-         exactBase(module, "reminders") || exactBase(module, "countdown");
+         exactBase(module, "reminders") || exactBase(module, "countdown") ||
+         numericInstance(module, "surf");
 }
 
 } // namespace AdaptiveModuleCapability

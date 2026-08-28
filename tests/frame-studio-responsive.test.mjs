@@ -29,10 +29,10 @@ test('all structured Surf presets compose and lay out across all geometries', ()
 
 test('Surf composition follows physical geometry and progressive disclosure', () => {
   const at=(cols,rows,w=cols*196,h=rows*114)=>surfComposition(responsiveCellProfile(cols,rows,w,h),surfStudioPresets.normal)
-  assert.equal(at(1,1).family,'micro');assert.equal(at(2,1).family,'shallow');assert.equal(at(1,4).family,'hero')
-  assert.equal(at(3,2).family,'detail-split');assert.equal(at(2,4).family,'forecast');assert.equal(at(3,4).family,'expanded');assert.equal(at(4,3).family,'expanded')
-  assert.equal(at(1,1).showBlocks,false);assert.equal(at(1,1).showDirections,false);assert.equal(at(1,1).forecastDays,0)
-  assert.equal(at(2,4).forecastDays,3);assert.equal(at(3,4).forecastDays,4)
+  assert.equal(at(1,1).family,'stacked');assert.equal(at(2,1).family,'shallow-wide');assert.equal(at(1,4).family,'stacked')
+  assert.equal(at(3,2).family,'split');assert.equal(at(2,4).family,'stacked');assert.equal(at(3,4).family,'expanded-daily');assert.equal(at(4,3).family,'daypart-enhanced')
+  assert.equal(at(1,1).showDirections,false);assert.equal(at(1,1).forecastDays,0)
+  assert.equal(at(2,4).daypartCount,0);assert.equal(at(3,4).forecastDays,4)
   assert.notEqual(at(3,2,600,140).family,at(3,2,240,500).family)
 })
 
