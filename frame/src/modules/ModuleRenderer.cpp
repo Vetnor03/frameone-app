@@ -19,6 +19,8 @@
 
 bool ModuleRenderer::canRenderCell(const char* module, const Cell& cell) {
   if (!module || module[0] == '\0') return false;
+  if (AdaptiveModuleCapability::hasPrefix(module, "surf"))
+    return AdaptiveModuleCapability::numericInstance(module, "surf");
   if (cell.size != CELL_ADAPTIVE) return true; // frozen anchor dispatch/support
   return AdaptiveModuleCapability::supports(module);
 }
@@ -103,7 +105,7 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
       continue;
     }
 
-    if (mod.startsWith("surf")) {
+    if (AdaptiveModuleCapability::numericInstance(mod.c_str(), "surf")) {
       ModuleSurf::render(c, mod);
       continue;
     }

@@ -9,6 +9,7 @@
 #include "NetClient.h"
 #include "Config.h"
 #include "ModuleIcons.h"
+#include "SurfAdaptivePolicy.h"
 
 #include <ArduinoJson.h>
 #include <math.h>
@@ -1203,14 +1204,21 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   return true;
 }
 
-static void tick(int idx, CellSize wantSize) {
+static SurfAdaptivePolicy::SurfDataNeeds legacyDataNeeds(CellSize size) {
+  SurfAdaptivePolicy::SurfDataNeeds needs = {false, false};
+  needs.dayparts = size == CELL_MEDIUM || size == CELL_LARGE;
+  needs.daily = size == CELL_XL;
+  return needs;
+}
+
+static void tick(int idx, const SurfAdaptivePolicy::SurfDataNeeds& dataNeeds) {
   SurfInstanceConfig& cfg = g_inst[idx];
   SurfCache& cache = g_cache[idx];
 
   const uint32_t now = millis();
 
-  const bool wantDayparts = (wantSize == CELL_MEDIUM || wantSize == CELL_LARGE);
-  const bool wantDaily = (wantSize == CELL_XL);
+  const bool wantDayparts = dataNeeds.dayparts;
+  const bool wantDaily = dataNeeds.daily;
 
   bool needs = (!cache.valid) || ((now - cache.fetchedAtMs) > cfg.refreshMs);
 
@@ -1850,6 +1858,186 @@ static void drawMediumDetailsHalf(int x, int y, int w, int h,
 // =========================================================
 // TAB 8 — Rendering
 // =========================================================
+struct AdaptiveSurfRect { int x; int y; int w; int h; };
+
+static int validDaypartCount(const SurfCache& data) {
+  int count = 0;
+  for (int i = 0; i < 4; ++i) if (data.day[i].valid) ++count;
+  return count;
+}
+
+static int validDailyCount(const SurfCache& data) {
+  int count = 0;
+  for (int i = 0; i < 5; ++i) if (data.daily[i].valid) ++count;
+  return count;
+}
+
+static SurfAdaptivePolicy::Input adaptiveSurfInput(const Cell& c,
+                                                    const SurfInstanceConfig& cfg,
+                                                    const SurfCache& data) {
+  static char spot[64];
+  static char wave[32];
+  getDisplaySpotName(cfg, data, spot, sizeof(spot));
+  getWaveRangeLabel(data, wave, sizeof(wave));
+  return SurfAdaptivePolicy::Input{
+    c.w, c.h, spot, ratingToWord(data.rating), wave,
+    data.ratingFromExperience, isfinite(data.swellPeriodS), isfinite(data.windSpeedMs),
+    isfinite(data.swellDirDegFrom), isfinite(data.windDirDegFrom),
+    surfTrendSymbol(data) != 0, isTodaysBestConfig(cfg),
+    validDaypartCount(data), validDailyCount(data)
+  };
+}
+
+static void renderAdaptiveSurf(const Cell& c,
+                               const SurfInstanceConfig& cfg,
+                               const SurfCache& data,
+                               const SurfAdaptivePolicy::Result& comp) {
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+  char spot[64] = {0};
+  char wave[32] = {0};
+  getDisplaySpotName(cfg, data, spot, sizeof(spot));
+  getWaveRangeLabel(data, wave, sizeof(wave));
+
+  // BEGIN ADAPTIVE SURF GEOMETRY
+  const int pad = clampi((c.w < c.h ? c.w : c.h) * 6 / 100, 8, 18);
+  const int gap = 10;
+  const int innerX = c.x + pad;
+  const int innerY = c.y + pad;
+  const int innerW = c.w - pad * 2;
+  const int innerH = c.h - pad * 2;
+  const int labelH = comp.showTodaysBestLabel ? 20 : 0;
+  const int spotH = comp.showSpot ? 25 : 0;
+  const int topH = labelH + spotH;
+  const int dailyH = comp.dailyCount > 0 ? clampi(innerH * 32 / 100, 104, 145) : 0;
+  const int contentY = innerY + topH;
+  const int contentH = innerH - topH - (dailyH > 0 ? dailyH + gap : 0);
+  AdaptiveSurfRect label = {innerX, innerY, innerW, labelH};
+  AdaptiveSurfRect title = {innerX, innerY + labelH, innerW, spotH};
+  AdaptiveSurfRect hero = {innerX, contentY, innerW, contentH};
+  AdaptiveSurfRect details = {0, 0, 0, 0};
+  AdaptiveSurfRect dayparts = {0, 0, 0, 0};
+  AdaptiveSurfRect daily = {innerX, innerY + innerH - dailyH, innerW, dailyH};
+  if (comp.family == SurfAdaptivePolicy::SHALLOW_WIDE && comp.showDetails) {
+    const int detailW = clampi(innerW * 18 / 100, 62, 130);
+    details = AdaptiveSurfRect{innerX + innerW - detailW, contentY, detailW, contentH};
+    hero.w -= detailW + gap;
+  } else if (comp.family == SurfAdaptivePolicy::STACKED && comp.showDetails) {
+    const int detailH = clampi(contentH * 28 / 100, 54, 84);
+    details = AdaptiveSurfRect{innerX, contentY + contentH - detailH, innerW, detailH};
+    hero.h -= detailH + gap;
+  } else if (comp.family == SurfAdaptivePolicy::SPLIT ||
+             comp.family == SurfAdaptivePolicy::DAYPART_ENHANCED ||
+             comp.family == SurfAdaptivePolicy::EXPANDED_DAILY) {
+    hero.w = (innerW - gap) * comp.splitPercent / 100;
+    const int sideX = innerX + hero.w + gap;
+    const int sideW = innerX + innerW - sideX;
+    if (comp.daypartCount > 0) dayparts = AdaptiveSurfRect{sideX, contentY, sideW, contentH};
+    else if (comp.showDetails) details = AdaptiveSurfRect{sideX, contentY, sideW, contentH};
+    if (comp.daypartCount > 0 && comp.showDetails) {
+      const int detailH = clampi(contentH * 30 / 100, 50, 78);
+      details = AdaptiveSurfRect{sideX, contentY, sideW, detailH};
+      dayparts.y += detailH + gap;
+      dayparts.h -= detailH + gap;
+    }
+  }
+  // END ADAPTIVE SURF GEOMETRY
+
+  if (comp.showTodaysBestLabel) {
+    drawTextCenteredAt(label.x + label.w / 2, label.y + 15,
+      comp.todaysBestLabelMode == SurfAdaptivePolicy::BEST_SPACIOUS ? "Best next 4hrs" : "Today's Best",
+      FONT_B9, ink);
+  }
+  if (comp.showSpot) drawTextCenteredAt(title.x + title.w / 2, title.y + 18, spot, FONT_B12, ink);
+
+  const bool horizontal = comp.family == SurfAdaptivePolicy::SHALLOW_WIDE;
+  if (horizontal) {
+    const int ratingW = comp.showRatingWord ? clampi(hero.w * 22 / 100, 58, 125) : 0;
+    const int visualW = comp.showRatingVisual ? clampi(hero.w * 34 / 100, 105, 150) : 0;
+    const int waveW = hero.w - ratingW - visualW;
+    if (comp.showRatingWord) drawTextCenteredAt(hero.x + ratingW / 2, hero.y + hero.h / 2 + 6,
+                                                ratingToWord(data.rating), FONT_B12, ink);
+    if (comp.showRatingVisual) {
+      const int boxW = clampi((visualW - 25) / 6, 12, 20);
+      const int visualPixels = blocksWidthPxSized(boxW, 5);
+      drawRatingVisualSized(hero.x + ratingW + (visualW - visualPixels) / 2,
+                            hero.y + hero.h / 2 - 7, data.rating,
+                            data.ratingFromExperience, data.experienceDiceValue,
+                            ink, boxW, 14, 5, 2, 14);
+    }
+    if (comp.showWaveRange) drawTextCenteredAt(hero.x + ratingW + visualW + waveW / 2,
+                                               hero.y + hero.h / 2 + 6, wave, FONT_B12, ink);
+  } else {
+    const GFXfont* verdictFont = FONT_B12;
+    int16_t bx, by; uint16_t bw, bh;
+    measureText(ratingToWord(data.rating), FONT_B18, bx, by, bw, bh);
+    if (hero.w >= (int)bw + 8 && hero.h >= 120) verdictFont = FONT_B18;
+    int centerY = hero.y + hero.h / 2;
+    if (comp.showRatingWord) drawTextCenteredAt(hero.x + hero.w / 2, centerY - 38,
+                                                ratingToWord(data.rating), verdictFont, ink);
+    if (comp.showRatingVisual) {
+      const int boxW = clampi((hero.w - 45) / 6, 12, 22);
+      const int visualW = blocksWidthPxSized(boxW, 5);
+      drawRatingVisualSized(hero.x + (hero.w - visualW) / 2, centerY - 12,
+                            data.rating, data.ratingFromExperience, data.experienceDiceValue,
+                            ink, boxW, 15, 5, 2, 15);
+    }
+    if (comp.showWaveRange) drawTextCenteredAt(hero.x + hero.w / 2, centerY + 38,
+                                               wave, FONT_B12, ink);
+  }
+
+  if (details.w > 0 && details.h > 0) {
+    int rows = (isfinite(data.swellPeriodS) ? 1 : 0) + (isfinite(data.windSpeedMs) ? 1 : 0);
+    if (rows < 1) rows = 1;
+    const int rowH = details.h / rows;
+    int row = 0;
+    if (isfinite(data.swellPeriodS)) {
+      char text[16]; snprintf(text, sizeof(text), "%.0f s", data.swellPeriodS);
+      if (comp.showDirections && isfinite(data.swellDirDegFrom))
+        drawSurfDirectionArrow(details.x + 20, details.y + rowH / 2, clampi(rowH - 12, 18, 34), data.swellDirDegFrom, ink);
+      drawTextCenteredAt(details.x + details.w / 2 + (comp.showDirections ? 10 : 0),
+                         details.y + row * rowH + rowH / 2 + 5, text, FONT_B9, ink);
+      ++row;
+    }
+    if (isfinite(data.windSpeedMs)) {
+      char text[16]; snprintf(text, sizeof(text), "%.0f m/s", data.windSpeedMs);
+      if (comp.showDirections && isfinite(data.windDirDegFrom))
+        drawSurfDirectionArrow(details.x + 20, details.y + row * rowH + rowH / 2, clampi(rowH - 12, 18, 34), data.windDirDegFrom, ink);
+      drawTextCenteredAt(details.x + details.w / 2 + (comp.showDirections ? 10 : 0),
+                         details.y + row * rowH + rowH / 2 + 5, text, FONT_B9, ink);
+    }
+  }
+
+  if (dayparts.w > 0 && comp.daypartCount > 0) {
+    static const char* labels[4] = {"Morning", "Noon", "Afternoon", "Evening"};
+    const int columnW = dayparts.w / comp.daypartCount;
+    int shown = 0;
+    for (int i = 0; i < 4 && shown < comp.daypartCount; ++i) {
+      if (!data.day[i].valid) continue;
+      const int cx = dayparts.x + shown * columnW + columnW / 2;
+      drawTextCenteredAt(cx, dayparts.y + 16, labels[i], FONT_B9, ink);
+      drawTextCenteredAt(cx, dayparts.y + 39, ratingToWord(data.day[i].rating), FONT_B9, ink);
+      drawTextCenteredAt(cx, dayparts.y + dayparts.h - 8,
+                         data.day[i].waveRange[0] ? data.day[i].waveRange : wave, FONT_B9, ink);
+      ++shown;
+    }
+  }
+  if (daily.h > 0 && comp.dailyCount > 0) {
+    const int columnW = daily.w / comp.dailyCount;
+    int shown = 0;
+    for (int i = 0; i < 5 && shown < comp.dailyCount; ++i) {
+      if (!data.daily[i].valid) continue;
+      const int cx = daily.x + shown * columnW + columnW / 2;
+      drawTextCenteredAt(cx, daily.y + 18, data.daily[i].label, FONT_B9, ink);
+      drawTextCenteredAt(cx, daily.y + 42, ratingToWord(data.daily[i].rating), FONT_B9, ink);
+      drawTextCenteredAt(cx, daily.y + daily.h - 10,
+                         data.daily[i].waveRange[0] ? data.daily[i].waveRange : wave, FONT_B9, ink);
+      ++shown;
+    }
+  }
+  if (comp.showTrend) drawSurfTrendIndicator(c.x + c.w - pad - 10, c.y + pad, surfTrendSymbol(data), ink);
+}
+
 static void renderCommon(const Cell& c,
                          const SurfInstanceConfig& cfg,
                          const SurfCache& data,
@@ -1873,7 +2061,14 @@ static void renderCommon(const Cell& c,
     return;
   }
 
-  if (isBest) drawTodaysBestOverlay(c, data, ink);
+  if (isBest && c.size != CELL_ADAPTIVE) drawTodaysBestOverlay(c, data, ink);
+
+  if (c.size == CELL_ADAPTIVE) {
+    const SurfAdaptivePolicy::Input input = adaptiveSurfInput(c, cfg, data);
+    const SurfAdaptivePolicy::Result composition = SurfAdaptivePolicy::compose(input);
+    renderAdaptiveSurf(c, cfg, data, composition);
+    return;
+  }
 
   // ===============================
   // SMALL
@@ -2598,7 +2793,9 @@ void render(const Cell& c, const String& moduleName) {
   uint8_t id = parseInstanceId(moduleName);
   int idx = instIndex(id);
 
-  tick(idx, c.size);
+  SurfAdaptivePolicy::SurfDataNeeds dataNeeds = legacyDataNeeds(c.size);
+  if (c.size == CELL_ADAPTIVE) dataNeeds = SurfAdaptivePolicy::dataNeedsForGeometry(c.w, c.h);
+  tick(idx, dataNeeds);
 
   const SurfInstanceConfig& cfg = g_inst[idx];
   const SurfCache& data = g_cache[idx];

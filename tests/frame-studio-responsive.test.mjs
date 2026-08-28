@@ -29,17 +29,17 @@ test('all structured Surf presets compose and lay out across all geometries', ()
 
 test('Surf composition follows physical geometry and progressive disclosure', () => {
   const at=(cols,rows,w=cols*196,h=rows*114)=>surfComposition(responsiveCellProfile(cols,rows,w,h),surfStudioPresets.normal)
-  assert.equal(at(1,1).family,'micro');assert.equal(at(2,1).family,'shallow');assert.equal(at(1,4).family,'hero')
-  assert.equal(at(3,2).family,'detail-split');assert.equal(at(2,4).family,'forecast');assert.equal(at(3,4).family,'expanded');assert.equal(at(4,3).family,'expanded')
-  assert.equal(at(1,1).showBlocks,false);assert.equal(at(1,1).showDirections,false);assert.equal(at(1,1).forecastDays,0)
-  assert.equal(at(2,4).forecastDays,3);assert.equal(at(3,4).forecastDays,4)
+  assert.equal(at(1,1).family,'stacked');assert.equal(at(2,1).family,'shallow-wide');assert.equal(at(1,4).family,'stacked')
+  assert.equal(at(3,2).family,'split');assert.equal(at(2,4).family,'stacked');assert.equal(at(3,4).family,'expanded-daily');assert.equal(at(4,3).family,'split')
+  assert.equal(at(1,1).showDirections,false);assert.equal(at(1,1).forecastDays,0)
+  assert.equal(at(2,4).daypartCount,0);assert.equal(at(3,4).forecastDays,4)
   assert.notEqual(at(3,2,600,140).family,at(3,2,240,500).family)
 })
 
 test('Surf forecast columns honor minimum width and all regions are bounded', () => {
   const overlap=(a,b)=>a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height
   for(const state of Object.values(surfStudioPresets))for(let colSpan=1;colSpan<=4;colSpan++)for(let rowSpan=1;rowSpan<=4;rowSpan++){
-    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),composition=surfComposition(profile,state),layout=surfLayout(profile,composition),regions=[layout.headerRect,layout.heroRect,layout.detailsRect,layout.bestWindowRect,layout.environmentRect,layout.forecastRect].filter(Boolean)
+    const profile=responsiveCellProfile(colSpan,rowSpan,colSpan*196,rowSpan*114),composition=surfComposition(profile,state),layout=surfLayout(profile,composition),regions=[layout.headerRect,layout.heroRect,layout.detailsRect,layout.bestWindowRect,layout.environmentRect,layout.daypartRect,layout.dailyRect].filter(Boolean)
     for(const r of regions){assert.ok(r.x>=0&&r.y>=0&&r.width>0&&r.height>0);assert.ok(r.x+r.width<=profile.width+.001&&r.y+r.height<=profile.height+.001)}
     for(let i=0;i<regions.length;i++)for(let j=i+1;j<regions.length;j++)assert.equal(overlap(regions[i],regions[j]),false)
     for(const column of layout.forecastColumns){assert.ok(column.columnRect.width>=SURF_FORECAST_MIN_COLUMN_WIDTH);assert.ok(column.columnRect.x>=layout.forecastRect.x);assert.ok(column.columnRect.x+column.columnRect.width<=layout.forecastRect.x+layout.forecastRect.width+.001)}
@@ -54,7 +54,7 @@ test('Surf facts are atomic, score drives rating blocks, and declarations match 
   const runtime=await readFile(new URL('../app/lib/surfResponsive.mjs',import.meta.url),'utf8'),declarations=await readFile(new URL('../app/lib/surfResponsive.d.mts',import.meta.url),'utf8')
   for(const name of [...runtime.matchAll(/export (?:const|function) (\w+)/g)].map(match=>match[1]))assert.match(declarations,new RegExp(`export (?:const|function) ${name}\\b`))
   const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8'),responsive=source.slice(source.indexOf('function drawResponsiveSurf'),source.indexOf('function drawSurf'))
-  assert.match(responsive,/ratingBlocks\([^\n]+state\.rating\.score/);assert.match(responsive,/measureText\(fitted\.text\)/);assert.doesNotMatch(responsive,/\.slice\(|ellips/i);assert.doesNotMatch(responsive,/fetch\(|generate|rewrite/i)
+  assert.match(responsive,/adaptiveSurfRatingVisual\([^\n]+state\.rating\.score/);assert.match(responsive,/measureText\(fitted\.text\)/);assert.doesNotMatch(responsive,/ellips/i);assert.doesNotMatch(responsive,/fetch\(|generate|rewrite/i)
 })
 
 test('Surf Studio uses the physical firmware rating words without visible numeric fractions', async () => {
@@ -71,7 +71,7 @@ test('Surf Studio uses the physical firmware rating words without visible numeri
   for(const studioSurfSource of [responsive,handmade,surfSamples])assert.doesNotMatch(studioSurfSource,/\d\s*\/\s*6|ratingScore\}\//)
   assert.match(responsive,/fact\(surfRatingWord\(state\.rating\.score\),layout\.ratingRect/)
   assert.match(responsive,/fact\(surfRatingWord\(entry\.ratingScore\),column\.ratingRect/)
-  assert.match(responsive,/ratingBlocks\([^\n]+entry\.ratingScore/)
+  assert.match(responsive,/adaptiveSurfRatingVisual\([^\n]+entry\.ratingScore/)
   assert.match(handmade,/ratingBlocks\([^\n]+score/)
 })
 
