@@ -34,6 +34,7 @@ import {
   sendDeviceActivity,
 } from './lib/device/updateStateClient'
 import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
+import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
@@ -2374,13 +2375,10 @@ export default function HomePage() {
       }
       if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return false}settingsJson={...settingsJson,...payload}}
 
-      const { data, error } = await supabase.rpc('upsert_device_settings', {
-        p_device_id: deviceId,
-        p_settings: settingsJson,
-      })
-
-      if (error) throw error
-      if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
+      const session = await supabase.auth.getSession()
+      const accessToken = session.data.session?.access_token
+      if (!accessToken) throw new Error(language === 'no' ? 'Økten er utløpt. Logg inn igjen.' : 'Your session expired. Please sign in again.')
+      await saveFrameSettings({ deviceId, settingsJson: { ...settingsJson, theme: frameTheme }, accessToken })
 
       // A frame switch may finish loading while this save is in flight. The save
       // still belongs to its captured device, so never apply its UI state to the new frame.
