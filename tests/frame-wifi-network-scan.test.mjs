@@ -15,6 +15,11 @@ test('scan results are deduplicated and sorted by strongest signal first', () =>
   assert.match(portal, /return a\.rssi > b\.rssi/)
 })
 
+test('scan results do not consume persistent DRAM', () => {
+  assert.doesNotMatch(portal, /static std::vector<ScannedNetwork> scannedNetworks/)
+  assert.match(portal, /const std::vector<ScannedNetwork> scannedNetworks = scanNearbyNetworks\(\)/)
+})
+
 test('the portal selects a detected SSID and retains a hidden-network fallback', () => {
   assert.match(portal, /type='radio' name='ssid'/)
   assert.match(portal, />Enter network manually</)
