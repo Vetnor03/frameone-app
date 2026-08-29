@@ -77,6 +77,14 @@ test('behavior-defining constants and rendering code remain present', () => {
   for (const source of [reminders, surf, countdown]) assert.match(source, /render\(/);
 });
 
+test('adaptive Surf formatting scratch and daypart labels do not consume static DRAM', () => {
+  const adaptive = surf.slice(surf.indexOf('static SurfAdaptivePolicy::Input adaptiveSurfInput'));
+  assert.doesNotMatch(adaptive, /static char (?:spot|wave)\[/);
+  assert.doesNotMatch(adaptive, /static const char\* labels\[/);
+  assert.match(adaptive, /char spot\[64\] = \{0\};/);
+  assert.match(adaptive, /char wave\[32\] = \{0\};/);
+});
+
 test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {
   assert.match(reminders, /static SmartReminderLayout\* g_smartLayoutScratch = nullptr;/);
   assert.match(reminders, /sizeof\(SmartReminderLayout\) \* 2/);

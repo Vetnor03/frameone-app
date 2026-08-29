@@ -1874,9 +1874,9 @@ static int validDailyCount(const SurfCache& data) {
 
 static SurfAdaptivePolicy::Input adaptiveSurfInput(const Cell& c,
                                                     const SurfInstanceConfig& cfg,
-                                                    const SurfCache& data) {
-  static char spot[64];
-  static char wave[32];
+                                                    const SurfCache& data,
+                                                    char (&spot)[64],
+                                                    char (&wave)[32]) {
   getDisplaySpotName(cfg, data, spot, sizeof(spot));
   getWaveRangeLabel(data, wave, sizeof(wave));
   return SurfAdaptivePolicy::Input{
@@ -1889,15 +1889,11 @@ static SurfAdaptivePolicy::Input adaptiveSurfInput(const Cell& c,
 }
 
 static void renderAdaptiveSurf(const Cell& c,
-                               const SurfInstanceConfig& cfg,
                                const SurfCache& data,
-                               const SurfAdaptivePolicy::Result& comp) {
-  auto& d = DisplayCore::get();
+                               const SurfAdaptivePolicy::Result& comp,
+                               const char* spot,
+                               const char* wave) {
   const uint16_t ink = Theme::ink();
-  char spot[64] = {0};
-  char wave[32] = {0};
-  getDisplaySpotName(cfg, data, spot, sizeof(spot));
-  getWaveRangeLabel(data, wave, sizeof(wave));
 
   // BEGIN ADAPTIVE SURF GEOMETRY
   const int pad = clampi((c.w < c.h ? c.w : c.h) * 6 / 100, 8, 18);
@@ -2009,13 +2005,13 @@ static void renderAdaptiveSurf(const Cell& c,
   }
 
   if (dayparts.w > 0 && comp.daypartCount > 0) {
-    static const char* labels[4] = {"Morning", "Noon", "Afternoon", "Evening"};
     const int columnW = dayparts.w / comp.daypartCount;
     int shown = 0;
     for (int i = 0; i < 4 && shown < comp.daypartCount; ++i) {
       if (!data.day[i].valid) continue;
       const int cx = dayparts.x + shown * columnW + columnW / 2;
-      drawTextCenteredAt(cx, dayparts.y + 16, labels[i], FONT_B9, ink);
+      const char* label = i == 0 ? "Morning" : i == 1 ? "Noon" : i == 2 ? "Afternoon" : "Evening";
+      drawTextCenteredAt(cx, dayparts.y + 16, label, FONT_B9, ink);
       drawTextCenteredAt(cx, dayparts.y + 39, ratingToWord(data.day[i].rating), FONT_B9, ink);
       drawTextCenteredAt(cx, dayparts.y + dayparts.h - 8,
                          data.day[i].waveRange[0] ? data.day[i].waveRange : wave, FONT_B9, ink);
@@ -2064,9 +2060,11 @@ static void renderCommon(const Cell& c,
   if (isBest && c.size != CELL_ADAPTIVE) drawTodaysBestOverlay(c, data, ink);
 
   if (c.size == CELL_ADAPTIVE) {
-    const SurfAdaptivePolicy::Input input = adaptiveSurfInput(c, cfg, data);
+    char spot[64] = {0};
+    char wave[32] = {0};
+    const SurfAdaptivePolicy::Input input = adaptiveSurfInput(c, cfg, data, spot, wave);
     const SurfAdaptivePolicy::Result composition = SurfAdaptivePolicy::compose(input);
-    renderAdaptiveSurf(c, cfg, data, composition);
+    renderAdaptiveSurf(c, data, composition, spot, wave);
     return;
   }
 
