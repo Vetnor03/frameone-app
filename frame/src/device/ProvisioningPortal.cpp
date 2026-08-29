@@ -20,8 +20,6 @@ struct ScannedNetwork {
   int32_t rssi;
 };
 
-static std::vector<ScannedNetwork> scannedNetworks;
-
 static String escapeHtml(const String& value) {
   String escaped;
   escaped.reserve(value.length());
@@ -38,9 +36,8 @@ static String escapeHtml(const String& value) {
   return escaped;
 }
 
-static void scanNearbyNetworks() {
-  scannedNetworks.clear();
-
+static std::vector<ScannedNetwork> scanNearbyNetworks() {
+  std::vector<ScannedNetwork> scannedNetworks;
   const int count = WiFi.scanNetworks(false, false);
   for (int i = 0; i < count; ++i) {
     const String ssid = WiFi.SSID(i);
@@ -61,9 +58,11 @@ static void scanNearbyNetworks() {
             [](const ScannedNetwork& a, const ScannedNetwork& b) {
               return a.rssi > b.rssi;
             });
+  return scannedNetworks;
 }
 
-static String htmlPage(const String& msg) {
+static String htmlPage(const String& msg,
+                       const std::vector<ScannedNetwork>& scannedNetworks) {
   String s;
   s += "<!doctype html><html><head>";
   s += "<meta name='viewport' content='width=device-width,initial-scale=1'/>";
@@ -114,11 +113,11 @@ static String htmlPage(const String& msg) {
   return s;
 }
 
-static void handleRoot() {
-  server.send(200, "text/html", htmlPage(""));
+static void handleRoot(const std::vector<ScannedNetwork>& scannedNetworks) {
+  server.send(200, "text/html", htmlPage("", scannedNetworks));
 }
 
-static void handleSave() {
+static void handleSave(const std::vector<ScannedNetwork>& scannedNetworks) {
   String ssid = server.arg("manual_ssid");
   if (ssid.length() == 0) ssid = server.arg("ssid");
   String pass = server.arg("pass");
@@ -126,12 +125,14 @@ static void handleSave() {
   ssid.trim();
 
   if (ssid.length() == 0) {
-    server.send(400, "text/html", htmlPage("Wi-Fi name required."));
+    server.send(400, "text/html",
+                htmlPage("Wi-Fi name required.", scannedNetworks));
     return;
   }
 
   WiFiManagerV2::saveCreds(ssid, pass);
-  server.send(200, "text/html", htmlPage("Saved. Reconnecting your frame..."));
+  server.send(200, "text/html",
+              htmlPage("Saved. Reconnecting your frame...", scannedNetworks));
   delay(900);
   ESP.restart();
 }
@@ -156,7 +157,7 @@ void runBlocking() {
 
   IPAddress apIP = WiFi.softAPIP();
 
-  scanNearbyNetworks();
+  const std::vector<ScannedNetwork> scannedNetworks = scanNearbyNetworks();
 
   ScreenPairing::showWifiSetup(apSsid.c_str());
 
@@ -168,8 +169,9 @@ void runBlocking() {
 
   dnsServer.start(DNS_PORT, "*", apIP);
 
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
+  server.on("/", HTTP_GET, [&scannedNetworks]() { handleRoot(scannedNetworks); });
+  server.on("/save", HTTP_POST,
+            [&scannedNetworks]() { handleSave(scannedNetworks); });
   server.onNotFound(handleNotFound);
   server.begin();
 
