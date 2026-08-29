@@ -1609,22 +1609,22 @@ static void renderAdaptive(const Cell& c, const SoccerInstanceConfig& cfg, const
   SoccerRect table = {0,0,0,0}, details = {0,0,0,0}, previous = {0,0,0,0};
   if (comp.showTable && comp.family == FIXTURE_STANDINGS) {
     const int tableW = minInt(c.w*46/100, 360);
-    table = {c.x+c.w-pad-tableW, c.y+pad, tableW, c.h-pad*2};
+    table = SoccerRect{c.x+c.w-pad-tableW, c.y+pad, tableW, c.h-pad*2};
     primary.w = table.x-gap-primary.x;
   } else if (comp.showTable && comp.family == EXPANDED) {
     const int tableH = minInt(180, c.h*38/100);
-    table = {c.x+pad, c.y+c.h-pad-tableH, c.w-pad*2, tableH};
+    table = SoccerRect{c.x+pad, c.y+c.h-pad-tableH, c.w-pad*2, tableH};
     primary.h = table.y-gap-primary.y;
     if (comp.showDetails) {
       const int detailW = minInt(230, primary.w*36/100);
-      details = {primary.x+primary.w-detailW, primary.y, detailW, primary.h};
+      details = SoccerRect{primary.x+primary.w-detailW, primary.y, detailW, primary.h};
       primary.w -= detailW+gap;
     }
   }
   const bool wideHistory = comp.family == FIXTURE_HISTORY && comp.showPrevious && c.w >= 500 && c.h >= 190;
   if (wideHistory) {
     const int primaryW = (primary.w-gap)*65/100;
-    previous = {primary.x+primaryW+gap, primary.y, primary.w-gap-primaryW, primary.h};
+    previous = SoccerRect{primary.x+primaryW+gap, primary.y, primary.w-gap-primaryW, primary.h};
     primary.w = primaryW;
   }
 
@@ -1651,7 +1651,7 @@ static void renderAdaptive(const Cell& c, const SoccerInstanceConfig& cfg, const
   int y = fixture.y + fixture.h;
   if (comp.showStanding) { SoccerRect standing = {primary.x, y, primary.w, minInt(32, primary.y+primary.h-y)}; drawAdaptiveStanding(standing, data, ink); y += standing.h; }
   if (comp.showPrevious) {
-    if (!wideHistory) previous = {primary.x, y+5, primary.w, maxInt(1, primary.y+primary.h-y-5)};
+    if (!wideHistory) previous = SoccerRect{primary.x, y+5, primary.w, maxInt(1, primary.y+primary.h-y-5)};
     drawAdaptiveFixture(previous, data, PRIMARY_PREVIOUS, false, ink);
   }
   if (comp.showTable) drawAdaptiveTable(table, data, comp.tableRows, comp.tableColumns, ink);

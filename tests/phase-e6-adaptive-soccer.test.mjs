@@ -57,12 +57,24 @@ test('Studio and host C++ Soccer policy agree field-for-field',async()=>{
 
 test('physical Soccer instances are exact and custom preflight stays atomic',async()=>{
  const cells=module=>[{slot:0,col:0,row:0,colSpan:1,rowSpan:3,module},{slot:1,col:1,row:0,colSpan:3,rowSpan:3,module:'date'},{slot:2,col:0,row:3,colSpan:4,rowSpan:1,module:'date'}]
- for(const module of ['soccer','soccer:1','soccer:255'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,true)
- for(const module of ['soccer:0','soccer:club','soccerfoo','soccers'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,false)
+ for(const module of ['soccer','soccer:1','soccer:4'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,true)
+ for(const module of ['soccer:0','soccer:5','soccer:255','soccer:club','soccerfoo','soccers'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,false)
  const capability=await readFile(new URL('../frame/src/modules/AdaptiveModuleCapability.h',import.meta.url),'utf8')
- assert.match(capability,/numericInstance\(module, "soccer"\)/)
+ assert.match(capability,/numericInstance\(module, "soccer", 4\)/)
  const layout=await readFile(new URL('../frame/src/core/Layout.cpp',import.meta.url),'utf8')
  assert.match(layout,/!ModuleRenderer::canRenderCell\(module, cell\)\) return false/)
+})
+
+test('firmware Soccer capability and adaptive rectangle assignments compile as GNU C++11',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'soccer-arduino-')),cpp=join(dir,'compat.cpp'),bin=join(dir,'compat')
+ const source=`#include <iostream>\n#include "AdaptiveModuleCapability.h"\nstruct SoccerRect { int x,y,w,h; };\nint main(){SoccerRect table={0,0,0,0},details={0,0,0,0},previous={0,0,0,0};table=SoccerRect{1,2,3,4};details=SoccerRect{5,6,7,8};previous=SoccerRect{9,10,11,12};const char*v[]={"soccer","soccer:1","soccer:4","soccer:5","soccer:255","soccer:club","soccerfoo"};for(const char*s:v)std::cout<<AdaptiveModuleCapability::supports(s);return table.x+details.x+previous.x==15?0:1;}`
+ await writeFile(cpp,source)
+ execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/modules/',import.meta.url).pathname,cpp,'-o',bin])
+ assert.equal(execFileSync(bin,{encoding:'utf8'}),'1110000')
+ const firmware=await readFile(new URL('../frame/src/modules/ModuleSoccer.cpp',import.meta.url),'utf8')
+ const geometry=firmware.slice(firmware.indexOf('static void renderAdaptive'),firmware.indexOf('// END ADAPTIVE SOCCER RENDERER'))
+ assert.doesNotMatch(geometry,/(?:^|\n)\s*(?:table|details|previous)\s*=\s*\{/)
+ for(const target of ['table','details','previous'])assert.match(geometry,new RegExp(`${target} = SoccerRect\\{`))
 })
 
 test('legacy Soccer renderers remain distinct and adaptive dispatch is additive',async()=>{
