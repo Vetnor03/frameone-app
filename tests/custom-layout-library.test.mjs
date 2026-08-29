@@ -44,7 +44,7 @@ test('physical contract preserves blank assignments but rejects holes and incomp
   assert.deepEqual(payload.cells.map(c=>c.module),['date','','reminders',''])
   assert.equal(JSON.stringify(payload).includes('CellSize'),false)
   assert.equal(customPhysicalPayload({...source,cells:[cell(0,0,0,4,1)]},{0:null}),null)
-  assert.equal(customPhysicalPayload({...source,cells:adaptive},{0:'date',1:null,2:'surf'}),null)
+  assert.equal(customPhysicalPayload({...source,cells:adaptive},{0:'date',1:null,2:'stocks'}),null)
 })
 test('empty module assignments are physical cells, not geometry holes',()=>{
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module:null}),true)
@@ -52,7 +52,7 @@ test('empty module assignments are physical cells, not geometry holes',()=>{
   assert.equal(supportsPhysicalCustomLayout(rows.map((c,index)=>({...c,module:index===1?null:'date'}))).valid,true)
   assert.equal(supportsPhysicalCustomLayout(rows.map(c=>({...c,module:''}))).valid,true)
   assert.equal(supportsPhysicalCustomLayout([cell(0,0,0,4,1)]).valid,false)
-  assert.equal(supportsPhysicalCustomLayout(adaptive.map((c,index)=>({...c,module:index===2?'surf':''}))).valid,false)
+  assert.equal(supportsPhysicalCustomLayout(adaptive.map((c,index)=>({...c,module:index===2?'stocks':''}))).valid,false)
 })
 test('create and edit persistence use structural validation while frame writes retain the physical gate',async()=>{
   const page=await readFile(new URL('../app/HomePageClient.tsx',import.meta.url),'utf8')
@@ -73,7 +73,7 @@ test('physical support is explicitly module-aware',()=>{
     assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),true)
   for(const module of ['reminders','reminders:1','reminders:calendar-id'])
     assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),true)
-  for(const module of ['weatherfoo','weather-foo','notweather','remindersfoo','reminders-foo','countdown','surf','soccer','stocks','groceries','ai-follow','unknown'])
+  for(const module of ['weatherfoo','weather-foo','notweather','remindersfoo','reminders-foo','stocks','groceries','ai-follow','unknown'])
     assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module}),false)
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,3,3),module:''}),true)
   assert.equal(supportsPhysicalCustomCell({...cell(0,0,0,4,1),module:'weather'}),true)

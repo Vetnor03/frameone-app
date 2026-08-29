@@ -34,7 +34,7 @@ inline bool hasPrefix(const char* module, const char* prefix) {
   return true;
 }
 
-inline bool numericInstance(const char* module, const char* base) {
+inline bool numericInstance(const char* module, const char* base, int maxInstance = 255) {
   if (!module || !base) return false;
   int index = 0;
   while (base[index]) {
@@ -47,7 +47,7 @@ inline bool numericInstance(const char* module, const char* base) {
   for (; module[index]; ++index) {
     if (module[index] < '0' || module[index] > '9') return false;
     value = value * 10 + module[index] - '0';
-    if (value > 255) return false;
+    if (value > maxInstance) return false;
   }
   return value >= 1;
 }
@@ -55,7 +55,7 @@ inline bool numericInstance(const char* module, const char* base) {
 inline bool supports(const char* module) {
   return exactOnly(module, "date") || exactBase(module, "weather") ||
          exactBase(module, "reminders") || exactBase(module, "countdown") ||
-         numericInstance(module, "surf");
+         numericInstance(module, "surf") || numericInstance(module, "soccer", 4);
 }
 
 } // namespace AdaptiveModuleCapability
