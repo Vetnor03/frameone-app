@@ -9,6 +9,7 @@ const reminders = read('frame/src/modules/ModuleReminders.cpp');
 const surf = read('frame/src/modules/ModuleSurf.cpp');
 const countdown = read('frame/src/modules/ModuleCountdown.cpp');
 const soccer = read('frame/src/modules/ModuleSoccer.cpp');
+const stocks = read('frame/src/modules/ModuleStocks.cpp');
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -91,6 +92,14 @@ test('adaptive Soccer policy and formatting scratch do not consume static DRAM',
   assert.doesNotMatch(adaptive, /\bstatic\s+(?:char|SoccerRect)\s+\w+\s*\[/);
   assert.match(adaptive, /char home3\[8\]/);
   assert.match(adaptive, /char record\[40\]/);
+});
+
+test('adaptive Stocks reuses its cache and keeps policy/formatting scratch off static DRAM', () => {
+  const adaptive = stocks.slice(stocks.indexOf('// BEGIN ADAPTIVE STOCKS RENDERER'), stocks.indexOf('// END ADAPTIVE STOCKS RENDERER'));
+  assert.doesNotMatch(adaptive, /\bstatic\s+(?:char|float|StocksRect)\s+\w+\s*\[/);
+  assert.doesNotMatch(adaptive, /float\s+(?:series|points)\s*\[/);
+  assert.match(adaptive, /drawChartBox\(chart\.x, chart\.y, chart\.w, chart\.h, data\)/);
+  assert.match(adaptive, /char priceTxt\[24\]/);
 });
 
 test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {
