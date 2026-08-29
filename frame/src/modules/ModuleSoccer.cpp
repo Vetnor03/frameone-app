@@ -8,6 +8,7 @@
 #include "Theme.h"
 #include "NetClient.h"
 #include "Config.h"
+#include "SoccerAdaptivePolicy.h"
 
 #include <ArduinoJson.h>
 #include <math.h>
@@ -1486,6 +1487,178 @@ static void renderXL(const Cell& c,
   drawStandingsTable(rightX, c.y, rightW, c.h, data, 12, ink);
 }
 
+// BEGIN ADAPTIVE SOCCER RENDERER
+struct SoccerRect { int x, y, w, h; };
+
+static int soccerDetailCount(const SoccerCache& data) {
+  int count = 0;
+  if (data.competitionName[0]) ++count;
+  if (data.hasStanding && data.won >= 0 && data.draw >= 0 && data.lost >= 0) ++count;
+  if (data.form[0]) ++count;
+  if (data.hasTopScorer) ++count;
+  return count;
+}
+
+static void drawAdaptiveFixture(const SoccerRect& r, const SoccerCache& data,
+                                SoccerAdaptivePolicy::PrimaryState primary,
+                                bool strip, uint16_t ink) {
+  const bool next = primary == SoccerAdaptivePolicy::PRIMARY_NEXT;
+  const bool previous = primary == SoccerAdaptivePolicy::PRIMARY_PREVIOUS;
+  const char* home = next ? data.nextHomeShort : data.prevHomeShort;
+  const char* away = next ? data.nextAwayShort : data.prevAwayShort;
+  char home3[8] = "---", away3[8] = "---", teams[112] = {0};
+  if (next || previous) {
+    // Full names are used only when their measured line fits; otherwise use the
+    // same deterministic official-ish abbreviations as the legacy renderers.
+    snprintf(teams, sizeof(teams), "%s vs %s", home, away);
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(teams, FONT_B12, x1, y1, tw, th);
+    if ((int)tw > r.w - 4) {
+      toOfficialish3(home, home3, sizeof(home3));
+      toOfficialish3(away, away3, sizeof(away3));
+      snprintf(teams, sizeof(teams), "%s vs %s", home3, away3);
+    }
+  } else {
+    strlcpy(teams, "Standing", sizeof(teams));
+  }
+
+  if (strip) {
+    drawCenteredBestFit(r.x, r.y, r.w, r.h, teams, FONT_B12, FONT_B9, ink);
+    return;
+  }
+  int top = r.y;
+  if (next) {
+    char day[20] = "--", time[16] = "--:--", kickoff[40] = {0};
+    splitKickoffDayTime(data.nextKickoffIso, day, sizeof(day), time, sizeof(time));
+    snprintf(kickoff, sizeof(kickoff), "%s  %s", day, time);
+    drawCenteredBestFit(r.x, top, r.w, 30, kickoff, FONT_B9, FONT_B9, ink);
+    top += 30;
+  }
+  if (previous) {
+    char result[112] = {0};
+    snprintf(result, sizeof(result), "%s  %d-%d", teams,
+             data.prevGoalsHome, data.prevGoalsAway);
+    drawCenteredBestFit(r.x, top, r.w, r.h - (top-r.y), result, FONT_B12, FONT_B9, ink);
+  } else {
+    drawCenteredBestFit(r.x, top, r.w, r.h - (top-r.y), teams, FONT_B12, FONT_B9, ink);
+  }
+}
+
+static void drawAdaptiveStanding(const SoccerRect& r, const SoccerCache& data, uint16_t ink) {
+  char value[48] = {0};
+  if (data.position > 0 && data.points >= 0) snprintf(value, sizeof(value), "Position %d   %d pts", data.position, data.points);
+  else if (data.position > 0) snprintf(value, sizeof(value), "Position %d", data.position);
+  else snprintf(value, sizeof(value), "%d points", data.points);
+  drawCenteredBestFit(r.x, r.y, r.w, r.h, value, FONT_B9, FONT_B9, ink);
+}
+
+static void drawAdaptiveTable(const SoccerRect& r, const SoccerCache& data,
+                              int rowsWanted, int columns, uint16_t ink) {
+  int start = 0, count = 0;
+  getTableWindow(data, rowsWanted, start, count);
+  if (count <= 0 || columns < 3) return;
+  const int headerH = 26, rowH = (r.h - headerH) / count;
+  const char* headers[5] = {"P", "Team", "Pts", columns == 4 ? "GD" : "Gap", "GD"};
+  for (int col = 0; col < columns; ++col)
+    drawCenteredTextInRect(r.x + r.w*col/columns, r.y, r.w/columns, headerH, headers[col], FONT_B9, ink);
+  for (int i = 0; i < count; ++i) {
+    const SoccerTableRow& row = data.table[start+i];
+    const int y = r.y + headerH + i*rowH;
+    char pos[8], pts[8], gap[10] = "", gd[10] = "";
+    snprintf(pos, sizeof(pos), "%d", row.position); snprintf(pts, sizeof(pts), "%d", row.points);
+    if (row.hasGap && !row.isSelected) snprintf(gap, sizeof(gap), "%+d", row.gap);
+    if (row.hasGoalDifference) snprintf(gd, sizeof(gd), "%+d", row.goalDifference);
+    const char* values[5] = {pos, row.teamShort, pts, columns == 4 ? gd : gap, gd};
+    if (row.isSelected) {
+      DisplayCore::get().drawFastHLine(r.x, y, r.w, ink);
+      DisplayCore::get().drawFastHLine(r.x, y + rowH - 1, r.w, ink);
+    }
+    for (int col = 0; col < columns; ++col)
+      drawCenteredBestFit(r.x+r.w*col/columns, y, r.w/columns, rowH, values[col], FONT_B9, FONT_B9, ink);
+  }
+}
+
+static void drawAdaptiveDetails(const SoccerRect& r, const SoccerCache& data, uint16_t ink) {
+  char record[40] = {0}, scorer[72] = {0};
+  if (data.hasStanding && data.won >= 0 && data.draw >= 0 && data.lost >= 0)
+    snprintf(record, sizeof(record), "Record: %dW %dD %dL", data.won, data.draw, data.lost);
+  if (data.hasTopScorer) snprintf(scorer, sizeof(scorer), "Top scorer: %s (%d)", data.topScorerName, data.topScorerGoals);
+  const char* lines[4] = {data.competitionName, record, data.form, scorer};
+  int present = soccerDetailCount(data), index = 0;
+  for (int i = 0; i < 4; ++i) if (lines[i][0]) {
+    drawCenteredBestFit(r.x, r.y + r.h*index/present, r.w, r.h/present, lines[i], FONT_B9, FONT_B9, ink);
+    ++index;
+  }
+}
+
+static void renderAdaptive(const Cell& c, const SoccerInstanceConfig& cfg, const SoccerCache& data) {
+  (void)cfg;
+  using namespace SoccerAdaptivePolicy;
+  const Input input = {c.w, c.h, c.w > c.h, data.hasNext, data.hasPrev,
+                       data.hasStanding, data.tableCount, soccerDetailCount(data)};
+  const Result comp = compose(input);
+  const uint16_t ink = Theme::ink();
+  const int pad = c.w*35/1000 < 8 ? 8 : c.w*35/1000 > 14 ? 14 : c.w*35/1000;
+  const int gap = 10;
+  if (!data.valid || !comp.available) {
+    drawCenteredBox(c.x+pad, c.y+pad, c.w-pad*2, c.h-pad*2, "Soccer", FONT_B12, ink);
+    return;
+  }
+
+  SoccerRect primary = {c.x+pad, c.y+pad, c.w-pad*2, c.h-pad*2};
+  SoccerRect table = {0,0,0,0}, details = {0,0,0,0}, previous = {0,0,0,0};
+  if (comp.showTable && comp.family == FIXTURE_STANDINGS) {
+    const int tableW = minInt(c.w*46/100, 360);
+    table = {c.x+c.w-pad-tableW, c.y+pad, tableW, c.h-pad*2};
+    primary.w = table.x-gap-primary.x;
+  } else if (comp.showTable && comp.family == EXPANDED) {
+    const int tableH = minInt(180, c.h*38/100);
+    table = {c.x+pad, c.y+c.h-pad-tableH, c.w-pad*2, tableH};
+    primary.h = table.y-gap-primary.y;
+    if (comp.showDetails) {
+      const int detailW = minInt(230, primary.w*36/100);
+      details = {primary.x+primary.w-detailW, primary.y, detailW, primary.h};
+      primary.w -= detailW+gap;
+    }
+  }
+  const bool wideHistory = comp.family == FIXTURE_HISTORY && comp.showPrevious && c.w >= 500 && c.h >= 190;
+  if (wideHistory) {
+    const int primaryW = (primary.w-gap)*65/100;
+    previous = {primary.x+primaryW+gap, primary.y, primary.w-gap-primaryW, primary.h};
+    primary.w = primaryW;
+  }
+
+  if (comp.family == FIXTURE_STRIP) {
+    SoccerRect teams = {primary.x, primary.y, primary.w*48/100, primary.h};
+    drawAdaptiveFixture(teams, data, comp.primaryState, true, ink);
+    if (comp.primaryState == PRIMARY_NEXT) {
+      char day[20] = "--", time[16] = "--:--", kickoff[40] = {0};
+      splitKickoffDayTime(data.nextKickoffIso, day, sizeof(day), time, sizeof(time));
+      snprintf(kickoff, sizeof(kickoff), "%s %s", day, time);
+      drawCenteredBestFit(primary.x+primary.w*50/100, primary.y, primary.w*22/100,
+                          primary.h, kickoff, FONT_B9, FONT_B9, ink);
+    }
+    if (comp.showStanding) {
+      SoccerRect standing = {primary.x+primary.w*74/100, primary.y, primary.w*26/100, primary.h};
+      drawAdaptiveStanding(standing, data, ink);
+    }
+    return;
+  }
+  const bool strip = comp.family == MICRO;
+  int fixtureH = strip ? primary.h : minInt(primary.h, comp.showPrevious && !wideHistory ? 105 : 85);
+  SoccerRect fixture = {primary.x, primary.y, primary.w, fixtureH};
+  drawAdaptiveFixture(fixture, data, comp.primaryState, strip, ink);
+  int y = fixture.y + fixture.h;
+  if (comp.showStanding) { SoccerRect standing = {primary.x, y, primary.w, minInt(32, primary.y+primary.h-y)}; drawAdaptiveStanding(standing, data, ink); y += standing.h; }
+  if (comp.showPrevious) {
+    if (!wideHistory) previous = {primary.x, y+5, primary.w, maxInt(1, primary.y+primary.h-y-5)};
+    drawAdaptiveFixture(previous, data, PRIMARY_PREVIOUS, false, ink);
+  }
+  if (comp.showTable) drawAdaptiveTable(table, data, comp.tableRows, comp.tableColumns, ink);
+  if (comp.showDetails) drawAdaptiveDetails(details, data, ink);
+}
+// END ADAPTIVE SOCCER RENDERER
+
 namespace ModuleSoccer {
 
 void setConfig(const FrameConfig* cfg) {
@@ -1519,6 +1692,7 @@ void render(const Cell& c, const String& moduleName) {
   else if (c.size == CELL_MEDIUM) renderMedium(c, cfg, data);
   else if (c.size == CELL_LARGE)  renderLarge(c, cfg, data);
   else if (c.size == CELL_XL)     renderXL(c, cfg, data);
+  else if (c.size == CELL_ADAPTIVE) renderAdaptive(c, cfg, data);
   else                            renderMedium(c, cfg, data);
 }
 

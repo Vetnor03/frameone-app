@@ -8,6 +8,7 @@ const update = read('frame/src/network/UpdateChecker.cpp');
 const reminders = read('frame/src/modules/ModuleReminders.cpp');
 const surf = read('frame/src/modules/ModuleSurf.cpp');
 const countdown = read('frame/src/modules/ModuleCountdown.cpp');
+const soccer = read('frame/src/modules/ModuleSoccer.cpp');
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -83,6 +84,13 @@ test('adaptive Surf formatting scratch and daypart labels do not consume static 
   assert.doesNotMatch(adaptive, /static const char\* labels\[/);
   assert.match(adaptive, /char spot\[64\] = \{0\};/);
   assert.match(adaptive, /char wave\[32\] = \{0\};/);
+});
+
+test('adaptive Soccer policy and formatting scratch do not consume static DRAM', () => {
+  const adaptive = soccer.slice(soccer.indexOf('// BEGIN ADAPTIVE SOCCER RENDERER'), soccer.indexOf('// END ADAPTIVE SOCCER RENDERER'));
+  assert.doesNotMatch(adaptive, /\bstatic\s+(?:char|SoccerRect)\s+\w+\s*\[/);
+  assert.match(adaptive, /char home3\[8\]/);
+  assert.match(adaptive, /char record\[40\]/);
 });
 
 test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {
