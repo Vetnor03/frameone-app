@@ -2,8 +2,8 @@
 
 ## Known-good baseline
 
-The physical frame is an 800×480 panel with a calibrated content viewport at
-`9,22` measuring `785×458`. Layout uses a 4×4 logical grid and the four named
+The physical frame and logical landscape viewport are both the complete `800×480` panel,
+with origin `0,0` and centre `400,240`. Layout uses a 4×4 logical grid and the four named
 layouts `FULL`, `DEFAULT`, `PYRAMID`, and `SQUARE`. Internal dividers span 95%
 of their viewport or region (a 2.5% inset at each end), and there is no outer
 border. Phase D1 expanded the historical maximum assignment array

@@ -1,6 +1,6 @@
 {
   "panel": { "width": 800, "height": 480 },
-  "viewport": { "x": 9, "y": 22, "width": 785, "height": 458 },
+  "viewport": { "x": 0, "y": 0, "width": 800, "height": 480 },
   "gridSize": 4,
   "layouts": {
     "full": [{ "col": 0, "row": 0, "colSpan": 4, "rowSpan": 4, "slot": 0, "size": "XL" }],

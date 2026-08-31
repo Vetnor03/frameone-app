@@ -5,14 +5,13 @@
 static const bool DEBUG_DRAW_SLOTS = false;
 
 // =========================
-// Logical safe/visible viewport (rotation 0)
+// Full-panel logical viewport (landscape, rotation 0)
 // =========================
-// Physical panel resolution remains 800x480. These bounds represent the
-// calibrated matte opening and should be used for all layout/content math.
-static const int VIEWPORT_X = 9;
-static const int VIEWPORT_Y = 22;
-static const int VIEWPORT_W = 785;
-static const int VIEWPORT_H = 458;
+// All layout and content math uses the complete physical 800x480 panel.
+static const int VIEWPORT_X = 0;
+static const int VIEWPORT_Y = 0;
+static const int VIEWPORT_W = 800;
+static const int VIEWPORT_H = 480;
 
 // Inclusive bounds for callers that need them.
 static const int VIEW_LEFT   = VIEWPORT_X;

@@ -14,7 +14,7 @@ export const clampPointToViewport = (point, viewport) => ({
 const touchedRangeBoundary = (value, extent, direction) => Math.max(0, Math.min(GRID_SIZE, Math[direction](value / extent * GRID_SIZE)))
 
 /** Lock the cross-axis interpretation once a divider drag becomes meaningful. */
-export function resolveDividerStrokeLock(stroke, viewport = {width: 785, height: 458}) {
+export function resolveDividerStrokeLock(stroke, viewport = {width: 800, height: 480}) {
   if (Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y) < MIN_STROKE_PX) return undefined
   const orientation = detectOrientation(stroke), vertical = orientation === 'vertical'
   const snapped = snapBoundary(vertical ? (stroke.start.x + stroke.end.x) / 2 : (stroke.start.y + stroke.end.y) / 2, vertical ? viewport.width : viewport.height)
@@ -75,7 +75,7 @@ export function removableDividerSegments(cells) {
 }
 
 /** Hit-test removable divider segments in viewport-local pixel coordinates. */
-export function findDividerNearPointer(cells, point, viewport = {width: 785, height: 458}, tolerance = 10) {
+export function findDividerNearPointer(cells, point, viewport = {width: 800, height: 480}, tolerance = 10) {
   const candidates = removableDividerSegments(cells).map(segment => {
     const vertical = segment.axis === 'vertical'
     const fixed = segment.boundary / GRID_SIZE * (vertical ? viewport.width : viewport.height)
@@ -92,7 +92,7 @@ export function findDividerNearPointer(cells, point, viewport = {width: 785, hei
 const assignedModule = cell => cell.moduleId && cell.moduleId !== 'empty' ? cell.moduleId : 'empty'
 
 /** Find the closest 4x4 boundary crossing a cell's interior (vertical wins ties). */
-export function nearestValidSplitGuide(cell, point, viewport = {width: 785, height: 458}) {
+export function nearestValidSplitGuide(cell, point, viewport = {width: 800, height: 480}) {
   if (!cell) return undefined
   const guides = []
   for (let boundary = cell.col + 1; boundary < cell.col + cell.colSpan; boundary++) guides.push({axis: 'vertical', boundary, distance: Math.abs(point.x - boundary / GRID_SIZE * viewport.width)})
@@ -101,13 +101,13 @@ export function nearestValidSplitGuide(cell, point, viewport = {width: 785, heig
 }
 
 /** Hit-test a cell's internal split guides in viewport-local pixel coordinates. */
-export function findSplitGuideNearPointer(cell, point, viewport = {width: 785, height: 458}, tolerance = 14) {
+export function findSplitGuideNearPointer(cell, point, viewport = {width: 800, height: 480}, tolerance = 14) {
   const guide = nearestValidSplitGuide(cell, point, viewport)
   return guide && guide.distance <= tolerance ? guide : undefined
 }
 
 /** Resolve short-tap intent in divider, split-guide, then containing-cell priority. */
-export function resolveShortTap(cells, point, viewport = {width: 785, height: 458}) {
+export function resolveShortTap(cells, point, viewport = {width: 800, height: 480}) {
   const divider = findDividerNearPointer(cells, point, viewport)
   if (divider) return {kind: 'merge', divider}
   const logical = {x: point.x / viewport.width * GRID_SIZE, y: point.y / viewport.height * GRID_SIZE}
@@ -132,7 +132,7 @@ export function splitCellAtBoundary(cells, cellId, guide) {
   return validateLayout(next) ? {valid: true, cells: next, parentId: parent.id, intendedId: pieces[0].id} : {valid: false, reason: 'The split partition is invalid', cells}
 }
 
-export function splitCellNearPointer(cells, point, viewport = {width: 785, height: 458}, tolerance = 14) {
+export function splitCellNearPointer(cells, point, viewport = {width: 800, height: 480}, tolerance = 14) {
   const logical = {x: point.x / viewport.width * GRID_SIZE, y: point.y / viewport.height * GRID_SIZE}
   const parent = findContainingCell(cells, logical)
   const guide = findSplitGuideNearPointer(parent, point, viewport, tolerance)
@@ -140,7 +140,7 @@ export function splitCellNearPointer(cells, point, viewport = {width: 785, heigh
 }
 
 /** Find the atomic grid cell containing a viewport-local pointer. */
-export function gridCellAtPointer(point, viewport = {width: 785, height: 458}) {
+export function gridCellAtPointer(point, viewport = {width: 800, height: 480}) {
   const index = (value, extent) => Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(value / extent * GRID_SIZE)))
   return {col: index(point.x, viewport.width), row: index(point.y, viewport.height)}
 }
@@ -152,7 +152,7 @@ export function selectionBetweenGridCells(start, end) {
 }
 
 /** Select complete cells under both pointers, rather than rounding to nearby edges. */
-export function dragSelectionFromPointers(start, end, viewport = {width: 785, height: 458}) {
+export function dragSelectionFromPointers(start, end, viewport = {width: 800, height: 480}) {
   return selectionBetweenGridCells(gridCellAtPointer(start, viewport), gridCellAtPointer(end, viewport))
 }
 
@@ -303,7 +303,7 @@ export function partitionCell(parent, normalized) {
   return {pieces: sortCells(pieces), intendedId: intended.id}
 }
 
-export function previewStroke(cells, stroke, viewport = {width: 785, height: 458}) {
+export function previewStroke(cells, stroke, viewport = {width: 800, height: 480}) {
   const length = Math.hypot(stroke.end.x - stroke.start.x, stroke.end.y - stroke.start.y)
   if (length < MIN_STROKE_PX) return {valid: false, reason: 'Draw a longer line', cells}
   if ([stroke.start, stroke.end].some(p => p.x < 0 || p.y < 0 || p.x > viewport.width || p.y > viewport.height)) return {valid: false, reason: 'Keep the line inside the viewport', cells}
@@ -334,7 +334,7 @@ export function previewStroke(cells, stroke, viewport = {width: 785, height: 458
  * segment. Atomic connectivity is converted back to rectangular editor cells,
  * so an operation which would make an L-shaped region is rejected unchanged.
  */
-export function previewDividerStroke(cells, stroke, viewport = {width: 785, height: 458}) {
+export function previewDividerStroke(cells, stroke, viewport = {width: 800, height: 480}) {
   const start = clampPointToViewport(stroke.start, viewport), end = clampPointToViewport(stroke.end, viewport)
   stroke = {...stroke, start, end}
   const length = Math.hypot(end.x - start.x, end.y - start.y)
