@@ -60,11 +60,11 @@ function derive(cells) {
 const grid = (start, length, boundary) => start + Math.trunc(length * boundary / 4)
 function resolve([axis, boundary, from, to]) {
   const horizontal = axis === 'H'; const start = horizontal
-    ? grid(9, 785, from) : grid(22, 458, from)
-  const end = horizontal ? grid(9, 785, to) : grid(22, 458, to)
+    ? grid(0, 800, from) : grid(0, 480, from)
+  const end = horizontal ? grid(0, 800, to) : grid(0, 480, to)
   const margin = Math.trunc((end - start) * 0.025)
-  return horizontal ? [start + margin, grid(22, 458, boundary), end - margin, grid(22, 458, boundary)]
-    : [grid(9, 785, boundary), start + margin, grid(9, 785, boundary), end - margin]
+  return horizontal ? [start + margin, grid(0, 480, boundary), end - margin, grid(0, 480, boundary)]
+    : [grid(0, 800, boundary), start + margin, grid(0, 800, boundary), end - margin]
 }
 
 const expected = {
@@ -73,9 +73,9 @@ const expected = {
   SQUARE: [['H', 2, 0, 4], ['V', 2, 0, 4]],
 }
 const expectedPixels = {
-  FULL: [], DEFAULT: [[28, 136, 775, 136], [28, 251, 775, 251]],
-  PYRAMID: [[28, 136, 775, 136], [28, 251, 775, 251], [401, 256, 401, 475]],
-  SQUARE: [[28, 251, 775, 251], [401, 33, 401, 469]],
+  FULL: [], DEFAULT: [[20, 120, 780, 120], [20, 240, 780, 240]],
+  PYRAMID: [[20, 120, 780, 120], [20, 240, 780, 240], [400, 246, 400, 474]],
+  SQUARE: [[20, 240, 780, 240], [400, 12, 400, 468]],
 }
 
 test('divider types are allocation-free and bounded by all 24 internal unit edges', () => {
@@ -86,7 +86,7 @@ test('divider types are allocation-free and bounded by all 24 internal unit edge
   assert.match(header, /bool deriveGridDividers\(GridDividerLayout& destination, const GridLayout& layout\);/)
 })
 
-test('named layouts derive deterministic logical and pixel-exact legacy dividers', () => {
+test('named layouts derive deterministic logical and pixel-exact full-screen dividers', () => {
   for (const name of Object.keys(expected)) {
     const logical = derive(named(name))
     assert.deepEqual(logical, expected[name], `${name} logical`)
@@ -141,8 +141,8 @@ test('invalid derivation is validate-first and atomic for every malformed class'
 })
 
 test('partial regions use their own 2.5% truncating margin', () => {
-  assert.deepEqual(resolve(['H', 1, 0, 2]), [18, 136, 392, 136])
-  assert.deepEqual(resolve(['V', 2, 1, 3]), [401, 141, 401, 360])
+  assert.deepEqual(resolve(['H', 1, 0, 2]), [10, 120, 390, 120])
+  assert.deepEqual(resolve(['V', 2, 1, 3]), [400, 126, 400, 354])
   assert.match(source, /span95\(start, end - start, resolved\.x0, resolved\.x1\)/)
   assert.match(source, /span95\(start, end - start, resolved\.y0, resolved\.y1\)/)
 })

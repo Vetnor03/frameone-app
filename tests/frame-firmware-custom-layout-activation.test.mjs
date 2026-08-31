@@ -32,9 +32,9 @@ function valid(cells) {
 }
 const renderable = (cells) => valid(cells) && cells.every((c) => c.size !== 'CELL_ADAPTIVE')
 const boundary = (start, length, n) => start + Math.trunc(length * n / 4)
-const resolvedCells = (cells) => cells.map((c) => [boundary(9, 785, c.col), boundary(22, 458, c.row),
-  boundary(9, 785, c.col + c.colSpan) - boundary(9, 785, c.col),
-  boundary(22, 458, c.row + c.rowSpan) - boundary(22, 458, c.row), c.slot, c.size])
+const resolvedCells = (cells) => cells.map((c) => [boundary(0, 800, c.col), boundary(0, 480, c.row),
+  boundary(0, 800, c.col + c.colSpan) - boundary(0, 800, c.col),
+  boundary(0, 480, c.row + c.rowSpan) - boundary(0, 480, c.row), c.slot, c.size])
 function dividers(cells) {
   const owner = Array.from({ length: 4 }, () => Array(4))
   cells.forEach((c, i) => { for (let y = c.row; y < c.row + c.rowSpan; y++) for (let x = c.col; x < c.col + c.colSpan; x++) owner[y][x] = i })
@@ -48,10 +48,10 @@ function dividers(cells) {
   return out
 }
 const pixels = (ds) => ds.map(([axis, b, from, to]) => {
-  const h = axis === 'H'; const start = boundary(h ? 9 : 22, h ? 785 : 458, from)
-  const end = boundary(h ? 9 : 22, h ? 785 : 458, to); const m = Math.trunc((end - start) * .025)
-  return h ? [start + m, boundary(22, 458, b), end - m, boundary(22, 458, b)]
-    : [boundary(9, 785, b), start + m, boundary(9, 785, b), end - m]
+  const h = axis === 'H'; const start = boundary(h ? 0 : 0, h ? 800 : 480, from)
+  const end = boundary(h ? 0 : 0, h ? 800 : 480, to); const m = Math.trunc((end - start) * .025)
+  return h ? [start + m, boundary(0, 480, b), end - m, boundary(0, 480, b)]
+    : [boundary(0, 800, b), start + m, boundary(0, 800, b), end - m]
 })
 const fourRows = [0, 1, 2, 3].map((row) => cell(0, row, 4, 1, [0, 3, 8, 12][row]))
 const twoLarge = [cell(0, 0, 4, 2, 0), cell(0, 2, 4, 2, 12)]
@@ -69,10 +69,10 @@ test('validity remains distinct from D2 renderability', () => {
   assert.equal(valid(singles.slice(1)), false); assert.equal(renderable(singles.slice(1)), false)
   assert.match(header, /bool valid = false;\s*bool renderable = false;/)
 })
-test('custom FULL, DEFAULT, PYRAMID, and SQUARE have exact legacy pixels', () => {
-  const expected = { FULL: [], DEFAULT: [[28,136,775,136],[28,251,775,251]],
-    PYRAMID: [[28,136,775,136],[28,251,775,251],[401,256,401,475]],
-    SQUARE: [[28,251,775,251],[401,33,401,469]] }
+test('custom FULL, DEFAULT, PYRAMID, and SQUARE have exact full-screen pixels', () => {
+  const expected = { FULL: [], DEFAULT: [[20,120,780,120],[20,240,780,240]],
+    PYRAMID: [[20,120,780,120],[20,240,780,240],[400,246,400,474]],
+    SQUARE: [[20,240,780,240],[400,12,400,468]] }
   for (const name of Object.keys(expected)) {
     const cells = named(name); assert.equal(renderable(cells), true)
     assert.deepEqual(resolvedCells(cells), resolvedCells(named(name)))

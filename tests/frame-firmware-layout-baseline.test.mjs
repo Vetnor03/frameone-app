@@ -48,23 +48,23 @@ const expectedLayouts = {
 }
 
 const expectedRects = {
-  full: [[9, 22, 785, 458, 0, 'CELL_XL']],
+  full: [[0, 0, 800, 480, 0, 'CELL_XL']],
   default: [
-    [9, 22, 785, 114, 0, 'CELL_SMALL'],
-    [9, 136, 785, 115, 1, 'CELL_SMALL'],
-    [9, 251, 785, 229, 2, 'CELL_LARGE'],
+    [0, 0, 800, 120, 0, 'CELL_SMALL'],
+    [0, 120, 800, 120, 1, 'CELL_SMALL'],
+    [0, 240, 800, 240, 2, 'CELL_LARGE'],
   ],
   pyramid: [
-    [9, 22, 785, 114, 0, 'CELL_SMALL'],
-    [9, 136, 785, 115, 1, 'CELL_SMALL'],
-    [9, 251, 392, 229, 2, 'CELL_MEDIUM'],
-    [401, 251, 393, 229, 3, 'CELL_MEDIUM'],
+    [0, 0, 800, 120, 0, 'CELL_SMALL'],
+    [0, 120, 800, 120, 1, 'CELL_SMALL'],
+    [0, 240, 400, 240, 2, 'CELL_MEDIUM'],
+    [400, 240, 400, 240, 3, 'CELL_MEDIUM'],
   ],
   square: [
-    [9, 22, 392, 229, 0, 'CELL_MEDIUM'],
-    [401, 22, 393, 229, 1, 'CELL_MEDIUM'],
-    [9, 251, 392, 229, 2, 'CELL_MEDIUM'],
-    [401, 251, 393, 229, 3, 'CELL_MEDIUM'],
+    [0, 0, 400, 240, 0, 'CELL_MEDIUM'],
+    [400, 0, 400, 240, 1, 'CELL_MEDIUM'],
+    [0, 240, 400, 240, 2, 'CELL_MEDIUM'],
+    [400, 240, 400, 240, 3, 'CELL_MEDIUM'],
   ],
 }
 
@@ -88,17 +88,17 @@ const expectedDividers = {
 const expectedResolvedDividers = {
   full: [],
   default: [
-    { axis: 'y', coordinate: 136, from: 28, to: 775 },
-    { axis: 'y', coordinate: 251, from: 28, to: 775 },
+    { axis: 'y', coordinate: 120, from: 20, to: 780 },
+    { axis: 'y', coordinate: 240, from: 20, to: 780 },
   ],
   pyramid: [
-    { axis: 'y', coordinate: 136, from: 28, to: 775 },
-    { axis: 'y', coordinate: 251, from: 28, to: 775 },
-    { axis: 'x', coordinate: 401, from: 256, to: 475 },
+    { axis: 'y', coordinate: 120, from: 20, to: 780 },
+    { axis: 'y', coordinate: 240, from: 20, to: 780 },
+    { axis: 'x', coordinate: 400, from: 246, to: 474 },
   ],
   square: [
-    { axis: 'y', coordinate: 251, from: 28, to: 775 },
-    { axis: 'x', coordinate: 401, from: 33, to: 469 },
+    { axis: 'y', coordinate: 240, from: 20, to: 780 },
+    { axis: 'x', coordinate: 400, from: 12, to: 468 },
   ],
 }
 
@@ -200,10 +200,11 @@ function assertValidTiling(name, cells) {
     `${name} order is top-to-bottom, then left-to-right`)
 }
 
-test('panel, calibrated viewport, and 4x4 grid are frozen and Config.h matches', () => {
+test('panel, full-screen viewport, and 4x4 grid are frozen and Config.h matches', () => {
   assert.deepEqual(contract.panel, { width: 800, height: 480 })
-  assert.deepEqual(contract.viewport, { x: 9, y: 22, width: 785, height: 458 })
+  assert.deepEqual(contract.viewport, { x: 0, y: 0, width: 800, height: 480 })
   assert.equal(contract.gridSize, 4)
+  assert.deepEqual({ x: contract.viewport.x + contract.viewport.width / 2, y: contract.viewport.y + contract.viewport.height / 2 }, { x: 400, y: 240 })
   assert.deepEqual({
     x: configInteger('VIEWPORT_X'),
     y: configInteger('VIEWPORT_Y'),
@@ -232,10 +233,10 @@ test('shared and generated named layouts match the exact production baseline', (
 test('integer grid boundaries and every resolved physical cell rectangle are exact', () => {
   assert.deepEqual([0, 1, 2, 3, 4].map((boundary) =>
     gridBoundary(contract.viewport.x, contract.viewport.width, boundary)),
-  [9, 205, 401, 597, 794])
+  [0, 200, 400, 600, 800])
   assert.deepEqual([0, 1, 2, 3, 4].map((boundary) =>
     gridBoundary(contract.viewport.y, contract.viewport.height, boundary)),
-  [22, 136, 251, 365, 480])
+  [0, 120, 240, 360, 480])
   for (const name of layoutNames) {
     assert.deepEqual(expectedLayouts[name].map(resolveCell), expectedRects[name], `${name} pixels are exact`)
   }
@@ -247,9 +248,9 @@ test('every named layout is an ordered, complete, non-overlapping 4x4 tiling', (
 
 test('divider definitions, integer coordinates, and 95% truncation are exact', () => {
   assert.deepEqual(contract.dividers, expectedDividers)
-  assert.deepEqual(span95(9, 785), [28, 775])
-  assert.deepEqual(span95(22, 458), [33, 469])
-  assert.deepEqual(span95(251, 229), [256, 475])
+  assert.deepEqual(span95(0, 800), [20, 780])
+  assert.deepEqual(span95(0, 480), [12, 468])
+  assert.deepEqual(span95(240, 240), [246, 474])
   for (const name of layoutNames) {
     assert.deepEqual(contract.dividers[name].map(resolveDivider), expectedResolvedDividers[name],
       `${name} divider pixels are exact`)
