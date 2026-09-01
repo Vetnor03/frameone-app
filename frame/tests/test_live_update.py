@@ -75,6 +75,20 @@ def test_status_reporting_is_outside_render_and_after_manual_ack():
     assert accepted.index('postDeviceStatus') < accepted.index('refreshContentSignatureBestEffort')
 
 
+def test_later_ack_success_reports_completed_render_once_without_redraw():
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
+    retry = loop[loop.index('uint64_t awaitingAck'):loop.index('uint64_t rendered')]
+    assert retry.index('retryRenderedAck') < retry.index('postDeviceStatus(batt, pwr, true)')
+    assert retry.index('postDeviceStatus(batt, pwr, true)') < retry.index('refreshContentSignatureBestEffort')
+    assert 'renderLoadedDashboard' not in retry
+    assert 'fetchAndRenderExplicit' not in retry
+    assert retry.count('postDeviceStatus(batt, pwr, true)') == 1
+
+    immediate = loop[loop.index('if (!fetchAndRenderExplicit'):loop.index('// Exactly one cheap revision probe')]
+    assert immediate.count('postDeviceStatus(batt, pwr, true)') == 1
+    assert immediate.index('retryRenderedAck') < immediate.index('postDeviceStatus(batt, pwr, true)')
+
+
 def test_manual_timing_diagnostics_and_safe_request_paths_are_present():
     for metric in ('probe_to_pending_ms', 'config_fetch_ms', 'render_total_ms',
                    'display_update_ms', 'ack_ms', 'total_ms'):

@@ -724,7 +724,9 @@ static InteractiveModeResult runInteractiveMode(
     if (retryRenderedAck(state.displayedRevision)) {
       if (awaitingAck > state.displayedRevision) {
         state.displayedRevision = awaitingAck;
-        // Signature bookkeeping is deliberately after durable physical ACK.
+        // Physical status and signature bookkeeping are deliberately after
+        // durable physical ACK, including when the first ACK attempt failed.
+        postDeviceStatus(batt, pwr, true);
         refreshContentSignatureBestEffort();
       }
     }
