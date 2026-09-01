@@ -58,8 +58,6 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
 
   StaticJsonDocument<384> doc;
   if (deserializeJson(doc, body)) return false;
-  if (!doc["app_active"].is<bool>()) return false;
-
   uint64_t requested = 0;
   uint64_t displayed = 0;
   if (!readRevision(doc["requested_revision"], requested) ||
@@ -68,7 +66,6 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
     return false;
   }
 
-  out.appActive = doc["app_active"].as<bool>();
   out.requestedRevision = requested;
   out.displayedRevision = displayed;
   return true;

@@ -25,19 +25,15 @@ import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppThe
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
 import {
-  DEVICE_ACTIVITY_HEARTBEAT_MS,
   DEVICE_UPDATE_POLL_MS,
   DEVICE_UPDATE_TIMEOUT_MS,
-  LIVE_UPDATE_SAVE_DEBOUNCE_MS,
   getDeviceUpdateStatus,
   requestDeviceUpdate,
   revisionHasBeenDisplayed,
-  sendDeviceActivity,
 } from './lib/device/updateStateClient'
-import { clearManualUpdate, readManualUpdate, requestManualUpdateRevision, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
+import { clearManualUpdate, readManualUpdate, writeManualUpdate, type PersistedManualUpdate } from './lib/device/manualUpdateState'
 import { saveFrameSettings } from './lib/device/saveFrameSettings.mjs'
 import { reconcilePersistedDesiredState } from './lib/device/desiredStateReconciliation.mjs'
-import { createLatestStateDebouncer, type LatestStateDebouncer } from './lib/device/liveUpdateDebounce.mjs'
 import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normalizeLayoutName, remapAssignmentsAfterGeometryEdit, validateCustomGeometry, geometryWithAssignments, supportsPhysicalCustomLayout, type CustomLayout, type CustomLayoutCell } from './lib/customLayouts'
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
@@ -1185,12 +1181,8 @@ export default function HomePage() {
   const [persisting, setPersisting] = useState(false)
   const [frameUpdateError, setFrameUpdateError] = useState('')
   const [explicitUpdateStatus, setExplicitUpdateStatus] = useState<'idle' | 'saving' | 'requesting' | 'waiting_for_display'>('idle')
-  const [updateRevisions, setUpdateRevisions] = useState({ requested: 0, displayed: 0 })
-  const [desiredEditVersion, setDesiredEditVersion] = useState(0)
   const updateActionInFlightRef = useRef(false)
   const manualUpdateCompletionRef = useRef<{ deviceId: string; promise: Promise<void> } | null>(null)
-  const settingsSaveCompletionRef = useRef<{ deviceId: string; promise: Promise<number | null> } | null>(null)
-  const liveUpdateDebounceRef = useRef<LatestStateDebouncer | null>(null)
   const updateOperationRef = useRef<{ id: number; deviceId: string; requestedRevision: number } | null>(null)
   const updateOperationIdRef = useRef(0)
   const activeDeviceIdRef = useRef(activeDeviceId)
@@ -1210,68 +1202,6 @@ export default function HomePage() {
   useEffect(() => {
     physicalFrameSnapshotRef.current = physicalFrameSnapshot
   }, [physicalFrameSnapshot])
-
-  useEffect(() => {
-    if (!activeDeviceId || !userId || activeTab === 'settings') return
-
-    let heartbeatTimer: number | null = null
-    let cancelled = false
-
-    const heartbeat = () => {
-      if (cancelled || document.visibilityState !== 'visible') return
-      void sendDeviceActivity(supabase, activeDeviceId).catch(() => undefined)
-    }
-    const start = () => {
-      if (document.visibilityState !== 'visible' || heartbeatTimer != null) return
-      heartbeat()
-      heartbeatTimer = window.setInterval(heartbeat, DEVICE_ACTIVITY_HEARTBEAT_MS)
-    }
-    const stop = () => {
-      if (heartbeatTimer != null) window.clearInterval(heartbeatTimer)
-      heartbeatTimer = null
-    }
-    const handleVisibilityChange = () => document.visibilityState === 'visible' ? start() : stop()
-    const handleFocus = () => heartbeat()
-
-    start()
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-    return () => {
-      cancelled = true
-      stop()
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [activeDeviceId, activeTab, userId])
-
-  useEffect(() => {
-    if (!activeDeviceId || !userId || activeTab === 'settings') return
-    let cancelled = false
-    const deviceId = activeDeviceId
-
-    const refresh = async () => {
-      if (cancelled || document.visibilityState !== 'visible') return
-      try {
-        const status = await getDeviceUpdateStatus(supabase, deviceId)
-        if (!cancelled) {
-          setUpdateRevisions({
-            requested: status.requestedRevision,
-            displayed: status.displayedRevision,
-          })
-        }
-      } catch {
-        // Offline status is intentionally non-destructive. The desired state
-        // remains persisted/pending and will be observed after reconnecting.
-      }
-    }
-
-    void refresh()
-    const timer = window.setInterval(() => void refresh(), DEVICE_UPDATE_POLL_MS)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [activeDeviceId, activeTab, userId])
 
   useEffect(() => {
     updateOperationIdRef.current += 1
@@ -1298,21 +1228,11 @@ export default function HomePage() {
       let update = persisted
       while (!cancelled && Date.now() < update.deadline) {
         try {
-          // Recover the exact ledger operation. Replaying this request ID is
-          // idempotent and must never adopt an unrelated global revision.
+          // Only an already accepted manual revision may be recovered. A failed
+          // request stays dirty and is retried by a new explicit button press.
           const requestedRevision = update.requestedRevision
-            ?? await requestManualUpdateRevision(
-              update.requestId,
-              update.deadline,
-              (requestId) => requestDeviceUpdate(supabase, deviceId, requestId)
-          )
           if (requestedRevision == null) break
           resolvedRevision = requestedRevision
-          if (requestedRevision > 0 && update.requestedRevision == null) {
-            update = { ...update, phase: 'waiting_for_display', requestedRevision }
-            writeManualUpdate(window.localStorage, deviceId, update)
-            setExplicitUpdateStatus('waiting_for_display')
-          }
           const backend = await getDeviceUpdateStatus(supabase, deviceId)
           if (requestedRevision > 0 && revisionHasBeenDisplayed(backend.displayedRevision, requestedRevision)) {
             clearManualUpdate(window.localStorage, deviceId)
@@ -1690,7 +1610,6 @@ export default function HomePage() {
     // Record desired state synchronously. An older network save may resolve
     // before the next animation frame and must still see that a newer edit won.
     desiredStateRef.current = serializeDesiredState(next)
-    setDesiredEditVersion((version) => version + 1)
     pendingDirtyStateRef.current = next ?? null
     if (dirtyFrameRef.current != null) return
     dirtyFrameRef.current = window.requestAnimationFrame(() => {
@@ -1806,14 +1725,14 @@ export default function HomePage() {
     return `${prefix} ${diffDay} day${diffDay === 1 ? '' : 's'} ago`
   }
 
-  const manualUpdateInProgress = explicitUpdateStatus === 'saving' || explicitUpdateStatus === 'requesting'
-  const frameChangesPending = updateRevisions.requested > updateRevisions.displayed
+  const manualUpdateInProgress = explicitUpdateStatus !== 'idle'
+  const frameChangesPending = dirty
   const actionDisabled = layoutFlow
     ? layoutDraftSaving || (layoutFlow.mode === 'create' && !activeDeviceId)
-    : !activeDeviceId
+    : !activeDeviceId || manualUpdateInProgress
   const updateStatusText = manualUpdateInProgress
     ? (language === 'no' ? 'Oppdaterer…' : 'Updating…')
-    : frameChangesPending || dirty
+    : frameChangesPending
       ? (language === 'no' ? 'Endringer venter' : 'Changes pending')
       : lastPhysicalDisplayUpdatedAt
         ? formatRelative(lastPhysicalDisplayUpdatedAt)
@@ -2396,126 +2315,83 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  function persistSettings(deviceId = activeDeviceId): Promise<number | null> {
-    if (!deviceId) return Promise.resolve(null)
-    const existing = settingsSaveCompletionRef.current
-    if (existing?.deviceId === deviceId) return existing.promise
-
-    const promise = performSettingsSave(deviceId)
-    settingsSaveCompletionRef.current = { deviceId, promise }
-    void promise.finally(() => {
-      if (settingsSaveCompletionRef.current?.promise === promise) {
-        settingsSaveCompletionRef.current = null
-      }
-    })
-    return promise
-  }
-
-  async function performSettingsSave(deviceId: string): Promise<number | null> {
-
+  async function performSettingsSave(deviceId: string): Promise<boolean> {
     try {
       setPersisting(true)
 
-      const modulesForSave = normalizeModulesForSave(modulesJson)
-      const currentCellsForLayout = cellsByLayout[layoutKey] || emptyCellsFor(layoutKey)
-      const persistedSignature = serializeComparableState({
-        frameTheme,
-        language,
-        fontSize,
-        layoutKey,
-        cellsByLayout,
-        modulesJson: modulesForSave,
-        pinnedModuleTabs,
-      })
+      // Snapshot every value used to build the physical draft before awaiting.
+      const draftTheme = frameTheme
+      const draftLanguage = language
+      const draftFontSize = fontSize
+      const draftLayoutKey = layoutKey
+      const draftCellsByLayout = cellsByLayout
+      const draftModules = normalizeModulesForSave(modulesJson)
+      const draftPinnedTabs = pinnedModuleTabs
+      const currentCells = draftCellsByLayout[draftLayoutKey] || emptyCellsFor(draftLayoutKey)
       const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(
         layoutModuleMemoryRef.current,
-        layoutKey,
-        currentCellsForLayout
+        draftLayoutKey,
+        currentCells
       )
+      const persistedSignature = serializeComparableState({
+        frameTheme: draftTheme,
+        language: draftLanguage,
+        fontSize: draftFontSize,
+        layoutKey: draftLayoutKey,
+        cellsByLayout: draftCellsByLayout,
+        modulesJson: draftModules,
+        pinnedModuleTabs: draftPinnedTabs,
+      })
 
       let settingsJson: SettingsJson = {
-        theme: frameTheme,
-        language,
-        fontSize,
-        layout: layoutKey,
-        cells: cellsMapToArray(currentCellsForLayout),
-        modules: modulesForSave,
-        pinned_tabs: pinnedModuleTabs,
+        theme: draftTheme,
+        language: draftLanguage,
+        fontSize: draftFontSize,
+        layout: draftLayoutKey,
+        cells: cellsMapToArray(currentCells),
+        modules: draftModules,
+        pinned_tabs: draftPinnedTabs,
         layout_module_memory: nextLayoutModuleMemory,
       }
-      if(activeCustomLayoutId){const custom=customLayouts.find(item=>item.id===activeCustomLayoutId),payload=custom&&customPhysicalPayload(custom,customAssignments[activeCustomLayoutId]||{});if(!payload){return null}settingsJson={...settingsJson,...payload}}
+      if (activeCustomLayoutId) {
+        const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
+        const payload = custom && customPhysicalPayload(custom, customAssignments[activeCustomLayoutId] || {})
+        if (!payload) throw new Error('This layout isn’t supported on the frame yet.')
+        settingsJson = { ...settingsJson, ...payload }
+      }
 
       const session = await supabase.auth.getSession()
       const accessToken = session.data.session?.access_token
-      if (!accessToken) throw new Error(language === 'no' ? 'Økten er utløpt. Logg inn igjen.' : 'Your session expired. Please sign in again.')
-      const saveResult = await saveFrameSettings({ deviceId, settingsJson: { ...settingsJson, theme: frameTheme }, accessToken })
-      const requestedRevision = Number(saveResult.requested_revision)
-      setUpdateRevisions((current) => ({
-        requested: Math.max(current.requested, requestedRevision),
-        displayed: current.displayed,
-      }))
+      if (!accessToken) throw new Error(draftLanguage === 'no' ? 'Økten er utløpt. Logg inn igjen.' : 'Your session expired. Please sign in again.')
+      await saveFrameSettings({ deviceId, settingsJson: { ...settingsJson, theme: draftTheme }, accessToken })
+      if (activeDeviceIdRef.current !== deviceId) return false
 
-      // A frame switch may finish loading while this save is in flight. The save
-      // still belongs to its captured device, so never apply its UI state to the new frame.
-      if (activeDeviceIdRef.current !== deviceId) return requestedRevision
-
-      const savedCellsForLayout = { ...currentCellsForLayout }
-
-      const nextCellsByLayout = {
-        ...makeEmptyCellsByLayout(),
-        [layoutKey]: savedCellsForLayout,
-      }
-
+      const nextCellsByLayout = { ...makeEmptyCellsByLayout(), [draftLayoutKey]: { ...currentCells } }
       const reconciliation = reconcilePersistedDesiredState(desiredStateRef.current, persistedSignature)
       if (reconciliation.applyPersistedValues) {
         layoutModuleMemoryRef.current = nextLayoutModuleMemory
         setCellsByLayout(nextCellsByLayout)
-        setModulesJson(modulesForSave)
+        setModulesJson(draftModules)
       }
-
       savedStateRef.current = persistedSignature
       savedFrameStateRef.current = {
-        frameTheme,
-        language,
-        fontSize,
-        layoutKey,
+        frameTheme: draftTheme,
+        language: draftLanguage,
+        fontSize: draftFontSize,
+        layoutKey: draftLayoutKey,
         cellsByLayout: nextCellsByLayout,
       }
-
-      // A newer edit may have landed while this request was in flight. Never
-      // clear that desired state; the next autosave pass will persist it.
       setDirty(reconciliation.dirty)
       pendingFrameConfigUpdatedAtRef.current = new Date().toISOString()
-      await refreshPhysicalFrameState(deviceId, { forceSnapshot: true })
-
-      return requestedRevision
-    } catch (e: any) {
-      alert(String(e?.message || e))
-      return null
+      return true
+    } catch (error) {
+      setDirty(true)
+      setFrameUpdateError(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setPersisting(false)
     }
   }
-
-  useEffect(() => {
-    if (!activeDeviceId || !userId || activeTab === 'settings' || !dirty || persisting) return
-    const deviceId = activeDeviceId
-    const debouncer = liveUpdateDebounceRef.current
-      ?? createLatestStateDebouncer(LIVE_UPDATE_SAVE_DEBOUNCE_MS)
-    liveUpdateDebounceRef.current = debouncer
-
-    debouncer.schedule(async () => {
-      const saved = await persistSettings(deviceId)
-      if (!saved || activeDeviceIdRef.current !== deviceId) return
-
-      // persistSettings publishes the newest desired revision in the same API
-      // operation. Status polling now only observes its eventual confirmation.
-    })
-
-    return () => {
-      debouncer.cancel()
-    }
-  }, [activeDeviceId, activeTab, desiredEditVersion, dirty, persisting, userId])
 
   function handleExplicitUpdate() {
     const deviceId = activeDeviceId
@@ -2555,22 +2431,24 @@ export default function HomePage() {
     const operationId = ++updateOperationIdRef.current
     setExplicitUpdateStatus('saving')
 
-    let requestedRevision: number | null = null
-    if (!dirty) {
-      try {
-        const status = await getDeviceUpdateStatus(supabase, deviceId)
-        if (status.requestedRevision > status.displayedRevision) {
-          requestedRevision = status.requestedRevision
-        }
-      } catch {
-        // Falling through to save is safe: it publishes one newest revision.
-      }
+    const saved = await performSettingsSave(deviceId)
+    if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
+      if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) setExplicitUpdateStatus('idle')
+      updateActionInFlightRef.current = false
+      return
     }
-    requestedRevision ??= await persistSettings(deviceId)
-    if (requestedRevision == null || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
-      if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) {
-        setExplicitUpdateStatus('idle')
-      }
+
+    setExplicitUpdateStatus('requesting')
+    const requestId = crypto.randomUUID()
+    let requestedRevision: number
+    try {
+      requestedRevision = await requestDeviceUpdate(supabase, deviceId, requestId)
+    } catch {
+      setDirty(true)
+      setExplicitUpdateStatus('idle')
+      setFrameUpdateError(language === 'no'
+        ? 'Innstillingene ble lagret, men oppdateringen kunne ikke startes.'
+        : 'Settings were saved, but the update could not be started.')
       updateActionInFlightRef.current = false
       return
     }
@@ -2578,13 +2456,11 @@ export default function HomePage() {
     const requestedAt = Date.now()
     const persistedUpdate: PersistedManualUpdate = {
       phase: 'waiting_for_display',
-      requestId: `desired-${requestedRevision}`,
+      requestId,
       requestedRevision,
       requestedAt,
       deadline: requestedAt + DEVICE_UPDATE_TIMEOUT_MS,
     }
-    // save-settings already published this exact desired revision. Manual
-    // Update observes it instead of publishing an identical second revision.
     writeManualUpdate(window.localStorage, deviceId, persistedUpdate)
     setExplicitUpdateStatus('waiting_for_display')
 

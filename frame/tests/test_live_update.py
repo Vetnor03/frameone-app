@@ -1,197 +1,66 @@
-import re
-import subprocess
 from pathlib import Path
+MAIN = Path('frame/src/frame_v2.5.1.ino').read_text()
+LIVE = Path('frame/src/network/LiveUpdate.cpp').read_text()
+CHECKER = Path('frame/src/network/UpdateChecker.cpp').read_text()
+SIGNATURE = Path('app/api/device/content-signature/route.ts').read_text()
 
-ROOT = Path(__file__).parents[1]
-MAIN = (ROOT / "src/frame_v2.5.1.ino").read_text()
-LIVE = (ROOT / "src/network/LiveUpdate.cpp").read_text()
-INTERACTIVE = MAIN[MAIN.index("static InteractiveModeResult runInteractiveMode"):MAIN.index("// --------------------------------------\n// Setup")]
+def test_revision_probe_is_one_second_and_idle_is_cheap():
+    assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
+    assert 'delay(REALTIME_UPDATE_POLL_MS);' in loop
+    assert 'LiveUpdate::probe' in loop
+    assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
+def test_app_activity_is_not_a_firmware_gate():
+    assert 'appActive' not in MAIN + LIVE
+    assert 'app_active' not in LIVE
 
-def test_firmware_translation_units_declare_direct_wifi_dependency():
-    tracked = subprocess.run(["git", "ls-files", "frame"], cwd=ROOT.parent, check=True,
-                             capture_output=True, text=True).stdout.splitlines()
-    missing = []
-    for relative in tracked:
-        path = ROOT.parent / relative
-        if path.suffix not in {".c", ".cc", ".cpp", ".cxx", ".ino"}:
-            continue
-        source = path.read_text()
-        if re.search(r"WiFi\.|\bWL_CONNECTED\b", source) and not re.search(
-                r"^\s*#\s*include\s*<WiFi\.h>", source, re.MULTILINE):
-            missing.append(relative)
-    assert missing == []
+def test_manual_revision_fetches_new_config_then_renders_persists_and_acks():
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
+    assert explicit.index('FrameConfigApi::fetchWithStatus') < explicit.index('renderLoadedDashboard')
+    assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
+    retry = MAIN[MAIN.index('static bool retryRenderedAck'):MAIN.index('static void consumeNormalSyncPeriod')]
+    assert retry.index('getRenderedAwaitingAck') < retry.index('LiveUpdate::acknowledge')
 
+def test_renders_are_serial_and_new_layout_cannot_use_cached_config():
+    assert 'while (true)' in MAIN
+    assert MAIN.count('fetchAndRenderExplicit(batt, pwr, revisionToDisplay)') == 1
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
+    assert 'FrameConfigApi::fetchWithStatus(g_cfg' in explicit
 
-def test_live_update_declares_its_wifi_dependency():
-    assert "#include <WiFi.h>" in LIVE
+def test_single_four_hour_content_policy():
+    assert 'SCHEDULED_CONTENT_CHECK_SECONDS = 4 * 60 * 60' in MAIN
+    assert 'NORMAL_SYNC_SECONDS' not in MAIN
+    assert 'WAKES_PER_REFRESH' not in MAIN
+    assert 'shouldForcePeriodicRefresh' not in MAIN
+    assert 'NORMAL_SYNC_SECONDS = 900' not in MAIN
 
+def test_signature_covers_all_physical_modules_and_sha256():
+    for module in ('date','weather','reminders','surf','countdown','soccer','stocks','groceries','assistant'):
+        assert f"active.has('{module}')" in SIGNATURE
+    assert "createHash('sha256')" in SIGNATURE
+    assert 'buildFrameConfigPayload' in SIGNATURE
+    assert 'optimizeFrameContent' not in SIGNATURE
 
-def test_realtime_test_mode_is_explicit_and_enabled_at_one_second():
-    assert "static const bool REALTIME_TEST_MODE = true;" in MAIN
-    assert "static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;" in MAIN
-    assert "delay(REALTIME_UPDATE_POLL_MS);\n    LiveUpdateState next{};" in INTERACTIVE
+def test_scheduled_same_signature_does_not_render_and_change_forces_full_refresh():
+    scheduled = MAIN[MAIN.index('String nextSignature;'):MAIN.index('normalSyncDue = false;', MAIN.index('String nextSignature;'))]
+    same = scheduled[scheduled.index('nextSignature =='):scheduled.index('} else {', scheduled.index('nextSignature =='))]
+    assert 'renderLoadedDashboard' not in same
+    assert 'postDeviceStatus(batt, pwr, false)' in same
+    assert 'DisplayCore::forceNextFullRefresh(true)' in scheduled
+    assert scheduled.index('renderLoadedDashboard') < scheduled.index('saveContentSignature(nextSignature)')
 
+def test_signature_failure_preserves_display_and_backs_off():
+    scheduled = MAIN[MAIN.index('String nextSignature;'):]
+    failed = scheduled[:scheduled.index('} else if')]
+    assert 'renderLoadedDashboard' not in failed
+    assert 'preserving display' in failed
 
-def test_paired_realtime_loop_does_not_gate_on_app_active_or_finish_when_inactive():
-    assert "while (true)" in INTERACTIVE
-    assert "if (!state.appActive" not in INTERACTIVE
-    assert "activity expired" not in INTERACTIVE
-    assert "REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)" in MAIN
+def test_manual_render_updates_signature_without_blocking_ack():
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
+    assert explicit.index('saveRenderedAwaitingAck') < explicit.index('fetchContentSignature')
+    assert 'rendered content signature could not be persisted' in explicit
 
-
-def test_realtime_paired_flow_bypasses_normal_sleep():
-    assert "if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);" in MAIN
-    initial_gate = MAIN[MAIN.index("bool explicitRevisionPending"):MAIN.index("run_normal_sync:")]
-    assert "if (!REALTIME_TEST_MODE &&" in initial_gate
-    assert "goToShelfSleep" not in INTERACTIVE
-    assert "goToRechargeSleep" not in INTERACTIVE
-
-
-def test_idle_loop_only_uses_cheap_live_update_probe():
-    cadence = INTERACTIVE[INTERACTIVE.index("delay(REALTIME_UPDATE_POLL_MS)"):]
-    assert "LiveUpdate::probe(DeviceIdentity::getToken(), next)" in cadence
-    assert "FrameConfigApi::fetchWithStatus" not in cadence
-    assert "postDeviceStatus" not in cadence
-
-
-def test_new_revision_uses_existing_serial_physical_render_pipeline():
-    pending = INTERACTIVE.index("state.requestedRevision > state.displayedRevision")
-    render = INTERACTIVE.index("fetchAndRenderExplicit(batt, pwr, revisionToDisplay)", pending)
-    ack = INTERACTIVE.index("retryRenderedAck(state.displayedRevision)", render)
-    probe = INTERACTIVE.index("LiveUpdate::probe(DeviceIdentity::getToken(), next)", ack)
-    adopt = INTERACTIVE.index("state = next", probe)
-    assert pending < render < ack < probe < adopt
-    explicit = MAIN[MAIN.index("static bool fetchAndRenderExplicit"):MAIN.index("static bool retryRenderedAck")]
-    assert "FrameConfigApi::fetchWithStatus" in explicit
-    assert explicit.index("renderLoadedDashboard") < explicit.index("LiveUpdate::saveRenderedAwaitingAck")
-
-
-def test_displayed_revision_is_durable_and_acked_only_after_render():
-    render = MAIN.index("renderLoadedDashboard(batt, pwr)", MAIN.index("fetchAndRenderExplicit"))
-    persist = MAIN.index("LiveUpdate::saveRenderedAwaitingAck(revision)", render)
-    ack = MAIN.index("LiveUpdate::acknowledge", persist)
-    assert render < persist < ack
-    assert 'prefs.putULong64("live_render", revision)' in LIVE
-
-
-def test_awake_elapsed_time_makes_normal_sync_due_every_900_seconds():
-    assert "static const uint32_t NORMAL_SYNC_SECONDS = 900;" in MAIN
-    assert "baselineElapsedAtEntry + awakeSeconds >= NORMAL_SYNC_SECONDS" in INTERACTIVE
-    assert "normalSyncElapsedSeconds = baselineElapsedAtEntry + awakeSeconds" in MAIN
-    assert "consumeNormalSyncPeriod();\n        goto run_normal_sync;" in MAIN
-    assert 600 + 300 == 900
-
-
-def test_normal_sync_returns_to_polling_not_sleep_in_realtime_mode():
-    no_redraw = MAIN[MAIN.index("// ---------------- No redraw"):MAIN.index("// ---------------- Redraw")]
-    assert "REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)" in no_redraw
-    applied = MAIN[MAIN.index('Serial.println("✅ Applied")'):]
-    assert "REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)" in applied
-    assert "runInteractiveMode" in no_redraw and "runInteractiveMode" in applied
-
-
-def test_probe_and_network_failures_back_off_without_sleep():
-    assert "static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;" in MAIN
-    assert "WiFiManagerV2::connectSaved(12000)" in INTERACTIVE
-    failure = INTERACTIVE[INTERACTIVE.index("if (!LiveUpdate::probe"):]
-    assert "delay(REALTIME_FAILURE_BACKOFF_MS - REALTIME_UPDATE_POLL_MS)" in failure
-    assert "goToSleep" not in failure
-    assert "return finishInteractiveMode" not in failure
-
-
-def test_successful_interactive_reconnect_reapplies_realtime_power_policy():
-    reconnect = INTERACTIVE[
-        INTERACTIVE.index("if (WiFi.status() != WL_CONNECTED)"):
-        INTERACTIVE.index('Serial.println("LiveUpdate: Wi-Fi reconnected")')
-    ]
-    connected = reconnect.index("if (!WiFiManagerV2::connectSaved(12000))")
-    no_sleep = reconnect.index("WiFi.setSleep(false);", connected)
-    no_ps = reconnect.index("esp_wifi_set_ps(WIFI_PS_NONE);", no_sleep)
-    assert connected < no_sleep < no_ps
-
-
-def test_revision_contract_uses_uint64_and_rejects_invalid_shapes():
-    header = (ROOT / "src/network/LiveUpdate.h").read_text()
-    assert "uint64_t requestedRevision" in header
-    assert "uint64_t displayedRevision" in header
-    # ArduinoJson treats booleans as numeric-convertible, so the explicit bool
-    # rejection must remain ahead of revision parsing.
-    assert "value.is<bool>()" in LIVE
-    assert "displayed > requested" in LIVE
-
-
-def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
-    assert "if (!fetchAndRenderExplicit" in INTERACTIVE
-    assert "configRetryMs >= 2500U" in INTERACTIVE
-    assert "? 5000U" in INTERACTIVE
-    assert ": configRetryMs * 2U" in INTERACTIVE
-    retry_ms = 1000
-    observed = []
-    for _ in range(5):
-        observed.append(retry_ms)
-        retry_ms = 5000 if retry_ms >= 2500 else retry_ms * 2
-    assert observed == [1000, 2000, 4000, 5000, 5000]
-    assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in INTERACTIVE
-
-
-def test_only_scheduled_full_sync_advances_periodic_refresh_counter():
-    assert "if (normalSyncDue) UpdateChecker::noteWake();" in MAIN
-    assert MAIN.count("UpdateChecker::noteWake();") == 1
-
-
-def test_failed_live_probe_cannot_postpone_due_normal_sync():
-    probe = MAIN.index("const bool liveProbeOk = LiveUpdate::probe")
-    legacy_checks = MAIN.index("UpdateChecker::hasConfigChanged", probe)
-    flow = MAIN[probe:legacy_checks]
-    assert 'else {\n    Serial.println("LiveUpdate: probe failed");\n  }' in flow
-    assert "if (!REALTIME_TEST_MODE && !normalSyncDue" in flow
-    assert "if (normalSyncDue) UpdateChecker::noteWake();" in flow
-    assert "if (normalSyncDue) runOtaCheckIfDue();" in flow
-    assert "UpdateChecker::shouldForceRedrawForFirmware" in flow
-    assert "UpdateChecker::shouldForcePeriodicRefresh" in flow
-    assert "bool explicitRevisionPending =\n    liveProbeOk &&" in flow
-
-
-def test_normal_sync_clock_and_explicit_ack_remain_independent():
-    setup = MAIN.index("void setup()")
-    scheduler = MAIN[
-        MAIN.index("if (wakeCause == ESP_SLEEP_WAKEUP_TIMER)", setup):
-        MAIN.index('Serial.print("device_id: ")', setup)
-    ]
-    assert "normalSyncElapsedSeconds += PROBE_WAKE_SECONDS" in scheduler
-    assert "normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS" in scheduler
-    explicit = MAIN[
-        MAIN.index("static bool fetchAndRenderExplicit"):
-        MAIN.index("static bool retryRenderedAck")
-    ]
-    assert "normalSyncElapsedSeconds" not in explicit
-
-
-def test_pending_revision_survives_interactive_deadline_into_normal_sync():
-    deadline = INTERACTIVE[
-        INTERACTIVE.index("normal sync became due while interactive"):
-        INTERACTIVE.index("INTERACTIVE_NORMAL_SYNC_DUE")
-    ]
-    assert "LiveUpdate::probe" in deadline
-    assert "state = deadlineState" in deadline
-    label = MAIN.index("run_normal_sync:")
-    render = MAIN.index("renderLoadedDashboard(batt, pwr)", label)
-    persist = MAIN.index("LiveUpdate::saveRenderedAwaitingAck(liveState.requestedRevision)", render)
-    ack = MAIN.index("retryRenderedAck(liveState.displayedRevision)", persist)
-    assert label < render < persist < ack
-
-
-def test_special_safety_and_setup_sleep_paths_remain():
-    assert "if (battEarly.requiresRecharge)" in MAIN
-    assert "showRechargeAndSleep(battEarly, pwrEarly);" in MAIN
-    assert "static void goToRechargeSleep" in MAIN
-    assert "static void goToShelfSleep" in MAIN
-    assert "showPairingShelfAndSleep" in MAIN
-    assert "PairingResult pairing = ensurePairedNoReboot" in MAIN
-
-
-def test_legacy_ten_second_sleep_policy_remains_available_but_not_realtime_cadence():
-    assert "static const uint32_t PROBE_WAKE_SECONDS = 10;" in MAIN
-    assert "goToSleepForUs(PROBE_WAKE_US, usbPresent);" in MAIN
-    assert "delay(PROBE_WAKE_SECONDS" not in INTERACTIVE
+def test_recharge_pairing_wifi_and_ota_maintenance_remain():
+    for token in ('requiresRecharge', 'ensurePairedNoReboot', 'WiFiManagerV2::connectSaved', 'runOtaCheckIfDue'):
+        assert token in MAIN

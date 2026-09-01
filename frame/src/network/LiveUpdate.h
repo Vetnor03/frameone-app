@@ -3,7 +3,6 @@
 #include <Arduino.h>
 
 struct LiveUpdateState {
-  bool appActive;
   uint64_t requestedRevision;
   uint64_t displayedRevision;
 };

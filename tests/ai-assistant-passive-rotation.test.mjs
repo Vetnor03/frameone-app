@@ -29,8 +29,7 @@ const base = {
 }
 
 test('AI Assistant rotation never adds an Assistant wake, refresh endpoint call, or dedicated 15-minute timer', () => {
-  assert.match(frameLoop, /static const uint64_t QUICK_WAKE_US = 900ULL \* 1000000ULL/)
-  assert.match(frameLoop, /static const uint16_t WAKES_PER_REFRESH = 12/)
+  assert.match(frameLoop, /SCHEDULED_CONTENT_CHECK_SECONDS = 4 \* 60 \* 60/)
   assert.doesNotMatch(frameLoop, /assistant[\s\S]{0,120}(wake|refresh|timer|900ULL|15\s*min)/i)
   const assistantRouteSection = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
   assert.doesNotMatch(assistantRouteSection, /setTimeout|setInterval|\/api\/device\/refresh|forceRefresh/i)
