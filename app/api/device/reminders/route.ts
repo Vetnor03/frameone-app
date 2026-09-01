@@ -1,11 +1,11 @@
 // app/api/device/reminders/route.ts
 
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
 import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
-import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
+import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 
 export const runtime = 'nodejs'
 
@@ -39,6 +39,7 @@ type PhysicalDeviceReminderItem = {
   days_until: number
   is_overdue: boolean
   display_time: string | null
+  profile_titles?: Partial<Record<DisplayCapacityProfile, string>>
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
@@ -427,21 +428,25 @@ export async function GET(req: Request) {
 
     const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
 
-    const { data, error } = await supabase
+    // These reads share only sharedDeviceIds, so overlap their network latency.
+    const [remindersResult, completionsResult, membersResult] = await Promise.all([supabase
       .from('reminders')
       .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
       .in('device_id', sharedDeviceIds)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
-      .order('title', { ascending: true })
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-    const { data: completionsData, error: completionsError } = await supabase
+      .order('title', { ascending: true }), supabase
       .from('reminder_completions')
       .select('reminder_id, occurrence_date')
-      .in('device_id', sharedDeviceIds)
+      .in('device_id', sharedDeviceIds), supabase
+      .from('device_members')
+      .select('user_id')
+      .eq('device_id', device_id)])
+    const { data, error } = remindersResult
+    const { data: completionsData, error: completionsError } = completionsResult
+    const { data: membersData, error: membersError } = membersResult
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     if (completionsError) {
       return NextResponse.json({ error: completionsError.message }, { status: 500 })
@@ -470,11 +475,6 @@ export async function GET(req: Request) {
       .filter((item) => !completedKeySet.has(`${item.reminder_id}__${item.occurrence_date}`))
       .map((item) => ({ ...item, source: 'remind' as const }))
 
-    const { data: membersData, error: membersError } = await supabase
-      .from('device_members')
-      .select('user_id')
-      .eq('device_id', device_id)
-
     if (membersError) {
       logOptionalReminderProviderFailure('device_members', membersError)
     }
@@ -490,8 +490,17 @@ export async function GET(req: Request) {
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     if (memberUserIds.length > 0) {
-      try {
-        if (!skipSync) await syncSpondIfStaleForUsers(memberUserIds)
+      if (!skipSync) {
+        const syncResults = await Promise.allSettled([
+          syncSpondIfStaleForUsers(memberUserIds),
+          Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays }))),
+        ])
+        syncResults.forEach((result) => {
+          if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
+        })
+      }
+
+      await Promise.all([(async () => { try {
 
         const { data: integrationItemsData, error: integrationItemsError } = await supabase
           .from('integration_items')
@@ -512,15 +521,7 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('spond', error)
-      }
-
-      try {
-        if (!skipSync) {
-          const syncResults = await Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays })))
-          syncResults.forEach((result) => {
-            if (result.status === 'rejected') logOptionalReminderProviderFailure('teams-sync', result.reason)
-          })
-        }
+      } })(), (async () => { try {
 
         const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
           .from('integration_items')
@@ -539,9 +540,8 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('teams', error)
-      }
+      } })(), (async () => { try {
 
-      try {
         const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
@@ -560,9 +560,8 @@ export async function GET(req: Request) {
         )
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
-      }
+      } })(), (async () => { try {
 
-      try {
         const { data: localEventsData, error: localEventsError } = await supabase
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
@@ -599,7 +598,7 @@ export async function GET(req: Request) {
         localEventItems = buildLocalEventFrameItem(localEventRows, localEventSkipRows, todayYmd, now)
       } catch (error) {
         logOptionalReminderProviderFailure('local-events', error)
-      }
+      } })()])
     }
 
     const integrationItems = [
@@ -619,20 +618,32 @@ export async function GET(req: Request) {
         return true
       })
     const selectedItems = selectReminderDisplayGroups(allItems, limit)
-    const optimizedTitles = await optimizeFrameContent(
-      selectedItems.map((item, index) => ({
+    const requestedProfiles = String(url.searchParams.get('display_profiles') || url.searchParams.get('display_profile') || 'standard')
+      .split(',').map(value => value.trim()).filter((value): value is DisplayCapacityProfile => value === 'compact' || value === 'standard' || value === 'spacious')
+    const displayProfiles = [...new Set<DisplayCapacityProfile>(requestedProfiles.length ? requestedProfiles : ['standard'])]
+    const optimizerItems = selectedItems.map((item, index) => ({
         id: String(index),
         title: item.title,
         source: item.source,
         displayDate: item.display_date,
         displayTime: item.display_time,
       }))
-    )
-    const optimizedTitleByIndex = new Map(optimizedTitles.map((item) => [Number(item.id), item.title]))
+    const persistentCache = supabaseTitleCache(supabase)
+    const optimizedByProfile = new Map(await Promise.all(displayProfiles.map(async displayProfile => {
+      const titles = await optimizeFrameContent(optimizerItems, {
+        displayProfile, persistentCache, fastBudgetMs: PHYSICAL_AI_TIMEOUT_MS, aiTimeoutMs: 5000,
+        defer: work => after(async () => { await work }),
+      })
+      return [displayProfile, new Map(titles.map(item => [Number(item.id), item.title]))] as const
+    })))
+    const primaryTitles = optimizedByProfile.get(displayProfiles[0])!
     const physicalItems = selectedItems.map((item, index) => toPhysicalDeviceReminderItem({
       ...item,
-      title: optimizedTitleByIndex.get(index) || item.title,
-    }))
+      title: primaryTitles.get(index) || item.title,
+    })).map((item, index) => displayProfiles.length > 1 ? {
+      ...item,
+      profile_titles: Object.fromEntries(displayProfiles.map(profile => [profile, optimizedByProfile.get(profile)?.get(index) || item.title])),
+    } : item)
     const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems }), 'utf8')
 
     console.info('[device/reminders] compact response', {

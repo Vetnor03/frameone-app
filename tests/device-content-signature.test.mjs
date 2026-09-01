@@ -121,3 +121,20 @@ test("Today's Best preserves fuel/home selection and refetches visible winner de
   assert.equal(seen[1].searchParams.get('daily'), '1')
   assert.equal(visible.sources['surf:1'].visible.rating, 5)
 })
+
+test('independent pipelines start concurrently while Surf detail waits for selection', async () => {
+  const current = settings([{ module: 'surf:1', w: 800, h: 480 }, { module: 'weather:1' }], {
+    surf: [{ id: 1, spotId: '__todays_best__', spot: "Today's Best" }],
+  })
+  const started = [], releases = new Map()
+  const pending = collectVisibleContent({ settings: current, deviceId, origin, authorization: 'Bearer token', fetchImpl: (request) => {
+    const kind = request.pathname.includes('weather') ? 'weather' : request.searchParams.get('spotId') === 'winner' ? 'detail' : 'selection'
+    started.push(kind)
+    return new Promise(resolve => releases.set(kind, () => resolve({ ok: true, json: async () => kind === 'selection' ? { picked: { spotId: 'winner' } } : { visible: kind } })))
+  } })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(started.sort(), ['selection', 'weather'])
+  releases.get('selection')(); await new Promise(resolve => setImmediate(resolve))
+  assert.ok(started.includes('detail'))
+  releases.get('weather')(); releases.get('detail')(); await pending
+})

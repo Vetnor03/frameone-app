@@ -12,6 +12,7 @@
 #include "ModuleWeather.h"
 #include "ModuleSurf.h"
 #include "ModuleStocks.h"
+#include "ModuleReminders.h"
 
 #include <GxEPD2_GFX.h>
 
@@ -327,6 +328,21 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
   staged.dividerCount = logical.count;
   output = staged;
   return true;
+}
+
+uint8_t reminderProfileMask(LayoutKey key, const FrameConfig& cfg) {
+  CustomRenderPlan& customPlan = g_renderWorkspace.prepared;
+  const bool customReady = key == LAYOUT_CUSTOM && prepareCustomRender(cfg, customPlan);
+  Cell* cells = customReady ? customPlan.cells : g_renderWorkspace.namedCells;
+  const int count = customReady ? customPlan.cellCount : buildCells(key == LAYOUT_CUSTOM ? LAYOUT_DEFAULT : key, cells, MAX_GRID_CELLS);
+  const SlotModule* assignments = customReady ? cfg.customLayout.assigns : cfg.assigns;
+  const int assignmentCount = customReady ? cfg.customLayout.assignCount : cfg.assignCount;
+  uint8_t mask = 0;
+  for (int i = 0; i < count; ++i) {
+    const String module = ModuleRenderer::moduleForSlot(assignments, assignmentCount, cells[i].slot);
+    if (module.startsWith("reminders")) mask |= ModuleReminders::profileForCell(cells[i]);
+  }
+  return mask;
 }
 
 void drawWithContent(LayoutKey key, const FrameConfig& cfg) {

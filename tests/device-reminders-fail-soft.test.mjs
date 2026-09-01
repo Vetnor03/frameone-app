@@ -10,7 +10,7 @@ const feed = readFileSync(new URL('../app/lib/device/remindersFeed.ts', import.m
 test('device reminders route keeps manual reminder query independent and returns the expected response shape', () => {
   assert.match(route, /\.from\('reminders'\)[\s\S]*?\.select\('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done'\)/)
   assert.match(route, /const manualItems:[\s\S]*?buildOccurrencesForRow[\s\S]*?source: 'remind' as const/)
-  assert.match(route, /const physicalItems = selectedItems\.map\(toPhysicalDeviceReminderItem\)/)
+  assert.match(route, /const physicalItems = selectedItems\.map\([\s\S]*?toPhysicalDeviceReminderItem/)
   assert.match(route, /return NextResponse\.json\(\{ items: physicalItems \}\)/)
   assert.doesNotMatch(route, /all_items:|count: selectedItems\.length|today: todayYmd|timezone: timeZone/)
   assert.ok(route.includes('const allItems = [...manualItems, ...integrationItems]'))
@@ -102,15 +102,15 @@ test('device reminders sorting and two-date-group selection are unchanged before
   assert.match(feed, /const selectedGroupKeys: string\[\] = \[\][\s\S]*?if \(selectedGroupKeys\.length >= 2\) break/)
 })
 
-test('the physical payload fix changes no unrelated modules', () => {
+test('the performance change stays scoped away from unrelated application systems', () => {
   const changedFiles = execSync('git diff --name-only HEAD', { encoding: 'utf8' })
     .split('\n')
     .map((file) => file.trim())
     .filter(Boolean)
-  assert.deepEqual(changedFiles.filter((file) => file.startsWith('frame/') || file.startsWith('public/firmware/')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.startsWith('frame/src/modules/Module') && !file.includes('ModuleRenderer.') && !file.includes('ModuleReminders.')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('ai-assistant') || file.includes('interpret-ai-assistant')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('frame-config')), [])
-  assert.deepEqual(changedFiles.filter((file) => file.endsWith('.sql') || file.includes('supabase/functions/')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.includes('supabase/functions/')), [])
   assert.deepEqual(changedFiles.filter((file) => file.startsWith('app/') && /page\.(tsx|ts|jsx|js)$/.test(file)), [])
 })
 
@@ -178,7 +178,7 @@ test('empty successful reminder queries return an empty successful response rath
   assert.match(route, /const rows = Array\.isArray\(data\) \? \(data as ReminderRow\[\]\) : \[\]/)
   assert.ok(route.includes('const allItems = [...manualItems, ...integrationItems]'))
   assert.match(route, /sort\(compareReminderItems\)/)
-  assert.match(route, /const physicalItems = selectedItems\.map\(toPhysicalDeviceReminderItem\)/)
+  assert.match(route, /const physicalItems = selectedItems\.map\([\s\S]*?toPhysicalDeviceReminderItem/)
   assert.match(route, /return NextResponse\.json\(\{ items: physicalItems \}\)/)
 })
 

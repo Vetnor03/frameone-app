@@ -540,7 +540,20 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
-  ModuleReminders::preload();
+  const uint8_t reminderProfiles = Layout::reminderProfileMask(g_cfg.layout, g_cfg);
+  ModuleReminders::setRequiredProfiles(reminderProfiles);
+  const SlotModule* activeAssignments = g_cfg.layout == LAYOUT_CUSTOM && g_cfg.customLayout.renderable
+    ? g_cfg.customLayout.assigns : g_cfg.assigns;
+  const int activeAssignmentCount = g_cfg.layout == LAYOUT_CUSTOM && g_cfg.customLayout.renderable
+    ? g_cfg.customLayout.assignCount : g_cfg.assignCount;
+  bool remindersActive = reminderProfiles != 0;
+  for (int i = 0; i < activeAssignmentCount; ++i) {
+    if (strncmp(activeAssignments[i].module, "reminders", 9) == 0) { remindersActive = true; break; }
+  }
+  const uint32_t remindersPreloadStartedAtMs = millis();
+  if (remindersActive) ModuleReminders::preload();
+  Serial.printf("Render timing reminders_preload_ms=%lu active=%u\n",
+    (unsigned long)(millis() - remindersPreloadStartedAtMs), remindersActive ? 1U : 0U);
 
   ensureDisplay();
   Theme::set(g_cfg.theme);
@@ -551,11 +564,11 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   const uint32_t displayStartedAtMs = millis();
   Layout::drawWithContent(g_cfg.layout, g_cfg);
   Serial.printf(
-    "LiveUpdate timing display_update_ms=%lu\n",
+    "Render timing epaper_and_composition_ms=%lu\n",
     (unsigned long)(millis() - displayStartedAtMs)
   );
   Serial.printf(
-    "LiveUpdate timing render_total_ms=%lu\n",
+    "Render timing total_ms=%lu\n",
     (unsigned long)(millis() - renderStartedAtMs)
   );
   return true;
