@@ -14,6 +14,7 @@ const probeMigration = readFileSync(new URL('../supabase/migrations/202608101200
 const updateClient = readFileSync(new URL('../app/lib/device/updateStateClient.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const manualRequestMigration = readFileSync(new URL('../supabase/migrations/20260822120000_manual_request_claims_activity.sql', import.meta.url), 'utf8')
+const repairMigration = readFileSync(new URL('../supabase/migrations/20260901120000_repair_device_update_telemetry.sql', import.meta.url), 'utf8')
 
 test('app operations authenticate a user and require device membership', () => {
   assert.match(auth, /supabase\.auth\.getUser\(token\)/)
@@ -67,10 +68,10 @@ test('ACK is monotonic, rejects future revisions, and timestamps only progress',
 })
 
 test('missing update state has safe zero defaults for both readers', () => {
-  for (const route of [deviceState, appStatus]) {
-    assert.match(route, /requested_revision: data\?\.requested_revision \?\? 0/)
-    assert.match(route, /displayed_revision: data\?\.displayed_revision \?\? 0/)
-  }
+  assert.match(deviceState, /requestedRevision = data\?\.requested_revision \?\? 0/)
+  assert.match(deviceState, /displayedRevision = data\?\.displayed_revision \?\? 0/)
+  assert.match(appStatus, /requested_revision: data\?\.requested_revision \?\? 0/)
+  assert.match(appStatus, /displayed_revision: data\?\.displayed_revision \?\? 0/)
 })
 
 test('RLS denies direct client access and RPC writes are service-role-only', () => {
@@ -98,11 +99,23 @@ test('status and probe GET routes explicitly disable caching', () => {
   }
 })
 
-test('physical probes provide a real wake-cycle anchor for the app estimate', () => {
+test('probe telemetry is best effort and cannot block critical revision state', () => {
   assert.match(probeMigration, /add column if not exists last_probe_at timestamptz/)
-  assert.match(deviceState, /update\(\{ last_probe_at: probedAt \}\)/)
-  assert.match(appStatus, /last_probe_at/)
-  assert.match(updateClient, /lastProbeAt:/)
+  const read = deviceState.indexOf(".select('requested_revision, displayed_revision')")
+  const telemetry = deviceState.indexOf('.update({ last_probe_at:')
+  const response = deviceState.indexOf('return NextResponse.json(', telemetry)
+  assert.ok(read >= 0 && read < telemetry && telemetry < response)
+  assert.match(deviceState, /update\(\{ last_probe_at: new Date\(\)\.toISOString\(\) \}\)/)
+  assert.match(deviceState, /probe-telemetry-failed/)
+  assert.doesNotMatch(deviceState.slice(telemetry, response), /if \(probeError\) return/)
+  assert.doesNotMatch(appStatus, /last_probe_at|app_active_until/)
+  assert.doesNotMatch(updateClient, /lastProbeAt:/)
+})
+
+test('repair migration idempotently restores both optional telemetry columns', () => {
+  assert.match(repairMigration, /add column if not exists last_probe_at timestamptz/)
+  assert.match(repairMigration, /add column if not exists app_active_until timestamptz/)
+  assert.doesNotMatch(repairMigration, /drop table|requested_revision\s*=|displayed_revision\s*=/)
 })
 
 test('manual update has no estimated countdown or fabricated timestamp', () => {

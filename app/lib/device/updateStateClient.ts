@@ -54,7 +54,6 @@ export async function getDeviceUpdateStatus(supabase: SupabaseClient, deviceId: 
     requestedAt: typeof body?.requested_at === 'string' ? body.requested_at : null,
     displayedRevision,
     lastDisplayedAt: typeof body?.last_displayed_at === 'string' ? body.last_displayed_at : null,
-    lastProbeAt: typeof body?.last_probe_at === 'string' ? body.last_probe_at : null,
   }
 }
 

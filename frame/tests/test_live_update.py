@@ -68,10 +68,12 @@ def test_manual_ack_precedes_signature_bookkeeping():
 def test_firmware_version_change_redraws_once_and_success_persists_version():
     checker = Path('frame/src/network/UpdateChecker.cpp').read_text()
     assert 'prefs.getString("fw_ver", "") != String(fwVer)' in checker
-    maintenance = MAIN[MAIN.index('// Renderer/layout changes require one maintenance redraw'):MAIN.index('// Battery, recharge, pairing')]
+    maintenance = MAIN[MAIN.index('static void runFirmwareMaintenanceIfNeeded'):MAIN.index('static InteractiveModeResult finishInteractiveMode')]
     assert maintenance.index('shouldForceRedrawForFirmware') < maintenance.index('forceNextFullRefresh(true)')
     assert maintenance.index('renderLoadedDashboard') < maintenance.index('saveFirmwareVersion(FW_VER)')
     assert maintenance.count('saveFirmwareVersion(FW_VER)') == 1
+    setup = MAIN[MAIN.index('void setup()'):]
+    assert setup.index('runFirmwareMaintenanceIfNeeded') < setup.index('LiveUpdate::probe')
     manual = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
     assert manual.index('renderLoadedDashboard') < manual.index('saveFirmwareVersion(FW_VER)')
 
@@ -86,7 +88,7 @@ def test_revision_fields_are_uint64_and_malformed_values_are_rejected():
     assert 'value.is<bool>()' in LIVE
     assert '!value.is<uint64_t>()' in LIVE
     assert 'displayed > requested' in LIVE
-    assert 'if (deserializeJson(doc, body)) return false;' in LIVE
+    assert 'if (deserializeJson(doc, body)) {' in LIVE
 
 
 def test_wifi_reconnect_restores_realtime_no_power_save_policy():
@@ -103,6 +105,14 @@ def test_probe_and_render_failures_have_bounded_retry_backoff():
     assert 'delay(configRetryMs)' in loop
     assert 'configRetryMs = (configRetryMs >= 2500U)' in loop
     assert ': configRetryMs * 2U' in loop
+
+
+def test_probe_failure_diagnostics_are_safe_and_specific():
+    assert 'LiveUpdate probe transport failure' in LIVE
+    assert 'LiveUpdate probe HTTP %d' in LIVE
+    assert 'LiveUpdate probe invalid JSON' in LIVE
+    assert 'LiveUpdate probe invalid revision values' in LIVE
+    assert 'Serial.println(body)' not in LIVE
 
 
 def test_render_persistence_ack_order_and_serial_retry_are_preserved():

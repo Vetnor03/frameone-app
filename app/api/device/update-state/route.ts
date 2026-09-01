@@ -12,13 +12,6 @@ export async function GET(req: Request) {
   const auth = await authenticatePhysicalDevice(req, deviceId)
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-  const probedAt = new Date().toISOString()
-  const { error: probeError } = await auth.supabase
-    .from('device_update_state')
-    .update({ last_probe_at: probedAt })
-    .eq('device_id', deviceId)
-  if (probeError) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
-
   const { data, error } = await auth.supabase
     .from('device_update_state')
     .select('requested_revision, displayed_revision')
@@ -26,10 +19,33 @@ export async function GET(req: Request) {
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
 
+  const requestedRevision = data?.requested_revision ?? 0
+  const displayedRevision = data?.displayed_revision ?? 0
+  if (!Number.isSafeInteger(requestedRevision) || requestedRevision < 0 ||
+      !Number.isSafeInteger(displayedRevision) || displayedRevision < 0 ||
+      displayedRevision > requestedRevision) {
+    return NextResponse.json({ error: 'invalid_revision_state' }, { status: 500 })
+  }
+
+  // Probe timestamps are telemetry, not part of the display-update contract.
+  // In particular, a production schema that has not received the telemetry
+  // migration must still be able to serve revisions to a physical frame.
+  const { error: probeError } = await auth.supabase
+    .from('device_update_state')
+    .update({ last_probe_at: new Date().toISOString() })
+    .eq('device_id', deviceId)
+  if (probeError) {
+    console.error('[device-update-state:probe-telemetry-failed]', {
+      device_id: deviceId,
+      code: probeError.code ?? 'unknown',
+      message: probeError.message || 'telemetry update failed',
+    })
+  }
+
   return NextResponse.json(
     {
-      requested_revision: data?.requested_revision ?? 0,
-      displayed_revision: data?.displayed_revision ?? 0,
+      requested_revision: requestedRevision,
+      displayed_revision: displayedRevision,
     },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0' } }
   )

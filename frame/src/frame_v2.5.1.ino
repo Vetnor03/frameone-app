@@ -602,6 +602,28 @@ static bool retryRenderedAck(uint64_t backendDisplayed) {
   return false;
 }
 
+static void runFirmwareMaintenanceIfNeeded(
+  const BatteryState& batt,
+  const PowerSenseDebug& pwr
+) {
+  if (!UpdateChecker::shouldForceRedrawForFirmware(FW_VER)) return;
+
+  // This endpoint reads the committed device_settings row. Browser drafts are
+  // local-only and therefore cannot participate in this boot maintenance pass.
+  FrameConfigApi::FetchResult result =
+    FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+  if (result != FrameConfigApi::FETCH_OK) {
+    Serial.println("Renderer maintenance config unavailable; will retry next boot");
+    return;
+  }
+
+  DisplayCore::forceNextFullRefresh(true);
+  if (!renderLoadedDashboard(batt, pwr)) return;
+  UpdateChecker::saveFirmwareVersion(FW_VER);
+  refreshContentSignatureBestEffort();
+  Serial.println("Renderer version changed; maintenance redraw complete");
+}
+
 static InteractiveModeResult finishInteractiveMode(
   uint32_t startedAtMs,
   uint32_t baselineElapsedAtEntry,
@@ -890,6 +912,13 @@ void setup() {
 
   activeSetupStep = SETUP_STEP_NONE;
 
+  // Complete one-time renderer maintenance deterministically after networking
+  // and pairing are ready, before starting revision listening.
+  runFirmwareMaintenanceIfNeeded(
+    BatteryManager::readAndUpdate(pwrEarly.usbPresent),
+    pwrEarly
+  );
+
   LiveUpdateState liveState{};
   const bool liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
   if (liveProbeOk) {
@@ -929,23 +958,6 @@ run_normal_sync:
         retryRenderedAck(liveState.displayedRevision)) {
       liveState.displayedRevision = liveState.requestedRevision;
       renderedWithoutSignature = !refreshContentSignatureBestEffort();
-    }
-  }
-
-  // Renderer/layout changes require one maintenance redraw even when backend
-  // content is byte-for-byte unchanged. This does not touch the four-hour clock.
-  if (UpdateChecker::shouldForceRedrawForFirmware(FW_VER)) {
-    FrameConfigApi::FetchResult firmwareConfig =
-      FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
-    if (firmwareConfig == FrameConfigApi::FETCH_OK) {
-      DisplayCore::forceNextFullRefresh(true);
-      PowerSenseDebug firmwarePwr = readPowerSenseDebug();
-      BatteryState firmwareBatt = BatteryManager::readAndUpdate(firmwarePwr.usbPresent);
-      if (renderLoadedDashboard(firmwareBatt, firmwarePwr)) {
-        UpdateChecker::saveFirmwareVersion(FW_VER);
-        renderedWithoutSignature = !refreshContentSignatureBestEffort();
-        Serial.println("Renderer version changed; maintenance redraw complete");
-      }
     }
   }
 
