@@ -6,9 +6,10 @@ import { normalizeSurfRating1to6, surfRatingIsExperienceBased } from '@/app/lib/
 import { buildFrameConfigPayload, deviceHasOwnerAccessLink, pairRequiredPayload } from '@/app/api/device/frame-config/builder'
 import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
-import { AI_ASSISTANT_FRAME_LIMITS, selectAiAssistantFrameItems, type AiAssistantFrameUpdate } from '@/app/lib/device/aiAssistantFrame'
+import { AI_ASSISTANT_FRAME_LIMITS } from '@/app/lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, simplifyAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
 import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
+import { loadAiAssistantDeviceData } from '@/app/lib/device/aiAssistantDeviceData'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1879,24 +1880,10 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
   }
 
   try {
-    const { data: memberRows, error: memberError } = await supabase
-      .from('device_members')
-      .select('user_id')
-      .eq('device_id', frameId)
-    if (memberError) throw memberError
-
-    const memberUserIds = uniqueNonEmpty(Array.isArray(memberRows) ? memberRows.map((row: { user_id?: unknown }) => row.user_id) : [])
+    const sharedData = await loadAiAssistantDeviceData(supabase, frameId, { liveMirrorView: true })
+    const { memberUserIds } = sharedData
     if (memberUserIds.length <= 0) return empty
-
-    const { data: watchRows, error: watchError } = await supabase
-      .from('monitoring_watches')
-      .select('id, last_checked_at, status, title, preferred_language, created_at')
-      .in('owner_user_id', memberUserIds)
-      .eq('status', 'active')
-      .order('created_at', { ascending: true })
-    if (watchError) throw watchError
-
-    const activeWatches = Array.isArray(watchRows) ? watchRows : []
+    const activeWatches = sharedData.activeWatches
     const aiAssistantActiveWatchTopics = uniqueNonEmpty(activeWatches.map((row: { title?: unknown; preferred_language?: unknown }) => simplifyAiAssistantTopicTitle(row.title, row.preferred_language === 'no' ? 'no' : 'en')))
     const activeTopicTitle = activeWatches.length === 1 ? aiAssistantActiveWatchTopics[0] || aiAssistantDefaultTopicTitle('en') : aiAssistantDefaultTopicTitle('en')
 
@@ -1905,15 +1892,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
       .filter(Boolean)
       .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] || null
 
-    const { data, error } = await supabase
-      .from('monitoring_updates')
-      .select('id, watch_id, headline, summary, created_at, dismissed_from_frame, is_read, monitoring_watches!inner(owner_user_id, title, preferred_language)')
-      .in('monitoring_watches.owner_user_id', memberUserIds)
-      .order('created_at', { ascending: false })
-    if (error) throw error
-
-    const updateCandidates = Array.isArray(data) ? data : []
-    const selected = selectAiAssistantFrameItems(updateCandidates as AiAssistantFrameUpdate[], { memberUserIds, limit, liveMirrorView: true })
+    const selected = { items: sharedData.items.slice(0, limit), overflowCount: sharedData.overflowCount + Math.max(0, sharedData.items.length - limit) }
     const optimizedHeadlines = await optimizeFrameContent(selected.items.map((item) => ({
       id: item.id,
       title: item.headline,
@@ -1928,7 +1907,7 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
       frameId,
       frameMemberCount: memberUserIds.length,
       activeAccessibleWatchCount: activeWatches.length,
-      unreadUpdateCandidateCount: updateCandidates.length,
+      unreadUpdateCandidateCount: selected.items.length + selected.overflowCount,
       selectedCount: selected.items.length,
     })
     return {

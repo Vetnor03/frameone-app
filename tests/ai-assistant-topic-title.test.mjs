@@ -28,7 +28,7 @@ const options = { memberUserIds: ['member-a'], now: new Date('2026-07-14T12:00:0
 test('displayed update uses its Watch topic as the shared header field', () => {
   const selected = selectAiAssistantFrameItems([row('stavanger')], options)
   assert.equal(selected.items[0].topicTitle, 'STAVANGER')
-  assert.match(route, /aiAssistantTopicTitle: selected\.items\[0\]\?\.topicTitle \|\| activeTopicTitle/)
+  assert.match(route, /aiAssistantTopicTitle: frameItems\[0\]\?\.topicTitle \|\| activeTopicTitle/)
   assert.match(home, /const header = items\[0\]\?\.topicTitle \|\| mirrorAiAssistantEmptyHeader/)
 })
 

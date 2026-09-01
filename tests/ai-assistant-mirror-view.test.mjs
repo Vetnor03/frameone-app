@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { selectAiAssistantFrameItems, AI_ASSISTANT_FRAME_LIMITS, sanitizeAiAssistantMirrorSummary } from '../app/lib/device/aiAssistantFrame.ts'
 
 const route = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+const deviceData = readFileSync(new URL('../app/lib/device/aiAssistantDeviceData.ts', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
 
@@ -135,7 +136,7 @@ test('AI Assistant zero updates returns structured empty snapshot data and serve
 })
 
 test('AI Assistant mirror snapshot uses device members for shared-frame access without legacy frame visibility filters', () => {
-  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
+  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail')) + deviceData
   assert.match(detail, /from\('device_members'\)/)
   assert.match(detail, /select\('user_id'\)/)
   assert.match(detail, /from\('monitoring_watches'\)[\s\S]*in\('owner_user_id', memberUserIds\)[\s\S]*eq\('status', 'active'\)/)
@@ -149,7 +150,7 @@ test('AI Assistant mirror snapshot uses device members for shared-frame access w
   assert.match(detail, /\[mirror-snapshot:ai-assistant-snapshot\]/)
   assert.match(detail, /frameMemberCount: memberUserIds\.length/)
   assert.match(detail, /activeAccessibleWatchCount: activeWatches\.length/)
-  assert.match(detail, /unreadUpdateCandidateCount: updateCandidates\.length/)
+  assert.match(detail, /unreadUpdateCandidateCount: selected\.items\.length \+ selected\.overflowCount/)
   assert.match(detail, /selectedCount: selected\.items\.length/)
 })
 
@@ -169,7 +170,7 @@ test('AI Assistant mirror snapshot carries summary but not private watch request
     created_at: '2026-07-14T11:00:00.000Z',
     topicTitle: 'STAVANGER',
   })
-  assert.match(route, /select\('id, watch_id, headline, summary, created_at/)
+  assert.match(deviceData, /select\('id, watch_id, headline, summary, created_at/)
   assert.doesNotMatch(JSON.stringify(selected.items[0]), /original_request|trigger_description|Skjer det noe kjekt/)
 })
 
@@ -313,7 +314,7 @@ test('AI Assistant empty state includes active watch count and latest successful
 })
 
 test('AI Assistant active watch metadata excludes inactive and error states in the shared snapshot path', () => {
-  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
+  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail')) + deviceData
   assert.match(detail, /from\('monitoring_watches'\)/)
   assert.match(detail, /select\('id, last_checked_at, status, title, preferred_language, created_at'\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)

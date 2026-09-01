@@ -36,10 +36,10 @@ test('forward migration removes the live Assistant refresh trigger and functions
 })
 
 
-test('physical frame config masks Assistant cells so deployed firmware can acknowledge the revision', () => {
-  assert.match(physicalFrameConfigRoute, /function stripUnsupportedPhysicalModules/)
-  assert.match(physicalFrameConfigRoute, /moduleBase === 'assistant' \? \{ \.\.\.record, module: '' \} : cell/)
-  assert.match(physicalFrameConfigRoute, /: stripUnsupportedPhysicalModules\(builtPayload\)/)
+test('physical frame config preserves renderable Assistant cells', () => {
+  assert.doesNotMatch(physicalFrameConfigRoute, /stripUnsupportedPhysicalModules/)
+  assert.doesNotMatch(physicalFrameConfigRoute, /moduleBase === 'assistant'.*module: ''/)
+  assert.match(physicalFrameConfigRoute, /: builtPayload/)
 })
 
 

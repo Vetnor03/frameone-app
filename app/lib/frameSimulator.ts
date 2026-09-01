@@ -9,18 +9,18 @@ export type CellSize = 'SMALL' | 'MEDIUM' | 'LARGE' | 'XL'
 export type GridCell = { col:number; row:number; colSpan:number; rowSpan:number; slot:number; size:CellSize }
 export type PixelCell = GridCell & { x:number; y:number; w:number; h:number }
 export type LayoutName = keyof typeof spec.layouts
-export type ModuleName = 'date'|'weather'|'surf'|'reminders'|'countdown'|'soccer'|'stocks'|'groceries'
-export type StudioModuleName = ModuleName|'ai-follow'
+export type ModuleName = 'date'|'weather'|'surf'|'reminders'|'countdown'|'soccer'|'stocks'|'groceries'|'assistant'
+export type LegacyModuleName = keyof typeof profiles
+export type StudioModuleName = ModuleName
 export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
 export type CalendarRowMode = 'date' | 'dateLarge' | 'remindersLarge' | 'remindersXL' | 'countdown'
 export const frameLayouts = spec
 export { profiles as moduleProfiles }
-export function visualContractFor(module: ModuleName, size: CellSize) {
+export function visualContractFor(module: LegacyModuleName, size: CellSize) {
   return profiles[module][size.toLowerCase() as 'small'|'medium'|'large'|'xl']
 }
 export const frameModuleRegistry = registry as {id:ModuleName;label:string}[]
-// Studio-only extension: this does not alter the shared physical/backend module catalog.
-export const studioModuleRegistry:readonly {id:StudioModuleName;label:string}[] = [...frameModuleRegistry,{id:'ai-follow',label:'AI Follow'}]
+export const studioModuleRegistry:readonly {id:StudioModuleName;label:string}[] = frameModuleRegistry
 export const responsiveShowcaseRegistry:readonly {id:StudioModuleName;label:string}[] = studioModuleRegistry
 export const gridX = (col:number) => VIEWPORT.x + Math.trunc(VIEWPORT.width * col / GRID_SIZE)
 export const gridY = (row:number) => VIEWPORT.y + Math.trunc(VIEWPORT.height * row / GRID_SIZE)
@@ -84,6 +84,6 @@ export function isoWeekNumber(year:number, month0:number, day:number) {
 }
 export const supportedGeometry: Record<ModuleName, string[]> = {
   date:['4x1','2x2','4x2','4x4'], reminders:['4x1','2x2','4x2','4x4'], weather:['4x1','2x2','4x2','4x4'], countdown:['4x1','2x2','4x2','4x4'],
-  surf:['4x1','2x2','4x2','4x4'], soccer:['4x1','2x2','4x2','4x4'], stocks:['4x1','2x2','4x2','4x4'], groceries:['4x1','2x2','4x2','4x4']
+  surf:['4x1','2x2','4x2','4x4'], soccer:['4x1','2x2','4x2','4x4'], stocks:['4x1','2x2','4x2','4x4'], groceries:['4x1','2x2','4x2','4x4'], assistant:['4x1','2x2','4x2','4x4']
 }
 export const isSupported = (module:ModuleName, colSpan:number, rowSpan:number) => supportedGeometry[module].includes(`${colSpan}x${rowSpan}`)
