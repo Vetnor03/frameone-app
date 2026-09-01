@@ -6,6 +6,7 @@ namespace UpdateChecker {
   bool fetchContentSignature(const String& deviceToken, String& outSignature);
   String getLastContentSignature();
   void saveContentSignature(const String& signature);
+  bool shouldForceRedrawForFirmware(const char* fwVer);
   void saveFirmwareVersion(const char* fwVer);
   bool hasLastUsbPresent();
   bool getLastUsbPresent();

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { activePhysicalReferences, buildContentRequestPlan, canonicalVisible, collectVisibleContent, contentDigest } from '../app/lib/device/contentSignature.mjs'
+import { activePhysicalReferences, buildContentRequestPlan, canonicalVisible, collectVisibleContent, contentDigest, withPhysicalCellGeometry } from '../app/lib/device/contentSignature.mjs'
+import { customPhysicalPayload } from '../app/lib/customLayouts.mjs'
 
 const origin = 'https://example.test'
 const deviceId = 'frame-1'
@@ -52,7 +53,7 @@ test('Soccer request has physical teamId and competitionId parity', () => {
 })
 
 test('Surf hashes actual frame score response and visible forecast changes alter SHA', async () => {
-  const current = settings([{ module: 'surf:2', size: 'large' }])
+  const current = settings([{ module: 'surf:2', w: 800, h: 240 }])
   const run = async (wave, wind, rating) => collectVisibleContent({ settings: current, deviceId, origin, authorization: 'Bearer token', fetchImpl: async (url) => {
     assert.equal(url.pathname, '/api/surf/score'); assert.equal(url.searchParams.get('frame'), '1'); assert.equal(url.searchParams.get('dayparts'), '1')
     return { ok: true, json: async () => ({ rating, forecast: { wave_height_range_label: wave }, inputs: { wind_speed_ms: wind }, dayparts: [{ label: 'Now' }] }) }
@@ -62,14 +63,34 @@ test('Surf hashes actual frame score response and visible forecast changes alter
   assert.notEqual(before, after)
 })
 
-test('Groceries rotation affects only an active Groceries signature', () => {
-  const fourHours = 4 * 60 * 60 * 1000
-  const activeA = buildContentRequestPlan({ settings: settings([{ module: 'groceries' }]), deviceId, origin, now: 0 }).timeInputs
-  const activeB = buildContentRequestPlan({ settings: settings([{ module: 'groceries' }]), deviceId, origin, now: fourHours }).timeInputs
-  assert.notEqual(contentDigest(activeA), contentDigest(activeB))
-  const inactiveA = buildContentRequestPlan({ settings: settings([{ module: 'date' }]), deviceId, origin, now: 1 }).timeInputs
-  const inactiveB = buildContentRequestPlan({ settings: settings([{ module: 'date' }]), deviceId, origin, now: fourHours - 1 }).timeInputs
-  assert.equal(contentDigest(inactiveA), contentDigest(inactiveB))
+test('Assistant response, not an artificial four-hour window, determines its signature', async () => {
+  const current = settings([{ module: 'assistant' }])
+  const run = (now) => collectVisibleContent({ settings: current, deviceId, origin, authorization: 'Bearer token', now, fetchImpl: async () => ({ ok: true, json: async () => ({ updates: [{ topic: 'Same' }] }) }) })
+  assert.equal(contentDigest(await run(0)), contentDigest(await run(4 * 60 * 60 * 1000)))
+})
+
+test('Groceries rotation is included only when multiple items can rotate', async () => {
+  const current = settings([{ module: 'groceries' }])
+  const run = (items, now) => collectVisibleContent({ settings: current, deviceId, origin, authorization: 'Bearer token', now, fetchImpl: async () => ({ ok: true, json: async () => ({ items }) }) })
+  const boundary = 4 * 60 * 60 * 1000
+  assert.equal(contentDigest(await run([], 0)), contentDigest(await run([], boundary)))
+  assert.equal(contentDigest(await run([{ name: 'Only' }], 0)), contentDigest(await run([{ name: 'Only' }], boundary)))
+  assert.notEqual(contentDigest(await run([{ name: 'A' }, { name: 'B' }], 0)), contentDigest(await run([{ name: 'A' }, { name: 'B' }], boundary)))
+})
+
+test('real custom physical geometry drives Surf needs with firmware pixel thresholds', () => {
+  const layout = { id: 'custom-1', cells: [
+    { slot: 0, col: 0, row: 0, colSpan: 3, rowSpan: 4 },
+    { slot: 1, col: 3, row: 0, colSpan: 1, rowSpan: 4 },
+  ] }
+  const payload = customPhysicalPayload(layout, { 0: 'surf:1', 1: 'date' })
+  assert.ok(payload)
+  assert.equal('size' in payload.cells[0], false)
+  const normalized = withPhysicalCellGeometry({ ...payload, modules }, {})
+  assert.deepEqual({ size: normalized.cells[0].size, w: normalized.cells[0].w, h: normalized.cells[0].h }, { size: 'ADAPTIVE', w: 600, h: 480 })
+  const request = buildContentRequestPlan({ settings: normalized, deviceId, origin }).requests.find((item) => item.key === 'surf:1').url
+  assert.equal(request.searchParams.get('dayparts'), '1')
+  assert.equal(request.searchParams.get('daily'), '1')
 })
 
 test('canonical hashing ignores key order and volatile metadata', () => {
@@ -81,7 +102,7 @@ test('canonical hashing ignores key order and volatile metadata', () => {
 })
 
 test("Today's Best preserves fuel/home selection and refetches visible winner detail", async () => {
-  const current = settings([{ module: 'surf:1', size: 'xl' }], {
+  const current = settings([{ module: 'surf:1', w: 800, h: 480 }], {
     surf: [{ id: 1, spotId: '__todays_best__', spot: "Today's Best" }],
     surf_settings: { fuelPenalty: true, homeLat: 59.9, homeLon: 10.7 },
   })

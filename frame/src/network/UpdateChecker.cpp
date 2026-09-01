@@ -39,6 +39,9 @@ String UpdateChecker::getLastContentSignature() { return prefs.getString("conten
 void UpdateChecker::saveContentSignature(const String& signature) {
   if (signature.length() == 64) prefs.putString("content_sig", signature);
 }
+bool UpdateChecker::shouldForceRedrawForFirmware(const char* fwVer) {
+  return prefs.getString("fw_ver", "") != String(fwVer);
+}
 void UpdateChecker::saveFirmwareVersion(const char* fwVer) { prefs.putString("fw_ver", String(fwVer)); }
 bool UpdateChecker::hasLastUsbPresent() { return prefs.getBool("usb_seen", false); }
 bool UpdateChecker::getLastUsbPresent() { return prefs.getBool("usb_prev", false); }

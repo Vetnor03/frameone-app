@@ -17,15 +17,20 @@ export function contentDigest(value) {
   return createHash('sha256').update(JSON.stringify(canonicalVisible(value))).digest('hex')
 }
 
+function physicalGeometry(cell) {
+  const colSpan = Number(cell?.colSpan), rowSpan = Number(cell?.rowSpan)
+  const geometry = `${colSpan}x${rowSpan}`
+  const sizes = { '4x1': 'SMALL', '2x2': 'MEDIUM', '4x2': 'LARGE', '4x4': 'XL' }
+  return { ...cell, size: sizes[geometry] ?? 'ADAPTIVE', w: colSpan * 200, h: rowSpan * 120 }
+}
 export function withPhysicalCellGeometry(settings, layouts) {
   const layout = String(settings?.layout ?? 'default')
-  if (layout === 'custom') return settings
-  const geometry = Array.isArray(layouts?.[layout]) ? layouts[layout] : []
+  const geometry = layout === 'custom' ? [] : (Array.isArray(layouts?.[layout]) ? layouts[layout] : [])
   const bySlot = new Map(geometry.map((cell) => [Number(cell.slot), cell]))
   return { ...settings, cells: (Array.isArray(settings?.cells) ? settings.cells : []).map((raw) => {
-    const cell = object(raw), shape = bySlot.get(Number(cell.slot))
-    if (!shape) return cell
-    return { ...cell, size: shape.size, w: Number(shape.colSpan) * 200, h: Number(shape.rowSpan) * 120 }
+    const cell = object(raw)
+    const shape = layout === 'custom' ? cell : bySlot.get(Number(cell.slot))
+    return shape ? physicalGeometry({ ...cell, ...shape, module: cell.module }) : cell
   }) }
 }
 
@@ -52,10 +57,6 @@ function url(origin, path, params) {
   return result
 }
 function surfNeeds(cell) {
-  const size = String(cell.size ?? '').toLowerCase()
-  if (size === 'xl') return { dayparts: true, daily: true }
-  if (size === 'medium' || size === 'large') return { dayparts: true, daily: false }
-  if (size !== 'adaptive') return { dayparts: false, daily: false }
   const width = Number(cell.w ?? 0), height = Number(cell.h ?? 0)
   const daily = width >= 500 && height >= 390 && width * height >= 210000
   return { daily, dayparts: daily || (width >= 330 && height >= 210) || (width >= 250 && height >= 300) }
@@ -89,10 +90,7 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
   const requests = []
   const timeInputs = {}
   const osloDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now))
-  const rotationWindow = Math.floor(now / (4 * 60 * 60 * 1000))
   if (refs.has('date')) timeInputs.date = osloDate
-  if (refs.has('assistant')) timeInputs.assistant_rotation = rotationWindow
-  if (refs.has('groceries')) timeInputs.groceries_rotation = rotationWindow
 
   for (const ref of refs.values()) {
     const id = ref.id
@@ -135,6 +133,8 @@ export async function collectVisibleContent({ settings, deviceId, origin, author
     }
     sources[request.key] = first
   }
+  const groceryItems = Array.isArray(sources.groceries?.items) ? sources.groceries.items : []
+  if (groceryItems.length >= 2) plan.timeInputs.groceries_rotation = Math.floor((now ?? Date.now()) / (4 * 60 * 60 * 1000))
   const activeBases = new Set([...plan.refs.values()].map((ref) => ref.base))
   const effectiveModules = {}
   for (const [base, value] of Object.entries(object(settings?.modules))) {

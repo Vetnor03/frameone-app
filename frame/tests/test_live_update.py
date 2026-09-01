@@ -56,10 +56,24 @@ def test_signature_failure_preserves_display_and_backs_off():
     assert 'renderLoadedDashboard' not in failed
     assert 'preserving display' in failed
 
-def test_manual_render_updates_signature_without_blocking_ack():
-    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
-    assert explicit.index('saveRenderedAwaitingAck') < explicit.index('fetchContentSignature')
-    assert 'rendered content signature could not be persisted' in explicit
+def test_manual_ack_precedes_signature_bookkeeping():
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
+    accepted = loop[loop.index('if (!fetchAndRenderExplicit'):loop.index('// Exactly one cheap revision probe')]
+    assert accepted.index('retryRenderedAck') < accepted.index('refreshContentSignatureBestEffort')
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
+    assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
+    assert 'fetchContentSignature' not in explicit
+
+
+def test_firmware_version_change_redraws_once_and_success_persists_version():
+    checker = Path('frame/src/network/UpdateChecker.cpp').read_text()
+    assert 'prefs.getString("fw_ver", "") != String(fwVer)' in checker
+    maintenance = MAIN[MAIN.index('// Renderer/layout changes require one maintenance redraw'):MAIN.index('// Battery, recharge, pairing')]
+    assert maintenance.index('shouldForceRedrawForFirmware') < maintenance.index('forceNextFullRefresh(true)')
+    assert maintenance.index('renderLoadedDashboard') < maintenance.index('saveFirmwareVersion(FW_VER)')
+    assert maintenance.count('saveFirmwareVersion(FW_VER)') == 1
+    manual = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
+    assert manual.index('renderLoadedDashboard') < manual.index('saveFirmwareVersion(FW_VER)')
 
 def test_recharge_pairing_wifi_and_ota_maintenance_remain():
     for token in ('requiresRecharge', 'ensurePairedNoReboot', 'WiFiManagerV2::connectSaved', 'runOtaCheckIfDue'):

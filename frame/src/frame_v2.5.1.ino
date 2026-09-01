@@ -566,14 +566,22 @@ static bool fetchAndRenderExplicit(
 
   if (!renderLoadedDashboard(batt, pwr)) return false;
   LiveUpdate::saveRenderedAwaitingAck(revision);
+  // A successful physical render also satisfies the one-time renderer-version
+  // maintenance redraw, even if its revision ACK needs a network retry.
+  UpdateChecker::saveFirmwareVersion(FW_VER);
+  Serial.printf("LiveUpdate: revision %" PRIu64 " physically displayed\n", revision);
+  return true;
+}
+
+static bool refreshContentSignatureBestEffort() {
   String renderedSignature;
   if (UpdateChecker::fetchContentSignature(DeviceIdentity::getToken(), renderedSignature)) {
     UpdateChecker::saveContentSignature(renderedSignature);
+    return true;
   } else {
     Serial.println("LiveUpdate: rendered content signature could not be persisted");
+    return false;
   }
-  Serial.printf("LiveUpdate: revision %" PRIu64 " physically displayed\n", revision);
-  return true;
 }
 
 static bool retryRenderedAck(uint64_t backendDisplayed) {
@@ -655,7 +663,11 @@ static InteractiveModeResult runInteractiveMode(
     }
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
     if (retryRenderedAck(state.displayedRevision)) {
-      if (awaitingAck > state.displayedRevision) state.displayedRevision = awaitingAck;
+      if (awaitingAck > state.displayedRevision) {
+        state.displayedRevision = awaitingAck;
+        // Signature bookkeeping is deliberately after durable physical ACK.
+        refreshContentSignatureBestEffort();
+      }
     }
 
     uint64_t rendered = LiveUpdate::getRenderedAwaitingAck();
@@ -674,6 +686,7 @@ static InteractiveModeResult runInteractiveMode(
         configRetryMs = REALTIME_UPDATE_POLL_MS;
         if (retryRenderedAck(state.displayedRevision)) {
           state.displayedRevision = revisionToDisplay;
+          refreshContentSignatureBestEffort();
         }
       }
     }
@@ -888,6 +901,7 @@ void setup() {
     if (retryRenderedAck(liveState.displayedRevision) &&
         awaitingAck > liveState.displayedRevision) {
       liveState.displayedRevision = awaitingAck;
+      refreshContentSignatureBestEffort();
     }
   } else {
     Serial.println("LiveUpdate: probe failed");
@@ -905,6 +919,7 @@ void setup() {
   }
 
 run_normal_sync:
+  bool renderedWithoutSignature = false;
   // A manual revision always wins over a coincident scheduled boundary.
   if (liveProbeOk && liveState.requestedRevision > liveState.displayedRevision &&
       liveState.requestedRevision > LiveUpdate::getRenderedAwaitingAck()) {
@@ -913,8 +928,31 @@ run_normal_sync:
     if (fetchAndRenderExplicit(manualBatt, manualPwr, liveState.requestedRevision) &&
         retryRenderedAck(liveState.displayedRevision)) {
       liveState.displayedRevision = liveState.requestedRevision;
+      renderedWithoutSignature = !refreshContentSignatureBestEffort();
     }
   }
+
+  // Renderer/layout changes require one maintenance redraw even when backend
+  // content is byte-for-byte unchanged. This does not touch the four-hour clock.
+  if (UpdateChecker::shouldForceRedrawForFirmware(FW_VER)) {
+    FrameConfigApi::FetchResult firmwareConfig =
+      FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+    if (firmwareConfig == FrameConfigApi::FETCH_OK) {
+      DisplayCore::forceNextFullRefresh(true);
+      PowerSenseDebug firmwarePwr = readPowerSenseDebug();
+      BatteryState firmwareBatt = BatteryManager::readAndUpdate(firmwarePwr.usbPresent);
+      if (renderLoadedDashboard(firmwareBatt, firmwarePwr)) {
+        UpdateChecker::saveFirmwareVersion(FW_VER);
+        renderedWithoutSignature = !refreshContentSignatureBestEffort();
+        Serial.println("Renderer version changed; maintenance redraw complete");
+      }
+    }
+  }
+
+  // The just-completed physical render satisfies a coincident content boundary.
+  // If signature bookkeeping failed, do not immediately duplicate that render;
+  // the next four-hour cycle will conservatively re-evaluate it.
+  if (renderedWithoutSignature) normalSyncDue = false;
 
   // Battery, recharge, pairing and OTA maintenance remain independent of the
   // display-content cadence. Only a revision or a changed signature draws.
