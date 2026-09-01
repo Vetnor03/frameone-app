@@ -90,6 +90,7 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
   for (int i = 0; i < n; i++) {
     const Cell& c = cells[i];
     String mod = moduleForSlot(assigns, assignCount, c.slot);
+    const uint32_t moduleStartedAtMs = millis();
 
     // Empty cell -> centered "+"
     if (mod.length() == 0) {
@@ -100,46 +101,55 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
     // Dispatch modules here
     if (mod.equalsIgnoreCase("date")) {
       ModuleDate::render(c);
+      Serial.printf("Render timing module=date slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (AdaptiveModuleCapability::exactOnly(mod.c_str(), "assistant")) {
       ModuleAssistant::render(c);
+      Serial.printf("Render timing module=assistant slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("weather")) {
       ModuleWeather::render(c, mod);
+      Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (AdaptiveModuleCapability::numericInstance(mod.c_str(), "surf")) {
       ModuleSurf::render(c, mod);
+      Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("reminders")) {
       ModuleReminders::render(c, mod);
+      Serial.printf("Render timing module=reminders slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("countdown")) {
       ModuleCountdown::render(c, mod);
+      Serial.printf("Render timing module=countdown slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("soccer")) {
       ModuleSoccer::render(c, mod);
+      Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("stocks")) {
       ModuleStocks::render(c, mod);
+      Serial.printf("Render timing module=%s slot=%u ms=%lu\n", mod.c_str(), c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 
     if (mod.startsWith("groceries")) {
       ModuleGroceries::render(c, mod);
+      Serial.printf("Render timing module=groceries slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 

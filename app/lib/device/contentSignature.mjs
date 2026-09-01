@@ -121,18 +121,20 @@ async function responseJson(fetchImpl, request, authorization) {
 export async function collectVisibleContent({ settings, deviceId, origin, authorization, now, fetchImpl = fetch }) {
   const plan = buildContentRequestPlan({ settings, deviceId, origin, now })
   const sources = {}
-  for (const request of plan.requests) {
+  // Each module is an independent pipeline. Surf winner detail remains ordered
+  // inside its own pipeline, while it no longer delays unrelated modules.
+  await Promise.all(plan.requests.map(async (request) => {
     const first = await responseJson(fetchImpl, request, authorization)
     if (request.surf?.todaysBest && (request.surf.needs.dayparts || request.surf.needs.daily)) {
       const winnerId = first?.spotId ?? first?.picked?.spotId
       if (winnerId) {
         const winnerRequest = { url: surfUrl(request.surf.origin, request.surf.config, request.surf.settings, request.surf.needs, winnerId) }
         sources[request.key] = { selected_spot_id: winnerId, visible: await responseJson(fetchImpl, winnerRequest, authorization) }
-        continue
+        return
       }
     }
     sources[request.key] = first
-  }
+  }))
   const groceryItems = Array.isArray(sources.groceries?.items) ? sources.groceries.items : []
   if (groceryItems.length >= 2) plan.timeInputs.groceries_rotation = Math.floor((now ?? Date.now()) / (4 * 60 * 60 * 1000))
   const activeBases = new Set([...plan.refs.values()].map((ref) => ref.base))

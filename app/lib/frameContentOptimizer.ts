@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { sanitizeFrameText } from './frameText.mjs'
 
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
 export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow'
+export type DisplayCapacityProfile = 'compact' | 'standard' | 'spacious'
 
 export type FrameContentInput = {
   id: string
@@ -11,257 +13,148 @@ export type FrameContentInput = {
   displayDate?: string
   displayTime?: string | null
 }
-
-export type FrameContentOutput = {
-  id: string
-  title: string
+export type FrameContentOutput = { id: string; title: string }
+export type PersistentTitleCache = {
+  read(keys: string[]): Promise<Array<{ cache_key: string; optimized_title: string }>>
+  write(rows: PersistentCacheRow[]): Promise<void>
+}
+export type PersistentCacheRow = {
+  cache_key: string
+  optimized_title: string
+  optimizer_version: string
+  model: string
+  display_profile: string
+  updated_at: string
 }
 
-type CacheEntry = {
-  title: string
-  expiresAt: number
-}
+type OpenAIResponsePayload = { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }
+type StructuredOptimizerResponse = { items?: Array<{ id?: unknown; title?: unknown }> }
 
-type OpenAIResponsePayload = {
-  output?: Array<{
-    type?: string
-    content?: Array<{
-      type?: string
-      text?: string
-    }>
-  }>
-}
-
-type StructuredOptimizerResponse = {
-  items?: Array<{
-    id?: unknown
-    title?: unknown
-  }>
-}
-
+export const FRAME_TITLE_OPTIMIZER_VERSION = 'v1'
 const DEFAULT_MODEL = 'gpt-5.6'
-const DEFAULT_MAX_TITLE_CHARS = 48
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000
-const MAX_CACHE_ENTRIES = 500
-const REQUEST_TIMEOUT_MS = 5000
-
-const titleCache = new Map<string, CacheEntry>()
-
-const OPTIMIZER_INSTRUCTIONS = `You optimize tiny pieces of text for a calm e-ink home display called RE:MIND.
-
-Rewrite each title so it is immediately understandable at a glance.
-- Keep the original language.
-- Prefer 2-6 words when possible.
-- Remove filler, duplicated context and provider boilerplate such as meeting platform names.
-- Preserve the essential action, subject, person, team, project, place or other identifying detail.
-- Dates and times are rendered separately, so do not add them unless they are essential to the meaning.
-- Never invent, infer or change facts.
-- Never turn a specific title into a vague generic title.
-- Do not add emojis or decorative punctuation.
-- Use plain typography: no smart quotes, en/em dashes, emoji, or decorative Unicode.
-- Preserve Norwegian æ/ø/å. The degree symbol is allowed.
-- Respect maxTitleChars for every item.
-- Follow the contentType-specific rules:
-  - reminder: retain the action or event needed for a useful reminder.
-  - countdown: produce a compact countdown title; remove phrases such as "days until" or "time left until" because the countdown value is rendered separately.
-  - ai-follow: turn the update into a calm, specific, headline-like summary; never return a paragraph.
-- Return exactly one result for every supplied id.`
-
-function normalizeText(value: string) {
-  return String(value || '').replace(/\s+/g, ' ').trim()
+const MAX_CACHE_ENTRIES = 1000
+export const PHYSICAL_AI_TIMEOUT_MS = 250
+const PROFILE_LIMITS: Record<DisplayCapacityProfile, { maxTitleChars: number; maxLines: number }> = {
+  compact: { maxTitleChars: 28, maxLines: 1 },
+  standard: { maxTitleChars: 48, maxLines: 2 },
+  spacious: { maxTitleChars: 72, maxLines: 3 },
 }
+const titleCache = new Map<string, string>()
 
+const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. Return every supplied id and respect each display profile, maximum characters, and line count.`
+
+const normalizeText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
 function truncateAtWordBoundary(value: string, maxChars: number) {
   const normalized = normalizeText(value)
   if (normalized.length <= maxChars) return normalized
-
   const clipped = normalized.slice(0, maxChars + 1)
   const lastSpace = clipped.lastIndexOf(' ')
-  const safeCut = lastSpace >= Math.floor(maxChars * 0.55) ? clipped.slice(0, lastSpace) : clipped.slice(0, maxChars)
-  return safeCut.replace(/[\s,;:|/\-–—]+$/g, '').trim()
+  return (lastSpace >= Math.floor(maxChars * .55) ? clipped.slice(0, lastSpace) : clipped.slice(0, maxChars))
+    .replace(/[\s,;:|/\-–—]+$/g, '').trim()
+}
+const fallbackTitle = (title: string, maxChars: number) => truncateAtWordBoundary(sanitizeFrameText(title), maxChars)
+
+/** Profiles follow renderer capacity, not raw pixels: one title line/roughly 28 chars,
+ * two lines/48 chars, or three-plus lines/72 chars. Nearby geometries therefore share a key. */
+export function deriveReminderDisplayProfile(input: { usableWidth?: number; maxLines?: number }): DisplayCapacityProfile {
+  const width = Math.max(0, Number(input.usableWidth) || 0)
+  const lines = Math.max(1, Math.floor(Number(input.maxLines) || 1))
+  const usefulChars = Math.floor(width / 10) * lines
+  if (lines <= 1 || usefulChars <= 30) return 'compact'
+  if (lines <= 2 || usefulChars <= 56) return 'standard'
+  return 'spacious'
 }
 
-function fallbackTitle(title: string, maxChars: number) {
-  return truncateAtWordBoundary(sanitizeFrameText(title), maxChars)
+export function frameTitleCacheKey(item: FrameContentInput, profile: DisplayCapacityProfile, model = DEFAULT_MODEL) {
+  const identity = [FRAME_TITLE_OPTIMIZER_VERSION, model, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title), profile]
+  return createHash('sha256').update(JSON.stringify(identity)).digest('hex')
 }
 
-function optimizationEnabled() {
-  const explicit = String(process.env.FRAME_AI_OPTIMIZATION_ENABLED || '').trim().toLowerCase()
-  if (explicit === '0' || explicit === 'false' || explicit === 'no' || explicit === 'off') return false
-  return Boolean(process.env.OPENAI_API_KEY)
-}
-
-function cacheKey(item: FrameContentInput, model: string, maxChars: number) {
-  return [model, maxChars, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title)].join('::')
-}
-
-function getCachedTitle(key: string) {
-  const entry = titleCache.get(key)
-  if (!entry) return null
-  if (entry.expiresAt <= Date.now()) {
-    titleCache.delete(key)
-    return null
+export function supabaseTitleCache(client: any): PersistentTitleCache {
+  return {
+    async read(keys) {
+      if (!keys.length) return []
+      const { data, error } = await client.from('frame_content_title_cache').select('cache_key, optimized_title').in('cache_key', keys)
+      if (error) throw error
+      return Array.isArray(data) ? data : []
+    },
+    async write(rows) {
+      if (!rows.length) return
+      const { error } = await client.from('frame_content_title_cache').upsert(rows, { onConflict: 'cache_key', ignoreDuplicates: true })
+      if (error) throw error
+    },
   }
-  return entry.title
 }
 
-function setCachedTitle(key: string, title: string) {
-  if (titleCache.size >= MAX_CACHE_ENTRIES) {
-    const oldestKey = titleCache.keys().next().value as string | undefined
-    if (oldestKey) titleCache.delete(oldestKey)
-  }
-  titleCache.set(key, { title, expiresAt: Date.now() + CACHE_TTL_MS })
+function remember(key: string, title: string) {
+  if (titleCache.size >= MAX_CACHE_ENTRIES) titleCache.delete(titleCache.keys().next().value as string)
+  titleCache.set(key, title)
 }
-
-function extractOutputText(payload: OpenAIResponsePayload) {
-  for (const output of payload.output || []) {
-    if (output.type !== 'message') continue
-    for (const content of output.content || []) {
-      if (content.type === 'output_text' && typeof content.text === 'string') return content.text
-    }
-  }
+export function clearFrameTitleL1CacheForTests() { titleCache.clear() }
+function enabled() {
+  const value = String(process.env.FRAME_AI_OPTIMIZATION_ENABLED || '').toLowerCase()
+  return !['0', 'false', 'no', 'off'].includes(value) && Boolean(process.env.OPENAI_API_KEY)
+}
+function extract(payload: OpenAIResponsePayload) {
+  for (const output of payload.output || []) for (const content of output.content || [])
+    if (output.type === 'message' && content.type === 'output_text' && typeof content.text === 'string') return content.text
   return ''
 }
 
-async function requestOptimizedTitles(
-  items: FrameContentInput[],
-  model: string,
-  maxTitleChars: number
-): Promise<Map<string, string>> {
+async function requestTitles(items: FrameContentInput[], model: string, profile: DisplayCapacityProfile, timeoutMs: number) {
+  const constraints = PROFILE_LIMITS[profile]
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        input: [
-          {
-            role: 'developer',
-            content: [{ type: 'input_text', text: OPTIMIZER_INSTRUCTIONS }],
-          },
-          {
-            role: 'user',
-            content: [{
-              type: 'input_text',
-              text: JSON.stringify({
-                maxTitleChars,
-                items: items.map((item) => ({
-                  id: item.id,
-                  title: normalizeText(item.title),
-                  contentType: item.contentType || 'reminder',
-                  source: item.source || 'unknown',
-                  displayDate: item.displayDate || null,
-                  displayTime: item.displayTime || null,
-                })),
-              }),
-            }],
-          },
-        ],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'frame_title_optimizations',
-            strict: true,
-            schema: {
-              type: 'object',
-              properties: {
-                items: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      id: { type: 'string' },
-                      title: { type: 'string' },
-                    },
-                    required: ['id', 'title'],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ['items'],
-              additionalProperties: false,
-            },
-          },
-        },
-        max_output_tokens: 500,
-      }),
+      method: 'POST', signal: controller.signal,
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, input: [
+        { role: 'developer', content: [{ type: 'input_text', text: INSTRUCTIONS }] },
+        { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ displayProfile: profile, ...constraints, items: items.map(i => ({ id: i.id, title: normalizeText(i.title), contentType: i.contentType || 'reminder', source: i.source || 'unknown' })) }) }] },
+      ], text: { format: { type: 'json_schema', name: 'frame_title_optimizations', strict: true, schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' } }, required: ['id', 'title'], additionalProperties: false } } }, required: ['items'], additionalProperties: false } } }, max_output_tokens: 500 }),
     })
-
     if (!response.ok) throw new Error(`OpenAI request failed with status ${response.status}`)
-
-    const payload = await response.json() as OpenAIResponsePayload
-    const outputText = extractOutputText(payload)
-    if (!outputText) throw new Error('OpenAI response did not contain output text')
-
-    const parsed = JSON.parse(outputText) as StructuredOptimizerResponse
-    const allowedIds = new Set(items.map((item) => item.id))
-    const results = new Map<string, string>()
-
-    for (const item of parsed.items || []) {
-      const id = typeof item.id === 'string' ? item.id : ''
-      const title = typeof item.title === 'string' ? item.title : ''
-      if (!allowedIds.has(id) || !title) continue
-      results.set(id, fallbackTitle(title, maxTitleChars))
-    }
-
-    return results
-  } finally {
-    clearTimeout(timeout)
-  }
+    const parsed = JSON.parse(extract(await response.json() as OpenAIResponsePayload) || '{}') as StructuredOptimizerResponse
+    return new Map((parsed.items || []).flatMap(i => typeof i.id === 'string' && typeof i.title === 'string' ? [[i.id, fallbackTitle(i.title, constraints.maxTitleChars)] as const] : []))
+  } finally { clearTimeout(timeout) }
 }
 
-/**
- * Creates frame-only display titles. Source content is never mutated or persisted.
- * Any missing key, API failure, timeout or invalid model response falls back to a
- * deterministic word-safe truncation so a frame refresh can never depend on AI.
- */
-export async function optimizeFrameContent(
-  items: FrameContentInput[],
-  options: { maxTitleChars?: number } = {}
-): Promise<FrameContentOutput[]> {
-  const maxTitleChars = Math.max(16, Math.floor(options.maxTitleChars || DEFAULT_MAX_TITLE_CHARS))
+/** Durable, batch-oriented optimization. Cache errors and AI errors are fail-soft. */
+export async function optimizeFrameContent(items: FrameContentInput[], options: {
+  maxTitleChars?: number
+  displayProfile?: DisplayCapacityProfile
+  persistentCache?: PersistentTitleCache
+  aiTimeoutMs?: number
+} = {}): Promise<FrameContentOutput[]> {
+  const profile = options.displayProfile || (options.maxTitleChars && options.maxTitleChars <= 30 ? 'compact' : options.maxTitleChars && options.maxTitleChars > 56 ? 'spacious' : 'standard')
+  const maxChars = options.maxTitleChars || PROFILE_LIMITS[profile].maxTitleChars
   const model = String(process.env.FRAME_AI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL
-
-  const normalized = items.map((item) => ({ ...item, title: sanitizeFrameText(item.title) }))
-  const fallback = normalized.map((item) => ({ id: item.id, title: fallbackTitle(item.title, maxTitleChars) }))
-  if (normalized.length === 0 || !optimizationEnabled()) return fallback
-
+  const normalized = items.map(i => ({ ...i, title: sanitizeFrameText(i.title) }))
+  const keys = normalized.map(i => frameTitleCacheKey(i, profile, model))
   const results = new Map<string, string>()
-  const uncached: FrameContentInput[] = []
 
-  for (const item of normalized) {
-    const key = cacheKey(item, model, maxTitleChars)
-    const cached = getCachedTitle(key)
-    if (cached) results.set(item.id, cached)
-    else uncached.push(item)
-  }
+  keys.forEach((key, index) => { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) })
+  const missingKeys = keys.filter((key, index) => !results.has(normalized[index].id))
+  if (missingKeys.length && options.persistentCache) try {
+    for (const row of await options.persistentCache.read([...new Set(missingKeys)])) remember(row.cache_key, row.optimized_title)
+    keys.forEach((key, index) => { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) })
+  } catch (error) { console.warn('[frame-content-optimizer] persistent cache unavailable', error) }
 
-  if (uncached.length > 0) {
-    try {
-      const fresh = await requestOptimizedTitles(uncached, model, maxTitleChars)
-      for (const item of uncached) {
-        const optimized = fresh.get(item.id)
-        if (!optimized) continue
-        results.set(item.id, optimized)
-        setCachedTitle(cacheKey(item, model, maxTitleChars), optimized)
-      }
-    } catch (error) {
-      console.warn('[frame-content-optimizer] AI optimization unavailable; using deterministic fallback', {
-        error: error instanceof Error ? error.message : 'unknown error',
-        itemCount: uncached.length,
-      })
+  // De-duplicate identical source/profile variants before the single batched AI request.
+  const unique = new Map<string, FrameContentInput>()
+  normalized.forEach((item, index) => { if (!results.has(item.id) && !unique.has(keys[index])) unique.set(keys[index], { ...item, id: keys[index] }) })
+  if (unique.size && enabled()) try {
+    const fresh = await requestTitles([...unique.values()], model, profile, options.aiTimeoutMs ?? 5000)
+    const rows: PersistentCacheRow[] = []
+    for (const [key, item] of unique) {
+      const title = fresh.get(key); if (!title) continue
+      remember(key, title)
+      rows.push({ cache_key: key, optimized_title: title, optimizer_version: FRAME_TITLE_OPTIMIZER_VERSION, model, display_profile: profile, updated_at: new Date().toISOString() })
     }
-  }
+    normalized.forEach((item, index) => { const hit = titleCache.get(keys[index]); if (hit) results.set(item.id, hit) })
+    if (rows.length && options.persistentCache) try { await options.persistentCache.write(rows) } catch (error) { console.warn('[frame-content-optimizer] cache write unavailable', error) }
+  } catch (error) { console.warn('[frame-content-optimizer] AI unavailable; using deterministic fallback', error) }
 
-  return normalized.map((item) => ({
-    id: item.id,
-    title: results.get(item.id) || fallbackTitle(item.title, maxTitleChars),
-  }))
+  return normalized.map(item => ({ id: item.id, title: results.get(item.id) || fallbackTitle(item.title, maxChars) }))
 }
