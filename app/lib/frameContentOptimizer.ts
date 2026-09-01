@@ -40,6 +40,7 @@ const PROFILE_LIMITS: Record<DisplayCapacityProfile, { maxTitleChars: number; ma
   spacious: { maxTitleChars: 72, maxLines: 3 },
 }
 const titleCache = new Map<string, string>()
+const inFlightOptimizations = new Map<string, Promise<string | null>>()
 
 const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. Return every supplied id and respect each display profile, maximum characters, and line count.`
 
@@ -91,6 +92,7 @@ function remember(key: string, title: string) {
   titleCache.set(key, title)
 }
 export function clearFrameTitleL1CacheForTests() { titleCache.clear() }
+export function clearFrameTitleInflightForTests() { inFlightOptimizations.clear() }
 function enabled() {
   const value = String(process.env.FRAME_AI_OPTIMIZATION_ENABLED || '').toLowerCase()
   return !['0', 'false', 'no', 'off'].includes(value) && Boolean(process.env.OPENAI_API_KEY)
@@ -126,6 +128,8 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
   displayProfile?: DisplayCapacityProfile
   persistentCache?: PersistentTitleCache
   aiTimeoutMs?: number
+  fastBudgetMs?: number
+  defer?: (work: Promise<unknown>) => void
 } = {}): Promise<FrameContentOutput[]> {
   const profile = options.displayProfile || (options.maxTitleChars && options.maxTitleChars <= 30 ? 'compact' : options.maxTitleChars && options.maxTitleChars > 56 ? 'spacious' : 'standard')
   const maxChars = options.maxTitleChars || PROFILE_LIMITS[profile].maxTitleChars
@@ -136,25 +140,55 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
 
   keys.forEach((key, index) => { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) })
   const missingKeys = keys.filter((key, index) => !results.has(normalized[index].id))
+  let persistentReadSucceeded = true
   if (missingKeys.length && options.persistentCache) try {
     for (const row of await options.persistentCache.read([...new Set(missingKeys)])) remember(row.cache_key, row.optimized_title)
     keys.forEach((key, index) => { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) })
-  } catch (error) { console.warn('[frame-content-optimizer] persistent cache unavailable', error) }
+  } catch (error) {
+    persistentReadSucceeded = false
+    console.warn('[frame-content-optimizer] persistent cache unavailable; skipping AI', error)
+  }
+
+  // Physical title generation is only useful when it can become durable. A
+  // missing/broken cache must never cause repeatedly changing AI wording.
+  if (!persistentReadSucceeded) {
+    return normalized.map(item => ({ id: item.id, title: fallbackTitle(item.title, maxChars) }))
+  }
 
   // De-duplicate identical source/profile variants before the single batched AI request.
   const unique = new Map<string, FrameContentInput>()
   normalized.forEach((item, index) => { if (!results.has(item.id) && !unique.has(keys[index])) unique.set(keys[index], { ...item, id: keys[index] }) })
-  if (unique.size && enabled()) try {
-    const fresh = await requestTitles([...unique.values()], model, profile, options.aiTimeoutMs ?? 5000)
-    const rows: PersistentCacheRow[] = []
-    for (const [key, item] of unique) {
-      const title = fresh.get(key); if (!title) continue
-      remember(key, title)
-      rows.push({ cache_key: key, optimized_title: title, optimizer_version: FRAME_TITLE_OPTIMIZER_VERSION, model, display_profile: profile, updated_at: new Date().toISOString() })
+  if (unique.size && enabled()) {
+    const newEntries = [...unique].filter(([key]) => !inFlightOptimizations.has(key))
+    if (newEntries.length) {
+      const batch = (async () => {
+        try {
+          const fresh = await requestTitles(newEntries.map(([, item]) => item), model, profile, options.aiTimeoutMs ?? 5000)
+          const rows = newEntries.flatMap(([key]) => {
+            const title = fresh.get(key)
+            return title ? [{ cache_key: key, optimized_title: title, optimizer_version: FRAME_TITLE_OPTIMIZER_VERSION, model, display_profile: profile, updated_at: new Date().toISOString() }] : []
+          })
+          // Never expose an AI title until its durable write succeeds.
+          if (rows.length && options.persistentCache) await options.persistentCache.write(rows)
+          for (const row of rows) remember(row.cache_key, row.optimized_title)
+          return fresh
+        } catch (error) {
+          console.warn('[frame-content-optimizer] AI optimization was not persisted; using deterministic fallback', error)
+          return new Map<string, string>()
+        }
+      })()
+      for (const [key] of newEntries) {
+        const task = batch.then(fresh => fresh.get(key) || null).finally(() => inFlightOptimizations.delete(key))
+        inFlightOptimizations.set(key, task)
+      }
     }
+
+    const pending = Promise.allSettled([...unique.keys()].map(key => inFlightOptimizations.get(key)!))
+    if (options.defer) options.defer(pending)
+    const fastBudgetMs = Math.max(0, options.fastBudgetMs ?? (options.aiTimeoutMs ?? 5000))
+    await Promise.race([pending, new Promise(resolve => setTimeout(resolve, fastBudgetMs))])
     normalized.forEach((item, index) => { const hit = titleCache.get(keys[index]); if (hit) results.set(item.id, hit) })
-    if (rows.length && options.persistentCache) try { await options.persistentCache.write(rows) } catch (error) { console.warn('[frame-content-optimizer] cache write unavailable', error) }
-  } catch (error) { console.warn('[frame-content-optimizer] AI unavailable; using deterministic fallback', error) }
+  }
 
   return normalized.map(item => ({ id: item.id, title: results.get(item.id) || fallbackTitle(item.title, maxChars) }))
 }

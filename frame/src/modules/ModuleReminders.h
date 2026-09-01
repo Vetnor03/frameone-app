@@ -5,7 +5,11 @@
 
 namespace ModuleReminders {
 
+  enum DisplayProfileMask : uint8_t { PROFILE_COMPACT = 1, PROFILE_STANDARD = 2, PROFILE_SPACIOUS = 4 };
+
   void setConfig(const FrameConfig* cfg);
+  uint8_t profileForCell(const Cell& cell);
+  void setRequiredProfiles(uint8_t mask);
   void preload();
 
   // single-instance for now: "reminders"

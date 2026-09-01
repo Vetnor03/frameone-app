@@ -107,7 +107,7 @@ test('the performance change stays scoped away from unrelated application system
     .split('\n')
     .map((file) => file.trim())
     .filter(Boolean)
-  assert.deepEqual(changedFiles.filter((file) => file.startsWith('frame/src/modules/Module') && !file.endsWith('ModuleRenderer.cpp') && !file.endsWith('ModuleReminders.cpp')), [])
+  assert.deepEqual(changedFiles.filter((file) => file.startsWith('frame/src/modules/Module') && !file.includes('ModuleRenderer.') && !file.includes('ModuleReminders.')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('ai-assistant') || file.includes('interpret-ai-assistant')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('frame-config')), [])
   assert.deepEqual(changedFiles.filter((file) => file.includes('supabase/functions/')), [])

@@ -1,6 +1,6 @@
 // app/api/device/reminders/route.ts
 
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
@@ -39,6 +39,7 @@ type PhysicalDeviceReminderItem = {
   days_until: number
   is_overdue: boolean
   display_time: string | null
+  profile_titles?: Partial<Record<DisplayCapacityProfile, string>>
 }
 
 const DEFAULT_TZ = 'Europe/Oslo'
@@ -617,22 +618,32 @@ export async function GET(req: Request) {
         return true
       })
     const selectedItems = selectReminderDisplayGroups(allItems, limit)
-    const requestedProfile = String(url.searchParams.get('display_profile') || 'standard')
-    const displayProfile: DisplayCapacityProfile = requestedProfile === 'compact' || requestedProfile === 'spacious' ? requestedProfile : 'standard'
-    const optimizedTitles = await optimizeFrameContent(
-      selectedItems.map((item, index) => ({
+    const requestedProfiles = String(url.searchParams.get('display_profiles') || url.searchParams.get('display_profile') || 'standard')
+      .split(',').map(value => value.trim()).filter((value): value is DisplayCapacityProfile => value === 'compact' || value === 'standard' || value === 'spacious')
+    const displayProfiles = [...new Set<DisplayCapacityProfile>(requestedProfiles.length ? requestedProfiles : ['standard'])]
+    const optimizerItems = selectedItems.map((item, index) => ({
         id: String(index),
         title: item.title,
         source: item.source,
         displayDate: item.display_date,
         displayTime: item.display_time,
-      })), { displayProfile, persistentCache: supabaseTitleCache(supabase), aiTimeoutMs: PHYSICAL_AI_TIMEOUT_MS }
-    )
-    const optimizedTitleByIndex = new Map(optimizedTitles.map((item) => [Number(item.id), item.title]))
+      }))
+    const persistentCache = supabaseTitleCache(supabase)
+    const optimizedByProfile = new Map(await Promise.all(displayProfiles.map(async displayProfile => {
+      const titles = await optimizeFrameContent(optimizerItems, {
+        displayProfile, persistentCache, fastBudgetMs: PHYSICAL_AI_TIMEOUT_MS, aiTimeoutMs: 5000,
+        defer: work => after(async () => { await work }),
+      })
+      return [displayProfile, new Map(titles.map(item => [Number(item.id), item.title]))] as const
+    })))
+    const primaryTitles = optimizedByProfile.get(displayProfiles[0])!
     const physicalItems = selectedItems.map((item, index) => toPhysicalDeviceReminderItem({
       ...item,
-      title: optimizedTitleByIndex.get(index) || item.title,
-    }))
+      title: primaryTitles.get(index) || item.title,
+    })).map((item, index) => displayProfiles.length > 1 ? {
+      ...item,
+      profile_titles: Object.fromEntries(displayProfiles.map(profile => [profile, optimizedByProfile.get(profile)?.get(index) || item.title])),
+    } : item)
     const compactJsonByteSize = Buffer.byteLength(JSON.stringify({ items: physicalItems }), 'utf8')
 
     console.info('[device/reminders] compact response', {

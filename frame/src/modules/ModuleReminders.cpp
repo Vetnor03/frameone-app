@@ -56,6 +56,9 @@ static const int MAX_BUCKET_ITEMS = 10;
 struct ReminderItem {
   bool used = false;
   char title[96] = {0};
+  char compactTitle[74] = {0};
+  char standardTitle[74] = {0};
+  char spaciousTitle[74] = {0};
   char time[12] = {0};           // HH:MM or empty
   char occurrenceDate[16] = {0}; // YYYY-MM-DD
   char displayDate[24] = {0};
@@ -79,6 +82,7 @@ struct ReminderCache {
 };
 
 static ReminderCache g_cache;
+static uint8_t g_requiredProfiles = PROFILE_STANDARD;
 
 // =========================================================
 // Helpers
@@ -670,10 +674,15 @@ static bool fetchReminders() {
   Serial.println("REM before fetch");
   logMemoryStats("before_fetch");
 
+  String profileQuery;
+  if (g_requiredProfiles & PROFILE_COMPACT) profileQuery += "compact,";
+  if (g_requiredProfiles & PROFILE_STANDARD) profileQuery += "standard,";
+  if (g_requiredProfiles & PROFILE_SPACIOUS) profileQuery += "spacious,";
+  if (profileQuery.endsWith(",")) profileQuery.remove(profileQuery.length() - 1);
   String url = String(BASE_URL)
              + "/api/device/reminders?device_id="
              + DeviceIdentity::getDeviceId()
-             + "&limit=10&tz=Europe/Oslo&skip_sync=1&display_profile=standard";
+             + "&limit=10&tz=Europe/Oslo&skip_sync=1&display_profiles=" + profileQuery;
 
   int code = 0;
   String body;
@@ -714,6 +723,9 @@ static bool fetchReminders() {
   itemFilter["days_until"] = true;
   itemFilter["is_overdue"] = true;
   itemFilter["display_time"] = true;
+  itemFilter["profile_titles"]["compact"] = true;
+  itemFilter["profile_titles"]["standard"] = true;
+  itemFilter["profile_titles"]["spacious"] = true;
 
   DynamicJsonDocument doc(REMINDERS_JSON_CAPACITY);
   if (doc.capacity() == 0) {
@@ -763,6 +775,9 @@ static bool fetchReminders() {
 
     const char* rawTitle = it["title"] | "";
     utf8ToLatin1(r.title, sizeof(r.title), rawTitle);
+    utf8ToLatin1(r.compactTitle, sizeof(r.compactTitle), it["profile_titles"]["compact"] | rawTitle);
+    utf8ToLatin1(r.standardTitle, sizeof(r.standardTitle), it["profile_titles"]["standard"] | rawTitle);
+    utf8ToLatin1(r.spaciousTitle, sizeof(r.spaciousTitle), it["profile_titles"]["spacious"] | rawTitle);
 
     char rawTime[24] = {0};
     safeCopy(rawTime, sizeof(rawTime), it["display_time"] | "");
@@ -2484,6 +2499,25 @@ void setConfig(const FrameConfig* cfg) {
   clearCache();
 }
 
+uint8_t profileForCell(const Cell& c) {
+  if (c.h <= 120 || c.w < 250) return PROFILE_COMPACT;
+  if (c.w >= 600 && c.h >= 360) return PROFILE_SPACIOUS;
+  return PROFILE_STANDARD;
+}
+
+void setRequiredProfiles(uint8_t mask) {
+  g_requiredProfiles = mask ? mask : PROFILE_STANDARD;
+}
+
+static void applyProfileTitles(const Cell& c) {
+  const uint8_t profile = profileForCell(c);
+  for (int i = 0; i < g_cache.count; ++i) {
+    const char* selected = profile == PROFILE_COMPACT ? g_cache.items[i].compactTitle
+      : profile == PROFILE_SPACIOUS ? g_cache.items[i].spaciousTitle : g_cache.items[i].standardTitle;
+    safeCopy(g_cache.items[i].title, sizeof(g_cache.items[i].title), selected);
+  }
+}
+
 void preload() {
   ensureLoaded();
 }
@@ -2494,6 +2528,7 @@ void render(const Cell& c, const String& moduleName) {
   Serial.println("REM render start");
   logMemoryStats("render_start");
   ensureLoaded();
+  applyProfileTitles(c);
 
   ReminderBucket buckets[MAX_BUCKETS];
   int bucketCount = buildBuckets(buckets, MAX_BUCKETS);

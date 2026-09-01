@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  clearFrameTitleL1CacheForTests, deriveReminderDisplayProfile, frameTitleCacheKey,
+  clearFrameTitleInflightForTests, clearFrameTitleL1CacheForTests, deriveReminderDisplayProfile, frameTitleCacheKey,
   optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS,
 } from '../app/lib/frameContentOptimizer.ts'
 
@@ -40,6 +40,9 @@ test('source and meaningful profile changes create one variant; equivalent geome
   clearFrameTitleL1CacheForTests()
   const persistentCache = cache(), counter = { calls: 0 }; ai(counter)
   assert.equal(deriveReminderDisplayProfile({ usableWidth: 398, maxLines: 2 }), deriveReminderDisplayProfile({ usableWidth: 402, maxLines: 2 }))
+  assert.equal(deriveReminderDisplayProfile({ usableWidth: 800, maxLines: 1 }), 'compact')
+  assert.equal(deriveReminderDisplayProfile({ usableWidth: 400, maxLines: 2 }), 'standard')
+  assert.equal(deriveReminderDisplayProfile({ usableWidth: 600, maxLines: 3 }), 'spacious')
   await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache })
   await optimizeFrameContent([item()], { displayProfile: 'compact', persistentCache })
   await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache })
@@ -62,5 +65,37 @@ test('AI failure is deterministic and does not fail rendering', async () => {
 })
 
 test('physical AI budget is deliberately far below the former five seconds', () => assert.ok(PHYSICAL_AI_TIMEOUT_MS <= 300))
+
+test('slow AI returns fallback inside the fast budget then persists after response', async () => {
+  clearFrameTitleL1CacheForTests(); clearFrameTitleInflightForTests()
+  const persistentCache = cache(), counter = { calls: 0 }; let deferred
+  globalThis.fetch = async (_url, init) => {
+    counter.calls++
+    const supplied = JSON.parse(JSON.parse(init.body).input[1].content[0].text).items
+    await new Promise(resolve => setTimeout(resolve, 320))
+    return { ok: true, json: async () => ({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ items: supplied.map(value => ({ id: value.id, title: 'Eventually durable' })) }) }] }] }) }
+  }
+  const started = Date.now()
+  const first = await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache, fastBudgetMs: 40, aiTimeoutMs: 1000, defer: work => { deferred = work } })
+  assert.ok(Date.now() - started < 200); assert.notEqual(first[0].title, 'Eventually durable')
+  await deferred
+  const second = await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache, fastBudgetMs: 40 })
+  assert.equal(second[0].title, 'Eventually durable'); assert.equal(counter.calls, 1)
+})
+
+test('persistent read failure starts no AI', async () => {
+  clearFrameTitleL1CacheForTests(); clearFrameTitleInflightForTests()
+  const counter = { calls: 0 }; ai(counter)
+  const output = await optimizeFrameContent([item()], { displayProfile: 'standard', persistentCache: { read: async () => { throw new Error('missing table') }, write: async () => {} }, fastBudgetMs: 10 })
+  assert.equal(counter.calls, 0); assert.ok(output[0].title)
+})
+
+test('concurrent identical misses share one AI operation', async () => {
+  clearFrameTitleL1CacheForTests(); clearFrameTitleInflightForTests()
+  const persistentCache = cache(), counter = { calls: 0 }; ai(counter, 'One operation')
+  const options = { displayProfile: 'standard', persistentCache, fastBudgetMs: 250 }
+  await Promise.all([optimizeFrameContent([item()], options), optimizeFrameContent([item()], options)])
+  assert.equal(counter.calls, 1); assert.equal(persistentCache.rows.size, 1)
+})
 
 test.after(() => { globalThis.fetch = originalFetch; process.env.OPENAI_API_KEY = originalKey })

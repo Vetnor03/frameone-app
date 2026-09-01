@@ -23,6 +23,7 @@ namespace Layout {
   void draw(LayoutKey key);
 
   int buildCells(LayoutKey key, Cell* outCells, int maxCells);
+  uint8_t reminderProfileMask(LayoutKey key, const FrameConfig& cfg);
 
   // NEW: draw layout dividers + allow caller to draw inside cells during same refresh
   void drawWithContent(LayoutKey key, const FrameConfig& cfg);

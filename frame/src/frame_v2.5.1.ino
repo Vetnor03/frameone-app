@@ -540,11 +540,13 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   ModuleReminders::setConfig(&g_cfg);
   ModuleSoccer::setConfig(&g_cfg);
   ModuleStocks::setConfig(&g_cfg);
+  const uint8_t reminderProfiles = Layout::reminderProfileMask(g_cfg.layout, g_cfg);
+  ModuleReminders::setRequiredProfiles(reminderProfiles);
   const SlotModule* activeAssignments = g_cfg.layout == LAYOUT_CUSTOM && g_cfg.customLayout.renderable
     ? g_cfg.customLayout.assigns : g_cfg.assigns;
   const int activeAssignmentCount = g_cfg.layout == LAYOUT_CUSTOM && g_cfg.customLayout.renderable
     ? g_cfg.customLayout.assignCount : g_cfg.assignCount;
-  bool remindersActive = false;
+  bool remindersActive = reminderProfiles != 0;
   for (int i = 0; i < activeAssignmentCount; ++i) {
     if (strncmp(activeAssignments[i].module, "reminders", 9) == 0) { remindersActive = true; break; }
   }
