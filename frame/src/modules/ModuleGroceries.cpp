@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "DeviceIdentity.h"
 #include "NetClient.h"
+#include "GroceriesAdaptivePolicy.h"
 
 #include "Fonts/FreeSans9ptNO.h"
 #include "Fonts/FreeSansBold12ptNO.h"
@@ -1062,6 +1063,233 @@ static void renderXL(const Cell& c) {
   drawMealIdeasList(right, rightTop);
 }
 
+// BEGIN ADAPTIVE GROCERIES RENDERER
+static void adaptiveToday(char* out, size_t size) {
+  if (!out || size == 0) return;
+  out[0] = '\0';
+  time_t now = time(nullptr);
+  if (now <= 0) return;
+  struct tm tmv;
+  localtime_r(&now, &tmv);
+  strftime(out, size, "%Y-%m-%d", &tmv);
+}
+
+static int adaptiveTodayDinner(const char* today) {
+  if (!today || !today[0]) return -1;
+  for (int i = 0; i < g_cache.dinnerCount; ++i)
+    if (g_cache.dinners[i].used && strcmp(g_cache.dinners[i].date, today) == 0) return i;
+  return -1;
+}
+
+static int adaptiveFutureCount(const char* today) {
+  int count = 0;
+  for (int i = 0; i < g_cache.dinnerCount; ++i)
+    if (g_cache.dinners[i].used && (!today[0] || strcmp(g_cache.dinners[i].date, today) > 0)) ++count;
+  return count;
+}
+
+// Finds the nth future dinner without copying/sorting the dinner cache.
+static int adaptiveFutureDinner(const char* today, int ordinal) {
+  int after = -1;
+  for (int n = 0; n <= ordinal; ++n) {
+    int best = -1;
+    for (int i = 0; i < g_cache.dinnerCount; ++i) {
+      if (!g_cache.dinners[i].used || (today[0] && strcmp(g_cache.dinners[i].date, today) <= 0)) continue;
+      if (after >= 0 && strcmp(g_cache.dinners[i].date, g_cache.dinners[after].date) <= 0) continue;
+      if (best < 0 || strcmp(g_cache.dinners[i].date, g_cache.dinners[best].date) < 0) best = i;
+    }
+    after = best;
+    if (after < 0) break;
+  }
+  return after;
+}
+
+static void adaptiveLine(int x, int y, int width, const char* value, const GFXfont* font) {
+  if (width < 4) return;
+  char fit[80] = {0};
+  fitTextToWidth(value, fit, sizeof(fit), width, font);
+  drawLeft(x, y, fit, font, Theme::ink());
+}
+
+static void adaptiveCenteredLine(int x, int y, int width, const char* value, const GFXfont* font) {
+  if (width < 4) return;
+  char fit[80] = {0};
+  fitTextToWidth(value, fit, sizeof(fit), width, font);
+  int16_t x1, y1;
+  uint16_t tw, th;
+  measureText(fit, font, x1, y1, tw, th);
+  if (static_cast<int>(tw) > width) return;
+  drawLeft(x + (width - static_cast<int>(tw)) / 2 - x1, y, fit, font, Theme::ink());
+}
+
+static void adaptiveHeading(int x, int top, int width, int height, const char* value) {
+  if (width < 4 || height < 4) return;
+  char fit[80] = {0};
+  fitTextToWidth(value, fit, sizeof(fit), width, FONT_B12);
+  int16_t x1, y1;
+  uint16_t tw, th;
+  measureText(fit, FONT_B12, x1, y1, tw, th);
+  if (static_cast<int>(tw) > width) return;
+  const int textX = x + (width - static_cast<int>(tw)) / 2 - x1;
+  drawLeft(textX, top + min(height - 4, 18) - y1, fit, FONT_B12, Theme::ink());
+  DisplayCore::get().fillRect(x + (width - static_cast<int>(tw)) / 2,
+                              top + height - 3, tw, 2, Theme::ink());
+}
+
+static void renderAdaptiveGroceries(const Cell& c) {
+  char today[16] = {0};
+  adaptiveToday(today, sizeof(today));
+  const int todayDinner = adaptiveTodayDinner(today);
+  const int futureCount = adaptiveFutureCount(today);
+  GroceriesAdaptivePolicy::Input input = {
+    c.w, c.h, !g_cache.ok, static_cast<uint8_t>(min(g_cache.count, 255)),
+    static_cast<uint8_t>(min(g_cache.dinnerCount, 255)),
+    static_cast<uint8_t>(min(futureCount, 255)), todayDinner >= 0,
+    static_cast<uint8_t>(min(g_cache.runningLowCount, 255)),
+    static_cast<uint8_t>(min(g_cache.recipeCount, 255))
+  };
+  const GroceriesAdaptivePolicy::Result layout = GroceriesAdaptivePolicy::compose(input);
+  if (layout.family == GroceriesAdaptivePolicy::EMPTY) {
+    const int pad = max(9, min(14, c.w * 35 / 1000));
+    adaptiveHeading(c.x + pad, c.y + pad, max(1, c.w - pad * 2), 28,
+                    g_cache.languageNo ? "Handleliste" : "Grocery List");
+    adaptiveCenteredLine(c.x + pad, c.y + c.h / 2 + 8, max(1, c.w - pad * 2),
+                         layout.failed ? "Fetch failed" : emptyPhrase(), FONT_B9);
+    return;
+  }
+
+  auto& d = DisplayCore::get();
+  const uint16_t ink = Theme::ink();
+  const int pad = max(9, min(14, c.w * 35 / 1000));
+  const int gap = 12;
+  const int innerX = c.x + pad;
+  const int innerW = max(1, c.w - pad * 2);
+  int topH = max(1, c.h - pad * 2);
+  int bottomH = 0;
+  if (layout.showRunningLow || layout.showMealIdeas) {
+    bottomH = min(116, c.h * 31 / 100);
+    topH = max(1, topH - bottomH - gap);
+  }
+  int groceryW = innerW;
+  int menuX = 0, menuW = 0;
+  if (layout.showMenu) {
+    const int split = max(c.w * 54 / 100, 250);
+    groceryW = max(1, split - pad);
+    menuX = c.x + split + gap;
+    menuW = max(1, c.x + c.w - pad - menuX);
+    d.drawFastVLine(menuX - gap / 2, c.y + pad, topH, ink);
+  }
+
+  const bool todayHeading = layout.todayIsHeading && todayDinner >= 0;
+  const int headerH = todayHeading && layout.family != GroceriesAdaptivePolicy::ITEM_STRIP &&
+    layout.family != GroceriesAdaptivePolicy::MICRO ? 48 : 32;
+  if (todayHeading && headerH > 32)
+    adaptiveLine(innerX, c.y + pad + 12, groceryW, g_cache.languageNo ? "Middag i dag" : "Today's Dinner", FONT_B9);
+  const char* heading = todayHeading ? g_cache.dinners[todayDinner].title : g_cache.header;
+  adaptiveHeading(innerX, c.y + pad + (headerH > 32 ? 16 : 0), groceryW,
+                  headerH - (headerH > 32 ? 16 : 0), heading);
+
+  const int listY = c.y + pad + headerH + 5;
+  const int listH = max(0, topH - headerH - 5);
+  const int overflowH = 18;
+  const int rowStep = 26;
+  int columns = layout.horizontal ? min(3, max(1, g_cache.count)) : layout.columns;
+  int capacity = 0;
+  if (layout.horizontal) capacity = min(3, g_cache.count);
+  else capacity = max(0, (listH - (g_cache.count ? overflowH : 0)) / rowStep) * columns;
+  capacity = min(12, min(capacity, g_cache.count));
+  const int rotation = getRotationStep4h();
+  const int perColumn = max(1, (capacity + columns - 1) / columns);
+  for (int i = 0; i < capacity; ++i) {
+    const GroceryItem& item = g_cache.items[wrapIndex(rotation + i, g_cache.count)];
+    int x, y, width;
+    if (layout.horizontal) {
+      x = innerX + groceryW * i / capacity + 4;
+      width = groceryW * (i + 1) / capacity - groceryW * i / capacity - 8;
+      y = listY + min(18, listH / 2);
+      if (i) d.drawFastVLine(innerX + groceryW * i / capacity, listY, max(1, listH - (g_cache.count > capacity ? overflowH : 0)), ink);
+    } else {
+      const int col = i / perColumn, row = i % perColumn;
+      const int columnW = groceryW / columns;
+      x = innerX + col * columnW + 14;
+      width = max(1, columnW - 20);
+      y = listY + row * rowStep + 15;
+      d.fillCircle(x - 8, y - 5, 3, ink);
+    }
+    if (layout.horizontal) {
+      char raw[72] = {0};
+      formatItem(item, raw, sizeof(raw));
+      adaptiveCenteredLine(x, y, width, raw, FONT_B12);
+    } else if (item.qty > 1) {
+      char quantity[16] = {0};
+      snprintf(quantity, sizeof(quantity), "%dx", item.qty);
+      const int quantityW = textWidth(quantity, FONT_B9);
+      if (quantityW <= width) {
+        adaptiveLine(x, y, quantityW, quantity, FONT_B9);
+        adaptiveLine(x + quantityW + 6, y, max(1, width - quantityW - 6), item.name, FONT_B9);
+      }
+    } else adaptiveLine(x, y, width, item.name, FONT_B9);
+  }
+  if (g_cache.count > capacity && listH >= overflowH) {
+    char more[24] = {0};
+    snprintf(more, sizeof(more), "+%d more", g_cache.count - capacity);
+    if (groceryW < 70) snprintf(more, sizeof(more), "+%d", g_cache.count - capacity);
+    adaptiveCenteredLine(innerX, c.y + pad + topH - 3, groceryW, more, FONT_B9);
+  }
+
+  if (layout.showMenu) {
+    const char* menuHeading = todayDinner >= 0 ? g_cache.dinners[todayDinner].title :
+      (g_cache.languageNo ? "Ukemeny" : "Weekly Menu");
+    adaptiveHeading(menuX, c.y + pad, menuW, 32, menuHeading);
+    const int maxRows = min(futureCount, max(0, (topH - 38) / 24));
+    for (int i = 0; i < maxRows; ++i) {
+      const int index = adaptiveFutureDinner(today, i);
+      if (index < 0) break;
+      char line[72] = {0};
+      snprintf(line, sizeof(line), "%s: %s", g_cache.dinners[index].dayLabel, g_cache.dinners[index].title);
+      adaptiveLine(menuX, c.y + pad + 54 + i * 24, menuW, line, FONT_B9);
+    }
+  }
+
+  if (bottomH > 0) {
+    const int bottomY = c.y + pad + topH + gap;
+    const bool both = layout.showRunningLow && layout.showMealIdeas;
+    const int half = both ? (c.w - gap) / 2 : c.w;
+    if (layout.showRunningLow) {
+      const int width = max(1, half - pad);
+      adaptiveHeading(innerX, bottomY, width, 25, g_cache.languageNo ? "SNART TOM" : "RUNNING LOW");
+      for (int i = 0; i < min(3, g_cache.runningLowCount); ++i) {
+        char full[84] = {0};
+        snprintf(full, sizeof(full), g_cache.runningLow[i].label[0] ? "%s - %s" : "%s",
+                 g_cache.runningLow[i].name, g_cache.runningLow[i].label);
+        const GroceriesAdaptivePolicy::RunningLowMode mode = GroceriesAdaptivePolicy::runningLowMode(
+          textWidth(full, FONT_B9) <= width, textWidth(g_cache.runningLow[i].name, FONT_B9) <= width);
+        adaptiveLine(innerX, bottomY + 46 + i * 24, width,
+                     mode == GroceriesAdaptivePolicy::RUNNING_FULL ? full : g_cache.runningLow[i].name, FONT_B9);
+      }
+    }
+    if (layout.showMealIdeas) {
+      const int x = both ? c.x + half + gap : innerX;
+      const int width = both ? max(1, c.x + c.w - pad - x) : innerW;
+      adaptiveHeading(x, bottomY, width, 25, g_cache.languageNo ? "MIDDAGSTIPS" : "MEAL IDEAS");
+      for (int i = 0; i < min(2, g_cache.recipeCount); ++i) {
+        char two[112] = {0}, one[112] = {0}, line[112] = {0};
+        safeCopy(one, sizeof(one), g_cache.recipes[i].name);
+        strlcat(one, g_cache.languageNo ? " - mangler: " : " - missing: ", sizeof(one));
+        if (g_cache.recipes[i].missingCount > 0) strlcat(one, g_cache.recipes[i].missing[0], sizeof(one));
+        safeCopy(two, sizeof(two), one);
+        if (g_cache.recipes[i].missingCount > 1) { strlcat(two, ", ", sizeof(two)); strlcat(two, g_cache.recipes[i].missing[1], sizeof(two)); }
+        const uint8_t missing = GroceriesAdaptivePolicy::mealMissingCount(
+          g_cache.recipes[i].missingCount > 1 && textWidth(two, FONT_B9) <= width,
+          g_cache.recipes[i].missingCount > 0 && textWidth(one, FONT_B9) <= width);
+        safeCopy(line, sizeof(line), missing == 2 ? two : (missing == 1 ? one : g_cache.recipes[i].name));
+        adaptiveLine(x, bottomY + 46 + i * 38, width, line, FONT_B9);
+      }
+    }
+  }
+}
+// END ADAPTIVE GROCERIES RENDERER
+
 void setConfig(const FrameConfig* cfg) {
   g_cfg = cfg;
   (void)g_cfg;
@@ -1072,6 +1300,11 @@ void render(const Cell& c, const String& moduleName) {
   (void)moduleName;
 
   ensureLoaded();
+
+  if (c.size == CELL_ADAPTIVE) {
+    renderAdaptiveGroceries(c);
+    return;
+  }
 
   if (!g_cache.ok) {
     drawEmptyState(c, "Grocery List", "Fetch failed");
