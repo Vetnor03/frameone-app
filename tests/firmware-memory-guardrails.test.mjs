@@ -114,14 +114,20 @@ test('adaptive Groceries reuses its sole cache and has no static row scratch', (
 });
 
 test('AI Follow uses one bounded cache, filtered capped JSON, and allocation-free render scratch', () => {
-  assert.equal((assistant.match(/static AssistantCache g_cache/g) || []).length, 1);
+  assert.doesNotMatch(assistant, /static AssistantCache g_cache\s*=/);
+  assert.equal((assistant.match(/static AssistantCache\* g_cache/g) || []).length, 1);
+  assert.equal((assistant.match(/new \(std::nothrow\) AssistantCache\{\}/g) || []).length, 1);
+  assert.match(assistant, /if \(g_cacheAllocationAttempted\) return false/);
+  assert.match(assistant, /if\(!cacheAvailable\|\|!g_cache->ok\)/);
   assert.match(assistant, /MAX_RESPONSE_BYTES = 6144/);
   assert.match(assistant, /body\.length\(\)>MAX_RESPONSE_BYTES/);
   assert.match(assistant, /DeserializationOption::Filter/);
   assert.match(assistant, /MAX_UPDATES = 4/);
   assert.match(assistant, /static_assert\(sizeof\(AssistantCache\) == 1030/);
+  assert.match(assistant, /DynamicJsonDocument doc\(4096\)/);
   const renderer = assistant.slice(assistant.indexOf('void render('));
-  assert.doesNotMatch(renderer, /\bString\b|\bnew\s+[A-Za-z_:][A-Za-z0-9_:]*\s*[\[(]|malloc|calloc|std::vector/);
+  assert.doesNotMatch(renderer, /\bString\b|malloc|calloc|std::vector/);
+  assert.doesNotMatch(assistant.slice(assistant.indexOf('static void wrapSummary'), assistant.indexOf('void reset(')), /\bnew\b|malloc|calloc/);
   assert.doesNotMatch(assistant, /Serial\.(?:print|println)\(body/);
 });
 

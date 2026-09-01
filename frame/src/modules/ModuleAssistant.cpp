@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 #include <string.h>
 #include <stdio.h>
+#include <new>
 
 namespace ModuleAssistant {
 static const uint8_t MAX_UPDATES = 4;
@@ -18,7 +19,16 @@ static const size_t MAX_RESPONSE_BYTES = 6144;
 struct Update { char topic[64]; char summary[192]; };
 struct AssistantCache { bool loaded; bool ok; bool languageNo; uint8_t followingCount; uint8_t count; uint8_t totalCount; Update updates[MAX_UPDATES]; };
 static_assert(sizeof(AssistantCache) == 1030, "Assistant cache DRAM budget changed");
-static AssistantCache g_cache = {};
+static AssistantCache* g_cache = nullptr;
+static bool g_cacheAllocationAttempted = false;
+
+static bool ensureCache() {
+  if (g_cache) return true;
+  if (g_cacheAllocationAttempted) return false;
+  g_cacheAllocationAttempted = true;
+  g_cache = new (std::nothrow) AssistantCache{};
+  return g_cache != nullptr;
+}
 
 static void copyDisplay(char* out, size_t size, const char* value) { FrameText::normalizeUtf8ForDisplay(out, size, value ? value : ""); }
 struct Rect { int x; int y; int w; int h; };
@@ -35,18 +45,19 @@ static void fit(const char* value,char* out,size_t size,int maxWidth,const GFXfo
   strlcpy(out,"...",size);
 }
 static bool fetch() {
+  if (!ensureCache()) return false;
   AssistantCache fresh={}; fresh.loaded=true;
   String url=String(BASE_URL)+"/api/device/assistant?device_id="+DeviceIdentity::getDeviceId(); int code=0; String body;
-  if(!NetClient::httpGetAuth(url,DeviceIdentity::getToken(),code,body)||code!=200||body.length()>MAX_RESPONSE_BYTES){g_cache=fresh;return false;}
+  if(!NetClient::httpGetAuth(url,DeviceIdentity::getToken(),code,body)||code!=200||body.length()>MAX_RESPONSE_BYTES){*g_cache=fresh;return false;}
   StaticJsonDocument<256> filter; filter["ok"]=true; filter["language"]=true; filter["active_watch_count"]=true; filter["update_count"]=true; filter["updates"][0]["topic"]=true; filter["updates"][0]["summary"]=true;
   DynamicJsonDocument doc(4096); const size_t responseBytes=body.length();
   DeserializationError error=deserializeJson(doc,body,DeserializationOption::Filter(filter)); body=String();
-  if(error){Serial.print("Assistant JSON parse failed, bytes=");Serial.println(responseBytes);g_cache=fresh;return false;}
+  if(error){Serial.print("Assistant JSON parse failed, bytes=");Serial.println(responseBytes);*g_cache=fresh;return false;}
   fresh.ok=doc["ok"]|false; fresh.languageNo=strcmp(doc["language"]|"en","no")==0;
   fresh.followingCount=static_cast<uint8_t>(min(255,static_cast<int>(doc["active_watch_count"]|0)));
   fresh.totalCount=static_cast<uint8_t>(min(255,static_cast<int>(doc["update_count"]|0)));
   for(JsonObject item:doc["updates"].as<JsonArray>()){if(fresh.count>=MAX_UPDATES)break;copyDisplay(fresh.updates[fresh.count].topic,sizeof(fresh.updates[0].topic),item["topic"]|"");copyDisplay(fresh.updates[fresh.count].summary,sizeof(fresh.updates[0].summary),item["summary"]|"");if(fresh.updates[fresh.count].topic[0]&&fresh.updates[fresh.count].summary[0])fresh.count++;}
-  if(fresh.totalCount<fresh.count)fresh.totalCount=fresh.count; g_cache=fresh; return fresh.ok;
+  if(fresh.totalCount<fresh.count)fresh.totalCount=fresh.count; *g_cache=fresh; return fresh.ok;
 }
 static void wrapSummary(const char* text,const Rect& summaryRect,int lines) {
   const int maxWidth=summaryRect.w;
@@ -58,22 +69,23 @@ static void wrapSummary(const char* text,const Rect& summaryRect,int lines) {
     drawInRect({summaryRect.x,summaryRect.y+line*16,summaryRect.w,16},output,&FreeSans9pt8b,13,ALIGN_LEFT);
   }
 }
-void reset(){g_cache=AssistantCache{};}
+void reset(){if(g_cache)*g_cache=AssistantCache{};}
 void render(const Cell& c) {
-  if(!g_cache.loaded)fetch();
-  const AiFollowAdaptivePolicy::Output policy=AiFollowAdaptivePolicy::compose({c.w,c.h,g_cache.followingCount,g_cache.totalCount});
+  const bool cacheAvailable=ensureCache();
+  if(cacheAvailable&&!g_cache->loaded)fetch();
   const int pad=c.w*35/1000<8?8:(c.w*35/1000>14?14:c.w*35/1000);const Rect header={c.x+pad,c.y+pad,c.w-pad*2,30};char fitted[80];
   fit("AI FOLLOW",fitted,sizeof(fitted),header.w,&FreeSansBold12pt8b);drawInRect(header,fitted,&FreeSansBold12pt8b,15,ALIGN_CENTER);
   if(c.h>=135){const int headingWidth=min(header.w,widthOf(fitted,&FreeSansBold12pt8b));DisplayCore::get().fillRect(header.x+(header.w-headingWidth)/2,header.y+21,headingWidth,2,Theme::ink());}
-  if(!g_cache.ok){drawInRect({c.x+pad,c.y+c.h/2-12,c.w-pad*2,24},"Updates unavailable",&FreeSans9pt8b,13,ALIGN_CENTER);return;}
+  if(!cacheAvailable||!g_cache->ok){drawInRect({c.x+pad,c.y+c.h/2-12,c.w-pad*2,24},"Updates unavailable",&FreeSans9pt8b,13,ALIGN_CENTER);return;}
+  const AiFollowAdaptivePolicy::Output policy=AiFollowAdaptivePolicy::compose({c.w,c.h,g_cache->followingCount,g_cache->totalCount});
   if(policy.mode!=AiFollowAdaptivePolicy::UPDATES){
     const bool secondary=policy.showQuietSecondary;const int blockH=24+(secondary?38:0);const int start=max(header.y+header.h+6,c.y+(c.h-blockH)/2);
-    const char* primary=policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW?(g_cache.languageNo?"Ingenting folges enna":"Nothing followed yet"):(g_cache.languageNo?"Ingen nye oppdateringer":"No new updates");
+    const char* primary=policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW?(g_cache->languageNo?"Ingenting folges enna":"Nothing followed yet"):(g_cache->languageNo?"Ingen nye oppdateringer":"No new updates");
     fit(primary,fitted,sizeof(fitted),c.w-pad*2,&FreeSansBold12pt8b);drawInRect({c.x+pad,start,c.w-pad*2,24},fitted,&FreeSansBold12pt8b,14,ALIGN_CENTER);
-    if(secondary){char text[64];if(policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW)strlcpy(text,g_cache.languageNo?"Folg temaer i appen":"Follow topics in the app",sizeof(text));else snprintf(text,sizeof(text),g_cache.languageNo?"Folger %u tema%s":"Following %u topic%s",g_cache.followingCount,g_cache.followingCount==1?"":"s");fit(text,fitted,sizeof(fitted),c.w-pad*2,&FreeSans9pt8b);drawInRect({c.x+pad,start+42,c.w-pad*2,20},fitted,&FreeSans9pt8b,12,ALIGN_CENTER);}return;
+    if(secondary){char text[64];if(policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW)strlcpy(text,g_cache->languageNo?"Folg temaer i appen":"Follow topics in the app",sizeof(text));else snprintf(text,sizeof(text),g_cache->languageNo?"Folger %u tema%s":"Following %u topic%s",g_cache->followingCount,g_cache->followingCount==1?"":"s");fit(text,fitted,sizeof(fitted),c.w-pad*2,&FreeSans9pt8b);drawInRect({c.x+pad,start+42,c.w-pad*2,20},fitted,&FreeSans9pt8b,12,ALIGN_CENTER);}return;
   }
   const int top=header.y+header.h+8,rowH=18+policy.summaryLines*16+3,gap=8;
-  for(uint8_t i=0;i<policy.visibleCapacity&&i<g_cache.count;i++){const int y=top+i*(rowH+gap);const Rect topic={c.x+pad,y,c.w-pad*2,18};fit(g_cache.updates[i].topic,fitted,sizeof(fitted),topic.w,&FreeSansBold12pt8b);drawInRect(topic,fitted,&FreeSansBold12pt8b,14,ALIGN_LEFT);wrapSummary(g_cache.updates[i].summary,{c.x+pad,y+21,c.w-pad*2,rowH-21},policy.summaryLines);}
+  for(uint8_t i=0;i<policy.visibleCapacity&&i<g_cache->count;i++){const int y=top+i*(rowH+gap);const Rect topic={c.x+pad,y,c.w-pad*2,18};fit(g_cache->updates[i].topic,fitted,sizeof(fitted),topic.w,&FreeSansBold12pt8b);drawInRect(topic,fitted,&FreeSansBold12pt8b,14,ALIGN_LEFT);wrapSummary(g_cache->updates[i].summary,{c.x+pad,y+21,c.w-pad*2,rowH-21},policy.summaryLines);}
   if(policy.overflowCount){const int rowsHeight=policy.visibleCapacity*rowH+(policy.visibleCapacity-1)*gap;const Rect overflow={c.x+pad,top+rowsHeight+5,c.w-pad*2,18};char more[24];snprintf(more,sizeof(more),overflow.w<75?"+%u":"+%u more",policy.overflowCount);drawInRect(overflow,more,&FreeSans9pt8b,12,ALIGN_RIGHT);}
 }
 } // namespace ModuleAssistant
