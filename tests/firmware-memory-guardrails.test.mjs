@@ -118,7 +118,8 @@ test('AI Follow uses one bounded cache, filtered capped JSON, and allocation-fre
   assert.match(assistant, /MAX_RESPONSE_BYTES = 6144/);
   assert.match(assistant, /body\.length\(\)>MAX_RESPONSE_BYTES/);
   assert.match(assistant, /DeserializationOption::Filter/);
-  assert.match(assistant, /MAX_UPDATES = 8/);
+  assert.match(assistant, /MAX_UPDATES = 4/);
+  assert.match(assistant, /static_assert\(sizeof\(AssistantCache\) == 1030/);
   const renderer = assistant.slice(assistant.indexOf('void render('));
   assert.doesNotMatch(renderer, /\bString\b|\bnew\s+[A-Za-z_:][A-Za-z0-9_:]*\s*[\[(]|malloc|calloc|std::vector/);
   assert.doesNotMatch(assistant, /Serial\.(?:print|println)\(body/);

@@ -10,12 +10,13 @@ export type GridCell = { col:number; row:number; colSpan:number; rowSpan:number;
 export type PixelCell = GridCell & { x:number; y:number; w:number; h:number }
 export type LayoutName = keyof typeof spec.layouts
 export type ModuleName = 'date'|'weather'|'surf'|'reminders'|'countdown'|'soccer'|'stocks'|'groceries'|'assistant'
+export type LegacyModuleName = keyof typeof profiles
 export type StudioModuleName = ModuleName
 export type DividerLine = { x1:number; y1:number; x2:number; y2:number }
 export type CalendarRowMode = 'date' | 'dateLarge' | 'remindersLarge' | 'remindersXL' | 'countdown'
 export const frameLayouts = spec
 export { profiles as moduleProfiles }
-export function visualContractFor(module: ModuleName, size: CellSize) {
+export function visualContractFor(module: LegacyModuleName, size: CellSize) {
   return profiles[module][size.toLowerCase() as 'small'|'medium'|'large'|'xl']
 }
 export const frameModuleRegistry = registry as {id:ModuleName;label:string}[]

@@ -19,7 +19,7 @@ struct Output {
 
 inline Output compose(const Input& in) {
   Output out = {in.followingCount == 0 ? ZERO_FOLLOW : NO_CHANGE, QUIET, 0, 0, 0,
-                in.height >= 155, in.width >= 240};
+                in.height >= 155, false};
   if (in.updateCount == 0) return out;
   out.mode = UPDATES;
   out.family = LIST;
@@ -31,6 +31,7 @@ inline Output compose(const Input& in) {
     (out.family == SINGLE ? static_cast<uint8_t>(in.height >= 190 ? 2 : 1) : 2);
 
   const int pad = in.width * 35 / 1000 < 8 ? 8 : (in.width * 35 / 1000 > 14 ? 14 : in.width * 35 / 1000);
+  out.verboseOverflow = in.width - pad * 2 >= 75;
   const int available = in.height - pad - (pad + 30 + 8);
   const int rowGap = 8, rowHeight = 18 + out.summaryLines * 16 + 3, overflowHeight = 18;
   int capacity = (available + rowGap) / (rowHeight + rowGap);
