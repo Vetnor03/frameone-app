@@ -54,15 +54,27 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
   String url = String(BASE_URL) + "/api/device/update-state?device_id=" + DeviceIdentity::getDeviceId();
   int code = 0;
   String body;
-  if (!request(url, deviceToken, "GET", nullptr, code, body) || code != 200) return false;
+  const bool ok = request(url, deviceToken, "GET", nullptr, code, body);
+  if (code <= 0) {
+    Serial.println("LiveUpdate probe transport failure");
+    return false;
+  }
+  if (!ok || code != 200) {
+    Serial.printf("LiveUpdate probe HTTP %d\n", code);
+    return false;
+  }
 
   StaticJsonDocument<384> doc;
-  if (deserializeJson(doc, body)) return false;
+  if (deserializeJson(doc, body)) {
+    Serial.println("LiveUpdate probe invalid JSON");
+    return false;
+  }
   uint64_t requested = 0;
   uint64_t displayed = 0;
   if (!readRevision(doc["requested_revision"], requested) ||
       !readRevision(doc["displayed_revision"], displayed) ||
       displayed > requested) {
+    Serial.println("LiveUpdate probe invalid revision values");
     return false;
   }
 

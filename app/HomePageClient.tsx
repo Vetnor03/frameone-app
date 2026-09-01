@@ -2010,13 +2010,22 @@ export default function HomePage() {
         layout_module_memory: layoutModuleMemoryRef.current,
       }
 
-      await supabase.rpc('upsert_device_settings', {
-        p_device_id: deviceId,
-        p_settings: initialSettingsJson,
-      })
+      await commitInitialFrameSetup(deviceId, initialSettingsJson)
     }
 
     isLoadedRef.current = true
+  }
+
+  // This is the only policy exception to manual Update: a newly paired frame
+  // needs one committed configuration before it can render at all. Never call
+  // this helper from post-setup editor handlers.
+  async function commitInitialFrameSetup(deviceId: string, settingsJson: SettingsJson) {
+    const { data, error } = await supabase.rpc('upsert_device_settings', {
+      p_device_id: deviceId,
+      p_settings: settingsJson,
+    })
+    if (error) throw error
+    if (data !== true) throw new Error('Not allowed to initialize this frame.')
   }
 
   useEffect(() => {
@@ -2198,12 +2207,7 @@ export default function HomePage() {
       layout_module_memory: nextLayoutModuleMemory,
     }
 
-    const { data, error } = await supabase.rpc('upsert_device_settings', {
-      p_device_id: activeDeviceId,
-      p_settings: settingsJson,
-    })
-    if (error) throw error
-    if (data !== true) throw new Error(language === 'no' ? 'Ikke tilgang til å oppdatere dette framet.' : 'Not allowed to update this frame.')
+    await commitInitialFrameSetup(activeDeviceId, settingsJson)
 
     layoutModuleMemoryRef.current = nextLayoutModuleMemory
     setLayoutKey(nextLayout)
@@ -2247,7 +2251,7 @@ export default function HomePage() {
     }
     setLayoutFlow(null)
   }
-  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const fallback={theme:frameTheme,language,fontSize,layout:'default',cells:cellsMapToArray(cellsByLayout.default),modules:normalizeModulesForSave(modulesJson),pinned_tabs:pinnedModuleTabs,layout_module_memory:layoutModuleMemoryRef.current};const result=await supabase.rpc('upsert_device_settings',{p_device_id:activeDeviceId,p_settings:fallback});if(result.error||result.data!==true)throw result.error||new Error('Unable to switch the frame to Default.');setActiveCustomLayoutId(null);setLayoutKey('default');setCarouselItemId('built-in:default')};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
+  async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const nextCells={...cellsByLayout,default:projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,'default')};setActiveCustomLayoutId(null);setLayoutKey('default');setCellsByLayout(nextCells);setCarouselItemId('built-in:default');markDirty({layoutKey:'default',cellsByLayout:nextCells})};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
   function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);trackProductEvent({event:'layout_selected',surface:'frame',metadata:{layoutType:custom?'custom':'built_in'}});if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
   function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 

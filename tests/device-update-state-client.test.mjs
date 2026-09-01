@@ -13,6 +13,14 @@ test('frame edits remain a dirty local draft with no autosave or activity heartb
   assert.doesNotMatch(home, /LIVE_UPDATE_SAVE_DEBOUNCE_MS|createLatestStateDebouncer|liveUpdateDebounceRef|sendDeviceActivity|DEVICE_ACTIVITY_HEARTBEAT_MS/)
   assert.equal((home.slice(0, saveStart).match(/saveFrameSettings\(/g) || []).length, 0)
   assert.equal((home.slice(0, updateStart).match(/requestDeviceUpdate\(/g) || []).length, 0)
+  assert.doesNotMatch(home.slice(home.indexOf('async function deleteCustom'), home.indexOf('function selectCarouselItem')), /upsert_device_settings|saveFrameSettings/)
+  assert.match(home, /function chooseModule[\s\S]*markDirty\(\{ cellsByLayout: nextCellsByLayout \}\)/)
+})
+
+test('only explicit onboarding policy can directly establish initial settings', () => {
+  assert.match(home, /async function commitInitialFrameSetup/)
+  assert.equal((home.match(/supabase\.rpc\('upsert_device_settings'/g) || []).length, 1)
+  assert.match(home, /await commitInitialFrameSetup\(activeDeviceId, settingsJson\)/)
 })
 
 test('save-settings persists settings only and publishes no revision', () => {
