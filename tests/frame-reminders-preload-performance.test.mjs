@@ -20,7 +20,7 @@ test('physical geometry selects compact, standard and spacious variants in one f
   assert.match(reminders, /c\.w >= 600 && c\.h >= 360[^]*PROFILE_SPACIOUS/)
   assert.match(reminders, /display_profiles=/)
   assert.match(reminders, /profile_titles[^]*compactTitle[^]*standardTitle[^]*spaciousTitle/)
-  assert.match(reminders, /void render\(const Cell& c[^]*ensureLoaded\(\);\s*applyProfileTitles\(c\);/)
+  assert.match(reminders, /void render\(const Cell& c[^]*if \(!ensureLoaded\(\)\)[^]*applyProfileTitles\(c\);/)
   assert.match(layout, /mask \|= ModuleReminders::profileForCell\(cells\[i\]\)/)
   assert.equal((reminders.match(/httpGetAuth\(/g) || []).length, 1)
 })

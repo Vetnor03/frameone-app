@@ -59,7 +59,7 @@ test('overdue-only adaptive data renders a relative overdue heading',async()=>{
 
 test('adaptive empty state is reserved for an unavailable or genuinely empty feed',async()=>{
   const reminders=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
-  assert.match(reminders,/if \(!g_cache\.ok\)[\s\S]*"Fetch failed"/)
+  assert.match(reminders,/if \(!g_cache->ok\)[\s\S]*"Fetch failed"/)
   assert.match(reminders,/if \(bucketCount == 0\)[\s\S]*"Nothing upcoming"/)
   assert.doesNotMatch(reminders,/todayCount \+ tomorrowCount == 0\) \{ drawEmptyState/)
 })

@@ -12,6 +12,7 @@ const soccer = read('frame/src/modules/ModuleSoccer.cpp');
 const stocks = read('frame/src/modules/ModuleStocks.cpp');
 const groceries = read('frame/src/modules/ModuleGroceries.cpp');
 const assistant = read('frame/src/modules/ModuleAssistant.cpp');
+const firmware = read('frame/src/frame_v2.5.1.ino');
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -138,4 +139,40 @@ test('Reminders render paths keep SmartReminderLayout scratch storage off the ta
   assert.doesNotMatch(reminders, /\bstatic\s+SmartReminderLayout\s+(?!\*)[A-Za-z_]\w*/);
   assert.doesNotMatch(reminders, /^\s+(?!static\b)SmartReminderLayout\s+(?![&*])[A-Za-z_]\w*\s*(?:[;={])/m);
   assert.doesNotMatch(reminders, /SmartReminderLayout\s*\{\s*\}/);
+});
+
+test('Reminders keeps its profile cache in one lifetime heap allocation', () => {
+  assert.doesNotMatch(reminders, /static\s+ReminderCache\s+g_cache\s*;/);
+  assert.equal((reminders.match(/static ReminderCache\* g_cache = nullptr;/g) || []).length, 1);
+  assert.equal((reminders.match(/new \(std::nothrow\) ReminderCache\{\}/g) || []).length, 1);
+  assert.match(reminders, /static bool g_cacheAllocationAttempted = false;/);
+  assert.match(reminders, /if \(g_cacheAllocationAttempted\) return false;[\s\S]*g_cacheAllocationAttempted = true;[\s\S]*new \(std::nothrow\) ReminderCache\{\}/);
+  assert.doesNotMatch(reminders, /delete\s+g_cache|free\s*\(\s*g_cache/);
+  assert.match(reminders, /static_assert\(sizeof\(ReminderCache\) <= 4096/);
+  assert.doesNotMatch(reminders, /static_assert\(sizeof\(ReminderCache\) ==/);
+});
+
+test('Reminders heap-cache failure is terminal and renders an unavailable state safely', () => {
+  assert.match(reminders, /if \(!g_cache\) REM_LOGLN\("reminders cache allocation failed"\)/);
+  assert.match(reminders, /static void clearCache\(\) \{\s*if \(g_cache\) memset\(g_cache, 0, sizeof\(\*g_cache\)\);\s*\}/);
+  assert.doesNotMatch(reminders, /\*g_cache\s*=\s*ReminderCache\{\}/);
+  assert.match(reminders, /if \(!ensureLoaded\(\)\) \{[\s\S]*drawEmptyState\(c, "No reminders", "Unavailable"\);[\s\S]*return;/);
+  assert.doesNotMatch(reminders, /static\s+(?:ReminderItem|ReminderCache)\s+(?!\*)\w+/);
+});
+
+test('Reminders profiles remain shared by one cache and one request', () => {
+  for (const field of ['compactTitle', 'standardTitle', 'spaciousTitle']) {
+    assert.match(reminders, new RegExp(`char ${field}\\[74\\]`));
+  }
+  assert.match(reminders, /ReminderItem items\[MAX_REMINDERS\]/);
+  assert.equal((reminders.match(/httpGetAuth\(/g) || []).length, 1);
+  assert.match(reminders, /applyProfileTitles\(c\)/);
+});
+
+test('layouts without Reminders neither preload nor allocate its cache', () => {
+  const dashboard = firmware.slice(firmware.indexOf('static bool renderLoadedDashboard'), firmware.indexOf('static uint64_t explicitTimingRevision'));
+  assert.equal((dashboard.match(/ModuleReminders::preload\(\)/g) || []).length, 1);
+  assert.match(dashboard, /if \(remindersActive\) ModuleReminders::preload\(\)/);
+  const setConfig = reminders.slice(reminders.indexOf('void setConfig('), reminders.indexOf('uint8_t profileForCell'));
+  assert.doesNotMatch(setConfig, /ensureCacheAllocated|ensureLoaded|new\s/);
 });
