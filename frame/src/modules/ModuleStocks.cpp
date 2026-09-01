@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "DeviceIdentity.h"
 #include "NetClient.h"
+#include "StocksAdaptivePolicy.h"
 
 #include <ArduinoJson.h>
 #include <math.h>
@@ -633,6 +634,22 @@ static void drawPlaceholder(const Cell& c, const StockInstanceConfig& cfg) {
     return;
   }
 
+  if (c.size == CELL_ADAPTIVE) {
+    char mainFit[64] = {0};
+    fitTextToWidth(mainLine, mainFit, sizeof(mainFit), max(1, c.w - 18), FONT_B12);
+    const bool secondLine = cfg.symbol[0] && (!cfg.name[0] || strcmp(cfg.name, cfg.symbol) != 0);
+    if (!secondLine || c.h < 60) {
+      drawCenteredLine(c.x, c.y, c.w, c.h, mainFit, FONT_B12, Theme::ink());
+      return;
+    }
+    char symbolFit[32] = {0};
+    fitTextToWidth(cfg.symbol, symbolFit, sizeof(symbolFit), max(1, c.w - 18), FONT_B9);
+    const int topH = c.h / 2;
+    drawCenteredLine(c.x, c.y, c.w, topH, mainFit, FONT_B12, Theme::ink());
+    drawCenteredLine(c.x, c.y + topH, c.w, c.h - topH, symbolFit, FONT_B9, Theme::ink());
+    return;
+  }
+
   if (c.size == CELL_SMALL) {
     drawCenteredLine(c.x, c.y, c.w, c.h, mainLine, FONT_B12, Theme::ink());
     return;
@@ -646,6 +663,148 @@ static void drawPlaceholder(const Cell& c, const StockInstanceConfig& cfg) {
     drawCenteredLine(c.x, c.y + topH, c.w, bottomH, cfg.symbol, FONT_B9, Theme::ink());
   }
 }
+
+// BEGIN ADAPTIVE STOCKS RENDERER
+struct StocksRect { int x; int y; int w; int h; };
+
+static StocksRect stockRect(int x, int y, int w, int h) {
+  StocksRect out = {x, y, max(1, w), max(1, h)};
+  return out;
+}
+
+static void drawAdaptiveFact(const StocksRect& r, const char* value, int maxFont = 18) {
+  if (!value || !value[0] || r.w <= 2 || r.h <= 2) return;
+  const GFXfont* fonts[3] = {FONT_B18, FONT_B12, FONT_B9};
+  const int sizes[3] = {18, 12, 9};
+  for (int i = 0; i < 3; ++i) {
+    if (sizes[i] > maxFont) continue;
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(value, fonts[i], x1, y1, tw, th);
+    if ((int)tw <= r.w - 4 && (int)th <= r.h - 2) {
+      drawCenteredLine(r.x, r.y, r.w, r.h, value, fonts[i], Theme::ink());
+      return;
+    }
+  }
+  char fitted[64] = {0};
+  fitTextToWidth(value, fitted, sizeof(fitted), r.w - 4, FONT_B9);
+  int16_t x1, y1; uint16_t tw, th;
+  measureText(fitted, FONT_B9, x1, y1, tw, th);
+  if ((int)th <= r.h - 2) drawCenteredLine(r.x, r.y, r.w, r.h, fitted, FONT_B9, Theme::ink());
+}
+
+static StocksAdaptivePolicy::Input adaptiveStocksInput(const Cell& c, const StockCache& data) {
+  StocksAdaptivePolicy::Input in = {c.w, c.h, c.w > c.h, isfinite(data.price),
+    data.seriesCount >= 2, isfinite(data.open), isfinite(data.high), isfinite(data.low),
+    isfinite(data.previousClose), isfinite(data.change)};
+  for (uint8_t i = 0; i < data.seriesCount; ++i)
+    if (!isfinite(data.series[i])) in.validSeries = false;
+  return in;
+}
+
+static void renderAdaptiveStocks(const Cell& c, const StockCache& data) {
+  using namespace StocksAdaptivePolicy;
+  const Result policy = compose(adaptiveStocksInput(c, data));
+  if (!policy.available) {
+    drawAdaptiveFact(stockRect(c.x + 9, c.y + 9, c.w - 18, c.h - 18), "No stock", 12);
+    return;
+  }
+
+  const int pad = max(9, min(14, c.w * 35 / 1000));
+  const int gap = 10;
+  StocksRect summary = stockRect(c.x + pad, c.y + pad, c.w - pad * 2, c.h - pad * 2);
+  StocksRect chart = stockRect(0, 0, 1, 1);
+  StocksRect selector = stockRect(0, 0, 1, 1);
+  StocksRect details = stockRect(0, 0, 1, 1);
+  bool hasChartRect = false, hasSelectorRect = false, hasDetailsRect = false;
+
+  if (policy.family == DETAIL_CHART) {
+    const int leftW = c.w * 42 / 100;
+    summary = StocksRect{c.x + pad, c.y + pad, leftW - pad, c.h - pad * 2};
+    chart = StocksRect{c.x + leftW + gap, c.y + pad + 38, c.w - leftW - gap - pad, c.h - pad * 2 - 38};
+    selector = StocksRect{chart.x, c.y + pad, chart.w, 28};
+    details = StocksRect{summary.x, summary.y + 105, summary.w, summary.h - 105};
+    hasChartRect = hasSelectorRect = hasDetailsRect = true;
+  } else if (policy.family == EXPANDED) {
+    const int chartH = min(c.h * 40 / 100, c.h - 245);
+    summary = StocksRect{c.x + pad, c.y + pad, c.w - pad * 2, 100};
+    details = StocksRect{c.x + pad, summary.y + summary.h + 8, c.w - pad * 2, 78};
+    int cy = details.y + details.h + 7;
+    if (policy.showSelector) {
+      selector = StocksRect{c.x + pad, details.y + details.h + 5, c.w - pad * 2, 28};
+      cy = selector.y + selector.h + 7;
+    }
+    chart = StocksRect{c.x + pad, cy, c.w - pad * 2, c.y + c.h - pad - cy};
+    (void)chartH;
+    hasChartRect = hasDetailsRect = true; hasSelectorRect = policy.showSelector;
+  } else if (policy.family == CHART_SUMMARY && c.w > c.h) {
+    const int sw = c.w * 40 / 100;
+    summary = StocksRect{c.x + pad, c.y + pad, sw - pad, c.h - pad * 2};
+    chart = StocksRect{c.x + sw + gap, c.y + pad + (policy.showSelector ? 32 : 0),
+      c.w - sw - gap - pad, c.h - pad * 2 - (policy.showSelector ? 32 : 0)};
+    selector = StocksRect{chart.x, c.y + pad, chart.w, 26};
+    hasChartRect = true; hasSelectorRect = policy.showSelector;
+  } else if (policy.family == CHART_SUMMARY) {
+    summary = StocksRect{c.x + pad, c.y + pad, c.w - pad * 2, 108};
+    chart = StocksRect{c.x + pad, summary.y + summary.h + 8, c.w - pad * 2,
+      c.y + c.h - pad - (summary.y + summary.h + 8)};
+    if (policy.showSelector) {
+      selector = StocksRect{c.x + pad, chart.y, c.w - pad * 2, 26};
+      chart = StocksRect{c.x + pad, chart.y + 31, chart.w, chart.h - 31};
+    }
+    hasChartRect = true; hasSelectorRect = policy.showSelector;
+  }
+  if (!policy.showChart) { hasChartRect = false; hasSelectorRect = false; }
+
+  const int titleH = policy.family == MICRO ? 0 : 28;
+  if (titleH) {
+    const char* title = data.name[0] ? data.name : data.symbol;
+    drawAdaptiveFact(stockRect(summary.x, summary.y, summary.w, titleH), title, 12);
+  }
+  const int contentY = summary.y + titleH + (titleH ? 5 : 0);
+  const int contentH = max(1, summary.y + summary.h - contentY);
+  StocksRect price, day, range;
+  if (policy.family == SUMMARY_STRIP) {
+    price = StocksRect{summary.x, contentY, summary.w * 45 / 100, contentH};
+    day = StocksRect{summary.x + summary.w * 47 / 100, contentY, summary.w * 22 / 100, contentH};
+    range = StocksRect{summary.x + summary.w * 71 / 100, contentY, summary.w * 29 / 100, contentH};
+  } else {
+    price = StocksRect{summary.x, contentY, summary.w, min(54, contentH * 58 / 100)};
+    const int y = price.y + price.h;
+    day = StocksRect{summary.x, y, summary.w * 48 / 100, max(1, contentY + contentH - y)};
+    range = StocksRect{summary.x + summary.w / 2, y, summary.w - summary.w / 2, max(1, contentY + contentH - y)};
+  }
+
+  char priceTxt[24] = {0}, dayTxt[20] = {0}, rangePct[20] = {0}, rangeTxt[32] = {0};
+  formatPrice(priceTxt, sizeof(priceTxt), data.price);
+  formatSigned(dayTxt, sizeof(dayTxt), data.changePercent, 2, true);
+  formatSigned(rangePct, sizeof(rangePct), data.selectedRangePercent, 2, true);
+  snprintf(rangeTxt, sizeof(rangeTxt), "%s %s", rangeLabel(data.chartRange), rangePct);
+  drawAdaptiveFact(price, priceTxt, policy.family == MICRO ? 18 : 18);
+  drawAdaptiveFact(day, dayTxt, 12);
+  if (policy.family != MICRO && isfinite(data.selectedRangePercent)) drawAdaptiveFact(range, rangeTxt, 12);
+
+  if (policy.showDetails && hasDetailsRect && policy.detailCount) {
+    const char* labels[5] = {"Open", "High", "Low", "Prev close", "Change"};
+    const float values[5] = {data.open, data.high, data.low, data.previousClose, data.change};
+    const int columns = policy.family == EXPANDED ? 3 : 1;
+    const int rows = (policy.detailCount + columns - 1) / columns;
+    int shown = 0;
+    for (int i = 0; i < 5; ++i) if (policy.detailMask & (1 << i)) {
+      const int col = shown % columns, row = shown / columns;
+      const int cw = details.w / columns, rh = details.h / max(1, rows);
+      char value[24] = {0}, line[48] = {0};
+      if (i == 4) formatSigned(value, sizeof(value), values[i], 2, false); else formatPrice(value, sizeof(value), values[i]);
+      snprintf(line, sizeof(line), "%s  %s", labels[i], value);
+      drawAdaptiveFact(stockRect(details.x + col * cw, details.y + row * rh, cw, rh), line, 12);
+      ++shown;
+    }
+  }
+  if (policy.showSelector && hasSelectorRect)
+    drawRangeSelectorRow(selector.x + selector.w / 2, selector.y + selector.h / 2 + 5, data.chartRange, Theme::ink());
+  if (policy.showChart && hasChartRect && chart.w > 0 && chart.h > 0)
+    drawChartBox(chart.x, chart.y, chart.w, chart.h, data);
+}
+// END ADAPTIVE STOCKS RENDERER
 
 static void drawLive(const Cell& c, const StockCache& data) {
   auto& d = DisplayCore::get();
@@ -666,6 +825,11 @@ static void drawLive(const Cell& c, const StockCache& data) {
     formatSigned(posPctTxt, sizeof(posPctTxt), data.personalChangePercent, 2, true);
   } else {
     strlcpy(posPctTxt, "--", sizeof(posPctTxt));
+  }
+
+  if (c.size == CELL_ADAPTIVE) {
+    renderAdaptiveStocks(c, data);
+    return;
   }
 
   if (c.size == CELL_SMALL) {

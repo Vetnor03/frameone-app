@@ -55,7 +55,8 @@ inline bool numericInstance(const char* module, const char* base, int maxInstanc
 inline bool supports(const char* module) {
   return exactOnly(module, "date") || exactBase(module, "weather") ||
          exactBase(module, "reminders") || exactBase(module, "countdown") ||
-         numericInstance(module, "surf") || numericInstance(module, "soccer", 4);
+         numericInstance(module, "surf") || numericInstance(module, "soccer", 4) ||
+         numericInstance(module, "stocks");
 }
 
 } // namespace AdaptiveModuleCapability
