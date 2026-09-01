@@ -107,14 +107,14 @@ function drawResponsiveReminders(ctx:CanvasRenderingContext2D,c:PixelCell,p:Resp
   if(layout.footerRect){const r=absolute(layout.footerRect),label=r.width<48?`+${composition.overflow}`:`+${composition.overflow} more`;ctx.font='bold 12px sans-serif';ctx.textAlign=composition.direction==='horizontal'?'center':'right';ctx.fillText(label,composition.direction==='horizontal'?r.x+r.width/2:r.x+r.width,r.y+r.height/2+4)}
   for(const [rect,count] of [[layout.todayFooterRect,composition.todayOverflow],[layout.tomorrowFooterRect,composition.tomorrowOverflow]] as const){if(rect){const r=absolute(rect);ctx.font='bold 12px sans-serif';ctx.textAlign='right';ctx.fillText(`+${count} more`,r.x+r.width,r.y+r.height/2+4)}}
 }
-function drawResponsive(ctx:CanvasRenderingContext2D,c:PixelCell,m:ModuleName,d:string[],p:ResponsiveCellProfile) {
+function drawResponsive(ctx:CanvasRenderingContext2D,c:PixelCell,m:LegacyModuleName,d:string[],p:ResponsiveCellProfile) {
   const centerY=c.y+c.h*(p.orientation==='portrait'?.38:.53)
   if(m==='date') {
     if(p.orientation==='landscape'){centered(ctx,`${d[0]} ${d[2]}. ${d[1]}`,c.x,centerY,c.w,'bold 17px sans-serif');return}
     centered(ctx,d[0].toUpperCase(),c.x,c.y+Math.min(24,c.h*.2),c.w,'bold 13px sans-serif');centered(ctx,d[2],c.x,centerY+12,c.w,`bold ${Math.min(54,c.h*.36)}px sans-serif`);if(p.area>1)centered(ctx,d[1].toUpperCase(),c.x,c.y+c.h-15,c.w,'bold 13px sans-serif');if(p.area>=8)centered(ctx,d[3],c.x,c.y+c.h-35,c.w,'12px sans-serif');return
   }
-  const titles:Record<Exclude<ModuleName,'date'>,string>={reminders:'Today',weather:d[0],countdown:d[0],surf:d[0],soccer:'Next fixture',stocks:d[0],groceries:'Groceries'}
-  adaptiveHeader(ctx,c,titles[m as Exclude<ModuleName,'date'>],p)
+  const titles:Record<Exclude<LegacyModuleName,'date'>,string>={reminders:'Today',weather:d[0],countdown:d[0],surf:d[0],soccer:'Next fixture',stocks:d[0],groceries:'Groceries'}
+  adaptiveHeader(ctx,c,titles[m as Exclude<LegacyModuleName,'date'>],p)
   if(m==='reminders'){adaptiveList(ctx,c,d.slice(1).length?d.slice(1):['No reminders'],p,c.y+Math.min(58,c.h*.4));return}
   if(m==='weather'){weatherIcon(ctx,c.x+c.w*(p.orientation==='portrait'?.25:.06),c.y+c.h*.27,Math.min(c.w*.5,90),Math.min(c.h*.4,80));adaptiveMetrics(ctx,c,[d[1],`Wind 4 m/s`,'Dry',`${d[3]} / ${d[4]}`],p,p.orientation==='landscape'?centerY:c.y+c.h*.7);return}
   if(m==='countdown'){centered(ctx,d[1],c.x,centerY+10,c.w,`bold ${Math.min(52,c.h*.32)}px sans-serif`);centered(ctx,'DAYS',c.x,Math.min(c.y+c.h-13,centerY+34),c.w,'bold 13px sans-serif');if(p.area>=6)centered(ctx,d[3],c.x,c.y+c.h-13,c.w,'12px sans-serif');return}
