@@ -48,10 +48,10 @@ test('Studio and host C++ Stocks policy agree field-for-field',async()=>{
 
 test('physical Stocks instances are exact and preflight remains atomic',async()=>{
  const cells=module=>[{slot:0,col:0,row:0,colSpan:1,rowSpan:3,module},{slot:1,col:1,row:0,colSpan:3,rowSpan:3,module:'date'},{slot:2,col:0,row:3,colSpan:4,rowSpan:1,module:'date'}]
- for(const module of ['stocks','stocks:1','stocks:2','stocks:3','stocks:4'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,true)
- for(const module of ['stocks:0','stocks:5','stocks:255','stocks:x','stocksfoo'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,false)
+ for(const module of ['stocks','stocks:1','stocks:2','stocks:3','stocks:4','stocks:12','stocks:255'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,true)
+ for(const module of ['stocks:0','stocks:256','stocks:x','stocksfoo'])assert.equal(supportsPhysicalCustomLayout(cells(module)).valid,false)
  const capability=await readFile(new URL('../frame/src/modules/AdaptiveModuleCapability.h',import.meta.url),'utf8')
- assert.match(capability,/numericInstance\(module, "stocks", 4\)/)
+ assert.match(capability,/numericInstance\(module, "stocks"\)/)
 })
 
 test('GNU C++11 geometry syntax and legacy renderer protection stay additive',async()=>{
@@ -64,6 +64,6 @@ test('GNU C++11 geometry syntax and legacy renderer protection stay additive',as
  assert.match(firmware,/\/\/ XL/)
  assert.match(adaptive,/drawChartBox/);assert.match(adaptive,/drawRangeSelectorRow/)
  const dir=await mkdtemp(join(tmpdir(),'stocks-compat-')),cpp=join(dir,'compat.cpp'),bin=join(dir,'compat')
- await writeFile(cpp,'#include "StocksAdaptivePolicy.h"\nstruct StocksRect{int x,y,w,h;};int main(){StocksRect chart={0,0,0,0};chart=StocksRect{1,2,3,4};return StocksAdaptivePolicy::compose({392,229,true,true,true,true,true,true,true,true}).showChart&&chart.w==3?0:1;}')
+ await writeFile(cpp,'#include "StocksAdaptivePolicy.h"\n#include "AdaptiveModuleCapability.h"\nstruct StocksRect{int x,y,w,h;};int main(){StocksRect chart={0,0,0,0};chart=StocksRect{1,2,3,4};const char*valid[]={"stocks","stocks:1","stocks:12","stocks:255"};const char*invalid[]={"stocks:0","stocks:256","stocks:x","stocksfoo"};for(const char*s:valid)if(!AdaptiveModuleCapability::supports(s))return 2;for(const char*s:invalid)if(AdaptiveModuleCapability::supports(s))return 3;return StocksAdaptivePolicy::compose({392,229,true,true,true,true,true,true,true,true}).showChart&&chart.w==3?0:1;}')
  execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/modules/',import.meta.url).pathname,cpp,'-o',bin]);execFileSync(bin)
 })

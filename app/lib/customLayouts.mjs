@@ -55,7 +55,7 @@ export function supportsPhysicalCustomCell(cell) {
   const baseModule = module.split(':', 1)[0]
   const surfModule = /^surf(?::(?:[1-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))?$/u.test(module)
   const soccerModule = /^soccer(?::[1-4])?$/u.test(module)
-  const stocksModule = /^stocks(?::[1-4])?$/u.test(module)
+  const stocksModule = /^stocks(?::(?:[1-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))?$/u.test(module)
   if (module.startsWith('surf') && !surfModule) return false
   if (module.startsWith('soccer') && !soccerModule) return false
   if (module.startsWith('stocks') && !stocksModule) return false
