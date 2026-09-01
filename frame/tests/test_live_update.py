@@ -2,7 +2,7 @@ from pathlib import Path
 MAIN = Path('frame/src/frame_v2.5.1.ino').read_text()
 LIVE = Path('frame/src/network/LiveUpdate.cpp').read_text()
 CHECKER = Path('frame/src/network/UpdateChecker.cpp').read_text()
-SIGNATURE = Path('app/api/device/content-signature/route.ts').read_text()
+SIGNATURE = Path('app/lib/device/contentSignature.mjs').read_text()
 
 def test_revision_probe_is_one_second_and_idle_is_cheap():
     assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
@@ -35,11 +35,11 @@ def test_single_four_hour_content_policy():
     assert 'shouldForcePeriodicRefresh' not in MAIN
     assert 'NORMAL_SYNC_SECONDS = 900' not in MAIN
 
-def test_signature_covers_all_physical_modules_and_sha256():
-    for module in ('date','weather','reminders','surf','countdown','soccer','stocks','groceries','assistant'):
-        assert f"active.has('{module}')" in SIGNATURE
-    assert "createHash('sha256')" in SIGNATURE
-    assert 'buildFrameConfigPayload' in SIGNATURE
+def test_signature_uses_exact_active_instances_and_physical_endpoints():
+    assert "INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])" in SIGNATURE
+    assert "'/api/device/stocks'" in SIGNATURE and 'device_id: deviceId, id' in SIGNATURE
+    assert "'/api/surf/score'" in SIGNATURE and 'frame: 1' in SIGNATURE
+    assert 'competitionId: config.competitionId' in SIGNATURE
     assert 'optimizeFrameContent' not in SIGNATURE
 
 def test_scheduled_same_signature_does_not_render_and_change_forces_full_refresh():
@@ -64,3 +64,46 @@ def test_manual_render_updates_signature_without_blocking_ack():
 def test_recharge_pairing_wifi_and_ota_maintenance_remain():
     for token in ('requiresRecharge', 'ensurePairedNoReboot', 'WiFiManagerV2::connectSaved', 'runOtaCheckIfDue'):
         assert token in MAIN
+
+
+def test_revision_fields_are_uint64_and_malformed_values_are_rejected():
+    header = Path('frame/src/network/LiveUpdate.h').read_text()
+    assert header.count('uint64_t') >= 2
+    assert 'value.is<bool>()' in LIVE
+    assert '!value.is<uint64_t>()' in LIVE
+    assert 'displayed > requested' in LIVE
+    assert 'if (deserializeJson(doc, body)) return false;' in LIVE
+
+
+def test_wifi_reconnect_restores_realtime_no_power_save_policy():
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
+    reconnect = loop[loop.index('WiFiManagerV2::connectSaved'):loop.index('Serial.println("LiveUpdate: Wi-Fi reconnected")')]
+    assert 'WiFi.setSleep(false)' in reconnect
+    assert 'esp_wifi_set_ps(WIFI_PS_NONE)' in reconnect
+
+
+def test_probe_and_render_failures_have_bounded_retry_backoff():
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
+    assert 'REALTIME_FAILURE_BACKOFF_MS = 5000' in MAIN
+    assert 'delay(REALTIME_FAILURE_BACKOFF_MS - REALTIME_UPDATE_POLL_MS)' in loop
+    assert 'delay(configRetryMs)' in loop
+    assert 'configRetryMs = (configRetryMs >= 2500U)' in loop
+    assert ': configRetryMs * 2U' in loop
+
+
+def test_render_persistence_ack_order_and_serial_retry_are_preserved():
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static InteractiveModeResult runInteractiveMode')]
+    assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
+    assert explicit.index('saveRenderedAwaitingAck') < explicit.index('LiveUpdate::acknowledge')
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
+    assert loop.count('fetchAndRenderExplicit(batt, pwr, revisionToDisplay)') == 1
+    assert 'if (!fetchAndRenderExplicit' in loop
+
+
+def test_charger_events_do_not_trigger_or_reset_content_clock():
+    setup = MAIN.index('void setup()')
+    scheduler = MAIN[MAIN.index('const esp_sleep_wakeup_cause_t wakeCause', setup):MAIN.index('Serial.print("device_id: ")', setup)]
+    due = scheduler[scheduler.index('bool normalSyncDue'):scheduler.index('if (normalSyncDue)')]
+    assert 'chargerStateChanged' not in due
+    assert 'wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED' in due
+    assert 'normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS' in due

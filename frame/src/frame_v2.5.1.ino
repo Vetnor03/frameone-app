@@ -727,7 +727,7 @@ void setup() {
     dummyHadPrevious
   );
   if (chargerStateChanged) {
-    Serial.print("🔄 Forced redraw/restart reason: charger_state_changed (prev=");
+    Serial.print("Power state changed (prev=");
     Serial.print(previousUsbPresent ? "plugged" : "battery");
     Serial.print(", now=");
     Serial.print(pwrEarly.usbPresent ? "plugged" : "battery");
@@ -738,10 +738,11 @@ void setup() {
   if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
     normalSyncElapsedSeconds += PROBE_WAKE_SECONDS;
   }
+  // Power events never advance, reset, or trigger the display-content clock.
+  // Cold boot initializes the baseline; subsequent checks are interval-only.
   bool normalSyncDue =
-    wakeCause != ESP_SLEEP_WAKEUP_TIMER ||
-    normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS ||
-    chargerStateChanged;
+    wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
+    normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS;
   if (normalSyncDue) {
     if (normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
       normalSyncElapsedSeconds -= SCHEDULED_CONTENT_CHECK_SECONDS;
