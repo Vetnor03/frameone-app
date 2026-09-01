@@ -10,6 +10,7 @@ const surf = read('frame/src/modules/ModuleSurf.cpp');
 const countdown = read('frame/src/modules/ModuleCountdown.cpp');
 const soccer = read('frame/src/modules/ModuleSoccer.cpp');
 const stocks = read('frame/src/modules/ModuleStocks.cpp');
+const groceries = read('frame/src/modules/ModuleGroceries.cpp');
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -100,6 +101,15 @@ test('adaptive Stocks reuses its cache and keeps policy/formatting scratch off s
   assert.doesNotMatch(adaptive, /float\s+(?:series|points)\s*\[/);
   assert.match(adaptive, /drawChartBox\(chart\.x, chart\.y, chart\.w, chart\.h, data\)/);
   assert.match(adaptive, /char priceTxt\[24\]/);
+});
+
+test('adaptive Groceries reuses its sole cache and has no static row scratch', () => {
+  assert.equal((groceries.match(/static GroceryCache g_cache;/g) || []).length, 1);
+  const adaptive = groceries.slice(groceries.indexOf('// BEGIN ADAPTIVE GROCERIES RENDERER'), groceries.indexOf('// END ADAPTIVE GROCERIES RENDERER'));
+  assert.doesNotMatch(adaptive, /\bstatic\s+(?:char|int|GroceryItem|DinnerPlanItem)\s+\w+\s*\[/);
+  assert.doesNotMatch(adaptive, /\b(?:GroceryItem|DinnerPlanItem|RunningLowInsight|RecipeInsight)\s+\w+\s*\[/);
+  assert.doesNotMatch(adaptive, /\bString\b|\bnew\b|malloc|calloc/);
+  assert.match(adaptive, /getRotationStep4h\(\)/);
 });
 
 test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {
