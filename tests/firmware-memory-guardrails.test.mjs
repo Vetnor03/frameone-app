@@ -20,15 +20,15 @@ function walk(dir) {
   });
 }
 
-test('reminder change check hashes the bounded compact response directly', () => {
-  const fn = update.match(/bool UpdateChecker::hasRemindersChanged[\s\S]*?\n}/)?.[0] ?? '';
-  assert.doesNotMatch(fn, /StaticJsonDocument|deserializeJson|serializeJson/);
-  assert.match(fn, /REMINDERS_MAX_BODY_BYTES/);
-  assert.match(fn, /reminderHashSig\(body\)/);
+test('scheduled change check fetches only the compact SHA-256 signature', () => {
+  const fn = update.match(/bool UpdateChecker::fetchContentSignature[\s\S]*?\n}/)?.[0] ?? '';
+  assert.match(fn, /content-signature/);
+  assert.match(fn, /StaticJsonDocument<192>/);
+  assert.match(fn, /strlen\(signature\) != 64/);
 });
 
 test('physical reminder URL and six-field DTO stay compact', () => {
-  for (const source of [update, reminders]) {
+  for (const source of [reminders]) {
     assert.match(source, /limit=10&tz=Europe\/Oslo&skip_sync=1/);
     assert.doesNotMatch(source, /limit=20&tz=Europe\/Oslo/);
   }

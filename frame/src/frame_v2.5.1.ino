@@ -42,16 +42,13 @@ static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 // cadence can be tuned independently when battery policy is revisited.
 static const uint32_t PROBE_WAKE_SECONDS = 10;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
-static const uint32_t NORMAL_SYNC_SECONDS = 900;
+static const uint32_t SCHEDULED_CONTENT_CHECK_SECONDS = 4 * 60 * 60;
 // Temporary hardware-development policy. Keep this decision here, at the
 // paired operational loop boundary, so production sleep policy can be restored
 // without changing the revision/render/ACK pipeline.
 static const bool REALTIME_TEST_MODE = true;
 static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;
 static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
-
-// 3 hours refresh: 12 * 15min = 180min
-static const uint16_t WAKES_PER_REFRESH = 12;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
@@ -569,8 +566,22 @@ static bool fetchAndRenderExplicit(
 
   if (!renderLoadedDashboard(batt, pwr)) return false;
   LiveUpdate::saveRenderedAwaitingAck(revision);
+  // A successful physical render also satisfies the one-time renderer-version
+  // maintenance redraw, even if its revision ACK needs a network retry.
+  UpdateChecker::saveFirmwareVersion(FW_VER);
   Serial.printf("LiveUpdate: revision %" PRIu64 " physically displayed\n", revision);
   return true;
+}
+
+static bool refreshContentSignatureBestEffort() {
+  String renderedSignature;
+  if (UpdateChecker::fetchContentSignature(DeviceIdentity::getToken(), renderedSignature)) {
+    UpdateChecker::saveContentSignature(renderedSignature);
+    return true;
+  } else {
+    Serial.println("LiveUpdate: rendered content signature could not be persisted");
+    return false;
+  }
 }
 
 static bool retryRenderedAck(uint64_t backendDisplayed) {
@@ -602,8 +613,8 @@ static InteractiveModeResult finishInteractiveMode(
 }
 
 static void consumeNormalSyncPeriod() {
-  if (normalSyncElapsedSeconds >= NORMAL_SYNC_SECONDS) {
-    normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS;
+  if (normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
+    normalSyncElapsedSeconds -= SCHEDULED_CONTENT_CHECK_SECONDS;
   }
 }
 
@@ -616,7 +627,6 @@ static InteractiveModeResult runInteractiveMode(
   WiFi.setSleep(false);
   esp_wifi_set_ps(WIFI_PS_NONE);
 
-  bool lastActive = state.appActive;
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
   uint32_t configRetryMs = REALTIME_UPDATE_POLL_MS;
@@ -637,7 +647,7 @@ static InteractiveModeResult runInteractiveMode(
       Serial.println("LiveUpdate: Wi-Fi reconnected");
     }
     const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
-    if (baselineElapsedAtEntry + awakeSeconds >= NORMAL_SYNC_SECONDS) {
+    if (baselineElapsedAtEntry + awakeSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
       Serial.println("LiveUpdate: normal sync became due while interactive");
       // Carry the freshest revision state into the baseline path. A failure is
       // non-blocking: the normal sync is already due and must not be postponed.
@@ -653,7 +663,11 @@ static InteractiveModeResult runInteractiveMode(
     }
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
     if (retryRenderedAck(state.displayedRevision)) {
-      if (awaitingAck > state.displayedRevision) state.displayedRevision = awaitingAck;
+      if (awaitingAck > state.displayedRevision) {
+        state.displayedRevision = awaitingAck;
+        // Signature bookkeeping is deliberately after durable physical ACK.
+        refreshContentSignatureBestEffort();
+      }
     }
 
     uint64_t rendered = LiveUpdate::getRenderedAwaitingAck();
@@ -672,6 +686,7 @@ static InteractiveModeResult runInteractiveMode(
         configRetryMs = REALTIME_UPDATE_POLL_MS;
         if (retryRenderedAck(state.displayedRevision)) {
           state.displayedRevision = revisionToDisplay;
+          refreshContentSignatureBestEffort();
         }
       }
     }
@@ -686,14 +701,12 @@ static InteractiveModeResult runInteractiveMode(
       continue;
     }
 
-    if (next.appActive != lastActive ||
-        next.requestedRevision != lastRequested ||
+    if (next.requestedRevision != lastRequested ||
         next.displayedRevision != lastDisplayed) {
       Serial.printf(
-        "LiveUpdate: probe active=%d requested=%" PRIu64 " displayed=%" PRIu64 "\n",
-        next.appActive, next.requestedRevision, next.displayedRevision
+        "LiveUpdate: probe requested=%" PRIu64 " displayed=%" PRIu64 "\n",
+        next.requestedRevision, next.displayedRevision
       );
-      lastActive = next.appActive;
       lastRequested = next.requestedRevision;
       lastDisplayed = next.displayedRevision;
     }
@@ -727,7 +740,7 @@ void setup() {
     dummyHadPrevious
   );
   if (chargerStateChanged) {
-    Serial.print("🔄 Forced redraw/restart reason: charger_state_changed (prev=");
+    Serial.print("Power state changed (prev=");
     Serial.print(previousUsbPresent ? "plugged" : "battery");
     Serial.print(", now=");
     Serial.print(pwrEarly.usbPresent ? "plugged" : "battery");
@@ -738,13 +751,14 @@ void setup() {
   if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
     normalSyncElapsedSeconds += PROBE_WAKE_SECONDS;
   }
+  // Power events never advance, reset, or trigger the display-content clock.
+  // Cold boot initializes the baseline; subsequent checks are interval-only.
   bool normalSyncDue =
-    wakeCause != ESP_SLEEP_WAKEUP_TIMER ||
-    normalSyncElapsedSeconds >= NORMAL_SYNC_SECONDS ||
-    chargerStateChanged;
+    wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
+    normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS;
   if (normalSyncDue) {
-    if (normalSyncElapsedSeconds >= NORMAL_SYNC_SECONDS) {
-      normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS;
+    if (normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
+      normalSyncElapsedSeconds -= SCHEDULED_CONTENT_CHECK_SECONDS;
     } else {
       normalSyncElapsedSeconds = 0;
     }
@@ -880,13 +894,14 @@ void setup() {
   const bool liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
   if (liveProbeOk) {
     Serial.printf(
-      "LiveUpdate: probe active=%d requested=%" PRIu64 " displayed=%" PRIu64 "\n",
-      liveState.appActive, liveState.requestedRevision, liveState.displayedRevision
+      "LiveUpdate: probe requested=%" PRIu64 " displayed=%" PRIu64 "\n",
+      liveState.requestedRevision, liveState.displayedRevision
     );
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
     if (retryRenderedAck(liveState.displayedRevision) &&
         awaitingAck > liveState.displayedRevision) {
       liveState.displayedRevision = awaitingAck;
+      refreshContentSignatureBestEffort();
     }
   } else {
     Serial.println("LiveUpdate: probe failed");
@@ -898,29 +913,58 @@ void setup() {
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
 
-  if (!REALTIME_TEST_MODE && !normalSyncDue && !explicitRevisionPending &&
-      !(liveProbeOk && liveState.appActive)) {
+  if (!REALTIME_TEST_MODE && !normalSyncDue && !explicitRevisionPending) {
     goToSleep(pwrEarly.usbPresent);
     return;
   }
 
 run_normal_sync:
-  explicitRevisionPending =
-    liveProbeOk &&
-    liveState.requestedRevision > liveState.displayedRevision &&
-    liveState.requestedRevision > LiveUpdate::getRenderedAwaitingAck();
+  bool renderedWithoutSignature = false;
+  // A manual revision always wins over a coincident scheduled boundary.
+  if (liveProbeOk && liveState.requestedRevision > liveState.displayedRevision &&
+      liveState.requestedRevision > LiveUpdate::getRenderedAwaitingAck()) {
+    PowerSenseDebug manualPwr = readPowerSenseDebug();
+    BatteryState manualBatt = BatteryManager::readAndUpdate(manualPwr.usbPresent);
+    if (fetchAndRenderExplicit(manualBatt, manualPwr, liveState.requestedRevision) &&
+        retryRenderedAck(liveState.displayedRevision)) {
+      liveState.displayedRevision = liveState.requestedRevision;
+      renderedWithoutSignature = !refreshContentSignatureBestEffort();
+    }
+  }
 
-  // Only full scheduled checks advance the legacy 12-wake (three-hour)
-  // physical-refresh counter. Cheap revision probes never touch it.
-  if (normalSyncDue) UpdateChecker::noteWake();
+  // Renderer/layout changes require one maintenance redraw even when backend
+  // content is byte-for-byte unchanged. This does not touch the four-hour clock.
+  if (UpdateChecker::shouldForceRedrawForFirmware(FW_VER)) {
+    FrameConfigApi::FetchResult firmwareConfig =
+      FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+    if (firmwareConfig == FrameConfigApi::FETCH_OK) {
+      DisplayCore::forceNextFullRefresh(true);
+      PowerSenseDebug firmwarePwr = readPowerSenseDebug();
+      BatteryState firmwareBatt = BatteryManager::readAndUpdate(firmwarePwr.usbPresent);
+      if (renderLoadedDashboard(firmwareBatt, firmwarePwr)) {
+        UpdateChecker::saveFirmwareVersion(FW_VER);
+        renderedWithoutSignature = !refreshContentSignatureBestEffort();
+        Serial.println("Renderer version changed; maintenance redraw complete");
+      }
+    }
+  }
 
-  // ---------------- Battery / Power sense ----------------
+  // The just-completed physical render satisfies a coincident content boundary.
+  // If signature bookkeeping failed, do not immediately duplicate that render;
+  // the next four-hour cycle will conservatively re-evaluate it.
+  if (renderedWithoutSignature) normalSyncDue = false;
+
+  // Battery, recharge, pairing and OTA maintenance remain independent of the
+  // display-content cadence. Only a revision or a changed signature draws.
   PowerSenseDebug pwr = readPowerSenseDebug();
   BatteryState batt = BatteryManager::readAndUpdate(pwr.usbPresent);
-
   BatteryManager::logState("post-wifi-pair", batt);
   logPowerSenseDebug(batt, pwr);
   DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
+  if (batt.requiresRecharge) {
+    showRechargeAndSleep(batt, pwr);
+    return;
+  }
 
   if (!normalSyncDue) {
     if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
@@ -932,186 +976,40 @@ run_normal_sync:
     return;
   }
 
-  if (normalSyncDue) runOtaCheckIfDue();
-
-  String updatedAt;
-  String reminderSig;
-  String surfSig;
-
-  const int lastBatteryPercent = UpdateChecker::getLastBatteryPercent();
-  const bool usbChanged = chargerStateChanged;
-
-  bool batteryJumpChanged = false;
-  if (lastBatteryPercent >= 0) {
-    int diff = batt.percent - lastBatteryPercent;
-    if (diff >= 10 || diff <= -10) batteryJumpChanged = true;
-  }
-
-  bool forceFw =
-    UpdateChecker::shouldForceRedrawForFirmware(FW_VER);
-
-  bool forcePeriodic =
-    UpdateChecker::shouldForcePeriodicRefresh(WAKES_PER_REFRESH);
-
-  bool configChanged =
-    UpdateChecker::hasConfigChanged(
-      DeviceIdentity::getToken(),
-      updatedAt
-    );
-
-  if (recoverPairingIfTokenLost("config-meta check", pwr.usbPresent)) return;
-
-  FrameConfigApi::FetchResult cfgResult =
-    FrameConfigApi::fetchWithStatus(
-      g_cfg,
-      DeviceIdentity::getToken()
-    );
-
-  bool cfgOk = cfgResult == FrameConfigApi::FETCH_OK;
-
-  if (cfgResult == FrameConfigApi::FETCH_UNPAIRED) {
-    if (recoverPairingIfTokenLost("frame-config unpaired", pwr.usbPresent)) return;
-  }
-
-  if (!cfgOk) {
-    if (recoverPairingIfTokenLost("frame-config precheck", pwr.usbPresent)) return;
-  }
-
-  bool remindersChanged = false;
-  bool surfChanged = false;
-
-  if (cfgOk) {
-    remindersChanged =
-      UpdateChecker::hasRemindersChanged(
-        DeviceIdentity::getToken(),
-        reminderSig
-      );
-
-    if (recoverPairingIfTokenLost("reminders signature check", pwr.usbPresent)) return;
-
-    surfChanged =
-      UpdateChecker::hasSurfChanged(
-        g_cfg,
-        DeviceIdentity::getToken(),
-        surfSig
-      );
-
-    if (recoverPairingIfTokenLost("surf signature check", pwr.usbPresent)) return;
-  }
-
-  if (usbChanged) {
-    Serial.println("🔌 USB state changed -> force redraw");
-    if (activeSetupStep == SETUP_STEP_WIFI) {
-      Serial.println("   ↳ setup screen refresh target: wifi_setup");
-    } else if (activeSetupStep == SETUP_STEP_PAIRING) {
-      Serial.println("   ↳ setup screen refresh target: pairing_code");
-    }
-  }
-
-  if (batteryJumpChanged) {
-    Serial.println("🔋 Battery changed by >= 10% -> force redraw");
-  }
-
-  if (reconnectedViaProvisioning) {
-    Serial.println("📶 Reconnected after provisioning -> force redraw");
-  }
-
-  bool shouldRender =
-    forceFw ||
-    forcePeriodic ||
-    configChanged ||
-    remindersChanged ||
-    surfChanged ||
-    usbChanged ||
-    batteryJumpChanged ||
-    reconnectedViaProvisioning ||
-    setupFlowRefreshByCharger ||
-    explicitRevisionPending;
-
-  // ---------------- No redraw ----------------
-  if (!shouldRender) {
-    Serial.println("😴 No change -> keep current ePaper image");
-
+  runOtaCheckIfDue();
+  String nextSignature;
+  if (!UpdateChecker::fetchContentSignature(DeviceIdentity::getToken(), nextSignature)) {
+    Serial.println("Scheduled content signature unavailable; preserving display");
+    // The period was consumed before entering this block. A failed lookup
+    // therefore backs off until the next scheduled boundary, never a tight loop.
+  } else if (nextSignature == UpdateChecker::getLastContentSignature()) {
+    Serial.println("Scheduled content unchanged; preserving display");
     postDeviceStatus(batt, pwr, false);
-    UpdateChecker::saveBatteryPercent(batt.percent);
-    if (REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)) {
-      if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
-        consumeNormalSyncPeriod();
-        goto run_normal_sync;
+  } else {
+    FrameConfigApi::FetchResult result = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+    if (result == FrameConfigApi::FETCH_UNPAIRED) {
+      if (recoverPairingIfTokenLost("scheduled frame fetch", pwr.usbPresent)) return;
+    } else if (result == FrameConfigApi::FETCH_OK) {
+      DisplayCore::forceNextFullRefresh(true);
+      if (renderLoadedDashboard(batt, pwr)) {
+        UpdateChecker::saveContentSignature(nextSignature);
+        UpdateChecker::saveFirmwareVersion(FW_VER);
+        UpdateChecker::saveBatteryPercent(batt.percent);
+        Serial.println("Scheduled changed content fully refreshed");
       }
     }
-    if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
-    return;
   }
 
-  // ---------------- Redraw ----------------
-  if (!cfgOk) {
-    FrameConfigApi::FetchResult retryResult = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
-    if (retryResult != FrameConfigApi::FETCH_OK) {
-      if (retryResult == FrameConfigApi::FETCH_UNPAIRED) {
-        if (recoverPairingIfTokenLost("frame-config unpaired retry", pwr.usbPresent)) return;
-      }
-      if (recoverPairingIfTokenLost("frame-config fetch", pwr.usbPresent)) return;
-
-      ensureDisplay();
-      ScreenPairing::showError("Could not load frame");
-      if (REALTIME_TEST_MODE) {
-        if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
-          consumeNormalSyncPeriod();
-          goto run_normal_sync;
-        }
-      }
-      goToSleep(pwr.usbPresent);
-      return;
-    }
-  }
-
-  if (usbChanged) {
-    DisplayCore::forceNextFullRefresh(true);
-  }
-
-  if (!renderLoadedDashboard(batt, pwr)) {
-    if (REALTIME_TEST_MODE) {
-      if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
-        consumeNormalSyncPeriod();
-        goto run_normal_sync;
-      }
-    }
-    goToSleep(pwr.usbPresent);
-    return;
-  }
-
-  // A scheduled render fetched the latest frame state, so it also physically
-  // satisfies the revision observed by the wake probe.
-  if (liveProbeOk && liveState.requestedRevision > liveState.displayedRevision) {
-    LiveUpdate::saveRenderedAwaitingAck(liveState.requestedRevision);
-    Serial.printf(
-      "LiveUpdate: revision %" PRIu64 " physically displayed by normal sync\n",
-      liveState.requestedRevision
-    );
-    if (retryRenderedAck(liveState.displayedRevision)) {
-      liveState.displayedRevision = liveState.requestedRevision;
-    }
-  }
-
-  UpdateChecker::saveApplied(updatedAt);
-  if (reminderSig.length() > 0) UpdateChecker::saveReminderSig(reminderSig);
-  if (surfSig.length() > 0) UpdateChecker::saveSurfSig(surfSig);
-  UpdateChecker::saveFirmwareVersion(FW_VER);
-  UpdateChecker::saveBatteryPercent(batt.percent);
-
-  if (forcePeriodic) {
-    UpdateChecker::resetWakeCounter();
-  }
-
-  Serial.println("✅ Applied");
-  if (REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)) {
+  normalSyncDue = false;
+  if (REALTIME_TEST_MODE) {
     if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
       consumeNormalSyncPeriod();
+      normalSyncDue = true;
       goto run_normal_sync;
     }
   }
   if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
+
 }
 
 void loop() {}

@@ -1,3 +1,9 @@
+function stableJson(value) {
+  if (Array.isArray(value)) return value.map(stableJson)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableJson(value[key])]))
+}
+
 export async function saveFrameSettings({ deviceId, settingsJson, accessToken, fetchImpl = fetch }) {
   const response = await fetchImpl('/api/device/save-settings', {
     method: 'POST',
@@ -10,13 +16,10 @@ export async function saveFrameSettings({ deviceId, settingsJson, accessToken, f
   const result = await response.json().catch(() => ({}))
   if (!response.ok || result?.ok !== true) throw new Error(result?.error || 'Unable to save frame settings.')
 
-  // The revision request must not proceed unless the database returned the
-  // same legacy frame theme that this update intended to store.
-  if (result?.saved_settings_json?.theme !== settingsJson.theme) {
-    throw new Error('Saved frame theme did not match the selected frame theme.')
-  }
-  if (!Number.isSafeInteger(Number(result?.requested_revision)) || Number(result.requested_revision) < 0) {
-    throw new Error('Saved frame state was not published for display.')
+  // Do not publish a display revision here. Verify the complete draft which
+  // the database returned before the caller performs the explicit request.
+  if (JSON.stringify(stableJson(result?.saved_settings_json)) !== JSON.stringify(stableJson(settingsJson))) {
+    throw new Error('Persisted frame settings did not match the requested draft.')
   }
   return result
 }

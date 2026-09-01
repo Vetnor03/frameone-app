@@ -43,29 +43,3 @@ export function writeManualUpdate(storage: StorageLike, deviceId: string, update
 export function clearManualUpdate(storage: StorageLike, deviceId: string) {
   storage.removeItem(manualUpdateStorageKey(deviceId))
 }
-
-export async function requestManualUpdateRevision(
-  requestId: string,
-  deadline: number,
-  request: (requestId: string) => Promise<number>,
-  options: {
-    now?: () => number
-    sleep?: (milliseconds: number) => Promise<void>
-    retryDelayMs?: number
-  } = {}
-): Promise<number | null> {
-  const now = options.now ?? Date.now
-  const sleep = options.sleep ?? ((milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)))
-  const retryDelayMs = Math.max(100, options.retryDelayMs ?? 1_000)
-
-  while (now() < deadline) {
-    try {
-      return await request(requestId)
-    } catch {
-      const remainingMs = deadline - now()
-      if (remainingMs <= 0) break
-      await sleep(Math.min(retryDelayMs, remainingMs))
-    }
-  }
-  return null
-}

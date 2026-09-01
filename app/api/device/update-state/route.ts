@@ -21,14 +21,13 @@ export async function GET(req: Request) {
 
   const { data, error } = await auth.supabase
     .from('device_update_state')
-    .select('app_active_until, requested_revision, displayed_revision')
+    .select('requested_revision, displayed_revision')
     .eq('device_id', deviceId)
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
 
   return NextResponse.json(
     {
-      app_active: data?.app_active_until ? new Date(data.app_active_until).getTime() > Date.now() : false,
       requested_revision: data?.requested_revision ?? 0,
       displayed_revision: data?.displayed_revision ?? 0,
     },

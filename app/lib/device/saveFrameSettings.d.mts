@@ -6,4 +6,4 @@ export function saveFrameSettings(args: {
   settingsJson: FrameSettings
   accessToken: string
   fetchImpl?: typeof fetch
-}): Promise<{ ok: true; saved_settings_json: FrameSettings; updated_at: string | null; requested_revision: number }>
+}): Promise<{ ok: true; saved_settings_json: FrameSettings; updated_at: string | null }>

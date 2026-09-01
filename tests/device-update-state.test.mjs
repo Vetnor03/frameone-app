@@ -53,7 +53,7 @@ test('device probe and ACK use existing per-device bearer authentication', () =>
   assert.match(auth, /from\('devices'\)/)
   assert.match(auth, /device\.device_token !== token/)
   assert.match(deviceState, /authenticatePhysicalDevice/)
-  assert.match(deviceState, /app_active:/)
+  assert.doesNotMatch(deviceState, /app_active:/)
   assert.match(deviceState, /ack_device_display_revision/)
 })
 
@@ -114,14 +114,14 @@ test('manual update has no estimated countdown or fabricated timestamp', () => {
 test('manual update keeps physical freshness visible through every operation phase', () => {
   assert.match(home, /explicitUpdateStatus[^\n]*'idle' \| 'saving' \| 'requesting' \| 'waiting_for_display'/)
   assert.match(home, /const updateStatusText = manualUpdateInProgress[\s\S]*lastPhysicalDisplayUpdatedAt/)
-  assert.match(home, /manualUpdateInProgress = explicitUpdateStatus === 'saving' \|\| explicitUpdateStatus === 'requesting'/)
+  assert.match(home, /manualUpdateInProgress = explicitUpdateStatus !== 'idle'/)
   assert.match(home, /Frame hasn’t confirmed the update yet\./)
 })
 
 test('desired state stays editable and pending while exact rendered revisions remain monotonic', () => {
   assert.match(home, /setDirty\(reconciliation\.dirty\)/)
-  assert.match(home, /frameChangesPending = updateRevisions\.requested > updateRevisions\.displayed/)
-  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*: !activeDeviceId/)
+  assert.match(home, /frameChangesPending = dirty/)
+  assert.match(home, /const actionDisabled = layoutFlow[\s\S]*manualUpdateInProgress/)
   assert.match(migration, /greatest\(displayed_revision, p_displayed_revision\)/)
   assert.match(migration, /p_displayed_revision <= requested_revision/)
 })
