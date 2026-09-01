@@ -1,6 +1,7 @@
 from pathlib import Path
 MAIN = Path('frame/src/frame_v2.5.1.ino').read_text()
 LIVE = Path('frame/src/network/LiveUpdate.cpp').read_text()
+NET = Path('frame/src/network/NetClient.cpp').read_text()
 CHECKER = Path('frame/src/network/UpdateChecker.cpp').read_text()
 SIGNATURE = Path('app/lib/device/contentSignature.mjs').read_text()
 
@@ -63,6 +64,25 @@ def test_manual_ack_precedes_signature_bookkeeping():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
     assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
     assert 'fetchContentSignature' not in explicit
+
+
+def test_status_reporting_is_outside_render_and_after_manual_ack():
+    render = MAIN[MAIN.index('static bool renderLoadedDashboard'):MAIN.index('static bool fetchAndRenderExplicit')]
+    assert 'postDeviceStatus' not in render
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// Exactly one cheap revision probe')]
+    accepted = loop[loop.index('if (!fetchAndRenderExplicit'):]
+    assert accepted.index('retryRenderedAck') < accepted.index('postDeviceStatus')
+    assert accepted.index('postDeviceStatus') < accepted.index('refreshContentSignatureBestEffort')
+
+
+def test_manual_timing_diagnostics_and_safe_request_paths_are_present():
+    for metric in ('probe_to_pending_ms', 'config_fetch_ms', 'render_total_ms',
+                   'display_update_ms', 'ack_ms', 'total_ms'):
+        assert f'LiveUpdate timing {metric}=' in MAIN
+    assert 'NetClient timing method=%s path=%s status=%d elapsed_ms=%lu' in NET
+    assert "url.indexOf('?', pathStart)" in NET
+    assert 'bearerToken->c_str()' not in NET
+    assert 'Authorization' not in NET[NET.index('Serial.printf('):]
 
 
 def test_firmware_version_change_redraws_once_and_success_persists_version():

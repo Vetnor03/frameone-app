@@ -27,21 +27,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'invalid_revision_state' }, { status: 500 })
   }
 
-  // Probe timestamps are telemetry, not part of the display-update contract.
-  // In particular, a production schema that has not received the telemetry
-  // migration must still be able to serve revisions to a physical frame.
-  const { error: probeError } = await auth.supabase
-    .from('device_update_state')
-    .update({ last_probe_at: new Date().toISOString() })
-    .eq('device_id', deviceId)
-  if (probeError) {
-    console.error('[device-update-state:probe-telemetry-failed]', {
-      device_id: deviceId,
-      code: probeError.code ?? 'unknown',
-      message: probeError.message || 'telemetry update failed',
-    })
-  }
-
   return NextResponse.json(
     {
       requested_revision: requestedRevision,
