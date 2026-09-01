@@ -15,6 +15,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
+#include <new>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -81,7 +82,9 @@ struct ReminderCache {
   ReminderItem items[MAX_REMINDERS];
 };
 
-static ReminderCache g_cache;
+static_assert(sizeof(ReminderCache) == 3848, "Reminders cache heap budget changed");
+static ReminderCache* g_cache = nullptr;
+static bool g_cacheAllocationAttempted = false;
 static uint8_t g_requiredProfiles = PROFILE_STANDARD;
 
 // =========================================================
@@ -109,17 +112,25 @@ static void utf8ToLatin1(char* out, size_t n, const char* in) {
   FrameText::normalizeUtf8ForDisplay(out, n, in);
 }
 
+static bool ensureCacheAllocated() {
+  if (g_cache) return true;
+  if (g_cacheAllocationAttempted) return false;
+
+  g_cacheAllocationAttempted = true;
+  g_cache = new (std::nothrow) ReminderCache{};
+  if (!g_cache) REM_LOGLN("reminders cache allocation failed");
+  return g_cache != nullptr;
+}
+
 static void clearCache() {
-  g_cache.loaded = false;
-  g_cache.ok = false;
-  g_cache.count = 0;
-  for (int i = 0; i < MAX_REMINDERS; i++) g_cache.items[i] = ReminderItem{};
+  if (g_cache) *g_cache = ReminderCache{};
 }
 
 static void markUnavailable() {
-  g_cache.loaded = true;
-  g_cache.ok = false;
-  g_cache.count = 0;
+  if (!g_cache) return;
+  g_cache->loaded = true;
+  g_cache->ok = false;
+  g_cache->count = 0;
 }
 
 static uint32_t loopStackHighWaterMarkBytes() {
@@ -600,14 +611,14 @@ static int ymdKey(int y, int m, int d) {
 }
 
 static int reminderCountOnDay(int year, int month0, int day) {
-  if (!g_cache.ok) return 0;
+  if (!g_cache->ok) return 0;
 
   int count = 0;
-  for (int i = 0; i < g_cache.count; i++) {
-    if (!g_cache.items[i].used) continue;
+  for (int i = 0; i < g_cache->count; i++) {
+    if (!g_cache->items[i].used) continue;
 
     int ry = 0, rm = 0, rd = 0;
-    if (!parseYMD10(g_cache.items[i].occurrenceDate, ry, rm, rd)) continue;
+    if (!parseYMD10(g_cache->items[i].occurrenceDate, ry, rm, rd)) continue;
 
     if (ry == year && rm == (month0 + 1) && rd == day) {
       count++;
@@ -669,6 +680,7 @@ static bool nextOccurrenceAfterDate(const ReminderItem& r,
 // Fetch
 // =========================================================
 static bool fetchReminders() {
+  if (!ensureCacheAllocated()) return false;
   clearCache();
 
   Serial.println("REM before fetch");
@@ -758,9 +770,9 @@ static bool fetchReminders() {
 
   JsonArray items = doc["items"].as<JsonArray>();
   if (items.isNull()) {
-    g_cache.loaded = true;
-    g_cache.ok = true;
-    g_cache.count = 0;
+    g_cache->loaded = true;
+    g_cache->ok = true;
+    g_cache->count = 0;
     Serial.println("REM cache populated");
     REM_LOGLN("reminders parsed_count=0");
     return true;
@@ -770,7 +782,7 @@ static bool fetchReminders() {
   for (JsonObject it : items) {
     if (idx >= MAX_REMINDERS) break;
 
-    ReminderItem& r = g_cache.items[idx];
+    ReminderItem& r = g_cache->items[idx];
     r.used = true;
 
     const char* rawTitle = it["title"] | "";
@@ -796,9 +808,9 @@ static bool fetchReminders() {
     idx++;
   }
 
-  g_cache.loaded = true;
-  g_cache.ok = true;
-  g_cache.count = idx;
+  g_cache->loaded = true;
+  g_cache->ok = true;
+  g_cache->count = idx;
   Serial.println("REM cache populated");
   REM_LOG("reminders parsed_count=");
   REM_LOGLN(idx);
@@ -806,9 +818,10 @@ static bool fetchReminders() {
   return true;
 }
 
-static void ensureLoaded() {
-  if (g_cache.loaded) return;
-  fetchReminders();
+static bool ensureLoaded() {
+  if (!ensureCacheAllocated()) return false;
+  if (!g_cache->loaded) fetchReminders();
+  return true;
 }
 
 // =========================================================
@@ -819,12 +832,12 @@ static int buildBuckets(ReminderBucket* buckets, int maxBuckets) {
 
   for (int i = 0; i < maxBuckets; i++) buckets[i] = ReminderBucket{};
 
-  if (!g_cache.ok || g_cache.count <= 0) return 0;
+  if (!g_cache->ok || g_cache->count <= 0) return 0;
 
   int bucketCount = 0;
 
-  for (int i = 0; i < g_cache.count; i++) {
-    const ReminderItem& r = g_cache.items[i];
+  for (int i = 0; i < g_cache->count; i++) {
+    const ReminderItem& r = g_cache->items[i];
     if (!r.used) continue;
 
     int found = -1;
@@ -888,9 +901,9 @@ static int computePrimaryVisibleCount(const ReminderBucket& bucket) {
     strlcpy(headerBuf, "Tomorrow", sizeof(headerBuf));
   } else {
     int firstItemIdx = bucket.itemIdx[0];
-    if (firstItemIdx >= 0 && firstItemIdx < g_cache.count) {
+    if (firstItemIdx >= 0 && firstItemIdx < g_cache->count) {
       int y = 0, m = 0, d0 = 0;
-      if (parseYMD10(g_cache.items[firstItemIdx].occurrenceDate, y, m, d0)) {
+      if (parseYMD10(g_cache->items[firstItemIdx].occurrenceDate, y, m, d0)) {
         const char* wd = weekdayNameFull(weekdayIndexYMD(y, m, d0));
 
         if (bucket.daysUntil <= 7) {
@@ -898,11 +911,11 @@ static int computePrimaryVisibleCount(const ReminderBucket& bucket) {
         } else if (bucket.daysUntil <= 14) {
           snprintf(headerBuf, sizeof(headerBuf), "%s next week", wd);
         } else {
-          safeCopy(headerBuf, sizeof(headerBuf), g_cache.items[firstItemIdx].displayDate);
+          safeCopy(headerBuf, sizeof(headerBuf), g_cache->items[firstItemIdx].displayDate);
         }
       } else {
         if (bucket.daysUntil <= 14) strlcpy(headerBuf, "Upcoming", sizeof(headerBuf));
-        else safeCopy(headerBuf, sizeof(headerBuf), g_cache.items[firstItemIdx].displayDate);
+        else safeCopy(headerBuf, sizeof(headerBuf), g_cache->items[firstItemIdx].displayDate);
       }
     } else {
       strlcpy(headerBuf, "Upcoming", sizeof(headerBuf));
@@ -936,10 +949,10 @@ static int collectPrimaryShownOccurrences(const ReminderBucket* buckets,
   for (int i = 0; i < visibleCount && outCount < maxCount; i++) {
     int pick = wrapIndex(rotation + i, bucket.count);
     int itemIdx = bucket.itemIdx[pick];
-    if (itemIdx < 0 || itemIdx >= g_cache.count) continue;
+    if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
     int y = 0, m = 0, d = 0;
-    if (!parseYMD10(g_cache.items[itemIdx].occurrenceDate, y, m, d)) continue;
+    if (!parseYMD10(g_cache->items[itemIdx].occurrenceDate, y, m, d)) continue;
 
     outRefs[outCount].itemIdx = itemIdx;
     outRefs[outCount].year = y;
@@ -1166,11 +1179,11 @@ static bool buildSmartReminderLayout(const ReminderBucket& bucket,
   for (int i = 0; i < count; i++) {
     int pick = wrapIndex(rotation + i, bucket.count);
     int itemIdx = bucket.itemIdx[pick];
-    if (itemIdx < 0 || itemIdx >= g_cache.count) return false;
+    if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
 
     SmartReminderLine& item = out.items[i];
     item.itemIdx = itemIdx;
-    buildReminderTitleWithTime(g_cache.items[itemIdx], item.title, sizeof(item.title));
+    buildReminderTitleWithTime(g_cache->items[itemIdx], item.title, sizeof(item.title));
     appendReminderLabel(item.title, includeLabel ? label : "", item.oneLine, sizeof(item.oneLine));
 
     if (!allowWrap) {
@@ -1241,11 +1254,11 @@ static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
 
   if (bucket.count <= 0 || maxTextW <= 0) return false;
   int itemIdx = bucket.itemIdx[wrapIndex(rotation, bucket.count)];
-  if (itemIdx < 0 || itemIdx >= g_cache.count) return false;
+  if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
 
   SmartReminderLine& item = out.items[0];
   item.itemIdx = itemIdx;
-  buildReminderTitleWithTime(g_cache.items[itemIdx], item.title, sizeof(item.title));
+  buildReminderTitleWithTime(g_cache->items[itemIdx], item.title, sizeof(item.title));
   fitTextToWidth(item.title, item.lines[0], sizeof(item.lines[0]), maxTextW, FONT_B9);
   item.lineCount = item.lines[0][0] ? 1 : 0;
   if (item.lineCount <= 0) return false;
@@ -1555,7 +1568,7 @@ static void drawNextRemindersList(int x, int y, int w, int h,
                                   const ReminderBucket* buckets,
                                   int bucketCount,
                                   int primaryIdx) {
-  if (!g_cache.ok || g_cache.count <= 0) {
+  if (!g_cache->ok || g_cache->count <= 0) {
     drawCenteredLine(x, y, w, h, "No reminders", FONT_B12, Theme::ink());
     return;
   }
@@ -1582,8 +1595,8 @@ static void drawNextRemindersList(int x, int y, int w, int h,
     bool found = false;
     OccurrenceRef best{};
 
-    for (int i = 0; i < g_cache.count; i++) {
-      const ReminderItem& r = g_cache.items[i];
+    for (int i = 0; i < g_cache->count; i++) {
+      const ReminderItem& r = g_cache->items[i];
       if (!r.used) continue;
 
       int candY = 0, candM = 0, candD = 0;
@@ -1661,9 +1674,9 @@ static void drawNextRemindersList(int x, int y, int w, int h,
 
   for (int i = 0; i < pickedCount; i++) {
     const OccurrenceRef& occ = picked[i];
-    if (occ.itemIdx < 0 || occ.itemIdx >= g_cache.count) continue;
+    if (occ.itemIdx < 0 || occ.itemIdx >= g_cache->count) continue;
 
-    const ReminderItem& r = g_cache.items[occ.itemIdx];
+    const ReminderItem& r = g_cache->items[occ.itemIdx];
 
     char dateStr[8];
     snprintf(dateStr, sizeof(dateStr), "%02d.%02d", occ.day, occ.month);
@@ -1705,7 +1718,7 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
-  if (!g_cache.ok) {
+  if (!g_cache->ok) {
     drawEmptyState(c, "No reminders", "Fetch failed");
     return;
   }
@@ -1728,9 +1741,9 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
     strlcpy(headerBuf, "Tomorrow", sizeof(headerBuf));
   } else {
     int firstItemIdx = bucket.itemIdx[0];
-    if (firstItemIdx >= 0 && firstItemIdx < g_cache.count) {
+    if (firstItemIdx >= 0 && firstItemIdx < g_cache->count) {
       int y = 0, m = 0, d0 = 0;
-      if (parseYMD10(g_cache.items[firstItemIdx].occurrenceDate, y, m, d0)) {
+      if (parseYMD10(g_cache->items[firstItemIdx].occurrenceDate, y, m, d0)) {
         const char* wd = weekdayNameFull(weekdayIndexYMD(y, m, d0));
 
         if (bucket.daysUntil <= 7) {
@@ -1738,7 +1751,7 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
         } else if (bucket.daysUntil <= 14) {
           snprintf(headerBuf, sizeof(headerBuf), "%s next week", wd);
         } else {
-          safeCopy(headerBuf, sizeof(headerBuf), g_cache.items[firstItemIdx].displayDate);
+          safeCopy(headerBuf, sizeof(headerBuf), g_cache->items[firstItemIdx].displayDate);
         }
       } else {
         strlcpy(headerBuf, "Upcoming", sizeof(headerBuf));
@@ -1814,14 +1827,14 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
   for (int i = 0; i < visibleCount; i++) {
     int pick = wrapIndex(rotation + i, bucket.count);
     int itemIdx = bucket.itemIdx[pick];
-    if (itemIdx < 0 || itemIdx >= g_cache.count) continue;
+    if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
     int secX0 = c.x + (c.w * i) / visibleCount;
     int secX1 = c.x + (c.w * (i + 1)) / visibleCount;
     int secW = secX1 - secX0;
 
     char fullBuf[128];
-    buildReminderTitleWithTime(g_cache.items[itemIdx], fullBuf, sizeof(fullBuf));
+    buildReminderTitleWithTime(g_cache->items[itemIdx], fullBuf, sizeof(fullBuf));
 
     char titleBuf[128];
     fitTextToWidth(fullBuf,
@@ -1852,7 +1865,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
   auto& d = DisplayCore::get();
   const uint16_t ink = Theme::ink();
 
-  if (!g_cache.ok) {
+  if (!g_cache->ok) {
     drawEmptyState(c, "No reminders", "Fetch failed");
     return;
   }
@@ -1871,9 +1884,9 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
     strlcpy(headerBuf, "Tomorrow", sizeof(headerBuf));
   } else {
     int firstItemIdx = bucket.itemIdx[0];
-    if (firstItemIdx >= 0 && firstItemIdx < g_cache.count) {
+    if (firstItemIdx >= 0 && firstItemIdx < g_cache->count) {
       int y = 0, m = 0, d0 = 0;
-      if (parseYMD10(g_cache.items[firstItemIdx].occurrenceDate, y, m, d0)) {
+      if (parseYMD10(g_cache->items[firstItemIdx].occurrenceDate, y, m, d0)) {
         const char* wd = weekdayNameFull(weekdayIndexYMD(y, m, d0));
 
         if (bucket.daysUntil <= 7) {
@@ -1881,11 +1894,11 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
         } else if (bucket.daysUntil <= 14) {
           snprintf(headerBuf, sizeof(headerBuf), "%s next week", wd);
         } else {
-          safeCopy(headerBuf, sizeof(headerBuf), g_cache.items[firstItemIdx].displayDate);
+          safeCopy(headerBuf, sizeof(headerBuf), g_cache->items[firstItemIdx].displayDate);
         }
       } else {
         if (bucket.daysUntil <= 14) strlcpy(headerBuf, "Upcoming", sizeof(headerBuf));
-        else safeCopy(headerBuf, sizeof(headerBuf), g_cache.items[firstItemIdx].displayDate);
+        else safeCopy(headerBuf, sizeof(headerBuf), g_cache->items[firstItemIdx].displayDate);
       }
     } else {
       strlcpy(headerBuf, "Upcoming", sizeof(headerBuf));
@@ -1988,7 +2001,7 @@ static void renderMedium(const Cell& c, const ReminderBucket* buckets, int bucke
 // LARGE
 // =========================================================
 static void renderLarge(const Cell& c, const ReminderBucket* buckets, int bucketCount, int primaryIdx) {
-  if (!g_cache.ok) {
+  if (!g_cache->ok) {
     drawEmptyState(c, "No reminders", "Fetch failed");
     return;
   }
@@ -2053,7 +2066,7 @@ static void renderLarge(const Cell& c, const ReminderBucket* buckets, int bucket
 // XL
 // =========================================================
 static void renderXL(const Cell& c, const ReminderBucket* buckets, int bucketCount, int primaryIdx) {
-  if (!g_cache.ok) {
+  if (!g_cache->ok) {
     drawEmptyState(c, "No reminders", "Fetch failed");
     return;
   }
@@ -2250,8 +2263,8 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
             if ((ti + mi) * (density.rowH + density.rowGap) - sections * density.rowGap > rowsSpace) continue;
           }
           int minimum = 101, readable = 0; bool useful = true;
-          for (int i = 0; i < ti; i++) { const int s = adaptiveUsefulTitleScore(g_cache.items[today->itemIdx[i]], todayTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
-          for (int i = 0; i < mi; i++) { const int s = adaptiveUsefulTitleScore(g_cache.items[tomorrow->itemIdx[i]], tomorrowTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
+          for (int i = 0; i < ti; i++) { const int s = adaptiveUsefulTitleScore(g_cache->items[today->itemIdx[i]], todayTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
+          for (int i = 0; i < mi; i++) { const int s = adaptiveUsefulTitleScore(g_cache->items[tomorrow->itemIdx[i]], tomorrowTitleW, dense); useful &= s > 0; minimum=min(minimum,s); readable += s; }
           if (!useful) continue;
           const int fontRank = dense ? 0 : 1, count = ti + mi, average = readable / max(1,count);
           // B12 receives a one-item calmness bonus. Dense B9 wins only when it
@@ -2364,8 +2377,8 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   for (int i = 0; i < visible; i++) {
     const int y0 = rect.y + headingH + i * (rowH + rowGap);
     const int itemIdx = bucket->itemIdx[i];
-    if (itemIdx >= 0 && itemIdx < g_cache.count)
-      drawAdaptiveItem(g_cache.items[itemIdx], {rect.x, y0, rect.w, rowH}, stacked, density);
+    if (itemIdx >= 0 && itemIdx < g_cache->count)
+      drawAdaptiveItem(g_cache->items[itemIdx], {rect.x, y0, rect.w, rowH}, stacked, density);
   }
   if (footerH) drawAdaptiveOverflow({rect.x, rect.y + rect.h - footerH, rect.w, footerH}, overflow);
 }
@@ -2378,8 +2391,8 @@ static void buildAdaptiveFallbackHeading(const ReminderBucket& bucket, char* out
     return;
   }
   const int firstItemIdx = bucket.count > 0 ? bucket.itemIdx[0] : -1;
-  if (firstItemIdx >= 0 && firstItemIdx < g_cache.count) {
-    const ReminderItem& item = g_cache.items[firstItemIdx];
+  if (firstItemIdx >= 0 && firstItemIdx < g_cache->count) {
+    const ReminderItem& item = g_cache->items[firstItemIdx];
     int y = 0, m = 0, day = 0;
     if (parseYMD10(item.occurrenceDate, y, m, day)) {
       const char* weekday = weekdayNameFull(weekdayIndexYMD(y, m, day));
@@ -2415,8 +2428,8 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
       const int x0 = content.x + (content.w * i) / visible + (i ? gap / 2 : 0);
       const int x1 = content.x + (content.w * (i + 1)) / visible - (i + 1 < visible ? gap / 2 : 0);
       const int itemIdx = bucket.itemIdx[i];
-      if (itemIdx >= 0 && itemIdx < g_cache.count)
-        drawAdaptiveItem(g_cache.items[itemIdx], {x0, content.y, x1 - x0, content.h}, false, density);
+      if (itemIdx >= 0 && itemIdx < g_cache->count)
+        drawAdaptiveItem(g_cache->items[itemIdx], {x0, content.y, x1 - x0, content.h}, false, density);
     }
   } else {
     drawAdaptiveSection(&bucket, visible, 0, content, false, c.w < 230, heading, false);
@@ -2425,7 +2438,7 @@ static void renderAdaptiveFallbackBucket(const Cell& c, const ReminderBucket& bu
 }
 
 static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets, int bucketCount) {
-  if (!g_cache.ok) { drawEmptyState(c, "No reminders", "Fetch failed"); return; }
+  if (!g_cache->ok) { drawEmptyState(c, "No reminders", "Fetch failed"); return; }
   if (bucketCount == 0) { drawEmptyState(c, "No reminders", "Nothing upcoming"); return; }
   const int todayIdx = findBucketByDaysUntil(buckets, bucketCount, 0);
   const int tomorrowIdx = findBucketByDaysUntil(buckets, bucketCount, 1);
@@ -2464,12 +2477,12 @@ static void renderAdaptiveReminders(const Cell& c, const ReminderBucket* buckets
     for (int i = 0; i < comp.todayItems; i++, drawn++) {
       int x0 = inner.x + (contentW * drawn) / count + (drawn ? gap / 2 : 0);
       int x1 = inner.x + (contentW * (drawn + 1)) / count - (drawn + 1 < count ? gap / 2 : 0);
-      drawAdaptiveItem(g_cache.items[today->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false, density);
+      drawAdaptiveItem(g_cache->items[today->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false, density);
     }
     for (int i = 0; i < comp.tomorrowItems; i++, drawn++) {
       int x0 = inner.x + (contentW * drawn) / count + (drawn ? gap / 2 : 0);
       int x1 = inner.x + (contentW * (drawn + 1)) / count - (drawn + 1 < count ? gap / 2 : 0);
-      drawAdaptiveItem(g_cache.items[tomorrow->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false, density);
+      drawAdaptiveItem(g_cache->items[tomorrow->itemIdx[i]], {x0, inner.y, x1 - x0, inner.h}, false, density);
     }
     drawAdaptiveOverflow({inner.x + inner.w - footerW, inner.y, footerW, inner.h}, overflow); return;
   }
@@ -2511,10 +2524,10 @@ void setRequiredProfiles(uint8_t mask) {
 
 static void applyProfileTitles(const Cell& c) {
   const uint8_t profile = profileForCell(c);
-  for (int i = 0; i < g_cache.count; ++i) {
-    const char* selected = profile == PROFILE_COMPACT ? g_cache.items[i].compactTitle
-      : profile == PROFILE_SPACIOUS ? g_cache.items[i].spaciousTitle : g_cache.items[i].standardTitle;
-    safeCopy(g_cache.items[i].title, sizeof(g_cache.items[i].title), selected);
+  for (int i = 0; i < g_cache->count; ++i) {
+    const char* selected = profile == PROFILE_COMPACT ? g_cache->items[i].compactTitle
+      : profile == PROFILE_SPACIOUS ? g_cache->items[i].spaciousTitle : g_cache->items[i].standardTitle;
+    safeCopy(g_cache->items[i].title, sizeof(g_cache->items[i].title), selected);
   }
 }
 
@@ -2527,7 +2540,11 @@ void render(const Cell& c, const String& moduleName) {
 
   Serial.println("REM render start");
   logMemoryStats("render_start");
-  ensureLoaded();
+  if (!ensureLoaded()) {
+    drawEmptyState(c, "No reminders", "Unavailable");
+    Serial.println("REM render complete");
+    return;
+  }
   applyProfileTitles(c);
 
   ReminderBucket buckets[MAX_BUCKETS];
