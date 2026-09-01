@@ -1181,8 +1181,6 @@ static bool fetchSurfScore2(const SurfInstanceConfig& cfg,
   if (wantDaily) appendDailyParamsIfWanted(urlW);
 
   if (httpGetJson(urlW, docWinner)) {
-    parseScoreResponseIntoCache(docWinner, out);
-
 #if SURF_DEBUG
     Serial.println("=== TODAYS BEST WINNER REFETCH ===");
     Serial.print("winner spotId="); Serial.println(out.spotIdResolved);
