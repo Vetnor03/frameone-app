@@ -29,30 +29,6 @@ async function startPairingPayload(rpcClient: PairingRpcClient, deviceId: string
   })
 }
 
-function stripUnsupportedPhysicalModules(payload: BuiltFrameConfigPayload): BuiltFrameConfigPayload {
-  if ('pair_required' in payload && payload.pair_required === true) return payload
-
-  const settings = payload.settings_json
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return payload
-
-  const rawCells = Array.isArray(settings.cells) ? settings.cells : []
-  const cells = rawCells.map((cell) => {
-    if (!cell || typeof cell !== 'object' || Array.isArray(cell)) return cell
-    const record = cell as Record<string, unknown>
-    const moduleName = typeof record.module === 'string' ? record.module.trim().toLowerCase() : ''
-    const moduleBase = moduleName.split(':', 1)[0]
-    return moduleBase === 'assistant' ? { ...record, module: '' } : cell
-  })
-
-  return {
-    ...payload,
-    settings_json: {
-      ...settings,
-      cells,
-    },
-  }
-}
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -67,7 +43,7 @@ export async function GET(req: Request) {
     const isUnpaired = 'pair_required' in builtPayload && builtPayload.pair_required === true
     const payload = isUnpaired
       ? await startPairingPayload(supabase as unknown as PairingRpcClient, device_id)
-      : stripUnsupportedPhysicalModules(builtPayload)
+      : builtPayload
     const responseBody = JSON.stringify(payload)
 
     if (device_id === 'frm_54AE37455F34') {

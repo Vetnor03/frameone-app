@@ -602,11 +602,11 @@ test('Studio sample-data options keep lowercase state values separate from label
   assert.match(source,/GeometryShowcase module=\{showcaseModule\}[^>]*preset=\{preset\}/)
 })
 
-test('AI Follow is a Studio-only picker option and participates in the responsive showcase', async () => {
+test('AI Follow uses the canonical production picker identity and participates in the responsive showcase', async () => {
   const source=await readFile(new URL('../app/frame-simulator/FrameSimulator.tsx',import.meta.url),'utf8')
   const simulatorLibrary=await readFile(new URL('../app/lib/frameSimulator.ts',import.meta.url),'utf8')
   const productionRegistry=JSON.parse(await readFile(new URL('../shared/frame-modules.json',import.meta.url),'utf8'))
-  assert.equal((simulatorLibrary.match(/id:'ai-follow'/g)||[]).length,1);assert.doesNotMatch(JSON.stringify(productionRegistry),/ai-follow/)
+  assert.equal(productionRegistry.filter(x=>x.id==='assistant').length,1);assert.doesNotMatch(JSON.stringify(productionRegistry),/ai-follow/)
   assert.match(source,/studioModuleRegistry\.map\(module/);assert.match(source,/responsiveShowcaseRegistry\.map\(m/)
-  assert.match(simulatorLibrary,/responsiveShowcaseRegistry[^\n]+studioModuleRegistry/);assert.match(source,/if\(m==='ai-follow'\).*drawResponsiveAiFollow/);assert.doesNotMatch(source,/m as ModuleName|Topic update/)
+  assert.match(simulatorLibrary,/responsiveShowcaseRegistry[^\n]+studioModuleRegistry/);assert.match(source,/if\(m==='assistant'\).*drawResponsiveAiFollow/);assert.doesNotMatch(source,/m as ModuleName|Topic update/)
 })

@@ -12,6 +12,7 @@
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
 #include "ModuleGroceries.h"
+#include "ModuleAssistant.h"
 
 // Simple smooth placeholder font (keep UI consistent)
 #include <Fonts/FreeSansBold12pt7b.h>
@@ -19,6 +20,8 @@
 
 bool ModuleRenderer::canRenderCell(const char* module, const Cell& cell) {
   if (!module || module[0] == '\0') return false;
+  if (AdaptiveModuleCapability::hasPrefix(module, "assistant"))
+    return AdaptiveModuleCapability::exactOnly(module, "assistant");
   if (AdaptiveModuleCapability::hasPrefix(module, "surf"))
     return AdaptiveModuleCapability::numericInstance(module, "surf");
   if (cell.size != CELL_ADAPTIVE) return true; // frozen anchor dispatch/support
@@ -97,6 +100,11 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
     // Dispatch modules here
     if (mod.equalsIgnoreCase("date")) {
       ModuleDate::render(c);
+      continue;
+    }
+
+    if (AdaptiveModuleCapability::exactOnly(mod.c_str(), "assistant")) {
+      ModuleAssistant::render(c);
       continue;
     }
 

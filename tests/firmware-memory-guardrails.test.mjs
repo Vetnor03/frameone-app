@@ -11,6 +11,7 @@ const countdown = read('frame/src/modules/ModuleCountdown.cpp');
 const soccer = read('frame/src/modules/ModuleSoccer.cpp');
 const stocks = read('frame/src/modules/ModuleStocks.cpp');
 const groceries = read('frame/src/modules/ModuleGroceries.cpp');
+const assistant = read('frame/src/modules/ModuleAssistant.cpp');
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -108,8 +109,19 @@ test('adaptive Groceries reuses its sole cache and has no static row scratch', (
   const adaptive = groceries.slice(groceries.indexOf('// BEGIN ADAPTIVE GROCERIES RENDERER'), groceries.indexOf('// END ADAPTIVE GROCERIES RENDERER'));
   assert.doesNotMatch(adaptive, /\bstatic\s+(?:char|int|GroceryItem|DinnerPlanItem)\s+\w+\s*\[/);
   assert.doesNotMatch(adaptive, /\b(?:GroceryItem|DinnerPlanItem|RunningLowInsight|RecipeInsight)\s+\w+\s*\[/);
-  assert.doesNotMatch(adaptive, /\bString\b|\bnew\b|malloc|calloc/);
+  assert.doesNotMatch(adaptive, /\bString\b|\bnew\s+[A-Za-z_:][A-Za-z0-9_:]*\s*[\[(]|malloc|calloc/);
   assert.match(adaptive, /getRotationStep4h\(\)/);
+});
+
+test('AI Follow uses one bounded cache, filtered capped JSON, and allocation-free render scratch', () => {
+  assert.equal((assistant.match(/static AssistantCache g_cache/g) || []).length, 1);
+  assert.match(assistant, /MAX_RESPONSE_BYTES = 6144/);
+  assert.match(assistant, /body\.length\(\)>MAX_RESPONSE_BYTES/);
+  assert.match(assistant, /DeserializationOption::Filter/);
+  assert.match(assistant, /MAX_UPDATES = 8/);
+  const renderer = assistant.slice(assistant.indexOf('void render('));
+  assert.doesNotMatch(renderer, /\bString\b|\bnew\s+[A-Za-z_:][A-Za-z0-9_:]*\s*[\[(]|malloc|calloc|std::vector/);
+  assert.doesNotMatch(assistant, /Serial\.(?:print|println)\(body/);
 });
 
 test('Reminders render paths keep SmartReminderLayout scratch storage off the task stack', () => {

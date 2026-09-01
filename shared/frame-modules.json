@@ -6,5 +6,6 @@
   { "id": "countdown", "label": "Countdown" },
   { "id": "soccer", "label": "Football" },
   { "id": "stocks", "label": "Stocks" },
-  { "id": "groceries", "label": "Groceries" }
+  { "id": "groceries", "label": "Groceries" },
+  { "id": "assistant", "label": "AI Follow" }
 ]

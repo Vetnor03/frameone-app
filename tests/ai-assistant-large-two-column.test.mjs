@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const route = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+const deviceData = readFileSync(new URL('../app/lib/device/aiAssistantDeviceData.ts', import.meta.url), 'utf8')
 const large = home.slice(home.indexOf('function MirrorAiAssistantLargeCard'), home.indexOf('function MirrorLargeRemindersCard'))
 const shared = home.slice(home.indexOf('function MirrorAiAssistantCard'), home.indexOf('function MirrorAiAssistantLargeCard'))
 
@@ -41,7 +42,7 @@ test('large Assistant right panel uses snapshot watch topics, deduplicates, caps
 })
 
 test('snapshot filters to active member-owned watches without legacy frame visibility filters and does not expose private watch fields', () => {
-  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail'))
+  const detail = route.slice(route.indexOf('async function aiAssistantDetail'), route.indexOf('async function remindersDetail')) + deviceData
   assert.match(detail, /\.in\('owner_user_id', memberUserIds\)/)
   assert.match(detail, /\.eq\('status', 'active'\)/)
   assert.doesNotMatch(detail, /\.eq\('show_on_frame', true\)|\.eq\('frame_id', frameId\)|monitoring_watches\.show_on_frame|monitoring_watches\.frame_id/)
