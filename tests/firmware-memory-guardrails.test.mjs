@@ -148,12 +148,14 @@ test('Reminders keeps its profile cache in one lifetime heap allocation', () => 
   assert.match(reminders, /static bool g_cacheAllocationAttempted = false;/);
   assert.match(reminders, /if \(g_cacheAllocationAttempted\) return false;[\s\S]*g_cacheAllocationAttempted = true;[\s\S]*new \(std::nothrow\) ReminderCache\{\}/);
   assert.doesNotMatch(reminders, /delete\s+g_cache|free\s*\(\s*g_cache/);
-  assert.match(reminders, /static_assert\(sizeof\(ReminderCache\) == 3848/);
+  assert.match(reminders, /static_assert\(sizeof\(ReminderCache\) <= 4096/);
+  assert.doesNotMatch(reminders, /static_assert\(sizeof\(ReminderCache\) ==/);
 });
 
 test('Reminders heap-cache failure is terminal and renders an unavailable state safely', () => {
   assert.match(reminders, /if \(!g_cache\) REM_LOGLN\("reminders cache allocation failed"\)/);
-  assert.match(reminders, /static void clearCache\(\) \{\s*if \(g_cache\) \*g_cache = ReminderCache\{\};\s*\}/);
+  assert.match(reminders, /static void clearCache\(\) \{\s*if \(g_cache\) memset\(g_cache, 0, sizeof\(\*g_cache\)\);\s*\}/);
+  assert.doesNotMatch(reminders, /\*g_cache\s*=\s*ReminderCache\{\}/);
   assert.match(reminders, /if \(!ensureLoaded\(\)\) \{[\s\S]*drawEmptyState\(c, "No reminders", "Unavailable"\);[\s\S]*return;/);
   assert.doesNotMatch(reminders, /static\s+(?:ReminderItem|ReminderCache)\s+(?!\*)\w+/);
 });

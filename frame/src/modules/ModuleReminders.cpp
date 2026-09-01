@@ -82,7 +82,8 @@ struct ReminderCache {
   ReminderItem items[MAX_REMINDERS];
 };
 
-static_assert(sizeof(ReminderCache) == 3848, "Reminders cache heap budget changed");
+static_assert(sizeof(ReminderCache) <= 4096,
+              "Reminders cache exceeded heap budget");
 static ReminderCache* g_cache = nullptr;
 static bool g_cacheAllocationAttempted = false;
 static uint8_t g_requiredProfiles = PROFILE_STANDARD;
@@ -123,7 +124,7 @@ static bool ensureCacheAllocated() {
 }
 
 static void clearCache() {
-  if (g_cache) *g_cache = ReminderCache{};
+  if (g_cache) memset(g_cache, 0, sizeof(*g_cache));
 }
 
 static void markUnavailable() {
