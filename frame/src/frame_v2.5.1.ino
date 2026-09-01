@@ -43,7 +43,12 @@ static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 static const uint32_t PROBE_WAKE_SECONDS = 10;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
 static const uint32_t NORMAL_SYNC_SECONDS = 900;
-static const uint32_t INTERACTIVE_POLL_MS = 1500;
+// Temporary hardware-development policy. Keep this decision here, at the
+// paired operational loop boundary, so production sleep policy can be restored
+// without changing the revision/render/ACK pipeline.
+static const bool REALTIME_TEST_MODE = true;
+static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;
+static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // 3 hours refresh: 12 * 15min = 180min
 static const uint16_t WAKES_PER_REFRESH = 12;
@@ -608,19 +613,29 @@ static InteractiveModeResult runInteractiveMode(
   LiveUpdateState& state
 ) {
   Serial.println("LiveUpdate: entering interactive mode");
-  WiFi.setSleep(true);
-  esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+  WiFi.setSleep(false);
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   bool lastActive = state.appActive;
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
-  uint8_t inactiveAckFailures = 0;
-  uint8_t consecutiveProbeFailures = 0;
-  uint32_t configRetryMs = INTERACTIVE_POLL_MS;
+  uint32_t configRetryMs = REALTIME_UPDATE_POLL_MS;
   const uint32_t interactiveStartedAtMs = millis();
   const uint32_t baselineElapsedAtEntry = normalSyncElapsedSeconds;
 
-  while (WiFi.status() == WL_CONNECTED) {
+  while (true) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("LiveUpdate: Wi-Fi disconnected; reconnecting");
+      if (!WiFiManagerV2::connectSaved(12000)) {
+        delay(REALTIME_FAILURE_BACKOFF_MS);
+        continue;
+      }
+      // connectSaved() re-enters STA mode and begins a new connection, so
+      // restore the temporary real-time power policy after every reconnect.
+      WiFi.setSleep(false);
+      esp_wifi_set_ps(WIFI_PS_NONE);
+      Serial.println("LiveUpdate: Wi-Fi reconnected");
+    }
     const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
     if (baselineElapsedAtEntry + awakeSeconds >= NORMAL_SYNC_SECONDS) {
       Serial.println("LiveUpdate: normal sync became due while interactive");
@@ -638,11 +653,7 @@ static InteractiveModeResult runInteractiveMode(
     }
     uint64_t awaitingAck = LiveUpdate::getRenderedAwaitingAck();
     if (retryRenderedAck(state.displayedRevision)) {
-      inactiveAckFailures = 0;
       if (awaitingAck > state.displayedRevision) state.displayedRevision = awaitingAck;
-    } else if (!state.appActive && ++inactiveAckFailures >= 3) {
-      Serial.println("LiveUpdate: deferring ACK retry to next probe wake");
-      return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
     }
 
     uint64_t rendered = LiveUpdate::getRenderedAwaitingAck();
@@ -658,34 +669,22 @@ static InteractiveModeResult runInteractiveMode(
           ? 5000U
           : configRetryMs * 2U;
       } else {
-        configRetryMs = INTERACTIVE_POLL_MS;
+        configRetryMs = REALTIME_UPDATE_POLL_MS;
         if (retryRenderedAck(state.displayedRevision)) {
           state.displayedRevision = revisionToDisplay;
-        } else if (!state.appActive) {
-          inactiveAckFailures++;
         }
       }
     }
 
-    rendered = LiveUpdate::getRenderedAwaitingAck();
-    if (!state.appActive &&
-        state.requestedRevision <= state.displayedRevision &&
-        rendered == 0) {
-      Serial.println("LiveUpdate: activity expired");
-      return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
-    }
-
-    delay(INTERACTIVE_POLL_MS);
+    // Exactly one cheap revision probe per idle cadence. Rendering above is
+    // synchronous, so a revision arriving during it is observed serially here.
+    delay(REALTIME_UPDATE_POLL_MS);
     LiveUpdateState next{};
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
-      consecutiveProbeFailures++;
-      Serial.printf("LiveUpdate: interactive probe failed (%u/3)\n", consecutiveProbeFailures);
-      if (consecutiveProbeFailures >= 3) {
-        return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
-      }
+      Serial.println("LiveUpdate: interactive probe failed; staying awake");
+      delay(REALTIME_FAILURE_BACKOFF_MS - REALTIME_UPDATE_POLL_MS);
       continue;
     }
-    consecutiveProbeFailures = 0;
 
     if (next.appActive != lastActive ||
         next.requestedRevision != lastRequested ||
@@ -700,7 +699,6 @@ static InteractiveModeResult runInteractiveMode(
     }
     state = next;
   }
-  return finishInteractiveMode(interactiveStartedAtMs, baselineElapsedAtEntry, INTERACTIVE_FINISHED);
 }
 
 // --------------------------------------
@@ -831,19 +829,28 @@ void setup() {
   const bool isCompletingWifiSetup =
     WiFiManagerV2::hasCreds() && !DeviceIdentity::hasToken();
   if (!WiFiManagerV2::connectSaved(12000)) {
-    if (!normalSyncDue && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
-      Serial.println("LiveUpdate: Wi-Fi unavailable on probe wake");
-      goToSleep(pwrEarly.usbPresent);
-      return;
+    // A normally paired test frame is a continuously running appliance. A
+    // transient disconnect must neither launch provisioning nor deep sleep.
+    while (REALTIME_TEST_MODE && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
+      Serial.println("LiveUpdate: startup reconnect failed; retrying while awake");
+      delay(REALTIME_FAILURE_BACKOFF_MS);
+      if (WiFiManagerV2::connectSaved(12000)) break;
     }
-    activeSetupStep = SETUP_STEP_WIFI;
-    if (chargerStateChanged) {
-      Serial.println("🔄 Charger change on Wi-Fi setup screen -> restart Wi-Fi setup flow and redraw");
-      setupFlowRefreshByCharger = true;
+    if (WiFi.status() != WL_CONNECTED) {
+      if (!normalSyncDue && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
+        Serial.println("LiveUpdate: Wi-Fi unavailable on probe wake");
+        goToSleep(pwrEarly.usbPresent);
+        return;
+      }
+      activeSetupStep = SETUP_STEP_WIFI;
+      if (chargerStateChanged) {
+        Serial.println("🔄 Charger change on Wi-Fi setup screen -> restart Wi-Fi setup flow and redraw");
+        setupFlowRefreshByCharger = true;
+      }
+      ensureDisplay();
+      ProvisioningPortal::runBlocking();
+      reconnectedViaProvisioning = true;
     }
-    ensureDisplay();
-    ProvisioningPortal::runBlocking();
-    reconnectedViaProvisioning = true;
   }
 
   if (isCompletingWifiSetup) {
@@ -891,7 +898,8 @@ void setup() {
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
 
-  if (!normalSyncDue && !explicitRevisionPending && !(liveProbeOk && liveState.appActive)) {
+  if (!REALTIME_TEST_MODE && !normalSyncDue && !explicitRevisionPending &&
+      !(liveProbeOk && liveState.appActive)) {
     goToSleep(pwrEarly.usbPresent);
     return;
   }
@@ -903,7 +911,7 @@ run_normal_sync:
     liveState.requestedRevision > LiveUpdate::getRenderedAwaitingAck();
 
   // Only full scheduled checks advance the legacy 12-wake (three-hour)
-  // physical-refresh counter. Two-minute probe wakes never touch it.
+  // physical-refresh counter. Cheap revision probes never touch it.
   if (normalSyncDue) UpdateChecker::noteWake();
 
   // ---------------- Battery / Power sense ----------------
@@ -920,7 +928,7 @@ run_normal_sync:
       normalSyncDue = true;
       goto run_normal_sync;
     }
-    goToSleep(pwr.usbPresent);
+    if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
     return;
   }
 
@@ -1026,13 +1034,13 @@ run_normal_sync:
 
     postDeviceStatus(batt, pwr, false);
     UpdateChecker::saveBatteryPercent(batt.percent);
-    if (liveProbeOk && liveState.appActive) {
+    if (REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)) {
       if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
         consumeNormalSyncPeriod();
         goto run_normal_sync;
       }
     }
-    goToSleep(pwr.usbPresent);
+    if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
     return;
   }
 
@@ -1047,6 +1055,12 @@ run_normal_sync:
 
       ensureDisplay();
       ScreenPairing::showError("Could not load frame");
+      if (REALTIME_TEST_MODE) {
+        if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+          consumeNormalSyncPeriod();
+          goto run_normal_sync;
+        }
+      }
       goToSleep(pwr.usbPresent);
       return;
     }
@@ -1057,6 +1071,12 @@ run_normal_sync:
   }
 
   if (!renderLoadedDashboard(batt, pwr)) {
+    if (REALTIME_TEST_MODE) {
+      if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+        consumeNormalSyncPeriod();
+        goto run_normal_sync;
+      }
+    }
     goToSleep(pwr.usbPresent);
     return;
   }
@@ -1085,13 +1105,13 @@ run_normal_sync:
   }
 
   Serial.println("✅ Applied");
-  if (liveProbeOk && liveState.appActive) {
+  if (REALTIME_TEST_MODE || (liveProbeOk && liveState.appActive)) {
     if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
       consumeNormalSyncPeriod();
       goto run_normal_sync;
     }
   }
-  goToSleep(pwr.usbPresent);
+  if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
 }
 
 void loop() {}
