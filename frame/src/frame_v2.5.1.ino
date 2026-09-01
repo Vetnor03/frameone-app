@@ -533,6 +533,7 @@ static void runOtaCheckIfDue() {
 }
 
 static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebug& pwr) {
+  const uint32_t renderStartedAtMs = millis();
   ModuleDate::setConfig(&g_cfg);
   ModuleWeather::setConfig(&g_cfg);
   ModuleSurf::setConfig(&g_cfg);
@@ -547,18 +548,41 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
 
   // GxEPD2's paged update is synchronous: returning from drawWithContent means
   // the BUSY-controlled physical panel update has completed.
+  const uint32_t displayStartedAtMs = millis();
   Layout::drawWithContent(g_cfg.layout, g_cfg);
-  postDeviceStatus(batt, pwr, true);
+  Serial.printf(
+    "LiveUpdate timing display_update_ms=%lu\n",
+    (unsigned long)(millis() - displayStartedAtMs)
+  );
+  Serial.printf(
+    "LiveUpdate timing render_total_ms=%lu\n",
+    (unsigned long)(millis() - renderStartedAtMs)
+  );
   return true;
 }
+
+static uint64_t explicitTimingRevision = 0;
+static uint32_t explicitTimingStartedAtMs = 0;
+static uint32_t explicitRevisionObservedAtMs = 0;
 
 static bool fetchAndRenderExplicit(
   const BatteryState& batt,
   const PowerSenseDebug& pwr,
   uint64_t revision
 ) {
+  explicitTimingRevision = revision;
+  explicitTimingStartedAtMs = millis();
+  Serial.printf(
+    "LiveUpdate timing probe_to_pending_ms=%lu\n",
+    (unsigned long)(explicitTimingStartedAtMs - explicitRevisionObservedAtMs)
+  );
+  const uint32_t configFetchStartedAtMs = millis();
   FrameConfigApi::FetchResult result =
     FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+  Serial.printf(
+    "LiveUpdate timing config_fetch_ms=%lu\n",
+    (unsigned long)(millis() - configFetchStartedAtMs)
+  );
   if (result != FrameConfigApi::FETCH_OK) {
     Serial.printf("LiveUpdate: revision %" PRIu64 " frame fetch failed\n", revision);
     return false;
@@ -592,9 +616,21 @@ static bool retryRenderedAck(uint64_t backendDisplayed) {
     return true;
   }
 
+  const uint32_t ackStartedAtMs = millis();
   if (LiveUpdate::acknowledge(DeviceIdentity::getToken(), rendered)) {
     LiveUpdate::clearRenderedAwaitingAckThrough(rendered);
     Serial.printf("LiveUpdate: ACK %" PRIu64 " success\n", rendered);
+    if (rendered == explicitTimingRevision) {
+      Serial.printf(
+        "LiveUpdate timing ack_ms=%lu\n",
+        (unsigned long)(millis() - ackStartedAtMs)
+      );
+      Serial.printf(
+        "LiveUpdate timing total_ms=%lu\n",
+        (unsigned long)(millis() - explicitTimingStartedAtMs)
+      );
+      explicitTimingRevision = 0;
+    }
     return true;
   }
 
@@ -620,6 +656,7 @@ static void runFirmwareMaintenanceIfNeeded(
   DisplayCore::forceNextFullRefresh(true);
   if (!renderLoadedDashboard(batt, pwr)) return;
   UpdateChecker::saveFirmwareVersion(FW_VER);
+  postDeviceStatus(batt, pwr, true);
   refreshContentSignatureBestEffort();
   Serial.println("Renderer version changed; maintenance redraw complete");
 }
@@ -687,7 +724,9 @@ static InteractiveModeResult runInteractiveMode(
     if (retryRenderedAck(state.displayedRevision)) {
       if (awaitingAck > state.displayedRevision) {
         state.displayedRevision = awaitingAck;
-        // Signature bookkeeping is deliberately after durable physical ACK.
+        // Physical status and signature bookkeeping are deliberately after
+        // durable physical ACK, including when the first ACK attempt failed.
+        postDeviceStatus(batt, pwr, true);
         refreshContentSignatureBestEffort();
       }
     }
@@ -696,6 +735,7 @@ static InteractiveModeResult runInteractiveMode(
     if (state.requestedRevision > state.displayedRevision &&
         state.requestedRevision > rendered) {
       const uint64_t revisionToDisplay = state.requestedRevision;
+      if (explicitRevisionObservedAtMs == 0) explicitRevisionObservedAtMs = millis();
       Serial.printf("LiveUpdate: revision %" PRIu64 " pending\n", revisionToDisplay);
       if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) {
         // The revision remains pending. Stay interactive and retry with a
@@ -708,7 +748,9 @@ static InteractiveModeResult runInteractiveMode(
         configRetryMs = REALTIME_UPDATE_POLL_MS;
         if (retryRenderedAck(state.displayedRevision)) {
           state.displayedRevision = revisionToDisplay;
+          postDeviceStatus(batt, pwr, true);
           refreshContentSignatureBestEffort();
+          explicitRevisionObservedAtMs = 0;
         }
       }
     }
@@ -717,6 +759,7 @@ static InteractiveModeResult runInteractiveMode(
     // synchronous, so a revision arriving during it is observed serially here.
     delay(REALTIME_UPDATE_POLL_MS);
     LiveUpdateState next{};
+    const uint32_t probeStartedAtMs = millis();
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
       Serial.println("LiveUpdate: interactive probe failed; staying awake");
       delay(REALTIME_FAILURE_BACKOFF_MS - REALTIME_UPDATE_POLL_MS);
@@ -725,6 +768,9 @@ static InteractiveModeResult runInteractiveMode(
 
     if (next.requestedRevision != lastRequested ||
         next.displayedRevision != lastDisplayed) {
+      if (next.requestedRevision > next.displayedRevision) {
+        explicitRevisionObservedAtMs = probeStartedAtMs;
+      }
       Serial.printf(
         "LiveUpdate: probe requested=%" PRIu64 " displayed=%" PRIu64 "\n",
         next.requestedRevision, next.displayedRevision
@@ -920,8 +966,12 @@ void setup() {
   );
 
   LiveUpdateState liveState{};
+  const uint32_t liveProbeStartedAtMs = millis();
   const bool liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
   if (liveProbeOk) {
+    if (liveState.requestedRevision > liveState.displayedRevision) {
+      explicitRevisionObservedAtMs = liveProbeStartedAtMs;
+    }
     Serial.printf(
       "LiveUpdate: probe requested=%" PRIu64 " displayed=%" PRIu64 "\n",
       liveState.requestedRevision, liveState.displayedRevision
@@ -957,6 +1007,7 @@ run_normal_sync:
     if (fetchAndRenderExplicit(manualBatt, manualPwr, liveState.requestedRevision) &&
         retryRenderedAck(liveState.displayedRevision)) {
       liveState.displayedRevision = liveState.requestedRevision;
+      postDeviceStatus(manualBatt, manualPwr, true);
       renderedWithoutSignature = !refreshContentSignatureBestEffort();
     }
   }
@@ -1007,6 +1058,7 @@ run_normal_sync:
         UpdateChecker::saveContentSignature(nextSignature);
         UpdateChecker::saveFirmwareVersion(FW_VER);
         UpdateChecker::saveBatteryPercent(batt.percent);
+        postDeviceStatus(batt, pwr, true);
         Serial.println("Scheduled changed content fully refreshed");
       }
     }

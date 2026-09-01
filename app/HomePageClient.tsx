@@ -1732,11 +1732,9 @@ export default function HomePage() {
     : !activeDeviceId || manualUpdateInProgress
   const updateStatusText = manualUpdateInProgress
     ? (language === 'no' ? 'Oppdaterer…' : 'Updating…')
-    : frameChangesPending
-      ? (language === 'no' ? 'Endringer venter' : 'Changes pending')
-      : lastPhysicalDisplayUpdatedAt
-        ? formatRelative(lastPhysicalDisplayUpdatedAt)
-        : (language === 'no' ? 'Oppdatert' : 'Updated')
+    : lastPhysicalDisplayUpdatedAt
+      ? formatRelative(lastPhysicalDisplayUpdatedAt)
+      : (language === 'no' ? 'Oppdatert' : 'Updated')
 
   useEffect(() => {
     if (!frameUpdateError) return

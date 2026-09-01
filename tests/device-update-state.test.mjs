@@ -99,15 +99,13 @@ test('status and probe GET routes explicitly disable caching', () => {
   }
 })
 
-test('probe telemetry is best effort and cannot block critical revision state', () => {
+test('revision probe is a pure read while telemetry schema remains available', () => {
   assert.match(probeMigration, /add column if not exists last_probe_at timestamptz/)
   const read = deviceState.indexOf(".select('requested_revision, displayed_revision')")
-  const telemetry = deviceState.indexOf('.update({ last_probe_at:')
-  const response = deviceState.indexOf('return NextResponse.json(', telemetry)
-  assert.ok(read >= 0 && read < telemetry && telemetry < response)
-  assert.match(deviceState, /update\(\{ last_probe_at: new Date\(\)\.toISOString\(\) \}\)/)
-  assert.match(deviceState, /probe-telemetry-failed/)
-  assert.doesNotMatch(deviceState.slice(telemetry, response), /if \(probeError\) return/)
+  const response = deviceState.indexOf('return NextResponse.json(', read)
+  assert.ok(read >= 0 && read < response)
+  assert.doesNotMatch(deviceState, /\.update\(|last_probe_at|probe-telemetry-failed/)
+  assert.match(deviceState, /requestedRevision = data\?\.requested_revision[\s\S]*displayedRevision = data\?\.displayed_revision/)
   assert.doesNotMatch(appStatus, /last_probe_at|app_active_until/)
   assert.doesNotMatch(updateClient, /lastProbeAt:/)
 })
@@ -128,6 +126,9 @@ test('manual update keeps physical freshness visible through every operation pha
   assert.match(home, /explicitUpdateStatus[^\n]*'idle' \| 'saving' \| 'requesting' \| 'waiting_for_display'/)
   assert.match(home, /const updateStatusText = manualUpdateInProgress[\s\S]*lastPhysicalDisplayUpdatedAt/)
   assert.match(home, /manualUpdateInProgress = explicitUpdateStatus !== 'idle'/)
+  const statusExpression = home.slice(home.indexOf('const updateStatusText'), home.indexOf('useEffect', home.indexOf('const updateStatusText')))
+  assert.doesNotMatch(statusExpression, /frameChangesPending|Changes pending|Endringer venter/)
+  assert.match(statusExpression, /lastPhysicalDisplayUpdatedAt[\s\S]*formatRelative/)
   assert.match(home, /Frame hasn’t confirmed the update yet\./)
 })
 

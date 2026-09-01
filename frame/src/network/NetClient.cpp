@@ -8,6 +8,15 @@ namespace {
   static const int MAX_RETRIES = 3;
   static int g_lastContentLength = -1;
 
+  String sanitizedPath(const String& url) {
+    int pathStart = url.indexOf("://");
+    pathStart = pathStart >= 0 ? url.indexOf('/', pathStart + 3) : 0;
+    if (pathStart < 0) return String("/");
+    int pathEnd = url.indexOf('?', pathStart);
+    if (pathEnd < 0) pathEnd = url.indexOf('#', pathStart);
+    return pathEnd < 0 ? url.substring(pathStart) : url.substring(pathStart, pathEnd);
+  }
+
   bool doRequestWithRetry(
     const String& url,
     const String* bearerToken,
@@ -21,6 +30,7 @@ namespace {
     g_lastContentLength = -1;
 
     for (int attempt = 1; attempt <= MAX_RETRIES; ++attempt) {
+      const uint32_t requestStartedAtMs = millis();
       if (WiFi.status() != WL_CONNECTED) {
         WiFi.reconnect();
         delay(700);
@@ -61,6 +71,14 @@ namespace {
 
         // Accept all 2xx, even if body is empty
         if (httpCodeOut >= 200 && httpCodeOut < 300) {
+          const String path = sanitizedPath(url);
+          Serial.printf(
+            "NetClient timing method=%s path=%s status=%d elapsed_ms=%lu\n",
+            method,
+            path.c_str(),
+            httpCodeOut,
+            (unsigned long)(millis() - requestStartedAtMs)
+          );
           return true;
         }
       } else {
