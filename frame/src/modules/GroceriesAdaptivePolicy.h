@@ -8,6 +8,7 @@ namespace GroceriesAdaptivePolicy {
 
 enum Family : uint8_t { EMPTY, MICRO, ITEM_STRIP, LIST_STACK,
                         LIST_COLUMNS, LIST_MENU, EXPANDED };
+enum RunningLowMode : uint8_t { RUNNING_FULL, RUNNING_NAME, RUNNING_TRUNCATED_NAME };
 
 struct Input {
   int width;
@@ -55,6 +56,15 @@ inline Result compose(const Input& in) {
   out.showMealIdeas = out.family == EXPANDED && in.height >= 390 && in.mealIdeaCount > 0;
   out.todayIsHeading = in.hasTodayDinner && !out.showMenu;
   return out;
+}
+
+inline RunningLowMode runningLowMode(bool fullFits, bool nameFits) {
+  return fullFits ? RUNNING_FULL : (nameFits ? RUNNING_NAME : RUNNING_TRUNCATED_NAME);
+}
+
+// Candidate widths are measured with complete ingredient tokens included.
+inline uint8_t mealMissingCount(bool twoFit, bool oneFits) {
+  return twoFit ? 2 : (oneFits ? 1 : 0);
 }
 
 } // namespace GroceriesAdaptivePolicy

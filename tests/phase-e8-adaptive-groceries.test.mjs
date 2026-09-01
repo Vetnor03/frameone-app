@@ -60,4 +60,18 @@ test('adaptive dispatch is additive and fixed renderers remain protected',async(
  for(const name of ['renderSmall','renderMedium','renderLarge','renderXL'])assert.match(firmware,new RegExp(`static void ${name}\\(`))
  assert.match(firmware,/BEGIN ADAPTIVE GROCERIES RENDERER[\s\S]*END ADAPTIVE GROCERIES RENDERER/)
  assert.equal((firmware.match(/static GroceryCache g_cache;/g)||[]).length,1)
+ const adaptive=firmware.slice(firmware.indexOf('// BEGIN ADAPTIVE GROCERIES RENDERER'),firmware.indexOf('// END ADAPTIVE GROCERIES RENDERER'))
+ assert.match(adaptive,/adaptiveHeading[\s\S]*fillRect/)
+ assert.match(adaptive,/adaptiveCenteredLine\(x, y, width, raw, FONT_B12\)/)
+ assert.match(adaptive,/adaptiveCenteredLine\(innerX,[\s\S]*more, FONT_B9\)/)
+ assert.match(adaptive,/char quantity\[16\][\s\S]*textWidth\(quantity[\s\S]*item\.name/)
+ assert.match(adaptive,/runningLowMode\([\s\S]*RUNNING_FULL \? full : g_cache\.runningLow\[i\]\.name/)
+ assert.match(adaptive,/mealMissingCount\([\s\S]*missing == 2 \? two : \(missing == 1 \? one : g_cache\.recipes\[i\]\.name\)/)
+ assert.match(adaptive,/family == GroceriesAdaptivePolicy::EMPTY[\s\S]*adaptiveHeading[\s\S]*adaptiveCenteredLine/)
+})
+
+test('host policy helpers enforce optional-fact disclosure order',async()=>{
+ const source='#include "GroceriesAdaptivePolicy.h"\nusing namespace GroceriesAdaptivePolicy;\nint main(){if(runningLowMode(true,true)!=RUNNING_FULL)return 1;if(runningLowMode(false,true)!=RUNNING_NAME)return 2;if(runningLowMode(false,false)!=RUNNING_TRUNCATED_NAME)return 3;if(mealMissingCount(true,true)!=2)return 4;if(mealMissingCount(false,true)!=1)return 5;if(mealMissingCount(false,false)!=0)return 6;return 0;}'
+ const dir=await mkdtemp(join(tmpdir(),'groceries-semantics-')),cpp=join(dir,'semantics.cpp'),bin=join(dir,'semantics');await writeFile(cpp,source)
+ execFileSync('g++',['-std=gnu++11','-Wall','-Wextra','-Werror','-I',new URL('../frame/src/modules/',import.meta.url).pathname,cpp,'-o',bin]);execFileSync(bin)
 })
