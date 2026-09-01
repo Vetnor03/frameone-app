@@ -100,6 +100,88 @@ def test_probe_and_network_failures_back_off_without_sleep():
     assert "return finishInteractiveMode" not in failure
 
 
+def test_successful_interactive_reconnect_reapplies_realtime_power_policy():
+    reconnect = INTERACTIVE[
+        INTERACTIVE.index("if (WiFi.status() != WL_CONNECTED)"):
+        INTERACTIVE.index('Serial.println("LiveUpdate: Wi-Fi reconnected")')
+    ]
+    connected = reconnect.index("if (!WiFiManagerV2::connectSaved(12000))")
+    no_sleep = reconnect.index("WiFi.setSleep(false);", connected)
+    no_ps = reconnect.index("esp_wifi_set_ps(WIFI_PS_NONE);", no_sleep)
+    assert connected < no_sleep < no_ps
+
+
+def test_revision_contract_uses_uint64_and_rejects_invalid_shapes():
+    header = (ROOT / "src/network/LiveUpdate.h").read_text()
+    assert "uint64_t requestedRevision" in header
+    assert "uint64_t displayedRevision" in header
+    # ArduinoJson treats booleans as numeric-convertible, so the explicit bool
+    # rejection must remain ahead of revision parsing.
+    assert "value.is<bool>()" in LIVE
+    assert "displayed > requested" in LIVE
+
+
+def test_transient_config_fetch_stays_interactive_with_bounded_backoff():
+    assert "if (!fetchAndRenderExplicit" in INTERACTIVE
+    assert "configRetryMs >= 2500U" in INTERACTIVE
+    assert "? 5000U" in INTERACTIVE
+    assert ": configRetryMs * 2U" in INTERACTIVE
+    retry_ms = 1000
+    observed = []
+    for _ in range(5):
+        observed.append(retry_ms)
+        retry_ms = 5000 if retry_ms >= 2500 else retry_ms * 2
+    assert observed == [1000, 2000, 4000, 5000, 5000]
+    assert "if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) return" not in INTERACTIVE
+
+
+def test_only_scheduled_full_sync_advances_periodic_refresh_counter():
+    assert "if (normalSyncDue) UpdateChecker::noteWake();" in MAIN
+    assert MAIN.count("UpdateChecker::noteWake();") == 1
+
+
+def test_failed_live_probe_cannot_postpone_due_normal_sync():
+    probe = MAIN.index("const bool liveProbeOk = LiveUpdate::probe")
+    legacy_checks = MAIN.index("UpdateChecker::hasConfigChanged", probe)
+    flow = MAIN[probe:legacy_checks]
+    assert 'else {\n    Serial.println("LiveUpdate: probe failed");\n  }' in flow
+    assert "if (!REALTIME_TEST_MODE && !normalSyncDue" in flow
+    assert "if (normalSyncDue) UpdateChecker::noteWake();" in flow
+    assert "if (normalSyncDue) runOtaCheckIfDue();" in flow
+    assert "UpdateChecker::shouldForceRedrawForFirmware" in flow
+    assert "UpdateChecker::shouldForcePeriodicRefresh" in flow
+    assert "bool explicitRevisionPending =\n    liveProbeOk &&" in flow
+
+
+def test_normal_sync_clock_and_explicit_ack_remain_independent():
+    setup = MAIN.index("void setup()")
+    scheduler = MAIN[
+        MAIN.index("if (wakeCause == ESP_SLEEP_WAKEUP_TIMER)", setup):
+        MAIN.index('Serial.print("device_id: ")', setup)
+    ]
+    assert "normalSyncElapsedSeconds += PROBE_WAKE_SECONDS" in scheduler
+    assert "normalSyncElapsedSeconds -= NORMAL_SYNC_SECONDS" in scheduler
+    explicit = MAIN[
+        MAIN.index("static bool fetchAndRenderExplicit"):
+        MAIN.index("static bool retryRenderedAck")
+    ]
+    assert "normalSyncElapsedSeconds" not in explicit
+
+
+def test_pending_revision_survives_interactive_deadline_into_normal_sync():
+    deadline = INTERACTIVE[
+        INTERACTIVE.index("normal sync became due while interactive"):
+        INTERACTIVE.index("INTERACTIVE_NORMAL_SYNC_DUE")
+    ]
+    assert "LiveUpdate::probe" in deadline
+    assert "state = deadlineState" in deadline
+    label = MAIN.index("run_normal_sync:")
+    render = MAIN.index("renderLoadedDashboard(batt, pwr)", label)
+    persist = MAIN.index("LiveUpdate::saveRenderedAwaitingAck(liveState.requestedRevision)", render)
+    ack = MAIN.index("retryRenderedAck(liveState.displayedRevision)", persist)
+    assert label < render < persist < ack
+
+
 def test_special_safety_and_setup_sleep_paths_remain():
     assert "if (battEarly.requiresRecharge)" in MAIN
     assert "showRechargeAndSleep(battEarly, pwrEarly);" in MAIN

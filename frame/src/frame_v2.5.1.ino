@@ -630,6 +630,10 @@ static InteractiveModeResult runInteractiveMode(
         delay(REALTIME_FAILURE_BACKOFF_MS);
         continue;
       }
+      // connectSaved() re-enters STA mode and begins a new connection, so
+      // restore the temporary real-time power policy after every reconnect.
+      WiFi.setSleep(false);
+      esp_wifi_set_ps(WIFI_PS_NONE);
       Serial.println("LiveUpdate: Wi-Fi reconnected");
     }
     const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
