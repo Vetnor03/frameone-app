@@ -1,11 +1,14 @@
 // app/api/soccer/frame/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { TEAM_ID_MAP } from '@/app/lib/soccer/teamIdMap'
 
 export const runtime = 'nodejs'
 
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY
 const SOCCER_FETCH_TIMEOUT_MS = 8000
+const SOCCER_DATA_REVALIDATE_SECONDS = 5 * 60
+const SOCCER_STALE_SECONDS = 24 * 60 * 60
 
 type SoccerLogContext = Record<string, unknown>
 
@@ -27,6 +30,25 @@ function soccerLog(stage: string, context: SoccerLogContext = {}) {
 
 function soccerError(stage: string, context: SoccerLogContext = {}) {
   console.error('[soccer-frame]', { stage, ...context })
+}
+
+function soccerJson(payload: unknown, status = 200, cacheable = false) {
+  const body = JSON.stringify(payload)
+  const cacheControl = cacheable
+    ? `public, s-maxage=${SOCCER_DATA_REVALIDATE_SECONDS}, stale-while-revalidate=${SOCCER_STALE_SECONDS}`
+    : 'no-store'
+
+  return new NextResponse(body, {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      // The ESP32 HTTP client is much more reliable when it can reserve the
+      // response buffer up front instead of growing a chunked String in RAM.
+      'Content-Length': String(new TextEncoder().encode(body).byteLength),
+      'Cache-Control': cacheControl,
+      'Vercel-CDN-Cache-Control': cacheControl,
+    },
+  })
 }
 
 function errorMessage(e: unknown) {
@@ -257,7 +279,11 @@ function buildNextLineupStub() {
   }
 }
 
-async function fetchJson(url: string, stage: string, extraHeaders?: Record<string, string>) {
+const fetchJson = unstable_cache(async (
+  url: string,
+  stage: string,
+  extraHeaders?: Record<string, string>
+) => {
   if (!API_KEY) {
     soccerError('config:missing-api-key', { stage, envVar: 'FOOTBALL_DATA_API_KEY' })
     throw new SoccerExternalApiError('Football data API key is not configured', 502, 'missing FOOTBALL_DATA_API_KEY')
@@ -274,6 +300,8 @@ async function fetchJson(url: string, stage: string, extraHeaders?: Record<strin
         'X-Auth-Token': API_KEY,
         ...(extraHeaders || {}),
       },
+      // Cache the parsed successful value via unstable_cache below. Keeping the
+      // origin request itself uncached ensures a 429/5xx response is never saved.
       cache: 'no-store',
       signal: controller.signal,
     })
@@ -299,7 +327,7 @@ async function fetchJson(url: string, stage: string, extraHeaders?: Record<strin
   } finally {
     clearTimeout(timeout)
   }
-}
+}, ['soccer-football-data-v1'], { revalidate: SOCCER_DATA_REVALIDATE_SECONDS })
 
 export async function GET(req: NextRequest) {
   const requestId = crypto.randomUUID()
@@ -309,14 +337,14 @@ export async function GET(req: NextRequest) {
 
   if (!teamKey) {
     soccerError('teamId:invalid', { requestId, rawTeamId: rawTeamKey, reason: 'missing' })
-    return NextResponse.json({ error: 'Missing teamId', code: 'missing_team_id' }, { status: 400 })
+    return soccerJson({ error: 'Missing teamId', code: 'missing_team_id' }, 400)
   }
 
   const teamId = TEAM_ID_MAP[teamKey]
   soccerLog('teamId:parsed', { requestId, teamKey, teamId: teamId ?? null })
   if (!teamId) {
     soccerError('teamId:unsupported', { requestId, teamKey, supportedTeamIds: Object.keys(TEAM_ID_MAP) })
-    return NextResponse.json({ error: `Unsupported teamId: ${teamKey}`, code: 'unsupported_team_id', teamId: teamKey }, { status: 400 })
+    return soccerJson({ error: `Unsupported teamId: ${teamKey}`, code: 'unsupported_team_id', teamId: teamKey }, 400)
   }
 
   const domesticCompetitionCode = DOMESTIC_COMPETITION_MAP[teamKey] || null
@@ -407,18 +435,18 @@ export async function GET(req: NextRequest) {
       empty: !nextMatch && !prevMatch && !standing && table.length === 0 && !topScorer,
     }
     soccerLog('response:payload', { requestId, teamKey, teamId, empty: payload.empty, hasNext: Boolean(payload.next), hasLast: Boolean(payload.last), tableRows: payload.table.length })
-    return NextResponse.json(payload)
+    return soccerJson(payload, 200, true)
   } catch (e: unknown) {
     const debugReason = e instanceof SoccerExternalApiError ? e.debugReason : errorMessage(e)
     soccerError('request:failed', { requestId, teamKey, teamId, reason: debugReason, name: e instanceof Error ? e.name : typeof e })
 
     if (e instanceof SoccerExternalApiError) {
-      return NextResponse.json(
+      return soccerJson(
         { error: 'External soccer API failed', code: 'external_soccer_api_failed', debugReason },
-        { status: 502 }
+        502
       )
     }
 
-    return NextResponse.json(emptyFramePayload({ teamKey, teamId, domesticCompetitionCode }))
+    return soccerJson(emptyFramePayload({ teamKey, teamId, domesticCompetitionCode }))
   }
 }

@@ -111,6 +111,7 @@ struct SoccerCache {
 
 static SoccerInstanceConfig* g_inst = nullptr;
 static SoccerCache* g_cache = nullptr;
+static bool g_fetchAttempted[MAX_INSTANCES] = {false};
 
 static bool hasStorage() {
   return g_inst != nullptr && g_cache != nullptr;
@@ -1666,6 +1667,18 @@ void setConfig(const FrameConfig* cfg) {
   ensureDefaultsOnce();
   if (!hasStorage()) return;
   applyConfigFromFrameConfig();
+  for (int i = 0; i < MAX_INSTANCES; ++i) g_fetchAttempted[i] = false;
+}
+
+void preload(const String& moduleName) {
+  ensureDefaultsOnce();
+  if (!hasStorage()) return;
+
+  int idx = instIndex(parseInstanceId(moduleName));
+  if (g_fetchAttempted[idx]) return;
+
+  g_fetchAttempted[idx] = true;
+  tick(idx);
 }
 
 void render(const Cell& c, const String& moduleName) {
@@ -1677,8 +1690,6 @@ void render(const Cell& c, const String& moduleName) {
 
   uint8_t id = parseInstanceId(moduleName);
   int idx = instIndex(id);
-
-  tick(idx);
 
   const SoccerInstanceConfig& cfg = g_inst[idx];
   const SoccerCache& data = g_cache[idx];

@@ -5,6 +5,9 @@ import test from 'node:test'
 import { TEAM_ID_MAP } from '../app/lib/soccer/teamIdMap.ts'
 
 const soccerRoute = readFileSync(new URL('../app/api/soccer/frame/route.ts', import.meta.url), 'utf8')
+const soccerFirmware = readFileSync(new URL('../frame/src/modules/ModuleSoccer.cpp', import.meta.url), 'utf8')
+const frameFirmware = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', import.meta.url), 'utf8')
+const netClient = readFileSync(new URL('../frame/src/network/NetClient.cpp', import.meta.url), 'utf8')
 const mirrorRoute = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
 const weatherDetailsRoute = readFileSync(new URL('../app/api/weather/details/route.ts', import.meta.url), 'utf8')
 const weatherMirror = readFileSync(new URL('../app/lib/weatherMirror.ts', import.meta.url), 'utf8')
@@ -23,7 +26,7 @@ test('/api/soccer/frame supports brann with a mapped numeric football-data team 
 test('invalid soccer teamId returns clear 400 JSON instead of a generic 500', () => {
   assert.match(soccerRoute, /code: 'missing_team_id'/)
   assert.match(soccerRoute, /code: 'unsupported_team_id'/)
-  assert.match(soccerRoute, /status: 400/)
+  assert.ok((soccerRoute.match(/, 400\)/g) || []).length >= 2)
   assert.doesNotMatch(soccerRoute, /status: 500/)
 })
 
@@ -33,7 +36,39 @@ test('external soccer API failures are logged and returned as controlled 502 JSO
   assert.match(soccerRoute, /config:missing-api-key/)
   assert.match(soccerRoute, /code: 'external_soccer_api_failed'/)
   assert.match(soccerRoute, /debugReason/)
-  assert.match(soccerRoute, /status: 502/)
+  assert.match(soccerRoute, /code: 'external_soccer_api_failed'[^]*502/)
+})
+
+test('soccer responses cache successful upstream data and expose a fixed body length', () => {
+  assert.match(soccerRoute, /unstable_cache/)
+  assert.match(soccerRoute, /\['soccer-football-data-v1'\]/)
+  assert.match(soccerRoute, /revalidate: SOCCER_DATA_REVALIDATE_SECONDS/)
+  assert.match(soccerRoute, /stale-while-revalidate=/)
+  assert.match(soccerRoute, /'Vercel-CDN-Cache-Control': cacheControl/)
+  assert.match(soccerRoute, /'Content-Length': String\(new TextEncoder\(\)\.encode\(body\)\.byteLength\)/)
+  assert.match(soccerRoute, /return soccerJson\(payload, 200, true\)/)
+})
+
+test('physical Soccer fetches once before paged drawing and never from render', () => {
+  const dashboardRender = frameFirmware.slice(
+    frameFirmware.indexOf('static bool renderLoadedDashboard'),
+    frameFirmware.indexOf('static uint64_t explicitTimingRevision')
+  )
+  const soccerRender = soccerFirmware.slice(
+    soccerFirmware.indexOf('void render(const Cell& c'),
+    soccerFirmware.indexOf('} // namespace ModuleSoccer')
+  )
+
+  assert.match(dashboardRender, /ModuleSoccer::preload\(String\(activeAssignments\[i\]\.module\)\)/)
+  assert.ok(dashboardRender.indexOf('ModuleSoccer::preload') < dashboardRender.indexOf('ensureDisplay()'))
+  assert.match(soccerFirmware, /g_fetchAttempted\[idx\]/)
+  assert.doesNotMatch(soccerRender, /tick\(idx\)/)
+})
+
+test('ESP32 requests identity encoding and logs response allocation evidence', () => {
+  assert.match(netClient, /http\.addHeader\("Accept-Encoding", "identity"\)/)
+  assert.match(netClient, /body_bytes=%u content_length=%d/)
+  assert.match(netClient, /NetClient empty body path=%s free_heap=%u max_alloc=%u/)
 })
 
 test('weather mirror endpoint times out Open-Meteo and returns safe JSON on failure', () => {
