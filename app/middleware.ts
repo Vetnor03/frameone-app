@@ -94,6 +94,8 @@ export async function middleware(request: NextRequest) {
     isLogin ||
     pathname === '/shop' ||
     pathname.startsWith('/shop/') ||
+    pathname === '/pilot' ||
+    pathname.startsWith('/pilot/') ||
     pathname === '/waitlist' ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/AppLogo.png' ||
