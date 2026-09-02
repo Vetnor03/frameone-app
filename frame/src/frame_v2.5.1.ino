@@ -555,6 +555,16 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   Serial.printf("Render timing reminders_preload_ms=%lu active=%u\n",
     (unsigned long)(millis() - remindersPreloadStartedAtMs), remindersActive ? 1U : 0U);
 
+  uint8_t soccerAssignments = 0;
+  const uint32_t soccerPreloadStartedAtMs = millis();
+  for (int i = 0; i < activeAssignmentCount; ++i) {
+    if (strncmp(activeAssignments[i].module, "soccer", 6) != 0) continue;
+    ModuleSoccer::preload(String(activeAssignments[i].module));
+    soccerAssignments++;
+  }
+  Serial.printf("Render timing soccer_preload_ms=%lu active_assignments=%u\n",
+    (unsigned long)(millis() - soccerPreloadStartedAtMs), (unsigned int)soccerAssignments);
+
   ensureDisplay();
   Theme::set(g_cfg.theme);
   resetTextStateForDashboard();

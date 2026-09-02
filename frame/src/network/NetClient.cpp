@@ -48,6 +48,10 @@ namespace {
         continue;
       }
 
+      // Vercel may otherwise Brotli-compress and chunk JSON responses. Identity
+      // plus the API's Content-Length lets HTTPClient reserve the String once.
+      http.addHeader("Accept-Encoding", "identity");
+
       if (bearerToken && bearerToken->length() > 0) {
         http.addHeader("Authorization", "Bearer " + *bearerToken);
       }
@@ -73,12 +77,22 @@ namespace {
         if (httpCodeOut >= 200 && httpCodeOut < 300) {
           const String path = sanitizedPath(url);
           Serial.printf(
-            "NetClient timing method=%s path=%s status=%d elapsed_ms=%lu\n",
+            "NetClient timing method=%s path=%s status=%d elapsed_ms=%lu body_bytes=%u content_length=%d\n",
             method,
             path.c_str(),
             httpCodeOut,
-            (unsigned long)(millis() - requestStartedAtMs)
+            (unsigned long)(millis() - requestStartedAtMs),
+            (unsigned int)bodyOut.length(),
+            g_lastContentLength
           );
+          if (bodyOut.length() == 0) {
+            Serial.printf(
+              "NetClient empty body path=%s free_heap=%u max_alloc=%u\n",
+              path.c_str(),
+              (unsigned int)ESP.getFreeHeap(),
+              (unsigned int)ESP.getMaxAllocHeap()
+            );
+          }
           return true;
         }
       } else {
