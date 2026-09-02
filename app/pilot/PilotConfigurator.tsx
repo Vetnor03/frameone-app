@@ -63,18 +63,27 @@ function matteMaterial(matte: MatteOption): CSSProperties {
 
 function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOption }) {
   return (
-    <div className="relative mx-auto aspect-[4/3] w-full max-w-[700px] select-none" aria-label={`${frame.name} frame with ${matte.name} matte`}>
+    <div className="relative mx-auto aspect-[4/3] w-full max-w-[340px] select-none sm:max-w-[560px] lg:max-w-[700px]" aria-label={`${frame.name} frame with ${matte.name} matte`}>
       <div className="absolute inset-[4.4%] rounded-[5px] p-[6.7%]" style={frameMaterial(frame)}>
         <div
           className="h-full w-full p-[10.8%] shadow-[inset_0_0_0_1px_rgba(0,0,0,.14),inset_0_0_18px_rgba(0,0,0,.06)]"
           style={matteMaterial(matte)}
         >
           <div className="relative flex h-full w-full overflow-hidden rounded-[2px] border border-black/20 shadow-[0_1px_5px_rgba(0,0,0,.18)]">
-            <div className="flex w-1/2 items-center justify-end bg-[#e9e8e2] pr-[2%] text-[#222220]">
-              <span className="translate-x-1/2 text-[clamp(12px,2.1vw,23px)] font-semibold tracking-[0.18em]">RE:</span>
-            </div>
-            <div className="flex w-1/2 items-center justify-start bg-[#222220] pl-[2%] text-[#eceae3]">
-              <span className="-translate-x-1/2 text-[clamp(12px,2.1vw,23px)] font-semibold tracking-[0.18em]">MIND</span>
+            <div className="w-1/2 bg-[#e9e8e2]" />
+            <div className="w-1/2 bg-[#222220]" />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span
+                className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]"
+                style={{
+                  backgroundImage: 'linear-gradient(90deg, #222220 0 50%, #eceae3 50% 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  color: 'transparent',
+                }}
+              >
+                RE:MIND
+              </span>
             </div>
             <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(#000_0.55px,transparent_0.7px)] [background-size:3px_3px]" />
           </div>
@@ -102,16 +111,16 @@ function SelectionButton({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`min-w-0 rounded-[12px] border p-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-black/20 ${
+      className={`min-w-0 rounded-[10px] border p-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-black/20 sm:rounded-[12px] sm:p-2 ${
         selected ? 'border-black bg-white shadow-[0_1px_4px_rgba(0,0,0,.05)]' : 'border-black/10 bg-white/55 hover:border-black/25 hover:bg-white'
       }`}
     >
-      <span className="mb-2 block h-7 w-full rounded-[6px] border border-black/10" style={{ backgroundColor: swatch }} />
-      <span className="flex min-w-0 items-start justify-between gap-1.5">
-        <span className="min-w-0 text-[12px] font-medium leading-[1.2] text-[#1d1d1b]">{label}</span>
-        {selected ? <span className="shrink-0 text-[12px] font-semibold">✓</span> : null}
+      <span className="mb-1.5 block h-4 w-full rounded-[5px] border border-black/10 sm:h-6" style={{ backgroundColor: swatch }} />
+      <span className="flex min-w-0 items-start justify-between gap-1">
+        <span className="min-w-0 text-[10px] font-medium leading-[1.15] text-[#1d1d1b] sm:text-[11px]">{label}</span>
+        {selected ? <span className="shrink-0 text-[10px] font-semibold sm:text-[11px]">✓</span> : null}
       </span>
-      {limited ? <span className="mt-1 block text-[9px] font-semibold uppercase tracking-[0.09em] text-black/45">Limited</span> : null}
+      {limited ? <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.08em] text-black/45">Limited</span> : null}
     </button>
   )
 }
@@ -169,46 +178,44 @@ export default function PilotConfigurator() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f3f1ec] text-[#1d1d1b]">
-      <header className="flex h-16 items-center justify-between border-b border-black/10 px-5 sm:px-8 lg:px-10">
-        <a href="/" className="text-[17px] font-semibold tracking-[0.16em]">RE:MIND</a>
-        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-black/45">Pilot order</span>
+    <main className="min-h-screen overflow-x-hidden bg-[#f3f1ec] text-[#1d1d1b]">
+      <header className="flex h-12 items-center justify-between border-b border-black/10 px-4 sm:h-14 sm:px-8 lg:px-10">
+        <a href="/" className="text-[16px] font-semibold tracking-[0.16em] sm:text-[17px]">RE:MIND</a>
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-black/45 sm:text-[11px]">Pilot order</span>
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1280px] flex-1 items-center px-4 py-5 sm:px-7 lg:min-h-[calc(100vh-64px)] lg:px-10 lg:py-6">
-        <div className="grid w-full items-center gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(390px,.92fr)] lg:gap-10 xl:gap-14">
-          <section className="min-w-0">
-            <div className="mb-3 flex items-end justify-between gap-4 px-1 lg:mb-5">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">Your configuration</p>
-                <h1 className="mt-1 text-[22px] font-medium tracking-[-0.025em] sm:text-[26px]">{frame.name} · {matte.name}</h1>
+      <div className="mx-auto flex w-full max-w-[1280px] flex-1 items-start px-3 py-2 sm:px-6 sm:py-4 lg:min-h-[calc(100vh-56px)] lg:items-center lg:px-8 lg:py-4 xl:px-10">
+        <div className="grid w-full items-center gap-3 lg:grid-cols-[minmax(0,1.08fr)_minmax(390px,.92fr)] lg:gap-6 xl:gap-8">
+          <section className={`min-w-0 ${step === 2 || submitted ? 'hidden lg:block' : ''}`}>
+            <div className="mb-1.5 flex items-end justify-between gap-3 px-1 sm:mb-3 lg:mb-4">
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-black/40 sm:text-[10px]">Your configuration</p>
+                <h1 className="mt-0.5 truncate text-[17px] font-medium tracking-[-0.025em] sm:mt-1 sm:text-[23px] lg:text-[25px]">{frame.name} · {matte.name}</h1>
               </div>
               <span className="hidden shrink-0 rounded-full border border-black/10 bg-white/55 px-3 py-1.5 text-[10px] font-medium text-black/50 sm:block">Light + dark included</span>
             </div>
 
-            <div className="rounded-[20px] border border-black/8 bg-[#e8e5de] p-3 sm:p-5 lg:p-7">
+            <div className="rounded-[16px] border border-black/8 bg-[#e8e5de] p-2 sm:rounded-[20px] sm:p-3 lg:p-5">
               <ProductPreview frame={frame} matte={matte} />
             </div>
-            <p className="mt-2 px-1 text-center text-[10px] leading-4 text-black/35">Preview placeholder · final product photos will replace this visual.</p>
+            <p className="mt-1 px-1 text-center text-[9px] leading-3 text-black/35 sm:mt-1.5 sm:text-[10px] sm:leading-4">Preview placeholder · final product photos will replace this visual.</p>
           </section>
 
-          <section className="min-w-0 rounded-[20px] border border-black/10 bg-[#faf9f6] p-4 sm:p-6 lg:p-7">
+          <section className="min-w-0 rounded-[16px] border border-black/10 bg-[#faf9f6] p-3 sm:rounded-[20px] sm:p-4 lg:p-5">
             {!submitted && step === 1 ? (
               <>
-                <div className="flex items-start justify-between gap-5">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">Step 1 of 2</p>
-                    <h2 className="mt-1 text-[24px] font-medium tracking-[-0.03em]">Choose your finish</h2>
-                    <p className="mt-1.5 text-[13px] leading-5 text-black/50">The display is always shown half light and half dark. Screen mode is not an order choice.</p>
-                  </div>
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-black/40 sm:text-[10px]">Step 1 of 2</p>
+                  <h2 className="mt-0.5 text-[20px] font-medium tracking-[-0.03em] sm:mt-1 sm:text-[23px]">Choose your finish</h2>
+                  <p className="mt-0.5 text-[11px] leading-4 text-black/50 sm:mt-1 sm:text-[12px]">Light + dark are both included. Screen mode is not a choice.</p>
                 </div>
 
-                <div className="mt-5">
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/55">Frame</h3>
-                    <span className="text-[11px] text-black/40">{frame.name}</span>
+                <div className="mt-3 sm:mt-4">
+                  <div className="mb-1.5 flex items-center justify-between sm:mb-2">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/55 sm:text-[11px]">Frame</h3>
+                    <span className="text-[10px] text-black/40 sm:text-[11px]">{frame.name}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     {frames.map((option) => (
                       <SelectionButton
                         key={option.id}
@@ -221,12 +228,12 @@ export default function PilotConfigurator() {
                   </div>
                 </div>
 
-                <div className="mt-5">
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/55">Matte</h3>
-                    <span className="text-[11px] text-black/40">{matte.name}</span>
+                <div className="mt-3 sm:mt-4">
+                  <div className="mb-1.5 flex items-center justify-between sm:mb-2">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/55 sm:text-[11px]">Matte</h3>
+                    <span className="max-w-[60%] truncate text-[10px] text-black/40 sm:text-[11px]">{matte.name}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     {mattes.map((option) => (
                       <SelectionButton
                         key={option.id}
@@ -240,12 +247,12 @@ export default function PilotConfigurator() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between gap-3 border-t border-black/10 pt-4">
-                  <p className="min-w-0 text-[12px] text-black/50"><span className="font-medium text-black/75">Selected:</span> {frame.name} + {matte.name}</p>
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-black/10 pt-3 sm:mt-4 sm:gap-3 sm:pt-4">
+                  <p className="min-w-0 truncate text-[10px] text-black/50 sm:text-[12px]"><span className="font-medium text-black/75">Selected:</span> {frame.name} + {matte.name}</p>
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="h-11 shrink-0 rounded-[11px] bg-[#1d1d1b] px-5 text-[12px] font-semibold text-white transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2"
+                    className="h-10 shrink-0 rounded-[10px] bg-[#1d1d1b] px-4 text-[11px] font-semibold text-white transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2 sm:h-11 sm:rounded-[11px] sm:px-5 sm:text-[12px]"
                   >
                     Continue
                   </button>
