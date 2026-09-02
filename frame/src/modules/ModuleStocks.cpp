@@ -759,6 +759,10 @@ static void renderAdaptiveStocks(const Cell& c, const StockCache& data) {
   if (titleH) {
     const char* title = data.name[0] ? data.name : data.symbol;
     drawAdaptiveFact(stockRect(summary.x, summary.y, summary.w, titleH), title, 12);
+    int16_t x1, y1; uint16_t tw, th; measureText(title, FONT_B12, x1, y1, tw, th);
+    const int lineW = min(summary.w - 4, (int)tw);
+    DisplayCore::get().fillRect(summary.x + (summary.w - lineW) / 2,
+                                summary.y + titleH - 3, lineW, 2, Theme::ink());
   }
   const int contentY = summary.y + titleH + (titleH ? 5 : 0);
   const int contentH = max(1, summary.y + summary.h - contentY);

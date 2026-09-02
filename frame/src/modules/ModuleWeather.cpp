@@ -2311,6 +2311,11 @@ static void renderAdaptiveWeather(const Cell& c,
     char location[48] = {0};
     getDisplayLocationName(cfg, location, sizeof(location));
     drawCenteredBox(inner.x, inner.y, inner.w, headerH, location, FONT_B9, ink);
+    int16_t x1, y1; uint16_t tw, th;
+    measureText(location, FONT_B9, x1, y1, tw, th);
+    const int underlineW = min(inner.w * 68 / 100, (int)tw);
+    DisplayCore::get().fillRect(inner.x + (inner.w - underlineW) / 2,
+                                inner.y + min(headerH - 5, 18), underlineW, 2, ink);
   }
 
   char temperature[16] = {0};
