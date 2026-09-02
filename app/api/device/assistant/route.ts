@@ -17,8 +17,15 @@ export async function GET(req: Request) {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { data: device, error } = await supabase.from('devices').select('device_token').eq('device_id', deviceId).maybeSingle()
     if (error || !device || device.device_token !== token) return response({ error: 'Unauthorized' }, 401)
-    const data = await loadAiAssistantDeviceData(supabase, deviceId)
-    const language = data.activeWatches.some((watch: { preferred_language?: unknown }) => watch.preferred_language === 'no') ? 'no' : 'en'
+    const [data, settingsResult] = await Promise.all([
+      loadAiAssistantDeviceData(supabase, deviceId),
+      supabase.from('device_settings').select('settings_json').eq('device_id', deviceId).maybeSingle(),
+    ])
+    if (settingsResult.error) throw settingsResult.error
+    const settings = settingsResult.data?.settings_json
+    // Watch language describes update content. Device chrome follows the
+    // authoritative frame preference, just like the other device endpoints.
+    const language = settings && typeof settings === 'object' && 'language' in settings && settings.language === 'no' ? 'no' : 'en'
     const updates = data.items.map(compactAiAssistantDeviceItem).filter((item) => item.topic && item.summary)
     return response({ ok: true, language, active_watch_count: data.activeWatches.length, update_count: updates.length + data.overflowCount, updates, overflow_count: data.overflowCount })
   } catch (error) {

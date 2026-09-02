@@ -19,7 +19,7 @@ struct Output {
 
 inline Output compose(const Input& in) {
   Output out = {in.followingCount == 0 ? ZERO_FOLLOW : NO_CHANGE, QUIET, 0, 0, 0,
-                in.height >= 155, false};
+                in.height >= 155 || in.width >= 360, false};
   if (in.updateCount == 0) return out;
   out.mode = UPDATES;
   out.family = LIST;
@@ -36,7 +36,7 @@ inline Output compose(const Input& in) {
   const int rowGap = 8, rowHeight = 18 + out.summaryLines * 16 + 3, overflowHeight = 18;
   int capacity = (available + rowGap) / (rowHeight + rowGap);
   if (capacity < 1) capacity = 1;
-  if (capacity > 4) capacity = 4;
+  if (capacity > 6) capacity = 6;
   if (capacity > in.updateCount) capacity = in.updateCount;
   if (out.family == MICRO || out.family == SHALLOW || out.family == SINGLE) capacity = 1;
   while (capacity > 0 && capacity < in.updateCount &&
