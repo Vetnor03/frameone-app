@@ -14,11 +14,11 @@
 #include <new>
 
 namespace ModuleAssistant {
-static const uint8_t MAX_UPDATES = 4;
+static const uint8_t MAX_UPDATES = 6;
 static const size_t MAX_RESPONSE_BYTES = 6144;
 struct Update { char topic[64]; char summary[192]; };
 struct AssistantCache { bool loaded; bool ok; bool languageNo; uint8_t followingCount; uint8_t count; uint8_t totalCount; Update updates[MAX_UPDATES]; };
-static_assert(sizeof(AssistantCache) == 1030, "Assistant cache DRAM budget changed");
+static_assert(sizeof(AssistantCache) == 1542, "Assistant cache DRAM budget changed");
 static AssistantCache* g_cache = nullptr;
 static bool g_cacheAllocationAttempted = false;
 
@@ -79,10 +79,11 @@ void render(const Cell& c) {
   if(!cacheAvailable||!g_cache->ok){drawInRect({c.x+pad,c.y+c.h/2-12,c.w-pad*2,24},"Updates unavailable",&FreeSans9pt8b,13,ALIGN_CENTER);return;}
   const AiFollowAdaptivePolicy::Output policy=AiFollowAdaptivePolicy::compose({c.w,c.h,g_cache->followingCount,g_cache->totalCount});
   if(policy.mode!=AiFollowAdaptivePolicy::UPDATES){
-    const bool secondary=policy.showQuietSecondary;const int blockH=24+(secondary?38:0);const int start=max(header.y+header.h+6,c.y+(c.h-blockH)/2);
+    const bool secondary=policy.showQuietSecondary;const bool horizontal=secondary&&c.h<155;const int blockH=24+(secondary&&!horizontal?32:0);const int start=horizontal?header.y+header.h+12:max(header.y+header.h+6,c.y+(c.h-blockH)/2);
     const char* primary=policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW?(g_cache->languageNo?"Ingenting folges enna":"Nothing followed yet"):(g_cache->languageNo?"Ingen nye oppdateringer":"No new updates");
-    fit(primary,fitted,sizeof(fitted),c.w-pad*2,&FreeSansBold12pt8b);drawInRect({c.x+pad,start,c.w-pad*2,24},fitted,&FreeSansBold12pt8b,14,ALIGN_CENTER);
-    if(secondary){char text[64];if(policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW)strlcpy(text,g_cache->languageNo?"Folg temaer i appen":"Follow topics in the app",sizeof(text));else snprintf(text,sizeof(text),g_cache->languageNo?"Folger %u tema%s":"Following %u topic%s",g_cache->followingCount,g_cache->followingCount==1?"":"s");fit(text,fitted,sizeof(fitted),c.w-pad*2,&FreeSans9pt8b);drawInRect({c.x+pad,start+42,c.w-pad*2,20},fitted,&FreeSans9pt8b,12,ALIGN_CENTER);}return;
+    const int gap=14,columnW=(c.w-pad*2-gap)/2;const Rect primaryRect=horizontal?Rect{c.x+pad,start,columnW,24}:Rect{c.x+pad,start,c.w-pad*2,24};
+    fit(primary,fitted,sizeof(fitted),primaryRect.w,&FreeSansBold12pt8b);drawInRect(primaryRect,fitted,&FreeSansBold12pt8b,14,ALIGN_CENTER);
+    if(secondary){char text[64];if(policy.mode==AiFollowAdaptivePolicy::ZERO_FOLLOW)strlcpy(text,g_cache->languageNo?"Følg temaer i appen":"Follow topics in the app",sizeof(text));else if(g_cache->languageNo)snprintf(text,sizeof(text),g_cache->followingCount==1?"Følger 1 tema":"Følger %u temaer",g_cache->followingCount);else snprintf(text,sizeof(text),"Following %u topic%s",g_cache->followingCount,g_cache->followingCount==1?"":"s");char displayText[64];copyDisplay(displayText,sizeof(displayText),text);const Rect secondaryRect=horizontal?Rect{primaryRect.x+columnW+gap,start,columnW,20}:Rect{c.x+pad,start+36,c.w-pad*2,20};fit(displayText,fitted,sizeof(fitted),secondaryRect.w,&FreeSans9pt8b);drawInRect(secondaryRect,fitted,&FreeSans9pt8b,12,ALIGN_CENTER);}return;
   }
   const int top=header.y+header.h+8,rowH=18+policy.summaryLines*16+3,gap=8;
   for(uint8_t i=0;i<policy.visibleCapacity&&i<g_cache->count;i++){const int y=top+i*(rowH+gap);const Rect topic={c.x+pad,y,c.w-pad*2,18};fit(g_cache->updates[i].topic,fitted,sizeof(fitted),topic.w,&FreeSansBold12pt8b);drawInRect(topic,fitted,&FreeSansBold12pt8b,14,ALIGN_LEFT);wrapSummary(g_cache->updates[i].summary,{c.x+pad,y+21,c.w-pad*2,rowH-21},policy.summaryLines);}

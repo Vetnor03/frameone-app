@@ -76,9 +76,10 @@ export function groceriesLayout(profile,composition,state){
   const headerRect=rect(groceryRect.x,groceryRect.y,groceryRect.width,headerH)
   const todayLabelRect=showTodayDinnerInGroceryHeader&&headerH>32?rect(headerRect.x,headerRect.y,headerRect.width,16):null
   const titleRect=rect(headerRect.x,headerRect.y+(todayLabelRect?16:0),headerRect.width,headerRect.height-(todayLabelRect?16:0))
-  const overflowH=18,rowGap=4,listY=headerRect.y+headerRect.height+5,listH=Math.max(1,groceryRect.y+groceryRect.height-listY),rowH=composition.horizontal?Math.max(1,listH-(state.items.length>3?overflowH:0)):22
+  const overflowH=18,rowGap=5,listY=headerRect.y+headerRect.height+8,listH=Math.max(1,groceryRect.y+groceryRect.height-listY),rowH=composition.horizontal?Math.max(1,listH-(state.items.length>3?overflowH:0)):22
   const columns=composition.horizontal?Math.min(3,Math.max(1,state.items.length)):composition.columns
-  let capacity=composition.horizontal?Math.min(3,columns):Math.max(1,Math.floor((listH-(state.items.length?overflowH:0))/(rowH+rowGap))*columns)
+  const unreservedCapacity=composition.horizontal?Math.min(3,columns):Math.max(1,Math.floor(listH/(rowH+rowGap))*columns)
+  let capacity=state.items.length<=unreservedCapacity?unreservedCapacity:composition.horizontal?Math.min(3,columns):Math.max(1,Math.floor((listH-overflowH)/(rowH+rowGap))*columns)
   capacity=Math.min(12,capacity,state.items.length)
   const visible=selectGroceryItems(state,capacity),overflow=Math.max(0,state.items.length-visible.length),reserve=overflow?overflowH:0
   const groceryRows=[]

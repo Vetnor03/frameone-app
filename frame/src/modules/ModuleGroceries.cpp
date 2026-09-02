@@ -1189,14 +1189,16 @@ static void renderAdaptiveGroceries(const Cell& c) {
   adaptiveHeading(innerX, c.y + pad + (headerH > 32 ? 16 : 0), groceryW,
                   headerH - (headerH > 32 ? 16 : 0), heading);
 
-  const int listY = c.y + pad + headerH + 5;
-  const int listH = max(0, topH - headerH - 5);
+  const int listY = c.y + pad + headerH + 8;
+  const int listH = max(0, topH - headerH - 8);
   const int overflowH = 18;
   const int rowStep = 26;
   int columns = layout.horizontal ? min(3, max(1, g_cache.count)) : layout.columns;
   int capacity = 0;
-  if (layout.horizontal) capacity = min(3, g_cache.count);
-  else capacity = max(0, (listH - (g_cache.count ? overflowH : 0)) / rowStep) * columns;
+  const int unreservedCapacity = layout.horizontal ? min(3, g_cache.count) : max(0, listH / rowStep) * columns;
+  if (g_cache.count <= unreservedCapacity) capacity = unreservedCapacity;
+  else if (layout.horizontal) capacity = min(3, g_cache.count);
+  else capacity = max(0, (listH - overflowH) / rowStep) * columns;
   capacity = min(12, min(capacity, g_cache.count));
   const int rotation = getRotationStep4h();
   const int perColumn = max(1, (capacity + columns - 1) / columns);

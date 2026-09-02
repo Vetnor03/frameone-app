@@ -1942,7 +1942,12 @@ static void renderAdaptiveSurf(const Cell& c,
       comp.todaysBestLabelMode == SurfAdaptivePolicy::BEST_SPACIOUS ? "Best next 4hrs" : "Today's Best",
       FONT_B9, ink);
   }
-  if (comp.showSpot) drawTextCenteredAt(title.x + title.w / 2, title.y + 18, spot, FONT_B12, ink);
+  if (comp.showSpot) {
+    drawTextCenteredAt(title.x + title.w / 2, title.y + 18, spot, FONT_B12, ink);
+    int16_t x1, y1; uint16_t tw, th; measureText(spot, FONT_B12, x1, y1, tw, th);
+    const int lineW = min(title.w - 4, (int)tw);
+    DisplayCore::get().fillRect(title.x + (title.w - lineW) / 2, title.y + 22, lineW, 2, ink);
+  }
 
   const bool horizontal = comp.family == SurfAdaptivePolicy::SHALLOW_WIDE;
   if (horizontal) {

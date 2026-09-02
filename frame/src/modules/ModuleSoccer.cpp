@@ -1560,8 +1560,13 @@ static void drawAdaptiveTable(const SoccerRect& r, const SoccerCache& data,
   if (count <= 0 || columns < 3) return;
   const int headerH = 26, rowH = (r.h - headerH) / count;
   const char* headers[5] = {"P", "Team", "Pts", columns == 4 ? "GD" : "Gap", "GD"};
+  const int factW = min(44, max(31, r.w / (columns + 3)));
+  const int teamW = max(1, r.w - factW * (columns - 1));
+  int colX[5] = {r.x, r.x + factW, 0, 0, 0};
+  int colW[5] = {factW, teamW, factW, factW, factW};
+  for (int col = 2; col < columns; ++col) colX[col] = colX[col-1] + colW[col-1];
   for (int col = 0; col < columns; ++col)
-    drawCenteredTextInRect(r.x + r.w*col/columns, r.y, r.w/columns, headerH, headers[col], FONT_B9, ink);
+    drawCenteredTextInRect(colX[col], r.y, colW[col], headerH, headers[col], FONT_B9, ink);
   for (int i = 0; i < count; ++i) {
     const SoccerTableRow& row = data.table[start+i];
     const int y = r.y + headerH + i*rowH;
@@ -1575,7 +1580,7 @@ static void drawAdaptiveTable(const SoccerRect& r, const SoccerCache& data,
       DisplayCore::get().drawFastHLine(r.x, y + rowH - 1, r.w, ink);
     }
     for (int col = 0; col < columns; ++col)
-      drawCenteredBestFit(r.x+r.w*col/columns, y, r.w/columns, rowH, values[col], FONT_B9, FONT_B9, ink);
+      drawCenteredBestFit(colX[col], y, colW[col], rowH, values[col], FONT_B9, FONT_B9, ink);
   }
 }
 

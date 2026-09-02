@@ -53,7 +53,8 @@ const rect=(x,y,width,height)=>Object.freeze({x,y,width:Math.max(1,width),height
 
 /** Allocate disjoint cell-local regions before any text or calendar is painted. */
 export function dateLayout(profile,composition) {
-  const pad=Math.max(8,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.07)))
+  const micro=profile.width<150||profile.height<88||(profile.width<230&&profile.height<140)
+  const pad=Math.max(micro?8:10,Math.min(18,Math.round(Math.min(profile.width,profile.height)*.07)))
   const inner=rect(pad,pad,profile.width-pad*2,profile.height-pad*2)
   if(!composition.available)return Object.freeze({pad,emptyRect:inner,heroRect:null,heroGroupRect:null,yearRect:null,monthRect:null,dayRect:null,weekdayRect:null,calendarRect:null,nextCalendarRect:null,holidayRect:null})
   let heroRect=inner,calendarRect=null,nextCalendarRect=null,holidayRect=null

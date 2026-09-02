@@ -66,12 +66,17 @@ export function aiFollowLayout(profile,composition){
   const {width,height}=profile,pad=Math.max(8,Math.min(14,width*.035)),headerH=30,headerRect=rect(pad,pad,width-pad*2,headerH)
   const blank={headerRect,quietPrimaryRect:null,quietSecondaryRect:null,updatesRect:null,updateGroups:[],overflowRect:null}
   if(composition.mode!=='updates'){
-    const primaryH=24,secondaryH=20,showSecondary=height>=155,blockH=primaryH+(showSecondary?18+secondaryH:0),start=Math.max(headerRect.y+headerRect.height+6,(height-blockH)/2)
-    return {...blank,quietPrimaryRect:rect(pad,start,width-pad*2,primaryH),quietSecondaryRect:showSecondary?rect(pad,start+primaryH+18,width-pad*2,secondaryH):null}
+    const primaryH=24,secondaryH=20,showSecondary=height>=155||width>=360
+    if(showSecondary&&height<155){
+      const top=headerRect.y+headerRect.height+12,gap=14,columnW=(width-pad*2-gap)/2
+      return {...blank,quietPrimaryRect:rect(pad,top,columnW,primaryH),quietSecondaryRect:rect(pad+columnW+gap,top,columnW,secondaryH)}
+    }
+    const blockH=primaryH+(showSecondary?12+secondaryH:0),start=Math.max(headerRect.y+headerRect.height+6,(height-blockH)/2)
+    return {...blank,quietPrimaryRect:rect(pad,start,width-pad*2,primaryH),quietSecondaryRect:showSecondary?rect(pad,start+primaryH+12,width-pad*2,secondaryH):null}
   }
   const top=headerRect.y+headerRect.height+8,bottom=height-pad,available=Math.max(1,bottom-top),rowGap=8,topicH=18,lineH=16,rowH=topicH+composition.summaryLines*lineH+3,overflowH=18
   const count=composition.updates.length
-  let capacity=Math.min(4,count,Math.max(1,Math.floor((available+rowGap)/(rowH+rowGap))))
+  let capacity=Math.min(6,count,Math.max(1,Math.floor((available+rowGap)/(rowH+rowGap))))
   if(composition.family==='micro'||composition.family==='shallow'||composition.family==='single')capacity=1
   while(capacity>0&&capacity<count&&capacity*rowH+(capacity-1)*rowGap+overflowH+5>available)capacity--
   capacity=Math.max(1,capacity)
