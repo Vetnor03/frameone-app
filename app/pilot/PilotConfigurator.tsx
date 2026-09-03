@@ -70,20 +70,11 @@ function ProductPreview({ frame, matte }: { frame: FrameOption; matte: MatteOpti
           style={matteMaterial(matte)}
         >
           <div className="relative flex h-full w-full overflow-hidden rounded-[2px] border border-black/20 shadow-[0_1px_5px_rgba(0,0,0,.18)]">
-            <div className="w-1/2 bg-[#e9e8e2]" />
-            <div className="w-1/2 bg-[#222220]" />
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span
-                className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]"
-                style={{
-                  backgroundImage: 'linear-gradient(90deg, #222220 0 50%, #eceae3 50% 100%)',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                }}
-              >
-                RE:MIND
-              </span>
+            <div className="flex w-1/2 items-center justify-end bg-[#e9e8e2] pr-[2%] text-[#222220]">
+              <span className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]">RE:</span>
+            </div>
+            <div className="flex w-1/2 items-center justify-start bg-[#222220] pl-[2%] text-[#eceae3]">
+              <span className="text-[clamp(11px,2vw,23px)] font-semibold leading-none tracking-[0.18em]">MIND</span>
             </div>
             <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(#000_0.55px,transparent_0.7px)] [background-size:3px_3px]" />
           </div>
