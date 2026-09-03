@@ -178,9 +178,9 @@ export default function PilotConfigurator() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f3f1ec] text-[#1d1d1b]">
+    <main className="pilot-page min-h-screen overflow-x-hidden bg-[#f3f1ec] text-[#1d1d1b]">
       <header className="flex h-12 items-center justify-between border-b border-black/10 px-4 sm:h-14 sm:px-8 lg:px-10">
-        <a href="/" className="text-[16px] font-semibold tracking-[0.16em] sm:text-[17px]">RE:MIND</a>
+        <span className="text-[16px] font-semibold tracking-[0.16em] sm:text-[17px]">RE:MIND</span>
         <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-black/45 sm:text-[11px]">Pilot order</span>
       </header>
 

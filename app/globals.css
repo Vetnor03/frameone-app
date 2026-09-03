@@ -290,6 +290,24 @@ html:has(.waitlist-page) .waitlist-page {
   overflow: visible;
 }
 
+/* Public pilot ordering is a document page, not the fixed app shell. */
+html:has(.pilot-page),
+html:has(.pilot-page) body,
+body:has(.pilot-page),
+html:has(.pilot-page) body > div:first-child,
+body:has(.pilot-page) > div:first-child {
+  min-height: 100%;
+  height: auto;
+  background: #f3f1ec;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+html:has(.pilot-page) .pilot-page {
+  overflow-y: visible;
+}
+
 /* Hide scrollbars but keep horizontal swipe */
 .tab-scroll {
   -ms-overflow-style: none;
