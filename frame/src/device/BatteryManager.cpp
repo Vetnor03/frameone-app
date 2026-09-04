@@ -460,7 +460,7 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
     BatteryState retained{};
     retained.rawVoltage = rtcStateValid() ? g_batteryRtc.smoothedVoltage : NAN;
     retained.smoothedVoltage = retained.rawVoltage;
-    retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : 0;
+    retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1;
     retained.isCharging = usbPresent && digitalRead(HardwareProfile::kChargeN) == LOW;
     retained.requiresRecharge = rtcStateValid() && !usbPresent && g_batteryRtc.rechargeRequired;
     return retained;

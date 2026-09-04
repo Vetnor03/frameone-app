@@ -30,9 +30,15 @@ def test_gauge_is_transactional_retried_and_non_destructive():
     assert "if (!readMax17048Sample(sample))" in source
     assert "retaining previous valid battery state" in source
     assert "retained.requiresRecharge = rtcStateValid()" in source
+    assert "retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1" in source
     assert "const int stablePercent = mappedPercent" in source
     assert "digitalRead(HardwareProfile::kChargeN) == LOW" in source
     assert "#if !defined(FRAME_IS_ALFRED_V1_2)\nstatic const int BATTERY_ADC_PIN = 35" in source
+    display = text("src/display/DisplayCore.cpp")
+    assert "g_batteryPercent = -1;" in display
+    app = text("src/frame_v2.5.1.ino")
+    assert "Device status skipped: no valid battery sample" in app
+    assert "if (batt.percent >= 0) UpdateChecker::saveBatteryPercent" in app
 
 def test_wake_polarity_and_complete_deep_sleep_hold():
     display = text("src/display/DisplayCore.cpp")

@@ -118,11 +118,14 @@ bool prepareForDeepSleep() {
 }
 
 void setBatteryStatus(int percent, bool isCharging, bool isUsbPresent) {
-  if (percent < 0) percent = 0;
-  if (percent > 100) percent = 100;
-  g_batteryPercent = percent;
   g_batteryIsCharging = isCharging;
   g_batteryUsbPresent = isUsbPresent;
+  if (percent < 0) {
+    g_batteryPercent = -1;
+    return;
+  }
+  if (percent > 100) percent = 100;
+  g_batteryPercent = percent;
 }
 
 int getBatteryStatusPercent() {

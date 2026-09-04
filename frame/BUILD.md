@@ -25,7 +25,7 @@ At runtime, the S3 boot log should report detected PSRAM. The build configuratio
 
 ## Current port build report
 
-The source tree used for this port did not provide PlatformIO. Installation was attempted, but the environment's package proxy returned HTTP 403, so neither target could be compiled here. Consequently firmware binary size, linked DRAM use, and runtime PSRAM detection are not available from this environment. These are mandatory checks before USB-flashing the candidate.
+GitHub Actions run `33909072657` at commit `85bc34f8a027cb83696ba2323ac16374d29692b3` established the first complete green build for this port: all 37 Python firmware tests passed, both `alfred_v1_2` and `frame_esp32` compiled, and the Alfred size target passed. The Alfred image used 1,471,377 of 6,291,456 application bytes (23.4%) and 120,624 of 327,680 bytes of static internal RAM (36.8%). Runtime detection of the configured 8 MiB OPI PSRAM remains a first-flash serial check.
 
 The selected Alfred partition table is `partitions_alfred_16mb.csv`: app0 spans `0x010000..0x60ffff` and app1 spans `0x610000..0xc0ffff`, providing 6,291,456 bytes per OTA slot. No firmware binary or OTA manifest is changed or published by this hardware-port PR.
 
@@ -37,4 +37,4 @@ Alfred uses an explicit S3 FSPI instance at 4 MHz, the MAX17048 rather than ADC3
 
 The `Frame firmware build` GitHub Actions job installs pinned-project PlatformIO dependencies, runs the complete Python firmware test suite, compiles both hardware environments, and reports the Alfred size. It uploads and publishes nothing. This provides the required compile gate when local tooling is unavailable.
 
-The Alfred environment resolves `boards/alfred_v1_2.json`, rather than inheriting the misleading N8/no-PSRAM DevKitC label. That manifest declares ESP32-S3-WROOM-1-N16R8, 16 MiB flash, 80 MHz QIO flash mode, `qio_opi` Arduino memory type, OPI PSRAM with an expected size of 8 MiB, and the USB CDC/JTAG build flags. The verbose CI build exposes the effective compiler and image-generation settings in its log; `platformio.ini` independently selects the checked-in `partitions_alfred_16mb.csv` table.
+The Alfred environment resolves `boards/alfred_v1_2.json`, rather than inheriting the misleading N8/no-PSRAM DevKitC label. That manifest declares ESP32-S3-WROOM-1-N16R8, 16 MiB flash, 80 MHz QIO flash mode, `qio_opi` Arduino memory type, OPI PSRAM with an expected size of 8 MiB, and the USB CDC/JTAG build flags. PlatformIO 6.6.0 deliberately emits a DIO-compatible ROM image header for a `qio` board setting while selecting `bootloader_qio_80m.elf`; the selected QIO bootloader and `qio_opi` SDK configuration are visible in the verbose CI log. `platformio.ini` independently selects the checked-in `partitions_alfred_16mb.csv` table.

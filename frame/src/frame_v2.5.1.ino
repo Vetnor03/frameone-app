@@ -367,6 +367,11 @@ static void postDeviceStatus(
   const PowerSenseDebug& pwr,
   bool didRender
 ) {
+  if (batt.percent < 0) {
+    Serial.println("Device status skipped: no valid battery sample");
+    return;
+  }
+
   int code = 0;
   String body;
 
@@ -1132,7 +1137,7 @@ run_normal_sync:
       if (renderLoadedDashboard(batt, pwr)) {
         UpdateChecker::saveContentSignature(nextSignature);
         UpdateChecker::saveFirmwareVersion(FW_VER);
-        UpdateChecker::saveBatteryPercent(batt.percent);
+        if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
         postDeviceStatus(batt, pwr, true);
         Serial.println("Scheduled changed content fully refreshed");
       }
