@@ -25,12 +25,12 @@ namespace {
     wifi_ps_type_t previousPowerSave = WIFI_PS_MIN_MODEM;
     const bool havePreviousPowerSave = esp_wifi_get_ps(&previousPowerSave) == ESP_OK;
 
-    Serial.printf(
-      "NetClient transport recovery reason=%s wifi_status=%d failures=%d\n",
-      reason,
-      (int)WiFi.status(),
-      g_consecutiveTransportFailures
-    );
+    Serial.print("NetClient transport recovery reason=");
+    Serial.print(reason);
+    Serial.print(" wifi_status=");
+    Serial.print((int)WiFi.status());
+    Serial.print(" failures=");
+    Serial.println(g_consecutiveTransportFailures);
 
     // A station can remain WL_CONNECTED while lwIP/TLS is no longer able to
     // open sockets. Turning Wi-Fi fully off tears down the stale TCP state;
@@ -47,26 +47,28 @@ namespace {
     // outage cannot trigger a reconnect loop on every following attempt.
     g_consecutiveTransportFailures = 0;
 
-    Serial.printf(
-      "NetClient transport recovery result=%s wifi_status=%d\n",
-      connected ? "connected" : "failed",
-      (int)WiFi.status()
-    );
+    Serial.print("NetClient transport recovery result=");
+    Serial.print(connected ? "connected" : "failed");
+    Serial.print(" wifi_status=");
+    Serial.println((int)WiFi.status());
     return connected;
   }
 
   void noteTransportFailure(const char* stage, const String& path, int code) {
     g_consecutiveTransportFailures++;
     String errorText = code < 0 ? HTTPClient::errorToString(code) : String("n/a");
-    Serial.printf(
-      "NetClient transport failure stage=%s path=%s code=%d error=%s count=%d wifi_status=%d\n",
-      stage,
-      path.c_str(),
-      code,
-      errorText.c_str(),
-      g_consecutiveTransportFailures,
-      (int)WiFi.status()
-    );
+    Serial.print("NetClient transport failure stage=");
+    Serial.print(stage);
+    Serial.print(" path=");
+    Serial.print(path);
+    Serial.print(" code=");
+    Serial.print(code);
+    Serial.print(" error=");
+    Serial.print(errorText);
+    Serial.print(" count=");
+    Serial.print(g_consecutiveTransportFailures);
+    Serial.print(" wifi_status=");
+    Serial.println((int)WiFi.status());
 
     if (g_consecutiveTransportFailures >= TRANSPORT_FAILURES_BEFORE_WIFI_RESET) {
       recoverWifiTransport("consecutive-http-transport-failures");
