@@ -36,3 +36,5 @@ Alfred uses an explicit S3 FSPI instance at 4 MHz, the MAX17048 rather than ADC3
 ## Continuous compilation
 
 The `Frame firmware build` GitHub Actions job installs pinned-project PlatformIO dependencies, runs the complete Python firmware test suite, compiles both hardware environments, and reports the Alfred size. It uploads and publishes nothing. This provides the required compile gate when local tooling is unavailable.
+
+The Alfred environment resolves `boards/alfred_v1_2.json`, rather than inheriting the misleading N8/no-PSRAM DevKitC label. That manifest declares ESP32-S3-WROOM-1-N16R8, 16 MiB flash, 80 MHz QIO flash mode, `qio_opi` Arduino memory type, OPI PSRAM with an expected size of 8 MiB, and the USB CDC/JTAG build flags. The verbose CI build exposes the effective compiler and image-generation settings in its log; `platformio.ini` independently selects the checked-in `partitions_alfred_16mb.csv` table.

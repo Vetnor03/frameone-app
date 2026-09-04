@@ -8,9 +8,9 @@
 #include "NetClient.h"
 #include "GroceriesAdaptivePolicy.h"
 
-#include "Fonts/FreeSans9ptNO.h"
-#include "Fonts/FreeSansBold12ptNO.h"
-#include "Fonts/FreeSansBold18ptNO.h"
+#include "FreeSans9ptNO.h"
+#include "FreeSansBold12ptNO.h"
+#include "FreeSansBold18ptNO.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>

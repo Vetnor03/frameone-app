@@ -7,32 +7,32 @@
 /* =========================
    Font includes (prefer NO fonts if they exist)
    ========================= */
-#if __has_include("Fonts/FreeSansBold24ptNO.h")
-  #include "Fonts/FreeSansBold24ptNO.h"
+#if __has_include("FreeSansBold24ptNO.h")
+  #include "FreeSansBold24ptNO.h"
   #define FONT_B24 (&FreeSansBold24pt8b)
 #else
   #include <Fonts/FreeSansBold24pt7b.h>
   #define FONT_B24 (&FreeSansBold24pt7b)
 #endif
 
-#if __has_include("Fonts/FreeSansBold18ptNO.h")
-  #include "Fonts/FreeSansBold18ptNO.h"
+#if __has_include("FreeSansBold18ptNO.h")
+  #include "FreeSansBold18ptNO.h"
   #define FONT_B18 (&FreeSansBold18pt8b)
 #else
   #include <Fonts/FreeSansBold18pt7b.h>
   #define FONT_B18 (&FreeSansBold18pt7b)
 #endif
 
-#if __has_include("Fonts/FreeSansBold12ptNO.h")
-  #include "Fonts/FreeSansBold12ptNO.h"
+#if __has_include("FreeSansBold12ptNO.h")
+  #include "FreeSansBold12ptNO.h"
   #define FONT_B12 (&FreeSansBold12pt8b)
 #else
   #include <Fonts/FreeSansBold12pt7b.h>
   #define FONT_B12 (&FreeSansBold12pt7b)
 #endif
 
-#if __has_include("Fonts/FreeSans9ptNO.h")
-  #include "Fonts/FreeSans9ptNO.h"
+#if __has_include("FreeSans9ptNO.h")
+  #include "FreeSans9ptNO.h"
   #define FONT_9 (&FreeSans9pt8b)
 #else
   #include <Fonts/FreeSans9pt7b.h>

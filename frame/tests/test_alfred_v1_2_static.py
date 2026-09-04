@@ -63,8 +63,57 @@ def test_alfred_begin_does_not_physically_refresh_and_shutdown_is_audited():
 
 def test_s3_build_profile_and_ota_partitions():
     ini = text("platformio.ini")
-    for value in ["[env:alfred_v1_2]", "esp32-s3-devkitc-1", "16MB", "qio_opi",
-                  "240000000L", "ARDUINO_USB_CDC_ON_BOOT=1", "ARDUINO_USB_MODE=1"]:
+    for value in ["[env:alfred_v1_2]", "board = alfred_v1_2", "16MB", "qio_opi",
+                  "240000000L"]:
         assert value in ini
+    board = text("boards/alfred_v1_2.json")
+    assert "ARDUINO_USB_CDC_ON_BOOT=1" in board and "ARDUINO_USB_MODE=1" in board
     partitions = text("partitions_alfred_16mb.csv")
     assert "ota_0" in partitions and "ota_1" in partitions
+
+def test_fresh_checkout_include_paths_are_resolvable():
+    source_root = ROOT / "src"
+    pairing = text("src/display/ScreenPairing.cpp")
+    assert '#include "assets/images/PairingQrBitmap.h"' in pairing
+    assert (source_root / "assets/images/PairingQrBitmap.h").is_file()
+    for source in source_root.rglob("*"):
+        if source.suffix not in {".cpp", ".h", ".ino"}:
+            continue
+        contents = source.read_text()
+        assert not re.search(r'#include [<"]Fonts/[^">]*NO\.h[">]', contents), source
+
+
+def test_custom_board_unambiguously_describes_n16r8():
+    import csv
+    import json
+
+    board = json.loads(text("boards/alfred_v1_2.json"))
+    assert board["name"].endswith("ESP32-S3-WROOM-1-N16R8)")
+    assert board["upload"]["flash_size"] == "16MB"
+    assert board["upload"]["maximum_size"] == 16 * 1024 * 1024
+    assert board["build"]["flash_mode"] == "qio"
+    assert board["build"]["arduino"]["memory_type"] == "qio_opi"
+    assert board["build"]["psram_type"] == "opi"
+    assert board["build"]["psram_size"] == 8 * 1024 * 1024
+    assert "-DBOARD_HAS_PSRAM" in board["build"]["extra_flags"]
+
+    ini = text("platformio.ini")
+    alfred = ini[ini.index("[env:alfred_v1_2]"):]
+    assert "board = alfred_v1_2" in alfred
+    assert "board_build.partitions = partitions_alfred_16mb.csv" in alfred
+
+    rows = list(csv.reader(line for line in text("partitions_alfred_16mb.csv").splitlines()
+                           if line and not line.startswith("#")))
+    apps = {row[0].strip(): (int(row[3], 0), int(row[4], 0)) for row in rows
+            if row[2].strip() in {"ota_0", "ota_1"}}
+    assert apps == {"app0": (0x10000, 0x600000), "app1": (0x610000, 0x600000)}
+    assert apps["app0"][0] + apps["app0"][1] == apps["app1"][0]
+    assert max(offset + size for offset, size in apps.values()) <= 16 * 1024 * 1024
+
+
+def test_power_sense_is_typed_not_a_preprocessor_macro():
+    app = text("src/frame_v2.5.1.ino")
+    assert "PWR_SENSE_DEBUG_PIN" not in app
+    assert "#define POWER_SENSE_PIN" not in app
+    assert "static constexpr int POWER_SENSE_PIN = HardwareProfile::kPgoodN" in app
+    assert "static constexpr int POWER_SENSE_PIN = HardwareProfile::kPowerSense" in app

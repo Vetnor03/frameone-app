@@ -56,9 +56,9 @@ RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
 
 // Hardware-specific USB source indication.
 #if defined(FRAME_IS_ALFRED_V1_2)
-#define PWR_SENSE_DEBUG_PIN HardwareProfile::kPgoodN
+static constexpr int POWER_SENSE_PIN = HardwareProfile::kPgoodN;
 #else
-#define PWR_SENSE_DEBUG_PIN HardwareProfile::kPowerSense
+static constexpr int POWER_SENSE_PIN = HardwareProfile::kPowerSense;
 #endif
 
 // Keep one config globally to avoid stack overflow
@@ -112,7 +112,7 @@ static void prepareDisplayForSleep() {
   }
 }
 
-static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << PWR_SENSE_DEBUG_PIN);
+static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << POWER_SENSE_PIN);
 
 
 static bool isDeepSleepWake() {
@@ -272,16 +272,16 @@ static int getLocalHourNow() {
 // Power sense helpers
 // --------------------------------------
 static PowerSenseDebug readPowerSenseDebug() {
-  pinMode(PWR_SENSE_DEBUG_PIN, INPUT);
+  pinMode(POWER_SENSE_PIN, INPUT);
   delay(5);
 
   PowerSenseDebug out{};
-  out.raw = digitalRead(PWR_SENSE_DEBUG_PIN);
+  out.raw = digitalRead(POWER_SENSE_PIN);
 
   int highCount = 0;
   const int samples = 10;
   for (int i = 0; i < samples; i++) {
-    if (digitalRead(PWR_SENSE_DEBUG_PIN) == HIGH) highCount++;
+    if (digitalRead(POWER_SENSE_PIN) == HIGH) highCount++;
     delay(10);
   }
 
@@ -319,7 +319,7 @@ static void logPowerSenseDebug(const BatteryState& batt, const PowerSenseDebug& 
   Serial.println(BatteryManager::getLearnedFullSampleCount());
 
   Serial.print("pwr_sense_pin: ");
-  Serial.println(PWR_SENSE_DEBUG_PIN);
+  Serial.println(POWER_SENSE_PIN);
 
   Serial.print("pwr_sense_raw: ");
   Serial.println(pwr.raw);
