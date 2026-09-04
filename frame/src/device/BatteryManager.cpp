@@ -72,12 +72,14 @@ static const int8_t CHARGE_SCORE_MAX = 3;
 static const int8_t CHARGE_ON_SCORE = 2;
 static const int8_t CHARGE_OFF_SCORE = -2;
 
-// UI stabilization
+// UI stabilization for the classic ADC-based battery model.
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static const int PERCENT_DEADBAND = 1;
 static const int MAX_DROP_PER_WAKE = 2;
 static const int MAX_RISE_PER_WAKE = 3;
 static const int FULL_DISPLAY_SNAP_PERCENT = 95;
 static const float FULL_DISPLAY_SNAP_MARGIN_V = 0.03f;
+#endif
 
 // Learned calibrationc:\Users\vetle\Documents\Arduino\frame_v2.4.7\build\espressif.esp32.esp32\frame-2.4.7.bin
 static const float DEFAULT_LEARNED_FULL_V = 3.90f;
@@ -299,6 +301,7 @@ static void updateChargingState(float newSmoothedVoltage, bool usbPresent) {
 #endif
 }
 
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static bool shouldSnapToFullWhilePlugged(bool usbPresent, float smoothedVoltage, int mappedPercent) {
   if (!usbPresent) return false;
   if (mappedPercent >= FULL_DISPLAY_SNAP_PERCENT) return true;
@@ -329,6 +332,7 @@ static int stabilizePercent(int mappedPercent, bool isCharging) {
   if (out > 100) out = 100;
   return out;
 }
+#endif
 
 static void learnFullCandidate(float candidateV) {
   candidateV = clampf(candidateV, MIN_LEARNABLE_FULL_V, MAX_LEARNABLE_FULL_V);
