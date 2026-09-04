@@ -2,14 +2,17 @@
 
 #include "Config.h"
 #include "DeviceIdentity.h"
+#include "NetClient.h"
 #include <ArduinoJson.h>
-#include <HTTPClient.h>
 #include <Preferences.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <inttypes.h>
 
 namespace {
+static const uint32_t LIVE_PROBE_MIN_NETWORK_INTERVAL_MS = 10000;
+static bool g_haveCachedProbeState = false;
+static LiveUpdateState g_cachedProbeState{};
+static uint32_t g_lastProbeNetworkAtMs = 0;
+
 String revisionString(uint64_t revision) {
   char value[24];
   snprintf(value, sizeof(value), "%" PRIu64, revision);
@@ -21,40 +24,20 @@ bool readRevision(JsonVariantConst value, uint64_t& out) {
   out = value.as<uint64_t>();
   return true;
 }
-
-bool request(
-  const String& url,
-  const String& token,
-  const char* method,
-  const String* json,
-  int& code,
-  String& body
-) {
-  code = 0;
-  body = "";
-  if (WiFi.status() != WL_CONNECTED) return false;
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  http.setConnectTimeout(4000);
-  http.setTimeout(5000);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  if (!http.begin(client, url)) return false;
-  http.addHeader("Authorization", "Bearer " + token);
-  if (json) http.addHeader("Content-Type", "application/json");
-  code = method[0] == 'P' ? http.POST(*json) : http.GET();
-  if (code > 0) body = http.getString();
-  http.end();
-  return code >= 200 && code < 300;
-}
 }
 
 bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
+  const uint32_t nowMs = millis();
+  if (g_haveCachedProbeState &&
+      (uint32_t)(nowMs - g_lastProbeNetworkAtMs) < LIVE_PROBE_MIN_NETWORK_INTERVAL_MS) {
+    out = g_cachedProbeState;
+    return true;
+  }
+
   String url = String(BASE_URL) + "/api/device/update-state?device_id=" + DeviceIdentity::getDeviceId();
   int code = 0;
   String body;
-  const bool ok = request(url, deviceToken, "GET", nullptr, code, body);
+  const bool ok = NetClient::httpGetAuth(url, deviceToken, code, body);
   if (code <= 0) {
     Serial.println("LiveUpdate probe transport failure");
     return false;
@@ -78,8 +61,11 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
     return false;
   }
 
-  out.requestedRevision = requested;
-  out.displayedRevision = displayed;
+  g_cachedProbeState.requestedRevision = requested;
+  g_cachedProbeState.displayedRevision = displayed;
+  g_haveCachedProbeState = true;
+  g_lastProbeNetworkAtMs = millis();
+  out = g_cachedProbeState;
   return true;
 }
 
@@ -88,14 +74,23 @@ bool LiveUpdate::acknowledge(const String& deviceToken, uint64_t revision) {
                 "\",\"displayed_revision\":" + revisionString(revision) + "}";
   int code = 0;
   String body;
-  return request(
+  const bool ok = NetClient::httpPostAuthJson(
     String(BASE_URL) + "/api/device/update-state",
     deviceToken,
-    "POST",
-    &json,
+    json,
     code,
     body
   ) && code == 200;
+
+  if (ok && g_haveCachedProbeState) {
+    if (revision > g_cachedProbeState.displayedRevision) {
+      g_cachedProbeState.displayedRevision = revision;
+    }
+    if (revision > g_cachedProbeState.requestedRevision) {
+      g_cachedProbeState.requestedRevision = revision;
+    }
+  }
+  return ok;
 }
 
 uint64_t LiveUpdate::getRenderedAwaitingAck() {
