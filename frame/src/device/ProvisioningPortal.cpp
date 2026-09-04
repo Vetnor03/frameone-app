@@ -2,6 +2,8 @@
 #include "ProvisioningPortal.h"
 #include "WiFiManager.h"
 #include "ScreenPairing.h"
+#include "DisplayCore.h"
+#include "HardwareProfile.h"
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -229,6 +231,11 @@ void runBlocking() {
   const std::vector<ScannedNetwork> scannedNetworks = scanNearbyNetworks();
 
   ScreenPairing::showWifiSetup(apSsid.c_str());
+  // The captive portal may remain active indefinitely; the retained setup
+  // image does not require the Alfred panel rail to remain powered.
+#if defined(FRAME_IS_ALFRED_V1_2)
+  DisplayCore::end();
+#endif
 
   Serial.println("=== Provisioning Portal ===");
   Serial.print("AP SSID: ");

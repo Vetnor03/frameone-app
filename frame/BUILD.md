@@ -32,3 +32,7 @@ The selected Alfred partition table is `partitions_alfred_16mb.csv`: app0 spans 
 ## Hardware/API port notes
 
 Alfred uses an explicit S3 FSPI instance at 4 MHz, the MAX17048 rather than ADC35, and active-low BQ24074 status signals. Deep-sleep source-change wake uses the ESP32-S3-supported `esp_sleep_enable_ext1_wakeup` API on RTC-capable GPIO17. Display power is asserted only around panel operations and held LOW across deep sleep.
+
+## Continuous compilation
+
+The `Frame firmware build` GitHub Actions job installs pinned-project PlatformIO dependencies, runs the complete Python firmware test suite, compiles both hardware environments, and reports the Alfred size. It uploads and publishes nothing. This provides the required compile gate when local tooling is unavailable.

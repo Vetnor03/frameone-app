@@ -5,29 +5,49 @@
 #include <Preferences.h>
 #include <math.h>
 #include "HardwareProfile.h"
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
 #include <Wire.h>
 #endif
 
 // ------------------------------
 // Hardware config
 // ------------------------------
-#if !defined(FRAME_HW_ALFRED_V1_2)
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static const int BATTERY_ADC_PIN = 35;
 #endif
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
+struct Max17048Sample {
+  float voltage;
+  float soc;
+};
 static float g_max17048Soc = 0.0f;
-static uint16_t readMax17048Register(uint8_t reg) {
-  Wire.beginTransmission(HardwareProfile::kMax17048Address);
-  Wire.write(reg);
-  if (Wire.endTransmission(false) != 0 || Wire.requestFrom(HardwareProfile::kMax17048Address, (uint8_t)2) != 2) return 0;
-  return (uint16_t(Wire.read()) << 8) | uint16_t(Wire.read());
+
+static bool readMax17048Register(uint8_t reg, uint16_t& value) {
+  constexpr int kMax17048ReadAttempts = 3;
+  for (int attempt = 0; attempt < kMax17048ReadAttempts; ++attempt) {
+    Wire.beginTransmission(HardwareProfile::kMax17048Address);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) == 0 &&
+        Wire.requestFrom(HardwareProfile::kMax17048Address, (uint8_t)2) == 2) {
+      value = (uint16_t(Wire.read()) << 8) | uint16_t(Wire.read());
+      return true;
+    }
+    delay(5);
+  }
+  return false;
 }
 
-static float readMax17048Voltage() {
-  const uint16_t rawVCell = readMax17048Register(0x02);
-  g_max17048Soc = readMax17048Register(0x04) / 256.0f;
-  return rawVCell * 78.125e-6f;
+static bool readMax17048Sample(Max17048Sample& sample) {
+  uint16_t rawVCell = 0;
+  uint16_t rawSoc = 0;
+  if (!readMax17048Register(0x02, rawVCell) ||
+      !readMax17048Register(0x04, rawSoc)) {
+    Serial.println("MAX17048 sample failed; retaining previous valid battery state");
+    return false;
+  }
+  sample.voltage = rawVCell * 78.125e-6f;
+  sample.soc = rawSoc / 256.0f;
+  return true;
 }
 #endif
 
@@ -137,7 +157,7 @@ static float clampf(float x, float lo, float hi) {
   return x;
 }
 
-#if !defined(FRAME_HW_ALFRED_V1_2)
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static void sortFloatArray(float* arr, int n) {
   for (int i = 0; i < n - 1; i++) {
     for (int j = i + 1; j < n; j++) {
@@ -255,7 +275,7 @@ static float applySmoothing(float rawVoltage) {
 }
 
 static void updateChargingState(float newSmoothedVoltage, bool usbPresent) {
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
   g_batteryRtc.isCharging = usbPresent && digitalRead(HardwareProfile::kChargeN) == LOW;
   g_batteryRtc.chargeScore = g_batteryRtc.isCharging ? CHARGE_SCORE_MAX : CHARGE_SCORE_MIN;
   return;
@@ -402,7 +422,7 @@ static void handleUsbSessionLearning(bool usbPresent, float rawVoltage, float sm
 void BatteryManager::begin() {
   if (g_started) return;
 
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
   Wire.begin(HardwareProfile::kI2cSda, HardwareProfile::kI2cScl);
   pinMode(HardwareProfile::kChargeN, INPUT_PULLUP);
 #else
@@ -413,13 +433,17 @@ void BatteryManager::begin() {
   loadLearnedCalibration();
 
   if (!rtcStateValid()) {
-    const float firstVoltage =
-#if defined(FRAME_HW_ALFRED_V1_2)
-      readMax17048Voltage();
+#if defined(FRAME_IS_ALFRED_V1_2)
+    Max17048Sample firstSample{};
+    if (readMax17048Sample(firstSample)) {
+      g_max17048Soc = firstSample.soc;
+      resetRtcState(firstSample.voltage);
+      g_batteryRtc.displayedPercent =
+        (int)lroundf(clampf(firstSample.soc, 0.0f, 100.0f));
+    }
 #else
-      readRawVoltageTrimmedMean();
+    resetRtcState(readRawVoltageTrimmedMean());
 #endif
-    resetRtcState(firstVoltage);
   }
 
   g_started = true;
@@ -430,11 +454,21 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
     BatteryManager::begin();
   }
 
-  const float rawVoltage =
-#if defined(FRAME_HW_ALFRED_V1_2)
-    readMax17048Voltage();
+#if defined(FRAME_IS_ALFRED_V1_2)
+  Max17048Sample sample{};
+  if (!readMax17048Sample(sample)) {
+    BatteryState retained{};
+    retained.rawVoltage = rtcStateValid() ? g_batteryRtc.smoothedVoltage : NAN;
+    retained.smoothedVoltage = retained.rawVoltage;
+    retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : 0;
+    retained.isCharging = usbPresent && digitalRead(HardwareProfile::kChargeN) == LOW;
+    retained.requiresRecharge = rtcStateValid() && !usbPresent && g_batteryRtc.rechargeRequired;
+    return retained;
+  }
+  const float rawVoltage = sample.voltage;
+  g_max17048Soc = sample.soc;
 #else
-    readRawVoltageTrimmedMean();
+  const float rawVoltage = readRawVoltageTrimmedMean();
 #endif
 
   if (!rtcStateValid()) {
@@ -451,12 +485,12 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
   handleUsbSessionLearning(usbPresent, rawVoltage, newSmoothed);
   updateRechargeRequired(usbPresent, rawVoltage, newSmoothed);
 
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
   const int mappedPercent = (int)lroundf(clampf(g_max17048Soc, 0.0f, 100.0f));
 #else
   const int mappedPercent = batteryPercentFromVoltage(newSmoothed);
 #endif
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
   const int stablePercent = mappedPercent;
 #else
   int stablePercent = stabilizePercent(mappedPercent, g_batteryRtc.isCharging);

@@ -13,9 +13,15 @@
 static FrameDisplay display(
   GxEPD2_750_T7(EPAPER_CS, EPAPER_DC, EPAPER_RST, EPAPER_BUSY)
 );
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
 static SPIClass alfredEpdSpi(FSPI);
 static bool g_powered = false;
+
+static void forcePowerLow() {
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  pinMode(HardwareProfile::kEpdPower, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+}
 
 static void safeSignalPins() {
   pinMode(HardwareProfile::kEpdBusy, INPUT);
@@ -51,11 +57,11 @@ void fillThemeBackground() {
 }
 
 void begin() {
-#if defined(FRAME_HW_ALFRED_V1_2)
-  pinMode(HardwareProfile::kEpdPower, OUTPUT);
-  digitalWrite(HardwareProfile::kEpdPower, LOW);
+#if defined(FRAME_IS_ALFRED_V1_2)
+  forcePowerLow();
+  gpio_deep_sleep_hold_dis();
   gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdPower);
-  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  forcePowerLow();
   digitalWrite(HardwareProfile::kEpdPower, HIGH);
   delay(10);
   alfredEpdSpi.begin(HardwareProfile::kEpdSck, -1, HardwareProfile::kEpdMosi,
@@ -69,17 +75,18 @@ void begin() {
   display.setTextColor(Theme::ink());
 
   display.setFullWindow();
+#if !defined(FRAME_IS_ALFRED_V1_2)
   display.firstPage();
   do {
     fillThemeBackground();
   } while (display.nextPage());
+#endif
 }
 
 void end() {
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_IS_ALFRED_V1_2)
   if (!g_powered) {
-    pinMode(HardwareProfile::kEpdPower, OUTPUT);
-    digitalWrite(HardwareProfile::kEpdPower, LOW);
+    forcePowerLow();
     gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
     return;
   }
@@ -93,6 +100,20 @@ void end() {
   g_powered = false;
 #else
   display.hibernate();
+#endif
+}
+
+bool prepareForDeepSleep() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  forcePowerLow();
+  const esp_err_t holdResult = gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+  gpio_deep_sleep_hold_en();
+  const bool low = gpio_get_level((gpio_num_t)HardwareProfile::kEpdPower) == 0;
+  Serial.printf("EPD_PWR deep-sleep hold: %s, level=%s\n",
+                holdResult == ESP_OK ? "enabled" : "failed", low ? "LOW" : "HIGH");
+  return holdResult == ESP_OK && low;
+#else
+  return true;
 #endif
 }
 

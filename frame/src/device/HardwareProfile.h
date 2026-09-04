@@ -2,7 +2,11 @@
 
 #include <Arduino.h>
 
-#if defined(FRAME_HW_ALFRED_V1_2)
+#if defined(FRAME_HW_ALFRED_V1_2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#define FRAME_IS_ALFRED_V1_2 1
+#endif
+
+#if defined(FRAME_IS_ALFRED_V1_2)
 namespace HardwareProfile {
 constexpr bool kAlfredV12 = true;
 constexpr int kEpdBusy = 4;
