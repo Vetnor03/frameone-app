@@ -5,6 +5,8 @@
 namespace DisplayCore {
 
   void begin();
+  // Hibernate and electrically isolate the panel after a physical refresh.
+  void end();
 
   // Return the real type (no casts needed)
   FrameDisplay& get();

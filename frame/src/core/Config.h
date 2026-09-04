@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "HardwareProfile.h"
 
 //Debug Module Display Slots
 static const bool DEBUG_DRAW_SLOTS = false;
@@ -35,9 +36,9 @@ extern const char* BASE_URL;
 // =========================
 // Waveshare ePaper typical SPI pins (ESP32):
 // SCK=18, MOSI=23, MISO not used, CS=5, DC=17, RST=16, BUSY=4
-static const int EPAPER_CS   = 5;
-static const int EPAPER_DC   = 17;
-static const int EPAPER_RST  = 16;
-static const int EPAPER_BUSY = 4;
+static const int EPAPER_CS   = HardwareProfile::kEpdCs;
+static const int EPAPER_DC   = HardwareProfile::kEpdDc;
+static const int EPAPER_RST  = HardwareProfile::kEpdReset;
+static const int EPAPER_BUSY = HardwareProfile::kEpdBusy;
 
 // (Optional) If your wiring differs, change the constants above.

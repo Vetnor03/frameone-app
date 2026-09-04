@@ -1,6 +1,9 @@
 #include "DisplayCore.h"
 #include "Config.h"
 #include "Theme.h"
+#include "HardwareProfile.h"
+#include <SPI.h>
+#include <driver/gpio.h>
 
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
@@ -10,6 +13,19 @@
 static FrameDisplay display(
   GxEPD2_750_T7(EPAPER_CS, EPAPER_DC, EPAPER_RST, EPAPER_BUSY)
 );
+#if defined(FRAME_HW_ALFRED_V1_2)
+static SPIClass alfredEpdSpi(FSPI);
+static bool g_powered = false;
+
+static void safeSignalPins() {
+  pinMode(HardwareProfile::kEpdBusy, INPUT);
+  pinMode(HardwareProfile::kEpdReset, INPUT);
+  pinMode(HardwareProfile::kEpdDc, INPUT);
+  pinMode(HardwareProfile::kEpdCs, INPUT);
+  pinMode(HardwareProfile::kEpdSck, INPUT);
+  pinMode(HardwareProfile::kEpdMosi, INPUT);
+}
+#endif
 
 // State for current draw cycle
 static bool g_forceFullNext = false;
@@ -35,6 +51,19 @@ void fillThemeBackground() {
 }
 
 void begin() {
+#if defined(FRAME_HW_ALFRED_V1_2)
+  pinMode(HardwareProfile::kEpdPower, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdPower);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  digitalWrite(HardwareProfile::kEpdPower, HIGH);
+  delay(10);
+  alfredEpdSpi.begin(HardwareProfile::kEpdSck, -1, HardwareProfile::kEpdMosi,
+                     HardwareProfile::kEpdCs);
+  display.epd2.selectSPI(alfredEpdSpi,
+    SPISettings(HardwareProfile::kEpdSpiHz, MSBFIRST, SPI_MODE0));
+  g_powered = true;
+#endif
   display.init(115200);
   display.setRotation(0);
   display.setTextColor(Theme::ink());
@@ -44,6 +73,27 @@ void begin() {
   do {
     fillThemeBackground();
   } while (display.nextPage());
+}
+
+void end() {
+#if defined(FRAME_HW_ALFRED_V1_2)
+  if (!g_powered) {
+    pinMode(HardwareProfile::kEpdPower, OUTPUT);
+    digitalWrite(HardwareProfile::kEpdPower, LOW);
+    gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+    return;
+  }
+  display.hibernate();
+  delay(42);
+  display.end();
+  alfredEpdSpi.end();
+  safeSignalPins();
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+  g_powered = false;
+#else
+  display.hibernate();
+#endif
 }
 
 void setBatteryStatus(int percent, bool isCharging, bool isUsbPresent) {
