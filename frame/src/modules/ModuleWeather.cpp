@@ -2273,7 +2273,10 @@ static void renderAdaptiveWeather(const Cell& c,
   const bool showProbability = area >= 4 && !isnan(data.currentPrecipProbability);
   const bool showLocation = area >= 3;
   const bool large = area >= 8 && c.h >= 300;
-  int forecastRows = large ? (c.w >= 500 ? 4 : 3) : 0;
+  // 2x3 is the compact member of the accepted 2x4 family, rather than a
+  // separate sparse hero. It deliberately discloses one fewer forecast day.
+  const bool compactForecast = area >= 6 && c.h >= 300;
+  int forecastRows = large ? (c.w >= 500 ? 4 : 3) : compactForecast ? 2 : 0;
   const int availableForecast = data.dayCount > 1 ? data.dayCount - 1 : 0;
   if (forecastRows > availableForecast) forecastRows = availableForecast;
   char insight[96] = {0};
@@ -2311,11 +2314,6 @@ static void renderAdaptiveWeather(const Cell& c,
     char location[48] = {0};
     getDisplayLocationName(cfg, location, sizeof(location));
     drawCenteredBox(inner.x, inner.y, inner.w, headerH, location, FONT_B9, ink);
-    int16_t x1, y1; uint16_t tw, th;
-    measureText(location, FONT_B9, x1, y1, tw, th);
-    const int underlineW = min(inner.w * 68 / 100, (int)tw);
-    DisplayCore::get().fillRect(inner.x + (inner.w - underlineW) / 2,
-                                inner.y + min(headerH - 5, 18), underlineW, 2, ink);
   }
 
   char temperature[16] = {0};
@@ -2382,7 +2380,10 @@ static void renderAdaptiveWeather(const Cell& c,
       formatTemp(high, sizeof(high), day.hiC, cfg.units);
       drawCenteredBox(x, forecastY + 3, columnW, 24, dayLabel, FONT_B9, ink);
       drawCenteredBox(x, forecastY + 29, columnW, 27, high, FONT_B12, ink);
-      drawWrappedTextBox(x + 3, forecastY + 59, columnW - 6, forecastH - 61,
+      const int forecastIconSize = area >= 16 ? 30 : 34;
+      ModuleIcons::drawWeatherIcon(x + columnW / 2, forecastY + 73,
+                                   forecastIconSize, day.wmo);
+      drawWrappedTextBox(x + 3, forecastY + 91, columnW - 6, forecastH - 93,
                          conditionFromWmo(day.wmo), FONT_B9, ink, 2);
     }
   }

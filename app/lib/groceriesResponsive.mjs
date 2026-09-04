@@ -57,7 +57,7 @@ export function groceriesComposition(profile,state){
   const futureDinners=groceriesFutureDinners(state),todayDinner=groceriesTodayDinner(state)
   const showMenu=['list-menu','expanded'].includes(family)&&w>=GROCERIES_MENU_MIN_WIDTH*2&&h>=GROCERIES_MENU_MIN_HEIGHT&&futureDinners.length>=2
   const showRunningLow=family==='expanded'&&h>=300&&state.runningLow.length>0
-  const showMealIdeas=family==='expanded'&&h>=390&&state.mealIdeas.length>0
+  const showMealIdeas=family==='expanded'&&w>=700&&h>=390&&state.mealIdeas.length>0
   return {family,failed:false,todayDinner,futureDinners,showMenu,showRunningLow,showMealIdeas,columns:family==='list-columns'&&w>=360?2:1,horizontal:family==='item-strip'}
 }
 

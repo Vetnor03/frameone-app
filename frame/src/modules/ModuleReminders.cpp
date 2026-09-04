@@ -2370,10 +2370,6 @@ static void drawAdaptiveSection(const ReminderBucket* bucket, int visible, int o
   const int footerH = sectionFooter && overflow ? 24 : 0;
   if (heading) {
     drawAdaptiveLabel({rect.x, rect.y, rect.w, headingH}, headingText, FONT_B12);
-    int16_t x1, y1; uint16_t tw, th; measureText(headingText, FONT_B12, x1, y1, tw, th);
-    const int lineW = min(rect.w, (int)tw);
-    DisplayCore::get().fillRect(rect.x + (rect.w - lineW) / 2, rect.y + 22,
-                                lineW, 2, Theme::ink());
   }
   const int available = max(1, rect.h - headingH - footerH);
   const AdaptiveReminderDensity density = selectedDensity

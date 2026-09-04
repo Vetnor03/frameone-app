@@ -752,6 +752,13 @@ static void renderAdaptiveStocks(const Cell& c, const StockCache& data) {
       chart = StocksRect{c.x + pad, chart.y + 31, chart.w, chart.h - 31};
     }
     hasChartRect = true; hasSelectorRect = policy.showSelector;
+  } else if (policy.family == SUMMARY_STACK && policy.showDetails) {
+    // A tall narrow stock remains one compact hierarchy. Extra height reveals
+    // facts directly below the quote instead of stretching three labels apart.
+    summary.h = min(150, summary.h);
+    details = StocksRect{summary.x, summary.y + summary.h + 10, summary.w,
+                         max(1, c.y + c.h - pad - (summary.y + summary.h + 10))};
+    hasDetailsRect = true;
   }
   if (!policy.showChart) { hasChartRect = false; hasSelectorRect = false; }
 
@@ -759,10 +766,6 @@ static void renderAdaptiveStocks(const Cell& c, const StockCache& data) {
   if (titleH) {
     const char* title = data.name[0] ? data.name : data.symbol;
     drawAdaptiveFact(stockRect(summary.x, summary.y, summary.w, titleH), title, 12);
-    int16_t x1, y1; uint16_t tw, th; measureText(title, FONT_B12, x1, y1, tw, th);
-    const int lineW = min(summary.w - 4, (int)tw);
-    DisplayCore::get().fillRect(summary.x + (summary.w - lineW) / 2,
-                                summary.y + titleH - 3, lineW, 2, Theme::ink());
   }
   const int contentY = summary.y + titleH + (titleH ? 5 : 0);
   const int contentH = max(1, summary.y + summary.h - contentY);

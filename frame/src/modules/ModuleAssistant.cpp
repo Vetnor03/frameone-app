@@ -75,7 +75,6 @@ void render(const Cell& c) {
   if(cacheAvailable&&!g_cache->loaded)fetch();
   const int pad=c.w*35/1000<8?8:(c.w*35/1000>14?14:c.w*35/1000);const Rect header={c.x+pad,c.y+pad,c.w-pad*2,30};char fitted[80];
   fit("AI FOLLOW",fitted,sizeof(fitted),header.w,&FreeSansBold12pt8b);drawInRect(header,fitted,&FreeSansBold12pt8b,15,ALIGN_CENTER);
-  if(c.h>=135){const int headingWidth=min(header.w,widthOf(fitted,&FreeSansBold12pt8b));DisplayCore::get().fillRect(header.x+(header.w-headingWidth)/2,header.y+21,headingWidth,2,Theme::ink());}
   if(!cacheAvailable||!g_cache->ok){drawInRect({c.x+pad,c.y+c.h/2-12,c.w-pad*2,24},"Updates unavailable",&FreeSans9pt8b,13,ALIGN_CENTER);return;}
   const AiFollowAdaptivePolicy::Output policy=AiFollowAdaptivePolicy::compose({c.w,c.h,g_cache->followingCount,g_cache->totalCount});
   if(policy.mode!=AiFollowAdaptivePolicy::UPDATES){

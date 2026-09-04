@@ -42,6 +42,7 @@ export function surfComposition(profile,state) {
   const availableDayparts=Math.min(4,state.dayparts?.length??0),availableDaily=Math.min(5,state.daily?.length??state.forecast?.length??0)
   let family
   if(innerH<145&&innerW>=300)family='shallow-wide'
+  else if(width<430&&height>=390)family='stacked'
   else if(requestedDataNeeds.daily)family='expanded-daily'
   else if(requestedDataNeeds.dayparts&&availableDayparts&&innerW>=420&&innerH>=250)family='daypart-enhanced'
   else if(innerW>=360&&innerH>=195)family='split'

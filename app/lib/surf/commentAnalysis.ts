@@ -69,7 +69,7 @@ export async function analyzeSurfComment(context: AnalysisContext, fetcher: type
       body: JSON.stringify({
         model,
         input: [
-          { role: 'developer', content: [{ type: 'input_text', text: 'Extract only surf observations explicitly supported by the surfer comment. Conditions are context only: never infer an observation merely because a number is present. Do not calculate or output any rating, score, residual, adjustment, or multiplier. Use null and omit drivers when unsupported. Keep summary under 160 characters.' }] },
+          { role: 'developer', content: [{ type: 'input_text', text: 'Extract only surf observations explicitly supported by the surfer comment. Conditions are context only: never infer an observation merely because a number is present. Do not calculate or output any rating, score, residual, adjustment, or multiplier. Use null and omit drivers when unsupported. Keep summary under 160 characters. Write the summary in the same natural language as the surfer comment; infer it from the comment and do not translate to match UI language. Use UI language only when the comment has no meaningful linguistic content.' }] },
           { role: 'user', content: [{ type: 'input_text', text: JSON.stringify(context) }] },
         ],
         text: { format: { type: 'json_schema', name: 'surf_comment_observations', strict: true, schema: {

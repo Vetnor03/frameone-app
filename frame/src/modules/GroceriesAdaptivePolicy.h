@@ -53,7 +53,10 @@ inline Result compose(const Input& in) {
   out.showMenu = (out.family == LIST_MENU || out.family == EXPANDED) &&
     in.width >= 500 && in.height >= 180 && in.futureDinnerCount >= 2;
   out.showRunningLow = out.family == EXPANDED && in.height >= 300 && in.runningLowCount > 0;
-  out.showMealIdeas = out.family == EXPANDED && in.height >= 390 && in.mealIdeaCount > 0;
+  // 3x4 keeps one intentionally aligned secondary region; 4x4 may disclose
+  // the full accepted pair of secondary sections.
+  out.showMealIdeas = out.family == EXPANDED && in.width >= 700 &&
+                      in.height >= 390 && in.mealIdeaCount > 0;
   out.todayIsHeading = in.hasTodayDinner && !out.showMenu;
   return out;
 }

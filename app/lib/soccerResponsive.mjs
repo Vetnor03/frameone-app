@@ -39,7 +39,7 @@ export function soccerComposition(profile,state){
   const hasNext=Boolean(state.nextFixture),hasPrevious=Boolean(state.previousFixture),hasStanding=state.position!=null||state.points!=null,hasTable=Array.isArray(state.table)&&state.table.length>0,available=hasNext||hasPrevious||hasStanding||hasTable
   if(!available)return {family:'empty',available:false,primaryState:'empty',showStanding:false,showPrevious:false,showTable:false,tableColumns:[],tableRows:0,showDetails:false,detailRows:0}
   const {width:w,height:h,orientation}=profile
-  let family;if(w<230&&h<150)family='micro';else if(h<160)family='fixture-strip';else if(w<260)family='fixture-stack';else if(w>=560&&h>=300)family='fixture-standings';else if(h>=390&&w>=360)family='expanded';else family='fixture-history'
+  let family;if(w<230&&h<150)family='micro';else if(h<160)family='fixture-strip';else if(w<260)family='fixture-stack';else if(w>=560&&w<700&&h>=390)family='expanded';else if(w>=560&&h>=300)family='fixture-standings';else if(h>=390&&w>=360)family='expanded';else family='fixture-history'
   const primaryState=hasNext?'next':hasPrevious?'previous':'standing'
   const tableWidth=family==='fixture-standings'?Math.min(w*.46,360):family==='expanded'?w-28:0
   const tableHeight=family==='fixture-standings'?h-28:family==='expanded'?Math.min(180,h*.38):0

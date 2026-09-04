@@ -1132,8 +1132,6 @@ static void adaptiveHeading(int x, int top, int width, int height, const char* v
   if (static_cast<int>(tw) > width) return;
   const int textX = x + (width - static_cast<int>(tw)) / 2 - x1;
   drawLeft(textX, top + min(height - 4, 18) - y1, fit, FONT_B12, Theme::ink());
-  DisplayCore::get().fillRect(x + (width - static_cast<int>(tw)) / 2,
-                              top + height - 3, tw, 2, Theme::ink());
 }
 
 static void renderAdaptiveGroceries(const Cell& c) {

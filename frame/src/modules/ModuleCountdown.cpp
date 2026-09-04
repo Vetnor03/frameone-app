@@ -1829,19 +1829,26 @@ static void renderAdaptiveCountdown(const Cell& c) {
       };
     }
   } else {
+    const bool compactHero = c.w >= 500 && c.w < 700 && c.h >= 300 && c.h < 390;
     const int titleH = comp.showTitle
-      ? min(38, max(24, primary.h * 20 / 100))
+      ? min(38, max(24, primary.h * (compactHero ? 15 : 20) / 100))
       : 0;
     const int dateH = comp.showDate ? 24 : 0;
     const int unitH = 22;
     if (titleH) {
       title = AdaptiveCountdownRect{primary.x, primary.y, primary.w, titleH};
     }
+    const int usedH = titleH + unitH + dateH;
+    const int countH = compactHero ? min(82, max(50, primary.h - usedH))
+                                   : max(30, primary.h - usedH);
+    const int heroTop = compactHero ? primary.y + max(0, (primary.h - usedH - countH) / 2)
+                                    : primary.y;
+    if (title.w) title.y = heroTop;
     count = AdaptiveCountdownRect{
       primary.x,
-      primary.y + titleH,
+      heroTop + titleH,
       primary.w,
-      max(30, primary.h - titleH - unitH - dateH)
+      countH
     };
     unitRect = AdaptiveCountdownRect{
       primary.x, count.y + count.h, primary.w, unitH
@@ -1854,7 +1861,7 @@ static void renderAdaptiveCountdown(const Cell& c) {
   }
   // END ADAPTIVE COUNTDOWN GEOMETRY
   if(title.w)adaptiveCenteredFitted(title,hero.title,FONT_B12);const GFXfont* numberFont=adaptiveNumberFont(number,count.w-2,count.h-2);drawCenteredLine(count.x,count.y,count.w,count.h,number,numberFont,Theme::ink());adaptiveCenteredFitted(unitRect,unit,FONT_B12,false);if(dateRect.w&&textWidth(date,FONT_B9)<=dateRect.w-8)adaptiveCenteredFitted(dateRect,date,FONT_B9,false);
-  if(upcoming.w){AdaptiveCountdownRect header{upcoming.x,upcoming.y,upcoming.w,21};adaptiveCenteredFitted(header,"COMING UP",FONT_B9,false);const int headingW=min(upcoming.w,textWidth("COMING UP",FONT_B9));DisplayCore::get().fillRect(upcoming.x+(upcoming.w-headingW)/2,upcoming.y+18,headingW,2,Theme::ink());for(int i=0;i<comp.upcomingRows;i++){AdaptiveCountdownRect row{upcoming.x,upcoming.y+25+i*32,upcoming.w,28};const int metricW=min(120,max(62,row.w*30/100));AdaptiveCountdownRect tr{row.x,row.y,row.w-metricW-10,row.h},mr{row.x+row.w-metricW,row.y,metricW,row.h};char metric[48];adaptiveCountdownMetric(*events[i],metric,sizeof(metric));adaptiveCenteredFitted(tr,events[i]->title,FONT_B9);adaptiveCenteredFitted(mr,metric,FONT_B9,false);}if(comp.overflow){char more[24];snprintf(more,sizeof(more),"+%d more",comp.overflow);AdaptiveCountdownRect fr{upcoming.x,upcoming.y+upcoming.h-18,upcoming.w,18};adaptiveCenteredFitted(fr,more,FONT_B9,false);}}
+  if(upcoming.w){AdaptiveCountdownRect header{upcoming.x,upcoming.y,upcoming.w,21};adaptiveCenteredFitted(header,"COMING UP",FONT_B9,false);for(int i=0;i<comp.upcomingRows;i++){AdaptiveCountdownRect row{upcoming.x,upcoming.y+25+i*32,upcoming.w,28};const int metricW=min(120,max(62,row.w*30/100));AdaptiveCountdownRect tr{row.x,row.y,row.w-metricW-10,row.h},mr{row.x+row.w-metricW,row.y,metricW,row.h};char metric[48];adaptiveCountdownMetric(*events[i],metric,sizeof(metric));adaptiveCenteredFitted(tr,events[i]->title,FONT_B9);adaptiveCenteredFitted(mr,metric,FONT_B9,false);}if(comp.overflow){char more[24];snprintf(more,sizeof(more),"+%d more",comp.overflow);AdaptiveCountdownRect fr{upcoming.x,upcoming.y+upcoming.h-18,upcoming.w,18};adaptiveCenteredFitted(fr,more,FONT_B9,false);}}
   if(calendar.w){tm nowTm;if(getLocalTmQuick(nowTm))drawCountdownCalendarMonth(calendar.x,calendar.y,calendar.w,calendar.h,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_year+1900,nowTm.tm_mon,nowTm.tm_mday,hero,true,true);}
 }
 

@@ -258,7 +258,6 @@ void drawShelfScreen(const String& deviceId) {
     const char* line1 = "RE:MIND";
     const char* line2 = "Welcome";
     const char* line3 = "Plug in the frame to begin setup";
-    const char* line4 = "This display stays visible without power";
 
     int16_t x1, y1;
     uint16_t w, h;
@@ -292,11 +291,6 @@ void drawShelfScreen(const String& deviceId) {
     display.setCursor(idX, idY);
     display.print(idLine);
 
-    display.getTextBounds(line4, 0, 0, &x1, &y1, &w, &h);
-    int helperX = FRAME_X + (FRAME_W - (int)w) / 2;
-    int helperY = FRAME_Y + FRAME_H - 26;
-    display.setCursor(helperX, helperY);
-    display.print(line4);
   } while (display.nextPage());
 }
 

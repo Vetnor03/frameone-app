@@ -76,7 +76,8 @@ inline Result compose(const Input& in) {
   }
   out.showChart = in.validSeries && usefulWidth && usefulHeight;
   out.showSelector = out.showChart && selectorWidth && selectorHeight;
-  out.showDetails = (out.family == DETAIL_CHART || out.family == EXPANDED) && in.height >= 300;
+  out.showDetails = (out.family == DETAIL_CHART || out.family == EXPANDED ||
+                     out.family == SUMMARY_STACK) && in.height >= 300;
 
   const bool fields[5] = {in.hasOpen, in.hasHigh, in.hasLow, in.hasPreviousClose, in.hasChange};
   for (uint8_t i = 0; i < 5; ++i) if (fields[i]) {

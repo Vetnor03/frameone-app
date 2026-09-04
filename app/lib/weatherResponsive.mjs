@@ -21,7 +21,8 @@ export function weatherComposition(profile,state) {
   const showWind=profile.area>=3&&Boolean(state.windSpeed||state.windDirection)
   const showPrecipitation=profile.area>=4&&state.precipitationProbability!=null
   const large=profile.area>=8&&profile.height>=300
-  const forecastRows=large?Math.min(state.forecast?.length??0,profile.width>=500?4:3):0
+  const compactForecast=profile.area>=6&&profile.height>=300
+  const forecastRows=large?Math.min(state.forecast?.length??0,profile.width>=500?4:3):compactForecast?Math.min(state.forecast?.length??0,2):0
   return Object.freeze({
     available:true,
     layout:tall?'vertical':wide?'horizontal':'balanced',

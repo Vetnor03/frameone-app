@@ -46,6 +46,7 @@ inline Result compose(const Input& in) {
   if (in.width < 230 && in.height < 150) out.family = MICRO;
   else if (in.height < 160) out.family = FIXTURE_STRIP;
   else if (in.width < 260) out.family = FIXTURE_STACK;
+  else if (in.width >= 560 && in.width < 700 && in.height >= 390) out.family = EXPANDED;
   else if (in.width >= 560 && in.height >= 300) out.family = FIXTURE_STANDINGS;
   else if (in.height >= 390 && in.width >= 360) out.family = EXPANDED;
   else out.family = FIXTURE_HISTORY;

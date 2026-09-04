@@ -84,6 +84,9 @@ inline Result compose(const Input& in) {
   const bool daypartRoom = out.requestedDataNeeds.dayparts && in.availableDayparts > 0;
 
   if (shallow) out.family = SHALLOW_WIDE;
+  // 2x4 keeps the compact 2x2 information group; height adds breathing room,
+  // not an unrelated split composition.
+  else if (in.width < 430 && in.height >= 390) out.family = STACKED;
   else if (veryLarge) out.family = EXPANDED_DAILY;
   else if (daypartRoom && innerW >= 420 && innerH >= 250) out.family = DAYPART_ENHANCED;
   else if (innerW >= 360 && innerH >= 195) out.family = SPLIT;

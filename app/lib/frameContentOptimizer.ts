@@ -42,7 +42,7 @@ const PROFILE_LIMITS: Record<DisplayCapacityProfile, { maxTitleChars: number; ma
 const titleCache = new Map<string, string>()
 const inFlightOptimizations = new Map<string, Promise<string | null>>()
 
-const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. Return every supplied id and respect each display profile, maximum characters, and line count.`
+const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Produce each output in the same natural language as that item's source title. Infer language from the source text itself; do not translate merely to match app or frame UI language. For ambiguous names or neutral tokens only, use the supplied UI language as fallback. Preserve facts, Norwegian æ/ø/å, and the natural dominant language of mixed-language source text. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Return every supplied id and respect each display profile, maximum characters, and line count.`
 
 const normalizeText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
 function truncateAtWordBoundary(value: string, maxChars: number) {

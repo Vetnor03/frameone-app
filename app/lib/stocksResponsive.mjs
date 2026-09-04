@@ -23,7 +23,7 @@ export function stocksComposition(profile,state){
   let family;if(w<230&&h<150)family='micro';else if(h<160)family='summary-strip';else if(w<260)family='summary-stack';else if(w>=650&&h>=300)family='detail-chart';else if(h>=390&&w>=360)family='expanded';else family='chart-summary'
   const candidate=family==='detail-chart'?{width:w*.54-24,height:h-68}:family==='expanded'?{width:w-28,height:h*.40-40}:family==='chart-summary'?(orientation==='landscape'?{width:w*.55-22,height:h-54}:{width:w-28,height:h*.42-28}):{width:0,height:0}
   const showChart=finiteSeries(state)&&candidate.width>=STOCK_CHART_MIN_WIDTH&&candidate.height>=STOCK_CHART_MIN_HEIGHT
-  const showDetails=['detail-chart','expanded'].includes(family)&&h>=300
+  const showDetails=['summary-stack','detail-chart','expanded'].includes(family)&&h>=300
   const detailKeys=['open','high','low','previousClose','change'].filter(key=>Number.isFinite(state[key]))
   return {family,available,showChart,showSelector:showChart&&candidate.width>=250&&candidate.height>=105,showDetails,detailKeys}
 }
@@ -37,6 +37,7 @@ export function stocksLayout(profile,composition){
   else if(composition.family==='expanded'){const chartH=Math.min(h*.40,h-245);summaryGroupRect=rect(pad,pad,w-pad*2,100);detailsRect=rect(pad,summaryGroupRect.y+summaryGroupRect.height+8,w-pad*2,78);if(composition.showSelector)rangeSelectorRect=rect(pad,detailsRect.y+detailsRect.height+5,w-pad*2,28);const cy=(rangeSelectorRect?rangeSelectorRect.y+rangeSelectorRect.height:detailsRect.y+detailsRect.height)+7;chartRect=rect(pad,cy,w-pad*2,h-pad-cy)}
   else if(composition.family==='chart-summary'&&profile.orientation==='landscape'){const sw=w*.40;summaryGroupRect=rect(pad,pad,sw-pad,h-pad*2);chartRect=rect(sw+gap,pad+(composition.showSelector?32:0),w-sw-gap-pad,h-pad*2-(composition.showSelector?32:0));if(composition.showSelector)rangeSelectorRect=rect(chartRect.x,pad,chartRect.width,26)}
   else if(composition.family==='chart-summary'){summaryGroupRect=rect(pad,pad,w-pad*2,108);chartRect=rect(pad,summaryGroupRect.y+summaryGroupRect.height+8,w-pad*2,h-pad-(summaryGroupRect.y+summaryGroupRect.height+8));if(composition.showSelector){rangeSelectorRect=rect(pad,chartRect.y,w-pad*2,26);chartRect=rect(pad,chartRect.y+31,w-pad*2,chartRect.height-31)}}
+  else if(composition.family==='summary-stack'&&composition.showDetails){summaryGroupRect=rect(pad,pad,w-pad*2,150);detailsRect=rect(pad,summaryGroupRect.y+summaryGroupRect.height+10,w-pad*2,h-pad-(summaryGroupRect.y+summaryGroupRect.height+10))}
   else summaryGroupRect=rect(pad,pad,w-pad*2,h-pad*2)
   if(!composition.showChart){chartRect=null;rangeSelectorRect=null}
   const titleH=composition.family==='micro'?0:28,titleRect=titleH?rect(summaryGroupRect.x,summaryGroupRect.y,summaryGroupRect.width,titleH):null,contentY=summaryGroupRect.y+titleH+(titleH?5:0),contentH=Math.max(1,summaryGroupRect.y+summaryGroupRect.height-contentY)
