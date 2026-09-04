@@ -4,9 +4,20 @@ NET = Path('frame/src/network/NetClient.cpp').read_text()
 LIVE = Path('frame/src/network/LiveUpdate.cpp').read_text()
 
 
-def test_short_lived_http_clients_do_not_advertise_keep_alive():
-    assert 'http.setReuse(false);' in NET
-    assert NET.index('http.setReuse(false);') < NET.index('http.GET()')
+def test_shared_https_session_is_reused_instead_of_churning_tcp_pcbs():
+    assert 'static WiFiClientSecure g_tlsClient;' in NET
+    assert 'static HTTPClient g_http;' in NET
+    assert 'g_http.setReuse(true);' in NET
+    assert 'g_http.begin(g_tlsClient, url)' in NET
+    assert 'http.setReuse(false);' not in NET
+
+
+def test_declared_but_truncated_response_body_is_retried():
+    assert 'g_lastContentLength > 0' in NET
+    assert 'bodyOut.length() != (size_t)g_lastContentLength' in NET
+    assert 'NetClient incomplete body path=' in NET
+    assert 'noteTransportFailure("body", path, httpCodeOut)' in NET
+    assert 'httpCodeOut = HTTPC_ERROR_CONNECTION_LOST' in NET
 
 
 def test_repeated_transport_failures_force_a_real_wifi_stack_reset():
@@ -16,9 +27,11 @@ def test_repeated_transport_failures_force_a_real_wifi_stack_reset():
     assert 'recoverWifiTransport("consecutive-http-transport-failures")' in NET
 
 
-def test_transport_reset_preserves_existing_wifi_power_save_policy():
-    assert 'esp_wifi_get_ps(&previousPowerSave)' in NET
-    assert 'esp_wifi_set_ps(previousPowerSave)' in NET
+def test_transport_reset_closes_shared_session_and_preserves_wifi_power_policy():
+    recovery = NET[NET.index('bool recoverWifiTransport'):NET.index('void noteTransportFailure')]
+    assert 'closeHttpSession();' in recovery
+    assert 'esp_wifi_get_ps(&previousPowerSave)' in recovery
+    assert 'esp_wifi_set_ps(previousPowerSave)' in recovery
 
 
 def test_live_update_uses_shared_hardened_network_client():
