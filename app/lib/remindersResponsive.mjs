@@ -30,10 +30,10 @@ function usefulTitleScore(item,width,font) {
   return fraction<28?0:fraction<42?Math.floor(fraction*35/100):fraction
 }
 
-function selectLandscapeCandidate(usable,state,showHeading) {
+function selectLandscapeCandidate(usable,state,showHeading,forceSplit=false) {
   const headingH=showHeading?30:0,gap=18,footerH=24
   const candidates=[]
-  for(const font of ['B12','B9'])for(const direction of ['split','vertical']) {
+  for(const font of ['B12','B9'])for(const direction of (forceSplit?['split']:['split','vertical'])) {
     const density=DENSITIES[font]
     const ratios=direction==='split'?[.35,.4,.45,.5,.55,.6,.65]:[1]
     for(const splitRatio of ratios)for(let todayItems=state.today.length;todayItems>=Math.min(1,state.today.length);todayItems--)
@@ -113,7 +113,8 @@ export function reminderComposition(profile,state) {
   const usable={width:Math.max(0,profile.width-pad*2),height:Math.max(0,profile.height-pad*2)}
   const landscape=profile.height>0&&profile.width/profile.height>1.12
   const shallow=landscape&&usable.height<126
-  const split=!shallow&&landscape&&usable.width>=464&&usable.height>=164
+  const forceFourByTwo=profile.colSpan===4&&profile.rowSpan===2
+  const split=forceFourByTwo||(!shallow&&landscape&&usable.width>=464&&usable.height>=164)
   let family=shallow?'shallow-horizontal':split?'split-sections':'vertical-list'
   let direction=shallow?'horizontal':split?'split':'vertical'
   const showHeading=!shallow&&usable.height>=104
@@ -128,7 +129,7 @@ export function reminderComposition(profile,state) {
     todayItems=Math.min(state.today.length,capacity)
     tomorrowItems=showTomorrow?Math.min(state.tomorrow.length,capacity-todayItems):0
   } else if(split) {
-    const selected=selectLandscapeCandidate(usable,state,showHeading)
+    const selected=selectLandscapeCandidate(usable,state,showHeading,forceFourByTwo)
     if(selected){
       direction=selected.direction;family=selected.direction==='split'?'split-sections':'vertical-list'
       todayItems=selected.todayItems;tomorrowItems=selected.tomorrowItems

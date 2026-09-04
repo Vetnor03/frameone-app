@@ -1162,9 +1162,11 @@ static void renderAdaptiveGroceries(const Cell& c) {
   const int gap = 12;
   const int innerX = c.x + pad;
   const int innerW = max(1, c.w - pad * 2);
+  const bool alignedThreeByFour = c.colSpan == 3 && c.rowSpan == 4 &&
+    layout.showRunningLow && !layout.showMealIdeas;
   int topH = max(1, c.h - pad * 2);
   int bottomH = 0;
-  if (layout.showRunningLow || layout.showMealIdeas) {
+  if ((layout.showRunningLow || layout.showMealIdeas) && !alignedThreeByFour) {
     bottomH = min(116, c.h * 31 / 100);
     topH = max(1, topH - bottomH - gap);
   }
@@ -1176,6 +1178,8 @@ static void renderAdaptiveGroceries(const Cell& c) {
     menuX = c.x + split + gap;
     menuW = max(1, c.x + c.w - pad - menuX);
     d.drawFastVLine(menuX - gap / 2, c.y + pad, topH, ink);
+  } else if (alignedThreeByFour) {
+    groceryW = (innerW - gap) * 68 / 100;
   }
 
   const bool todayHeading = layout.todayIsHeading && todayDinner >= 0;
@@ -1251,20 +1255,21 @@ static void renderAdaptiveGroceries(const Cell& c) {
     }
   }
 
-  if (bottomH > 0) {
-    const int bottomY = c.y + pad + topH + gap;
+  if (bottomH > 0 || alignedThreeByFour) {
+    const int bottomY = alignedThreeByFour ? c.y + pad : c.y + pad + topH + gap;
     const bool both = layout.showRunningLow && layout.showMealIdeas;
     const int half = both ? (c.w - gap) / 2 : c.w;
     if (layout.showRunningLow) {
-      const int width = max(1, half - pad);
-      adaptiveHeading(innerX, bottomY, width, 25, g_cache.languageNo ? "SNART TOM" : "RUNNING LOW");
+      const int secondaryX = alignedThreeByFour ? innerX + groceryW + gap : innerX;
+      const int width = alignedThreeByFour ? max(1, innerX + innerW - secondaryX) : max(1, half - pad);
+      adaptiveHeading(secondaryX, bottomY, width, 25, g_cache.languageNo ? "SNART TOM" : "RUNNING LOW");
       for (int i = 0; i < min(3, g_cache.runningLowCount); ++i) {
         char full[84] = {0};
         snprintf(full, sizeof(full), g_cache.runningLow[i].label[0] ? "%s - %s" : "%s",
                  g_cache.runningLow[i].name, g_cache.runningLow[i].label);
         const GroceriesAdaptivePolicy::RunningLowMode mode = GroceriesAdaptivePolicy::runningLowMode(
           textWidth(full, FONT_B9) <= width, textWidth(g_cache.runningLow[i].name, FONT_B9) <= width);
-        adaptiveLine(innerX, bottomY + 46 + i * 24, width,
+        adaptiveLine(secondaryX, bottomY + 46 + i * 24, width,
                      mode == GroceriesAdaptivePolicy::RUNNING_FULL ? full : g_cache.runningLow[i].name, FONT_B9);
       }
     }

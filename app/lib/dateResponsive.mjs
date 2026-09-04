@@ -31,7 +31,7 @@ export function dateComposition(profile,state) {
   let currentCalendar=null,nextCalendar=null,holidayRows=0
   if(width>=430&&height>=210){
     family='calendar-split'
-    const calendarWidth=Math.floor(width*(fourByThree ? .62 : .48))-18
+    const calendarWidth=Math.floor(width*(fourByThree ? .60 : .48))-18
     currentCalendar=dateCalendarFeatures(calendarWidth,height-32,{title:height>=300})
   }
   if(!currentCalendar&&width>=330&&height>=400){
@@ -60,7 +60,7 @@ export function dateLayout(profile,composition) {
   let heroRect=inner,calendarRect=null,nextCalendarRect=null,holidayRect=null
   if(composition.currentCalendar){
     const gap=18,vertical=profile.width<430&&!composition.nextCalendar
-    const heroWidth=Math.floor(inner.width*(profile.colSpan===4&&profile.rowSpan===3 ? .38 : .48))
+    const heroWidth=Math.floor(inner.width*(profile.colSpan===4&&profile.rowSpan===3 ? .40 : .48))
     heroRect=vertical?rect(inner.x,inner.y,inner.width,Math.floor(inner.height*.52)-gap/2):rect(inner.x,inner.y,heroWidth,inner.height)
     const right=vertical?rect(inner.x,heroRect.y+heroRect.height+gap,inner.width,inner.height-heroRect.height-gap):rect(inner.x+heroWidth+gap,inner.y,inner.width-heroWidth-gap,inner.height)
     if(composition.nextCalendar){

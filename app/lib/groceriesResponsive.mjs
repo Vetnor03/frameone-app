@@ -55,7 +55,7 @@ export function groceriesComposition(profile,state){
   let family
   if(w<230&&h<150)family='micro';else if(h<165)family='item-strip';else if(w<270)family='list-stack';else if((w>=620&&h>=300)||(w>=360&&h>=390))family='expanded';else if(w>=480&&h>=190)family='list-menu';else family='list-columns'
   const futureDinners=groceriesFutureDinners(state),todayDinner=groceriesTodayDinner(state)
-  const showMenu=['list-menu','expanded'].includes(family)&&w>=GROCERIES_MENU_MIN_WIDTH*2&&h>=GROCERIES_MENU_MIN_HEIGHT&&futureDinners.length>=2
+  const showMenu=(family==='list-menu'||(family==='expanded'&&w>=700))&&w>=GROCERIES_MENU_MIN_WIDTH*2&&h>=GROCERIES_MENU_MIN_HEIGHT&&futureDinners.length>=2
   const showRunningLow=family==='expanded'&&h>=300&&state.runningLow.length>0
   const showMealIdeas=family==='expanded'&&w>=700&&h>=390&&state.mealIdeas.length>0
   return {family,failed:false,todayDinner,futureDinners,showMenu,showRunningLow,showMealIdeas,columns:family==='list-columns'&&w>=360?2:1,horizontal:family==='item-strip'}
@@ -69,10 +69,11 @@ export function groceriesLayout(profile,composition,state){
   const groceryHeading=showTodayDinnerInGroceryHeader?composition.todayDinner.title:state.header
   const menuHeading=composition.showMenu?(composition.todayDinner?.title??'WEEKLY MENU'):null
   const headerH=showTodayDinnerInGroceryHeader&&composition.family!=='item-strip'&&composition.family!=='micro'?48:32
+  const alignedThreeByFour=profile.colSpan===3&&profile.rowSpan===4&&composition.showRunningLow&&!composition.showMealIdeas
   let topH=h-pad*2,bottomY=null,bottomH=0
-  if(composition.showRunningLow||composition.showMealIdeas){bottomH=Math.min(116,h*.31);topH-=bottomH+gap;bottomY=pad+topH+gap}
+  if((composition.showRunningLow||composition.showMealIdeas)&&!alignedThreeByFour){bottomH=Math.min(116,h*.31);topH-=bottomH+gap;bottomY=pad+topH+gap}
   let groceryRect,menuRect=null
-  if(composition.showMenu){const leftW=Math.max(w*.54,GROCERIES_MENU_MIN_WIDTH);groceryRect=rect(pad,pad,leftW-pad,topH);menuRect=rect(leftW+gap,pad,w-leftW-gap-pad,topH)}else groceryRect=rect(pad,pad,w-pad*2,topH)
+  if(composition.showMenu){const leftW=Math.max(w*.54,GROCERIES_MENU_MIN_WIDTH);groceryRect=rect(pad,pad,leftW-pad,topH);menuRect=rect(leftW+gap,pad,w-leftW-gap-pad,topH)}else if(alignedThreeByFour)groceryRect=rect(pad,pad,(w-pad*2-gap)*.68,topH);else groceryRect=rect(pad,pad,w-pad*2,topH)
   const headerRect=rect(groceryRect.x,groceryRect.y,groceryRect.width,headerH)
   const todayLabelRect=showTodayDinnerInGroceryHeader&&headerH>32?rect(headerRect.x,headerRect.y,headerRect.width,16):null
   const titleRect=rect(headerRect.x,headerRect.y+(todayLabelRect?16:0),headerRect.width,headerRect.height-(todayLabelRect?16:0))
@@ -89,6 +90,7 @@ export function groceriesLayout(profile,composition,state){
   let menuHeaderRect=null,menuRows=[]
   if(menuRect){menuHeaderRect=rect(menuRect.x,menuRect.y,menuRect.width,32);const menuRowH=24,max=Math.min(composition.futureDinners.length,Math.floor((menuRect.height-38)/menuRowH));menuRows=composition.futureDinners.slice(0,max).map((value,index)=>({dinner:value,rect:rect(menuRect.x,menuRect.y+38+index*menuRowH,menuRect.width,menuRowH)}))}
   let runningLowRect=null,runningLowRows=[],mealIdeasRect=null,mealIdeaGroups=[]
-  if(bottomY!==null){const both=composition.showRunningLow&&composition.showMealIdeas,half=both?(w-gap)/2:w;if(composition.showRunningLow){runningLowRect=rect(pad,bottomY,half-pad,bottomH);runningLowRows=state.runningLow.slice(0,3).map((value,index)=>({item:value,rect:rect(runningLowRect.x,runningLowRect.y+30+index*24,runningLowRect.width,22)}))}if(composition.showMealIdeas){mealIdeasRect=both?rect(half+gap,bottomY,w-half-gap-pad,bottomH):rect(pad,bottomY,w-pad*2,bottomH);mealIdeaGroups=state.mealIdeas.slice(0,2).map((value,index)=>({idea:value,rect:rect(mealIdeasRect.x,mealIdeasRect.y+30+index*38,mealIdeasRect.width,36)}))}}
+  if(alignedThreeByFour){runningLowRect=rect(groceryRect.x+groceryRect.width+gap,pad,w-pad-(groceryRect.x+groceryRect.width+gap),topH);runningLowRows=state.runningLow.slice(0,3).map((value,index)=>({item:value,rect:rect(runningLowRect.x,runningLowRect.y+30+index*24,runningLowRect.width,22)}))}
+  else if(bottomY!==null){const both=composition.showRunningLow&&composition.showMealIdeas,half=both?(w-gap)/2:w;if(composition.showRunningLow){runningLowRect=rect(pad,bottomY,half-pad,bottomH);runningLowRows=state.runningLow.slice(0,3).map((value,index)=>({item:value,rect:rect(runningLowRect.x,runningLowRect.y+30+index*24,runningLowRect.width,22)}))}if(composition.showMealIdeas){mealIdeasRect=both?rect(half+gap,bottomY,w-half-gap-pad,bottomH):rect(pad,bottomY,w-pad*2,bottomH);mealIdeaGroups=state.mealIdeas.slice(0,2).map((value,index)=>({idea:value,rect:rect(mealIdeasRect.x,mealIdeasRect.y+30+index*38,mealIdeasRect.width,36)}))}}
   return {...blank,headerRect,todayLabelRect,titleRect,groceryHeading,groceryRect,groceryRows,overflowRect,menuRect,menuHeaderRect,menuHeading,menuRows,runningLowRect,runningLowRows,mealIdeasRect,mealIdeaGroups,dividers:menuRect?[{x1:menuRect.x-gap/2,y1:pad,x2:menuRect.x-gap/2,y2:pad+topH}]:[]}
 }

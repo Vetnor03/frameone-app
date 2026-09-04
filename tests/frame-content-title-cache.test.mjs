@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   clearFrameTitleInflightForTests, clearFrameTitleL1CacheForTests, deriveReminderDisplayProfile, frameTitleCacheKey,
-  optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS,
+  optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, FRAME_TITLE_OPTIMIZER_VERSION,
 } from '../app/lib/frameContentOptimizer.ts'
 
 const originalFetch = globalThis.fetch
@@ -49,6 +49,24 @@ test('source and meaningful profile changes create one variant; equivalent geome
   await optimizeFrameContent([item('Changed source')], { displayProfile: 'standard', persistentCache })
   assert.equal(counter.calls, 3)
   assert.notEqual(frameTitleCacheKey(item(), 'standard'), frameTitleCacheKey(item(), 'compact'))
+})
+
+test('source language wins and ambiguous titles receive the explicit UI fallback', async () => {
+  clearFrameTitleL1CacheForTests(); clearFrameTitleInflightForTests()
+  const persistentCache=cache(),requests=[]
+  globalThis.fetch=async(_url,init)=>{
+    const body=JSON.parse(init.body),payload=JSON.parse(body.input[1].content[0].text);requests.push(payload)
+    const outputs=payload.items.map(value=>({id:value.id,title:/møte|tannlegen/i.test(value.title)?'Tannlegetime':/dinner|tomorrow/i.test(value.title)?'Dinner with Sarah':payload.uiLanguage==='no'?'Ukjent emne':'Unknown topic'}))
+    return {ok:true,json:async()=>({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({items:outputs})}]}]})}
+  }
+  const run=(title,uiLanguage)=>optimizeFrameContent([item(title)],{displayProfile:'standard',uiLanguage,persistentCache})
+  assert.equal((await run('Møte med tannlegen i morgen klokken 14','en'))[0].title,'Tannlegetime')
+  assert.equal((await run('Dinner with Sarah tomorrow at 7','no'))[0].title,'Dinner with Sarah')
+  assert.equal((await run('ACME 123','no'))[0].title,'Ukjent emne')
+  assert.equal((await run('ACME 123','en'))[0].title,'Unknown topic')
+  assert.deepEqual(requests.map(value=>value.uiLanguage),['en','no','no','en'])
+  assert.notEqual(frameTitleCacheKey(item('ACME 123'),'standard','test-model','no'),frameTitleCacheKey(item('ACME 123'),'standard','test-model','en'))
+  assert.match(FRAME_TITLE_OPTIMIZER_VERSION,/^v2-/)
 })
 
 test('duplicate missing variants are optimized once in one batch', async () => {

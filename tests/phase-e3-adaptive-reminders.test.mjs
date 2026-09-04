@@ -34,6 +34,16 @@ test('pixel dimensions select shallow, vertical, and split Studio families',()=>
   assert.ok(['split-sections','vertical-list'].includes(reminderComposition(profile(3,2),reminderStudioPresets.normal).family))
 })
 
+test('physical 4x2 is explicitly Today and Tomorrow, never the legacy calendar composition',async()=>{
+  const composition=reminderComposition(profile(4,2),reminderStudioPresets.normal)
+  assert.equal(composition.family,'split-sections');assert.ok(composition.todayItems>0);assert.ok(composition.tomorrowItems>0)
+  const layout=reminderLayout(profile(4,2),composition);assert.ok(layout.todayRect);assert.ok(layout.tomorrowRect)
+  assert.ok(layout.todayRect.x+layout.todayRect.width<=layout.tomorrowRect.x)
+  const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
+  assert.match(firmware,/forceFourByTwo[\s\S]*forceFourByTwo \? 0 : 1/)
+  assert.match(firmware,/CELL_ADAPTIVE \|\| \(c\.colSpan == 4 && c\.rowSpan == 2\)/)
+})
+
 test('Today-only, Tomorrow-only, empty, and mixed disclosure follow Studio policy',()=>{
   const today={today:reminderStudioPresets.normal.today,tomorrow:[]}
   const tomorrow={today:[],tomorrow:reminderStudioPresets.normal.tomorrow}

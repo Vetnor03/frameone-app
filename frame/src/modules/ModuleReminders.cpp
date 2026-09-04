@@ -2219,7 +2219,8 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
   const float ratio = c.h > 0 ? (float)c.w / (float)c.h : 1.0f;
   const bool landscape = ratio > 1.12f;
   const bool shallow = landscape && usable.height < 126;
-  const bool split = !shallow && landscape && usable.width >= 464 && usable.height >= 164;
+  const bool forceFourByTwo = c.colSpan == 4 && c.rowSpan == 2;
+  const bool split = forceFourByTwo || (!shallow && landscape && usable.width >= 464 && usable.height >= 164);
   out.family = shallow ? REM_SHALLOW_HORIZONTAL : split ? REM_SPLIT_SECTIONS : REM_VERTICAL_LIST;
   out.showHeading = !shallow && usable.height >= 104;
 
@@ -2241,7 +2242,7 @@ static AdaptiveReminderComposition adaptiveComposition(const Cell& c, const Remi
     // a one-word prefix is rejected rather than rewarded as another item.
     int bestMinimum = -1, bestAverage = -1, bestFont = -1, bestToday = -1, bestCount = -1;
     const int splitPercents[] = {35, 40, 45, 50, 55, 60, 65};
-    for (int dense = 0; dense <= 1; dense++) for (int vertical = 0; vertical <= 1; vertical++) {
+    for (int dense = 0; dense <= 1; dense++) for (int vertical = 0; vertical <= (forceFourByTwo ? 0 : 1); vertical++) {
       const AdaptiveReminderDensity density = dense ? AdaptiveReminderDensity{FONT_B9,34,4,48}
                                                      : AdaptiveReminderDensity{FONT_B12,42,5,62};
       const int ratioCount = vertical ? 1 : 7;
@@ -2350,7 +2351,11 @@ static void drawAdaptiveItem(const ReminderItem& item, const ReminderRect& row, 
     const int timeW = density.timeW, gap = 7;
     timeRect = {x, y, timeW, h}; titleRect = {x + timeW + gap, y, max(1, w - timeW - gap), h};
   }
-  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, density.font);
+  // Adaptive hierarchy: section heading is bold B12, reminder title keeps the
+  // selected readable content face, while structured time metadata uses the
+  // existing quiet B9 treatment. The monochrome firmware driver intentionally
+  // does not fabricate unsupported grayscale values.
+  if (item.time[0]) drawAdaptiveLabel(timeRect, item.time, FONT_B9);
   char fitted[96]; fitAdaptiveText(item.title, fitted, sizeof(fitted), titleRect.w, density.font);
   drawAdaptiveLabel(titleRect, fitted, density.font);
 }
@@ -2555,7 +2560,7 @@ void render(const Cell& c, const String& moduleName) {
   int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
   logMemoryStats("after_buckets");
 
-  if (c.size == CELL_ADAPTIVE) {
+  if (c.size == CELL_ADAPTIVE || (c.colSpan == 4 && c.rowSpan == 2)) {
     renderAdaptiveReminders(c, buckets, bucketCount);
     Serial.println("REM render complete");
     return;

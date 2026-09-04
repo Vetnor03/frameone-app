@@ -27,6 +27,8 @@ test('physical geometries select the finished Studio visual policy',()=>{
   const fourByThree=dateComposition(profile(4,3),dateStudioPresets.extreme),fourByThreeLayout=dateLayout(profile(4,3),fourByThree)
   assert.equal(fourByThree.family,'calendar-split');assert.ok(fourByThree.currentCalendar);assert.equal(fourByThree.nextCalendar,null);assert.ok(fourByThree.holidayRows<=1)
   assert.equal(fourByThreeLayout.nextCalendarRect,null);assert.ok(fourByThreeLayout.calendarRect.width>fourByThreeLayout.heroRect.width)
+  assert.ok(fourByThreeLayout.heroRect.x+fourByThreeLayout.heroRect.width<fourByThreeLayout.calendarRect.x)
+  assert.ok(fourByThreeLayout.holidayRect.x+fourByThreeLayout.holidayRect.width<=fourByThreeLayout.calendarRect.x)
 })
 
 test('all twelve Date adaptive geometries form complete eligible 4x4 plans with exact resolution',()=>{

@@ -427,6 +427,9 @@ export async function GET(req: Request) {
     )
 
     const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
+    const { data: deviceSettings } = await supabase.from('device_settings')
+      .select('settings_json').eq('device_id', device_id).maybeSingle()
+    const uiLanguage = (deviceSettings?.settings_json as { language?: unknown } | null)?.language === 'no' ? 'no' : 'en'
 
     // These reads share only sharedDeviceIds, so overlap their network latency.
     const [remindersResult, completionsResult, membersResult] = await Promise.all([supabase
@@ -631,7 +634,7 @@ export async function GET(req: Request) {
     const persistentCache = supabaseTitleCache(supabase)
     const optimizedByProfile = new Map(await Promise.all(displayProfiles.map(async displayProfile => {
       const titles = await optimizeFrameContent(optimizerItems, {
-        displayProfile, persistentCache, fastBudgetMs: PHYSICAL_AI_TIMEOUT_MS, aiTimeoutMs: 5000,
+        displayProfile, uiLanguage, persistentCache, fastBudgetMs: PHYSICAL_AI_TIMEOUT_MS, aiTimeoutMs: 5000,
         defer: work => after(async () => { await work }),
       })
       return [displayProfile, new Map(titles.map(item => [Number(item.id), item.title]))] as const

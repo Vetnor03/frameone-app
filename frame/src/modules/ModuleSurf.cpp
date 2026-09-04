@@ -1900,10 +1900,13 @@ static void renderAdaptiveSurf(const Cell& c,
   const int innerY = c.y + pad;
   const int innerW = c.w - pad * 2;
   const int innerH = c.h - pad * 2;
+  const bool largeDerivedThreeByFour = c.colSpan == 3 && c.rowSpan == 4;
+  const bool largeDerivedFourByThree = c.colSpan == 4 && c.rowSpan == 3;
   const int labelH = comp.showTodaysBestLabel ? 20 : 0;
   const int spotH = comp.showSpot ? 25 : 0;
   const int topH = labelH + spotH;
-  const int dailyH = comp.dailyCount > 0 ? clampi(innerH * 32 / 100, 104, 145) : 0;
+  const int dailyH = comp.dailyCount > 0
+    ? clampi(innerH * (largeDerivedThreeByFour ? 28 : 32) / 100, 104, 145) : 0;
   const int contentY = innerY + topH;
   const int contentH = innerH - topH - (dailyH > 0 ? dailyH + gap : 0);
   AdaptiveSurfRect label = {innerX, innerY, innerW, labelH};
@@ -1923,7 +1926,8 @@ static void renderAdaptiveSurf(const Cell& c,
   } else if (comp.family == SurfAdaptivePolicy::SPLIT ||
              comp.family == SurfAdaptivePolicy::DAYPART_ENHANCED ||
              comp.family == SurfAdaptivePolicy::EXPANDED_DAILY) {
-    hero.w = (innerW - gap) * comp.splitPercent / 100;
+    const int splitPercent = largeDerivedFourByThree ? 52 : comp.splitPercent;
+    hero.w = (innerW - gap) * splitPercent / 100;
     const int sideX = innerX + hero.w + gap;
     const int sideW = innerX + innerW - sideX;
     if (comp.daypartCount > 0) dayparts = AdaptiveSurfRect{sideX, contentY, sideW, contentH};

@@ -119,6 +119,9 @@ export async function GET(req: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
+    const { data: deviceSettings } = await supabase.from('device_settings')
+      .select('settings_json').eq('device_id', device_id).maybeSingle()
+    const uiLanguage = (deviceSettings?.settings_json as { language?: unknown } | null)?.language === 'no' ? 'no' : 'en'
 
     const { data: events, error: eventsError } = await supabase
       .from('countdown_events')
@@ -169,7 +172,7 @@ export async function GET(req: Request) {
       title: item.title,
       contentType: 'countdown',
       displayDate: item.display_date,
-    })))
+    })), { uiLanguage })
     const optimizedTitleById = new Map(optimizedTitles.map((item) => [item.id, item.title]))
     const items = sourceItems.map((item: any) => ({
       ...item,

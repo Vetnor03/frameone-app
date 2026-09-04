@@ -725,9 +725,10 @@ static void renderAdaptiveStocks(const Cell& c, const StockCache& data) {
     details = StocksRect{summary.x, summary.y + 105, summary.w, summary.h - 105};
     hasChartRect = hasSelectorRect = hasDetailsRect = true;
   } else if (policy.family == EXPANDED) {
+    const bool threeByFour = c.colSpan == 3 && c.rowSpan == 4;
     const int chartH = min(c.h * 40 / 100, c.h - 245);
-    summary = StocksRect{c.x + pad, c.y + pad, c.w - pad * 2, 100};
-    details = StocksRect{c.x + pad, summary.y + summary.h + 8, c.w - pad * 2, 78};
+    summary = StocksRect{c.x + pad, c.y + pad, c.w - pad * 2, threeByFour ? 84 : 100};
+    details = StocksRect{c.x + pad, summary.y + summary.h + 8, c.w - pad * 2, threeByFour ? 64 : 78};
     int cy = details.y + details.h + 7;
     if (policy.showSelector) {
       selector = StocksRect{c.x + pad, details.y + details.h + 5, c.w - pad * 2, 28};

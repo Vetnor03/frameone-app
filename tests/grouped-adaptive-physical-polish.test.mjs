@@ -9,6 +9,8 @@ test('adaptive headings use typography and spacing rather than detached underlin
   assert.doesNotMatch(read('frame/src/modules/ModuleStocks.cpp'),/const int lineW = min\(summary\.w/)
   assert.doesNotMatch(read('frame/src/modules/ModuleSurf.cpp'),/const int lineW = min\(title\.w/)
   assert.doesNotMatch(read('frame/src/modules/ModuleAssistant.cpp'),/headingWidth[\s\S]{0,120}fillRect/)
+  const reminders=read('frame/src/modules/ModuleReminders.cpp')
+  assert.match(reminders,/headingText, FONT_B12/);assert.match(reminders,/timeRect, item\.time, FONT_B9/);assert.match(reminders,/titleRect, fitted, density\.font/)
 })
 
 test('physically rejected geometry families inherit their accepted references',async()=>{
@@ -25,6 +27,28 @@ test('tall narrow Stocks reveals facts without a useless chart',async()=>{
   const composition=stocksComposition(profile,stocksStudioPresets.normal)
   assert.equal(composition.family,'summary-stack');assert.equal(composition.showChart,false);assert.equal(composition.showDetails,true)
   const layout=stocksLayout(profile,composition);assert.ok(layout.detailsRect);assert.ok(layout.detailRowRects.length>=4)
+})
+
+test('3x4 Stocks keeps the fullscreen-derived hierarchy and integrated chart controls',async()=>{
+  const {stocksComposition,stocksLayout,stocksStudioPresets}=await import('../app/lib/stocksResponsive.mjs')
+  const profile={width:588,height:458,colSpan:3,rowSpan:4,orientation:'landscape'},composition=stocksComposition(profile,stocksStudioPresets.normal),layout=stocksLayout(profile,composition)
+  assert.equal(composition.family,'expanded');assert.equal(composition.showDetails,true);assert.equal(composition.showChart,true);assert.equal(composition.showSelector,true)
+  assert.ok(layout.titleRect.y<layout.detailsRect.y);assert.ok(layout.detailsRect.y<layout.rangeSelectorRect.y);assert.ok(layout.rangeSelectorRect.y<layout.chartRect.y)
+  assert.ok(layout.chartRect.height>180)
+})
+
+test('3x4 Groceries aligns its one secondary region beside the primary list',async()=>{
+  const {groceriesComposition,groceriesLayout,groceriesStudioPresets}=await import('../app/lib/groceriesResponsive.mjs')
+  const profile={width:588,height:458,colSpan:3,rowSpan:4,orientation:'landscape'},composition=groceriesComposition(profile,groceriesStudioPresets.normal),layout=groceriesLayout(profile,composition,groceriesStudioPresets.normal)
+  assert.equal(composition.showMealIdeas,false);assert.equal(composition.showMenu,false);assert.equal(composition.showRunningLow,true)
+  assert.equal(layout.runningLowRect.y,layout.groceryRect.y);assert.equal(layout.runningLowRect.height,layout.groceryRect.height);assert.ok(layout.groceryRect.x+layout.groceryRect.width<layout.runningLowRect.x)
+})
+
+test('Surf 3x4 and 4x3 explicitly keep the accepted large grammar',async()=>{
+  const source=read('frame/src/modules/ModuleSurf.cpp')
+  assert.match(source,/largeDerivedThreeByFour[\s\S]*largeDerivedFourByThree/)
+  assert.match(source,/largeDerivedThreeByFour \? 28 : 32/)
+  assert.match(source,/largeDerivedFourByThree \? 52 : comp\.splitPercent/)
 })
 
 test('source-language policy is explicit and UI language remains a fallback',()=>{

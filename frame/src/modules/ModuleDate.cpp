@@ -1049,7 +1049,10 @@ static void drawAdaptiveDate(const Cell& c, const char* month, const char* wday,
       heroH = (h * 52 / 100) - gap / 2;
       calX = x; calY = heroY + heroH + gap; calW = w; calH = h - heroH - gap;
     } else {
-      heroW = w * (fourByThree ? 38 : 48) / 100;
+      // 4x3 is a strict two-region composition. Calendar width is calculated
+      // only from the right remainder and can never encroach on the hero or
+      // Upcoming Holidays region.
+      heroW = fourByThree ? w * 40 / 100 : w * 48 / 100;
       calX = heroX + heroW + gap; calY = y; calW = w - heroW - gap; calH = h;
     }
     if (holidayRows) heroH -= min(82, 42 + holidayRows * 22) + 12;

@@ -4,6 +4,7 @@ import { sanitizeFrameText } from './frameText.mjs'
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
 export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow'
 export type DisplayCapacityProfile = 'compact' | 'standard' | 'spacious'
+export type FrameUiLanguage = 'en' | 'no'
 
 export type FrameContentInput = {
   id: string
@@ -30,7 +31,7 @@ export type PersistentCacheRow = {
 type OpenAIResponsePayload = { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }
 type StructuredOptimizerResponse = { items?: Array<{ id?: unknown; title?: unknown }> }
 
-export const FRAME_TITLE_OPTIMIZER_VERSION = 'v1'
+export const FRAME_TITLE_OPTIMIZER_VERSION = 'v2-source-language'
 const DEFAULT_MODEL = 'gpt-5.6'
 const MAX_CACHE_ENTRIES = 1000
 export const PHYSICAL_AI_TIMEOUT_MS = 250
@@ -66,8 +67,8 @@ export function deriveReminderDisplayProfile(input: { usableWidth?: number; maxL
   return 'spacious'
 }
 
-export function frameTitleCacheKey(item: FrameContentInput, profile: DisplayCapacityProfile, model = DEFAULT_MODEL) {
-  const identity = [FRAME_TITLE_OPTIMIZER_VERSION, model, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title), profile]
+export function frameTitleCacheKey(item: FrameContentInput, profile: DisplayCapacityProfile, model = DEFAULT_MODEL, uiLanguage: FrameUiLanguage = 'en') {
+  const identity = [FRAME_TITLE_OPTIMIZER_VERSION, model, uiLanguage, item.contentType || 'reminder', item.source || 'unknown', normalizeText(item.title), profile]
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex')
 }
 
@@ -103,7 +104,7 @@ function extract(payload: OpenAIResponsePayload) {
   return ''
 }
 
-async function requestTitles(items: FrameContentInput[], model: string, profile: DisplayCapacityProfile, timeoutMs: number) {
+async function requestTitles(items: FrameContentInput[], model: string, profile: DisplayCapacityProfile, uiLanguage: FrameUiLanguage, timeoutMs: number) {
   const constraints = PROFILE_LIMITS[profile]
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -113,7 +114,7 @@ async function requestTitles(items: FrameContentInput[], model: string, profile:
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, input: [
         { role: 'developer', content: [{ type: 'input_text', text: INSTRUCTIONS }] },
-        { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ displayProfile: profile, ...constraints, items: items.map(i => ({ id: i.id, title: normalizeText(i.title), contentType: i.contentType || 'reminder', source: i.source || 'unknown' })) }) }] },
+        { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ displayProfile: profile, uiLanguage, ...constraints, items: items.map(i => ({ id: i.id, title: normalizeText(i.title), contentType: i.contentType || 'reminder', source: i.source || 'unknown' })) }) }] },
       ], text: { format: { type: 'json_schema', name: 'frame_title_optimizations', strict: true, schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' } }, required: ['id', 'title'], additionalProperties: false } } }, required: ['items'], additionalProperties: false } } }, max_output_tokens: 500 }),
     })
     if (!response.ok) throw new Error(`OpenAI request failed with status ${response.status}`)
@@ -126,6 +127,7 @@ async function requestTitles(items: FrameContentInput[], model: string, profile:
 export async function optimizeFrameContent(items: FrameContentInput[], options: {
   maxTitleChars?: number
   displayProfile?: DisplayCapacityProfile
+  uiLanguage?: FrameUiLanguage
   persistentCache?: PersistentTitleCache
   aiTimeoutMs?: number
   fastBudgetMs?: number
@@ -134,8 +136,9 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
   const profile = options.displayProfile || (options.maxTitleChars && options.maxTitleChars <= 30 ? 'compact' : options.maxTitleChars && options.maxTitleChars > 56 ? 'spacious' : 'standard')
   const maxChars = options.maxTitleChars || PROFILE_LIMITS[profile].maxTitleChars
   const model = String(process.env.FRAME_AI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const uiLanguage: FrameUiLanguage = options.uiLanguage === 'no' ? 'no' : 'en'
   const normalized = items.map(i => ({ ...i, title: sanitizeFrameText(i.title) }))
-  const keys = normalized.map(i => frameTitleCacheKey(i, profile, model))
+  const keys = normalized.map(i => frameTitleCacheKey(i, profile, model, uiLanguage))
   const results = new Map<string, string>()
 
   keys.forEach((key, index) => { const hit = titleCache.get(key); if (hit) results.set(normalized[index].id, hit) })
@@ -163,7 +166,7 @@ export async function optimizeFrameContent(items: FrameContentInput[], options: 
     if (newEntries.length) {
       const batch = (async () => {
         try {
-          const fresh = await requestTitles(newEntries.map(([, item]) => item), model, profile, options.aiTimeoutMs ?? 5000)
+          const fresh = await requestTitles(newEntries.map(([, item]) => item), model, profile, uiLanguage, options.aiTimeoutMs ?? 5000)
           const rows = newEntries.flatMap(([key]) => {
             const title = fresh.get(key)
             return title ? [{ cache_key: key, optimized_title: title, optimizer_version: FRAME_TITLE_OPTIMIZER_VERSION, model, display_profile: profile, updated_at: new Date().toISOString() }] : []

@@ -50,7 +50,7 @@ inline Result compose(const Input& in) {
 
   out.horizontal = out.family == ITEM_STRIP;
   out.columns = out.family == LIST_COLUMNS && in.width >= 360 ? 2 : 1;
-  out.showMenu = (out.family == LIST_MENU || out.family == EXPANDED) &&
+  out.showMenu = (out.family == LIST_MENU || (out.family == EXPANDED && in.width >= 700)) &&
     in.width >= 500 && in.height >= 180 && in.futureDinnerCount >= 2;
   out.showRunningLow = out.family == EXPANDED && in.height >= 300 && in.runningLowCount > 0;
   // 3x4 keeps one intentionally aligned secondary region; 4x4 may disclose
