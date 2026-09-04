@@ -8,7 +8,7 @@ import { fetchWeatherForecast } from '@/app/lib/server/weatherForecast'
 import { resolveWeatherInsight } from '@/app/lib/server/weatherInsight.mjs'
 import { AI_ASSISTANT_FRAME_LIMITS } from '@/app/lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, simplifyAiAssistantTopicTitle } from '@/app/lib/device/aiAssistantTopicTitle.ts'
-import { optimizeFrameContent } from '@/app/lib/frameContentOptimizer'
+import { optimizeFrameContent, type FrameUiLanguage } from '@/app/lib/frameContentOptimizer'
 import { loadAiAssistantDeviceData } from '@/app/lib/device/aiAssistantDeviceData'
 
 export const runtime = 'nodejs'
@@ -471,7 +471,7 @@ function todayYmdInTimeZone(timeZone: string) {
   return `${year}-${pad2(month)}-${pad2(day)}`
 }
 
-async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: string[], language: string): Promise<Detail> {
+async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: string[], language: FrameUiLanguage): Promise<Detail> {
   const { data, error } = await supabase
     .from('countdown_events')
     .select('id, title, target_date, pinned')
@@ -1867,7 +1867,7 @@ function formatReminderMirrorNextItems(items: UnknownRecord[]) {
 }
 
 
-async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, language: 'en' | 'no', limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
+async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, language: FrameUiLanguage, limit = AI_ASSISTANT_FRAME_LIMITS.full): Promise<Detail> {
   const empty = {
     primary: 'UPDATES',
     secondary: 'UPDATES',
@@ -2117,7 +2117,7 @@ export async function GET(req: Request) {
     const settings = asRecord(frameConfig.settings_json)
     const modules = asRecord(settings.modules)
     const cells = Array.isArray(settings.cells) ? settings.cells.map(asRecord) : []
-    const language = asString(settings.language, 'en') === 'no' ? 'no' : 'en'
+    const language: FrameUiLanguage = asString(settings.language, 'en') === 'no' ? 'no' : 'en'
     const deviceToken = asString(deviceRow?.device_token)
     const detailsBySlot: Record<string, Detail> = {}
 

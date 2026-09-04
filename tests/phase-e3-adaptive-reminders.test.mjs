@@ -41,7 +41,11 @@ test('physical 4x2 is explicitly Today and Tomorrow, never the legacy calendar c
   assert.ok(layout.todayRect.x+layout.todayRect.width<=layout.tomorrowRect.x)
   const firmware=await readFile(new URL('../frame/src/modules/ModuleReminders.cpp',import.meta.url),'utf8')
   assert.match(firmware,/forceFourByTwo[\s\S]*forceFourByTwo \? 0 : 1/)
-  assert.match(firmware,/CELL_ADAPTIVE \|\| \(c\.colSpan == 4 && c\.rowSpan == 2\)/)
+  assert.match(firmware,/if \(c\.size == CELL_ADAPTIVE\)/)
+  assert.doesNotMatch(firmware,/CELL_ADAPTIVE \|\| \(c\.colSpan == 4 && c\.rowSpan == 2\)/)
+  const layoutSource=await readFile(new URL('../frame/src/core/Layout.cpp',import.meta.url),'utf8')
+  assert.match(layoutSource,/exactBase\(module, "reminders"\)[\s\S]*cell\.colSpan == 4 && cell\.rowSpan == 2\)[\s\S]*cell\.size = CELL_ADAPTIVE/)
+  assert.match(firmware,/if \(c\.size == CELL_LARGE\)[\s\S]*renderLarge\(c, buckets, bucketCount, primaryIdx\)/)
 })
 
 test('Today-only, Tomorrow-only, empty, and mixed disclosure follow Studio policy',()=>{
@@ -207,6 +211,6 @@ test('firmware adds adaptive routing while leaving all handmade anchors intact',
   const dispatch=reminders.match(/void render\(const Cell& c,[\s\S]*?\n}/)[0]
   assert.ok(dispatch.indexOf('CELL_ADAPTIVE')<dispatch.indexOf('CELL_SMALL'))
   for(const anchor of ['CELL_SMALL','CELL_MEDIUM','CELL_LARGE','CELL_XL'])assert.match(dispatch,new RegExp(anchor))
-  assert.match(renderer,/strncasecmp\(module, "reminders", 9\)[\s\S]*module\[9\] == '\\0' \|\| module\[9\] == ':'/)
-  assert.match(renderer,/strncasecmp\(module, "weather", 7\)/)
+  assert.match(renderer,/cell\.size != CELL_ADAPTIVE[\s\S]*AdaptiveModuleCapability::supports\(module\)/)
+  assert.match(await readFile(new URL('../frame/src/modules/AdaptiveModuleCapability.h',import.meta.url),'utf8'),/exactBase\(module, "reminders"\)/)
 })

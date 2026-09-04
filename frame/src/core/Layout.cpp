@@ -306,7 +306,7 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
   CustomRenderPlan& staged = g_renderWorkspace.staging;
   if (!buildGridCells(custom.grid, staged.cells, MAX_GRID_CELLS, staged.cellCount)) return false;
   for (int i = 0; i < staged.cellCount; ++i) {
-    const Cell& cell = staged.cells[i];
+    Cell& cell = staged.cells[i];
     if (!(assignedSlots & ((uint16_t)1U << cell.slot))) return false;
     const char* module = nullptr;
     for (uint8_t assignmentIndex = 0; assignmentIndex < custom.assignCount; ++assignmentIndex) {
@@ -317,6 +317,11 @@ static bool prepareCustomRender(const FrameConfig& cfg, CustomRenderPlan& output
     }
     // Empty assignments are renderable placeholders. Geometry/module
     // compatibility only applies once a module has actually been assigned.
+    // Only this custom/module combination opts out of its geometry's frozen
+    // legacy anchor. Named/default 4x2 cells remain CELL_LARGE and therefore
+    // continue through ModuleReminders::renderLarge unchanged.
+    if (module && AdaptiveModuleCapability::exactBase(module, "reminders") &&
+        cell.colSpan == 4 && cell.rowSpan == 2) cell.size = CELL_ADAPTIVE;
     if (module && module[0] != '\0' && !ModuleRenderer::canRenderCell(module, cell)) return false;
   }
 

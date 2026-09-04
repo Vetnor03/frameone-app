@@ -2560,7 +2560,7 @@ void render(const Cell& c, const String& moduleName) {
   int primaryIdx = findPrimaryBucketIndex(buckets, bucketCount);
   logMemoryStats("after_buckets");
 
-  if (c.size == CELL_ADAPTIVE || (c.colSpan == 4 && c.rowSpan == 2)) {
+  if (c.size == CELL_ADAPTIVE) {
     renderAdaptiveReminders(c, buckets, bucketCount);
     Serial.println("REM render complete");
     return;
