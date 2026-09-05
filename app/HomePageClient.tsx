@@ -762,8 +762,17 @@ async function claimPairCodeAndLoadFrames(code: string, currentFrames: MemberRow
   }
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+function errorMessage(error: unknown, fallback = 'Something went wrong. Please try again.') {
+  if (error instanceof Error && error.message.trim()) return error.message.trim()
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>
+    if (typeof value.message === 'string' && value.message.trim()) return value.message.trim()
+    for (const key of ['error', 'details', 'code'] as const) {
+      if (typeof value[key] === 'string' && value[key].trim()) return value[key].trim()
+    }
+  }
+  if (typeof error === 'string' && error.trim() && error !== '[object Object]') return error.trim()
+  return fallback
 }
 
 
@@ -2024,6 +2033,8 @@ export default function HomePage() {
     )
 
     if (!stickySettingsRef.current) setActiveTab('frame')
+    const hasOnboardingDraft = typeof window !== 'undefined' && sessionStorage.getItem(`remind:onboarding:${deviceId}`) !== null
+    setSetupDeviceId(!hasSavedSettings || hasOnboardingDraft ? deviceId : null)
 
     isLoadedRef.current = true
   }
@@ -2081,6 +2092,18 @@ export default function HomePage() {
         return
       }
 
+      const onboardingDraftUser = sessionStorage.getItem('remind:onboarding-user')
+      if (onboardingDraftUser && onboardingDraftUser !== session.user.id) {
+        for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+          const key = sessionStorage.key(index)
+          if (key?.startsWith('remind:onboarding:')) sessionStorage.removeItem(key)
+        }
+      }
+      if (onboardingDraftUser && onboardingDraftUser !== session.user.id) {
+        sessionStorage.removeItem('remind:teams-oauth-device')
+        sessionStorage.removeItem('remind:teams-oauth-result')
+      }
+      sessionStorage.setItem('remind:onboarding-user', session.user.id)
       setAuthReady(true)
       setUserId(session.user.id)
       setShouldRenderApp(true)
@@ -2096,6 +2119,13 @@ export default function HomePage() {
           setActiveDeviceId(null)
           isLoadedRef.current = false
           setIsFirstFramePairingComplete(false)
+          for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+            const key = sessionStorage.key(index)
+            if (key?.startsWith('remind:onboarding:')) sessionStorage.removeItem(key)
+          }
+          sessionStorage.removeItem('remind:onboarding-user')
+          sessionStorage.removeItem('remind:teams-oauth-device')
+          sessionStorage.removeItem('remind:teams-oauth-result')
           setShouldRenderApp(false)
           setShowSplash(false)
           setBooting(false)
@@ -2194,7 +2224,7 @@ export default function HomePage() {
 
     let nextLayout: LayoutKey = layoutKey
     let nextCellsByLayout = cellsByLayout
-    let nextModules = mergeReusableUserModules({ ...modulesJson }, selection.modules)
+    let nextModules = { ...modulesJson, ...selection.modules }
     let nextPinnedTabs: ModuleKey[] = []
 
     if (selection.purpose === 'normal') {
@@ -2246,6 +2276,7 @@ export default function HomePage() {
     savedStateRef.current = serializeComparableState({ frameTheme, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
+    sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
     setSetupDeviceId(null)
     setActiveTab('frame')
     await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
@@ -2747,6 +2778,11 @@ async function handleSelectTab(k: TabKey) {
                       modulesJson={modulesJson}
                       activeDeviceId={activeDeviceId}
                       onBack={() => setRemindersConnectScreenOpen(false)}
+                      onIntegrationChanged={(key, config = { enabled: true }, legacyEnabled = []) => {
+                        const nextModules = integrationModulesAfterChange(modulesJson, key, config, legacyEnabled)
+                        setModulesJson(nextModules)
+                        markDirty({ modulesJson: nextModules })
+                      }}
                     />
                   ) : (
                     <ModuleSettingsTab
@@ -2887,35 +2923,61 @@ function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectApp
   })
 }
 
+function frameUsesIntegration(modulesJson: Record<string, any>, key: ConnectAppKey) {
+  if (modulesJson?.integration_selection_explicit !== true) return connectAppIsConnected(modulesJson, key)
+  return modulesJson?.integrations?.[key]?.enabled === true
+}
+
+function integrationModulesAfterChange(modulesJson: Record<string, any>, key: ConnectAppKey, config: Record<string, unknown>, legacyEnabled: ConnectAppKey[] = []) {
+  const integrations = modulesJson?.integration_selection_explicit === true
+    ? { ...(modulesJson.integrations || {}) }
+    : Object.fromEntries(legacyEnabled.map(provider => [provider, { enabled: true }]))
+  return { ...modulesJson, integration_selection_explicit: true, integrations: { ...integrations, [key]: config } }
+}
+
 function ConnectAppsScreen({
   language,
   modulesJson,
   activeDeviceId = null,
   onBack,
   startup = false,
+  onIntegrationChanged,
 }: {
   language: AppLanguage
   modulesJson: Record<string, unknown>
   activeDeviceId?: string | null
   onBack: () => void
   startup?: boolean
+  onIntegrationChanged?: (key: ConnectAppKey, config?: Record<string, unknown>, legacyEnabled?: ConnectAppKey[]) => void
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'connected' ? 'success' : initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
-    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Teams er tilkoblet' : 'Teams connected'
+    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Teams-tilkobling…' : 'Finishing Teams connection…'
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
-  const [spondConnected, setSpondConnected] = useState(connectAppIsConnected(modulesJson, 'spond'))
+  const [spondConnected, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
+  const [spondAccountConnected, setSpondAccountConnected] = useState(false)
+  const [spondStatusResolved, setSpondStatusResolved] = useState(false)
+  const [spondStatusFailed, setSpondStatusFailed] = useState(false)
   const [spondModalOpen, setSpondModalOpen] = useState(false)
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
-  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
+  const [teamsConnected, setTeamsConnected] = useState(false)
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
+  const [teamsAccountConnected, setTeamsAccountConnected] = useState(false)
+  const [teamsStatusResolved, setTeamsStatusResolved] = useState(false)
+  const [teamsStatusFailed, setTeamsStatusFailed] = useState(false)
+  const [pendingTeamsEnableAfterOAuth, setPendingTeamsEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    const initiatingDeviceId = sessionStorage.getItem('remind:teams-oauth-device')
+    const storedResult = sessionStorage.getItem('remind:teams-oauth-result')
+    return initiatingDeviceId === activeDeviceId && (initialTeamsOAuthStatus === 'connected' || storedResult === 'connected')
+  })
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
@@ -2925,22 +2987,32 @@ function ConnectAppsScreen({
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
+  const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
+  const [localEventsStatusResolved, setLocalEventsStatusResolved] = useState(false)
+  const [localEventsStatusFailed, setLocalEventsStatusFailed] = useState(false)
+  const [localEventsStatusDeviceId, setLocalEventsStatusDeviceId] = useState<string | null>(null)
+  const localEventsRequestGenerationRef = useRef(0)
+  const activeConnectDeviceIdRef = useRef(activeDeviceId)
+  activeConnectDeviceIdRef.current = activeDeviceId
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
-    return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
+    return frameUsesIntegration(modulesJson, 'local-events') ? normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference) : null
   })
   const [localEventsDraftArea, setLocalEventsDraftArea] = useState<LocalEventAreaPreference>(() => localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) return
+    if (!accessToken) { setSpondStatusResolved(true); setSpondConnected(false); return }
     const resp = await fetch('/api/integrations/spond/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) return
+    if (!resp.ok) { setSpondStatusFailed(true); setSpondConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Spond-status' : 'Could not check Spond status'); return }
     const json = await resp.json()
+    setSpondStatusResolved(true)
+    setSpondStatusFailed(false)
     setLocallyDisconnectedApps((current) => ({ ...current, spond: json?.connected === true ? false : current.spond }))
-    setSpondConnected(json?.connected === true)
+    setSpondAccountConnected(json?.connected === true)
+    setSpondConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'spond') && json?.connected === true : json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
       setIntegrationSetupErrors((current) => ({ ...current, spond: json.setup_error.message }))
@@ -2952,15 +3024,18 @@ function ConnectAppsScreen({
 
   async function fetchTeamsStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) return
+    if (!accessToken) { setTeamsStatusResolved(true); setTeamsConnected(false); return }
     const resp = await fetch('/api/integrations/teams/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) return
+    if (!resp.ok) { setTeamsStatusFailed(true); setTeamsConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Teams-status' : 'Could not check Teams status'); return }
     const json = await resp.json()
+    setTeamsStatusResolved(true)
+    setTeamsStatusFailed(false)
     setLocallyDisconnectedApps((current) => ({ ...current, teams: json?.connected === true ? false : current.teams }))
-    setTeamsConnected(json?.connected === true)
+    setTeamsAccountConnected(json?.connected === true)
+    setTeamsConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'teams') && json?.connected === true : json?.connected === true)
     setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
       setIntegrationSetupErrors((current) => ({ ...current, teams: json.setup_error.message }))
@@ -2970,6 +3045,29 @@ function ConnectAppsScreen({
   }
 
 
+  function legacyEnabledIntegrations(): ConnectAppKey[] {
+    return [
+      ...(spondAccountConnected ? ['spond' as const] : []),
+      ...(teamsAccountConnected ? ['teams' as const] : []),
+      ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
+      ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
+    ]
+  }
+
+  function changeFrameIntegration(key: ConnectAppKey, config: Record<string, unknown>) {
+    onIntegrationChanged?.(key, config, legacyEnabledIntegrations())
+  }
+
+  const localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId
+  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsResolvedForActiveDevice)
+  const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || localEventsStatusFailed
+
+  function retryProviderDiscovery() {
+    setStatus(null)
+    if (!spondStatusResolved) void fetchSpondStatus().catch(() => setSpondStatusFailed(true))
+    if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
+    if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
+  }
 
   async function connectTeams() {
     if (teamsLoading || teamsConnected) return
@@ -2986,6 +3084,9 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Teams' : 'Sign in to connect Teams')
+      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
+      sessionStorage.setItem('remind:teams-oauth-device', activeDeviceId)
+      sessionStorage.removeItem('remind:teams-oauth-result')
       const params = new URLSearchParams({ access_token: accessToken })
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
       if (timeZone) params.set('tz', timeZone)
@@ -3023,6 +3124,8 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Failed to connect Spond')
       setLocallyDisconnectedApps((current) => ({ ...current, spond: false }))
       setSpondConnected(true)
+      setSpondAccountConnected(true)
+      changeFrameIntegration('spond', { enabled: true })
       setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
       setSpondPassword('')
       setSpondModalOpen(false)
@@ -3040,18 +3143,25 @@ function ConnectAppsScreen({
   }
 
 
-  async function fetchLocalEventsStatus() {
+  async function fetchLocalEventsStatus(deviceId: string, requestGeneration: number) {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken || !activeDeviceId) {
+    if (!accessToken || !deviceId) {
       setLocalEventsSavedArea(null)
       setLocalEventsCanManage(false)
+      setLocalEventsStatusResolved(true)
       return
     }
-    const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(activeDeviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
-    if (!resp.ok) return
+    const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+    if (requestGeneration !== localEventsRequestGenerationRef.current || deviceId !== activeConnectDeviceIdRef.current) return
+    if (!resp.ok) { setLocalEventsStatusFailed(true); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status'); return }
     const json = await resp.json()
+    if (requestGeneration !== localEventsRequestGenerationRef.current || deviceId !== activeConnectDeviceIdRef.current) return
+    setLocalEventsStatusDeviceId(deviceId)
+    setLocalEventsStatusResolved(true)
+    setLocalEventsStatusFailed(false)
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
-    setLocalEventsSavedArea(json?.connected === true ? area : null)
+    setLocalEventsAccountConnected(json?.connected === true)
+    if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
   }
@@ -3072,6 +3182,8 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
+      setLocalEventsAccountConnected(true)
+      changeFrameIntegration('local-events', { enabled: true, areaPreference: saved })
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
@@ -3100,6 +3212,8 @@ function ConnectAppsScreen({
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
+      setLocalEventsAccountConnected(false)
+      changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': true }))
@@ -3133,9 +3247,13 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || `Failed to disconnect ${appName}`)
       if (provider === 'teams') {
         setTeamsConnected(false)
+        setTeamsAccountConnected(false)
+        changeFrameIntegration('teams', { enabled: false })
         setTeamsAccount(null)
       } else if (provider === 'spond') {
         setSpondConnected(false)
+        setSpondAccountConnected(false)
+        changeFrameIntegration('spond', { enabled: false })
         setSpondAccount(null)
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
@@ -3153,14 +3271,69 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    fetchSpondStatus()
-    fetchTeamsStatus()
+    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus()]).then(results => {
+      if (results[0].status === 'rejected') setSpondStatusFailed(true)
+      if (results[1].status === 'rejected') setTeamsStatusFailed(true)
+    })
     const params = new URLSearchParams(window.location.search)
+    if (initialTeamsOAuthStatus === 'connected') {
+      sessionStorage.setItem('remind:teams-oauth-result', 'connected')
+    } else if (initialTeamsOAuthStatus === 'error') {
+      sessionStorage.removeItem('remind:teams-oauth-device')
+      sessionStorage.removeItem('remind:teams-oauth-result')
+      setPendingTeamsEnableAfterOAuth(false)
+    }
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
 
   useEffect(() => {
-    fetchLocalEventsStatus()
+    const initiatingDeviceId = sessionStorage.getItem('remind:teams-oauth-device')
+    const storedResult = sessionStorage.getItem('remind:teams-oauth-result')
+    setPendingTeamsEnableAfterOAuth(!!activeDeviceId && initiatingDeviceId === activeDeviceId && storedResult === 'connected')
+  }, [activeDeviceId])
+
+  useEffect(() => {
+    if (spondStatusResolved) {
+      setSpondConnected(
+        spondAccountConnected &&
+        (modulesJson?.integration_selection_explicit !== true || frameUsesIntegration(modulesJson, 'spond')),
+      )
+    }
+    if (teamsStatusResolved) {
+      setTeamsConnected(
+        teamsAccountConnected &&
+        (modulesJson?.integration_selection_explicit !== true || frameUsesIntegration(modulesJson, 'teams')),
+      )
+    }
+  }, [activeDeviceId, modulesJson, spondStatusResolved, spondAccountConnected, teamsStatusResolved, teamsAccountConnected])
+
+  useEffect(() => {
+    if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
+    if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
+    setTeamsConnected(true)
+    setStatusTone('success')
+    setStatus(language === 'no' ? 'Teams er tilkoblet' : 'Teams connected')
+    changeFrameIntegration('teams', { enabled: true })
+    sessionStorage.removeItem('remind:teams-oauth-device')
+    sessionStorage.removeItem('remind:teams-oauth-result')
+    setPendingTeamsEnableAfterOAuth(false)
+  }, [pendingTeamsEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, legacyIntegrationDiscoveryPending])
+
+  useEffect(() => {
+    const requestGeneration = ++localEventsRequestGenerationRef.current
+    setLocalEventsStatusResolved(false)
+    setLocalEventsStatusFailed(false)
+    setLocalEventsAccountConnected(false)
+    setLocalEventsSavedArea(null)
+    setLocalEventsCanManage(false)
+    setLocalEventsStatusDeviceId(null)
+    if (!activeDeviceId) return
+    void fetchLocalEventsStatus(activeDeviceId, requestGeneration).catch(() => {
+      if (requestGeneration !== localEventsRequestGenerationRef.current || activeDeviceId !== activeConnectDeviceIdRef.current) return
+      setStatusTone('error')
+      setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status')
+      setLocalEventsStatusFailed(true)
+    })
   }, [activeDeviceId])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string; comingSoon?: boolean }> = [
     {
@@ -3298,7 +3471,9 @@ function ConnectAppsScreen({
             const localEventsSelectedName = localEventsSavedArea ? (getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger') : null
             const description = app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Lokale arrangementer i ${localEventsSelectedName} valgt` : `Local Events in ${localEventsSelectedName} selected`)
-              : app.description
+              : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected))
+                ? (language === 'no' ? 'Konto tilkoblet · ikke aktiv på denne framen' : 'Account connected · not enabled on this frame')
+                : app.description
             return (
               <div
                 key={app.key}
@@ -3325,22 +3500,29 @@ function ConnectAppsScreen({
                         </button>
                       </div>
                     ) : (
+                      modulesJson?.integration_selection_explicit === true && (app.key === 'spond' || app.key === 'teams') ? (
+                      <button type="button" onClick={() => { if (app.key === 'spond') setSpondConnected(false); else setTeamsConnected(false); changeFrameIntegration(app.key, { enabled: false }) }} className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)]">
+                        {language === 'no' ? 'DEAKTIVER PÅ FRAMEN' : 'DISABLE ON THIS FRAME'}
+                      </button>
+                    ) : (
                       <span className="shrink-0 h-8 px-3 rounded-xl border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[11px] tracking-widest text-[#1f9d4a] inline-flex items-center">
                         {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
                       </span>
                     )
+                    )
                   ) : (
                     <button
                       type="button"
-                      disabled={(app.key === 'teams' && teamsLoading)}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && teamsLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
-                          if (setupError) {
+                          if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
+                          else if (setupError) {
                             setStatusTone('error')
                             setStatus(setupError)
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
-                          connectTeams()
+                          if (teamsAccountConnected) { setTeamsConnected(true); changeFrameIntegration('teams', { enabled: true }) } else connectTeams()
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
@@ -3388,6 +3570,13 @@ function ConnectAppsScreen({
             )
           })}
         </div>
+
+        {providerDiscoveryFailed && legacyIntegrationDiscoveryPending && (
+          <div className="mt-3 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 px-4 py-3 text-sm text-[#ff7a7a]">
+            <div>{language === 'no' ? 'Kunne ikke kontrollere tilkoblede tjenester.' : 'Could not check connected services.'}</div>
+            <button type="button" onClick={retryProviderDiscovery} className="mt-2 text-xs font-medium tracking-widest text-[#2aa3ff]">{language === 'no' ? 'PRØV IGJEN' : 'RETRY'}</button>
+          </div>
+        )}
 
         {status && (
           <div
@@ -8589,60 +8778,75 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const setupModules = ['date', 'reminders', 'weather', 'countdown'] as const
-  const [moduleIndex, setModuleIndex] = useState(0)
-  const [modules, setModules] = useState<Record<string, any>>({})
+  const guidedModules = ['reminders', 'weather', 'countdown'] as const
+  const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
+  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(savedDraft?.step === 'guided' || savedDraft?.step === 'custom' ? savedDraft.step : 'purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose>(savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
+  const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(2, savedDraft.moduleIndex)) : 0)
+  const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reminderComposerOpen, setReminderComposerOpen] = useState(false)
   const [reminderDraft, setReminderDraft] = useState<ReminderUiItem | null>(null)
   const [countdownComposerOpen, setCountdownComposerOpen] = useState(false)
+  const [countdownDraft, setCountdownDraft] = useState<{ title: string; date: string } | null>(null)
   const isNo = language === 'no'
-  const current = setupModules[moduleIndex]
+  const current = guidedModules[moduleIndex]
 
-  async function advance() {
-    if (saving) return
-    setError(null)
-    if (moduleIndex < setupModules.length - 1) {
-      setModuleIndex(index => index + 1)
-      return
-    }
-    try {
-      setSaving(true)
-      await onComplete({ purpose: 'normal', modules })
-    } catch (reason) {
-      setError(errorMessage(reason))
-    } finally {
-      setSaving(false)
-    }
+  useEffect(() => {
+    sessionStorage.setItem(`remind:onboarding:${activeDeviceId}`, JSON.stringify({ step, purpose, moduleIndex, modules }))
+  }, [activeDeviceId, step, purpose, moduleIndex, modules])
+
+  function selectIntegration(key: ConnectAppKey, config: Record<string, unknown> = { enabled: true }) {
+    setModules(value => ({ ...value, integration_selection_explicit: true, integrations: { ...(value.integrations || {}), [key]: config } }))
   }
 
-  return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
-      <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
-        <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
-          <div className="flex items-center justify-between">
-            <button type="button" disabled={moduleIndex === 0 || saving} onClick={() => setModuleIndex(index => Math.max(0, index - 1))} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>
-            <span className="text-xs text-[color:var(--fg-50)]">{moduleIndex + 1} / {setupModules.length}</span>
-          </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${((moduleIndex + 1) / setupModules.length) * 100}%` }} /></div>
-        </div>
-        <div className="overflow-y-auto p-6">
-          <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
-          <h1 className="mt-3 text-2xl font-medium">{current === 'date' ? (isNo ? 'Dato' : 'Date') : current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
-          {current === 'date' && <p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Dato og norske helligdager oppdateres automatisk.' : 'The date and Norwegian holidays update automatically.'}</p>}
-          {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse, koble til kalenderne dine, eller fortsett med et nyttig startsett.' : 'Add a reminder, connect your calendars, or continue with a useful starter set.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup /></div></>}
-          {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Oslo brukes hvis du hopper over' : 'Oslo is used if you skip')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
-          {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til din egen nedtelling, eller fortsett med et lite redigerbart startsett.' : 'Add your own countdown, or continue with a small editable starter set.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL NEDTELLING' : 'ADD COUNTDOWN'}</button></>}
-          {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}
-          <button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === setupModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
-        </div>
-      </div>
-      {reminderComposerOpen && <NaturalReminderComposer language={language} activeDeviceId={activeDeviceId} fallbackDate={toLocalYmd(new Date())} selectedDate={null} onClose={() => setReminderComposerOpen(false)} onSaved={() => setReminderComposerOpen(false)} onEditDetails={(draft) => { setReminderComposerOpen(false); setReminderDraft(draft) }} />}
-      {reminderDraft && <ReminderDraftSheet language={language} activeDeviceId={activeDeviceId} editingReminder={null} initialDraft={reminderDraft} initialDate={reminderDraft.date || toLocalYmd(new Date())} onClose={() => setReminderDraft(null)} onSaved={() => setReminderDraft(null)} onDeleted={() => setReminderDraft(null)} />}
-      {countdownComposerOpen && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialDate={toLocalYmd(new Date())} onClose={() => setCountdownComposerOpen(false)} onSaved={() => setCountdownComposerOpen(false)} onDeleted={() => setCountdownComposerOpen(false)} />}
+  async function finish(selectedPurpose: SetupPurpose) {
+    if (saving) return
+    try {
+      setSaving(true)
+      setError(null)
+      await onComplete({ purpose: selectedPurpose, modules })
+    } catch (reason) {
+      console.error('Initial frame setup failed', reason)
+      setError(errorMessage(reason, isNo ? 'Kunne ikke fullføre oppsettet. Prøv igjen.' : 'Could not finish setup. Please try again.'))
+    } finally { setSaving(false) }
+  }
+
+  async function advance() {
+    if (moduleIndex < guidedModules.length - 1) { setError(null); setModuleIndex(index => index + 1); return }
+    await finish('normal')
+  }
+
+  function goBack() {
+    if (saving) return
+    setError(null)
+    if (step === 'custom') setStep('purpose')
+    else if (step === 'guided' && moduleIndex > 0) setModuleIndex(index => index - 1)
+    else if (step === 'guided') setStep('purpose')
+  }
+
+  const shell = (children: React.ReactNode, showProgress = false) => <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
+    <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
+      <div className="border-b border-[color:var(--bd-10)] px-5 py-4"><div className="flex items-center justify-between"><button type="button" disabled={step === 'purpose' || saving} onClick={goBack} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>{showProgress && <span className="text-xs text-[color:var(--fg-50)]">{moduleIndex + 1} / {guidedModules.length}</span>}</div>{showProgress && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${((moduleIndex + 1) / guidedModules.length) * 100}%` }} /></div>}</div>
+      <div className="overflow-y-auto p-6">{children}</div>
     </div>
-  )
+  </div>
+
+  if (step === 'purpose') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{(['normal', 'custom'] as SetupPurpose[]).map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nedtelling.' : 'Date, Reminders, Weather, and Countdown.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
+
+  if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
+
+  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
+    {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse eller koble til tjenester du vil ha på framen.' : 'Add a reminder or connect services you want on your frame.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div></>}
+    {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
+    {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Beskriv nedtellingen med egne ord, eller legg inn tittel og dato manuelt.' : 'Describe your countdown in your own words, or enter its title and date manually.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'BESKRIV NEDTELLING' : 'DESCRIBE COUNTDOWN'}</button></>}
+    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
+    {reminderComposerOpen && <NaturalReminderComposer language={language} activeDeviceId={activeDeviceId} fallbackDate={toLocalYmd(new Date())} selectedDate={null} onClose={() => setReminderComposerOpen(false)} onSaved={() => setReminderComposerOpen(false)} onEditDetails={(draft) => { setReminderComposerOpen(false); setReminderDraft(draft) }} />}
+    {reminderDraft && <ReminderDraftSheet language={language} activeDeviceId={activeDeviceId} editingReminder={null} initialDraft={reminderDraft} initialDate={reminderDraft.date || toLocalYmd(new Date())} onClose={() => setReminderDraft(null)} onSaved={() => setReminderDraft(null)} onDeleted={() => setReminderDraft(null)} />}
+    {countdownComposerOpen && <NaturalCountdownComposer language={language} onClose={() => setCountdownComposerOpen(false)} onDraft={(draft) => { setCountdownComposerOpen(false); setCountdownDraft(draft) }} />}
+    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={() => setCountdownDraft(null)} onDeleted={() => setCountdownDraft(null)} />}
+  </>, true)
 }
 function FirstFrameOnboarding({
   language,
@@ -10278,10 +10482,40 @@ function CountdownModuleSettingsTab({
   )
 }
 
+function NaturalCountdownComposer({ language, onClose, onDraft }: { language: AppLanguage; onClose: () => void; onDraft: (draft: { title: string; date: string }) => void }) {
+  const [text, setText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  async function interpret() {
+    if (!text.trim() || parsing) return
+    setParsing(true); setFailed(false)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const accessToken = data.session?.access_token
+      if (!accessToken) throw new Error('sign in')
+      const now = new Date()
+      const offset = -now.getTimezoneOffset()
+      const sign = offset >= 0 ? '+' : '-'
+      const localNow = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`
+      const response = await fetch('/api/reminders/parse', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ text: text.trim(), localNow, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language }) })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok || json.status !== 'ready' || !json.reminder?.title || !json.reminder?.due_date) throw new Error('parse failed')
+      onDraft({ title: json.reminder.title, date: json.reminder.due_date })
+    } catch (error) {
+      console.error('Countdown parsing failed', error)
+      setFailed(true)
+    } finally { setParsing(false) }
+  }
+
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]"><div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5"><div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY NEDTELLING' : 'NEW COUNTDOWN'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div><label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva teller du ned til?' : 'What are you counting down to?'}</label><textarea autoFocus rows={4} value={text} onChange={event => { setText(event.target.value); setFailed(false) }} placeholder={language === 'no' ? 'Bryllup 18. august 2027' : "Vetle's birthday October 4"} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" /><SensitiveInformationHelper language={language} />{failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Kunne ikke tolke nedtellingen. Legg inn tittel og dato manuelt.' : 'Could not understand the countdown. Enter the title and date manually.'}</p>}<button onClick={interpret} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'UNDERSTANDING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>{failed && <button onClick={() => onDraft({ title: text.trim(), date: toLocalYmd(new Date()) })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER MANUELT' : 'EDIT MANUALLY'}</button>}</div></div>
+}
+
 function CountdownDraftSheet({
   language,
   activeDeviceId,
   editingItem,
+  initialTitle,
   initialDate,
   onClose,
   onSaved,
@@ -10290,12 +10524,13 @@ function CountdownDraftSheet({
   language: AppLanguage
   activeDeviceId: string
   editingItem: CountdownItem | null
+  initialTitle?: string
   initialDate?: string
   onClose: () => void
   onSaved: () => void | Promise<void>
   onDeleted: () => void | Promise<void>
 }) {
-  const [title, setTitle] = useState(editingItem?.title ?? '')
+  const [title, setTitle] = useState(editingItem?.title ?? initialTitle ?? '')
   const [date, setDate] = useState(editingItem?.date ?? initialDate ?? toLocalYmd(new Date()))
   const [pinned, setPinned] = useState(!!editingItem?.pinned)
 

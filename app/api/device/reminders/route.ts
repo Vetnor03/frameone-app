@@ -444,7 +444,7 @@ export async function GET(req: Request) {
     const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
 
     // These reads share only sharedDeviceIds, so overlap their network latency.
-    const [remindersResult, completionsResult, membersResult] = await Promise.all([supabase
+    const [remindersResult, completionsResult, membersResult, deviceSettingsResult] = await Promise.all([supabase
       .from('reminders')
       .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done, starter_key')
       .in('device_id', sharedDeviceIds)
@@ -456,10 +456,16 @@ export async function GET(req: Request) {
       .in('device_id', sharedDeviceIds), supabase
       .from('device_members')
       .select('user_id')
-      .eq('device_id', device_id)])
+      .eq('device_id', device_id), supabase
+      .from('device_settings')
+      .select('settings_json')
+      .eq('device_id', device_id)
+      .maybeSingle()])
     const { data, error } = remindersResult
     const { data: completionsData, error: completionsError } = completionsResult
     const { data: membersData, error: membersError } = membersResult
+    const { data: deviceSettingsData, error: deviceSettingsError } = deviceSettingsResult
+    if (deviceSettingsError) logOptionalReminderProviderFailure('device_settings', deviceSettingsError)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -504,11 +510,15 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
+    const configuredModules = (deviceSettingsData?.settings_json as any)?.modules
+    const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
+    const selectedIntegrations = configuredModules?.integrations || {}
+    const providerEnabled = (provider: string) => !deviceSettingsError && (!explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true)
     if (memberUserIds.length > 0) {
       if (!skipSync) {
         const syncResults = await Promise.allSettled([
-          syncSpondIfStaleForUsers(memberUserIds),
-          Promise.allSettled(memberUserIds.map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
+          providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
+          Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
         ])
         syncResults.forEach((result) => {
           if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
@@ -516,6 +526,7 @@ export async function GET(req: Request) {
       }
 
       await Promise.all([(async () => { try {
+        if (!providerEnabled('spond')) return
 
         const { data: integrationItemsData, error: integrationItemsError } = await supabase
           .from('integration_items')
@@ -537,6 +548,7 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('spond', error)
       } })(), (async () => { try {
+        if (!providerEnabled('teams')) return
 
         const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
           .from('integration_items')
@@ -556,6 +568,7 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('teams', error)
       } })(), (async () => { try {
+        if (!providerEnabled('waste')) return
 
         const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
           .from('integration_items')
@@ -576,6 +589,7 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
       } })(), (async () => { try {
+        if (!providerEnabled('local-events')) return
 
         const { data: localEventsData, error: localEventsError } = await supabase
           .from('integration_items')
