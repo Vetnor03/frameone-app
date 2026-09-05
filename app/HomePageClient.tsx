@@ -2025,7 +2025,8 @@ export default function HomePage() {
     )
 
     if (!stickySettingsRef.current) setActiveTab('frame')
-    setSetupDeviceId(hasSavedSettings ? null : deviceId)
+    const hasOnboardingDraft = typeof window !== 'undefined' && sessionStorage.getItem(`remind:onboarding:${deviceId}`) !== null
+    setSetupDeviceId(!hasSavedSettings || hasOnboardingDraft ? deviceId : null)
 
     isLoadedRef.current = true
   }
@@ -2083,6 +2084,14 @@ export default function HomePage() {
         return
       }
 
+      const onboardingDraftUser = sessionStorage.getItem('remind:onboarding-user')
+      if (onboardingDraftUser && onboardingDraftUser !== session.user.id) {
+        for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+          const key = sessionStorage.key(index)
+          if (key?.startsWith('remind:onboarding:')) sessionStorage.removeItem(key)
+        }
+      }
+      sessionStorage.setItem('remind:onboarding-user', session.user.id)
       setAuthReady(true)
       setUserId(session.user.id)
       setShouldRenderApp(true)
@@ -2098,6 +2107,11 @@ export default function HomePage() {
           setActiveDeviceId(null)
           isLoadedRef.current = false
           setIsFirstFramePairingComplete(false)
+          for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+            const key = sessionStorage.key(index)
+            if (key?.startsWith('remind:onboarding:')) sessionStorage.removeItem(key)
+          }
+          sessionStorage.removeItem('remind:onboarding-user')
           setShouldRenderApp(false)
           setShowSplash(false)
           setBooting(false)
@@ -2750,8 +2764,8 @@ async function handleSelectTab(k: TabKey) {
                       modulesJson={modulesJson}
                       activeDeviceId={activeDeviceId}
                       onBack={() => setRemindersConnectScreenOpen(false)}
-                      onIntegrationConnected={(key, config = { enabled: true }) => {
-                        const nextModules = { ...modulesJson, integration_selection_explicit: true, integrations: { ...(modulesJson.integrations || {}), [key]: config } }
+                      onIntegrationChanged={(key, config = { enabled: true }, legacyEnabled = []) => {
+                        const nextModules = integrationModulesAfterChange(modulesJson, key, config, legacyEnabled)
                         setModulesJson(nextModules)
                         markDirty({ modulesJson: nextModules })
                       }}
@@ -2900,20 +2914,27 @@ function frameUsesIntegration(modulesJson: Record<string, any>, key: ConnectAppK
   return modulesJson?.integrations?.[key]?.enabled === true
 }
 
+function integrationModulesAfterChange(modulesJson: Record<string, any>, key: ConnectAppKey, config: Record<string, unknown>, legacyEnabled: ConnectAppKey[] = []) {
+  const integrations = modulesJson?.integration_selection_explicit === true
+    ? { ...(modulesJson.integrations || {}) }
+    : Object.fromEntries(legacyEnabled.map(provider => [provider, { enabled: true }]))
+  return { ...modulesJson, integration_selection_explicit: true, integrations: { ...integrations, [key]: config } }
+}
+
 function ConnectAppsScreen({
   language,
   modulesJson,
   activeDeviceId = null,
   onBack,
   startup = false,
-  onIntegrationConnected,
+  onIntegrationChanged,
 }: {
   language: AppLanguage
   modulesJson: Record<string, unknown>
   activeDeviceId?: string | null
   onBack: () => void
   startup?: boolean
-  onIntegrationConnected?: (key: ConnectAppKey, config?: Record<string, unknown>) => void
+  onIntegrationChanged?: (key: ConnectAppKey, config?: Record<string, unknown>, legacyEnabled?: ConnectAppKey[]) => void
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
@@ -2942,6 +2963,7 @@ function ConnectAppsScreen({
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
+  const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
     return frameUsesIntegration(modulesJson, 'local-events') ? normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference) : null
   })
@@ -2989,6 +3011,18 @@ function ConnectAppsScreen({
   }
 
 
+  function legacyEnabledIntegrations(): ConnectAppKey[] {
+    return [
+      ...(spondAccountConnected ? ['spond' as const] : []),
+      ...(teamsAccountConnected ? ['teams' as const] : []),
+      ...(localEventsAccountConnected ? ['local-events' as const] : []),
+      ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
+    ]
+  }
+
+  function changeFrameIntegration(key: ConnectAppKey, config: Record<string, unknown>) {
+    onIntegrationChanged?.(key, config, legacyEnabledIntegrations())
+  }
 
   async function connectTeams() {
     if (teamsLoading || teamsConnected) return
@@ -3042,7 +3076,8 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Failed to connect Spond')
       setLocallyDisconnectedApps((current) => ({ ...current, spond: false }))
       setSpondConnected(true)
-      onIntegrationConnected?.('spond', { enabled: true })
+      setSpondAccountConnected(true)
+      changeFrameIntegration('spond', { enabled: true })
       setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
       setSpondPassword('')
       setSpondModalOpen(false)
@@ -3071,6 +3106,7 @@ function ConnectAppsScreen({
     if (!resp.ok) return
     const json = await resp.json()
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
+    setLocalEventsAccountConnected(json?.connected === true)
     if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
@@ -3092,7 +3128,8 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
-      onIntegrationConnected?.('local-events', { enabled: true, areaPreference: saved })
+      setLocalEventsAccountConnected(true)
+      changeFrameIntegration('local-events', { enabled: true, areaPreference: saved })
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
@@ -3121,6 +3158,8 @@ function ConnectAppsScreen({
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not disconnect Local Events')
       setLocalEventsSavedArea(null)
+      setLocalEventsAccountConnected(false)
+      changeFrameIntegration('local-events', { enabled: false })
       setLocalEventsDraftArea(DEFAULT_LOCAL_EVENT_AREA)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': true }))
@@ -3154,9 +3193,13 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || `Failed to disconnect ${appName}`)
       if (provider === 'teams') {
         setTeamsConnected(false)
+        setTeamsAccountConnected(false)
+        changeFrameIntegration('teams', { enabled: false })
         setTeamsAccount(null)
       } else if (provider === 'spond') {
         setSpondConnected(false)
+        setSpondAccountConnected(false)
+        changeFrameIntegration('spond', { enabled: false })
         setSpondAccount(null)
       }
       setLocallyDisconnectedApps((current) => ({ ...current, [provider]: true }))
@@ -3177,7 +3220,7 @@ function ConnectAppsScreen({
     fetchSpondStatus()
     fetchTeamsStatus()
     if (startup && initialTeamsOAuthStatus === 'connected') {
-      onIntegrationConnected?.('teams', { enabled: true })
+      changeFrameIntegration('teams', { enabled: true })
     }
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
@@ -3361,13 +3404,13 @@ function ConnectAppsScreen({
                       disabled={(app.key === 'teams' && teamsLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
-                          if (spondAccountConnected) { setSpondConnected(true); onIntegrationConnected?.('spond', { enabled: true }) }
+                          if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
                           else if (setupError) {
                             setStatusTone('error')
                             setStatus(setupError)
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
-                          if (teamsAccountConnected) { setTeamsConnected(true); onIntegrationConnected?.('teams', { enabled: true }) } else connectTeams()
+                          if (teamsAccountConnected) { setTeamsConnected(true); changeFrameIntegration('teams', { enabled: true }) } else connectTeams()
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
@@ -8638,7 +8681,7 @@ function FrameSetupFlow({
   if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
 
   return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
-    {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse eller koble til tjenester du vil ha på framen.' : 'Add a reminder or connect services you want on your frame.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationConnected={selectIntegration} /></div></>}
+    {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse eller koble til tjenester du vil ha på framen.' : 'Add a reminder or connect services you want on your frame.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div></>}
     {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
     {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Beskriv nedtellingen med egne ord, eller legg inn tittel og dato manuelt.' : 'Describe your countdown in your own words, or enter its title and date manually.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'BESKRIV NEDTELLING' : 'DESCRIBE COUNTDOWN'}</button></>}
     {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>

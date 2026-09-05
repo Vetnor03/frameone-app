@@ -36,8 +36,8 @@ test('fresh integration selection starts empty and only records explicit connect
   assert.match(connect, /frameUsesIntegration\(modulesJson, 'spond'\)/)
   assert.match(connect, /setSpondAccountConnected/)
   assert.match(connect, /if \(frameUsesIntegration\(modulesJson, 'local-events'\)\) setLocalEventsSavedArea/)
-  assert.match(connect, /onIntegrationConnected\?\.\('spond'/)
-  assert.match(connect, /onIntegrationConnected\?\.\('local-events'/)
+  assert.match(connect, /changeFrameIntegration\('spond'/)
+  assert.match(connect, /changeFrameIntegration\('local-events'/)
   assert.match(remindersRoute, /explicitIntegrationSelection/)
   assert.match(remindersRoute, /providerEnabled\('spond'\)/)
   assert.match(remindersRoute, /if \(!providerEnabled\('local-events'\)\) return/)
@@ -70,7 +70,7 @@ test('structured errors never stringify as object Object and completion remains 
 
 
 test('incomplete setup and OAuth draft survive reload while completion clears the draft', () => {
-  assert.match(home, /setSetupDeviceId\(hasSavedSettings \? null : deviceId\)/)
+  assert.match(home, /setSetupDeviceId\(!hasSavedSettings \|\| hasOnboardingDraft \? deviceId : null\)/)
   assert.match(setup, /sessionStorage\.getItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
   assert.match(setup, /sessionStorage\.setItem\(`remind:onboarding:\$\{activeDeviceId\}`/)
   assert.match(home, /sessionStorage\.removeItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
@@ -81,7 +81,35 @@ test('account credentials and frame enablement are separate and legacy frames re
   assert.match(home, /function frameUsesIntegration/)
   assert.match(home, /integration_selection_explicit !== true.*connectAppIsConnected/)
   assert.match(connect, /Account connected · not enabled on this frame/)
-  assert.match(connect, /spondAccountConnected.*onIntegrationConnected/)
-  assert.match(connect, /teamsAccountConnected.*onIntegrationConnected/)
+  assert.match(connect, /spondAccountConnected.*changeFrameIntegration/)
+  assert.match(connect, /teamsAccountConnected.*changeFrameIntegration/)
   assert.match(setup, /modulesJson=\{modules\}/)
+})
+
+
+test('legacy transition preserves active providers and disconnects disable frame state', () => {
+  assert.match(home, /function integrationModulesAfterChange/)
+  assert.match(home, /Object\.fromEntries\(legacyEnabled\.map\(provider => \[provider, \{ enabled: true \}\]\)\)/)
+  assert.match(connect, /spondAccountConnected \? \['spond' as const\]/)
+  assert.match(connect, /teamsAccountConnected \? \['teams' as const\]/)
+  assert.match(connect, /localEventsAccountConnected \? \['local-events' as const\]/)
+  assert.match(connect, /connectAppIsConnected\(modulesJson, 'waste'\)/)
+  assert.match(connect, /setSpondAccountConnected\(false\)[\s\S]*changeFrameIntegration\('spond', \{ enabled: false \}\)/)
+  assert.match(connect, /setTeamsAccountConnected\(false\)[\s\S]*changeFrameIntegration\('teams', \{ enabled: false \}\)/)
+  assert.match(connect, /setLocalEventsAccountConnected\(false\)[\s\S]*changeFrameIntegration\('local-events', \{ enabled: false \}\)/)
+})
+
+test('settings lookup errors fail closed while valid legacy settings stay compatible', () => {
+  assert.match(remindersRoute, /deviceSettingsData, error: deviceSettingsError/)
+  assert.match(remindersRoute, /logOptionalReminderProviderFailure\('device_settings'/)
+  assert.match(remindersRoute, /!deviceSettingsError && \(!explicitIntegrationSelection \|\|/)
+  assert.match(remindersRoute, /if \(!providerEnabled\('spond'\)\) return/)
+  assert.match(remindersRoute, /if \(!providerEnabled\('local-events'\)\) return/)
+})
+
+test('onboarding drafts are device scoped and cleared across authenticated users', () => {
+  assert.match(setup, /remind:onboarding:\$\{activeDeviceId\}/)
+  assert.match(home, /onboardingDraftUser !== session\.user\.id/)
+  assert.match(home, /key\?\.startsWith\('remind:onboarding:'\)/)
+  assert.match(home, /sessionStorage\.removeItem\('remind:onboarding-user'\)/)
 })

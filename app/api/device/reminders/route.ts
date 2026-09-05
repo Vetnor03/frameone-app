@@ -464,7 +464,8 @@ export async function GET(req: Request) {
     const { data, error } = remindersResult
     const { data: completionsData, error: completionsError } = completionsResult
     const { data: membersData, error: membersError } = membersResult
-    const { data: deviceSettingsData } = deviceSettingsResult
+    const { data: deviceSettingsData, error: deviceSettingsError } = deviceSettingsResult
+    if (deviceSettingsError) logOptionalReminderProviderFailure('device_settings', deviceSettingsError)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -512,7 +513,7 @@ export async function GET(req: Request) {
     const configuredModules = (deviceSettingsData?.settings_json as any)?.modules
     const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
     const selectedIntegrations = configuredModules?.integrations || {}
-    const providerEnabled = (provider: string) => !explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true
+    const providerEnabled = (provider: string) => !deviceSettingsError && (!explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true)
     if (memberUserIds.length > 0) {
       if (!skipSync) {
         const syncResults = await Promise.allSettled([
