@@ -119,8 +119,8 @@ bool connectSaved(uint32_t timeoutMs) {
   return false;
 }
 
-bool applyOperationalPowerPolicy(bool usbPresent) {
-  if (g_policyInitialized && usbPresent == g_lastPolicyUsbPresent) {
+bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
+  if (!force && g_policyInitialized && usbPresent == g_lastPolicyUsbPresent) {
     return usbPresent ? true : g_lastBatteryConnectedIdleReady;
   }
 
