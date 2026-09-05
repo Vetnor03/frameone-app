@@ -38,6 +38,7 @@ import { orderedLayoutItems, customPhysicalPayload, nextCustomLayoutName, normal
 import { projectSlotMemoryIntoBuiltInLayout, sanitizeLayoutModuleMemory as sanitizeCanonicalLayoutModuleMemory, serializeBuiltInLayoutCells } from './lib/frameLayoutTransition'
 import { AddLayoutCard, CustomLayoutPreview, InlineCustomLayoutEditor, editorCells, initialEditorCells, withSlots } from './components/CustomLayoutLibrary'
 import type { EditorCell } from './lib/frameLayoutEditor.mjs'
+import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
 
 type CoreTabKey = 'frame' | 'settings'
 type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
@@ -112,6 +113,12 @@ const UI = {
     addFrame: '+ ADD FRAME',
     editFrames: 'EDIT',
     doneEditingFrames: 'DONE',
+    renameFrame: 'RENAME',
+    frameName: 'Frame name',
+    saveFrameName: 'SAVE',
+    cancelFrameName: 'CANCEL',
+    emptyFrameName: 'Enter a frame name.',
+    frameNameTooLong: 'Frame names can be up to 40 characters.',
     deleteFrame: 'DELETE',
     deleteFrameTitle: 'DELETE FRAME',
     deleteFrameConfirm: 'This removes the frame from your app. This action cannot be undone.',
@@ -232,6 +239,12 @@ const UI = {
     addFrame: '+ LEGG TIL FRAME',
     editFrames: 'REDIGER',
     doneEditingFrames: 'FERDIG',
+    renameFrame: 'ENDRE NAVN',
+    frameName: 'Navn på frame',
+    saveFrameName: 'LAGRE',
+    cancelFrameName: 'AVBRYT',
+    emptyFrameName: 'Skriv inn et navn på framen.',
+    frameNameTooLong: 'Navnet kan ha opptil 40 tegn.',
     deleteFrame: 'SLETT',
     deleteFrameTitle: 'SLETT FRAME',
     deleteFrameConfirm: 'Dette fjerner framen fra appen din. Denne handlingen kan ikke angres.',
@@ -495,6 +508,7 @@ type SettingsJson = {
 type MemberRow = {
   device_id: string
   role: string | null
+  display_name?: string | null
   current_version?: string | null
   battery_percent?: number | null
   battery_voltage?: number | null
@@ -692,10 +706,16 @@ async function fetchCurrentUserFrames(userId: string): Promise<MemberRow[]> {
   const memberRows = (members || []) as Array<{ device_id: string; role: string | null }>
   const deviceIds = memberRows.map((m) => m.device_id).filter(Boolean)
   const statusMap = await fetchDeviceStatusMap(deviceIds)
+  const nameMap = new Map<string, string | null>()
+  if (deviceIds.length > 0) {
+    const { data: devices } = await supabase.rpc('get_accessible_frame_names')
+    for (const device of devices || []) nameMap.set(device.device_id, device.display_name)
+  }
 
   return memberRows.map((m) => ({
     device_id: m.device_id,
     role: m.role,
+    display_name: nameMap.get(m.device_id) ?? null,
     current_version: statusMap.get(m.device_id)?.current_version ?? null,
     battery_percent: statusMap.get(m.device_id)?.battery_percent ?? null,
     battery_voltage: statusMap.get(m.device_id)?.battery_voltage ?? null,
@@ -8724,6 +8744,10 @@ function MyFramesSection({
   const [deleteTarget, setDeleteTarget] = useState<MemberRow | null>(null)
   const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
 
   const t = tx(language)
   const batteryLabel = language === 'no' ? 'Batteri' : 'Battery'
@@ -8801,6 +8825,52 @@ function MyFramesSection({
       setDeleteError(errorMessage(e))
     } finally {
       setDeletingDeviceId(null)
+    }
+  }
+
+  function beginRename(frame: MemberRow) {
+    if (frame.role?.toLowerCase() !== 'owner') return
+    setRenameTargetId(frame.device_id)
+    setRenameDraft(frame.display_name || '')
+    setRenameError(null)
+  }
+
+  function cancelRename() {
+    setRenameTargetId(null)
+    setRenameDraft('')
+    setRenameError(null)
+  }
+
+  async function saveName(frame: MemberRow) {
+    if (frame.role?.toLowerCase() !== 'owner' || renaming) return
+    const normalized = normalizeFrameName(renameDraft)
+    if (!normalized.ok) {
+      setRenameError(normalized.error === 'empty_frame_name' ? t.emptyFrameName : t.frameNameTooLong)
+      return
+    }
+
+    setRenaming(true)
+    setRenameError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('missing_auth_token')
+      const response = await fetch('/api/frame/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ device_id: frame.device_id, display_name: normalized.name }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || payload?.ok !== true) throw new Error(payload?.error || 'rename_failed')
+
+      // Optimistic local replacement makes the shared name visible immediately;
+      // reload verifies and replaces it with the persisted record.
+      onFramesChanged(frames.map((item) => item.device_id === frame.device_id ? { ...item, display_name: normalized.name } : item))
+      cancelRename()
+      await reload()
+    } catch (error) {
+      setRenameError(errorMessage(error))
+    } finally {
+      setRenaming(false)
     }
   }
 
@@ -8894,6 +8964,7 @@ function MyFramesSection({
               onClick={() => {
                 setEditingFrames((value) => !value)
                 setDeleteError(null)
+                cancelRename()
               }}
               disabled={frames.length === 0}
               className={`min-h-10 rounded-xl border px-3 text-[11px] uppercase tracking-[0.22em] transition ${
@@ -8937,6 +9008,8 @@ function MyFramesSection({
 
           {frames.map((f) => {
             const selected = f.device_id === activeDeviceId
+            const isOwner = f.role?.toLowerCase() === 'owner'
+            const isRenaming = renameTargetId === f.device_id
             const batteryPercent = normalizeBatteryPercent(f.battery_percent)
             const hasBattery = batteryPercent !== null
             const isCharging = f.is_usb_present === true || f.is_charging === true
@@ -8947,14 +9020,15 @@ function MyFramesSection({
                   selected ? 'border-[#2aa3ff] text-[#2aa3ff]' : 'border-[color:var(--bd-10)] text-[color:var(--fg-70)]'
                 }`}
               >
-                <button onClick={() => onSelectDevice(f.device_id)} className="min-w-0 flex-1 text-left">
-                  <div className="truncate text-base tracking-[0.14em]">{f.device_id}</div>
+                {!isRenaming && <button onClick={() => onSelectDevice(f.device_id)} className="min-w-0 flex-1 text-left">
+                  <div className="truncate text-base font-medium tracking-[0.04em]">{f.display_name?.trim() || (language === 'no' ? 'Min Frame' : 'My Frame')}</div>
+                  <div className="mt-1 truncate text-[10px] opacity-45 normal-case tracking-[0.08em]" title={f.device_id}>{f.device_id}</div>
                   {!!f.current_version && (
                     <div className="mt-1 text-xs opacity-60 normal-case tracking-[0.06em]">
                       {f.current_version}
                     </div>
                   )}
-                </button>
+                </button>}
 
                 {!editingFrames && <div
                   className="shrink-0 inline-flex items-center gap-1.5 text-xs opacity-70 normal-case tracking-[0.06em]"
@@ -8967,7 +9041,11 @@ function MyFramesSection({
 
                 {!editingFrames && <div className="shrink-0 text-xs uppercase tracking-[0.06em] opacity-70">{(f.role || 'member').toUpperCase()}</div>}
 
-                {editingFrames && (
+                {editingFrames && !isRenaming && (
+                  <div className="flex shrink-0 gap-2">
+                  {isOwner && <button type="button" onClick={() => beginRename(f)} className="rounded-2xl border border-[color:var(--bd-20)] px-3 py-2 text-xs uppercase tracking-[0.12em]">
+                    {t.renameFrame}
+                  </button>}
                   <button
                     onClick={() => {
                       setDeleteTarget(f)
@@ -8978,7 +9056,14 @@ function MyFramesSection({
                   >
                     {deletingDeviceId === f.device_id ? t.deleting : t.deleteFrame}
                   </button>
+                  </div>
                 )}
+                {editingFrames && isRenaming && isOwner && <div className="min-w-0 flex-1" onClick={(event) => event.stopPropagation()}>
+                  <label className="sr-only" htmlFor={`frame-name-${f.device_id}`}>{t.frameName}</label>
+                  <input id={`frame-name-${f.device_id}`} autoFocus value={renameDraft} maxLength={MAX_FRAME_NAME_LENGTH} onChange={(event) => { setRenameDraft(event.target.value); setRenameError(null) }} onKeyDown={(event) => { if (event.key === 'Enter') void saveName(f); if (event.key === 'Escape') cancelRename() }} className="h-10 w-full rounded-xl border border-[color:var(--bd-20)] bg-transparent px-3 text-sm outline-none focus:border-[#2aa3ff]" />
+                  {renameError && <p role="alert" className="mt-1 text-xs text-[color:var(--danger)]">{renameError}</p>}
+                  <div className="mt-2 flex gap-2"><button type="button" disabled={renaming || !renameDraft.trim()} onClick={() => void saveName(f)} className="rounded-xl border border-[#2aa3ff] px-3 py-1.5 text-[10px] tracking-[0.12em] text-[#2aa3ff] disabled:opacity-40">{t.saveFrameName}</button><button type="button" disabled={renaming} onClick={cancelRename} className="px-3 py-1.5 text-[10px] tracking-[0.12em] opacity-70">{t.cancelFrameName}</button></div>
+                </div>}
               </div>
             )
           })}
