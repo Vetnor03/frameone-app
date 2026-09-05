@@ -5,10 +5,11 @@ NET = Path('frame/src/network/NetClient.cpp').read_text()
 CHECKER = Path('frame/src/network/UpdateChecker.cpp').read_text()
 SIGNATURE = Path('app/lib/device/contentSignature.mjs').read_text()
 
-def test_revision_probe_is_one_second_and_idle_is_cheap():
+def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
+    assert 'static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;' in MAIN
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
-    assert 'delay(REALTIME_UPDATE_POLL_MS);' in loop
+    assert 'delay(pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS);' in loop
     assert 'LiveUpdate::probe' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
@@ -125,17 +126,18 @@ def test_revision_fields_are_uint64_and_malformed_values_are_rejected():
     assert 'if (deserializeJson(doc, body)) {' in LIVE
 
 
-def test_wifi_reconnect_restores_realtime_no_power_save_policy():
+def test_wifi_reconnect_restores_source_aware_power_policy():
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
     reconnect = loop[loop.index('WiFiManagerV2::connectSaved'):loop.index('Serial.println("LiveUpdate: Wi-Fi reconnected")')]
-    assert 'WiFi.setSleep(false)' in reconnect
-    assert 'esp_wifi_set_ps(WIFI_PS_NONE)' in reconnect
+    assert 'applyOperationalPowerPolicy(pwr.usbPresent, true)' in reconnect
+    assert 'WIFI_PS_NONE' not in reconnect
+    assert 'connected light sleep is unavailable' in reconnect
 
 
 def test_probe_and_render_failures_have_bounded_retry_backoff():
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
     assert 'REALTIME_FAILURE_BACKOFF_MS = 5000' in MAIN
-    assert 'delay(REALTIME_FAILURE_BACKOFF_MS - REALTIME_UPDATE_POLL_MS)' in loop
+    assert 'delay(REALTIME_FAILURE_BACKOFF_MS)' in loop
     assert 'delay(configRetryMs)' in loop
     assert 'configRetryMs = (configRetryMs >= 2500U)' in loop
     assert ': configRetryMs * 2U' in loop
