@@ -109,6 +109,10 @@ const UI = {
     contact: 'Contact',
     shop: 'Shop',
     logout: 'Log out',
+    logoutTitle: 'LOG OUT?',
+    logoutConfirm: 'Are you sure you want to log out of the app?',
+    logoutConfirmButton: 'LOG OUT',
+    loggingOut: 'LOGGING OUT…',
 
     myFrames: 'MY FRAMES',
     addFrame: '+ ADD FRAME',
@@ -235,6 +239,10 @@ const UI = {
     contact: 'Kontakt',
     shop: 'Butikk',
     logout: 'Logg ut',
+    logoutTitle: 'LOGG UT?',
+    logoutConfirm: 'Er du sikker på at du vil logge ut av appen?',
+    logoutConfirmButton: 'LOGG UT',
+    loggingOut: 'LOGGER UT…',
 
     myFrames: 'MINE FRAMES',
     addFrame: '+ LEGG TIL FRAME',
@@ -8132,7 +8140,7 @@ function SettingsTab({
   activeDeviceId: string | null
   onSelectDevice: (id: string) => void
   onFramesChanged: (frames: MemberRow[]) => void
-  onLogout: () => void
+  onLogout: () => Promise<void>
   onGo: (path: string) => void
   initialSubpage?: 'subscription' | null
   notificationState: NotificationState
@@ -8148,6 +8156,18 @@ function SettingsTab({
   const [showTopFade, setShowTopFade] = useState(false)
   const [showBottomFade, setShowBottomFade] = useState(false)
   const [subpage, setSubpage] = useState<'subscription' | null>(initialSubpage ?? null)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function confirmLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await onLogout()
+    } finally {
+      setLoggingOut(false)
+    }
+  }
 
   function updateFadeState() {
     const el = scrollRef.current
@@ -8257,9 +8277,35 @@ function SettingsTab({
         </div>
 
         <div className="shrink-0 border-t border-[color:var(--bd-10)] pb-[6px] pt-1">
-          <SettingRow label={t.logout} value="" onClick={onLogout} variant="danger" />
+          <SettingRow label={t.logout} value="" onClick={() => setLogoutConfirmOpen(true)} variant="danger" />
         </div>
       </div>
+
+      {logoutConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title">
+          <div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--danger-bd)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5">
+            <div id="logout-confirm-title" className="text-sm tracking-widest text-[color:var(--danger)]">{t.logoutTitle}</div>
+            <p className="mt-4 text-sm leading-6 text-[color:var(--fg-70)]">{t.logoutConfirm}</p>
+
+            <button
+              type="button"
+              onClick={() => void confirmLogout()}
+              disabled={loggingOut}
+              className="mt-6 h-12 w-full rounded-2xl border border-[color:var(--danger-bd)] bg-[color:var(--danger-bg)] text-sm tracking-widest text-[color:var(--danger)] disabled:opacity-50"
+            >
+              {loggingOut ? t.loggingOut : t.logoutConfirmButton}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogoutConfirmOpen(false)}
+              disabled={loggingOut}
+              className="mt-3 h-12 w-full rounded-2xl border border-[color:var(--bd-15)] text-sm tracking-widest text-[color:var(--fg-60)] disabled:opacity-40"
+            >
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
