@@ -754,8 +754,17 @@ async function claimPairCodeAndLoadFrames(code: string, currentFrames: MemberRow
   }
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+function errorMessage(error: unknown, fallback = 'Something went wrong. Please try again.') {
+  if (error instanceof Error && error.message.trim()) return error.message.trim()
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>
+    if (typeof value.message === 'string' && value.message.trim()) return value.message.trim()
+    for (const key of ['error', 'details', 'code'] as const) {
+      if (typeof value[key] === 'string' && value[key].trim()) return value[key].trim()
+    }
+  }
+  if (typeof error === 'string' && error.trim() && error !== '[object Object]') return error.trim()
+  return fallback
 }
 
 
@@ -2186,7 +2195,7 @@ export default function HomePage() {
 
     let nextLayout: LayoutKey = layoutKey
     let nextCellsByLayout = cellsByLayout
-    let nextModules = mergeReusableUserModules({ ...modulesJson }, selection.modules)
+    let nextModules = { ...modulesJson, ...selection.modules }
     let nextPinnedTabs: ModuleKey[] = []
 
     if (selection.purpose === 'normal') {
@@ -2885,12 +2894,14 @@ function ConnectAppsScreen({
   activeDeviceId = null,
   onBack,
   startup = false,
+  onIntegrationConnected,
 }: {
   language: AppLanguage
   modulesJson: Record<string, unknown>
   activeDeviceId?: string | null
   onBack: () => void
   startup?: boolean
+  onIntegrationConnected?: (key: ConnectAppKey, config?: Record<string, unknown>) => void
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
@@ -2900,13 +2911,13 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
-  const [spondConnected, setSpondConnected] = useState(connectAppIsConnected(modulesJson, 'spond'))
+  const [spondConnected, setSpondConnected] = useState(startup ? false : connectAppIsConnected(modulesJson, 'spond'))
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondModalOpen, setSpondModalOpen] = useState(false)
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
-  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || connectAppIsConnected(modulesJson, 'teams'))
+  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || (!startup && connectAppIsConnected(modulesJson, 'teams')))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
@@ -2918,7 +2929,7 @@ function ConnectAppsScreen({
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
-    return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
+    return startup ? null : normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
   })
   const [localEventsDraftArea, setLocalEventsDraftArea] = useState<LocalEventAreaPreference>(() => localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
 
@@ -3015,6 +3026,7 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Failed to connect Spond')
       setLocallyDisconnectedApps((current) => ({ ...current, spond: false }))
       setSpondConnected(true)
+      onIntegrationConnected?.('spond', { enabled: true })
       setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : username)
       setSpondPassword('')
       setSpondModalOpen(false)
@@ -3043,7 +3055,7 @@ function ConnectAppsScreen({
     if (!resp.ok) return
     const json = await resp.json()
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
-    setLocalEventsSavedArea(json?.connected === true ? area : null)
+    if (!startup) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
   }
@@ -3064,6 +3076,7 @@ function ConnectAppsScreen({
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
+      onIntegrationConnected?.('local-events', { enabled: true, areaPreference: saved })
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
       setLocallyDisconnectedApps((current) => ({ ...current, 'local-events': false }))
@@ -3145,8 +3158,12 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    fetchSpondStatus()
-    fetchTeamsStatus()
+    if (!startup) {
+      fetchSpondStatus()
+      fetchTeamsStatus()
+    } else if (initialTeamsOAuthStatus === 'connected') {
+      onIntegrationConnected?.('teams', { enabled: true })
+    }
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
@@ -8543,60 +8560,70 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  const setupModules = ['date', 'reminders', 'weather', 'countdown'] as const
+  const guidedModules = ['reminders', 'weather', 'countdown'] as const
+  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>('purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose>('normal')
   const [moduleIndex, setModuleIndex] = useState(0)
-  const [modules, setModules] = useState<Record<string, any>>({})
+  const [modules, setModules] = useState<Record<string, any>>({ integration_selection_explicit: true, integrations: {} })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reminderComposerOpen, setReminderComposerOpen] = useState(false)
   const [reminderDraft, setReminderDraft] = useState<ReminderUiItem | null>(null)
   const [countdownComposerOpen, setCountdownComposerOpen] = useState(false)
+  const [countdownDraft, setCountdownDraft] = useState<{ title: string; date: string } | null>(null)
   const isNo = language === 'no'
-  const current = setupModules[moduleIndex]
+  const current = guidedModules[moduleIndex]
 
-  async function advance() {
-    if (saving) return
-    setError(null)
-    if (moduleIndex < setupModules.length - 1) {
-      setModuleIndex(index => index + 1)
-      return
-    }
-    try {
-      setSaving(true)
-      await onComplete({ purpose: 'normal', modules })
-    } catch (reason) {
-      setError(errorMessage(reason))
-    } finally {
-      setSaving(false)
-    }
+  function selectIntegration(key: ConnectAppKey, config: Record<string, unknown> = { enabled: true }) {
+    setModules(value => ({ ...value, integration_selection_explicit: true, integrations: { ...(value.integrations || {}), [key]: config } }))
   }
 
-  return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
-      <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
-        <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
-          <div className="flex items-center justify-between">
-            <button type="button" disabled={moduleIndex === 0 || saving} onClick={() => setModuleIndex(index => Math.max(0, index - 1))} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>
-            <span className="text-xs text-[color:var(--fg-50)]">{moduleIndex + 1} / {setupModules.length}</span>
-          </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${((moduleIndex + 1) / setupModules.length) * 100}%` }} /></div>
-        </div>
-        <div className="overflow-y-auto p-6">
-          <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
-          <h1 className="mt-3 text-2xl font-medium">{current === 'date' ? (isNo ? 'Dato' : 'Date') : current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
-          {current === 'date' && <p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Dato og norske helligdager oppdateres automatisk.' : 'The date and Norwegian holidays update automatically.'}</p>}
-          {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse, koble til kalenderne dine, eller fortsett med et nyttig startsett.' : 'Add a reminder, connect your calendars, or continue with a useful starter set.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup /></div></>}
-          {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Oslo brukes hvis du hopper over' : 'Oslo is used if you skip')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
-          {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til din egen nedtelling, eller fortsett med et lite redigerbart startsett.' : 'Add your own countdown, or continue with a small editable starter set.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL NEDTELLING' : 'ADD COUNTDOWN'}</button></>}
-          {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}
-          <button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === setupModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
-        </div>
-      </div>
-      {reminderComposerOpen && <NaturalReminderComposer language={language} activeDeviceId={activeDeviceId} fallbackDate={toLocalYmd(new Date())} selectedDate={null} onClose={() => setReminderComposerOpen(false)} onSaved={() => setReminderComposerOpen(false)} onEditDetails={(draft) => { setReminderComposerOpen(false); setReminderDraft(draft) }} />}
-      {reminderDraft && <ReminderDraftSheet language={language} activeDeviceId={activeDeviceId} editingReminder={null} initialDraft={reminderDraft} initialDate={reminderDraft.date || toLocalYmd(new Date())} onClose={() => setReminderDraft(null)} onSaved={() => setReminderDraft(null)} onDeleted={() => setReminderDraft(null)} />}
-      {countdownComposerOpen && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialDate={toLocalYmd(new Date())} onClose={() => setCountdownComposerOpen(false)} onSaved={() => setCountdownComposerOpen(false)} onDeleted={() => setCountdownComposerOpen(false)} />}
+  async function finish(selectedPurpose: SetupPurpose) {
+    if (saving) return
+    try {
+      setSaving(true)
+      setError(null)
+      await onComplete({ purpose: selectedPurpose, modules: selectedPurpose === 'normal' ? modules : {} })
+    } catch (reason) {
+      console.error('Initial frame setup failed', reason)
+      setError(errorMessage(reason, isNo ? 'Kunne ikke fullføre oppsettet. Prøv igjen.' : 'Could not finish setup. Please try again.'))
+    } finally { setSaving(false) }
+  }
+
+  async function advance() {
+    if (moduleIndex < guidedModules.length - 1) { setError(null); setModuleIndex(index => index + 1); return }
+    await finish('normal')
+  }
+
+  function goBack() {
+    if (saving) return
+    setError(null)
+    if (step === 'custom') setStep('purpose')
+    else if (step === 'guided' && moduleIndex > 0) setModuleIndex(index => index - 1)
+    else if (step === 'guided') setStep('purpose')
+  }
+
+  const shell = (children: React.ReactNode, showProgress = false) => <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
+    <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
+      <div className="border-b border-[color:var(--bd-10)] px-5 py-4"><div className="flex items-center justify-between"><button type="button" disabled={step === 'purpose' || saving} onClick={goBack} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>{showProgress && <span className="text-xs text-[color:var(--fg-50)]">{moduleIndex + 1} / {guidedModules.length}</span>}</div>{showProgress && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${((moduleIndex + 1) / guidedModules.length) * 100}%` }} /></div>}</div>
+      <div className="overflow-y-auto p-6">{children}</div>
     </div>
-  )
+  </div>
+
+  if (step === 'purpose') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{(['normal', 'custom'] as SetupPurpose[]).map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nedtelling.' : 'Date, Reminders, Weather, and Countdown.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
+
+  if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
+
+  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
+    {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse eller koble til tjenester du vil ha på framen.' : 'Add a reminder or connect services you want on your frame.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationConnected={selectIntegration} /></div></>}
+    {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
+    {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Beskriv nedtellingen med egne ord, eller legg inn tittel og dato manuelt.' : 'Describe your countdown in your own words, or enter its title and date manually.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'BESKRIV NEDTELLING' : 'DESCRIBE COUNTDOWN'}</button></>}
+    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
+    {reminderComposerOpen && <NaturalReminderComposer language={language} activeDeviceId={activeDeviceId} fallbackDate={toLocalYmd(new Date())} selectedDate={null} onClose={() => setReminderComposerOpen(false)} onSaved={() => setReminderComposerOpen(false)} onEditDetails={(draft) => { setReminderComposerOpen(false); setReminderDraft(draft) }} />}
+    {reminderDraft && <ReminderDraftSheet language={language} activeDeviceId={activeDeviceId} editingReminder={null} initialDraft={reminderDraft} initialDate={reminderDraft.date || toLocalYmd(new Date())} onClose={() => setReminderDraft(null)} onSaved={() => setReminderDraft(null)} onDeleted={() => setReminderDraft(null)} />}
+    {countdownComposerOpen && <NaturalCountdownComposer language={language} onClose={() => setCountdownComposerOpen(false)} onDraft={(draft) => { setCountdownComposerOpen(false); setCountdownDraft(draft) }} />}
+    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={() => setCountdownDraft(null)} onDeleted={() => setCountdownDraft(null)} />}
+  </>, true)
 }
 function FirstFrameOnboarding({
   language,
@@ -10232,10 +10259,40 @@ function CountdownModuleSettingsTab({
   )
 }
 
+function NaturalCountdownComposer({ language, onClose, onDraft }: { language: AppLanguage; onClose: () => void; onDraft: (draft: { title: string; date: string }) => void }) {
+  const [text, setText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  async function interpret() {
+    if (!text.trim() || parsing) return
+    setParsing(true); setFailed(false)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const accessToken = data.session?.access_token
+      if (!accessToken) throw new Error('sign in')
+      const now = new Date()
+      const offset = -now.getTimezoneOffset()
+      const sign = offset >= 0 ? '+' : '-'
+      const localNow = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`
+      const response = await fetch('/api/reminders/parse', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ text: text.trim(), localNow, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null, language }) })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok || json.status !== 'ready' || !json.reminder?.title || !json.reminder?.due_date) throw new Error('parse failed')
+      onDraft({ title: json.reminder.title, date: json.reminder.due_date })
+    } catch (error) {
+      console.error('Countdown parsing failed', error)
+      setFailed(true)
+    } finally { setParsing(false) }
+  }
+
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[color:var(--overlay-55)]"><div className="w-full max-w-[420px] rounded-t-3xl border-t border-[color:var(--bd-10)] bg-[color:var(--sheet-bg)] px-5 pb-8 pt-5"><div className="flex items-center justify-between"><div className="text-sm tracking-widest text-[color:var(--fg-70)]">{language === 'no' ? 'NY NEDTELLING' : 'NEW COUNTDOWN'}</div><button onClick={onClose} className="text-xl text-[color:var(--fg-60)]">✕</button></div><label className="mt-6 block text-lg font-medium text-[color:var(--fg-95)]">{language === 'no' ? 'Hva teller du ned til?' : 'What are you counting down to?'}</label><textarea autoFocus rows={4} value={text} onChange={event => { setText(event.target.value); setFailed(false) }} placeholder={language === 'no' ? 'Bryllup 18. august 2027' : "Vetle's birthday October 4"} className="mt-3 w-full resize-none rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] p-4 text-[color:var(--fg-90)] outline-none" /><SensitiveInformationHelper language={language} />{failed && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{language === 'no' ? 'Kunne ikke tolke nedtellingen. Legg inn tittel og dato manuelt.' : 'Could not understand the countdown. Enter the title and date manually.'}</p>}<button onClick={interpret} disabled={!text.trim() || parsing} className="mt-5 h-12 w-full rounded-2xl border border-[#2aa3ff] text-sm tracking-widest text-[#2aa3ff] disabled:opacity-40">{parsing ? (language === 'no' ? 'TOLKER…' : 'UNDERSTANDING…') : (language === 'no' ? 'FORTSETT' : 'CONTINUE')}</button>{failed && <button onClick={() => onDraft({ title: text.trim(), date: toLocalYmd(new Date()) })} className="mt-3 h-10 w-full text-xs tracking-widest text-[color:var(--fg-60)]">{language === 'no' ? 'REDIGER MANUELT' : 'EDIT MANUALLY'}</button>}</div></div>
+}
+
 function CountdownDraftSheet({
   language,
   activeDeviceId,
   editingItem,
+  initialTitle,
   initialDate,
   onClose,
   onSaved,
@@ -10244,12 +10301,13 @@ function CountdownDraftSheet({
   language: AppLanguage
   activeDeviceId: string
   editingItem: CountdownItem | null
+  initialTitle?: string
   initialDate?: string
   onClose: () => void
   onSaved: () => void | Promise<void>
   onDeleted: () => void | Promise<void>
 }) {
-  const [title, setTitle] = useState(editingItem?.title ?? '')
+  const [title, setTitle] = useState(editingItem?.title ?? initialTitle ?? '')
   const [date, setDate] = useState(editingItem?.date ?? initialDate ?? toLocalYmd(new Date()))
   const [pinned, setPinned] = useState(!!editingItem?.pinned)
 

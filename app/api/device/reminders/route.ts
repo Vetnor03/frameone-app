@@ -444,7 +444,7 @@ export async function GET(req: Request) {
     const sharedDeviceIds = await sharedDeviceIdsForFrame(supabase, device_id)
 
     // These reads share only sharedDeviceIds, so overlap their network latency.
-    const [remindersResult, completionsResult, membersResult] = await Promise.all([supabase
+    const [remindersResult, completionsResult, membersResult, deviceSettingsResult] = await Promise.all([supabase
       .from('reminders')
       .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done, starter_key')
       .in('device_id', sharedDeviceIds)
@@ -456,10 +456,15 @@ export async function GET(req: Request) {
       .in('device_id', sharedDeviceIds), supabase
       .from('device_members')
       .select('user_id')
-      .eq('device_id', device_id)])
+      .eq('device_id', device_id), supabase
+      .from('device_settings')
+      .select('settings_json')
+      .eq('device_id', device_id)
+      .maybeSingle()])
     const { data, error } = remindersResult
     const { data: completionsData, error: completionsError } = completionsResult
     const { data: membersData, error: membersError } = membersResult
+    const { data: deviceSettingsData } = deviceSettingsResult
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -504,11 +509,18 @@ export async function GET(req: Request) {
     let teamsItems: DeviceReminderItem[] = []
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
+    const configuredModules = (deviceSettingsData?.settings_json as any)?.modules
+    const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
+    const selectedIntegrations = configuredModules?.integrations || {}
+    const providerEnabled = (provider: string) => !explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true
+    const spondUserIds = providerEnabled('spond') ? memberUserIds : []
+    const teamsUserIds = providerEnabled('teams') ? memberUserIds : []
+    const wasteUserIds = providerEnabled('waste') ? memberUserIds : []
     if (memberUserIds.length > 0) {
       if (!skipSync) {
         const syncResults = await Promise.allSettled([
-          syncSpondIfStaleForUsers(memberUserIds),
-          Promise.allSettled(memberUserIds.map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
+          syncSpondIfStaleForUsers(spondUserIds),
+          Promise.allSettled(teamsUserIds.map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
         ])
         syncResults.forEach((result) => {
           if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
@@ -521,7 +533,7 @@ export async function GET(req: Request) {
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'spond')
-          .in('user_id', memberUserIds)
+          .in('user_id', spondUserIds)
           .order('priority', { ascending: true })
           .order('starts_at', { ascending: true, nullsFirst: false })
 
@@ -542,7 +554,7 @@ export async function GET(req: Request) {
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'teams')
-          .in('user_id', memberUserIds)
+          .in('user_id', teamsUserIds)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (teamsIntegrationItemsError) throw teamsIntegrationItemsError
@@ -561,7 +573,7 @@ export async function GET(req: Request) {
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'waste')
-          .in('user_id', memberUserIds)
+          .in('user_id', wasteUserIds)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (wasteIntegrationItemsError) throw wasteIntegrationItemsError

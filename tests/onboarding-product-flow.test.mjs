@@ -12,8 +12,8 @@ function setupSource() {
   return home.slice(home.indexOf('function FrameSetupFlow({'), home.indexOf('function FirstFrameOnboarding({'))
 }
 
-test('first setup is exactly Date, Reminders, Weather, Countdown and excludes AI Follow', () => {
-  assert.match(setupSource(), /\['date', 'reminders', 'weather', 'countdown'\] as const/)
+test('first setup guides Reminders, Weather, Countdown and excludes AI Follow', () => {
+  assert.match(setupSource(), /guidedModules = \['reminders', 'weather', 'countdown'\] as const/)
   assert.doesNotMatch(setupSource(), /AI Follow|assistant|ai-intro|plans/)
   assert.match(setupSource(), /Continue \/ Skip/)
 })
