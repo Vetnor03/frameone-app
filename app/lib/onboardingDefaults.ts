@@ -47,6 +47,25 @@ function addUtcDays(date: Date, days: number) {
   return result
 }
 
+export const MOVABLE_NORWAY_STARTER_KEYS = new Set([
+  'mothers-day', 'fathers-day', 'maundy-thursday', 'good-friday',
+  'easter-monday', 'ascension-day', 'whit-monday',
+])
+
+/** Resolve a starter key for a specific year; null means ordinary recurrence. */
+export function norwegianStarterReminderDate(key: string, year: number): string | null {
+  if (key === 'mothers-day') return ymd(nthWeekdayOfMonth(year, 2, 0, 2))
+  if (key === 'fathers-day') return ymd(nthWeekdayOfMonth(year, 11, 0, 2))
+  const offsets: Record<string, number> = {
+    'maundy-thursday': -3,
+    'good-friday': -2,
+    'easter-monday': 1,
+    'ascension-day': 39,
+    'whit-monday': 50,
+  }
+  return key in offsets ? ymd(addUtcDays(easterSunday(year), offsets[key])) : null
+}
+
 export function nthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number) {
   const first = utcDate(year, month, 1)
   const day = 1 + ((weekday - first.getUTCDay() + 7) % 7) + (nth - 1) * 7

@@ -2119,6 +2119,7 @@ export async function GET(req: Request) {
     if (frameConfig.pair_required === true || frameConfig.unpaired === true) {
       return NextResponse.json(frameConfig)
     }
+    if (frameConfig.setup_pending === true) return NextResponse.json(frameConfig)
 
     const settings = asRecord(frameConfig.settings_json)
     const modules = asRecord(settings.modules)

@@ -43,3 +43,38 @@ test('claimed frame without canonical settings renders setup pending', () => {
   assert.match(firmware, /Waiting for setup/)
   assert.match(firmware, /Finish setup in the RE:MIND app/)
 })
+
+test('successful onboarding requests the normal durable device revision before leaving setup', () => {
+  const completion = home.slice(home.indexOf('async function completeFrameSetup'), home.indexOf('async function customLayoutRequest'))
+  assert.match(completion, /complete_initial_device_onboarding/)
+  assert.match(completion, /await requestDeviceUpdate\(supabase, activeDeviceId, crypto\.randomUUID\(\)\)/)
+  assert.ok(completion.indexOf('complete_initial_device_onboarding') < completion.indexOf('requestDeviceUpdate'))
+  assert.ok(completion.indexOf('requestDeviceUpdate') < completion.indexOf('setSetupDeviceId(null)'))
+})
+
+test('setup-pending payload is guarded by every shared payload consumer', () => {
+  const signature = readFileSync(new URL('../app/api/device/content-signature/route.ts', import.meta.url), 'utf8')
+  const mirror = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+  assert.match(signature, /'setup_pending' in config/)
+  assert.match(mirror, /frameConfig\.setup_pending === true/)
+})
+
+test('firmware remembers its waiting screen and skips repeat e-paper redraws', () => {
+  const loop = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', import.meta.url), 'utf8')
+  assert.match(loop, /getBool\("setup_wait", false\)/)
+  assert.match(loop, /if \(!setupPendingScreenShown\(\)\)/)
+  assert.match(loop, /skipping e-paper redraw/)
+  assert.match(loop, /rememberSetupPendingScreen\(false\)/)
+})
+
+test('calendar refresh uses a rolling horizon without reconnecting', () => {
+  const route = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
+  const teams = readFileSync(new URL('../app/lib/integrations/teams/server.ts', import.meta.url), 'utf8')
+  const signature = readFileSync(new URL('../app/lib/device/contentSignature.mjs', import.meta.url), 'utf8')
+  assert.match(route, /DEFAULT_HORIZON_DAYS = 120/)
+  assert.match(route, /syncTeamsIfStaleForUser\(userId, \{ horizonDays \}\)/)
+  assert.match(teams, /last_sync_at/)
+  assert.match(teams, /syncTeamsFromStoredConnection\(userId, \{ horizonDays: options\.horizonDays \}\)/)
+  assert.match(signature, /skip_sync: 0/)
+  assert.match(teams, /upsert\(rows, \{ onConflict: 'user_id,provider,external_id' \}\)/)
+})

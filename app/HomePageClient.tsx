@@ -21,7 +21,7 @@ import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
-import { norwegianStarterCountdowns, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
+import { norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
@@ -2224,6 +2224,11 @@ export default function HomePage() {
     })
     if (completionError) throw completionError
     if (completed !== true) throw new Error('Could not complete frame setup.')
+
+    // Completion owns the same durable revision path as the normal Update
+    // action. If requesting it fails, keep onboarding open so a retry can issue
+    // the revision without duplicating the transactionally seeded content.
+    await requestDeviceUpdate(supabase, activeDeviceId, crypto.randomUUID())
 
     layoutModuleMemoryRef.current = nextLayoutModuleMemory
     setLayoutKey(nextLayout)
@@ -8543,6 +8548,9 @@ function FrameSetupFlow({
   const [modules, setModules] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reminderComposerOpen, setReminderComposerOpen] = useState(false)
+  const [reminderDraft, setReminderDraft] = useState<ReminderUiItem | null>(null)
+  const [countdownComposerOpen, setCountdownComposerOpen] = useState(false)
   const isNo = language === 'no'
   const current = setupModules[moduleIndex]
 
@@ -8577,13 +8585,16 @@ function FrameSetupFlow({
           <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
           <h1 className="mt-3 text-2xl font-medium">{current === 'date' ? (isNo ? 'Dato' : 'Date') : current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
           {current === 'date' && <p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Dato og norske helligdager oppdateres automatisk.' : 'The date and Norwegian holidays update automatically.'}</p>}
-          {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Koble til kalenderne dine nå, eller fortsett med et nyttig startsett.' : 'Connect your calendars now, or continue with a useful starter set.'}</p><div className="mt-5 h-[min(390px,42vh)]"><ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup /></div></>}
+          {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse, koble til kalenderne dine, eller fortsett med et nyttig startsett.' : 'Add a reminder, connect your calendars, or continue with a useful starter set.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup /></div></>}
           {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Oslo brukes hvis du hopper over' : 'Oslo is used if you skip')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
-          {current === 'countdown' && <p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Du kan legge til egne nedtellinger senere. Hvis du fortsetter nå, får du et lite redigerbart startsett.' : 'You can add your own countdowns later. Continuing now adds a small editable starter set.'}</p>}
+          {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til din egen nedtelling, eller fortsett med et lite redigerbart startsett.' : 'Add your own countdown, or continue with a small editable starter set.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL NEDTELLING' : 'ADD COUNTDOWN'}</button></>}
           {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}
           <button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === setupModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
         </div>
       </div>
+      {reminderComposerOpen && <NaturalReminderComposer language={language} activeDeviceId={activeDeviceId} fallbackDate={toLocalYmd(new Date())} selectedDate={null} onClose={() => setReminderComposerOpen(false)} onSaved={() => setReminderComposerOpen(false)} onEditDetails={(draft) => { setReminderComposerOpen(false); setReminderDraft(draft) }} />}
+      {reminderDraft && <ReminderDraftSheet language={language} activeDeviceId={activeDeviceId} editingReminder={null} initialDraft={reminderDraft} initialDate={reminderDraft.date || toLocalYmd(new Date())} onClose={() => setReminderDraft(null)} onSaved={() => setReminderDraft(null)} onDeleted={() => setReminderDraft(null)} />}
+      {countdownComposerOpen && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialDate={toLocalYmd(new Date())} onClose={() => setCountdownComposerOpen(false)} onSaved={() => setCountdownComposerOpen(false)} onDeleted={() => setCountdownComposerOpen(false)} />}
     </div>
   )
 }
@@ -9449,6 +9460,7 @@ type ReminderUiItem = {
   sourceUrl?: string | null
   externalEventId?: string | null
   skippedOnFrame?: boolean
+  starterKey?: string | null
 }
 
 type ReminderCompletionItem = {
@@ -9798,6 +9810,15 @@ function expandReminderOccurrences(
   const safeRangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate())
 
   for (const item of items) {
+    if (item.starterKey) {
+      for (let year = rangeStart.getFullYear(); year <= rangeEnd.getFullYear(); year += 1) {
+        const occurrenceDate = norwegianStarterReminderDate(item.starterKey, year)
+        if (occurrenceDate && occurrenceDate >= rangeStartYmd && occurrenceDate <= rangeEndYmd) {
+          out.push({ ...item, date: occurrenceDate, sourceId: item.id, occurrenceDate })
+        }
+      }
+      if (norwegianStarterReminderDate(item.starterKey, rangeStart.getFullYear())) continue
+    }
     const base = parseYmdToLocalDate(item.date)
     if (!base) continue
 
@@ -13272,7 +13293,7 @@ function RemindersModuleSettingsTab({
 
       const { data, error } = await supabase
         .from('reminders')
-        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, is_done')
+        .select('id, title, due_date, due_time, end_date, end_time, tag, repeat_type, custom_repeat_days, is_done, starter_key')
         .eq('device_id', activeDeviceId)
         .eq('is_done', false)
         .order('due_date', { ascending: true })
@@ -13322,6 +13343,7 @@ const manualItems: ReminderUiItem[] = (data || [])
         : null,
     source: 'remind' as const,
     editable: true,
+    starterKey: row.starter_key ? String(row.starter_key) : null,
   }))
   .filter((x) => x.title && x.date)
 

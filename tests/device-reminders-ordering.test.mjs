@@ -2,7 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 
-import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems } from '../app/lib/device/remindersFeed.ts'
+import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, selectReminderDisplayGroups } from '../app/lib/device/remindersFeed.ts'
+
+const item = ({ id, date, days, source }) => ({
+  reminder_id: id, title: id, occurrence_date: date,
+  display_date: days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : date,
+  days_until: days, is_overdue: false, repeat: 'none',
+  due_time: null, display_time: null, source,
+})
 
 test('frame reminder feed orders tomorrow Microsoft meeting before later trash reminder', () => {
   const todayYmd = '2026-06-01'
@@ -144,4 +151,30 @@ test('physical frame omits reminder bullet when only one item is displayed', () 
   assert.match(source, /const bool drawBullets = layout\.count > 1/)
   assert.match(source, /singleItemMaxTextW = c\.w - sidePad \* 2/)
   assert.match(source, /drawBulletWrappedItem\([\s\S]*ink, drawBullets\)/)
+})
+
+test('event-only Today is selected with no manual reminders', () => {
+  const events = [item({ id: 'e1', date: '2026-09-05', days: 0, source: 'teams' }), item({ id: 'e2', date: '2026-09-05', days: 0, source: 'spond' })]
+  assert.deepEqual(selectReminderDisplayGroups(events, 10).map(x => x.reminder_id), ['e1', 'e2'])
+})
+
+test('event-only Tomorrow is selected when Today is empty', () => {
+  const events = [item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' })]
+  assert.equal(selectReminderDisplayGroups(events, 10)[0].occurrence_date, '2026-09-06')
+})
+
+test('event tomorrow wins over a reminder three days away', () => {
+  const selected = selectReminderDisplayGroups([
+    item({ id: 'r1', date: '2026-09-08', days: 3, source: 'remind' }),
+    item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' }),
+  ], 1)
+  assert.equal(selected[0].reminder_id, 'e1')
+})
+
+test('a mixed reminder and event day keeps both sources', () => {
+  const selected = selectReminderDisplayGroups([
+    item({ id: 'r1', date: '2026-09-06', days: 1, source: 'remind' }),
+    item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' }),
+  ], 10)
+  assert.deepEqual(new Set(selected.map(x => x.source)), new Set(['remind', 'teams']))
 })

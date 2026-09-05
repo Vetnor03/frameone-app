@@ -3,9 +3,10 @@
 import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
-import { syncTeamsFromStoredConnection } from '@/app/lib/integrations/teams/server'
+import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
 import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
+import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 
 export const runtime = 'nodejs'
 
@@ -30,6 +31,7 @@ type ReminderRow = {
   repeat_type: ReminderRepeatKey | null
   custom_repeat_days: number | null
   is_done: boolean | null
+  starter_key?: string | null
 }
 
 type PhysicalDeviceReminderItem = {
@@ -280,7 +282,7 @@ function normalizeIncludeOverdue(raw: string | null) {
 }
 
 function normalizeSkipSync(raw: string | null) {
-  if (raw == null) return true
+  if (raw == null) return false
   const v = raw.trim().toLowerCase()
   if (v === '0' || v === 'false' || v === 'no') return false
   return true
@@ -372,6 +374,19 @@ function buildOccurrencesForRow(
     })
   }
 
+  if (row.starter_key) {
+    const startYear = Number(todayYmd.slice(0, 4))
+    const endYear = Number(horizonEndYmd.slice(0, 4))
+    let derived = false
+    for (let year = startYear; year <= endYear; year += 1) {
+      const occurrence = norwegianStarterReminderDate(row.starter_key, year)
+      if (!occurrence) continue
+      derived = true
+      if (occurrence <= horizonEndYmd) addOccurrence(occurrence)
+    }
+    if (derived) return items
+  }
+
   if (repeat === 'none') {
     if (row.is_done) return []
     if (dueDate > horizonEndYmd) return []
@@ -431,7 +446,7 @@ export async function GET(req: Request) {
     // These reads share only sharedDeviceIds, so overlap their network latency.
     const [remindersResult, completionsResult, membersResult] = await Promise.all([supabase
       .from('reminders')
-      .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done')
+      .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done, starter_key')
       .in('device_id', sharedDeviceIds)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
@@ -493,7 +508,7 @@ export async function GET(req: Request) {
       if (!skipSync) {
         const syncResults = await Promise.allSettled([
           syncSpondIfStaleForUsers(memberUserIds),
-          Promise.allSettled(memberUserIds.map((userId) => syncTeamsFromStoredConnection(userId, { horizonDays }))),
+          Promise.allSettled(memberUserIds.map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
         ])
         syncResults.forEach((result) => {
           if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)

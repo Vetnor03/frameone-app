@@ -69,6 +69,21 @@ static bool g_displayReady = false;
 static bool g_dashboardLoaded = false;
 static bool g_powerRefreshPending = false;
 
+static bool setupPendingScreenShown() {
+  Preferences prefs;
+  prefs.begin("frame", true);
+  const bool shown = prefs.getBool("setup_wait", false);
+  prefs.end();
+  return shown;
+}
+
+static void rememberSetupPendingScreen(bool shown) {
+  Preferences prefs;
+  prefs.begin("frame", false);
+  prefs.putBool("setup_wait", shown);
+  prefs.end();
+}
+
 enum SetupStep {
   SETUP_STEP_NONE = 0,
   SETUP_STEP_WIFI = 1,
@@ -655,6 +670,8 @@ static bool fetchAndRenderExplicit(
     return false;
   }
 
+  rememberSetupPendingScreen(false);
+
   if (!renderLoadedDashboard(batt, pwr)) return false;
   LiveUpdate::saveRenderedAwaitingAck(revision);
   // A successful physical render also satisfies the one-time renderer-version
@@ -1093,9 +1110,14 @@ void setup() {
   FrameConfigApi::FetchResult postPairConfig =
     FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
   if (postPairConfig == FrameConfigApi::FETCH_SETUP_PENDING) {
-    ensureDisplay();
-    ScreenPairing::showWaitingForSetup();
-    shutdownDisplay();
+    if (!setupPendingScreenShown()) {
+      ensureDisplay();
+      ScreenPairing::showWaitingForSetup();
+      shutdownDisplay();
+      rememberSetupPendingScreen(true);
+    } else {
+      Serial.println("Setup-pending screen already displayed; skipping e-paper redraw");
+    }
   } else if (postPairConfig == FrameConfigApi::FETCH_UNPAIRED) {
     Serial.println("frame-config unpaired");
     if (recoverPairingIfTokenLost("initial frame fetch", pwrEarly.usbPresent)) return;
@@ -1103,6 +1125,8 @@ void setup() {
     ensureDisplay();
     ScreenPairing::showError("Could not load frame");
     shutdownDisplay();
+  } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
+    rememberSetupPendingScreen(false);
   }
 
   // Complete one-time renderer maintenance deterministically after networking
