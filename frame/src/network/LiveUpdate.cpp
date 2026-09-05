@@ -3,6 +3,8 @@
 #include "Config.h"
 #include "DeviceIdentity.h"
 #include "NetClient.h"
+#include "UpdateChecker.h"
+#include "WiFiManager.h"
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <inttypes.h>
@@ -24,6 +26,17 @@ bool readRevision(JsonVariantConst value, uint64_t& out) {
   out = value.as<uint64_t>();
   return true;
 }
+
+void restoreOperationalPowerPolicyAfterProbe() {
+  // The realtime loop historically forces WIFI_PS_NONE on entry/reconnect.
+  // Re-apply the actual source-aware policy after each real network probe so a
+  // battery-powered Alfred can settle back into MAX_MODEM connected idle. The
+  // persisted USB state is refreshed by the main power-sense path.
+  const bool usbPresent = UpdateChecker::hasLastUsbPresent()
+    ? UpdateChecker::getLastUsbPresent()
+    : true;
+  WiFiManagerV2::applyOperationalPowerPolicy(usbPresent, true);
+}
 }
 
 bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
@@ -38,6 +51,7 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
   int code = 0;
   String body;
   const bool ok = NetClient::httpGetAuth(url, deviceToken, code, body);
+  restoreOperationalPowerPolicyAfterProbe();
   if (code <= 0) {
     Serial.println("LiveUpdate probe transport failure");
     return false;
