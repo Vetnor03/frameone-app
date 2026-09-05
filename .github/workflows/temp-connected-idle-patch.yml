@@ -1,0 +1,28 @@
+name: Temporary connected-idle patch
+
+on:
+  push:
+    branches:
+      - power/s3-10s-fallback
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, 'Trigger connected idle main patch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: power/s3-10s-fallback
+      - name: Apply targeted main-loop patch
+        run: python frame/tools/apply_connected_idle_main_patch.py
+      - name: Commit patch and remove temporary helpers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm frame/tools/apply_connected_idle_main_patch.py .github/workflows/temp-connected-idle-patch.yml
+          git add frame/src/frame_v2.5.1.ino
+          git commit -m "Wire 10-second S3 battery fallback"
+          git push origin HEAD:power/s3-10s-fallback
