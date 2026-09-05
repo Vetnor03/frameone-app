@@ -44,11 +44,11 @@ static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 static const uint32_t PROBE_WAKE_SECONDS = 10;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
 static const uint32_t SCHEDULED_CONTENT_CHECK_SECONDS = 4 * 60 * 60;
-// Temporary hardware-development policy. Keep this decision here, at the
-// paired operational loop boundary, so production sleep policy can be restored
-// without changing the revision/render/ACK pipeline.
-static const bool REALTIME_TEST_MODE = true;
+// USB stays fully realtime. On battery, a PM-capable Alfred remains connected
+// with MAX_MODEM/automatic light sleep and uses a 10-second idle cadence. Builds
+// without automatic light sleep fall back to the existing 10-second deep sleep.
 static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;
+static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;
 static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
@@ -766,8 +766,10 @@ static InteractiveModeResult runInteractiveMode(
   LiveUpdateState& state
 ) {
   Serial.println("LiveUpdate: entering interactive mode");
-  WiFi.setSleep(false);
-  esp_wifi_set_ps(WIFI_PS_NONE);
+  if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
+    Serial.println("LiveUpdate: connected light sleep unavailable; use 10-second deep-sleep fallback");
+    return INTERACTIVE_FINISHED;
+  }
 
   uint64_t lastRequested = state.requestedRevision;
   uint64_t lastDisplayed = state.displayedRevision;
@@ -780,6 +782,10 @@ static InteractiveModeResult runInteractiveMode(
     if (sampledPower.stable && sampledPower.usbPresent != pwr.usbPresent) {
       pwr = sampledPower;
       batt = BatteryManager::readAndUpdate(pwr.usbPresent);
+      if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
+        Serial.println("LiveUpdate: unplugged -> 10-second deep-sleep fallback");
+        return INTERACTIVE_FINISHED;
+      }
       bool hadPrevious = false;
       UpdateChecker::detectAndPersistUsbStateChange(pwr.usbPresent, true, hadPrevious);
       g_powerRefreshPending = true;
@@ -796,9 +802,11 @@ static InteractiveModeResult runInteractiveMode(
         continue;
       }
       // connectSaved() re-enters STA mode and begins a new connection, so
-      // restore the temporary real-time power policy after every reconnect.
-      WiFi.setSleep(false);
-      esp_wifi_set_ps(WIFI_PS_NONE);
+      // restore the source-aware operational power policy after every reconnect.
+      if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
+        Serial.println("LiveUpdate: reconnect succeeded but connected light sleep is unavailable");
+        return INTERACTIVE_FINISHED;
+      }
       Serial.println("LiveUpdate: Wi-Fi reconnected");
     }
     const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
@@ -859,12 +867,12 @@ static InteractiveModeResult runInteractiveMode(
 
     // Exactly one cheap revision probe per idle cadence. Rendering above is
     // synchronous, so a revision arriving during it is observed serially here.
-    delay(REALTIME_UPDATE_POLL_MS);
+    delay(pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS);
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
       Serial.println("LiveUpdate: interactive probe failed; staying awake");
-      delay(REALTIME_FAILURE_BACKOFF_MS - REALTIME_UPDATE_POLL_MS);
+      delay(REALTIME_FAILURE_BACKOFF_MS);
       continue;
     }
 
@@ -1031,7 +1039,7 @@ void setup() {
   if (!WiFiManagerV2::connectSaved(12000)) {
     // A normally paired test frame is a continuously running appliance. A
     // transient disconnect must neither launch provisioning nor deep sleep.
-    while (REALTIME_TEST_MODE && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
+    while (pwrEarly.usbPresent && WiFiManagerV2::hasCreds() && DeviceIdentity::hasToken()) {
       Serial.println("LiveUpdate: startup reconnect failed; retrying while awake");
       delay(REALTIME_FAILURE_BACKOFF_MS);
       if (WiFiManagerV2::connectSaved(12000)) break;
@@ -1119,7 +1127,9 @@ void setup() {
     refreshPowerOverlayIfNeeded(overlayBatt, overlayPwr);
   }
 
-  if (!REALTIME_TEST_MODE && !normalSyncDue && !explicitRevisionPending) {
+  const bool connectedIdleReady =
+    WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
+  if (!pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending) {
     goToSleep(pwrEarly.usbPresent);
     return;
   }
@@ -1162,7 +1172,7 @@ run_normal_sync:
       normalSyncDue = true;
       goto run_normal_sync;
     }
-    if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
+    goToSleep(pwr.usbPresent);
     return;
   }
 
@@ -1192,14 +1202,12 @@ run_normal_sync:
   }
 
   normalSyncDue = false;
-  if (REALTIME_TEST_MODE) {
-    if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
-      consumeNormalSyncPeriod();
-      normalSyncDue = true;
-      goto run_normal_sync;
-    }
+  if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+    consumeNormalSyncPeriod();
+    normalSyncDue = true;
+    goto run_normal_sync;
   }
-  if (!REALTIME_TEST_MODE) goToSleep(pwr.usbPresent);
+  goToSleep(pwr.usbPresent);
 
 }
 
