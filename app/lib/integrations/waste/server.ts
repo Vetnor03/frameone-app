@@ -33,6 +33,11 @@ async function resolveAndFetch(input: string | ResolvedWasteAddress) {
   return { registryEntry, resolvedAddress, collections }
 }
 function isUnsupported(error: unknown) { return (error as WasteProviderError)?.code === 'unsupported' }
+function todayYmdInNorway(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((value) => value.type === type)?.value || ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
 export async function previewWasteForUser(_userId: string, address: string | ResolvedWasteAddress): Promise<WasteConnectResult> {
   try {
     const { registryEntry, resolvedAddress, collections } = await resolveAndFetch(address)
@@ -48,10 +53,11 @@ export async function previewWasteForUser(_userId: string, address: string | Res
 }
 async function storeSuccessfulSync(userId: string, resolvedAddress: ResolvedWasteAddress, entry: WasteProviderRegistryEntry, collections: NormalizedWasteCollection[]) {
   const supabase = getSupabaseAdmin(); const now = new Date().toISOString()
-  const rows = collections.map((item) => ({ user_id: userId, provider: WASTE_PROVIDER, external_id: externalId(entry.provider, resolvedAddress.municipalityNumber, resolvedAddress.addressId, item), title: item.title, body: null, starts_at: `${item.date}T00:00:00+01:00`, due_at: null, priority: 5, raw: { source: 'waste', type: 'waste_collection', provider: entry.provider, collection_date: item.date, date: item.date, normalized_type: item.waste_fraction, waste_fraction: item.waste_fraction, all_day: true }, updated_at: now }))
+  const todayInNorway = todayYmdInNorway()
+  const rows = collections.filter((item) => item.date >= todayInNorway).map((item) => ({ user_id: userId, provider: WASTE_PROVIDER, external_id: externalId(entry.provider, resolvedAddress.municipalityNumber, resolvedAddress.addressId, item), title: item.title, body: null, starts_at: null, due_at: null, priority: 5, raw: { source: 'waste', type: 'waste_collection', provider: entry.provider, collection_date: item.date, date: item.date, normalized_type: item.waste_fraction, waste_fraction: item.waste_fraction, all_day: true, collection: item.raw ?? null }, updated_at: now }))
   if (rows.length) { const { error } = await supabase.from('integration_items').upsert(rows, { onConflict: 'user_id,provider,external_id' }); if (error) throw new Error(error.message) }
   const ids = rows.map((row) => row.external_id)
-  let staleDelete = supabase.from('integration_items').delete().eq('user_id', userId).eq('provider', WASTE_PROVIDER)
+  let staleDelete = supabase.from('integration_items').delete().eq('user_id', userId).eq('provider', WASTE_PROVIDER).gte('raw->>collection_date', todayInNorway)
   if (ids.length) staleDelete = staleDelete.not('external_id', 'in', `(${ids.map((id) => `"${id.replaceAll('"', '')}"`).join(',')})`)
   const { error: deleteError } = await staleDelete; if (deleteError) throw new Error(deleteError.message)
   const { error } = await supabase.from('user_integrations').upsert({ user_id: userId, provider: WASTE_PROVIDER, status: 'connected', encrypted_credentials: { address: resolvedAddress, provider: entry.provider, provider_config: entry.provider_config }, external_account_id: resolvedAddress.addressId, external_account_label: resolvedAddress.label, last_sync_at: now, last_success_at: now, last_error: null, last_error_at: null, last_error_code: null, updated_at: now }, { onConflict: 'user_id,provider' })
@@ -71,7 +77,11 @@ export async function syncWasteFromStoredConnection(userId: string) {
   if (data.last_sync_at && Date.now() - new Date(data.last_sync_at).getTime() < WASTE_STALE_MS) return
   const address = (data.encrypted_credentials as any)?.address as ResolvedWasteAddress | undefined
   if (!address) return
-  try { const fetched = await resolveAndFetch(address); if (fetched.registryEntry) await storeSuccessfulSync(userId, fetched.resolvedAddress, fetched.registryEntry, fetched.collections) }
+  try {
+    const fetched = await resolveAndFetch(address)
+    if (!fetched.registryEntry) throw new Error('Waste provider returned no current collection schedule')
+    await storeSuccessfulSync(userId, fetched.resolvedAddress, fetched.registryEntry, fetched.collections)
+  }
   catch (syncError) {
     console.warn('[waste] refresh failed; retaining cache', { user_id: userId, code: (syncError as WasteProviderError)?.code || 'temporary' })
     await supabase.from('user_integrations').update({ last_error: WASTE_TEMPORARY_MESSAGE, last_error_at: new Date().toISOString(), last_error_code: (syncError as WasteProviderError)?.code || 'temporary', updated_at: new Date().toISOString() }).eq('user_id', userId).eq('provider', WASTE_PROVIDER)

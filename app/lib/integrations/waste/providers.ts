@@ -111,22 +111,31 @@ function stripTags(value: string) {
 }
 
 function normalizeFraction(raw: unknown) {
-  const value = asString(raw).toLowerCase()
-  if (value.includes('plast')) return 'plast'
-  if (value.includes('papir') || value.includes('papp')) return 'papir'
-  if (value.includes('mat')) return 'matavfall'
-  if (value.includes('glass') || value.includes('metall')) return 'glass_metall'
-  if (value.includes('hage')) return 'hageavfall'
-  return 'restavfall'
+  const value = asString(raw).toLocaleLowerCase('nb-NO').replace(/\s+/g, ' ').trim()
+  if (/^(rest|restavfall)$/.test(value)) return 'restavfall'
+  if (/^(mat|matavfall|bio)$/.test(value)) return 'matavfall'
+  if (/^(papir|papp|papp og papir|papp\/papir)$/.test(value)) return 'papir'
+  if (/^(plast|plastemballasje)$/.test(value)) return 'plast'
+  if (/^(glass|metall|glass og metall)$/.test(value)) return 'glass_metall'
+  if (/^(hage|hageavfall)$/.test(value)) return 'hageavfall'
+  if (value === 'juletre') return 'christmas_tree'
+  if (value === 'farlig avfall') return 'hazardous'
+  if (/^(tekstil|klær)$/.test(value)) return 'textile'
+  return 'other'
 }
 
-export function wasteCollectionTitle(fraction: WasteFraction) {
+export function wasteCollectionTitle(fraction: WasteFraction, providerLabel = '') {
+  if (fraction === 'restavfall') return 'Tøm restavfall'
   if (fraction === 'plast') return 'Tøm plast'
   if (fraction === 'papir') return 'Tøm papir'
   if (fraction === 'matavfall') return 'Tøm matavfall'
   if (fraction === 'glass_metall') return 'Tøm glass og metall'
   if (fraction === 'hageavfall') return 'Tøm hageavfall'
-  return 'Tøm restavfall'
+  if (fraction === 'christmas_tree') return 'Hent juletre'
+  if (fraction === 'hazardous') return 'Farlig avfall'
+  if (fraction === 'textile') return 'Tekstil'
+  if (fraction === 'other') return providerLabel || 'Annet avfall'
+  return providerLabel || 'Annet avfall'
 }
 
 function normalizeCollectionRows(rawData: unknown): NormalizedWasteCollection[] {
@@ -143,7 +152,8 @@ function normalizeCollectionRows(rawData: unknown): NormalizedWasteCollection[] 
       const key = `${date}__${waste_fraction}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ date, waste_fraction, title: wasteCollectionTitle(waste_fraction), source_url: asString(r.source_url) || null, raw: row })
+      const providerLabel = asString(fractionRaw)
+      out.push({ date, waste_fraction, title: wasteCollectionTitle(waste_fraction, providerLabel), source_url: asString(r.source_url) || null, raw: row })
     }
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title))
@@ -176,9 +186,9 @@ async function fetchMinRenovasjon(address: ResolvedWasteAddress, config: Record<
   }
   const fractions = await requestJson('fraksjoner')
   const calendar = await requestJson('tommekalender', { gatenavn: address.streetName, husnr: address.houseNumber, gatekode: address.addressCode })
-  const names = new Map(fractions.map((row) => {
+  const names = new Map<string, string>(fractions.map((row): readonly [string, string] => {
     const r = asRecord(row)
-    return [asString(r.Id || r.id || r.FraksjonId), asString(r.Navn || r.navn || r.Name)]
+    return [asString(r.Id || r.id || r.FraksjonId), asString(r.Navn || r.navn || r.Name)] as const
   }).filter(([id]) => id))
   return calendar.flatMap((row) => {
     const r = asRecord(row)

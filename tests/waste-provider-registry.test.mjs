@@ -308,3 +308,15 @@ test('MinRenovasjon malformed JSON is a controlled provider error', async () => 
     await assert.rejects(() => providerFor('min_renovasjon').fetchCollections({ addressId: 'x', label: 'A 1', municipalityNumber: '0301', municipalityName: 'Oslo', streetName: 'A', houseNumber: '1', addressCode: '2' }), (error) => error.code === 'invalid_response')
   } finally { globalThis.fetch = originalFetch; delete process.env.MINRENOVASJON_APP_KEY }
 })
+
+test('common and unknown provider fractions normalize without guessing residual waste', () => {
+  const provider = providerFor('min_renovasjon')
+  const rows = provider.normalizeCollections([
+    ...['Bio', 'Juletre', 'Farlig avfall', 'Tekstil', 'Klær', 'mystisk beholder'].map((fractionName) => ({ date: '2027-01-02', fractionName })),
+  ])
+  assert.deepEqual(new Set(rows.map((row) => row.waste_fraction)), new Set(['matavfall', 'other', 'hazardous', 'textile', 'christmas_tree']))
+  const unknown = rows.find((row) => row.waste_fraction === 'other')
+  assert.equal(unknown.title, 'mystisk beholder')
+  assert.notEqual(unknown.waste_fraction, 'restavfall')
+  assert.equal(unknown.raw.fractionName, 'mystisk beholder')
+})

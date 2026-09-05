@@ -90,3 +90,18 @@ test('waste grouping is scoped and other provider builders remain unchanged', as
   assert.deepEqual(teams.map((item) => item.title), ['Meeting'])
   assert.deepEqual(spond.map((item) => item.title), ['Practice'])
 })
+
+test('cached waste rows use canonical all-day dates without a fixed Norway UTC offset', async () => {
+  const { readFileSync } = await import('node:fs')
+  const server = readFileSync(new URL('../app/lib/integrations/waste/server.ts', import.meta.url), 'utf8')
+  assert.match(server, /starts_at: null/)
+  assert.match(server, /collection_date: item\.date, date: item\.date/)
+  assert.match(server, /all_day: true/)
+  assert.doesNotMatch(server, /T00:00:00\+01:00/)
+  assert.match(server, /\.gte\('raw->>collection_date', todayInNorway\)/)
+  assert.ok(server.indexOf('await resolveAndFetch(address)') < server.indexOf(".delete().eq('user_id', userId)"))
+
+  const summer = buildWasteCollectionItems([{ id: 'summer', user_id: 'u', provider: 'waste', external_id: 'summer', title: 'Tøm papir', body: null, starts_at: null, due_at: null, priority: 5, raw: { source: 'waste', type: 'waste_collection', date: '2026-07-01', collection_date: '2026-07-01', all_day: true, waste_fraction: 'papir' } }], '2026-06-30', '2026-07-31', 'Pacific/Honolulu', false)
+  assert.equal(summer[0].occurrence_date, '2026-07-01')
+  assert.equal(summer[0].display_date, 'Tomorrow')
+})
