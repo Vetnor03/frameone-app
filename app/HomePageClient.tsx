@@ -2982,6 +2982,10 @@ function ConnectAppsScreen({
   const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
   const [localEventsStatusResolved, setLocalEventsStatusResolved] = useState(false)
   const [localEventsStatusFailed, setLocalEventsStatusFailed] = useState(false)
+  const [localEventsStatusDeviceId, setLocalEventsStatusDeviceId] = useState<string | null>(null)
+  const localEventsRequestGenerationRef = useRef(0)
+  const activeConnectDeviceIdRef = useRef(activeDeviceId)
+  activeConnectDeviceIdRef.current = activeDeviceId
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
     return frameUsesIntegration(modulesJson, 'local-events') ? normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference) : null
   })
@@ -3037,7 +3041,7 @@ function ConnectAppsScreen({
     return [
       ...(spondAccountConnected ? ['spond' as const] : []),
       ...(teamsAccountConnected ? ['teams' as const] : []),
-      ...(localEventsAccountConnected ? ['local-events' as const] : []),
+      ...(localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId ? ['local-events' as const] : []),
       ...(connectAppIsConnected(modulesJson, 'waste') ? ['waste' as const] : []),
     ]
   }
@@ -3046,14 +3050,15 @@ function ConnectAppsScreen({
     onIntegrationChanged?.(key, config, legacyEnabledIntegrations())
   }
 
-  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsStatusResolved)
+  const localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId
+  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsResolvedForActiveDevice)
   const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || localEventsStatusFailed
 
   function retryProviderDiscovery() {
     setStatus(null)
     if (!spondStatusResolved) void fetchSpondStatus().catch(() => setSpondStatusFailed(true))
     if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
-    if (!localEventsStatusResolved) void fetchLocalEventsStatus().catch(() => setLocalEventsStatusFailed(true))
+    if (!localEventsResolvedForActiveDevice && activeDeviceId) void fetchLocalEventsStatus(activeDeviceId, localEventsRequestGenerationRef.current).catch(() => setLocalEventsStatusFailed(true))
   }
 
   async function connectTeams() {
@@ -3130,17 +3135,20 @@ function ConnectAppsScreen({
   }
 
 
-  async function fetchLocalEventsStatus() {
+  async function fetchLocalEventsStatus(deviceId: string, requestGeneration: number) {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken || !activeDeviceId) {
+    if (!accessToken || !deviceId) {
       setLocalEventsSavedArea(null)
       setLocalEventsCanManage(false)
       setLocalEventsStatusResolved(true)
       return
     }
-    const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(activeDeviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+    const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+    if (requestGeneration !== localEventsRequestGenerationRef.current || deviceId !== activeConnectDeviceIdRef.current) return
     if (!resp.ok) { setLocalEventsStatusFailed(true); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status'); return }
     const json = await resp.json()
+    if (requestGeneration !== localEventsRequestGenerationRef.current || deviceId !== activeConnectDeviceIdRef.current) return
+    setLocalEventsStatusDeviceId(deviceId)
     setLocalEventsStatusResolved(true)
     setLocalEventsStatusFailed(false)
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
@@ -3280,6 +3288,8 @@ function ConnectAppsScreen({
     if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
     if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
     setTeamsConnected(true)
+    setStatusTone('success')
+    setStatus(language === 'no' ? 'Teams er tilkoblet' : 'Teams connected')
     changeFrameIntegration('teams', { enabled: true })
     sessionStorage.removeItem('remind:teams-oauth-device')
     sessionStorage.removeItem('remind:teams-oauth-result')
@@ -3287,7 +3297,16 @@ function ConnectAppsScreen({
   }, [pendingTeamsEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, legacyIntegrationDiscoveryPending])
 
   useEffect(() => {
-    void fetchLocalEventsStatus().catch(() => {
+    const requestGeneration = ++localEventsRequestGenerationRef.current
+    setLocalEventsStatusResolved(false)
+    setLocalEventsStatusFailed(false)
+    setLocalEventsAccountConnected(false)
+    setLocalEventsSavedArea(null)
+    setLocalEventsCanManage(false)
+    setLocalEventsStatusDeviceId(null)
+    if (!activeDeviceId) return
+    void fetchLocalEventsStatus(activeDeviceId, requestGeneration).catch(() => {
+      if (requestGeneration !== localEventsRequestGenerationRef.current || activeDeviceId !== activeConnectDeviceIdRef.current) return
       setStatusTone('error')
       setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status')
       setLocalEventsStatusFailed(true)

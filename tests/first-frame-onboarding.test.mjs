@@ -92,7 +92,7 @@ test('legacy transition preserves active providers and disconnects disable frame
   assert.match(home, /Object\.fromEntries\(legacyEnabled\.map\(provider => \[provider, \{ enabled: true \}\]\)\)/)
   assert.match(connect, /spondAccountConnected \? \['spond' as const\]/)
   assert.match(connect, /teamsAccountConnected \? \['teams' as const\]/)
-  assert.match(connect, /localEventsAccountConnected \? \['local-events' as const\]/)
+  assert.match(connect, /localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId \? \['local-events' as const\]/)
   assert.match(connect, /connectAppIsConnected\(modulesJson, 'waste'\)/)
   assert.match(connect, /setSpondAccountConnected\(false\)[\s\S]*changeFrameIntegration\('spond', \{ enabled: false \}\)/)
   assert.match(connect, /setTeamsAccountConnected\(false\)[\s\S]*changeFrameIntegration\('teams', \{ enabled: false \}\)/)
@@ -125,7 +125,8 @@ test('operational connection requires resolved account credentials and frame ena
 })
 
 test('legacy transition waits for authoritative provider discovery', () => {
-  assert.match(connect, /legacyIntegrationDiscoveryPending = modulesJson\?\.integration_selection_explicit !== true && !\(spondStatusResolved && teamsStatusResolved && localEventsStatusResolved\)/)
+  assert.match(connect, /localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId/)
+  assert.match(connect, /legacyIntegrationDiscoveryPending = modulesJson\?\.integration_selection_explicit !== true && !\(spondStatusResolved && teamsStatusResolved && localEventsResolvedForActiveDevice\)/)
   assert.match(connect, /disabled=\{legacyIntegrationDiscoveryPending/)
   assert.doesNotMatch(connect, /!resp\.ok\) \{ setSpondStatusResolved\(true\)/)
   assert.doesNotMatch(connect, /!resp\.ok\) \{ setTeamsStatusResolved\(true\)/)
@@ -154,7 +155,7 @@ test('failed discovery offers retry without weakening the legacy gate', () => {
   assert.match(connect, /function retryProviderDiscovery\(\)/)
   assert.match(connect, /if \(!spondStatusResolved\) void fetchSpondStatus\(\)/)
   assert.match(connect, /if \(!teamsStatusResolved\) void fetchTeamsStatus\(\)/)
-  assert.match(connect, /if \(!localEventsStatusResolved\) void fetchLocalEventsStatus\(\)/)
+  assert.match(connect, /if \(!localEventsResolvedForActiveDevice && activeDeviceId\) void fetchLocalEventsStatus\(activeDeviceId, localEventsRequestGenerationRef\.current\)/)
   assert.match(connect, /Could not check connected services\./)
   assert.match(connect, /: 'RETRY'/)
 })
@@ -175,4 +176,18 @@ test('Teams OAuth intent is consumed or cancelled without cross-frame reuse', ()
   assert.match(connect, /initialTeamsOAuthStatus === 'error'[\s\S]*removeItem\('remind:teams-oauth-device'\)[\s\S]*setPendingTeamsEnableAfterOAuth\(false\)/)
   assert.match(home, /sessionStorage\.removeItem\('remind:teams-oauth-device'\)/)
   assert.doesNotMatch(connect, /setTeamsConnected\] = useState\(initialTeamsOAuthStatus/)
+})
+
+
+test('Local Events discovery is scoped to the active device and rejects stale responses', () => {
+  assert.match(connect, /localEventsStatusDeviceId, setLocalEventsStatusDeviceId/)
+  assert.match(connect, /const requestGeneration = \+\+localEventsRequestGenerationRef\.current/)
+  assert.match(connect, /setLocalEventsStatusResolved\(false\)[\s\S]*setLocalEventsAccountConnected\(false\)[\s\S]*setLocalEventsSavedArea\(null\)[\s\S]*setLocalEventsCanManage\(false\)[\s\S]*setLocalEventsStatusDeviceId\(null\)/)
+  assert.match(connect, /requestGeneration !== localEventsRequestGenerationRef\.current \|\| deviceId !== activeConnectDeviceIdRef\.current\) return/)
+  assert.match(connect, /setLocalEventsStatusDeviceId\(deviceId\)[\s\S]*setLocalEventsStatusResolved\(true\)/)
+  assert.match(connect, /localEventsAccountConnected && localEventsStatusDeviceId === activeDeviceId/)
+})
+
+test('Teams OAuth success replaces finishing status only after safe frame conversion', () => {
+  assert.match(connect, /setStatusTone\('success'\)[\s\S]*setStatus\(language === 'no' \? 'Teams er tilkoblet' : 'Teams connected'\)[\s\S]*changeFrameIntegration\('teams'/)
 })
