@@ -113,3 +113,29 @@ test('onboarding drafts are device scoped and cleared across authenticated users
   assert.match(home, /key\?\.startsWith\('remind:onboarding:'\)/)
   assert.match(home, /sessionStorage\.removeItem\('remind:onboarding-user'\)/)
 })
+
+
+test('operational connection requires resolved account credentials and frame enablement', () => {
+  assert.match(connect, /const \[spondConnected, setSpondConnected\] = useState\(false\)/)
+  assert.match(connect, /frameUsesIntegration\(modulesJson, 'spond'\) && json\?\.connected === true/)
+  assert.match(connect, /frameUsesIntegration\(modulesJson, 'teams'\) && json\?\.connected === true/)
+  assert.match(connect, /integration_selection_explicit === true \? frameUsesIntegration[\s\S]*: json\?\.connected === true/)
+  assert.match(connect, /if \(!resp\.ok\) \{ setSpondConnected\(false\)/)
+  assert.match(connect, /if \(!resp\.ok\) \{ setTeamsConnected\(false\)/)
+})
+
+test('legacy transition waits for authoritative provider discovery', () => {
+  assert.match(connect, /legacyIntegrationDiscoveryPending = modulesJson\?\.integration_selection_explicit !== true && !\(spondStatusResolved && teamsStatusResolved && localEventsStatusResolved\)/)
+  assert.match(connect, /disabled=\{legacyIntegrationDiscoveryPending/)
+  assert.doesNotMatch(connect, /!resp\.ok\) \{ setSpondStatusResolved\(true\)/)
+  assert.doesNotMatch(connect, /!resp\.ok\) \{ setTeamsStatusResolved\(true\)/)
+})
+
+test('explicit Spond and Teams can be disabled per frame without disconnecting credentials', () => {
+  assert.match(connect, /DISABLE ON THIS FRAME/)
+  assert.match(connect, /changeFrameIntegration\(app\.key, \{ enabled: false \}\)/)
+  const disableAction = connect.match(/onClick=\{\(\) => \{ if \(app\.key === 'spond'\)[^}]+enabled: false \}\) \}/)?.[0] || ''
+  assert.doesNotMatch(disableAction, /\/disconnect|setSpondAccountConnected|setTeamsAccountConnected/)
+  assert.match(connect, /spondAccountConnected\) \{ setSpondConnected\(true\); changeFrameIntegration\('spond', \{ enabled: true \}\)/)
+  assert.match(connect, /teamsAccountConnected\) \{ setTeamsConnected\(true\); changeFrameIntegration\('teams', \{ enabled: true \}\)/)
+})

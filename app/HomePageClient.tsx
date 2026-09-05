@@ -2944,16 +2944,18 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
-  const [spondConnected, setSpondConnected] = useState(frameUsesIntegration(modulesJson, 'spond'))
+  const [spondConnected, setSpondConnected] = useState(false)
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondAccountConnected, setSpondAccountConnected] = useState(false)
+  const [spondStatusResolved, setSpondStatusResolved] = useState(false)
   const [spondModalOpen, setSpondModalOpen] = useState(false)
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
-  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || frameUsesIntegration(modulesJson, 'teams'))
+  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected')
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsAccountConnected, setTeamsAccountConnected] = useState(initialTeamsOAuthStatus === 'connected')
+  const [teamsStatusResolved, setTeamsStatusResolved] = useState(initialTeamsOAuthStatus === 'connected')
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
@@ -2964,6 +2966,7 @@ function ConnectAppsScreen({
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
+  const [localEventsStatusResolved, setLocalEventsStatusResolved] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
     return frameUsesIntegration(modulesJson, 'local-events') ? normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference) : null
   })
@@ -2971,16 +2974,17 @@ function ConnectAppsScreen({
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) return
+    if (!accessToken) { setSpondStatusResolved(true); setSpondConnected(false); return }
     const resp = await fetch('/api/integrations/spond/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) return
+    if (!resp.ok) { setSpondConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Spond-status' : 'Could not check Spond status'); return }
     const json = await resp.json()
+    setSpondStatusResolved(true)
     setLocallyDisconnectedApps((current) => ({ ...current, spond: json?.connected === true ? false : current.spond }))
     setSpondAccountConnected(json?.connected === true)
-    if (modulesJson?.integration_selection_explicit !== true) setSpondConnected(json?.connected === true)
+    setSpondConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'spond') && json?.connected === true : json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
       setIntegrationSetupErrors((current) => ({ ...current, spond: json.setup_error.message }))
@@ -2992,16 +2996,17 @@ function ConnectAppsScreen({
 
   async function fetchTeamsStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
-    if (!accessToken) return
+    if (!accessToken) { setTeamsStatusResolved(true); setTeamsConnected(false); return }
     const resp = await fetch('/api/integrations/teams/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) return
+    if (!resp.ok) { setTeamsConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Teams-status' : 'Could not check Teams status'); return }
     const json = await resp.json()
+    setTeamsStatusResolved(true)
     setLocallyDisconnectedApps((current) => ({ ...current, teams: json?.connected === true ? false : current.teams }))
     setTeamsAccountConnected(json?.connected === true)
-    if (modulesJson?.integration_selection_explicit !== true) setTeamsConnected(json?.connected === true)
+    setTeamsConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'teams') && json?.connected === true : json?.connected === true)
     setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
       setIntegrationSetupErrors((current) => ({ ...current, teams: json.setup_error.message }))
@@ -3023,6 +3028,8 @@ function ConnectAppsScreen({
   function changeFrameIntegration(key: ConnectAppKey, config: Record<string, unknown>) {
     onIntegrationChanged?.(key, config, legacyEnabledIntegrations())
   }
+
+  const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsStatusResolved)
 
   async function connectTeams() {
     if (teamsLoading || teamsConnected) return
@@ -3100,11 +3107,13 @@ function ConnectAppsScreen({
     if (!accessToken || !activeDeviceId) {
       setLocalEventsSavedArea(null)
       setLocalEventsCanManage(false)
+      setLocalEventsStatusResolved(true)
       return
     }
     const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(activeDeviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
-    if (!resp.ok) return
+    if (!resp.ok) { setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status'); return }
     const json = await resp.json()
+    setLocalEventsStatusResolved(true)
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
     setLocalEventsAccountConnected(json?.connected === true)
     if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
@@ -3217,8 +3226,7 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    fetchSpondStatus()
-    fetchTeamsStatus()
+    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus()])
     if (startup && initialTeamsOAuthStatus === 'connected') {
       changeFrameIntegration('teams', { enabled: true })
     }
@@ -3227,7 +3235,10 @@ function ConnectAppsScreen({
   }, [])
 
   useEffect(() => {
-    fetchLocalEventsStatus()
+    void fetchLocalEventsStatus().catch(() => {
+      setStatusTone('error')
+      setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status')
+    })
   }, [activeDeviceId])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string; comingSoon?: boolean }> = [
     {
@@ -3394,14 +3405,20 @@ function ConnectAppsScreen({
                         </button>
                       </div>
                     ) : (
+                      modulesJson?.integration_selection_explicit === true && (app.key === 'spond' || app.key === 'teams') ? (
+                      <button type="button" onClick={() => { if (app.key === 'spond') setSpondConnected(false); else setTeamsConnected(false); changeFrameIntegration(app.key, { enabled: false }) }} className="shrink-0 h-8 rounded-xl border border-[color:var(--bd-20)] px-3 text-[10px] tracking-widest text-[color:var(--fg-60)]">
+                        {language === 'no' ? 'DEAKTIVER PÅ FRAMEN' : 'DISABLE ON THIS FRAME'}
+                      </button>
+                    ) : (
                       <span className="shrink-0 h-8 px-3 rounded-xl border border-[#1f9d4a]/45 bg-[#1f9d4a]/10 text-[11px] tracking-widest text-[#1f9d4a] inline-flex items-center">
                         {language === 'no' ? 'TILKOBLET' : 'CONNECTED'}
                       </span>
                     )
+                    )
                   ) : (
                     <button
                       type="button"
-                      disabled={(app.key === 'teams' && teamsLoading)}
+                      disabled={legacyIntegrationDiscoveryPending || (app.key === 'teams' && teamsLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
                           if (spondAccountConnected) { setSpondConnected(true); changeFrameIntegration('spond', { enabled: true }) }
