@@ -12,6 +12,9 @@ namespace {
 // beacon period. The AP buffers unicast traffic for a sleeping station; this
 // deliberately trades a small amount of latency for much lower radio duty.
 static const uint16_t CONNECTED_IDLE_LISTEN_INTERVAL_BEACONS = 100;
+static bool g_policyInitialized = false;
+static bool g_lastPolicyUsbPresent = false;
+static bool g_lastBatteryConnectedIdleReady = false;
 
 bool configureAutomaticLightSleep(bool enable) {
 #if defined(CONFIG_PM_ENABLE) && CONFIG_PM_ENABLE && \
@@ -94,6 +97,7 @@ bool connectSaved(uint32_t timeoutMs) {
   WiFi.begin(ssid.c_str(), pass.c_str(), 0, nullptr, false);
   configureListenIntervalBeforeConnect();
   esp_wifi_connect();
+  g_policyInitialized = false;  // Association/reconnect can reset Wi-Fi PS state.
 
   Serial.print("Connecting WiFi (saved): ");
   Serial.println(ssid);
@@ -116,12 +120,20 @@ bool connectSaved(uint32_t timeoutMs) {
 }
 
 bool applyOperationalPowerPolicy(bool usbPresent) {
+  if (g_policyInitialized && usbPresent == g_lastPolicyUsbPresent) {
+    return usbPresent ? true : g_lastBatteryConnectedIdleReady;
+  }
+
+  g_policyInitialized = true;
+  g_lastPolicyUsbPresent = usbPresent;
+
   if (usbPresent) {
     // USB power is the debugging/realtime case: prioritize latency and native
     // USB stability over battery savings.
     configureAutomaticLightSleep(false);
     WiFi.setSleep(false);
     const esp_err_t err = esp_wifi_set_ps(WIFI_PS_NONE);
+    g_lastBatteryConnectedIdleReady = false;
     Serial.println("WiFi power policy: USB realtime");
     return err == ESP_OK;
   }
@@ -133,8 +145,9 @@ bool applyOperationalPowerPolicy(bool usbPresent) {
   WiFi.setSleep(true);
   const esp_err_t psErr = esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
   const bool lightSleepReady = configureAutomaticLightSleep(true);
+  g_lastBatteryConnectedIdleReady = (psErr == ESP_OK && lightSleepReady);
 
-  if (psErr == ESP_OK && lightSleepReady) {
+  if (g_lastBatteryConnectedIdleReady) {
     Serial.println("WiFi power policy: battery connected-idle (~10s listen interval)");
     return true;
   }
