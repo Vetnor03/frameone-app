@@ -429,6 +429,7 @@ type CountdownMirrorRow = {
   title: string | null
   target_date: string | null
   pinned: boolean | null
+  starter_key?: string | null
 }
 
 function parseYmdDateOnly(ymd: string) {
@@ -474,7 +475,7 @@ function todayYmdInTimeZone(timeZone: string) {
 async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: string[], language: string): Promise<Detail> {
   const { data, error } = await supabase
     .from('countdown_events')
-    .select('id, title, target_date, pinned')
+    .select('id, title, target_date, pinned, starter_key')
     .in('device_id', storageDeviceIds)
     .order('target_date', { ascending: true })
     .order('title', { ascending: true })
@@ -485,7 +486,12 @@ async function countdownDetail(supabase: SupabaseClient, storageDeviceIds: strin
   const items = (Array.isArray(data) ? (data as CountdownMirrorRow[]) : [])
     .map((row) => {
       const title = asString(row.title).trim()
-      const targetDate = asString(row.target_date).trim()
+      let targetDate = asString(row.target_date).trim()
+      if (asString((row as CountdownMirrorRow & { starter_key?: string }).starter_key) && targetDate && targetDate < todayYmd) {
+        const monthDay = targetDate.slice(5)
+        targetDate = `${Number(todayYmd.slice(0, 4))}-${monthDay}`
+        if (targetDate < todayYmd) targetDate = `${Number(todayYmd.slice(0, 4)) + 1}-${monthDay}`
+      }
       const daysLeft = diffDaysYmd(todayYmd, targetDate)
       return title && targetDate
         ? {
@@ -2113,6 +2119,7 @@ export async function GET(req: Request) {
     if (frameConfig.pair_required === true || frameConfig.unpaired === true) {
       return NextResponse.json(frameConfig)
     }
+    if (frameConfig.setup_pending === true) return NextResponse.json(frameConfig)
 
     const settings = asRecord(frameConfig.settings_json)
     const modules = asRecord(settings.modules)

@@ -221,6 +221,30 @@ export async function syncTeamsFromStoredConnection(userId: string, options: { h
   }
 }
 
+export async function syncTeamsIfStaleForUser(
+  userId: string,
+  options: { horizonDays?: number; staleAfterMs?: number; now?: Date } = {}
+) {
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('user_integrations')
+    .select('status,last_sync_at')
+    .eq('user_id', userId)
+    .eq('provider', TEAMS_PROVIDER)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data || data.status !== 'connected') return { connected: false, refreshed: false }
+
+  const now = options.now ?? new Date()
+  const lastSync = Date.parse(String(data.last_sync_at || ''))
+  const staleAfterMs = Math.max(60_000, options.staleAfterMs ?? 60 * 60 * 1000)
+  if (Number.isFinite(lastSync) && now.getTime() - lastSync < staleAfterMs) {
+    return { connected: true, refreshed: false }
+  }
+  await syncTeamsFromStoredConnection(userId, { horizonDays: options.horizonDays })
+  return { connected: true, refreshed: true }
+}
+
 export async function getTeamsMeetingsForUser(userId: string, shouldSync = true, options: { horizonDays?: number } = {}) {
   if (shouldSync) {
     try {

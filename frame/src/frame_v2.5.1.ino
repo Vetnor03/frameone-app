@@ -53,6 +53,9 @@ static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
+// Retained across the 10-second deep-sleep wake cycle. A cold boot may redraw
+// once, but ordinary setup-pending probes never refresh unchanged e-paper.
+RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
 
 // Hardware-specific USB source indication.
 #if defined(FRAME_IS_ALFRED_V1_2)
@@ -655,6 +658,8 @@ static bool fetchAndRenderExplicit(
     return false;
   }
 
+  setupPendingScreenDisplayed = false;
+
   if (!renderLoadedDashboard(batt, pwr)) return false;
   LiveUpdate::saveRenderedAwaitingAck(revision);
   // A successful physical render also satisfies the one-time renderer-version
@@ -1086,6 +1091,31 @@ void setup() {
   }
 
   activeSetupStep = SETUP_STEP_NONE;
+
+  // A claimed frame deliberately has no dashboard until onboarding commits its
+  // canonical settings. Keep the pairing result useful rather than rendering
+  // the frame-config endpoint's former arbitrary fallback dashboard.
+  FrameConfigApi::FetchResult postPairConfig =
+    FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+  if (postPairConfig == FrameConfigApi::FETCH_SETUP_PENDING) {
+    if (!setupPendingScreenDisplayed) {
+      ensureDisplay();
+      ScreenPairing::showWaitingForSetup();
+      shutdownDisplay();
+      setupPendingScreenDisplayed = true;
+    } else {
+      Serial.println("Setup-pending screen already displayed; skipping e-paper redraw");
+    }
+  } else if (postPairConfig == FrameConfigApi::FETCH_UNPAIRED) {
+    Serial.println("frame-config unpaired");
+    if (recoverPairingIfTokenLost("initial frame fetch", pwrEarly.usbPresent)) return;
+  } else if (postPairConfig == FrameConfigApi::FETCH_ERROR) {
+    ensureDisplay();
+    ScreenPairing::showError("Could not load frame");
+    shutdownDisplay();
+  } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
+    setupPendingScreenDisplayed = false;
+  }
 
   // Complete one-time renderer maintenance deterministically after networking
   // and pairing are ready, before starting revision listening.

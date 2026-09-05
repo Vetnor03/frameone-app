@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   try {
     const config = await buildFrameConfigPayload(auth.supabase, deviceId)
     if ('pair_required' in config) return NextResponse.json({ error: 'pair_required' }, { status: 409 })
+    if ('setup_pending' in config) return NextResponse.json({ error: 'setup_pending' }, { status: 409 })
     const visible = await collectVisibleContent({
       settings: withPhysicalCellGeometry(config.settings_json, frameLayouts.layouts),
       deviceId,

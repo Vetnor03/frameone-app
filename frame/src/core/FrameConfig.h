@@ -141,7 +141,8 @@ namespace FrameConfigApi {
   enum FetchResult {
     FETCH_OK,
     FETCH_ERROR,
-    FETCH_UNPAIRED
+    FETCH_UNPAIRED,
+    FETCH_SETUP_PENDING
   };
 
   FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken);

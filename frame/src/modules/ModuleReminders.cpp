@@ -695,7 +695,7 @@ static bool fetchReminders() {
   String url = String(BASE_URL)
              + "/api/device/reminders?device_id="
              + DeviceIdentity::getDeviceId()
-             + "&limit=10&tz=Europe/Oslo&skip_sync=1&display_profiles=" + profileQuery;
+             + "&limit=10&tz=Europe/Oslo&skip_sync=0&display_profiles=" + profileQuery;
 
   int code = 0;
   String body;
