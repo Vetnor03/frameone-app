@@ -2948,6 +2948,7 @@ function ConnectAppsScreen({
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
   const [spondAccountConnected, setSpondAccountConnected] = useState(false)
   const [spondStatusResolved, setSpondStatusResolved] = useState(false)
+  const [spondStatusFailed, setSpondStatusFailed] = useState(false)
   const [spondModalOpen, setSpondModalOpen] = useState(false)
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
@@ -2955,7 +2956,9 @@ function ConnectAppsScreen({
   const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected')
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
   const [teamsAccountConnected, setTeamsAccountConnected] = useState(initialTeamsOAuthStatus === 'connected')
-  const [teamsStatusResolved, setTeamsStatusResolved] = useState(initialTeamsOAuthStatus === 'connected')
+  const [teamsStatusResolved, setTeamsStatusResolved] = useState(false)
+  const [teamsStatusFailed, setTeamsStatusFailed] = useState(false)
+  const [pendingTeamsEnableAfterOAuth, setPendingTeamsEnableAfterOAuth] = useState(initialTeamsOAuthStatus === 'connected')
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
@@ -2967,6 +2970,7 @@ function ConnectAppsScreen({
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsAccountConnected, setLocalEventsAccountConnected] = useState(false)
   const [localEventsStatusResolved, setLocalEventsStatusResolved] = useState(false)
+  const [localEventsStatusFailed, setLocalEventsStatusFailed] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
     return frameUsesIntegration(modulesJson, 'local-events') ? normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference) : null
   })
@@ -2979,9 +2983,10 @@ function ConnectAppsScreen({
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) { setSpondConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Spond-status' : 'Could not check Spond status'); return }
+    if (!resp.ok) { setSpondStatusFailed(true); setSpondConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Spond-status' : 'Could not check Spond status'); return }
     const json = await resp.json()
     setSpondStatusResolved(true)
+    setSpondStatusFailed(false)
     setLocallyDisconnectedApps((current) => ({ ...current, spond: json?.connected === true ? false : current.spond }))
     setSpondAccountConnected(json?.connected === true)
     setSpondConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'spond') && json?.connected === true : json?.connected === true)
@@ -3001,9 +3006,10 @@ function ConnectAppsScreen({
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
-    if (!resp.ok) { setTeamsConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Teams-status' : 'Could not check Teams status'); return }
+    if (!resp.ok) { setTeamsStatusFailed(true); setTeamsConnected(false); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere Teams-status' : 'Could not check Teams status'); return }
     const json = await resp.json()
     setTeamsStatusResolved(true)
+    setTeamsStatusFailed(false)
     setLocallyDisconnectedApps((current) => ({ ...current, teams: json?.connected === true ? false : current.teams }))
     setTeamsAccountConnected(json?.connected === true)
     setTeamsConnected(modulesJson?.integration_selection_explicit === true ? frameUsesIntegration(modulesJson, 'teams') && json?.connected === true : json?.connected === true)
@@ -3030,6 +3036,14 @@ function ConnectAppsScreen({
   }
 
   const legacyIntegrationDiscoveryPending = modulesJson?.integration_selection_explicit !== true && !(spondStatusResolved && teamsStatusResolved && localEventsStatusResolved)
+  const providerDiscoveryFailed = spondStatusFailed || teamsStatusFailed || localEventsStatusFailed
+
+  function retryProviderDiscovery() {
+    setStatus(null)
+    if (!spondStatusResolved) void fetchSpondStatus().catch(() => setSpondStatusFailed(true))
+    if (!teamsStatusResolved) void fetchTeamsStatus().catch(() => setTeamsStatusFailed(true))
+    if (!localEventsStatusResolved) void fetchLocalEventsStatus().catch(() => setLocalEventsStatusFailed(true))
+  }
 
   async function connectTeams() {
     if (teamsLoading || teamsConnected) return
@@ -3111,9 +3125,10 @@ function ConnectAppsScreen({
       return
     }
     const resp = await fetch(`/api/integrations/local-events/status?deviceId=${encodeURIComponent(activeDeviceId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
-    if (!resp.ok) { setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status'); return }
+    if (!resp.ok) { setLocalEventsStatusFailed(true); setStatusTone('error'); setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status'); return }
     const json = await resp.json()
     setLocalEventsStatusResolved(true)
+    setLocalEventsStatusFailed(false)
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
     setLocalEventsAccountConnected(json?.connected === true)
     if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
@@ -3226,18 +3241,27 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus()])
-    if (startup && initialTeamsOAuthStatus === 'connected') {
-      changeFrameIntegration('teams', { enabled: true })
-    }
+    void Promise.allSettled([fetchSpondStatus(), fetchTeamsStatus()]).then(results => {
+      if (results[0].status === 'rejected') setSpondStatusFailed(true)
+      if (results[1].status === 'rejected') setTeamsStatusFailed(true)
+    })
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
 
   useEffect(() => {
+    if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
+    if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
+    setTeamsConnected(true)
+    changeFrameIntegration('teams', { enabled: true })
+    setPendingTeamsEnableAfterOAuth(false)
+  }, [pendingTeamsEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, legacyIntegrationDiscoveryPending])
+
+  useEffect(() => {
     void fetchLocalEventsStatus().catch(() => {
       setStatusTone('error')
       setStatus(language === 'no' ? 'Kunne ikke kontrollere status for lokale arrangementer' : 'Could not check Local Events status')
+      setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
   const apps: Array<{ key: ConnectAppKey; name: string; description: string; comingSoon?: boolean }> = [
@@ -3475,6 +3499,13 @@ function ConnectAppsScreen({
             )
           })}
         </div>
+
+        {providerDiscoveryFailed && legacyIntegrationDiscoveryPending && (
+          <div className="mt-3 rounded-2xl border border-[#d94b4b]/35 bg-[#d94b4b]/10 px-4 py-3 text-sm text-[#ff7a7a]">
+            <div>{language === 'no' ? 'Kunne ikke kontrollere tilkoblede tjenester.' : 'Could not check connected services.'}</div>
+            <button type="button" onClick={retryProviderDiscovery} className="mt-2 text-xs font-medium tracking-widest text-[#2aa3ff]">{language === 'no' ? 'PRØV IGJEN' : 'RETRY'}</button>
+          </div>
+        )}
 
         {status && (
           <div

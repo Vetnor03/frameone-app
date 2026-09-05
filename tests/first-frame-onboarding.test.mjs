@@ -120,8 +120,8 @@ test('operational connection requires resolved account credentials and frame ena
   assert.match(connect, /frameUsesIntegration\(modulesJson, 'spond'\) && json\?\.connected === true/)
   assert.match(connect, /frameUsesIntegration\(modulesJson, 'teams'\) && json\?\.connected === true/)
   assert.match(connect, /integration_selection_explicit === true \? frameUsesIntegration[\s\S]*: json\?\.connected === true/)
-  assert.match(connect, /if \(!resp\.ok\) \{ setSpondConnected\(false\)/)
-  assert.match(connect, /if \(!resp\.ok\) \{ setTeamsConnected\(false\)/)
+  assert.match(connect, /if \(!resp\.ok\) \{ setSpondStatusFailed\(true\); setSpondConnected\(false\)/)
+  assert.match(connect, /if \(!resp\.ok\) \{ setTeamsStatusFailed\(true\); setTeamsConnected\(false\)/)
 })
 
 test('legacy transition waits for authoritative provider discovery', () => {
@@ -138,4 +138,23 @@ test('explicit Spond and Teams can be disabled per frame without disconnecting c
   assert.doesNotMatch(disableAction, /\/disconnect|setSpondAccountConnected|setTeamsAccountConnected/)
   assert.match(connect, /spondAccountConnected\) \{ setSpondConnected\(true\); changeFrameIntegration\('spond', \{ enabled: true \}\)/)
   assert.match(connect, /teamsAccountConnected\) \{ setTeamsConnected\(true\); changeFrameIntegration\('teams', \{ enabled: true \}\)/)
+})
+
+
+test('successful Teams OAuth enables its initiating frame exactly once after safe discovery', () => {
+  assert.match(connect, /pendingTeamsEnableAfterOAuth.*initialTeamsOAuthStatus === 'connected'/)
+  assert.match(connect, /if \(!pendingTeamsEnableAfterOAuth \|\| !teamsStatusResolved \|\| !teamsAccountConnected\) return/)
+  assert.match(connect, /integration_selection_explicit !== true && legacyIntegrationDiscoveryPending\) return/)
+  assert.match(connect, /changeFrameIntegration\('teams', \{ enabled: true \}\)[\s\S]*setPendingTeamsEnableAfterOAuth\(false\)/)
+  assert.doesNotMatch(connect, /startup && initialTeamsOAuthStatus === 'connected'/)
+})
+
+test('failed discovery offers retry without weakening the legacy gate', () => {
+  assert.match(connect, /providerDiscoveryFailed = spondStatusFailed \|\| teamsStatusFailed \|\| localEventsStatusFailed/)
+  assert.match(connect, /function retryProviderDiscovery\(\)/)
+  assert.match(connect, /if \(!spondStatusResolved\) void fetchSpondStatus\(\)/)
+  assert.match(connect, /if \(!teamsStatusResolved\) void fetchTeamsStatus\(\)/)
+  assert.match(connect, /if \(!localEventsStatusResolved\) void fetchLocalEventsStatus\(\)/)
+  assert.match(connect, /Could not check connected services\./)
+  assert.match(connect, /: 'RETRY'/)
 })
