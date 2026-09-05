@@ -15,8 +15,9 @@ namespace WiFiManagerV2 {
   // Apply the operational Wi-Fi/CPU power policy for the current power source.
   // Returns true when battery operation can remain connected using automatic
   // light sleep. A false return on battery means the caller must use the
-  // 10-second deep-sleep probe fallback instead of staying awake.
-  bool applyOperationalPowerPolicy(bool usbPresent);
+  // 10-second deep-sleep probe fallback instead of staying awake. Set force
+  // when another caller may have changed the Wi-Fi power-save mode.
+  bool applyOperationalPowerPolicy(bool usbPresent, bool force = false);
 
   // Save creds to flash
   void saveCreds(const String& ssid, const String& pass);
