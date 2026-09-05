@@ -229,42 +229,47 @@ export function buildWasteCollectionItems(
   timeZone: string,
   includeOverdue: boolean
 ): DeviceReminderItem[] {
-  const seen = new Set<string>()
-  return rows.flatMap((row) => {
+  const groups = new Map<string, { occurrenceDate: string; daysUntil: number; fractions: Map<string, { title: string; externalId: string }> }>()
+  for (const row of rows) {
     const title = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
-    if (!title || !externalId) return []
+    if (!title || !externalId) continue
 
     const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
-    if (raw.source !== 'waste' || raw.type !== 'waste_collection') return []
+    if (raw.source !== 'waste' || raw.type !== 'waste_collection') continue
 
     const dateFromRaw = typeof raw.date === 'string' ? raw.date.slice(0, 10) : ''
     const occurrenceDate = /^\d{4}-\d{2}-\d{2}$/.test(dateFromRaw)
       ? dateFromRaw
       : row.starts_at ? isoToYmdInTimeZone(row.starts_at, timeZone) : null
-    if (!occurrenceDate) return []
-    if (occurrenceDate > horizonEndYmd) return []
+    if (!occurrenceDate) continue
+    if (occurrenceDate > horizonEndYmd) continue
 
     const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
-    if (!includeOverdue && daysUntil < 0) return []
+    if (!includeOverdue && daysUntil < 0) continue
 
-    const duplicateKey = `${occurrenceDate}__${String(raw.waste_fraction || title).toLowerCase()}`
-    if (seen.has(duplicateKey)) return []
-    seen.add(duplicateKey)
+    const fraction = String(raw.normalized_type || raw.waste_fraction || title).trim().toLowerCase()
+    const group = groups.get(occurrenceDate) || { occurrenceDate, daysUntil, fractions: new Map() }
+    if (!group.fractions.has(fraction)) group.fractions.set(fraction, { title: title.replace(/^Tøm\s+/i, ''), externalId })
+    groups.set(occurrenceDate, group)
+  }
 
-    return [{
-      reminder_id: `waste:${externalId}`,
-      title,
-      occurrence_date: occurrenceDate,
-      display_date: formatDisplayDate(occurrenceDate, todayYmd),
-      days_until: daysUntil,
-      is_overdue: daysUntil < 0,
+  return Array.from(groups.values()).sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate)).map((group) => {
+    const fractions = Array.from(group.fractions.values()).sort((a, b) => a.title.localeCompare(b.title, 'nb-NO'))
+    const externalIds = fractions.map((fraction) => fraction.externalId).sort()
+    return {
+      reminder_id: `waste:${externalIds.join('+')}`,
+      title: fractions.map((fraction) => fraction.title).join(' + ').replace(/^./u, (first) => first.toLocaleUpperCase('nb-NO')),
+      occurrence_date: group.occurrenceDate,
+      display_date: formatDisplayDate(group.occurrenceDate, todayYmd),
+      days_until: group.daysUntil,
+      is_overdue: group.daysUntil < 0,
       repeat: 'none' as ReminderRepeatKey,
       due_time: null,
       display_time: null,
       source: 'waste' as const,
-      external_id: externalId,
-    }]
+      external_id: externalIds.join('+'),
+    }
   })
 }
 
