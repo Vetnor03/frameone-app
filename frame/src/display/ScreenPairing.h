@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 namespace ScreenPairing {
+void showWaitingForSetup();
 
   // Startup screens (calm + minimal)
   void showWifiSetup(const char* ssid);

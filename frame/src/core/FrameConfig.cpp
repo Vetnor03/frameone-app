@@ -245,6 +245,11 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
     return FETCH_UNPAIRED;
   }
 
+  if (doc["setup_pending"] == true || String((const char*)(doc["status"] | "")) == "waiting_for_setup") {
+    Serial.println("frame-config waiting for canonical setup");
+    return FETCH_SETUP_PENDING;
+  }
+
   JsonObject settings = doc["settings_json"];
   if (settings.isNull()) {
     Serial.println("frame-config missing settings_json");

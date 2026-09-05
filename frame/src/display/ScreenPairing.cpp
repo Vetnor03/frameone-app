@@ -49,6 +49,17 @@ static void renderPage(DrawCb cb, void* ctx) {
 // =======================================================
 namespace ScreenPairing {
 
+static void drawWaitingForSetup(void* vctx) {
+  (void)vctx;
+  drawCenteredInFrame("RE:MIND", FRAME_Y + 130, &FreeMonoBold18pt7b);
+  drawCenteredInFrame("Waiting for setup", FRAME_Y + 235, &FreeMonoBold12pt7b);
+  drawCenteredInFrame("Finish setup in the RE:MIND app", FRAME_Y + 300, &FreeMonoBold9pt7b);
+}
+
+void showWaitingForSetup() {
+  renderPage(drawWaitingForSetup, nullptr);
+}
+
 // ---- WIFI SETUP ----
 struct WifiCtx {
   const char* ssid;

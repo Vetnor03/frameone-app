@@ -14,13 +14,14 @@ import AIAssistantTab from './components/AIAssistantTab'
 import SensitiveInformationHelper from './components/SensitiveInformationHelper'
 import FrameAssistant from './components/FrameAssistant'
 import type { AssistantDestination } from './lib/assistant/types'
-import SubscriptionSettingsPage, { AI_FOLLOW_PLANS, type PreviewPlan } from './components/SubscriptionSettingsPage'
+import SubscriptionSettingsPage from './components/SubscriptionSettingsPage'
 import { findGrocerySuggestionByExactKey, mergeGrocerySuggestionsByExactKey, normalizeGrocerySuggestionKey } from './lib/groceries/suggestions'
 import { addGroceryItemsCanonical } from './lib/groceries/actions'
 import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients, recipeMergeDecision, recipeSourceLink, scaleRecipeQuantity, selectedRecipeGroceries, type GroceryRecipeItem, type RecipeDraft, type RecipeIngredient } from './lib/groceries/recipes.mjs'
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
+import { norwegianStarterCountdowns, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
 import { initializeProductAnalytics, trackProductEvent } from './lib/productAnalytics.mjs'
@@ -2016,21 +2017,6 @@ export default function HomePage() {
 
     if (!stickySettingsRef.current) setActiveTab('frame')
 
-    if (!hasSavedSettings) {
-      const initialSettingsJson: SettingsJson = {
-        theme: nextFrameTheme,
-        language: nextLanguage,
-        fontSize: nextFontSize,
-        layout: 'default',
-        cells: cellsMapToArray(emptyCellsFor('default'), { includeEmptySlots: true }),
-        modules: normalizedModules,
-        pinned_tabs: nextPinnedTabs,
-        layout_module_memory: layoutModuleMemoryRef.current,
-      }
-
-      await commitInitialFrameSetup(deviceId, initialSettingsJson)
-    }
-
     isLoadedRef.current = true
   }
 
@@ -2201,14 +2187,17 @@ export default function HomePage() {
     let nextLayout: LayoutKey = layoutKey
     let nextCellsByLayout = cellsByLayout
     let nextModules = mergeReusableUserModules({ ...modulesJson }, selection.modules)
-    let nextPinnedTabs = pinnedModuleTabs
+    let nextPinnedTabs: ModuleKey[] = []
 
     if (selection.purpose === 'normal') {
       nextLayout = 'pyramid'
-      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'assistant', 3: 'weather' }
+      const presetCells: Record<number, ModuleKey | null> = { 0: 'date', 1: 'reminders', 2: 'weather', 3: 'countdown' }
       nextCellsByLayout = { ...makeEmptyCellsByLayout(), pyramid: presetCells }
-      nextPinnedTabs = Array.from(new Set((Object.values(presetCells).filter(Boolean) as ModuleKey[]).filter((m) => m !== 'date')))
       layoutModuleMemoryRef.current = mergeCellsIntoSlotMemory([], nextLayout, presetCells)
+    }
+
+    if (!Array.isArray(nextModules.weather) || !nextModules.weather.length) {
+      nextModules.weather = [{ ...OSLO_WEATHER }]
     }
 
     nextModules = normalizeModulesForSave(nextModules)
@@ -2225,7 +2214,16 @@ export default function HomePage() {
       layout_module_memory: nextLayoutModuleMemory,
     }
 
-    await commitInitialFrameSetup(activeDeviceId, settingsJson)
+    const starterReminders = norwegianStarterReminders(language)
+    const starterCountdowns = norwegianStarterCountdowns(language)
+    const { data: completed, error: completionError } = await supabase.rpc('complete_initial_device_onboarding', {
+      p_device_id: activeDeviceId,
+      p_settings: settingsJson,
+      p_starter_reminders: starterReminders.map(item => ({ key: item.key, title: item.title, due_date: item.dueDate, repeat_type: item.repeatType })),
+      p_starter_countdowns: starterCountdowns.map(item => ({ key: item.key, title: item.title, target_date: item.targetDate })),
+    })
+    if (completionError) throw completionError
+    if (completed !== true) throw new Error('Could not complete frame setup.')
 
     layoutModuleMemoryRef.current = nextLayoutModuleMemory
     setLayoutKey(nextLayout)
@@ -8540,156 +8538,54 @@ function FrameSetupFlow({
   activeDeviceId: string
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
-  type SetupStep = 'paired' | 'purpose' | 'modules' | 'manual' | 'ai-intro' | 'plans' | 'follow'
-  type Entitlements = { monitoring_enabled: boolean; effective_status: string; is_trial: boolean }
-
-  const [step, setStep] = useState<SetupStep>('purpose')
-  const [purpose, setPurpose] = useState<SetupPurpose>('normal')
-  const [modules, setModules] = useState<Record<string, any>>({})
+  const setupModules = ['date', 'reminders', 'weather', 'countdown'] as const
   const [moduleIndex, setModuleIndex] = useState(0)
+  const [modules, setModules] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
-  const [billingPlan, setBillingPlan] = useState<PreviewPlan | null>(null)
-  const [entitlements, setEntitlements] = useState<Entitlements | null>(null)
-  const [entitlementsLoading, setEntitlementsLoading] = useState(true)
-  const [followRequest, setFollowRequest] = useState('')
-  const [createdRequestCount, setCreatedRequestCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const isNo = language === 'no'
-  const requiredModules = purpose === 'normal' ? ['reminders', 'weather'] : []
+  const current = setupModules[moduleIndex]
 
-  const loadEntitlements = useCallback(async () => {
-    const { data: authData, error: authError } = await supabase.auth.getUser()
-    if (authError) throw authError
-    if (!authData.user) throw new Error('not_authenticated')
-    const { data, error: entitlementError } = await supabase.rpc('get_ai_subscription_entitlements', { p_user_id: authData.user.id }).maybeSingle()
-    if (entitlementError) throw entitlementError
-    const current = data as Entitlements
-    setEntitlements(current)
-    return current
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    loadEntitlements().catch(() => {
-      if (active) setError(isNo ? 'Kunne ikke kontrollere AI Follow-abonnementet.' : 'Could not check your AI Follow subscription.')
-    }).finally(() => { if (active) setEntitlementsLoading(false) })
-    return () => { active = false }
-  }, [isNo, loadEntitlements])
-
-  function setupModuleComplete(moduleKey: string) {
-    if (moduleKey !== 'weather') return true
-    const cfg = modules.weather?.[0]
-    return Number.isFinite(Number(cfg?.lat)) && Number.isFinite(Number(cfg?.lon))
-  }
-
-  function continueFromPurpose() {
+  async function advance() {
+    if (saving) return
     setError(null)
-    if (purpose === 'custom') setStep('manual')
-    else { setModuleIndex(0); setStep('modules') }
-  }
-
-  function nextModule() {
-    const current = requiredModules[moduleIndex]
-    if (!setupModuleComplete(current)) {
-      setError(isNo ? 'Velg et værsted før du fortsetter.' : 'Choose a weather location before continuing.')
+    if (moduleIndex < setupModules.length - 1) {
+      setModuleIndex(index => index + 1)
       return
     }
-    setError(null)
-    if (moduleIndex + 1 >= requiredModules.length) setStep('manual')
-    else setModuleIndex((index) => index + 1)
-  }
-
-  function goBack() {
-    if (saving || billingPlan) return
-    setError(null)
-    if (step === 'purpose') setStep('paired')
-    else if (step === 'paired') setStep('purpose')
-    else if (step === 'modules') moduleIndex > 0 ? setModuleIndex((index) => index - 1) : setStep('purpose')
-    else if (step === 'manual') requiredModules.length ? (setModuleIndex(requiredModules.length - 1), setStep('modules')) : setStep('purpose')
-    else if (step === 'ai-intro') setStep('manual')
-    else if (step === 'plans') setStep('ai-intro')
-    else if (step === 'follow') setStep(entitlements?.monitoring_enabled ? 'ai-intro' : 'plans')
-  }
-
-  async function finish() {
-    if (saving) return
     try {
       setSaving(true)
-      setError(null)
-      await onComplete({ purpose, modules })
-    } catch (e) { setError(errorMessage(e)) }
-    finally { setSaving(false) }
+      await onComplete({ purpose: 'normal', modules })
+    } catch (reason) {
+      setError(errorMessage(reason))
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function openAiFollow() {
-    setError(null)
-    setEntitlementsLoading(true)
-    try {
-      const current = await loadEntitlements()
-      setStep(current.monitoring_enabled ? 'follow' : 'ai-intro')
-    } catch { setStep('ai-intro') }
-    finally { setEntitlementsLoading(false) }
-  }
-
-  async function selectPlan(plan: PreviewPlan) {
-    if (billingPlan) return
-    setBillingPlan(plan); setError(null)
-    try {
-      const { error: planError } = await supabase.rpc('preview_ai_subscription_plan', { p_plan: plan })
-      if (planError) throw planError
-      const confirmed = await loadEntitlements()
-      if (!confirmed.monitoring_enabled) throw new Error('entitlement_not_confirmed')
-      setStep('follow')
-    } catch (e) {
-      const message = errorMessage(e)
-      setError(message.includes('trial') ? (isNo ? 'Prøveperioden er ikke tilgjengelig. Du kan velge et abonnement eller hoppe over.' : 'The trial is not available. You can choose a plan or skip for now.') : (isNo ? 'Kunne ikke bekrefte abonnementet. Prøv igjen, gå tilbake eller hopp over.' : 'Could not confirm the subscription. Try again, go back, or skip for now.'))
-    } finally { setBillingPlan(null) }
-  }
-
-  async function createFollowRequest() {
-    const clean = followRequest.trim().replace(/\\s+/g, ' ')
-    if (saving) return
-    if (clean.length < 4) { setError(isNo ? 'Skriv litt mer om hva AI Follow skal følge.' : 'Tell AI Follow a little more about what to track.'); return }
-    if (clean.length > 500) { setError(isNo ? 'Gjør forespørselen litt kortere.' : 'Please make the request a little shorter.'); return }
-    setSaving(true); setError(null)
-    try {
-      const { error: creationError } = await supabase.rpc('create_ai_assistant_watch', { p_original_request: clean, p_frame_id: activeDeviceId })
-      if (creationError) throw creationError
-      setCreatedRequestCount((count) => count + 1)
-      setFollowRequest('')
-    } catch { setError(isNo ? 'Kunne ikke opprette forespørselen. Prøv igjen, gå tilbake eller hopp over.' : 'Could not create the request. Try again, go back, or skip for now.') }
-    finally { setSaving(false) }
-  }
-
-  const stepOrder: SetupStep[] = ['paired', 'purpose', 'modules', 'manual', 'ai-intro', 'plans', 'follow']
-  const shell = (children: React.ReactNode) => (
-    <div className="absolute inset-0 z-40 flex items-center justify-center px-3 sm:px-5 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
-      <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center px-3 text-[color:var(--fg)]" style={{ background: 'radial-gradient(circle at top, rgba(42,163,255,0.12), transparent 34%), var(--app-bg)' }}>
+      <div className="flex max-h-[94vh] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
         <div className="border-b border-[color:var(--bd-10)] px-5 py-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <button type="button" onClick={goBack} disabled={saving || !!billingPlan} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-60)] disabled:opacity-50">← {isNo ? 'Tilbake' : 'Back'}</button>
-            {(step === 'ai-intro' || step === 'plans' || step === 'follow') && <button type="button" onClick={finish} disabled={saving || !!billingPlan} className="rounded-full border border-[color:var(--bd-10)] px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)] disabled:opacity-50">{isNo ? 'Hopp over foreløpig' : 'Skip for now'}</button>}
+          <div className="flex items-center justify-between">
+            <button type="button" disabled={moduleIndex === 0 || saving} onClick={() => setModuleIndex(index => Math.max(0, index - 1))} className="text-xs uppercase tracking-widest disabled:opacity-30">← {isNo ? 'Tilbake' : 'Back'}</button>
+            <span className="text-xs text-[color:var(--fg-50)]">{moduleIndex + 1} / {setupModules.length}</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff] transition-all" style={{ width: `${((stepOrder.indexOf(step) + 1) / stepOrder.length) * 100}%` }} /></div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[color:var(--bd-10)]"><div className="h-full rounded-full bg-[#2aa3ff]" style={{ width: `${((moduleIndex + 1) / setupModules.length) * 100}%` }} /></div>
         </div>
-        <div className="overflow-y-auto overflow-x-hidden p-5 sm:p-6">{children}</div>
+        <div className="overflow-y-auto p-6">
+          <div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div>
+          <h1 className="mt-3 text-2xl font-medium">{current === 'date' ? (isNo ? 'Dato' : 'Date') : current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
+          {current === 'date' && <p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Dato og norske helligdager oppdateres automatisk.' : 'The date and Norwegian holidays update automatically.'}</p>}
+          {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Koble til kalenderne dine nå, eller fortsett med et nyttig startsett.' : 'Connect your calendars now, or continue with a useful starter set.'}</p><div className="mt-5 h-[min(390px,42vh)]"><ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup /></div></>}
+          {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Oslo brukes hvis du hopper over' : 'Oslo is used if you skip')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
+          {current === 'countdown' && <p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Du kan legge til egne nedtellinger senere. Hvis du fortsetter nå, får du et lite redigerbart startsett.' : 'You can add your own countdowns later. Continuing now adds a small editable starter set.'}</p>}
+          {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}
+          <button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === setupModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
+        </div>
       </div>
     </div>
   )
-
-  if (step === 'paired') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Framen er koblet til' : 'Your frame is paired'}</h1><p className="mt-3 text-sm leading-6 text-[color:var(--fg-60)]">{isNo ? 'Tilkoblingen er lagret. Fortsett for å velge oppsett – vi parer ikke framen på nytt.' : 'The connection is saved. Continue to choose a setup—we will not pair the frame again.'}</p><button onClick={() => setStep('purpose')} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
-
-  if (step === 'purpose') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{(['normal', 'custom'] as SetupPurpose[]).map((key) => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left transition ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)] bg-[color:var(--app-bg)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : (isNo ? 'Tilpasset' : 'Custom')}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, AI Follow og Vær.' : 'Date, Reminders, AI Follow, and Weather.') : (isNo ? 'Velg moduler og layout selv.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={continueFromPurpose} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
-
-  if (step === 'modules') { const current = requiredModules[moduleIndex]; return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{moduleIndex + 1} / {requiredModules.length}</div><h1 className="mt-3 text-2xl font-medium tracking-[-0.03em]">{current === 'weather' ? (isNo ? 'Velg værsted' : 'Choose weather location') : (isNo ? 'Koble påminnelser' : 'Connect reminders')}</h1><div className="mt-6 space-y-3">{current === 'reminders' && <div className="h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} onBack={() => undefined} startup /></div>}{current === 'weather' && <WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Ikke valgt' : 'Not set')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules((value) => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} />}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={nextModule} disabled={!setupModuleComplete(current)} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{isNo ? 'Fortsett' : 'Continue'}</button></>) }
-
-  if (step === 'manual') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Slik fungerer appen' : 'How the app works'}</h1><div className="mt-5 space-y-4 text-sm leading-6 text-[color:var(--fg-70)]"><p>• {isNo ? 'Faner følger modulene du har valgt.' : 'Tabs follow the modules selected for your frame.'}</p><p>• {isNo ? 'Du kan velge layout og endre moduler ved å trykke på en celle.' : 'Choose a layout and change modules by tapping a cell.'}</p><p>• {isNo ? 'Framen oppdateres automatisk når noe endres.' : 'Your frame refreshes automatically when something changes.'}</p></div><button onClick={openAiFollow} disabled={entitlementsLoading} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{entitlementsLoading ? (isNo ? 'Laster…' : 'Loading…') : (isNo ? 'Fortsett' : 'Continue')}</button></>)
-
-  if (step === 'ai-intro') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-3xl font-medium tracking-[-0.04em]">AI Follow</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'La RE:MIND følge med på det som betyr noe for deg. Følg priser, produkter, flyreiser, tilgjengelighet, værforhold, nyheter, lanseringer og mer. Når noe viktig endrer seg, kan AI Follow vise det direkte på framen.' : 'Let RE:MIND keep track of the things that matter to you. Follow prices, products, flights, availability, weather conditions, news, releases, and more. When something important changes, AI Follow can surface it directly on your frame.'}</p><div className="mt-5 space-y-2">{(isNo ? ['Flyreiser til Norge er nå innenfor budsjettet ditt', 'Dette produktet er på lager igjen', 'I morgen blir det ideelle surfeforhold', 'Prisen har falt under målet ditt'] : ['Flights to Norway are now within your budget', 'This product is back in stock', 'Tomorrow has ideal surf conditions', 'The price has dropped below your target']).map((example) => <div key={example} className="rounded-xl border border-[color:var(--bd-10)] bg-[color:var(--app-bg)] px-3 py-2.5 text-xs text-[color:var(--fg-65)]">{example}</div>)}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<div className="mt-6 space-y-2"><button onClick={() => selectPlan('trial')} disabled={!!billingPlan} className="h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm text-white disabled:opacity-50">{isNo ? 'Start én måned gratis' : 'Start one-month free trial'}</button><button onClick={() => setStep('plans')} disabled={!!billingPlan} className="h-12 w-full rounded-2xl border border-[color:var(--bd-15)] text-sm">{isNo ? 'Velg abonnement' : 'Choose subscription'}</button></div></>)
-
-  if (step === 'plans') return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Velg abonnement' : 'Choose subscription'}</h1><p className="mt-2 text-sm leading-6 text-[color:var(--fg-60)]">{isNo ? 'Velg planen som passer deg. Abonnementet regnes først som aktivt når det er bekreftet.' : 'Choose the plan that fits. Your subscription is only active after it is confirmed.'}</p><div className="mt-5 space-y-3">{AI_FOLLOW_PLANS.filter((plan) => plan.id !== 'trial').map((plan) => <button key={plan.id} onClick={() => selectPlan(plan.id)} disabled={!!billingPlan} className="w-full rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] p-4 text-left disabled:opacity-50"><span className="flex justify-between gap-3"><strong>{plan.name}</strong><span>{plan.price[language]} {plan.priceSuffix?.[language]}</span></span><span className="mt-2 block text-xs text-[color:var(--fg-60)]">{plan.features[language].join(' · ')}</span></button>)}</div>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}</>)
-
-  return shell(<><h1 className="text-2xl font-medium tracking-[-0.03em]">{isNo ? 'Hva vil du at AI Follow skal følge?' : 'What would you like AI Follow to track?'}</h1><p className="mt-2 text-sm leading-6 text-[color:var(--fg-60)]">{isNo ? 'Skriv med egne ord. Du kan legge til flere forespørsler én om gangen.' : 'Write it in your own words. You can add more requests one at a time.'}</p><textarea value={followRequest} onChange={(event) => setFollowRequest(event.target.value)} maxLength={500} rows={4} placeholder={isNo ? 'Flyreiser fra Stavanger til Tokyo under 5 000 kr' : 'Flights from Stavanger to Tokyo below 5,000 kr'} className="mt-5 w-full resize-none rounded-2xl border border-[color:var(--bd-15)] bg-[color:var(--app-bg)] p-4 text-sm outline-none focus:border-[#2aa3ff]"/><SensitiveInformationHelper language={language}/>{createdRequestCount > 0 && <p role="status" className="mt-3 text-sm text-[#2aa3ff]">{isNo ? `${createdRequestCount} forespørsel${createdRequestCount === 1 ? '' : 'er'} lagt til` : `${createdRequestCount} request${createdRequestCount === 1 ? '' : 's'} added`}</p>}{error && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{error}</p>}<div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2"><button onClick={createFollowRequest} disabled={saving || !followRequest.trim()} className="h-12 rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff] disabled:opacity-50">{saving ? (isNo ? 'Legger til…' : 'Adding…') : (isNo ? 'Legg til' : 'Add request')}</button><button onClick={finish} disabled={saving} className="h-12 rounded-2xl bg-[#2aa3ff] text-sm text-white disabled:opacity-50">{isNo ? 'Fortsett' : 'Continue'}</button></div></>)
 }
 function FirstFrameOnboarding({
   language,

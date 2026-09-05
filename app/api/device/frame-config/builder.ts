@@ -134,7 +134,15 @@ export type PairRequiredPayload = {
   expires_in_sec?: number
 }
 
-export type DeviceFrameConfigPayload = FrameConfigPayload | PairRequiredPayload
+export type SetupPendingPayload = {
+  device_id: string
+  setup_pending: true
+  status: 'waiting_for_setup'
+  settings_json: null
+  updated_at: null
+}
+
+export type DeviceFrameConfigPayload = FrameConfigPayload | PairRequiredPayload | SetupPendingPayload
 
 export function pairRequiredPayload(device_id: string, pairing?: { pairing_code?: string; expires_in?: number; expires_in_sec?: number }): PairRequiredPayload {
   return {
@@ -193,17 +201,11 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
       throw new Error(error.message)
     }
 
-    let settings_json: UnknownRecord =
-      data?.settings_json ?? {
-        theme: 'dark',
-        layout: 'default',
-        cells: [
-          { slot: 0, module: 'date' },
-          { slot: 1, module: 'weather:1' },
-          { slot: 2, module: 'surf:1' },
-        ],
-        modules: {},
-      }
+    if (!data?.settings_json) {
+      return { device_id, setup_pending: true, status: 'waiting_for_setup', settings_json: null, updated_at: null }
+    }
+
+    let settings_json: UnknownRecord = data.settings_json
 
     if (settings_json.layout === 'custom') {
       const customValidation = supportsPhysicalCustomLayout(settings_json.cells)

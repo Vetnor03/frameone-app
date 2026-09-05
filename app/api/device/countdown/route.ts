@@ -10,6 +10,7 @@ type CountdownRow = {
   title: string | null
   target_date: string | null
   pinned: boolean | null
+  starter_key?: string | null
 }
 
 function pad2(n: number) {
@@ -122,7 +123,7 @@ export async function GET(req: Request) {
 
     const { data: events, error: eventsError } = await supabase
       .from('countdown_events')
-      .select('id, device_id, title, target_date, pinned')
+      .select('id, device_id, title, target_date, pinned, starter_key')
       .in('device_id', await sharedDeviceIdsForFrame(supabase, device_id))
       .order('target_date', { ascending: true })
       .order('title', { ascending: true })
@@ -137,8 +138,16 @@ export async function GET(req: Request) {
     const sourceItems = rows
       .map((row) => {
         const title = String(row.title ?? '').trim()
-        const target_date = String(row.target_date ?? '').trim()
+        let target_date = String(row.target_date ?? '').trim()
         const id = String(row.id ?? '').trim()
+
+        // Starter countdowns are annual normal records. Derive the next view
+        // from their saved month/day without rewriting or recreating the row.
+        if (row.starter_key && target_date && target_date < todayYmd) {
+          const monthDay = target_date.slice(5)
+          target_date = `${Number(todayYmd.slice(0, 4))}-${monthDay}`
+          if (target_date < todayYmd) target_date = `${Number(todayYmd.slice(0, 4)) + 1}-${monthDay}`
+        }
 
         if (!id || !title || !target_date) return null
 

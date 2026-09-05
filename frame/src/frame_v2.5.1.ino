@@ -1087,6 +1087,24 @@ void setup() {
 
   activeSetupStep = SETUP_STEP_NONE;
 
+  // A claimed frame deliberately has no dashboard until onboarding commits its
+  // canonical settings. Keep the pairing result useful rather than rendering
+  // the frame-config endpoint's former arbitrary fallback dashboard.
+  FrameConfigApi::FetchResult postPairConfig =
+    FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+  if (postPairConfig == FrameConfigApi::FETCH_SETUP_PENDING) {
+    ensureDisplay();
+    ScreenPairing::showWaitingForSetup();
+    shutdownDisplay();
+  } else if (postPairConfig == FrameConfigApi::FETCH_UNPAIRED) {
+    Serial.println("frame-config unpaired");
+    if (recoverPairingIfTokenLost("initial frame fetch", pwrEarly.usbPresent)) return;
+  } else if (postPairConfig == FrameConfigApi::FETCH_ERROR) {
+    ensureDisplay();
+    ScreenPairing::showError("Could not load frame");
+    shutdownDisplay();
+  }
+
   // Complete one-time renderer maintenance deterministically after networking
   // and pairing are ready, before starting revision listening.
   runFirmwareMaintenanceIfNeeded(
