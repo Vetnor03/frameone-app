@@ -2091,6 +2091,10 @@ export default function HomePage() {
           if (key?.startsWith('remind:onboarding:')) sessionStorage.removeItem(key)
         }
       }
+      if (onboardingDraftUser && onboardingDraftUser !== session.user.id) {
+        sessionStorage.removeItem('remind:teams-oauth-device')
+        sessionStorage.removeItem('remind:teams-oauth-result')
+      }
       sessionStorage.setItem('remind:onboarding-user', session.user.id)
       setAuthReady(true)
       setUserId(session.user.id)
@@ -2112,6 +2116,8 @@ export default function HomePage() {
             if (key?.startsWith('remind:onboarding:')) sessionStorage.removeItem(key)
           }
           sessionStorage.removeItem('remind:onboarding-user')
+          sessionStorage.removeItem('remind:teams-oauth-device')
+          sessionStorage.removeItem('remind:teams-oauth-result')
           setShouldRenderApp(false)
           setShowSplash(false)
           setBooting(false)
@@ -2938,9 +2944,9 @@ function ConnectAppsScreen({
 }) {
   const initialTeamsOAuthStatus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teams')
   const initialTeamsOAuthMessage = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('message')
-  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'connected' ? 'success' : initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>(() => initialTeamsOAuthStatus === 'error' ? 'error' : 'info')
   const [status, setStatus] = useState<string | null>(() => {
-    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Teams er tilkoblet' : 'Teams connected'
+    if (initialTeamsOAuthStatus === 'connected') return language === 'no' ? 'Fullfører Teams-tilkobling…' : 'Finishing Teams connection…'
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
@@ -2953,12 +2959,17 @@ function ConnectAppsScreen({
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
-  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected')
+  const [teamsConnected, setTeamsConnected] = useState(false)
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
-  const [teamsAccountConnected, setTeamsAccountConnected] = useState(initialTeamsOAuthStatus === 'connected')
+  const [teamsAccountConnected, setTeamsAccountConnected] = useState(false)
   const [teamsStatusResolved, setTeamsStatusResolved] = useState(false)
   const [teamsStatusFailed, setTeamsStatusFailed] = useState(false)
-  const [pendingTeamsEnableAfterOAuth, setPendingTeamsEnableAfterOAuth] = useState(initialTeamsOAuthStatus === 'connected')
+  const [pendingTeamsEnableAfterOAuth, setPendingTeamsEnableAfterOAuth] = useState(() => {
+    if (typeof window === 'undefined' || !activeDeviceId) return false
+    const initiatingDeviceId = sessionStorage.getItem('remind:teams-oauth-device')
+    const storedResult = sessionStorage.getItem('remind:teams-oauth-result')
+    return initiatingDeviceId === activeDeviceId && (initialTeamsOAuthStatus === 'connected' || storedResult === 'connected')
+  })
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
@@ -3060,6 +3071,9 @@ function ConnectAppsScreen({
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til Teams' : 'Sign in to connect Teams')
+      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
+      sessionStorage.setItem('remind:teams-oauth-device', activeDeviceId)
+      sessionStorage.removeItem('remind:teams-oauth-result')
       const params = new URLSearchParams({ access_token: accessToken })
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
       if (timeZone) params.set('tz', timeZone)
@@ -3246,14 +3260,29 @@ function ConnectAppsScreen({
       if (results[1].status === 'rejected') setTeamsStatusFailed(true)
     })
     const params = new URLSearchParams(window.location.search)
+    if (initialTeamsOAuthStatus === 'connected') {
+      sessionStorage.setItem('remind:teams-oauth-result', 'connected')
+    } else if (initialTeamsOAuthStatus === 'error') {
+      sessionStorage.removeItem('remind:teams-oauth-device')
+      sessionStorage.removeItem('remind:teams-oauth-result')
+      setPendingTeamsEnableAfterOAuth(false)
+    }
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
+
+  useEffect(() => {
+    const initiatingDeviceId = sessionStorage.getItem('remind:teams-oauth-device')
+    const storedResult = sessionStorage.getItem('remind:teams-oauth-result')
+    setPendingTeamsEnableAfterOAuth(!!activeDeviceId && initiatingDeviceId === activeDeviceId && storedResult === 'connected')
+  }, [activeDeviceId])
 
   useEffect(() => {
     if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
     if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
     setTeamsConnected(true)
     changeFrameIntegration('teams', { enabled: true })
+    sessionStorage.removeItem('remind:teams-oauth-device')
+    sessionStorage.removeItem('remind:teams-oauth-result')
     setPendingTeamsEnableAfterOAuth(false)
   }, [pendingTeamsEnableAfterOAuth, teamsStatusResolved, teamsAccountConnected, legacyIntegrationDiscoveryPending])
 

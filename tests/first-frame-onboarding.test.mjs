@@ -142,7 +142,7 @@ test('explicit Spond and Teams can be disabled per frame without disconnecting c
 
 
 test('successful Teams OAuth enables its initiating frame exactly once after safe discovery', () => {
-  assert.match(connect, /pendingTeamsEnableAfterOAuth.*initialTeamsOAuthStatus === 'connected'/)
+  assert.match(connect, /pendingTeamsEnableAfterOAuth[\s\S]*initialTeamsOAuthStatus === 'connected'/)
   assert.match(connect, /if \(!pendingTeamsEnableAfterOAuth \|\| !teamsStatusResolved \|\| !teamsAccountConnected\) return/)
   assert.match(connect, /integration_selection_explicit !== true && legacyIntegrationDiscoveryPending\) return/)
   assert.match(connect, /changeFrameIntegration\('teams', \{ enabled: true \}\)[\s\S]*setPendingTeamsEnableAfterOAuth\(false\)/)
@@ -157,4 +157,22 @@ test('failed discovery offers retry without weakening the legacy gate', () => {
   assert.match(connect, /if \(!localEventsStatusResolved\) void fetchLocalEventsStatus\(\)/)
   assert.match(connect, /Could not check connected services\./)
   assert.match(connect, /: 'RETRY'/)
+})
+
+
+test('Teams OAuth return is non-authoritative and bound to its initiating device', () => {
+  assert.match(connect, /const \[teamsConnected, setTeamsConnected\] = useState\(false\)/)
+  assert.match(connect, /const \[teamsAccountConnected, setTeamsAccountConnected\] = useState\(false\)/)
+  assert.match(connect, /Finishing Teams connection…/)
+  assert.match(connect, /sessionStorage\.setItem\('remind:teams-oauth-device', activeDeviceId\)/)
+  assert.match(connect, /initiatingDeviceId === activeDeviceId && \(initialTeamsOAuthStatus === 'connected' \|\| storedResult === 'connected'\)/)
+  assert.match(connect, /initiatingDeviceId === activeDeviceId && storedResult === 'connected'/)
+  assert.match(connect, /setTeamsAccountConnected\(json\?\.connected === true\)/)
+})
+
+test('Teams OAuth intent is consumed or cancelled without cross-frame reuse', () => {
+  assert.match(connect, /changeFrameIntegration\('teams', \{ enabled: true \}\)[\s\S]*removeItem\('remind:teams-oauth-device'\)[\s\S]*removeItem\('remind:teams-oauth-result'\)/)
+  assert.match(connect, /initialTeamsOAuthStatus === 'error'[\s\S]*removeItem\('remind:teams-oauth-device'\)[\s\S]*setPendingTeamsEnableAfterOAuth\(false\)/)
+  assert.match(home, /sessionStorage\.removeItem\('remind:teams-oauth-device'\)/)
+  assert.doesNotMatch(connect, /setTeamsConnected\] = useState\(initialTeamsOAuthStatus/)
 })
