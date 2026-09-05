@@ -61,10 +61,10 @@ test('setup-pending payload is guarded by every shared payload consumer', () => 
 
 test('firmware remembers its waiting screen and skips repeat e-paper redraws', () => {
   const loop = readFileSync(new URL('../frame/src/frame_v2.5.1.ino', import.meta.url), 'utf8')
-  assert.match(loop, /getBool\("setup_wait", false\)/)
-  assert.match(loop, /if \(!setupPendingScreenShown\(\)\)/)
+  assert.match(loop, /RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false/)
+  assert.match(loop, /if \(!setupPendingScreenDisplayed\)/)
   assert.match(loop, /skipping e-paper redraw/)
-  assert.match(loop, /rememberSetupPendingScreen\(false\)/)
+  assert.match(loop, /setupPendingScreenDisplayed = false/)
 })
 
 test('calendar refresh uses a rolling horizon without reconnecting', () => {

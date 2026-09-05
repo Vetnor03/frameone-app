@@ -12,8 +12,8 @@ def test_setup_pending_is_a_distinct_fetch_result():
 
 
 def test_waiting_screen_is_retained_across_short_wakes():
-    assert 'getBool("setup_wait", false)' in LOOP
-    assert 'if (!setupPendingScreenShown())' in LOOP
+    assert 'RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false' in LOOP
+    assert 'if (!setupPendingScreenDisplayed)' in LOOP
     assert 'skipping e-paper redraw' in LOOP
-    assert 'rememberSetupPendingScreen(false)' in LOOP
+    assert 'setupPendingScreenDisplayed = false' in LOOP
     assert 'Waiting for setup' in SCREEN

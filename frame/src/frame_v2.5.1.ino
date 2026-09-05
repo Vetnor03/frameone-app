@@ -53,6 +53,9 @@ static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
+// Retained across the 10-second deep-sleep wake cycle. A cold boot may redraw
+// once, but ordinary setup-pending probes never refresh unchanged e-paper.
+RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
 
 // Hardware-specific USB source indication.
 #if defined(FRAME_IS_ALFRED_V1_2)
@@ -68,21 +71,6 @@ static FrameConfig g_cfg;
 static bool g_displayReady = false;
 static bool g_dashboardLoaded = false;
 static bool g_powerRefreshPending = false;
-
-static bool setupPendingScreenShown() {
-  Preferences prefs;
-  prefs.begin("frame", true);
-  const bool shown = prefs.getBool("setup_wait", false);
-  prefs.end();
-  return shown;
-}
-
-static void rememberSetupPendingScreen(bool shown) {
-  Preferences prefs;
-  prefs.begin("frame", false);
-  prefs.putBool("setup_wait", shown);
-  prefs.end();
-}
 
 enum SetupStep {
   SETUP_STEP_NONE = 0,
@@ -670,7 +658,7 @@ static bool fetchAndRenderExplicit(
     return false;
   }
 
-  rememberSetupPendingScreen(false);
+  setupPendingScreenDisplayed = false;
 
   if (!renderLoadedDashboard(batt, pwr)) return false;
   LiveUpdate::saveRenderedAwaitingAck(revision);
@@ -1110,11 +1098,11 @@ void setup() {
   FrameConfigApi::FetchResult postPairConfig =
     FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
   if (postPairConfig == FrameConfigApi::FETCH_SETUP_PENDING) {
-    if (!setupPendingScreenShown()) {
+    if (!setupPendingScreenDisplayed) {
       ensureDisplay();
       ScreenPairing::showWaitingForSetup();
       shutdownDisplay();
-      rememberSetupPendingScreen(true);
+      setupPendingScreenDisplayed = true;
     } else {
       Serial.println("Setup-pending screen already displayed; skipping e-paper redraw");
     }
@@ -1126,7 +1114,7 @@ void setup() {
     ScreenPairing::showError("Could not load frame");
     shutdownDisplay();
   } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
-    rememberSetupPendingScreen(false);
+    setupPendingScreenDisplayed = false;
   }
 
   // Complete one-time renderer maintenance deterministically after networking
