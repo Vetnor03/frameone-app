@@ -120,6 +120,67 @@ function candidates(value: unknown): Record<string, any>[] {
   return [r, ...Object.values(r).flatMap(candidates)]
 }
 
+function normalizeAddress(value: unknown) {
+  return string(value).toLocaleLowerCase('nb-NO').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function propertyCandidate(value: unknown, address: WasteAddress) {
+  const expected = normalizeAddress(address.label.split(',')[0])
+  return candidates(value).find(r => {
+    const g = string(r.gnumber ?? r.gnr ?? r.gardsnummer), b = string(r.bnumber ?? r.bnr ?? r.bruksnummer), s = string(r.snumber ?? r.snr ?? r.seksjonsnummer) || '0'
+    const label = normalizeAddress(r.address ?? r.adresse ?? r.label ?? r.text ?? r.adressetekst)
+    const hasId = string(r.ids ?? r.id ?? r.uuid ?? r.propertyId ?? r.property_id)
+    return Boolean(hasId && ((g === address.gnr && b === address.bnr && s === (address.snr || '0')) || (label && (label.includes(expected) || expected.includes(label)))))
+  })
+}
+
+function endpointCandidates(html: string, base: string) {
+  const found = new Set<string>()
+  for (const match of html.matchAll(/(?:data-(?:search-url|autocomplete-url|endpoint)|(?:search|autocomplete)(?:Url|Endpoint))\s*[=:]\s*["']([^"']+)["']/gi)) {
+    try { found.add(new URL(match[1], base).toString()) } catch { /* Ignore invalid page metadata. */ }
+  }
+  for (const match of html.matchAll(/["']([^"']*(?:address|adresse)[^"']*(?:search|sok|søk|autocomplete)[^"']*)["']/gi)) {
+    try { found.add(new URL(match[1], base).toString()) } catch { /* Ignore non-URL script strings. */ }
+  }
+  return [...found]
+}
+
+function propertyCandidateFromHtml(html: string, address: WasteAddress) {
+  const expected = normalizeAddress(address.label.split(',')[0])
+  for (const tag of html.matchAll(/<(?:option|li|button|a)\b[^>]*(?:data-(?:ids?|uuid|property-id)|value)=["']([^"']+)["'][^>]*>[\s\S]*?<\/(?:option|li|button|a)>/gi)) {
+    const text = normalizeAddress(tag[0].replace(/<[^>]+>/g, ' '))
+    if (text.includes(expected) || expected.includes(text)) return tag[1]
+  }
+  return ''
+}
+
+function calendarYear(dataMonth: string) {
+  const match = dataMonth.match(/(?:^|\D)((?:19|20)\d{2})(?:\D|$)/)
+  return match?.[1] || ''
+}
+
+export function parseNorconsultCalendarHtml(html: string, sourceUrl = '') {
+  const rows: Array<WasteCollection | null> = []
+  const monthMarkers = [...html.matchAll(/data-month=["']([^"']+)["']/gi)]
+  const sections = monthMarkers.map((marker, index) => ({
+    year: calendarYear(marker[1]),
+    html: html.slice(marker.index || 0, monthMarkers[index + 1]?.index ?? html.length),
+  }))
+  if (!sections.length) sections.push({ year: '', html })
+  for (const section of sections) {
+    for (const match of section.html.matchAll(/<tr\b[^>]*class=["'][^"']*waste-calendar__item[^"']*["'][^>]*>[\s\S]*?<\/tr>/gi)) {
+      const dateMatch = match[0].match(/(\d{2})\.(\d{2})(?:\.(\d{4}))?/)
+      if (!dateMatch) continue
+      const year = dateMatch[3] || section.year
+      if (!year) throw new WasteProviderError('invalid_response', 'Waste calendar row has no year context.')
+      const day = `${year}-${dateMatch[2]}-${dateMatch[1]}`
+      const labels = [...match[0].matchAll(/(?:alt|title|aria-label)=["']([^"']+)["']|Image:\s*([^<\n]+)/gi)].map(m => m[1] || m[2]).filter(x => normalizeWasteType(x) !== 'other')
+      for (const label of new Set(labels)) rows.push(collection(day, label, match[0], sourceUrl))
+    }
+  }
+  return dedupe(rows)
+}
+
 function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '1108'): WasteProvider {
   const stavanger = municipalityNumber === '1103'
   const base = stavanger ? 'https://www.stavanger.kommune.no/renovasjon-og-miljo/tommekalender/finn-kalender' : 'https://www.hentavfall.no/rogaland/sandnes/tommekalender'
@@ -127,17 +188,24 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
   return {
     key: stavanger ? 'stavanger' : 'hentavfall', canHandle: a => a.municipalityNumber === municipalityNumber,
     async resolveAddress(address) {
-      const url = new URL(`${base}/address-search`)
-      url.searchParams.set('query', address.label); url.searchParams.set('gnumber', address.gnr || ''); url.searchParams.set('bnumber', address.bnr || ''); url.searchParams.set('snumber', address.snr || '0')
-      let response: Response
-      try { response = await fetcher(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) }) } catch { throw new WasteProviderError('temporary_failure', `${municipality} address lookup is temporarily unavailable.`) }
-      if (!response.ok) throw new WasteProviderError(response.status >= 500 ? 'temporary_failure' : 'unsupported', 'Waste collection isn’t available for this address yet.', response.status >= 500)
-      let json: unknown; try { json = await response.json() } catch { throw new WasteProviderError('invalid_response', 'Stavanger returned an invalid address response.') }
-      const match = candidates(json).find(r => {
-        const g = string(r.gnumber ?? r.gnr), b = string(r.bnumber ?? r.bnr), s = string(r.snumber ?? r.snr) || '0'
-        return g === address.gnr && b === address.bnr && s === (address.snr || '0') && string(r.ids ?? r.id ?? r.uuid ?? r.propertyId)
-      })
-      const propertyId = match && string(match.ids ?? match.id ?? match.uuid ?? match.propertyId)
+      if (address.propertyId) return address
+      let landing: Response
+      try { landing = await fetcher(`${base}/`, { headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(10000) }) } catch { throw new WasteProviderError('temporary_failure', `${municipality} address lookup is temporarily unavailable.`) }
+      if (!landing.ok) throw new WasteProviderError(landing.status >= 500 ? 'temporary_failure' : 'unsupported', 'Waste collection isn’t available for this address yet.', landing.status >= 500)
+      const html = await landing.text()
+      const endpoints = [...endpointCandidates(html, `${base}/`), `${base}/address-search`, `${base}/search`]
+      let propertyId = propertyCandidateFromHtml(html, address)
+      for (const endpoint of endpoints) {
+        if (propertyId) break
+        const url = new URL(endpoint); url.searchParams.set('query', address.label); url.searchParams.set('term', address.label); url.searchParams.set('gnumber', address.gnr || ''); url.searchParams.set('bnumber', address.bnr || ''); url.searchParams.set('snumber', address.snr || '0')
+        let response: Response
+        try { response = await fetcher(url, { headers: { Accept: 'application/json, text/html' }, signal: AbortSignal.timeout(10000) }) } catch { continue }
+        if (!response.ok) continue
+        const body = await response.text()
+        let parsed: unknown = null; try { parsed = JSON.parse(body) } catch { /* Some official selectors return option HTML. */ }
+        const match = propertyCandidate(parsed, address)
+        propertyId = match ? string(match.ids ?? match.id ?? match.uuid ?? match.propertyId ?? match.property_id) : propertyCandidateFromHtml(body, address)
+      }
       if (!propertyId) throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this address yet.', false)
       return { ...address, propertyId }
     },
@@ -150,13 +218,7 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
     },
     normalizeCollections(raw) {
       const { html, sourceUrl } = record(raw); if (typeof html !== 'string') throw new WasteProviderError('invalid_response', 'Stavanger returned an invalid calendar.')
-      const rows: Array<WasteCollection | null> = []
-      for (const match of html.matchAll(/(\d{2})\.(\d{2})(?:\.(\d{4}))?[\s\S]{0,1000}?(?=(?:\d{2}\.\d{2})|$)/g)) {
-        const year = match[3] || String(new Date().getFullYear()); const day = `${year}-${match[2]}-${match[1]}`
-        const labels = [...match[0].matchAll(/(?:alt|title|aria-label)=["']([^"']+)["']|Image:\s*([^<\n]+)/gi)].map(m => m[1] || m[2]).filter(x => normalizeWasteType(x) !== 'other')
-        for (const label of new Set(labels)) rows.push(collection(day, label, match[0], string(sourceUrl)))
-      }
-      const result = dedupe(rows); if (!result.length) throw new WasteProviderError('invalid_response', 'Stavanger returned no parseable collection dates.')
+      const result = parseNorconsultCalendarHtml(html, string(sourceUrl)); if (!result.length) throw new WasteProviderError('invalid_response', 'Stavanger returned no parseable collection dates.')
       return result
     },
   }
@@ -167,11 +229,16 @@ export function createHentavfallProvider(fetcher: Fetch = fetch): WasteProvider 
 
 export function createMinRenovasjonProvider(appKey = process.env.MINRENOVASJON_APP_KEY || '', fetcher: Fetch = fetch): WasteProvider {
   const base = 'https://komteksky.norkart.no/MinRenovasjon.Api/api'
+  const proxy = 'https://norkartrenovasjon.azurewebsites.net/proxyserver.ashx'
   const request = async (path: string, address: WasteAddress) => {
     if (!appKey) throw new WasteProviderError('configuration', 'MinRenovasjon is temporarily unavailable because the service key is not configured.')
-    const url = new URL(`${base}/${path}`); url.searchParams.set('kommunenr', address.municipalityNumber); url.searchParams.set('gatekode', address.addressCode || ''); url.searchParams.set('gatenavn', address.streetName || ''); url.searchParams.set('husnr', address.houseNumber || '')
+    const upstream = new URL(`${base}/${path}`); upstream.searchParams.set('kommunenr', address.municipalityNumber); upstream.searchParams.set('gatekode', address.addressCode || ''); upstream.searchParams.set('gatenavn', address.streetName || ''); upstream.searchParams.set('husnr', address.houseNumber || '')
+    const url = new URL(proxy); url.searchParams.set('server', upstream.toString())
     let response: Response; try { response = await fetcher(url, { headers: { Accept: 'application/json', RenovasjonAppKey: appKey, Kommunenr: address.municipalityNumber }, signal: AbortSignal.timeout(12000) }) } catch { throw new WasteProviderError('temporary_failure', 'MinRenovasjon is temporarily unavailable.') }
-    if (!response.ok) throw new WasteProviderError(response.status >= 500 ? 'temporary_failure' : 'unsupported', `MinRenovasjon failed (${response.status}).`, response.status >= 500)
+    if (!response.ok) {
+      const code: WasteErrorCode = response.status === 401 || response.status === 403 ? 'configuration' : response.status === 429 || response.status >= 500 ? 'temporary_failure' : response.status === 404 ? 'unsupported' : 'invalid_response'
+      throw new WasteProviderError(code, `MinRenovasjon failed (${response.status}).`, code !== 'unsupported')
+    }
     try { return await response.json() } catch { throw new WasteProviderError('invalid_response', 'MinRenovasjon returned invalid JSON.') }
   }
   return {

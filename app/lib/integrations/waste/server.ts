@@ -1,16 +1,18 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { providerForAddress, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type WasteAddress, type WasteCollection } from './providers'
+import { norwayLocalYmd } from './date'
+import { wasteCachePlan } from './cache'
+export { norwayLocalYmd } from './date'
 
 export const WASTE_PROVIDER = 'waste'
 export const WASTE_UNSUPPORTED_MESSAGE = 'Waste collection isn’t available for this address yet.'
 
-const today = () => new Date().toISOString().slice(0, 10)
 const externalId = (address: WasteAddress, item: WasteCollection) => `${address.municipalityNumber}:${address.addressId}:${item.date}:${item.normalizedType}`
 
-export function wasteRows(userId: string, address: WasteAddress, collections: WasteCollection[]) {
+export function wasteRows(userId: string, address: WasteAddress, collections: WasteCollection[], boundaryDate = norwayLocalYmd()) {
   const grouped = new Map<string, WasteCollection[]>()
   for (const item of collections) {
-    if (item.date < today()) continue
+    if (item.date < boundaryDate) continue
     const list = grouped.get(item.date) || []
     if (!list.some(x => x.normalizedType === item.normalizedType && x.originalLabel === item.originalLabel)) list.push(item)
     grouped.set(item.date, list)
@@ -50,11 +52,16 @@ export async function refreshWasteForUser(userId: string, address?: WasteAddress
     const { resolved, collections } = await fetchForAddress(selected)
     const rows = wasteRows(userId, resolved, collections)
     if (!rows.length) throw new WasteProviderError('invalid_response', 'The provider returned no future waste collections.')
+    const boundaryDate = norwayLocalYmd()
+    const { data: previous, error: previousError } = await db.from('integration_items').select('external_id').eq('user_id', userId).eq('provider', WASTE_PROVIDER).gte('raw->>date', boundaryDate)
+    if (previousError) throw new Error(previousError.message)
     const { error: upsertError } = await db.from('integration_items').upsert(rows, { onConflict: 'user_id,provider,external_id' })
     if (upsertError) throw new Error(upsertError.message)
-    const ids = rows.map(row => row.external_id)
-    const { error: deleteError } = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', WASTE_PROVIDER).gte('raw->>date', today()).not('external_id', 'in', `(${ids.map(id => `"${id.replaceAll('"', '')}"`).join(',')})`)
-    if (deleteError) throw new Error(deleteError.message)
+    const plan = wasteCachePlan((previous || []).map(row => row.external_id), rows.map(row => row.external_id), true)
+    if (plan.staleIds.length) {
+      const { error: deleteError } = await db.from('integration_items').delete().eq('user_id', userId).eq('provider', WASTE_PROVIDER).in('external_id', plan.staleIds)
+      if (deleteError) throw new Error(deleteError.message)
+    }
     const now = new Date().toISOString()
     const { error } = await db.from('user_integrations').upsert({ user_id: userId, provider: WASTE_PROVIDER, status: 'connected', encrypted_credentials: { address: resolved }, external_account_id: resolved.addressId, external_account_label: resolved.label, last_sync_at: now, last_success_at: now, last_error: null, last_error_at: null, last_error_code: null, updated_at: now }, { onConflict: 'user_id,provider' })
     if (error) throw new Error(error.message)
