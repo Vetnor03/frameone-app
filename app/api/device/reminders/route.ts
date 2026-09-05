@@ -282,7 +282,8 @@ function normalizeIncludeOverdue(raw: string | null) {
 }
 
 function normalizeSkipSync(raw: string | null) {
-  if (raw == null) return false
+  // Physical frames are cache-only by default. Upstream refresh is opt-in for app/admin callers.
+  if (raw == null) return true
   const v = raw.trim().toLowerCase()
   if (v === '0' || v === 'false' || v === 'no') return false
   return true

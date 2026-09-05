@@ -248,7 +248,7 @@ export function buildWasteCollectionItems(
     const daysUntil = diffDaysFromYmd(todayYmd, occurrenceDate)
     if (!includeOverdue && daysUntil < 0) return []
 
-    const duplicateKey = `${occurrenceDate}__${String(raw.waste_fraction || title).toLowerCase()}`
+    const duplicateKey = `${occurrenceDate}__${String(raw.normalized_type || raw.waste_fraction || title).toLowerCase()}`
     if (seen.has(duplicateKey)) return []
     seen.add(duplicateKey)
 

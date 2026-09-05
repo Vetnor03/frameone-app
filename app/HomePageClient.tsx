@@ -21,6 +21,7 @@ import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
+import WasteSetupModal from './components/WasteSetupModal'
 import { norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
@@ -2984,6 +2985,8 @@ function ConnectAppsScreen({
   const [disconnectConfirmApp, setDisconnectConfirmApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [integrationSetupErrors, setIntegrationSetupErrors] = useState<Partial<Record<'spond' | 'teams', string>>>({})
   const [localEventsOpen, setLocalEventsOpen] = useState(false)
+  const [wasteModalOpen, setWasteModalOpen] = useState(false)
+  const [wasteConnected, setWasteConnected] = useState(() => connectAppIsConnected(modulesJson, 'waste'))
   const [localEventsLoading, setLocalEventsLoading] = useState(false)
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
@@ -3378,8 +3381,7 @@ function ConnectAppsScreen({
       key: 'waste',
       name: language === 'no' ? 'Renovasjon' : 'Waste collection',
       description:
-        language === 'no' ? 'Renovasjonsvarsler kommer snart' : 'Waste collection reminders coming soon',
-      comingSoon: true,
+        language === 'no' ? 'Finn hentedager automatisk fra hjemmeadressen din' : 'Automatically find collections for your home address',
     },
   ]
 
@@ -3389,6 +3391,7 @@ function ConnectAppsScreen({
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
+    if (app.key === 'waste') return wasteConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -3526,6 +3529,8 @@ function ConnectAppsScreen({
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
+                        } else if (app.key === 'waste') {
+                          setWasteModalOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
@@ -3633,6 +3638,7 @@ function ConnectAppsScreen({
 
 
       {localEventsOpen && renderLocalEventsModal()}
+      {wasteModalOpen && <WasteSetupModal language={language} onClose={() => setWasteModalOpen(false)} onSaved={(connected) => { setWasteConnected(connected); changeFrameIntegration('waste', { enabled: connected }); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) }} />}
 
       {spondModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
