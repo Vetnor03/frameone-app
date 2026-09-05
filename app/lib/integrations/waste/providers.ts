@@ -9,6 +9,8 @@ export type ResolvedWasteAddress = {
   streetName?: string
   houseNumber?: string
   postalCode?: string
+  postalPlace?: string
+  addressCode?: string
   lat?: number
   lon?: number
   gnr?: string
@@ -46,9 +48,26 @@ export type WasteProviderRegistryEntry = {
 
 export interface WasteProvider {
   key: WasteProviderKey
+  canHandle(address: ResolvedWasteAddress): boolean | Promise<boolean>
   resolveAddress(address: string, config?: Record<string, unknown>): Promise<ResolvedWasteAddress>
   fetchCollections(resolvedAddress: ResolvedWasteAddress, config?: Record<string, unknown>): Promise<unknown>
   normalizeCollections(rawData: unknown, config?: Record<string, unknown>): NormalizedWasteCollection[]
+}
+
+export class WasteProviderError extends Error {
+  code: 'unsupported' | 'temporary' | 'invalid_response'
+  constructor(code: 'unsupported' | 'temporary' | 'invalid_response', message: string) {
+    super(message)
+    this.code = code
+    this.name = 'WasteProviderError'
+  }
+}
+
+const REQUEST_TIMEOUT_MS = 10_000
+const MINRENOVASJON_BASE_URL = 'https://norkartrenovasjon.azurewebsites.net/proxyserver.ashx?server=https://komteksky.norkart.no/MinRenovasjon.Api/api/'
+
+function fetchWithTimeout(input: string | URL, init: RequestInit = {}) {
+  return fetch(input, { ...init, signal: init.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
 }
 
 type ProviderFetchLog = {
@@ -130,18 +149,57 @@ function normalizeCollectionRows(rawData: unknown): NormalizedWasteCollection[] 
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title))
 }
 
-export async function resolveKartverketAddress(address: string): Promise<ResolvedWasteAddress> {
+function minRenovasjonHeaders(address: ResolvedWasteAddress, config: Record<string, unknown>) {
+  const appKey = asString(config.app_key) || process.env.MINRENOVASJON_APP_KEY || ''
+  if (!appKey) throw new WasteProviderError('temporary', 'MinRenovasjon is not configured')
+  return { Accept: 'application/json', Kommunenr: address.municipalityNumber, RenovasjonAppKey: appKey }
+}
+
+async function fetchMinRenovasjon(address: ResolvedWasteAddress, config: Record<string, unknown>) {
+  if (Array.isArray(config.collections)) return config.collections
+  if (!address.streetName || !address.houseNumber || !address.addressCode || !address.municipalityNumber) {
+    throw new WasteProviderError('unsupported', 'Address is missing MinRenovasjon identifiers')
+  }
+  const base = asString(config.base_url) || MINRENOVASJON_BASE_URL
+  const headers = minRenovasjonHeaders(address, config)
+  const requestJson = async (path: string, params?: Record<string, string>) => {
+    const url = new URL(`${base}${base.endsWith('/') ? '' : '/'}${path}`)
+    for (const [key, value] of Object.entries(params || {})) url.searchParams.set(key, value)
+    let response: Response
+    try { response = await fetchWithTimeout(url, { headers }) }
+    catch { throw new WasteProviderError('temporary', `MinRenovasjon ${path} timed out`) }
+    if (response.status === 404 || response.status === 204) throw new WasteProviderError('unsupported', 'MinRenovasjon has no schedule for this address')
+    if (!response.ok) throw new WasteProviderError('temporary', `MinRenovasjon ${path} returned ${response.status}`)
+    const data = await response.json().catch(() => { throw new WasteProviderError('invalid_response', `MinRenovasjon ${path} returned malformed JSON`) })
+    if (!Array.isArray(data)) throw new WasteProviderError('invalid_response', `MinRenovasjon ${path} returned an unexpected response`)
+    return data
+  }
+  const fractions = await requestJson('fraksjoner')
+  const calendar = await requestJson('tommekalender', { gatenavn: address.streetName, husnr: address.houseNumber, gatekode: address.addressCode })
+  const names = new Map(fractions.map((row) => {
+    const r = asRecord(row)
+    return [asString(r.Id || r.id || r.FraksjonId), asString(r.Navn || r.navn || r.Name)]
+  }).filter(([id]) => id))
+  return calendar.flatMap((row) => {
+    const r = asRecord(row)
+    const fractionId = asString(r.FraksjonId || r.fraksjonId || r.Id || r.id)
+    const dates = Array.isArray(r.Tommedatoer) ? r.Tommedatoer : Array.isArray(r.tommedatoer) ? r.tommedatoer : []
+    return dates.map((value) => ({ date: asString(value).slice(0, 10), fractionName: names.get(fractionId) || asString(r.Fraksjon || r.fraksjon || r.Navn), subscription: asString(r.AbonnementsId || r.abonnementsId), raw: row }))
+  })
+}
+
+export async function searchKartverketAddresses(address: string, limit = 8): Promise<ResolvedWasteAddress[]> {
   const query = address.trim()
   if (!query) throw new Error('Missing address')
   const url = new URL('https://ws.geonorge.no/adresser/v1/sok')
   url.searchParams.set('sok', query)
-  url.searchParams.set('treffPerSide', '1')
+  url.searchParams.set('treffPerSide', String(Math.max(1, Math.min(limit, 20))))
   url.searchParams.set('asciiKompatibel', 'true')
-  const resp = await fetch(url, { headers: { Accept: 'application/json' } })
+  const resp = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } })
   if (!resp.ok) throw new Error(`Kartverket address lookup failed (${resp.status})`)
-  const json = await resp.json()
-  const hit = Array.isArray(json?.adresser) ? json.adresser[0] : null
-  if (!hit) throw new Error('Address not found')
+  const json = await resp.json().catch(() => null)
+  const hits = Array.isArray(json?.adresser) ? json.adresser : []
+  return hits.map((hit: any) => {
   const municipalityNumber = asString(hit.kommunenummer)
   const municipalityName = asString(hit.kommunenavn)
   const gnr = asString(hit.gardsnummer)
@@ -151,14 +209,19 @@ export async function resolveKartverketAddress(address: string): Promise<Resolve
   const addressId = asString(hit.adressekode) && asString(hit.nummer)
     ? `${municipalityNumber}-${hit.adressekode}-${hit.nummer}-${asString(hit.bokstav)}`
     : `${municipalityNumber}-${query.toLowerCase()}`
+  const postalCode = asString(hit.postnummer)
+  const postalPlace = asString(hit.poststed)
+  const streetLabel = asString(hit.adressetekst) || query
   return {
     addressId,
-    label: asString(hit.adressetekst) || query,
+    label: [streetLabel, [postalCode, postalPlace].filter(Boolean).join(' ')].filter(Boolean).join(', '),
     municipalityNumber,
     municipalityName,
     streetName: asString(hit.adressenavn),
     houseNumber: `${asString(hit.nummer)}${asString(hit.bokstav)}`.trim(),
-    postalCode: asString(hit.postnummer),
+    postalCode,
+    postalPlace,
+    addressCode: asString(hit.adressekode),
     lat: Number.isFinite(Number(hit.representasjonspunkt?.lat)) ? Number(hit.representasjonspunkt.lat) : undefined,
     lon: Number.isFinite(Number(hit.representasjonspunkt?.lon)) ? Number(hit.representasjonspunkt.lon) : undefined,
     gnr: gnr || undefined,
@@ -167,6 +230,13 @@ export async function resolveKartverketAddress(address: string): Promise<Resolve
     snr,
     source: 'kartverket',
   }
+  })
+}
+
+export async function resolveKartverketAddress(address: string): Promise<ResolvedWasteAddress> {
+  const hit = (await searchKartverketAddresses(address, 1))[0]
+  if (!hit) throw new Error('Address not found')
+  return hit
 }
 
 async function fetchJsonOrConfiguredCollections(resolvedAddress: ResolvedWasteAddress, config: Record<string, unknown>) {
@@ -189,7 +259,7 @@ function stavangerShowUrl(resolvedAddress: ResolvedWasteAddress, config: Record<
   const gnr = asString(config.gnr) || resolvedAddress.gnr
   const bnr = asString(config.bnr) || resolvedAddress.bnr
   const snr = asString(config.snr) || resolvedAddress.snr || '0'
-  const id = asString(config.id) || asString(config.property_id) || resolvedAddress.propertyId || temporaryProviderUuidFallback(resolvedAddress, municipality)
+  const id = asString(config.id) || asString(config.property_id) || resolvedAddress.propertyId
   if (!gnr || !bnr || !id) return ''
   const url = new URL(municipality === 'Sandnes' ? 'https://www.hentavfall.no/rogaland/sandnes/tommekalender/show' : 'https://www.stavanger.kommune.no/renovasjon-og-miljo/tommekalender/finn-kalender/show')
   url.searchParams.set('bnumber', bnr)
@@ -329,7 +399,6 @@ function parseNorconsultCalendarHtml(html: string, sourceUrl: string): Norconsul
   const datePattern = /(\d{2})\.(\d{2})(?:\.(\d{4}))?\s*-\s*[a-zæøå]+/i
   const rowBlocks = containersAroundDates(html, datePattern)
   let dateRowsFound = 0
-  const debugRows: Array<{ dateText: string; rowHtml: string; rowIconFingerprints: string[]; matchedWasteTypes: string[] }> = []
   for (const chunk of rowBlocks) {
     const text = stripTags(chunk)
     const match = text.match(datePattern)
@@ -348,20 +417,11 @@ function parseNorconsultCalendarHtml(html: string, sourceUrl: string): Norconsul
       if (label) matched.add(label)
     }
     const fractions = Array.from(matched)
-    debugRows.push({ dateText: match[0], rowHtml: chunk.slice(0, 1500), rowIconFingerprints: rowFingerprints.slice(0, 25), matchedWasteTypes: fractions })
     if (!fractions.length) continue
     const yyyy = yearForNorconsultDate(match[1], match[2], match[3])
     rows.push({ date: `${yyyy}-${match[2]}-${match[1]}`, fractions, source_url: sourceUrl, raw: stripTags(chunk) })
   }
-  console.log('[waste] calendar parser debug', {
-    sourceUrl,
-    htmlLength: html.length,
-    dateRowsFound,
-    legendEntriesFound: legend.size,
-    legendFingerprints: Array.from(legend.keys()).slice(0, 25),
-    rows: debugRows.slice(0, 10),
-    finalReminderCount: rows.reduce((sum, row) => sum + row.fractions.length, 0),
-  })
+  console.info('[waste] calendar parsed', { date_rows: dateRowsFound, legend_entries: legend.size, collection_count: rows.length })
   return rows
 }
 
@@ -371,13 +431,7 @@ async function fetchNorconsultPublicCalendar(resolvedAddress: ResolvedWasteAddre
   }
   const sourceUrl = stavangerShowUrl(resolvedAddress, config, municipality)
   if (!sourceUrl) {
-    console.log(`[waste] starting ${municipality} provider UUID lookup`, {
-      label: resolvedAddress.label,
-      gnr: resolvedAddress.gnr || null,
-      bnr: resolvedAddress.bnr || null,
-      snr: resolvedAddress.snr || '0',
-      propertyId: resolvedAddress.propertyId || null,
-    })
+    console.info('[waste] provider property identifier missing', { provider: municipality.toLowerCase() })
     throw new Error(`${municipality} waste provider could not resolve provider UUID for ${resolvedAddress.label}; resolved matrikkel ${resolvedAddress.gnr || '?'} / ${resolvedAddress.bnr || '?'} / ${resolvedAddress.snr || '0'}`)
   }
   const log: ProviderFetchLog[] = [{ url: sourceUrl }]
@@ -391,51 +445,42 @@ async function fetchNorconsultPublicCalendar(resolvedAddress: ResolvedWasteAddre
   }
   log[0].status = resp.status
   log[0].payloadSize = text.length
-  console.log('[waste] provider request', log[0])
+  console.info('[waste] provider response', { provider: municipality.toLowerCase(), status: resp.status, payload_size: text.length })
   if (!resp.ok) throw new Error(`${municipality} waste provider returned ${resp.status} for ${sourceUrl} (${text.length} bytes)`)
   const collections = parseNorconsultCalendarHtml(text, sourceUrl).filter((row) => row.date >= new Date().toISOString().slice(0, 10))
-  console.log('[waste] provider parse result', { provider: municipality.toLowerCase(), parsedCollectionCount: collections.length, first5: collections.slice(0, 5) })
+  console.info('[waste] provider parse result', { provider: municipality.toLowerCase(), collection_count: collections.length })
   if (!collections.length) throw new Error(`${municipality} waste provider returned no parseable collection dates from ${sourceUrl} (${text.length} bytes)`)
   return { provider: 'norconsult_public_calendar', municipality, source_url: sourceUrl, fetch_log: log, collections }
 }
 
 function jsonProvider(key: WasteProviderKey): WasteProvider {
-  return { key, resolveAddress: resolveKartverketAddress, fetchCollections: (a, c = {}) => fetchJsonOrConfiguredCollections(a, c), normalizeCollections: normalizeCollectionRows }
+  return { key, canHandle: () => true, resolveAddress: resolveKartverketAddress, fetchCollections: (a, c = {}) => fetchJsonOrConfiguredCollections(a, c), normalizeCollections: normalizeCollectionRows }
 }
 
-async function resolveNorconsultAddress(address: string, municipality: 'Stavanger' | 'Sandnes'): Promise<ResolvedWasteAddress> {
+const minRenovasjonProvider: WasteProvider = {
+  key: 'min_renovasjon',
+  canHandle: (address) => Boolean(address.addressCode && address.municipalityNumber),
+  resolveAddress: resolveKartverketAddress,
+  fetchCollections: (address, config = {}) => fetchMinRenovasjon(address, config),
+  normalizeCollections: normalizeCollectionRows,
+}
+
+async function resolveNorconsultAddress(address: string, municipality: 'Stavanger' | 'Sandnes', config: Record<string, unknown> = {}): Promise<ResolvedWasteAddress> {
   const kartverket = await resolveKartverketAddress(address)
-  console.log(`[waste] provider UUID lookup limited to known temporary fallbacks`, {
-    provider: municipality.toLowerCase(),
-    searchQuery: address.trim(),
-    label: kartverket.label,
-    gnr: kartverket.gnr || null,
-    bnr: kartverket.bnr || null,
-    snr: kartverket.snr || '0',
-  })
-  const fallbackId = temporaryProviderUuidFallback(kartverket, municipality)
-  if (fallbackId) {
-    console.log('[waste] temporary provider UUID fallback matched', {
-      provider: municipality.toLowerCase(),
-      gnr: kartverket.gnr,
-      bnr: kartverket.bnr,
-      snr: kartverket.snr || '0',
-      propertyId: fallbackId,
-    })
-    return { ...kartverket, addressId: fallbackId, propertyId: fallbackId, source: 'provider_search' }
-  }
+  const configuredEndpoint = asString(config.address_search_url)
+  const endpoint = configuredEndpoint || (municipality === 'Stavanger'
+    ? 'https://www.stavanger.kommune.no/renovasjon-og-miljo/tommekalender/finn-kalender/address-search'
+    : 'https://www.hentavfall.no/rogaland/sandnes/tommekalender/address-search')
+  try {
+    const url = new URL(endpoint); url.searchParams.set('query', address.trim())
+    const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } })
+    if (response.ok) {
+      const text = await response.text()
+      const candidates = pickProviderAddressCandidates(safeJsonParse(text) ?? text, address, kartverket, municipality)
+      if (candidates[0]) return { ...kartverket, ...candidates[0], municipalityNumber: kartverket.municipalityNumber, municipalityName: kartverket.municipalityName, source: 'provider_search' }
+    }
+  } catch { /* a provider miss is handled as unsupported by the registry */ }
   return kartverket
-}
-
-function temporaryProviderUuidFallback(resolvedAddress: ResolvedWasteAddress, municipality: string) {
-  const snr = resolvedAddress.snr || '0'
-  if (municipality === 'Stavanger' && resolvedAddress.gnr === '16' && resolvedAddress.bnr === '489' && snr === '0') {
-    return '6fa154fe-bbaa-42d6-9a24-a2e310ecd16b'
-  }
-  if (municipality === 'Sandnes' && resolvedAddress.gnr === '70' && resolvedAddress.bnr === '152' && snr === '0') {
-    return '6ddae2f0-9f6a-4e17-90dc-ba5a01e18ed7'
-  }
-  return ''
 }
 
 
@@ -555,14 +600,15 @@ function providerCandidateDebugLogs(json: unknown): Array<{ label: string | null
 function norconsultProvider(key: 'stavanger' | 'sandnes' | 'hentavfall', municipality: 'Stavanger' | 'Sandnes'): WasteProvider {
   return {
     key,
-    resolveAddress: (address) => resolveNorconsultAddress(address, municipality),
+    canHandle: (address) => address.municipalityNumber === (municipality === 'Stavanger' ? '1103' : '1108'),
+    resolveAddress: (address, config = {}) => resolveNorconsultAddress(address, municipality, config),
     fetchCollections: (a, c = {}) => fetchNorconsultPublicCalendar(a, c, municipality),
     normalizeCollections: normalizeCollectionRows,
   }
 }
 
 export const wasteProviders: Record<WasteProviderKey, WasteProvider> = {
-  min_renovasjon: jsonProvider('min_renovasjon'),
+  min_renovasjon: minRenovasjonProvider,
   stavanger: norconsultProvider('stavanger', 'Stavanger'),
   sandnes: norconsultProvider('sandnes', 'Sandnes'),
   hentavfall: norconsultProvider('hentavfall', 'Sandnes'),

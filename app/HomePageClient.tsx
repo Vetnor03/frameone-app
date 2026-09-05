@@ -2921,6 +2921,57 @@ function ConnectAppsScreen({
     return normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
   })
   const [localEventsDraftArea, setLocalEventsDraftArea] = useState<LocalEventAreaPreference>(() => localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
+  const [wasteOpen, setWasteOpen] = useState(false)
+  const [wasteConnected, setWasteConnected] = useState(false)
+  const [wasteAccount, setWasteAccount] = useState<string | null>(null)
+  const [wasteQuery, setWasteQuery] = useState('')
+  const [wasteResults, setWasteResults] = useState<any[]>([])
+  const [wasteSelected, setWasteSelected] = useState<any>(null)
+  const [wastePreview, setWastePreview] = useState<any[]>([])
+  const [wasteLoading, setWasteLoading] = useState(false)
+  const [wasteMessage, setWasteMessage] = useState<string | null>(null)
+
+  async function authToken() { return (await supabase.auth.getSession())?.data?.session?.access_token || '' }
+  async function fetchWasteStatus() {
+    const token = await authToken(); if (!token) return
+    const resp = await fetch('/api/integrations/waste/status', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+    if (!resp.ok) return
+    const json = await resp.json(); setWasteConnected(json.connected === true); setWasteAccount(json.account || null)
+  }
+
+  useEffect(() => {
+    if (!wasteOpen || wasteQuery.trim().length < 3 || wasteSelected?.label === wasteQuery) { setWasteResults([]); return }
+    const timer = window.setTimeout(async () => {
+      const token = await authToken()
+      const resp = await fetch(`/api/integrations/waste/addresses?q=${encodeURIComponent(wasteQuery.trim())}`, { headers: { Authorization: `Bearer ${token}` } })
+      const json = await resp.json().catch(() => ({})); setWasteResults(resp.ok && Array.isArray(json.addresses) ? json.addresses : [])
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [wasteOpen, wasteQuery, wasteSelected])
+
+  async function previewWaste(address: any) {
+    setWasteSelected(address); setWasteQuery(address.label); setWasteResults([]); setWastePreview([]); setWasteLoading(true); setWasteMessage(language === 'no' ? 'Finner tømmekalender…' : 'Finding your collection schedule…')
+    try {
+      const resp = await fetch('/api/integrations/waste/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await authToken()}` }, body: JSON.stringify({ address, preview: true }) })
+      const json = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(language === 'no' ? 'Vi kunne ikke laste tømmekalenderen nå. Prøv igjen.' : 'We couldn’t load the collection schedule right now. Try again.')
+      if (json.status === 'unsupported') { setWasteMessage(language === 'no' ? 'Renovasjon er ikke tilgjengelig for denne adressen ennå.' : 'Waste collection isn’t available for this address yet.'); return }
+      setWasteSelected(json.resolvedAddress || address); setWastePreview(json.previewItems || []); setWasteMessage(null)
+    } catch (error) { setWasteMessage(error instanceof Error ? error.message : 'Temporary error') } finally { setWasteLoading(false) }
+  }
+  async function saveWaste() {
+    if (!wasteSelected || wasteLoading) return; setWasteLoading(true)
+    try {
+      const resp = await fetch('/api/integrations/waste/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await authToken()}` }, body: JSON.stringify({ address: wasteSelected }) })
+      const json = await resp.json().catch(() => ({})); if (!resp.ok || json.status !== 'connected') throw new Error(json.error || json.message || 'Could not connect')
+      setWasteConnected(true); setWasteAccount(json.resolvedAddress?.label || wasteSelected.label); setWasteOpen(false); setStatusTone('success'); setStatus(language === 'no' ? 'Renovasjon er tilkoblet' : 'Waste collection connected'); window.dispatchEvent(new CustomEvent('remind:refresh-reminders'))
+    } catch (error) { setWasteMessage(error instanceof Error ? error.message : 'Could not connect') } finally { setWasteLoading(false) }
+  }
+  async function disconnectWaste() {
+    if (!window.confirm(language === 'no' ? 'Koble fra renovasjon?' : 'Disconnect Waste collection?')) return
+    setWasteLoading(true)
+    try { const resp = await fetch('/api/integrations/waste/disconnect', { method: 'POST', headers: { Authorization: `Bearer ${await authToken()}` } }); if (!resp.ok) throw new Error('Disconnect failed'); setWasteConnected(false); setWasteAccount(null); setWastePreview([]); window.dispatchEvent(new CustomEvent('remind:refresh-reminders')) } finally { setWasteLoading(false) }
+  }
 
   async function fetchSpondStatus() {
     const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
@@ -3147,6 +3198,7 @@ function ConnectAppsScreen({
   useEffect(() => {
     fetchSpondStatus()
     fetchTeamsStatus()
+    fetchWasteStatus()
     const params = new URLSearchParams(window.location.search)
     if (params.has('teams')) window.history.replaceState({}, '', window.location.pathname)
   }, [])
@@ -3197,8 +3249,7 @@ function ConnectAppsScreen({
       key: 'waste',
       name: language === 'no' ? 'Renovasjon' : 'Waste collection',
       description:
-        language === 'no' ? 'Renovasjonsvarsler kommer snart' : 'Waste collection reminders coming soon',
-      comingSoon: true,
+        language === 'no' ? 'Vis kommende tømmedager automatisk' : 'Automatically show upcoming collection days',
     },
   ]
 
@@ -3208,6 +3259,7 @@ function ConnectAppsScreen({
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
     if (app.key === 'local-events') return !!localEventsSavedArea
+    if (app.key === 'waste') return wasteConnected
     return connectAppIsConnected(modulesJson, app.key)
   }
 
@@ -3336,6 +3388,8 @@ function ConnectAppsScreen({
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
+                        } else if (app.key === 'waste') {
+                          setWasteSelected(null); setWastePreview([]); setWasteQuery(''); setWasteMessage(null); setWasteOpen(true)
                         }
                       }}
                       className="shrink-0 h-8 px-3 rounded-xl border border-[color:var(--bd-20)] text-[11px] tracking-widest text-[color:var(--fg-70)] disabled:opacity-60"
@@ -3374,6 +3428,12 @@ function ConnectAppsScreen({
                     >
                       {teamsLoading ? (language === 'no' ? 'KOBLER FRA…' : 'DISCONNECTING…') : (language === 'no' ? 'KOBLE FRA' : 'DISCONNECT')}
                     </button>
+                  </div>
+                )}
+                {app.key === 'waste' && wasteConnected && (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[color:var(--bd-10)] pt-3 text-xs text-[color:var(--fg-45)]">
+                    <span className="min-w-0 truncate">{wasteAccount}</span>
+                    <div className="flex gap-1.5"><button type="button" onClick={() => { setWasteQuery(wasteAccount || ''); setWasteOpen(true) }} className="rounded-xl border border-[color:var(--bd-15)] px-3 py-1.5 text-[10px] tracking-widest">{language === 'no' ? 'ENDRE' : 'CHANGE'}</button><button type="button" onClick={disconnectWaste} disabled={wasteLoading} className="rounded-xl border border-[#d94b4b]/35 px-3 py-1.5 text-[10px] tracking-widest text-[#d94b4b]">{language === 'no' ? 'KOBLE FRA' : 'DISCONNECT'}</button></div>
                   </div>
                 )}
               </div>
@@ -3435,6 +3495,20 @@ function ConnectAppsScreen({
       )}
 
 
+      {wasteOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-3xl border border-[color:var(--bd-15)] bg-[color:var(--sheet-bg)] p-5 shadow-2xl">
+            <div className="flex justify-between gap-3"><div><div className="font-semibold text-[color:var(--fg-90)]">{language === 'no' ? 'Renovasjon' : 'Waste collection'}</div><p className="mt-1 text-xs text-[color:var(--fg-45)]">{language === 'no' ? 'Skriv inn hjemmeadressen din, så viser RE:MIND automatisk kommende tømmedager.' : 'Enter your home address and RE:MIND will automatically show upcoming waste collection days.'}</p></div><button type="button" onClick={() => setWasteOpen(false)}>×</button></div>
+            <label htmlFor="waste-address" className="mt-4 block text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'SØK ADRESSE' : 'SEARCH ADDRESS'}</label>
+            <input id="waste-address" value={wasteQuery} onChange={(event) => { setWasteQuery(event.target.value); setWasteSelected(null); setWastePreview([]); setWasteMessage(null) }} placeholder={language === 'no' ? 'Søk etter adressen din…' : 'Search your address…'} autoComplete="street-address" className="mt-1 h-11 w-full rounded-2xl border border-[color:var(--bd-15)] bg-transparent px-3 text-sm outline-none focus:border-[#2aa3ff]" />
+            {wasteResults.length > 0 && <div className="mt-2 max-h-48 overflow-y-auto rounded-2xl border border-[color:var(--bd-10)]">{wasteResults.map((address) => <button type="button" key={address.addressId} onClick={() => previewWaste(address)} className="block w-full border-b border-[color:var(--bd-10)] px-3 py-2 text-left text-sm last:border-0">{address.label}</button>)}</div>}
+            {wasteLoading && <p className="mt-3 text-xs text-[#2aa3ff]">{language === 'no' ? 'Finner tømmekalender…' : 'Finding your collection schedule…'}</p>}
+            {wasteMessage && !wasteLoading && <p className="mt-3 text-xs text-[#d94b4b]">{wasteMessage}</p>}
+            {wastePreview.length > 0 && <div className="mt-4"><div className="text-xs font-semibold text-[#35c76a]">{language === 'no' ? 'Tilkobling funnet' : 'Connected'}</div><div className="mt-2 text-[10px] tracking-widest text-[color:var(--fg-45)]">{language === 'no' ? 'NESTE TØMMINGER' : 'NEXT COLLECTIONS'}</div>{wastePreview.map((item, index) => <div key={`${item.date}-${index}`} className="mt-2 flex justify-between text-xs"><span>{new Date(`${item.date}T12:00:00`).toLocaleDateString(language === 'no' ? 'nb-NO' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span><span>{item.wasteTypes.join(' + ')}</span></div>)}</div>}
+            <div className="mt-5 flex gap-2"><button type="button" onClick={() => setWasteOpen(false)} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button><button type="button" onClick={saveWaste} disabled={wasteLoading || wastePreview.length === 0} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs text-[#2aa3ff] disabled:opacity-40">{language === 'no' ? 'LAGRE' : 'SAVE'}</button></div>
+          </div>
+        </div>
+      )}
       {localEventsOpen && renderLocalEventsModal()}
 
       {spondModalOpen && (
@@ -9560,12 +9634,16 @@ function integrationItemDateTime(row: any) {
   return { date: rawDate, time: null }
 }
 
-function integrationReminderTitle(row: any, source: ReminderSource) {
+function integrationReminderTitle(row: any, source: ReminderSource, language: AppLanguage = 'en') {
   const title = String(row?.title ?? '').trim()
   if (!title) return ''
   if (source === 'teams') return title
   if (source === 'spond') return title
-  if (source === 'waste') return title
+  if (source === 'waste') {
+    const type = String(row?.raw?.normalized_type || row?.raw?.waste_fraction || '')
+    const labels: Record<string, [string, string]> = { restavfall: ['Residual waste', 'Restavfall'], residual: ['Residual waste', 'Restavfall'], matavfall: ['Food waste', 'Matavfall'], food: ['Food waste', 'Matavfall'], papir: ['Paper', 'Papir'], paper: ['Paper', 'Papir'], plast: ['Plastic', 'Plast'], plastic: ['Plastic', 'Plast'], glass_metall: ['Glass & metal', 'Glass og metall'], hageavfall: ['Garden waste', 'Hageavfall'], hazardous: ['Hazardous waste', 'Farlig avfall'], textile: ['Textiles', 'Tekstil'], christmas_tree: ['Christmas tree', 'Juletre'] }
+    return labels[type]?.[language === 'no' ? 1 : 0] || title.replace(/^Tøm\s+/i, '')
+  }
   return title
 }
 
@@ -13419,7 +13497,7 @@ const manualItems: ReminderUiItem[] = (data || [])
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               if (externalEventId && localEventHiddenSkippedIds.has(externalEventId)) return null
               const { date, time } = integrationItemDateTime(row)
-              const title = integrationReminderTitle(row, source)
+              const title = integrationReminderTitle(row, source, language)
               if (!title || !date) return null
               return {
                 id: `${source}:${String(row.external_id || row.id)}`,

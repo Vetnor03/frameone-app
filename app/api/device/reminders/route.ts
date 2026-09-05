@@ -4,6 +4,7 @@ import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
+import { syncWasteFromStoredConnection } from '@/app/lib/integrations/waste/server'
 import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
@@ -556,6 +557,8 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('teams', error)
       } })(), (async () => { try {
+
+        await Promise.all(memberUserIds.map((userId) => syncWasteFromStoredConnection(userId)))
 
         const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
           .from('integration_items')

@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/waste-sync", "schedule": "17 3 * * *" }
+  ]
+}

@@ -108,40 +108,6 @@ test('Norconsult providers build public calendar URLs with provider-specific UUI
   }
 })
 
-test('Norconsult providers temporarily fall back to known test-address UUIDs', async () => {
-  const originalFetch = globalThis.fetch
-  const calls = []
-  globalThis.fetch = async (url) => {
-    calls.push(String(url))
-    return new Response(`23.06 - tirsdag\nImage: Restavfall`, { status: 200, headers: { 'content-type': 'text/html' } })
-  }
-
-  try {
-    await providerFor('stavanger').fetchCollections({
-      addressId: '1103-1234-36-B',
-      label: 'Boganesstraen 36B',
-      municipalityNumber: '1103',
-      municipalityName: 'Stavanger',
-      gnr: '16',
-      bnr: '489',
-      snr: '0',
-    })
-    await providerFor('hentavfall').fetchCollections({
-      addressId: '1108-23400-17-C',
-      label: 'Professor Dahls gate 17C',
-      municipalityNumber: '1108',
-      municipalityName: 'Sandnes',
-      gnr: '70',
-      bnr: '152',
-      snr: '0',
-    })
-    assert.match(calls[0], /ids=6fa154fe-bbaa-42d6-9a24-a2e310ecd16b/)
-    assert.match(calls[1], /[?&]id=6ddae2f0-9f6a-4e17-90dc-ba5a01e18ed7/)
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
 test('Norconsult address resolution extracts Stavanger ids UUID from provider address search', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url) => {
@@ -233,8 +199,8 @@ test('Norconsult calendar parser maps row icons through the legend and supports 
     <table>
       <thead><tr><th>Dato og dag</th><th>Avfallstype</th></tr></thead>
       <tbody>
-        <tr><td>23.06 - tirsdag</td><td><img class="bin apple green" src="/icons/apple-core.svg"></td><td><svg class="garden"><use href="#hage-icon"></use></svg></td></tr>
-        <tr><td>30.06 - tirsdag</td><td><img src="/icons/plast-purple.svg" alt=""><img src="/icons/rest-black.svg"></td></tr>
+        <tr><td>23.06.2027 - tirsdag</td><td><img class="bin apple green" src="/icons/apple-core.svg"></td><td><svg class="garden"><use href="#hage-icon"></use></svg></td></tr>
+        <tr><td>30.06.2027 - tirsdag</td><td><img src="/icons/plast-purple.svg" alt=""><img src="/icons/rest-black.svg"></td></tr>
       </tbody>
     </table>
     <section aria-label="Forklaring">
@@ -258,10 +224,10 @@ test('Norconsult calendar parser maps row icons through the legend and supports 
     })
     const rows = providerFor('stavanger').normalizeCollections(raw)
     assert.deepEqual(rows.map((row) => ({ date: row.date, title: row.title })), [
-      { date: '2026-06-23', title: 'Tøm hageavfall' },
-      { date: '2026-06-23', title: 'Tøm matavfall' },
-      { date: '2026-06-30', title: 'Tøm plast' },
-      { date: '2026-06-30', title: 'Tøm restavfall' },
+      { date: '2027-06-23', title: 'Tøm hageavfall' },
+      { date: '2027-06-23', title: 'Tøm matavfall' },
+      { date: '2027-06-30', title: 'Tøm plast' },
+      { date: '2027-06-30', title: 'Tøm restavfall' },
     ])
   } finally {
     globalThis.fetch = originalFetch
@@ -272,7 +238,7 @@ test('Norconsult calendar parser uses accessible icon attributes when legend ent
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response(`
     <table><tr><th>Dato og dag</th><th>Avfallstype</th></tr>
-      <tr><td>25.06 - torsdag</td><td><img src="/apple.svg" alt="Green apple-core icon"></td></tr>
+      <tr><td>25.06.2027 - torsdag</td><td><img src="/apple.svg" alt="Green apple-core icon"></td></tr>
     </table>
     <div><img src="/apple.svg" alt="Green apple-core icon">Matavfall</div>
   `, { status: 200, headers: { 'content-type': 'text/html' } })
@@ -290,9 +256,55 @@ test('Norconsult calendar parser uses accessible icon attributes when legend ent
     })
     const rows = providerFor('hentavfall').normalizeCollections(raw)
     assert.deepEqual(rows.map((row) => ({ date: row.date, title: row.title })), [
-      { date: '2026-06-25', title: 'Tøm matavfall' },
+      { date: '2027-06-25', title: 'Tøm matavfall' },
     ])
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test('Kartverket autocomplete preserves selectable addresses, house letters and provider identifiers', async () => {
+  const { searchKartverketAddresses } = await import('../app/lib/integrations/waste/providers.ts')
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({ adresser: [
+    { adressetekst: 'Boganesstraen 36B', adressenavn: 'Boganesstraen', nummer: 36, bokstav: 'B', postnummer: '4020', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234 },
+    { adressetekst: 'Boganesstraen 36C', adressenavn: 'Boganesstraen', nummer: 36, bokstav: 'C', postnummer: '4020', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234 },
+  ]}), { status: 200 })
+  try {
+    const addresses = await searchKartverketAddresses('Boganesstraen 36', 8)
+    assert.equal(addresses.length, 2)
+    assert.equal(addresses[0].label, 'Boganesstraen 36B, 4020 Stavanger')
+    assert.equal(addresses[0].houseNumber, '36B')
+    assert.equal(addresses[0].municipalityNumber, '1103')
+    assert.equal(addresses[0].addressCode, '1234')
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('MinRenovasjon fetches fractions first, maps dates and deduplicates duplicates', async () => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  process.env.MINRENOVASJON_APP_KEY = 'server-secret'
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), headers: init.headers })
+    if (String(url).includes('fraksjoner')) return new Response(JSON.stringify([{ Id: 7, Navn: 'Papp/papir' }]), { status: 200 })
+    return new Response(JSON.stringify([{ FraksjonId: 7, Tommedatoer: ['2026-10-01', '2026-10-01'] }]), { status: 200 })
+  }
+  try {
+    const provider = providerFor('min_renovasjon')
+    const address = { addressId: 'x', label: 'Testveien 2B', municipalityNumber: '0301', municipalityName: 'Oslo', streetName: 'Testveien', houseNumber: '2B', addressCode: '99' }
+    const normalized = provider.normalizeCollections(await provider.fetchCollections(address))
+    assert.equal(calls.length, 2)
+    assert.match(calls[1].url, /tommekalender.*gatenavn=Testveien.*husnr=2B.*gatekode=99/)
+    assert.equal(calls[0].headers.RenovasjonAppKey, 'server-secret')
+    assert.deepEqual(normalized.map(({ date, waste_fraction }) => ({ date, waste_fraction })), [{ date: '2026-10-01', waste_fraction: 'papir' }])
+  } finally { globalThis.fetch = originalFetch; delete process.env.MINRENOVASJON_APP_KEY }
+})
+
+test('MinRenovasjon malformed JSON is a controlled provider error', async () => {
+  const originalFetch = globalThis.fetch
+  process.env.MINRENOVASJON_APP_KEY = 'server-secret'
+  globalThis.fetch = async () => new Response('{bad', { status: 200 })
+  try {
+    await assert.rejects(() => providerFor('min_renovasjon').fetchCollections({ addressId: 'x', label: 'A 1', municipalityNumber: '0301', municipalityName: 'Oslo', streetName: 'A', houseNumber: '1', addressCode: '2' }), (error) => error.code === 'invalid_response')
+  } finally { globalThis.fetch = originalFetch; delete process.env.MINRENOVASJON_APP_KEY }
 })
