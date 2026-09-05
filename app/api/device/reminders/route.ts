@@ -513,14 +513,11 @@ export async function GET(req: Request) {
     const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
     const selectedIntegrations = configuredModules?.integrations || {}
     const providerEnabled = (provider: string) => !explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true
-    const spondUserIds = providerEnabled('spond') ? memberUserIds : []
-    const teamsUserIds = providerEnabled('teams') ? memberUserIds : []
-    const wasteUserIds = providerEnabled('waste') ? memberUserIds : []
     if (memberUserIds.length > 0) {
       if (!skipSync) {
         const syncResults = await Promise.allSettled([
-          syncSpondIfStaleForUsers(spondUserIds),
-          Promise.allSettled(teamsUserIds.map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
+          providerEnabled('spond') ? syncSpondIfStaleForUsers(memberUserIds) : Promise.resolve(),
+          Promise.allSettled((providerEnabled('teams') ? memberUserIds : []).map((userId) => syncTeamsIfStaleForUser(userId, { horizonDays }))),
         ])
         syncResults.forEach((result) => {
           if (result.status === 'rejected') logOptionalReminderProviderFailure('integration-sync', result.reason)
@@ -528,12 +525,13 @@ export async function GET(req: Request) {
       }
 
       await Promise.all([(async () => { try {
+        if (!providerEnabled('spond')) return
 
         const { data: integrationItemsData, error: integrationItemsError } = await supabase
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'spond')
-          .in('user_id', spondUserIds)
+          .in('user_id', memberUserIds)
           .order('priority', { ascending: true })
           .order('starts_at', { ascending: true, nullsFirst: false })
 
@@ -549,12 +547,13 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('spond', error)
       } })(), (async () => { try {
+        if (!providerEnabled('teams')) return
 
         const { data: teamsIntegrationItemsData, error: teamsIntegrationItemsError } = await supabase
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'teams')
-          .in('user_id', teamsUserIds)
+          .in('user_id', memberUserIds)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (teamsIntegrationItemsError) throw teamsIntegrationItemsError
@@ -568,12 +567,13 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('teams', error)
       } })(), (async () => { try {
+        if (!providerEnabled('waste')) return
 
         const { data: wasteIntegrationItemsData, error: wasteIntegrationItemsError } = await supabase
           .from('integration_items')
           .select('id, user_id, provider, external_id, title, body, starts_at, due_at, priority, raw')
           .eq('provider', 'waste')
-          .in('user_id', wasteUserIds)
+          .in('user_id', memberUserIds)
           .order('starts_at', { ascending: true, nullsFirst: false })
 
         if (wasteIntegrationItemsError) throw wasteIntegrationItemsError
@@ -588,6 +588,7 @@ export async function GET(req: Request) {
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
       } })(), (async () => { try {
+        if (!providerEnabled('local-events')) return
 
         const { data: localEventsData, error: localEventsError } = await supabase
           .from('integration_items')

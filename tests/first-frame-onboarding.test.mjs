@@ -28,17 +28,20 @@ test('normal completion creates all four unpinned modules while custom stays cus
   assert.match(setup, /finish\('custom'\)/)
   assert.match(setup, /purpose: selectedPurpose/)
   assert.doesNotMatch(setup, /onComplete\(\{ purpose: 'normal'/)
+  assert.match(setup, /await onComplete\(\{ purpose: selectedPurpose, modules \}\)/)
 })
 
 test('fresh integration selection starts empty and only records explicit connects', () => {
-  assert.match(setup, /integration_selection_explicit: true, integrations: \{\}/)
-  assert.match(connect, /startup \? false : connectAppIsConnected/)
-  assert.match(connect, /if \(!startup\) \{\s*fetchSpondStatus\(\)\s*fetchTeamsStatus\(\)/)
-  assert.match(connect, /if \(!startup\) setLocalEventsSavedArea/)
+  assert.match(setup, /integration_selection_explicit: true, integrations: \{ \.\.\.\(savedDraft\?\.modules\?\.integrations \|\| \{\}\) \}/)
+  assert.match(connect, /frameUsesIntegration\(modulesJson, 'spond'\)/)
+  assert.match(connect, /setSpondAccountConnected/)
+  assert.match(connect, /if \(frameUsesIntegration\(modulesJson, 'local-events'\)\) setLocalEventsSavedArea/)
   assert.match(connect, /onIntegrationConnected\?\.\('spond'/)
   assert.match(connect, /onIntegrationConnected\?\.\('local-events'/)
   assert.match(remindersRoute, /explicitIntegrationSelection/)
   assert.match(remindersRoute, /providerEnabled\('spond'\)/)
+  assert.match(remindersRoute, /if \(!providerEnabled\('local-events'\)\) return/)
+  assert.doesNotMatch(remindersRoute, /\.in\('user_id', (?:spond|teams|waste)UserIds\)/)
 })
 
 test('weather setup is location-only and preserves the selected configuration', () => {
@@ -63,4 +66,22 @@ test('structured errors never stringify as object Object and completion remains 
   assert.match(formatter, /error !== '\[object Object\]'/)
   assert.match(setup, /finally \{ setSaving\(false\) \}/)
   assert.match(setup, /setError\(errorMessage/)
+})
+
+
+test('incomplete setup and OAuth draft survive reload while completion clears the draft', () => {
+  assert.match(home, /setSetupDeviceId\(hasSavedSettings \? null : deviceId\)/)
+  assert.match(setup, /sessionStorage\.getItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
+  assert.match(setup, /sessionStorage\.setItem\(`remind:onboarding:\$\{activeDeviceId\}`/)
+  assert.match(home, /sessionStorage\.removeItem\(`remind:onboarding:\$\{activeDeviceId\}`\)/)
+  assert.match(connect, /initialTeamsOAuthStatus === 'connected'/)
+})
+
+test('account credentials and frame enablement are separate and legacy frames remain compatible', () => {
+  assert.match(home, /function frameUsesIntegration/)
+  assert.match(home, /integration_selection_explicit !== true.*connectAppIsConnected/)
+  assert.match(connect, /Account connected · not enabled on this frame/)
+  assert.match(connect, /spondAccountConnected.*onIntegrationConnected/)
+  assert.match(connect, /teamsAccountConnected.*onIntegrationConnected/)
+  assert.match(setup, /modulesJson=\{modules\}/)
 })

@@ -2025,6 +2025,7 @@ export default function HomePage() {
     )
 
     if (!stickySettingsRef.current) setActiveTab('frame')
+    setSetupDeviceId(hasSavedSettings ? null : deviceId)
 
     isLoadedRef.current = true
   }
@@ -2247,6 +2248,7 @@ export default function HomePage() {
     savedStateRef.current = serializeComparableState({ frameTheme, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
+    sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
     setSetupDeviceId(null)
     setActiveTab('frame')
     await loadPhysicalFrameSnapshot(activeDeviceId, physicalFrameRenderAtRef.current)
@@ -2748,6 +2750,11 @@ async function handleSelectTab(k: TabKey) {
                       modulesJson={modulesJson}
                       activeDeviceId={activeDeviceId}
                       onBack={() => setRemindersConnectScreenOpen(false)}
+                      onIntegrationConnected={(key, config = { enabled: true }) => {
+                        const nextModules = { ...modulesJson, integration_selection_explicit: true, integrations: { ...(modulesJson.integrations || {}), [key]: config } }
+                        setModulesJson(nextModules)
+                        markDirty({ modulesJson: nextModules })
+                      }}
                     />
                   ) : (
                     <ModuleSettingsTab
@@ -2888,6 +2895,11 @@ function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectApp
   })
 }
 
+function frameUsesIntegration(modulesJson: Record<string, any>, key: ConnectAppKey) {
+  if (modulesJson?.integration_selection_explicit !== true) return connectAppIsConnected(modulesJson, key)
+  return modulesJson?.integrations?.[key]?.enabled === true
+}
+
 function ConnectAppsScreen({
   language,
   modulesJson,
@@ -2911,14 +2923,16 @@ function ConnectAppsScreen({
     if (initialTeamsOAuthStatus === 'error') return initialTeamsOAuthMessage || (language === 'no' ? 'Kunne ikke koble til Teams' : 'Could not connect Teams')
     return null
   })
-  const [spondConnected, setSpondConnected] = useState(startup ? false : connectAppIsConnected(modulesJson, 'spond'))
+  const [spondConnected, setSpondConnected] = useState(frameUsesIntegration(modulesJson, 'spond'))
   const [spondAccount, setSpondAccount] = useState<string | null>(null)
+  const [spondAccountConnected, setSpondAccountConnected] = useState(false)
   const [spondModalOpen, setSpondModalOpen] = useState(false)
   const [spondUsername, setSpondUsername] = useState('')
   const [spondPassword, setSpondPassword] = useState('')
   const [spondLoading, setSpondLoading] = useState(false)
-  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || (!startup && connectAppIsConnected(modulesJson, 'teams')))
+  const [teamsConnected, setTeamsConnected] = useState(initialTeamsOAuthStatus === 'connected' || frameUsesIntegration(modulesJson, 'teams'))
   const [teamsAccount, setTeamsAccount] = useState<string | null>(null)
+  const [teamsAccountConnected, setTeamsAccountConnected] = useState(initialTeamsOAuthStatus === 'connected')
   const [teamsLoading, setTeamsLoading] = useState(false)
   const [disconnectingApp, setDisconnectingApp] = useState<DisconnectableConnectAppKey | null>(null)
   const [locallyDisconnectedApps, setLocallyDisconnectedApps] = useState<Partial<Record<ConnectAppKey, boolean>>>({})
@@ -2929,7 +2943,7 @@ function ConnectAppsScreen({
   const [localEventsSearch, setLocalEventsSearch] = useState('')
   const [localEventsCanManage, setLocalEventsCanManage] = useState(false)
   const [localEventsSavedArea, setLocalEventsSavedArea] = useState<LocalEventAreaPreference | null>(() => {
-    return startup ? null : normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference)
+    return frameUsesIntegration(modulesJson, 'local-events') ? normalizeLocalEventAreaPreference((modulesJson as any)?.integrations?.['local-events']?.areaPreference || (modulesJson as any)?.['local-events']?.areaPreference) : null
   })
   const [localEventsDraftArea, setLocalEventsDraftArea] = useState<LocalEventAreaPreference>(() => localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
 
@@ -2943,7 +2957,8 @@ function ConnectAppsScreen({
     if (!resp.ok) return
     const json = await resp.json()
     setLocallyDisconnectedApps((current) => ({ ...current, spond: json?.connected === true ? false : current.spond }))
-    setSpondConnected(json?.connected === true)
+    setSpondAccountConnected(json?.connected === true)
+    if (modulesJson?.integration_selection_explicit !== true) setSpondConnected(json?.connected === true)
     setSpondAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
       setIntegrationSetupErrors((current) => ({ ...current, spond: json.setup_error.message }))
@@ -2963,7 +2978,8 @@ function ConnectAppsScreen({
     if (!resp.ok) return
     const json = await resp.json()
     setLocallyDisconnectedApps((current) => ({ ...current, teams: json?.connected === true ? false : current.teams }))
-    setTeamsConnected(json?.connected === true)
+    setTeamsAccountConnected(json?.connected === true)
+    if (modulesJson?.integration_selection_explicit !== true) setTeamsConnected(json?.connected === true)
     setTeamsAccount(typeof json?.account === 'string' && json.account ? json.account : null)
     if (typeof json?.setup_error?.message === 'string' && json.setup_error.message) {
       setIntegrationSetupErrors((current) => ({ ...current, teams: json.setup_error.message }))
@@ -3055,7 +3071,7 @@ function ConnectAppsScreen({
     if (!resp.ok) return
     const json = await resp.json()
     const area = normalizeLocalEventAreaPreference(json?.areaPreference)
-    if (!startup) setLocalEventsSavedArea(json?.connected === true ? area : null)
+    if (frameUsesIntegration(modulesJson, 'local-events')) setLocalEventsSavedArea(json?.connected === true ? area : null)
     setLocalEventsCanManage(json?.canManage === true)
     if (area) setLocalEventsDraftArea(area)
   }
@@ -3158,10 +3174,9 @@ function ConnectAppsScreen({
   }
 
   useEffect(() => {
-    if (!startup) {
-      fetchSpondStatus()
-      fetchTeamsStatus()
-    } else if (initialTeamsOAuthStatus === 'connected') {
+    fetchSpondStatus()
+    fetchTeamsStatus()
+    if (startup && initialTeamsOAuthStatus === 'connected') {
       onIntegrationConnected?.('teams', { enabled: true })
     }
     const params = new URLSearchParams(window.location.search)
@@ -3307,7 +3322,9 @@ function ConnectAppsScreen({
             const localEventsSelectedName = localEventsSavedArea ? (getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger') : null
             const description = app.key === 'local-events' && localEventsSelectedName
               ? (language === 'no' ? `Lokale arrangementer i ${localEventsSelectedName} valgt` : `Local Events in ${localEventsSelectedName} selected`)
-              : app.description
+              : !connected && ((app.key === 'spond' && spondAccountConnected) || (app.key === 'teams' && teamsAccountConnected))
+                ? (language === 'no' ? 'Konto tilkoblet · ikke aktiv på denne framen' : 'Account connected · not enabled on this frame')
+                : app.description
             return (
               <div
                 key={app.key}
@@ -3344,12 +3361,13 @@ function ConnectAppsScreen({
                       disabled={(app.key === 'teams' && teamsLoading)}
                       onClick={() => {
                         if (app.key === 'spond') {
-                          if (setupError) {
+                          if (spondAccountConnected) { setSpondConnected(true); onIntegrationConnected?.('spond', { enabled: true }) }
+                          else if (setupError) {
                             setStatusTone('error')
                             setStatus(setupError)
                           } else setSpondModalOpen(true)
                         } else if (app.key === 'teams') {
-                          connectTeams()
+                          if (teamsAccountConnected) { setTeamsConnected(true); onIntegrationConnected?.('teams', { enabled: true }) } else connectTeams()
                         } else if (app.key === 'local-events') {
                           setLocalEventsDraftArea(localEventsSavedArea || DEFAULT_LOCAL_EVENT_AREA)
                           setLocalEventsOpen(true)
@@ -8561,10 +8579,11 @@ function FrameSetupFlow({
   onComplete: (selection: FrameSetupSelection) => Promise<void>
 }) {
   const guidedModules = ['reminders', 'weather', 'countdown'] as const
-  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>('purpose')
-  const [purpose, setPurpose] = useState<SetupPurpose>('normal')
-  const [moduleIndex, setModuleIndex] = useState(0)
-  const [modules, setModules] = useState<Record<string, any>>({ integration_selection_explicit: true, integrations: {} })
+  const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
+  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(savedDraft?.step === 'guided' || savedDraft?.step === 'custom' ? savedDraft.step : 'purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose>(savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
+  const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(2, savedDraft.moduleIndex)) : 0)
+  const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reminderComposerOpen, setReminderComposerOpen] = useState(false)
@@ -8573,6 +8592,10 @@ function FrameSetupFlow({
   const [countdownDraft, setCountdownDraft] = useState<{ title: string; date: string } | null>(null)
   const isNo = language === 'no'
   const current = guidedModules[moduleIndex]
+
+  useEffect(() => {
+    sessionStorage.setItem(`remind:onboarding:${activeDeviceId}`, JSON.stringify({ step, purpose, moduleIndex, modules }))
+  }, [activeDeviceId, step, purpose, moduleIndex, modules])
 
   function selectIntegration(key: ConnectAppKey, config: Record<string, unknown> = { enabled: true }) {
     setModules(value => ({ ...value, integration_selection_explicit: true, integrations: { ...(value.integrations || {}), [key]: config } }))
@@ -8583,7 +8606,7 @@ function FrameSetupFlow({
     try {
       setSaving(true)
       setError(null)
-      await onComplete({ purpose: selectedPurpose, modules: selectedPurpose === 'normal' ? modules : {} })
+      await onComplete({ purpose: selectedPurpose, modules })
     } catch (reason) {
       console.error('Initial frame setup failed', reason)
       setError(errorMessage(reason, isNo ? 'Kunne ikke fullføre oppsettet. Prøv igjen.' : 'Could not finish setup. Please try again.'))
