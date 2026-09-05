@@ -2,9 +2,11 @@
 #include "Config.h"
 
 #include <Arduino.h>
-#include <Preferences.h>
-#include <math.h>
 #include "HardwareProfile.h"
+#if !defined(FRAME_IS_ALFRED_V1_2)
+#include <Preferences.h>
+#endif
+#include <math.h>
 #if defined(FRAME_IS_ALFRED_V1_2)
 #include <Wire.h>
 #endif
@@ -21,6 +23,12 @@ struct Max17048Sample {
   float soc;
 };
 static float g_max17048Soc = 0.0f;
+
+static const float ALFRED_SOC_HYSTERESIS = 0.75f;
+static const int ALFRED_CORRECTION_SAMPLES = 3;
+static const int ALFRED_LARGE_CORRECTION_PERCENT = 8;
+static const int ALFRED_LOW_VOLTAGE_SAMPLES = 3;
+static const float ALFRED_EMERGENCY_V = 3.10f;
 
 static bool readMax17048Register(uint8_t reg, uint16_t& value) {
   constexpr int kMax17048ReadAttempts = 3;
@@ -52,6 +60,7 @@ static bool readMax17048Sample(Max17048Sample& sample) {
 #endif
 
 // ADC -> battery voltage
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static const float BATTERY_DIVIDER_RATIO = 2.0f;
 static const float BATTERY_ADC_REF = 3.3f;
 static const float BATTERY_CAL_FACTOR = 1.0f;
@@ -59,6 +68,7 @@ static const float BATTERY_CAL_FACTOR = 1.0f;
 // Sampling
 static const int BATTERY_SAMPLE_COUNT = 7;
 static const int BATTERY_SAMPLE_DELAY_MS = 10;
+#endif
 
 // Smoothing
 static const float EMA_ALPHA_DISCHARGING = 0.15f;
@@ -81,7 +91,8 @@ static const int FULL_DISPLAY_SNAP_PERCENT = 95;
 static const float FULL_DISPLAY_SNAP_MARGIN_V = 0.03f;
 #endif
 
-// Learned calibrationc:\Users\vetle\Documents\Arduino\frame_v2.4.7\build\espressif.esp32.esp32\frame-2.4.7.bin
+// Learned calibration for classic ADC-based hardware.
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static const float DEFAULT_LEARNED_FULL_V = 3.90f;
 static const float MIN_LEARNABLE_FULL_V = 3.88f;
 static const float MAX_LEARNABLE_FULL_V = 4.22f;
@@ -91,6 +102,7 @@ static const int MAX_FULL_SAMPLES_FOR_WEIGHTING = 12;
 static const int MIN_USB_WAKES_FOR_FULL_LEARN = 6;
 static const float MIN_FULL_LEARN_CANDIDATE_V = 3.90f;
 static const float MIN_FULL_LEARN_ACCEPTABLE_DROP_FROM_PEAK_V = 0.12f;
+#endif
 
 // Display model
 static const float DISPLAY_EMPTY_V = 3.35f;
@@ -104,7 +116,11 @@ static const float RECHARGE_SHUTDOWN_V = DISPLAY_EMPTY_V;
 static const float RECHARGE_RECOVERY_V = 3.55f;
 
 // RTC validation
+#if defined(FRAME_IS_ALFRED_V1_2)
+static const uint32_t BATTERY_RTC_MAGIC = 0xBA77239C;
+#else
 static const uint32_t BATTERY_RTC_MAGIC = 0xBA77239B;
+#endif
 
 struct BatteryRtcState {
   uint32_t magic;
@@ -120,6 +136,12 @@ struct BatteryRtcState {
   int usbWakeCount;
   float usbSessionPeakVoltage;
   bool rechargeRequired;
+#if defined(FRAME_IS_ALFRED_V1_2)
+  float lastGaugeSoc;
+  int socCandidatePercent;
+  uint8_t socCandidateCount;
+  uint8_t lowVoltageCount;
+#endif
 };
 
 RTC_DATA_ATTR static BatteryRtcState g_batteryRtc = {
@@ -134,9 +156,13 @@ RTC_DATA_ATTR static BatteryRtcState g_batteryRtc = {
   0,
   0.0f,
   false
+#if defined(FRAME_IS_ALFRED_V1_2)
+  , 0.0f, -1, 0, 0
+#endif
 };
 
 static bool g_started = false;
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static Preferences g_prefs;
 static bool g_prefsOpened = false;
 
@@ -149,6 +175,7 @@ static int g_learnedFullSampleCount = 0;
 static const char* PREF_NS = "battery";
 static const char* PREF_KEY_FULL_V = "full_v";
 static const char* PREF_KEY_FULL_N = "full_n";
+#endif
 
 // ------------------------------
 // Helpers
@@ -201,6 +228,7 @@ static float readRawVoltageTrimmedMean() {
 
 #endif
 
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static void openPrefsIfNeeded() {
   if (!g_prefsOpened) {
     g_prefsOpened = g_prefs.begin(PREF_NS, false);
@@ -251,19 +279,36 @@ static int batteryPercentFromVoltage(float v) {
   if (pct > 100) pct = 100;
   return pct;
 }
+#endif
 
-static void resetRtcState(float initialVoltage) {
+static void resetRtcState(float initialVoltage
+#if defined(FRAME_IS_ALFRED_V1_2)
+                          , int initialPercent
+#endif
+                          ) {
   g_batteryRtc.magic = BATTERY_RTC_MAGIC;
   g_batteryRtc.initialized = true;
   g_batteryRtc.isCharging = false;
   g_batteryRtc.chargeScore = 0;
   g_batteryRtc.smoothedVoltage = initialVoltage;
   g_batteryRtc.lastSmoothedVoltage = initialVoltage;
+#if defined(FRAME_IS_ALFRED_V1_2)
+  g_batteryRtc.displayedPercent = initialPercent;
+  g_batteryRtc.lastGaugeSoc = g_max17048Soc;
+  g_batteryRtc.socCandidatePercent = -1;
+  g_batteryRtc.socCandidateCount = 0;
+  g_batteryRtc.lowVoltageCount = 0;
+#else
   g_batteryRtc.displayedPercent = batteryPercentFromVoltage(initialVoltage);
+#endif
   g_batteryRtc.lastUsbPresent = false;
   g_batteryRtc.usbWakeCount = 0;
   g_batteryRtc.usbSessionPeakVoltage = initialVoltage;
+#if defined(FRAME_IS_ALFRED_V1_2)
+  g_batteryRtc.rechargeRequired = false;
+#else
   g_batteryRtc.rechargeRequired = initialVoltage <= RECHARGE_SHUTDOWN_V;
+#endif
 }
 
 static bool rtcStateValid() {
@@ -334,6 +379,44 @@ static int stabilizePercent(int mappedPercent, bool isCharging) {
 }
 #endif
 
+#if defined(FRAME_IS_ALFRED_V1_2)
+static int stabilizeAlfredSoc(float gaugeSoc) {
+  const int measured = (int)lroundf(clampf(gaugeSoc, 0.0f, 100.0f));
+  const int shown = g_batteryRtc.displayedPercent;
+  if (shown < 0) return measured;
+
+  const float delta = gaugeSoc - (float)shown;
+  const bool normalDirection = g_batteryRtc.isCharging ? delta > 0.0f : delta < 0.0f;
+  const bool outsideHysteresis = fabsf(delta) >= ALFRED_SOC_HYSTERESIS;
+  const bool largeCorrection = abs(measured - shown) >= ALFRED_LARGE_CORRECTION_PERCENT;
+
+  if (normalDirection && outsideHysteresis && !largeCorrection) {
+    g_batteryRtc.socCandidatePercent = -1;
+    g_batteryRtc.socCandidateCount = 0;
+    return measured;
+  }
+  if (!outsideHysteresis) {
+    g_batteryRtc.socCandidatePercent = -1;
+    g_batteryRtc.socCandidateCount = 0;
+    return shown;
+  }
+
+  if (g_batteryRtc.socCandidatePercent != measured) {
+    g_batteryRtc.socCandidatePercent = measured;
+    g_batteryRtc.socCandidateCount = 1;
+  } else if (g_batteryRtc.socCandidateCount < ALFRED_CORRECTION_SAMPLES) {
+    g_batteryRtc.socCandidateCount++;
+  }
+  if (g_batteryRtc.socCandidateCount >= ALFRED_CORRECTION_SAMPLES) {
+    g_batteryRtc.socCandidatePercent = -1;
+    g_batteryRtc.socCandidateCount = 0;
+    return measured;
+  }
+  return shown;
+}
+#endif
+
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static void learnFullCandidate(float candidateV) {
   candidateV = clampf(candidateV, MIN_LEARNABLE_FULL_V, MAX_LEARNABLE_FULL_V);
 
@@ -361,19 +444,45 @@ static void learnFullCandidate(float candidateV) {
   Serial.println(")");
 }
 
-static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoothedVoltage) {
-  const float effectiveVoltage = min(rawVoltage, smoothedVoltage);
+#endif
 
+static void updateRechargeRequired(bool usbPresent, float rawVoltage, float smoothedVoltage) {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  if (!usbPresent) {
+    if (rawVoltage <= ALFRED_EMERGENCY_V) {
+      g_batteryRtc.rechargeRequired = true;
+      g_batteryRtc.lowVoltageCount = ALFRED_LOW_VOLTAGE_SAMPLES;
+      return;
+    }
+    if (smoothedVoltage <= RECHARGE_SHUTDOWN_V) {
+      if (g_batteryRtc.lowVoltageCount < ALFRED_LOW_VOLTAGE_SAMPLES) {
+        g_batteryRtc.lowVoltageCount++;
+      }
+      if (g_batteryRtc.lowVoltageCount >= ALFRED_LOW_VOLTAGE_SAMPLES) {
+        g_batteryRtc.rechargeRequired = true;
+      }
+    } else {
+      g_batteryRtc.lowVoltageCount = 0;
+    }
+    return;
+  }
+  g_batteryRtc.lowVoltageCount = 0;
+  if (smoothedVoltage >= RECHARGE_RECOVERY_V) {
+    g_batteryRtc.rechargeRequired = false;
+  }
+#else
+  const float effectiveVoltage = min(rawVoltage, smoothedVoltage);
   if (!usbPresent && effectiveVoltage <= RECHARGE_SHUTDOWN_V) {
     g_batteryRtc.rechargeRequired = true;
     return;
   }
-
   if (usbPresent && smoothedVoltage >= RECHARGE_RECOVERY_V) {
     g_batteryRtc.rechargeRequired = false;
   }
+#endif
 }
 
+#if !defined(FRAME_IS_ALFRED_V1_2)
 static void handleUsbSessionLearning(bool usbPresent, float rawVoltage, float smoothedVoltage) {
   // Start / continue plugged session
   if (usbPresent) {
@@ -420,6 +529,8 @@ static void handleUsbSessionLearning(bool usbPresent, float rawVoltage, float sm
   g_batteryRtc.usbSessionPeakVoltage = smoothedVoltage;
 }
 
+#endif
+
 // ------------------------------
 // Public API
 // ------------------------------
@@ -434,16 +545,21 @@ void BatteryManager::begin() {
   pinMode(BATTERY_ADC_PIN, INPUT);
 #endif
 
+#if !defined(FRAME_IS_ALFRED_V1_2)
   loadLearnedCalibration();
+#endif
+
+#if defined(FRAME_IS_ALFRED_V1_2)
+  if (rtcStateValid()) g_max17048Soc = g_batteryRtc.lastGaugeSoc;
+#endif
 
   if (!rtcStateValid()) {
 #if defined(FRAME_IS_ALFRED_V1_2)
     Max17048Sample firstSample{};
     if (readMax17048Sample(firstSample)) {
       g_max17048Soc = firstSample.soc;
-      resetRtcState(firstSample.voltage);
-      g_batteryRtc.displayedPercent =
-        (int)lroundf(clampf(firstSample.soc, 0.0f, 100.0f));
+      resetRtcState(firstSample.voltage,
+                    (int)lroundf(clampf(firstSample.soc, 0.0f, 100.0f)));
     }
 #else
     resetRtcState(readRawVoltageTrimmedMean());
@@ -465,6 +581,7 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
     retained.rawVoltage = rtcStateValid() ? g_batteryRtc.smoothedVoltage : NAN;
     retained.smoothedVoltage = retained.rawVoltage;
     retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1;
+    retained.usbPresent = usbPresent;
     retained.isCharging = usbPresent && digitalRead(HardwareProfile::kChargeN) == LOW;
     retained.requiresRecharge = rtcStateValid() && !usbPresent && g_batteryRtc.rechargeRequired;
     return retained;
@@ -476,9 +593,16 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
 #endif
 
   if (!rtcStateValid()) {
+#if defined(FRAME_IS_ALFRED_V1_2)
+    resetRtcState(rawVoltage, (int)lroundf(clampf(g_max17048Soc, 0.0f, 100.0f)));
+#else
     resetRtcState(rawVoltage);
+#endif
   }
 
+#if defined(FRAME_IS_ALFRED_V1_2)
+  g_batteryRtc.lastGaugeSoc = g_max17048Soc;
+#endif
   const float prevSmoothed = g_batteryRtc.smoothedVoltage;
   const float newSmoothed = applySmoothing(rawVoltage);
 
@@ -486,17 +610,15 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
   updateChargingState(newSmoothed, usbPresent);
   g_batteryRtc.smoothedVoltage = newSmoothed;
 
+#if !defined(FRAME_IS_ALFRED_V1_2)
   handleUsbSessionLearning(usbPresent, rawVoltage, newSmoothed);
+#endif
   updateRechargeRequired(usbPresent, rawVoltage, newSmoothed);
 
 #if defined(FRAME_IS_ALFRED_V1_2)
-  const int mappedPercent = (int)lroundf(clampf(g_max17048Soc, 0.0f, 100.0f));
+  const int stablePercent = stabilizeAlfredSoc(g_max17048Soc);
 #else
   const int mappedPercent = batteryPercentFromVoltage(newSmoothed);
-#endif
-#if defined(FRAME_IS_ALFRED_V1_2)
-  const int stablePercent = mappedPercent;
-#else
   int stablePercent = stabilizePercent(mappedPercent, g_batteryRtc.isCharging);
   if (shouldSnapToFullWhilePlugged(usbPresent, newSmoothed, mappedPercent)) {
     stablePercent = 100;
@@ -511,12 +633,39 @@ BatteryState BatteryManager::readAndUpdate(bool usbPresent) {
   out.rawVoltage = rawVoltage;
   out.smoothedVoltage = newSmoothed;
   out.percent = stablePercent;
+  out.usbPresent = usbPresent;
   out.isCharging = g_batteryRtc.isCharging;
   out.requiresRecharge = (!usbPresent && g_batteryRtc.rechargeRequired);
   return out;
 }
 
 void BatteryManager::logState(const char* label, const BatteryState& state) {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  Serial.print("Battery [");
+  Serial.print(label ? label : "");
+  Serial.print("] V=");
+  Serial.print(state.rawVoltage, 3);
+  Serial.print("V gauge=");
+  Serial.print(g_max17048Soc, 1);
+  Serial.print("% display=");
+  Serial.print(state.percent);
+  Serial.print("% usb=");
+  Serial.print(state.usbPresent ? 1 : 0);
+  Serial.print(" charging=");
+  Serial.print(state.isCharging ? 1 : 0);
+  Serial.print(" recharge=");
+  Serial.print(state.requiresRecharge ? 1 : 0);
+  if (g_batteryRtc.socCandidateCount > 0) {
+    Serial.print(" candidate=");
+    Serial.print(g_batteryRtc.socCandidatePercent);
+    Serial.print("(");
+    Serial.print(g_batteryRtc.socCandidateCount);
+    Serial.print("/");
+    Serial.print(ALFRED_CORRECTION_SAMPLES);
+    Serial.print(")");
+  }
+  Serial.println();
+#else
   Serial.print("🔋 Battery [");
   Serial.print(label ? label : "");
   Serial.print("] raw=");
@@ -535,12 +684,21 @@ void BatteryManager::logState(const char* label, const BatteryState& state) {
   Serial.print(g_learnedFullSampleCount);
   Serial.print(" usbWakes=");
   Serial.println(g_batteryRtc.usbWakeCount);
+#endif
 }
 
 float BatteryManager::getLearnedFullVoltage() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  return NAN;
+#else
   return g_learnedFullVoltage;
+#endif
 }
 
 int BatteryManager::getLearnedFullSampleCount() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  return 0;
+#else
   return g_learnedFullSampleCount;
+#endif
 }

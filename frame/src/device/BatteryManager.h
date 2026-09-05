@@ -5,6 +5,7 @@ struct BatteryState {
   float rawVoltage;
   float smoothedVoltage;
   int percent;
+  bool usbPresent;
   bool isCharging;
   bool requiresRecharge;
 };
