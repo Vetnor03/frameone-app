@@ -7,6 +7,7 @@ const {
   MIN_PERSONAL_EXPERIENCES,
   SURF_DICE_MIN_MATCH_QUALITY,
   SURF_DICE_MIN_PERSONAL_CONFIDENCE,
+  exactSurfExperienceForForecast,
   scoreSurf,
   surfExperienceDisplayDecision,
 } = await import('../app/lib/surfScoring.ts')
@@ -46,6 +47,54 @@ test('presentation decision is conservative and explainable', () => {
   assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: SURF_DICE_MIN_PERSONAL_CONFIDENCE - 0.01, matchQuality: 1 }).experienceDisplayReason, 'low_personal_confidence')
   assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: 1, matchQuality: SURF_DICE_MIN_MATCH_QUALITY - 0.01 }).experienceDisplayReason, 'weak_personal_match')
   assert.equal(surfExperienceDisplayDecision({ sampleCount: MIN_PERSONAL_EXPERIENCES, confidence: SURF_DICE_MIN_PERSONAL_CONFIDENCE, matchQuality: SURF_DICE_MIN_MATCH_QUALITY }).experienceDisplayReason, 'strong_personal_match')
+})
+
+test('an exact forecast timestamp immediately uses the personal rating and dice', () => {
+  const result = scoreSurf({
+    ...conditions,
+    forecastTimeUtc: '2026-09-05T15:00',
+    userExperiences: [row(0, 'personal', {
+      logged_at: '2026-09-05T17:36:42.517+02:00',
+      forecast_time_utc: '2026-09-05T15:00:38.999Z',
+      rating_1_6: 2,
+    })],
+  })
+
+  assert.equal(result.finalRating, 2)
+  assert.equal(result.experienceDisplay, 'personal_match')
+  assert.equal(result.experienceDisplayReason, 'exact_forecast_time_match')
+  assert.equal(normalizeSurfRating1to6(result).experienceDiceValue, 2)
+})
+
+test('exact matching is minute-precision, timezone-safe, and rejects nearby forecast buckets', () => {
+  const exact = row(0, 'personal', { forecast_time_utc: '2026-09-05T17:36:59.999+02:00' })
+  assert.equal(exactSurfExperienceForForecast([exact], '2026-09-05T15:36:00.001Z')?.id, exact.id)
+  assert.equal(exactSurfExperienceForForecast([exact], '2026-09-05T15:37Z'), null)
+  assert.equal(exactSurfExperienceForForecast([exact], '2026-09-05T16:36Z'), null)
+})
+
+test('repeated scoring refreshes neither duplicate nor drift an exact experience', () => {
+  const experience = row(0, 'personal', { forecast_time_utc: '2026-09-05T15:00Z', rating_1_6: 5 })
+  const refresh = () => scoreSurf({ ...conditions, forecastTimeUtc: '2026-09-05T15:00', userExperiences: [experience, { ...experience }] })
+  const first = refresh()
+  const second = refresh()
+  assert.equal(first.finalRating, 5)
+  assert.equal(second.finalRating, 5)
+  assert.equal(first.breakdown.experience.recordId, experience.id)
+  assert.equal(second.breakdown.experience.recordId, experience.id)
+})
+
+test('physical score payload and Mirror normalization resolve the same exact rating', () => {
+  const physicalPayload = scoreSurf({
+    ...conditions,
+    forecastTimeUtc: '2026-09-05T15:00Z',
+    userExperiences: [row(0, 'personal', { forecast_time_utc: '2026-09-05T15:00Z', rating_1_6: 4 })],
+  })
+  const mirrorRating = normalizeSurfRating1to6(physicalPayload)
+  assert.equal(physicalPayload.rating, 4)
+  assert.equal(mirrorRating.rating, physicalPayload.rating)
+  assert.equal(mirrorRating.experienceDiceValue, physicalPayload.rating)
+  assert.equal(mirrorRating.ratingFromExperience, true)
 })
 
 test('base, legacy/bootstrap, and shared-only influence use the normal icon', () => {
