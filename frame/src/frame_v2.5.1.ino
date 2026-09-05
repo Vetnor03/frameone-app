@@ -66,6 +66,8 @@ static FrameConfig g_cfg;
 
 // Only initialize the display if we actually need to draw
 static bool g_displayReady = false;
+static bool g_dashboardLoaded = false;
+static bool g_powerRefreshPending = false;
 
 enum SetupStep {
   SETUP_STEP_NONE = 0,
@@ -567,6 +569,7 @@ static void runOtaCheckIfDue() {
 }
 
 static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebug& pwr) {
+  DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
   const uint32_t renderStartedAtMs = millis();
   ModuleDate::setConfig(&g_cfg);
   ModuleWeather::setConfig(&g_cfg);
@@ -608,6 +611,8 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   const uint32_t displayStartedAtMs = millis();
   Layout::drawWithContent(g_cfg.layout, g_cfg);
   shutdownDisplay();
+  g_dashboardLoaded = true;
+  g_powerRefreshPending = false;
   Serial.printf(
     "Render timing epaper_and_composition_ms=%lu\n",
     (unsigned long)(millis() - displayStartedAtMs)
@@ -739,9 +744,25 @@ static void consumeNormalSyncPeriod() {
   }
 }
 
+// A cable event refreshes the current dashboard without inventing a revision
+// or changing the normal content-check clock. An actual revision render can
+// satisfy this refresh too, and clears the pending flag in renderLoadedDashboard.
+static void refreshPowerOverlayIfNeeded(const BatteryState& batt, const PowerSenseDebug& pwr) {
+  if (!g_powerRefreshPending) return;
+  if (!g_dashboardLoaded) {
+    if (FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) !=
+        FrameConfigApi::FETCH_OK) return;
+  }
+  DisplayCore::forceNextFullRefresh(true);
+  if (renderLoadedDashboard(batt, pwr)) {
+    postDeviceStatus(batt, pwr, true);
+    Serial.println("Power state change: dashboard refreshed");
+  }
+}
+
 static InteractiveModeResult runInteractiveMode(
-  const BatteryState& batt,
-  const PowerSenseDebug& pwr,
+  BatteryState& batt,
+  PowerSenseDebug& pwr,
   LiveUpdateState& state
 ) {
   Serial.println("LiveUpdate: entering interactive mode");
@@ -755,6 +776,19 @@ static InteractiveModeResult runInteractiveMode(
   const uint32_t baselineElapsedAtEntry = normalSyncElapsedSeconds;
 
   while (true) {
+    const PowerSenseDebug sampledPower = readPowerSenseDebug();
+    if (sampledPower.stable && sampledPower.usbPresent != pwr.usbPresent) {
+      pwr = sampledPower;
+      batt = BatteryManager::readAndUpdate(pwr.usbPresent);
+      bool hadPrevious = false;
+      UpdateChecker::detectAndPersistUsbStateChange(pwr.usbPresent, true, hadPrevious);
+      g_powerRefreshPending = true;
+      Serial.println(pwr.usbPresent ? "USB connected" : "USB disconnected");
+      if (batt.requiresRecharge) {
+        showRechargeAndSleep(batt, pwr);
+        return INTERACTIVE_FINISHED;
+      }
+    }
     if (WiFi.status() != WL_CONNECTED) {
       Serial.println("LiveUpdate: Wi-Fi disconnected; reconnecting");
       if (!WiFiManagerV2::connectSaved(12000)) {
@@ -815,6 +849,12 @@ static InteractiveModeResult runInteractiveMode(
           explicitRevisionObservedAtMs = 0;
         }
       }
+    }
+
+    // Preserve pending physical ACKs and give explicit revisions priority.
+    if (LiveUpdate::getRenderedAwaitingAck() == 0 &&
+        state.requestedRevision <= state.displayedRevision) {
+      refreshPowerOverlayIfNeeded(batt, pwr);
     }
 
     // Exactly one cheap revision probe per idle cadence. Rendering above is
@@ -883,6 +923,7 @@ void setup() {
     pwrEarly.stable,
     dummyHadPrevious
   );
+  g_powerRefreshPending = chargerStateChanged;
   if (chargerStateChanged) {
     Serial.print("Power state changed (prev=");
     Serial.print(previousUsbPresent ? "plugged" : "battery");
@@ -1071,6 +1112,12 @@ void setup() {
     liveProbeOk &&
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
+
+  if (!explicitRevisionPending && LiveUpdate::getRenderedAwaitingAck() == 0) {
+    PowerSenseDebug overlayPwr = readPowerSenseDebug();
+    BatteryState overlayBatt = BatteryManager::readAndUpdate(overlayPwr.usbPresent);
+    refreshPowerOverlayIfNeeded(overlayBatt, overlayPwr);
+  }
 
   if (!REALTIME_TEST_MODE && !normalSyncDue && !explicitRevisionPending) {
     goToSleep(pwrEarly.usbPresent);

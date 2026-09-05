@@ -185,7 +185,9 @@ static void drawChargingBolt(int x, int y) {
 void drawBatteryOverlay(bool forceShow) {
   auto& d = DisplayCore::get();
 
-  if (g_batteryPercent < 0) return;
+  // The dashboard battery indicator is only visible while USB is connected.
+  // Recharge protection uses its own screen and is unaffected.
+  if (!g_batteryUsbPresent || g_batteryPercent < 0) return;
 
   const bool showLow = (g_batteryPercent < 20);
   const bool showCritical = (g_batteryPercent < 10);
