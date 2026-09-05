@@ -63,6 +63,34 @@ test('Surf hashes actual frame score response and visible forecast changes alter
   assert.notEqual(before, after)
 })
 
+test('the next ordinary Surf collection refetches a newly added experience without duplicates', async () => {
+  const current = settings([{ module: 'surf:2', w: 400, h: 240 }])
+  let refresh = 0
+  const seenInit = []
+  const run = () => collectVisibleContent({
+    settings: current,
+    deviceId,
+    origin,
+    authorization: 'Bearer device-token',
+    fetchImpl: async (_url, init) => {
+      seenInit.push(init)
+      refresh++
+      return { ok: true, json: async () => refresh === 1
+        ? { rating: 3, experienceDisplay: 'normal' }
+        : { rating: 5, finalRating: 5, experienceDisplay: 'personal_match', experienceDisplayReason: 'exact_forecast_time_match', breakdown: { experience: { recordId: 'new-experience' } } } }
+    },
+  })
+
+  const initiallyLoaded = await run()
+  const nextRefresh = await run()
+  const repeatedRefresh = await run()
+  assert.equal(initiallyLoaded.sources['surf:2'].rating, 3)
+  assert.equal(nextRefresh.sources['surf:2'].finalRating, 5)
+  assert.equal(repeatedRefresh.sources['surf:2'].breakdown.experience.recordId, 'new-experience')
+  assert.equal(refresh, 3)
+  assert.ok(seenInit.every((init) => init.cache === 'no-store' && init.headers.authorization === 'Bearer device-token'))
+})
+
 test('Assistant response, not an artificial four-hour window, determines its signature', async () => {
   const current = settings([{ module: 'assistant' }])
   const run = (now) => collectVisibleContent({ settings: current, deviceId, origin, authorization: 'Bearer token', now, fetchImpl: async () => ({ ok: true, json: async () => ({ updates: [{ topic: 'Same' }] }) }) })

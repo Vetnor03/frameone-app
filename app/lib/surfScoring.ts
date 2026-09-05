@@ -293,6 +293,41 @@ export type SurfExperienceDisplayReason =
   | 'low_personal_confidence'
   | 'weak_personal_match'
   | 'strong_personal_match'
+  | 'exact_forecast_time_match'
+
+function utcMinute(value: unknown): number | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  // Open-Meteo's UTC series uses zone-less ISO values. Database timestamps carry
+  // an offset; treating only the former as UTC keeps both representations safe.
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`
+  const timestamp = Date.parse(normalized)
+  return Number.isFinite(timestamp) ? Math.floor(timestamp / 60000) : null
+}
+
+export function exactSurfExperienceForForecast(
+  records: readonly UserSurfExperienceRecord[] | null | undefined,
+  forecastTimeUtc: string | null | undefined,
+) {
+  const targetMinute = utcMinute(forecastTimeUtc)
+  if (targetMinute == null) return null
+
+  const seen = new Set<string>()
+  const matches = (records ?? []).filter((record) => {
+    if (record.calibration_scope !== 'personal') return false
+    const identity = String(record.id ?? `${record.forecast_time_utc ?? ''}|${record.logged_at ?? ''}|${record.rating_1_6 ?? ''}`)
+    if (seen.has(identity)) return false
+    seen.add(identity)
+    const rating = Math.round(Number(record.rating_1_6))
+    if (rating < 1 || rating > 6) return false
+    const recordedMinute = utcMinute(record.forecast_time_utc ?? record.logged_at)
+    return recordedMinute === targetMinute
+  })
+
+  if (!matches.length) return null
+  matches.sort((a, b) => Date.parse(String(b.updated_at ?? b.created_at ?? b.logged_at ?? '')) - Date.parse(String(a.updated_at ?? a.created_at ?? a.logged_at ?? '')))
+  return matches[0]
+}
 
 export function surfExperienceDisplayDecision(personal: Pick<CalibrationSummary, 'sampleCount' | 'confidence' | 'matchQuality'> | null | undefined) {
   if (!personal || personal.sampleCount === 0) return { experienceDisplay: 'normal' as const, experienceDisplayReason: 'no_personal_evidence' as const }
@@ -1897,12 +1932,16 @@ export function scoreSurf(params: {
   const baseScoreFloat = model.scoringBreakdown.finalScoreFloat
   const bootstrapScoreFloat = exp.blended_rating_float
   const calibratedScoreFloat = clamp(bootstrapScoreFloat + (shared?.adjustment ?? 0) + (personal?.adjustment ?? 0), 1, 6)
-  const finalRating = scopedCalibration ? roundFinalScore(calibratedScoreFloat) : clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6)
+  const exactExperience = exactSurfExperienceForForecast(personalRecords, params.forecastTimeUtc)
+  const exactExperienceRating = exactExperience ? clamp(Math.round(Number(exactExperience.rating_1_6)), 1, 6) : null
+  const finalRating = exactExperienceRating ?? (scopedCalibration ? roundFinalScore(calibratedScoreFloat) : clamp(exp.blended_rating_1_6 ?? model.rating, 1, 6))
   const calibrationSource = shared?.adjustment && personal?.adjustment ? 'shared_and_personal' : shared?.adjustment ? 'shared_calibration' : personal?.adjustment ? 'personal_calibration' : 'base_only'
   // This presentation-only decision deliberately ignores bootstrap/shared influence
   // and adjustment magnitude. Personal qualifying samples already passed the scoring
   // similarity/quality filters in calibrationFor; confidence expresses their relevance.
-  const experienceDisplayDecision = surfExperienceDisplayDecision(personal)
+  const experienceDisplayDecision = exactExperience
+    ? { experienceDisplay: 'personal_match' as const, experienceDisplayReason: 'exact_forecast_time_match' as const }
+    : surfExperienceDisplayDecision(personal)
 
   return {
     rating: finalRating,
@@ -1930,20 +1969,20 @@ export function scoreSurf(params: {
         forecast_time_utc: params.forecastTimeUtc ?? null,
       },
       experience: {
-        matched: exp.matched,
-        rating_1_6: exp.rating_1_6,
+        matched: Boolean(exactExperience) || exp.matched,
+        rating_1_6: exactExperienceRating ?? exp.rating_1_6,
         label: exp.label,
         recordIndex: exp.recordIndex,
         error: exp.error,
         source: exp.source,
         source_priority: exp.source_priority,
-        recordId: exp.recordId,
+        recordId: exactExperience?.id != null ? String(exactExperience.id) : exp.recordId,
         tol_pct: exp.tol_pct,
         tol_dir_deg: exp.tol_dir_deg,
 
         model_rating_1_6: exp.model_rating_1_6,
-        blended_rating_1_6: exp.blended_rating_1_6,
-        blended_rating_float: exp.blended_rating_float,
+        blended_rating_1_6: exactExperienceRating ?? exp.blended_rating_1_6,
+        blended_rating_float: exactExperienceRating ?? exp.blended_rating_float,
         confidence: exp.confidence,
         used_records: exp.used_records,
         considered_records: exp.considered_records,

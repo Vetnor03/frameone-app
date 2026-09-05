@@ -1015,55 +1015,11 @@ function truthy(value: unknown) {
 }
 
 function surfExperienceDiceValue(payload: UnknownRecord, fallbackRating?: number) {
-  if (!isSurfScoreExperienceBased(payload)) return undefined
-  const breakdown = asRecord(payload.breakdown)
-  const experience = asRecord(breakdown.experience)
-  const topExperience = asRecord(payload.experience)
-  const picked = asRecord(payload.picked)
-  const pickedBreakdown = asRecord(picked.breakdown)
-  const pickedExperience = asRecord(picked.experience)
-  const candidates = [
-    fallbackRating,
-    asNumber(payload.rating),
-    asNumber(payload.score),
-    asNumber(experience.blended_rating_1_6),
-    asNumber(topExperience.blended_rating_1_6),
-    asNumber(asRecord(pickedBreakdown.experience).blended_rating_1_6),
-    asNumber(pickedExperience.blended_rating_1_6),
-    asNumber(experience.rating_1_6),
-    asNumber(topExperience.rating_1_6),
-    asNumber(asRecord(pickedBreakdown.experience).rating_1_6),
-    asNumber(pickedExperience.rating_1_6),
-  ]
-
-  for (const value of candidates) {
-    if (value != null && value >= 1 && value <= 6) return Math.round(value)
-  }
-
-  return undefined
+  return normalizeSurfRating1to6(payload, fallbackRating).experienceDiceValue
 }
 
 function isSurfScoreExperienceBased(payload: UnknownRecord) {
-  const breakdown = asRecord(payload.breakdown)
-  const experience = asRecord(breakdown.experience)
-  const topExperience = asRecord(payload.experience)
-  const picked = asRecord(payload.picked)
-  const pickedBreakdown = asRecord(picked.breakdown)
-  const pickedExperience = asRecord(picked.experience)
-  const source = asString(payload.ratingSource || payload.source).toLowerCase()
-
-  return (
-    truthy(payload.isExperienceBased) ||
-    truthy(payload.ratingFromExperience) ||
-    truthy(payload.basedOnExperience) ||
-    source.includes('experience') ||
-    source.includes('user_surf_experiences') ||
-    truthy(experience.matched) ||
-    truthy(experience.isExperienceBased) ||
-    truthy(topExperience.matched) ||
-    truthy(pickedExperience.matched) ||
-    truthy(asRecord(pickedBreakdown.experience).matched)
-  )
+  return surfRatingIsExperienceBased(payload)
 }
 
 function formatPercent(value: unknown) {
