@@ -31,7 +31,9 @@ def test_gauge_is_transactional_retried_and_non_destructive():
     assert "retaining previous valid battery state" in source
     assert "retained.requiresRecharge = rtcStateValid()" in source
     assert "retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1" in source
-    assert "const int stablePercent = mappedPercent" in source
+    assert "const int stablePercent = stabilizeAlfredSoc(g_max17048Soc)" in source
+    assert "ALFRED_SOC_HYSTERESIS = 0.75f" in source
+    assert "ALFRED_CORRECTION_SAMPLES = 3" in source
     assert "digitalRead(HardwareProfile::kChargeN) == LOW" in source
     assert "#if !defined(FRAME_IS_ALFRED_V1_2)\nstatic const int BATTERY_ADC_PIN = 35" in source
     display = text("src/display/DisplayCore.cpp")
@@ -123,3 +125,46 @@ def test_power_sense_is_typed_not_a_preprocessor_macro():
     assert "#define POWER_SENSE_PIN" not in app
     assert "static constexpr int POWER_SENSE_PIN = HardwareProfile::kPgoodN" in app
     assert "static constexpr int POWER_SENSE_PIN = HardwareProfile::kPowerSense" in app
+
+def test_alfred_calibration_and_low_voltage_logic_are_isolated():
+    source = text("src/device/BatteryManager.cpp")
+    assert "Learned calibration for classic ADC-based hardware" in source
+    assert "#if !defined(FRAME_IS_ALFRED_V1_2)\n#include <Preferences.h>" in source
+    for call in ["loadLearnedCalibration();", "handleUsbSessionLearning(usbPresent"]:
+        call_at = source.index(call, source.index("void BatteryManager::begin()"))
+        guard_at = source.rfind("#if !defined(FRAME_IS_ALFRED_V1_2)", 0, call_at)
+        endif_at = source.find("#endif", call_at)
+        assert guard_at < call_at < endif_at
+    assert "smoothedVoltage <= RECHARGE_SHUTDOWN_V" in source
+    assert "lowVoltageCount >= ALFRED_LOW_VOLTAGE_SAMPLES" in source
+    assert "rawVoltage <= ALFRED_EMERGENCY_V" in source
+    assert "smoothedVoltage >= RECHARGE_RECOVERY_V" in source
+
+
+def test_alfred_diagnostics_include_gauge_power_and_stabilizer_state():
+    source = text("src/device/BatteryManager.cpp")
+    for value in ['"V gauge="', '"% display="', '"% usb="', '" charging="',
+                  '" recharge="', '" candidate="']:
+        assert value in source
+
+def test_alfred_stabilizer_covers_directional_and_large_corrections():
+    source = text("src/device/BatteryManager.cpp")
+    stabilizer = source[source.index("static int stabilizeAlfredSoc"):
+                        source.index("static void learnFullCandidate")]
+    assert "fabsf(delta) >= ALFRED_SOC_HYSTERESIS" in stabilizer
+    assert "g_batteryRtc.isCharging ? delta > 0.0f : delta < 0.0f" in stabilizer
+    assert "largeCorrection" in stabilizer
+    assert "socCandidatePercent != measured" in stabilizer
+    assert "socCandidateCount >= ALFRED_CORRECTION_SAMPLES" in stabilizer
+    assert "return measured" in stabilizer and "return shown" in stabilizer
+    assert "RTC_DATA_ATTR static BatteryRtcState" in source
+
+
+def test_alfred_power_changes_do_not_assign_synthetic_soc():
+    source = text("src/device/BatteryManager.cpp")
+    alfred_update = source[source.index("BatteryState BatteryManager::readAndUpdate"):]
+    assert "stabilizeAlfredSoc(g_max17048Soc)" in alfred_update
+    assert "retained.percent = rtcStateValid() ? g_batteryRtc.displayedPercent : -1" in alfred_update
+    assert "stablePercent = usbPresent ? 100" not in alfred_update
+    assert "stablePercent = usbPresent ? 0" not in alfred_update
+    assert "displayedPercent = usbPresent" not in alfred_update
