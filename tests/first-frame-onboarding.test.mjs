@@ -124,6 +124,25 @@ test('operational connection requires resolved account credentials and frame ena
   assert.match(connect, /if \(!resp\.ok\) \{ setTeamsStatusFailed\(true\); setTeamsConnected\(false\)/)
 })
 
+test('Spond and Teams operational state follows the active frame without refetching credentials', () => {
+  const reconciliation = connect.slice(
+    connect.indexOf('if (spondStatusResolved) {'),
+    connect.indexOf('if (!pendingTeamsEnableAfterOAuth'),
+  )
+  assert.match(reconciliation, /spondAccountConnected &&[\s\S]*frameUsesIntegration\(modulesJson, 'spond'\)/)
+  assert.match(reconciliation, /teamsAccountConnected &&[\s\S]*frameUsesIntegration\(modulesJson, 'teams'\)/)
+  assert.match(reconciliation, /modulesJson\?\.integration_selection_explicit !== true/g)
+  assert.match(reconciliation, /\[activeDeviceId, modulesJson, spondStatusResolved, spondAccountConnected, teamsStatusResolved, teamsAccountConnected\]/)
+  assert.doesNotMatch(reconciliation, /fetchSpondStatus|fetchTeamsStatus|setSpondAccountConnected|setTeamsAccountConnected/)
+
+  const operationallyConnected = ({ resolved, accountConnected, explicit, frameEnabled }) =>
+    resolved && accountConnected && (!explicit || frameEnabled)
+  assert.equal(operationallyConnected({ resolved: true, accountConnected: true, explicit: true, frameEnabled: true }), true)
+  assert.equal(operationallyConnected({ resolved: true, accountConnected: true, explicit: true, frameEnabled: false }), false)
+  assert.equal(operationallyConnected({ resolved: true, accountConnected: true, explicit: false, frameEnabled: false }), true)
+  assert.equal(operationallyConnected({ resolved: false, accountConnected: true, explicit: true, frameEnabled: true }), false)
+})
+
 test('legacy transition waits for authoritative provider discovery', () => {
   assert.match(connect, /localEventsResolvedForActiveDevice = !!activeDeviceId && localEventsStatusResolved && localEventsStatusDeviceId === activeDeviceId/)
   assert.match(connect, /legacyIntegrationDiscoveryPending = modulesJson\?\.integration_selection_explicit !== true && !\(spondStatusResolved && teamsStatusResolved && localEventsResolvedForActiveDevice\)/)

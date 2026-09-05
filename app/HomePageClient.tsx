@@ -3285,6 +3285,21 @@ function ConnectAppsScreen({
   }, [activeDeviceId])
 
   useEffect(() => {
+    if (spondStatusResolved) {
+      setSpondConnected(
+        spondAccountConnected &&
+        (modulesJson?.integration_selection_explicit !== true || frameUsesIntegration(modulesJson, 'spond')),
+      )
+    }
+    if (teamsStatusResolved) {
+      setTeamsConnected(
+        teamsAccountConnected &&
+        (modulesJson?.integration_selection_explicit !== true || frameUsesIntegration(modulesJson, 'teams')),
+      )
+    }
+  }, [activeDeviceId, modulesJson, spondStatusResolved, spondAccountConnected, teamsStatusResolved, teamsAccountConnected])
+
+  useEffect(() => {
     if (!pendingTeamsEnableAfterOAuth || !teamsStatusResolved || !teamsAccountConnected) return
     if (modulesJson?.integration_selection_explicit !== true && legacyIntegrationDiscoveryPending) return
     setTeamsConnected(true)
