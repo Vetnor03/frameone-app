@@ -1,6 +1,9 @@
 #include "DisplayCore.h"
 #include "Config.h"
 #include "Theme.h"
+#include "HardwareProfile.h"
+#include <SPI.h>
+#include <driver/gpio.h>
 
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
@@ -10,6 +13,25 @@
 static FrameDisplay display(
   GxEPD2_750_T7(EPAPER_CS, EPAPER_DC, EPAPER_RST, EPAPER_BUSY)
 );
+#if defined(FRAME_IS_ALFRED_V1_2)
+static SPIClass alfredEpdSpi(FSPI);
+static bool g_powered = false;
+
+static void forcePowerLow() {
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  pinMode(HardwareProfile::kEpdPower, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+}
+
+static void safeSignalPins() {
+  pinMode(HardwareProfile::kEpdBusy, INPUT);
+  pinMode(HardwareProfile::kEpdReset, INPUT);
+  pinMode(HardwareProfile::kEpdDc, INPUT);
+  pinMode(HardwareProfile::kEpdCs, INPUT);
+  pinMode(HardwareProfile::kEpdSck, INPUT);
+  pinMode(HardwareProfile::kEpdMosi, INPUT);
+}
+#endif
 
 // State for current draw cycle
 static bool g_forceFullNext = false;
@@ -35,23 +57,75 @@ void fillThemeBackground() {
 }
 
 void begin() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  forcePowerLow();
+  gpio_deep_sleep_hold_dis();
+  gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdPower);
+  forcePowerLow();
+  digitalWrite(HardwareProfile::kEpdPower, HIGH);
+  delay(10);
+  alfredEpdSpi.begin(HardwareProfile::kEpdSck, -1, HardwareProfile::kEpdMosi,
+                     HardwareProfile::kEpdCs);
+  display.epd2.selectSPI(alfredEpdSpi,
+    SPISettings(HardwareProfile::kEpdSpiHz, MSBFIRST, SPI_MODE0));
+  g_powered = true;
+#endif
   display.init(115200);
   display.setRotation(0);
   display.setTextColor(Theme::ink());
 
   display.setFullWindow();
+#if !defined(FRAME_IS_ALFRED_V1_2)
   display.firstPage();
   do {
     fillThemeBackground();
   } while (display.nextPage());
+#endif
+}
+
+void end() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  if (!g_powered) {
+    forcePowerLow();
+    gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+    return;
+  }
+  display.hibernate();
+  delay(42);
+  display.end();
+  alfredEpdSpi.end();
+  safeSignalPins();
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+  g_powered = false;
+#else
+  display.hibernate();
+#endif
+}
+
+bool prepareForDeepSleep() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  forcePowerLow();
+  const esp_err_t holdResult = gpio_hold_en((gpio_num_t)HardwareProfile::kEpdPower);
+  gpio_deep_sleep_hold_en();
+  const bool low = gpio_get_level((gpio_num_t)HardwareProfile::kEpdPower) == 0;
+  Serial.printf("EPD_PWR deep-sleep hold: %s, level=%s\n",
+                holdResult == ESP_OK ? "enabled" : "failed", low ? "LOW" : "HIGH");
+  return holdResult == ESP_OK && low;
+#else
+  return true;
+#endif
 }
 
 void setBatteryStatus(int percent, bool isCharging, bool isUsbPresent) {
-  if (percent < 0) percent = 0;
-  if (percent > 100) percent = 100;
-  g_batteryPercent = percent;
   g_batteryIsCharging = isCharging;
   g_batteryUsbPresent = isUsbPresent;
+  if (percent < 0) {
+    g_batteryPercent = -1;
+    return;
+  }
+  if (percent > 100) percent = 100;
+  g_batteryPercent = percent;
 }
 
 int getBatteryStatusPercent() {

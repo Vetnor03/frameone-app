@@ -1,0 +1,44 @@
+name: Frame firmware build
+
+on:
+  pull_request:
+    paths:
+      - "frame/**"
+      - ".github/workflows/frame-firmware-build.yml"
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install platformio pytest
+      - run: pytest -q frame/tests
+      - run: pio run -v -d frame -e alfred_v1_2
+      - run: pio run -d frame -e frame_esp32
+      - run: pio run -d frame -e alfred_v1_2 -t size
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: "1.5.1"
+      - name: Install pinned Arduino toolchain
+        run: |
+          arduino-cli core update-index \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@2.0.14 \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install "ArduinoJson@6.21.5"
+          arduino-cli lib install "Adafruit BusIO@1.17.4"
+          arduino-cli lib install "Adafruit GFX Library@1.12.6"
+          arduino-cli lib install "GxEPD2@1.6.4"
+      - name: Prepare flat Arduino IDE sketch
+        run: python frame/tools/prepare_arduino_sketch.py --output "$RUNNER_TEMP/frame_v2.5.1"
+      - name: Compile Alfred with Arduino CLI
+        run: |
+          arduino-cli compile --verbose --warnings default --export-binaries \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            "$RUNNER_TEMP/frame_v2.5.1"

@@ -6,8 +6,8 @@
 #include "DeviceIdentity.h"
 #include "NetClient.h"
 #include "FrameText.h"
-#include "Fonts/FreeSans9ptNO.h"
-#include "Fonts/FreeSansBold12ptNO.h"
+#include "FreeSans9ptNO.h"
+#include "FreeSansBold12ptNO.h"
 #include <ArduinoJson.h>
 #include <string.h>
 #include <stdio.h>

@@ -1,63 +1,94 @@
-# ESP32 physical-frame build and memory report
+# Physical-frame firmware builds
 
-## Reproducible build profile
+## Targets
 
-`frame/platformio.ini` pins PlatformIO Espressif32 `6.6.0` (Arduino-ESP32 `2.0.17`), ArduinoJson `6.21.5`, and GxEPD2 `1.6.4`; discovers the sketch and every nested source file; supplies the short-include paths used by the firmware; selects an OTA-capable dual-app partition; and emits a linker map.
+The firmware uses the Arduino framework. PlatformIO provides the reproducible repository/CI build, and Arduino IDE is also supported for the Alfred V1.2 USB workflow.
 
-From the repository root:
+The classic `frame_esp32` PlatformIO environment remains the default and preserves the existing 4 MB ESP32 profile. It is retained for existing frames; its board-specific assumptions have not been reclassified as Alfred facts.
 
-```sh
-pio run -d frame
-pio run -d frame -t size
-xtensa-esp32-elf-size -A frame/.pio/build/frame_esp32/firmware.elf
-xtensa-esp32-elf-nm -S --size-sort --radix=d frame/.pio/build/frame_esp32/firmware.elf | tail -40
+`alfred_v1_2` is the dedicated hardware profile for the physically verified Alfred V1.2 PCB:
+
+- ESP32-S3 DevKitC-compatible ESP32-S3-WROOM-1-N16R8, 240 MHz
+- 16 MB QIO flash and 8 MB OPI PSRAM (`qio_opi`, `BOARD_HAS_PSRAM`)
+- native Hardware CDC/JTAG-compatible USB mode and CDC at boot
+- 115200 baud monitor
+- custom 16 MB dual-OTA table with two 6 MiB application slots
+
+## Arduino IDE workflow
+
+The canonical source stays organized under `frame/src/`. The preparation script makes the familiar flat Arduino folder: it copies the `.ino` plus every firmware `.h`, `.hpp`, `.c`, `.cpp`, and `.S` file into one `frame_v2.5.1` folder, adjusts repository-local include paths, and copies the required Alfred table as `partitions.csv`. It does not modify the canonical source.
+
+Requirements:
+
+- Arduino IDE 2.x
+- Espressif ESP32 boards package `2.0.14`
+- ArduinoJson `6.21.5`
+- Adafruit BusIO `1.17.4`
+- Adafruit GFX Library `1.12.6`
+- GxEPD2 `1.6.4`
+
+After downloading and extracting the GitHub ZIP, open a terminal in the repository root. On Windows, prepare a new sketch folder with:
+
+```powershell
+py frame\tools\prepare_arduino_sketch.py --output "$HOME\Documents\Arduino\frame_v2.5.1"
 ```
 
-Preserve these artifacts from `frame/.pio/build/frame_esp32/`: `firmware.bin`, `firmware.elf`, and `firmware.map`.
+On macOS or Linux:
 
-## Hardware facts verified from source
+```sh
+python3 frame/tools/prepare_arduino_sketch.py --output "$HOME/Arduino/frame_v2.5.1"
+```
 
-- ESP32 Arduino APIs are used (`WiFi`, `Preferences`, ESP sleep and heap APIs).
-- Panel type is `GxEPD2_750_T7` (800 × 480).
-- E-paper control pins are CS 5, DC 17, RST 16 and BUSY 4. Comments identify the conventional SPI SCK 18/MOSI 23 wiring.
-- Battery ADC is GPIO35 and power sense defaults to GPIO39.
-- OTA requires a dual application partition and sufficient free sketch space.
+The destination must be new or empty, and its final folder name must remain `frame_v2.5.1`. This prevents a removed/renamed module from lingering as a stale source file. Open `frame_v2.5.1.ino` from that generated folder in Arduino IDE. You can still edit or replace individual `.h`/`.cpp` files there; rerun the preparation into a new empty folder whenever you want a guaranteed clean copy of the repository version.
 
-## Values requiring manual confirmation
+Select these Tools menu values:
 
-The repository contains no schematic, board manifest, prior binary/map, or production build metadata. Consequently these values are explicit **candidate assumptions**, not silently asserted facts:
-
-| Value in candidate profile | Required confirmation |
+| Arduino IDE setting | Alfred V1.2 value |
 | --- | --- |
-| `esp32dev` / classic ESP32 | Exact module/board and CPU/flash mode |
-| 4 MB flash | Read module marking or bootloader flash report |
-| `min_spiffs.csv` dual-app OTA | Compare production partition table and maximum published binary |
-| GPIO/SPI mapping above | Compare schematic for every hardware revision |
-| Power-sense polarity | Measure GPIO39 on USB and battery |
+| Board | ESP32S3 Dev Module |
+| CPU Frequency | 240MHz (WiFi) |
+| Flash Size | 16MB (128Mb) |
+| Flash Mode | QIO 80MHz |
+| PSRAM | OPI PSRAM |
+| USB Mode | Hardware CDC and JTAG |
+| USB CDC On Boot | Enabled |
+| Partition Scheme | Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS) |
 
-Do not publish from this profile until all five checks pass. If production differs, update `platformio.ini`, rebuild, and repeat hardware verification.
+`Partition Scheme` supplies Arduino's compile-time size ceiling. The generated sketch's checked-in `partitions.csv` overrides that built-in table for the actual image and USB upload, providing the two verified 6 MiB OTA slots. Do not omit or rename `partitions.csv`.
 
-## Memory audit and expected allocation changes
+Use **Sketch > Verify/Compile** or **Sketch > Export Compiled Binary**. For the first physical test, use the IDE's USB **Upload** only after the PR's required builds are green. Exporting does not publish or replace the production OTA binary/manifest; that remains a separate release action after physical validation.
 
-| Path | Before | After |
-| --- | --- | --- |
-| Reminder change check | 16,384-byte stack JSON + serialized items copy | direct FNV-1a over body; 4,096-byte response cap |
-| Reminder fetch | 20-item cache; 8,192-byte body/doc; 9-field DTO | 10-item cache; 4,096-byte body cap; 6,144-byte filtered heap doc; six-field DTO |
-| Surf | one or two 24,576-byte stack docs; body excerpts logged | 16,384-byte filtered heap doc; 32,768-byte body cap; selection doc destroyed before winner doc |
-| Countdown | 16,384-byte stack doc; complete body log | 12,288-byte filtered heap doc; 8,192-byte body cap; byte-count log |
-| Frame config | 8,192-byte stack doc | 12,288-byte bounded heap doc; 12,288-byte body cap; full supported schema retained |
-| Weather | unbounded body; 24,576-byte heap doc | 32,768-byte body cap; filtered 24,576-byte heap doc |
-| Soccer | unbounded body, full error body, 12/16 KB retry allocations | 24,576-byte cap; one filtered 16,384-byte heap doc |
-| Stocks | body-sized allocation | 16,384-byte cap; filtered fixed 12,288-byte heap doc |
+The CI job executes the same Arduino build non-interactively with this FQBN:
 
-The Countdown endpoint/cache remains at 20 because the renderer rotates across the cached event set; reducing it would change visible rotation. Module layouts, selection logic, refresh intervals, reminder grouping/order, Surf scoring/fuel/daypart logic, and Countdown rotation were not changed.
+```text
+esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc
+```
 
-`NetClient` still materializes the complete HTTP response in a `String`. Call-site caps prevent oversized payloads from being parsed, but they cannot stop the initial body allocation. A follow-up should add an opt-in bounded/streaming API without changing current callers, validate `Content-Length` before reads, and migrate modules individually.
+## PlatformIO workflow
 
-## Font duplication determination
+Build from the repository root without producing or publishing any release artifact:
 
-The custom font headers define non-`extern` namespace-scope `const` bitmap/glyph objects and are included by multiple module translation units. In C++, those objects have internal linkage, so each including translation unit can emit its own copy. A successful ELF/map inspection is required to determine whether this toolchain merges identical constants; no build artifact is present to prove that it does. If the map shows duplicates, move definitions into one `.cpp` and expose `extern` declarations from headers in a separate, behavior-neutral change.
+```sh
+pio run -d frame -e alfred_v1_2
+pio run -d frame -e frame_esp32
+pio run -d frame -e alfred_v1_2 -t size
+pio run -d frame -e frame_esp32 -t size
+```
 
-## Build/size result for this change
+At runtime, the S3 boot log should report detected PSRAM. Both build paths enable OPI PSRAM, but physical detection remains an on-device validation item for the integrated firmware.
 
-No `pio` or `arduino-cli` executable is installed in the supplied environment, and no previous ELF/map is present. Therefore flash, `.data`, `.bss`, available RAM, largest linked symbols/assets, definitive font deduplication, and before/after binary comparison remain **not measured**. Per release policy, `FW_VER` remains `v2.5.2`; bump to `v2.5.3` only after the confirmed production profile builds successfully. OTA artifact publication remains manual after that build and physical verification.
+## Current port build report
+
+GitHub Actions run `33909992699` at commit `7d883d172ce2eeec380289fd4a31eec2b06c1af8` passed all pre-Arduino-IDE gates: all 37 Python firmware tests, both `alfred_v1_2` and `frame_esp32` PlatformIO builds, and the Alfred size target. The Alfred image used 1,471,465 of 6,291,456 application bytes (23.4%) and 120,624 of 327,680 bytes of static internal RAM (36.8%). The Arduino IDE/CLI result is recorded by the latest `Frame firmware build` run for the current PR head.
+
+The selected Alfred partition table is `partitions_alfred_16mb.csv`: app0 spans `0x010000..0x60ffff` and app1 spans `0x610000..0xc0ffff`, providing 6,291,456 bytes per OTA slot. No firmware binary or OTA manifest is changed or published by this hardware-port PR.
+
+## Hardware/API port notes
+
+Alfred uses an explicit S3 FSPI instance at 4 MHz, the MAX17048 rather than ADC35, and active-low BQ24074 status signals. Deep-sleep source-change wake uses the ESP32-S3-supported `esp_sleep_enable_ext1_wakeup` API on RTC-capable GPIO17. Display power is asserted only around panel operations and held LOW across deep sleep.
+
+## Continuous compilation
+
+The `Frame firmware build` GitHub Actions job installs the pinned PlatformIO and Arduino dependencies, runs the complete Python firmware test suite, compiles both PlatformIO hardware environments, reports the Alfred size, generates the flat Arduino sketch, and compiles that sketch with the exact Alfred Arduino configuration. It uploads and publishes nothing.
+
+The PlatformIO Alfred environment resolves `boards/alfred_v1_2.json`, rather than inheriting the misleading N8/no-PSRAM DevKitC label. That manifest declares ESP32-S3-WROOM-1-N16R8, 16 MiB flash, 80 MHz QIO flash mode, `qio_opi` Arduino memory type, OPI PSRAM with an expected size of 8 MiB, and the USB CDC/JTAG build flags. PlatformIO 6.6.0 deliberately emits a DIO-compatible ROM image header for a `qio` board setting while selecting `bootloader_qio_80m.elf`; the selected QIO bootloader and `qio_opi` SDK configuration are visible in the verbose CI log. `platformio.ini` independently selects the checked-in `partitions_alfred_16mb.csv` table.

@@ -5,6 +5,10 @@
 namespace DisplayCore {
 
   void begin();
+  // Hibernate and electrically isolate the panel after a physical refresh.
+  void end();
+  // Lock the already-low Alfred display rail across deep sleep.
+  bool prepareForDeepSleep();
 
   // Return the real type (no casts needed)
   FrameDisplay& get();

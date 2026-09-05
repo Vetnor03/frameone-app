@@ -1,27 +1,22 @@
-# Physical-frame firmware verification (v2.5.3 candidate)
+# Alfred V1.2 hardware and integrated-firmware verification
 
-Do not publish OTA until the board, 4 MB flash assumption, partition table, and GPIO wiring in `BUILD.md` are confirmed. Capture serial output and reset reason for every case. Logs must contain only HTTP status, response byte count, free heap, largest free 8-bit block, task stack high-water mark, JSON result, and parsed item count—never content, titles, tokens, sensitive URLs, or bodies.
+## Completed board-level validation
 
-## Preparation
+The ESP32-S3-WROOM-1-N16R8 Alfred V1.2 PCB has physically passed USB boot/flashing; BOOT and RESET test points; the 3.3 V rail; MAX17048 I2C; BQ24074 USB/charging detection; USB/battery handover; switched e-paper rail; reset, busy, and SPI display control; full refresh on USB and battery; return of the e-paper rail to 0 V; zero-power image retention; timer wake; and deep sleep below the resolution of the 200 mA meter (less than approximately 0.1 mA observed). Awake board current was approximately 32.3 mA in the diagnostic.
 
-1. Build and flash by USB with the confirmed PlatformIO environment; save `firmware.elf`, `firmware.map`, `firmware.bin`, and the size report.
-2. Erase or record persisted signatures, then pair the frame. Enable serial capture at the sketch-configured baud.
-3. For each test, record heap/block/stack metrics before fetch, after body receipt, after parse, and after render. Confirm no reset, watchdog, allocation failure, or declining largest block over 20 refreshes.
+These results supersede old statements that Alfred V1.2 hardware still needs manual pin, flash, or peripheral confirmation. Comments in old V1.0 diagnostics about invalid MAX17048 data do not apply to V1.2.
 
-## Module matrix
+## Integrated firmware validation still required
 
-- **Reminders only:** configure 0, 1, and 10 reminders including overdue/today/future and timed/untimed entries. Verify ordering, date grouping, rotation and empty/error states. Repeat 20 forced refreshes.
-- **Countdown only:** configure 20 events including pinned, today, future, and past entries. Verify the existing rotation sequence and every cell size. Repeat 20 refreshes.
-- **Normal Surf:** exercise all cell sizes, dayparts and five-day view; compare score, dice/experience indication, weather and wave/wind values with the current production firmware.
-- **Today's Best Surf:** test with fuel penalty off, then on with a home location. Confirm winner selection, winner-detail data, dayparts/daily data, and that the largest heap block recovers between the two requests.
-- **Weather:** exercise all cell sizes and five forecast days, including precipitation/wind insight. Repeat 20 refreshes.
-- **Soccer:** verify next/last match, table window, standing, scorer and all cell sizes. Repeat 20 refreshes.
-- **Stocks:** verify quote, baseline, selected chart range/series and all cell sizes. Repeat 20 refreshes.
-- **Mixed layout:** configure Reminders + Surf + Weather without changing layout rules. Repeat 20 full cycles and ensure cache contents never cross modules or instances.
+The final application firmware in this PR is **not yet physically validated**. Before any release or OTA publication, USB-flash the `alfred_v1_2` environment onto an assembled V1.2 and verify:
 
-## Wake/update matrix
+1. Boot reports 16 MB flash and detects 8 MB OPI PSRAM.
+2. Provisioning, identity derived from the unit's own eFuse MAC, pairing, networking, backend APIs, revision/ACK behavior, and real-time test behavior are unchanged.
+3. MAX17048 voltage and SOC are believable; PGOOD_N LOW reports USB; CHG_N LOW reports charging only while USB is present.
+4. Every screen path performs a full 800x480 refresh and GPIO12 returns LOW afterward, including while real-time mode remains awake.
+5. Repeated updates power and initialize the display again successfully.
+6. GPIO12 remains LOW during boot and deep sleep; both USB plug and unplug wake with the correct polarity on GPIO17.
+7. Recharge shutdown near 3.35 V and USB-powered recovery near 3.55 V retain their hysteresis.
+8. Both OTA slots accept the linked binary and rollback remains possible. Publishing an OTA image/manifest is a separate release action and is explicitly outside this PR.
 
-- **Normal wake:** wake from the configured timer and confirm the normal fetch/render/sleep cadence.
-- **Quick change-check wake:** wake without changed signatures; confirm no full display initialization or refresh. Then alter one reminder and confirm exactly one normal refresh.
-- **Forced full refresh:** trigger the existing periodic/firmware force path; confirm unchanged layout and a complete display refresh.
-- **OTA update:** from the previous signed/published firmware, fetch the candidate manifest, download, verify, install and reboot. Confirm the OTA partition can hold the binary, rollback/recovery remains possible, version persistence is updated, and one forced redraw occurs. OTA artifact publication remains a separate manual release step.
+Also repeat the existing module/layout matrix and compare rendered output against the current firmware; this hardware port intentionally changes no rendering or backend behavior.

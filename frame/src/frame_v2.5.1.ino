@@ -14,6 +14,7 @@
 #include "Theme.h"
 #include "TimeSync.h"
 #include "BatteryManager.h"
+#include "HardwareProfile.h"
 
 // Modules
 #include "ModuleDate.h"
@@ -53,9 +54,11 @@ static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
 
-// Debug / power sense pin for PWR_SENS_E1 -> GPIO39
-#ifndef PWR_SENSE_DEBUG_PIN
-#define PWR_SENSE_DEBUG_PIN 39
+// Hardware-specific USB source indication.
+#if defined(FRAME_IS_ALFRED_V1_2)
+static constexpr int POWER_SENSE_PIN = HardwareProfile::kPgoodN;
+#else
+static constexpr int POWER_SENSE_PIN = HardwareProfile::kPowerSense;
 #endif
 
 // Keep one config globally to avoid stack overflow
@@ -95,7 +98,21 @@ static void ensureDisplay() {
   }
 }
 
-static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << PWR_SENSE_DEBUG_PIN);
+static void shutdownDisplay() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  DisplayCore::end();
+  g_displayReady = false;
+#endif
+}
+static void prepareDisplayForSleep() {
+  shutdownDisplay();
+  if (!DisplayCore::prepareForDeepSleep()) {
+    Serial.println("EPD_PWR is not safely held LOW; deep sleep cancelled");
+    while (true) delay(1000);
+  }
+}
+
+static const uint64_t PWR_SENSE_WAKE_MASK = (1ULL << POWER_SENSE_PIN);
 
 
 static bool isDeepSleepWake() {
@@ -120,27 +137,31 @@ static void recoverDisplayAfterShelfWake() {
   } while (d.nextPage());
 
   DisplayCore::forceNextFullRefresh(true);
+  shutdownDisplay();
   Serial.println("Display recovery refresh complete");
 }
 
 
 static bool enablePowerSenseWakeForNextSleep(bool currentlyUsbPresent) {
-  // Confirmed signal:
-  // HIGH = USB plugged in
-  // LOW  = battery only
-  //
-  // So:
-  // - on battery, wake when pin goes HIGH  (plug in)
-  // - on USB,     wake when pin goes LOW   (unplug)
-
   esp_err_t err;
+#if defined(FRAME_IS_ALFRED_V1_2)
+  // GPIO17 is an ESP32-S3 RTC-capable pin. PGOOD_N is LOW with USB present.
   if (currentlyUsbPresent) {
-    err = esp_sleep_enable_ext1_wakeup_io(PWR_SENSE_WAKE_MASK, ESP_EXT1_WAKEUP_ALL_LOW);
+    err = esp_sleep_enable_ext1_wakeup(PWR_SENSE_WAKE_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+    Serial.println("EXT1 target: wake on USB unplug (PGOOD_N HIGH)");
+  } else {
+    err = esp_sleep_enable_ext1_wakeup(PWR_SENSE_WAKE_MASK, ESP_EXT1_WAKEUP_ANY_LOW);
+    Serial.println("EXT1 target: wake on USB plug in (PGOOD_N LOW)");
+  }
+#else
+  if (currentlyUsbPresent) {
+    err = esp_sleep_enable_ext1_wakeup(PWR_SENSE_WAKE_MASK, ESP_EXT1_WAKEUP_ALL_LOW);
     Serial.println("EXT1 target: wake on USB unplug (LOW)");
   } else {
-    err = esp_sleep_enable_ext1_wakeup_io(PWR_SENSE_WAKE_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+    err = esp_sleep_enable_ext1_wakeup(PWR_SENSE_WAKE_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     Serial.println("EXT1 target: wake on USB plug in (HIGH)");
   }
+#endif
 
   if (err == ESP_OK) {
     Serial.println("✅ EXT1 wake enabled on power sense pin");
@@ -185,6 +206,7 @@ static void goToSleepForUs(uint64_t us, bool usbPresent) {
   Serial.print((unsigned long)(us / 1000000ULL));
   Serial.println(" seconds...");
 
+  prepareDisplayForSleep();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   esp_sleep_enable_timer_wakeup(us);
   enablePowerSenseWakeForNextSleep(usbPresent);
@@ -200,6 +222,7 @@ static void goToSleep(bool usbPresent) {
 static void goToShelfSleep(bool usbPresent) {
   Serial.println("Shelf sleep: timer disabled, waiting for power-sense wake if supported...");
 
+  prepareDisplayForSleep();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   enablePowerSenseWakeForNextSleep(usbPresent);
 
@@ -209,6 +232,7 @@ static void goToShelfSleep(bool usbPresent) {
 static void goToRechargeSleep(bool usbPresent) {
   Serial.println("Battery empty: timer disabled, waiting for USB power-sense wake...");
 
+  prepareDisplayForSleep();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   enablePowerSenseWakeForNextSleep(usbPresent);
 
@@ -248,27 +272,28 @@ static int getLocalHourNow() {
 // Power sense helpers
 // --------------------------------------
 static PowerSenseDebug readPowerSenseDebug() {
-  pinMode(PWR_SENSE_DEBUG_PIN, INPUT);
+  pinMode(POWER_SENSE_PIN, INPUT);
   delay(5);
 
   PowerSenseDebug out{};
-  out.raw = digitalRead(PWR_SENSE_DEBUG_PIN);
+  out.raw = digitalRead(POWER_SENSE_PIN);
 
   int highCount = 0;
   const int samples = 10;
   for (int i = 0; i < samples; i++) {
-    if (digitalRead(PWR_SENSE_DEBUG_PIN) == HIGH) highCount++;
+    if (digitalRead(POWER_SENSE_PIN) == HIGH) highCount++;
     delay(10);
   }
 
   out.highCount = highCount;
 
-  // Confirmed behavior:
-  // HIGH while USB plugged in => USB present is active HIGH.
-  // Use the sampled majority rather than the first raw read; a noisy edge or
-  // floating PWR_SENS line otherwise looks like a USB toggle and forces a
-  // redraw on every wake just to update the battery/charging overlay.
+  // Use a sampled majority. Alfred PGOOD_N is active LOW; the classic
+  // PWR_SENS input remains active HIGH.
+#if defined(FRAME_IS_ALFRED_V1_2)
+  out.usbPresent = (highCount < 3);  // BQ_PGOOD_N is active LOW.
+#else
   out.usbPresent = (highCount >= 7);
+#endif
   out.stable = (highCount <= 1 || highCount >= 9);
 
   return out;
@@ -294,7 +319,7 @@ static void logPowerSenseDebug(const BatteryState& batt, const PowerSenseDebug& 
   Serial.println(BatteryManager::getLearnedFullSampleCount());
 
   Serial.print("pwr_sense_pin: ");
-  Serial.println(PWR_SENSE_DEBUG_PIN);
+  Serial.println(POWER_SENSE_PIN);
 
   Serial.print("pwr_sense_raw: ");
   Serial.println(pwr.raw);
@@ -329,6 +354,7 @@ static void showRechargeAndSleep(const BatteryState& batt, const PowerSenseDebug
   Theme::set(THEME_DARK);
   ensureDisplay();
   DisplayCore::drawRechargeScreen();
+  shutdownDisplay();
 
   goToRechargeSleep(pwr.usbPresent);
 }
@@ -341,6 +367,11 @@ static void postDeviceStatus(
   const PowerSenseDebug& pwr,
   bool didRender
 ) {
+  if (batt.percent < 0) {
+    Serial.println("Device status skipped: no valid battery sample");
+    return;
+  }
+
   int code = 0;
   String body;
 
@@ -457,6 +488,7 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
     startResp.expires_in_sec,
     APP_LOGIN_URL
   );
+  shutdownDisplay();
 
   unsigned long maxPollMs =
     (startResp.expires_in_sec > 0)
@@ -489,6 +521,7 @@ static PairingResult ensurePairedNoReboot(bool forceFreshPairCode = false) {
 static void showPairingShelfAndSleep(bool usbPresent) {
   ensureDisplay();
   ScreenPairing::showPairingShelf();
+  shutdownDisplay();
 
   Preferences prefs;
   prefs.begin("frame", false);
@@ -518,6 +551,7 @@ static bool recoverPairingIfTokenLost(const char* reason, bool usbPresent) {
 
   ensureDisplay();
   ScreenPairing::showError("Could not pair frame");
+  shutdownDisplay();
   goToSleep(usbPresent);
   return true;
 }
@@ -573,6 +607,7 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   // the BUSY-controlled physical panel update has completed.
   const uint32_t displayStartedAtMs = millis();
   Layout::drawWithContent(g_cfg.layout, g_cfg);
+  shutdownDisplay();
   Serial.printf(
     "Render timing epaper_and_composition_ms=%lu\n",
     (unsigned long)(millis() - displayStartedAtMs)
@@ -581,6 +616,10 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
     "Render timing total_ms=%lu\n",
     (unsigned long)(millis() - renderStartedAtMs)
   );
+  Serial.printf("LiveUpdate timing display_update_ms=%lu\n",
+    (unsigned long)(millis() - displayStartedAtMs));
+  Serial.printf("LiveUpdate timing render_total_ms=%lu\n",
+    (unsigned long)(millis() - renderStartedAtMs));
   return true;
 }
 
@@ -809,8 +848,22 @@ static InteractiveModeResult runInteractiveMode(
 // Setup
 // --------------------------------------
 void setup() {
+#if defined(FRAME_IS_ALFRED_V1_2)
+  // Assert the switched display rail off before any peripheral or network work.
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  pinMode(HardwareProfile::kEpdPower, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  gpio_deep_sleep_hold_dis();
+  gpio_hold_dis((gpio_num_t)HardwareProfile::kEpdPower);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+  pinMode(HardwareProfile::kEpdPower, OUTPUT);
+  digitalWrite(HardwareProfile::kEpdPower, LOW);
+#endif
   Serial.begin(115200);
   delay(200);
+#if defined(FRAME_IS_ALFRED_V1_2)
+  Serial.printf("Alfred V1.2 PSRAM configured/detected: %u bytes\n", ESP.getPsramSize());
+#endif
 
   logWakeReason();
 
@@ -895,6 +948,7 @@ void setup() {
         Theme::set(THEME_DARK);
         ensureDisplay();
         DisplayCore::drawShelfScreen(DeviceIdentity::getDeviceId());
+        shutdownDisplay();
         prefs.putBool("shelf_done", true);
         prefs.putBool("shelf_pending_disconnect", false);
         prefs.end();
@@ -954,6 +1008,7 @@ void setup() {
       }
       ensureDisplay();
       ProvisioningPortal::runBlocking();
+      g_displayReady = false;
       reconnectedViaProvisioning = true;
     }
   }
@@ -961,6 +1016,7 @@ void setup() {
   if (isCompletingWifiSetup) {
     ensureDisplay();
     ScreenPairing::showWifiConnected();
+    shutdownDisplay();
   }
 
   TimeSync::ensure(8000);
@@ -975,6 +1031,7 @@ void setup() {
 
     ensureDisplay();
     ScreenPairing::showError("Could not pair frame");
+    shutdownDisplay();
     goToSleep(pwrEarly.usbPresent);
     return;
   }
@@ -1080,7 +1137,7 @@ run_normal_sync:
       if (renderLoadedDashboard(batt, pwr)) {
         UpdateChecker::saveContentSignature(nextSignature);
         UpdateChecker::saveFirmwareVersion(FW_VER);
-        UpdateChecker::saveBatteryPercent(batt.percent);
+        if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
         postDeviceStatus(batt, pwr, true);
         Serial.println("Scheduled changed content fully refreshed");
       }

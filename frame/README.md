@@ -12,13 +12,13 @@ This firmware runs an ESP32-based e-paper smart frame that:
 - Uses change detection (config/data/power/periodic/firmware) to decide whether to redraw.
 - Returns to deep sleep with timer + power-sense wake sources.
 
-The main entrypoint is `frame/src/frame_v2.4.8.ino`.
+The main entrypoint is `frame/src/frame_v2.5.1.ino`.
 
 ## Firmware architecture
 
 ```text
 frame/src/
-├── frame_v2.4.8.ino      # Boot + runtime orchestration
+├── frame_v2.5.1.ino      # Boot + runtime orchestration
 ├── core/                 # Shared config, parsed frame config, layout/theme primitives
 ├── device/               # Device identity, Wi-Fi creds/provisioning, time sync, battery logic
 ├── display/              # E-paper driver wrapper + pairing/setup screens
@@ -127,7 +127,7 @@ frame/src/
 There are **two update-related mechanisms** in code:
 
 1. **Redraw-for-firmware-version** (`UpdateChecker`):
-   - Compares stored `fw_ver` to `FW_VER` string (`v2.4.8`) to force one redraw after new firmware runs.
+   - Compares stored `fw_ver` to `FW_VER` string (`v2.5.7`) to force one redraw after new firmware runs.
 
 2. **Firmware binary OTA** (`FirmwareUpdater`):
    - Daily-gated by main sketch (`after 02:00`, once per day via `ota_day`).
@@ -137,16 +137,11 @@ There are **two update-related mechanisms** in code:
 
 ## Battery/charging/power handling
 
-- Battery voltage sampled from ADC pin **GPIO35** using trimmed-mean samples + EMA smoothing.
-- Displayed percent derived from voltage curve between `DISPLAY_EMPTY_V=3.35V` and learned full voltage.
-- Learned full-voltage calibration is persisted in `Preferences` namespace `battery` and updated after valid USB charging sessions.
-- Charging state inferred from smoothed-voltage slope scoring, not from a dedicated charger IC pin.
-- USB/power presence inferred from **GPIO39** (`PWR_SENSE_DEBUG_PIN`):
-  - HIGH => USB present,
-  - LOW => battery only (per in-code comments/logging assumptions).
-- Deep sleep wake sources:
-  - 10-second live-update probe wake while paired (normal sync remains independent),
-  - EXT1 wake on power-sense edge direction depending on current power source.
+- Alfred V1.2 reads the MAX17048 at I2C address `0x36` on SDA 9/SCL 8. A sample is committed only when both voltage and SOC reads are valid; a cold-boot read failure remains unavailable rather than becoming a fake 0% value.
+- Alfred reads active-low BQ24074 `PGOOD_N` on GPIO17 and `CHG_N` on GPIO18. Its source-change EXT1 wake polarity follows the current USB state.
+- Alfred switches panel power on GPIO12 only around a refresh and holds it LOW for awake waits and deep sleep.
+- The classic ESP32 target retains its ADC35 battery measurement, learned full-voltage behavior, GPIO39 power sense, and original wake logic.
+- Both targets retain the 10-second live-update probe while paired; normal synchronization remains independently scheduled.
 
 ## Current module list in this codebase
 
@@ -159,7 +154,8 @@ There are **two update-related mechanisms** in code:
 
 ## Working on this firmware
 
-- Start changes from `frame_v2.4.8.ino` flow first; most regressions come from sleep/pairing/redraw decisions.
+- For the exact PlatformIO and Arduino IDE build procedures, pinned versions, Alfred board-menu values, and flat-folder generator, follow [`BUILD.md`](BUILD.md).
+- Start changes from `frame_v2.5.1.ino` flow first; most regressions come from sleep/pairing/redraw decisions.
 - Keep token-loss behavior intact: several auth failures intentionally clear token and trigger re-pair.
 - Preserve low-memory patterns (static/global config/cache usage, bounded `StaticJsonDocument` sizes, array caps).
 - Validate any power changes against deep-sleep wake behavior (`EXT1` + timer).
@@ -170,7 +166,7 @@ There are **two update-related mechanisms** in code:
   4. render/layout expectations for all cell sizes.
 - For production hardening, TLS currently uses `setInsecure()` in networking/OTA and may need certificate pinning/CA strategy.
 
-## Notes on uncertainty
+## Notes on target scope
 
-- The code clearly targets an ESP32 + `GxEPD2_750_T7` display class, but exact physical board SKU and final wiring outside the named pins are not declared.
-- Backend API contract details beyond fields directly parsed in code are not documented here.
+- Alfred V1.2 hardware facts, pin mapping, and build configuration are declared and tested by this port; see [`BUILD.md`](BUILD.md).
+- The classic ESP32 target remains available with its legacy assumptions. Backend API contract details beyond fields directly parsed in code are not documented here.

@@ -20,9 +20,9 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include "Fonts/FreeSans9ptNO.h"
-#include "Fonts/FreeSansBold12ptNO.h"
-#include "Fonts/FreeSansBold18ptNO.h"
+#include "FreeSans9ptNO.h"
+#include "FreeSansBold12ptNO.h"
+#include "FreeSansBold18ptNO.h"
 
 #define FONT_B9  (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
@@ -2160,7 +2160,13 @@ struct AdaptiveReminderComposition {
   int readabilityScore = 0;
 };
 
-struct ReminderRect { int x = 0, y = 0, w = 0, h = 0; };
+struct ReminderRect {
+  int x, y, w, h;
+
+  ReminderRect() : x(0), y(0), w(0), h(0) {}
+  ReminderRect(int xValue, int yValue, int width, int height)
+    : x(xValue), y(yValue), w(width), h(height) {}
+};
 
 struct AdaptiveReminderDensity {
   const GFXfont* font;

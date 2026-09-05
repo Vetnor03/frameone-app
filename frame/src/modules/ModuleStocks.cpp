@@ -10,9 +10,9 @@
 #include <math.h>
 #include <string.h>
 
-#include "Fonts/FreeSans9ptNO.h"
-#include "Fonts/FreeSansBold12ptNO.h"
-#include "Fonts/FreeSansBold18ptNO.h"
+#include "FreeSans9ptNO.h"
+#include "FreeSansBold12ptNO.h"
+#include "FreeSansBold18ptNO.h"
 
 #define FONT_B9  (&FreeSans9pt8b)
 #define FONT_B12 (&FreeSansBold12pt8b)
