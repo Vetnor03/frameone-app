@@ -125,34 +125,77 @@ function normalizeAddress(value: unknown) {
   return string(value).toLocaleLowerCase('nb-NO').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-function propertyCandidate(value: unknown, address: WasteAddress) {
+function propertyIdFromRecord(r: Record<string, any>, stavanger: boolean) {
+  const direct = string(stavanger ? (r.ids ?? r.id ?? r.uuid ?? r.propertyId ?? r.property_id) : (r.id ?? r.ids ?? r.uuid ?? r.propertyId ?? r.property_id))
+  if (direct) return direct
+  const link = string(r.url ?? r.href ?? r.value)
+  if (!link) return ''
+  try {
+    const url = new URL(link, 'https://provider.invalid')
+    return string(url.searchParams.get(stavanger ? 'ids' : 'id') ?? url.searchParams.get(stavanger ? 'id' : 'ids'))
+  } catch { return '' }
+}
+
+function propertyCandidate(value: unknown, address: WasteAddress, stavanger: boolean) {
   const expected = normalizeAddress(address.label.split(',')[0])
   return candidates(value).find(r => {
     const g = string(r.gnumber ?? r.gnr ?? r.gardsnummer), b = string(r.bnumber ?? r.bnr ?? r.bruksnummer), s = string(r.snumber ?? r.snr ?? r.seksjonsnummer) || '0'
     const label = normalizeAddress(r.address ?? r.adresse ?? r.label ?? r.text ?? r.adressetekst)
-    const hasId = string(r.ids ?? r.id ?? r.uuid ?? r.propertyId ?? r.property_id)
+    const hasId = propertyIdFromRecord(r, stavanger)
     return Boolean(hasId && ((g === address.gnr && b === address.bnr && s === (address.snr || '0')) || (label && (label.includes(expected) || expected.includes(label)))))
   })
 }
 
-function endpointCandidates(html: string, base: string) {
-  const found = new Set<string>()
-  for (const match of html.matchAll(/(?:data-(?:search-url|autocomplete-url|endpoint)|(?:search|autocomplete)(?:Url|Endpoint))\s*[=:]\s*["']([^"']+)["']/gi)) {
-    try { found.add(new URL(match[1], base).toString()) } catch { /* Ignore invalid page metadata. */ }
+type AddressSearchContract = { endpoint: string; method: 'GET' | 'POST'; parameter: string }
+
+function addressSearchContracts(html: string, base: string): AddressSearchContract[] {
+  const contracts: AddressSearchContract[] = []
+  const add = (endpoint: string, method: string, parameter: string) => {
+    try {
+      const contract = { endpoint: new URL(endpoint, base).toString(), method: method.toUpperCase() === 'POST' ? 'POST' as const : 'GET' as const, parameter }
+      if (parameter && !contracts.some(x => x.endpoint === contract.endpoint && x.method === contract.method && x.parameter === parameter)) contracts.push(contract)
+    } catch { /* Ignore invalid page metadata. */ }
   }
-  for (const match of html.matchAll(/["']([^"']*(?:address|adresse)[^"']*(?:search|sok|søk|autocomplete)[^"']*)["']/gi)) {
-    try { found.add(new URL(match[1], base).toString()) } catch { /* Ignore non-URL script strings. */ }
+  // The official pages publish the autocomplete request contract on the address input.
+  for (const tag of html.matchAll(/<input\b[^>]*(?:autocomplete|address|adresse)[^>]*>/gi)) {
+    const attrs = Object.fromEntries([...tag[0].matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(x => [x[1].toLowerCase(), x[2]]))
+    const endpoint = attrs['data-url'] || attrs['data-search-url'] || attrs['data-autocomplete-url'] || attrs['data-endpoint']
+    if (endpoint) add(endpoint, attrs['data-method'] || 'GET', attrs['data-parameter'] || attrs.name || 'search')
   }
-  return [...found]
+  // Some versions put the same contract on the form rather than the input.
+  for (const form of html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)) {
+    if (!/(?:autocomplete|address|adresse)/i.test(form[0])) continue
+    const open = form[0].match(/^<form\b[^>]*>/i)?.[0] || ''
+    const attrs = Object.fromEntries([...open.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(x => [x[1].toLowerCase(), x[2]]))
+    const input = [...form[0].matchAll(/<input\b[^>]*name=["']([^"']+)["'][^>]*>/gi)].find(x => /(?:autocomplete|address|adresse|search|søk|sok)/i.test(x[0]))
+    const endpoint = attrs['data-search-url'] || attrs['data-autocomplete-url'] || attrs.action
+    if (endpoint && input) add(endpoint, attrs['data-method'] || attrs.method || 'GET', input[1])
+  }
+  return contracts
 }
 
-function propertyCandidateFromHtml(html: string, address: WasteAddress) {
+function propertyCandidateFromHtml(html: string, address: WasteAddress, stavanger: boolean) {
   const expected = normalizeAddress(address.label.split(',')[0])
   for (const tag of html.matchAll(/<(?:option|li|button|a)\b[^>]*(?:data-(?:ids?|uuid|property-id)|value)=["']([^"']+)["'][^>]*>[\s\S]*?<\/(?:option|li|button|a)>/gi)) {
     const text = normalizeAddress(tag[0].replace(/<[^>]+>/g, ' '))
-    if (text.includes(expected) || expected.includes(text)) return tag[1]
+    if (text.includes(expected) || expected.includes(text)) return propertyIdFromRecord({ value: tag[1] }, stavanger) || tag[1]
+  }
+  for (const href of html.matchAll(/(?:href|value)=["']([^"']+)["']/gi)) {
+    const id = propertyIdFromRecord({ value: href[1] }, stavanger)
+    const surrounding = normalizeAddress(html.slice(Math.max(0, (href.index || 0) - 300), (href.index || 0) + 500).replace(/<[^>]+>/g, ' '))
+    if (id && (surrounding.includes(expected) || expected.includes(surrounding))) return id
   }
   return ''
+}
+
+function responseShape(body: string, contentType: string) {
+  if (!contentType.includes('json')) return { kind: 'html', bytes: body.length, hasShowLink: /[?&](?:ids?|id)=/i.test(body) }
+  try {
+    const parsed = JSON.parse(body)
+    if (Array.isArray(parsed)) return { kind: 'json-array', count: parsed.length }
+    const keys = Object.keys(record(parsed)).slice(0, 8)
+    return { kind: 'json-object', keys }
+  } catch { return { kind: 'invalid-json', bytes: body.length } }
 }
 
 function calendarYear(dataMonth: string) {
@@ -194,18 +237,34 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
       try { landing = await fetcher(`${base}/`, { headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(10000) }) } catch { throw new WasteProviderError('temporary_failure', `${municipality} address lookup is temporarily unavailable.`) }
       if (!landing.ok) throw new WasteProviderError(landing.status >= 500 ? 'temporary_failure' : 'unsupported', 'Waste collection isn’t available for this address yet.', landing.status >= 500)
       const html = await landing.text()
-      const endpoints = [...endpointCandidates(html, `${base}/`), `${base}/address-search`, `${base}/search`]
-      let propertyId = propertyCandidateFromHtml(html, address)
-      for (const endpoint of endpoints) {
+      const contracts = addressSearchContracts(html, `${base}/`)
+      let propertyId = propertyCandidateFromHtml(html, address, stavanger)
+      console.info('[waste] property resolution discovered', {
+        municipality, provider: stavanger ? 'stavanger' : 'hentavfall', landingEndpoint: base,
+        status: landing.status, contentType: (landing.headers.get('content-type') || '').split(';')[0],
+        shape: responseShape(html, landing.headers.get('content-type') || 'text/html'),
+        contracts: contracts.map(x => ({ endpoint: x.endpoint, method: x.method, parameter: x.parameter })),
+      })
+      for (const contract of contracts) {
         if (propertyId) break
-        const url = new URL(endpoint); url.searchParams.set('query', address.label); url.searchParams.set('term', address.label); url.searchParams.set('gnumber', address.gnr || ''); url.searchParams.set('bnumber', address.bnr || ''); url.searchParams.set('snumber', address.snr || '0')
+        const url = new URL(contract.endpoint)
+        const request: RequestInit = { method: contract.method, headers: { Accept: 'application/json, text/html' }, signal: AbortSignal.timeout(10000) }
+        if (contract.method === 'POST') {
+          request.headers = { ...request.headers, 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }
+          request.body = new URLSearchParams({ [contract.parameter]: address.label })
+        } else url.searchParams.set(contract.parameter, address.label)
         let response: Response
-        try { response = await fetcher(url, { headers: { Accept: 'application/json, text/html' }, signal: AbortSignal.timeout(10000) }) } catch { continue }
-        if (!response.ok) continue
+        try { response = await fetcher(url, request) } catch {
+          console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', endpoint: url.origin + url.pathname, method: contract.method, status: 'network-error' })
+          continue
+        }
         const body = await response.text()
+        const contentType = response.headers.get('content-type') || ''
+        console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', endpoint: url.origin + url.pathname, method: contract.method, status: response.status, contentType: contentType.split(';')[0], shape: responseShape(body, contentType) })
+        if (!response.ok) continue
         let parsed: unknown = null; try { parsed = JSON.parse(body) } catch { /* Some official selectors return option HTML. */ }
-        const match = propertyCandidate(parsed, address)
-        propertyId = match ? string(match.ids ?? match.id ?? match.uuid ?? match.propertyId ?? match.property_id) : propertyCandidateFromHtml(body, address)
+        const match = propertyCandidate(parsed, address, stavanger)
+        propertyId = match ? propertyIdFromRecord(match, stavanger) : propertyCandidateFromHtml(body, address, stavanger)
       }
       if (!propertyId) throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this address yet.', false)
       return { ...address, propertyId }

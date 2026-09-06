@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createMinRenovasjonProvider, createStavangerProvider, normalizeWasteType, searchKartverketAddresses, WasteProviderError } from '../app/lib/integrations/waste/providers.ts'
+import { createHentavfallProvider, createMinRenovasjonProvider, createStavangerProvider, normalizeWasteType, searchKartverketAddresses, WasteProviderError } from '../app/lib/integrations/waste/providers.ts'
 import { norwayLocalYmd } from '../app/lib/integrations/waste/date.ts'
 import { wasteCollectionDisplayTitle } from '../app/lib/integrations/waste/display.ts'
 
@@ -12,11 +12,11 @@ test('Norwegian canonical today differs from UTC around Oslo midnight', () => {
 
 test('Kartverket autocomplete preserves multiple complete address candidates', async () => {
   const fetcher = async () => Response.json({ adresser: [
-    { adressetekst: 'Boganesstraen 36B', adressenavn: 'Boganesstraen', nummer: 36, bokstav: 'B', postnummer: '4020', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234, gardsnummer: 16, bruksnummer: 489, seksjonsnummer: 0, representasjonspunkt: { lat: 58.9, lon: 5.7 } },
-    { adressetekst: 'Boganesstraen 38', nummer: 38, postnummer: '4020', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234 },
+    { adressetekst: 'Eksempelgata 12B', adressenavn: 'Eksempelgata', nummer: 12, bokstav: 'B', postnummer: '4000', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234, gardsnummer: 16, bruksnummer: 489, seksjonsnummer: 0, representasjonspunkt: { lat: 58.9, lon: 5.7 } },
+    { adressetekst: 'Eksempelgata 14', nummer: 14, postnummer: '4000', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234 },
   ] })
-  const rows = await searchKartverketAddresses('Boganesstraen', fetcher)
-  assert.equal(rows.length, 2); assert.equal(rows[0].houseNumber, '36B'); assert.equal(rows[0].label, 'Boganesstraen 36B, 4020 Stavanger'); assert.equal(rows[0].municipalityNumber, '1103'); assert.equal(rows[0].addressCode, '1234'); assert.equal(rows[0].gnr, '16'); assert.equal(rows[0].bnr, '489')
+  const rows = await searchKartverketAddresses('Eksempelgata', fetcher)
+  assert.equal(rows.length, 2); assert.equal(rows[0].houseNumber, '12B'); assert.equal(rows[0].label, 'Eksempelgata 12B, 4000 Stavanger'); assert.equal(rows[0].municipalityNumber, '1103'); assert.equal(rows[0].addressCode, '1234'); assert.equal(rows[0].gnr, '16'); assert.equal(rows[0].bnr, '489')
 })
 
 test('normalization never turns unknown labels into residual waste', () => {
@@ -32,15 +32,26 @@ test('Stavanger dynamically resolves a property UUID then parses multiple fracti
   const calls = []
   const fetcher = async url => {
     calls.push(String(url))
-    if (calls.length === 1) return new Response('<form data-search-url="/renovasjon-og-miljo/tommekalender/finn-kalender/api/address-search"></form>')
-    if (calls.length === 2) return Response.json({ suggestions: [{ ids: 'dynamic-property-id', gnumber: 16, bnumber: 489, snumber: 0 }] })
+    if (calls.length === 1) return new Response('<input class="address-autocomplete" name="searchText" data-url="/provider/address" data-method="GET">')
+    if (calls.length === 2) return Response.json([{ label: 'Selected address', value: '/show?gnumber=16&bnumber=489&snumber=0&ids=dynamic-property-id&municipality=Stavanger' }])
     return new Response('<section data-month="2026-09"><table><tr class="waste-calendar__item"><td>08.09 - tirsdag</td><td><img alt="Matavfall"><img title="Papir"></td></tr></table></section>')
   }
   const provider = createStavangerProvider(fetcher)
   const resolved = await provider.resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1103', municipalityName: 'Stavanger', gnr: '16', bnr: '489', snr: '0' })
   assert.equal(resolved.propertyId, 'dynamic-property-id'); assert.doesNotMatch(JSON.stringify(provider), /6fa154fe|Boganesstraen/)
   const rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
-  assert.deepEqual(rows.map(x => x.normalizedType).sort(), ['matavfall', 'papir']); assert.match(calls[2], /ids=dynamic-property-id/)
+  assert.deepEqual(rows.map(x => x.normalizedType).sort(), ['matavfall', 'papir']); assert.equal(new URL(calls[1]).searchParams.get('searchText'), 'Selected address'); assert.match(calls[2], /ids=dynamic-property-id/)
+})
+
+test('Sandnes uses the published POST contract and extracts id from the observed result link', async () => {
+  const calls = []
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url: String(url), init })
+    if (calls.length === 1) return new Response('<form action="/provider/address" method="post"><input class="address-search" name="query"></form>')
+    return Response.json({ results: [{ text: 'Selected address', href: '/show?gnumber=70&bnumber=152&snumber=0&id=resolved-property&municipality=Sandnes+kommune' }] })
+  }
+  const resolved = await createHentavfallProvider(fetcher).resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '70', bnr: '152', snr: '0' })
+  assert.equal(resolved.propertyId, 'resolved-property'); assert.equal(calls[1].url, 'https://www.hentavfall.no/provider/address'); assert.equal(calls[1].init.method, 'POST'); assert.equal(String(calls[1].init.body), 'query=Selected+address')
 })
 
 test('Stavanger structured calendar derives years across December and January', () => {
