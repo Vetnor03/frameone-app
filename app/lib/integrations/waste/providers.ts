@@ -147,7 +147,7 @@ function propertyCandidate(value: unknown, address: WasteAddress, stavanger: boo
 }
 
 type AddressSearchContract = { endpoint: string; method: 'GET' | 'POST'; parameter: string }
-const searchParameter = /^(?:search|searchtext|query|q|term)$/i
+const searchParameter = /^(?:address|adresse|search|searchstring|searchtext|query|q|term)$/i
 const attrs = (tag: string) => Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(x => [x[1].toLowerCase(), x[2]]))
 const textInput = (tag: string) => {
   const values = attrs(tag)
@@ -167,7 +167,10 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
   for (const tag of html.matchAll(/<input\b[^>]*>/gi)) {
     const values = textInput(tag[0])
     if (!values) continue
+    const context = html.slice(Math.max(0, (tag.index || 0) - 500), (tag.index || 0) + tag[0].length + 500)
+    if (!/(?:waste|calendar|renov|tommekalender|tømmekalender|avfall)/i.test(context)) continue
     const endpoint = values['data-url'] || values['data-search-url'] || values['data-autocomplete-url'] || values['data-endpoint']
+      || Object.entries(values).find(([name, value]) => name.startsWith('data-') && /^(?:https?:\/\/|\/)/.test(value))?.[1]
     const parameter = values['data-parameter'] || values.name || ''
     if (endpoint && searchParameter.test(parameter)) add(endpoint, values['data-method'] || 'GET', parameter)
   }
@@ -186,7 +189,7 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
     for (const endpointMatch of script[1].matchAll(/(?:url|searchUrl|autocompleteUrl|endpoint)\s*[:=]\s*["']([^"']+)["']/gi)) {
       const context = script[1].slice(Math.max(0, (endpointMatch.index || 0) - 300), (endpointMatch.index || 0) + endpointMatch[0].length + 300)
       const method = context.match(/method\s*[:=]\s*["'](GET|POST)["']/i)?.[1] || 'GET'
-      const parameter = context.match(/(?:parameter|param|queryParameter)\s*[:=]\s*["'](search|searchText|query|q|term)["']/i)?.[1]
+      const parameter = context.match(/(?:parameter|param|queryParameter)\s*[:=]\s*["'](address|adresse|search|searchString|searchText|query|q|term)["']/i)?.[1]
       if (parameter) add(endpointMatch[1], method, parameter)
     }
   }
@@ -215,16 +218,56 @@ function scriptSearchContracts(source: string, base: string) {
       if (!contracts.some(x => x.endpoint === contract.endpoint && x.method === contract.method && x.parameter === parameter)) contracts.push(contract)
     } catch { /* Ignore non-URL JavaScript expressions. */ }
   }
-  for (const match of source.matchAll(/\$\.(get|post)\s*\(\s*["']([^"']+)["']\s*,\s*\{\s*["']?(search|searchText|query|q|term)["']?\s*:/gi)) add(match[2], match[1], match[3])
-  for (const match of source.matchAll(/axios\.(get|post)\s*\(\s*["']([^"']+)["'][\s\S]{0,400}?(?:params|data)\s*:\s*\{\s*["']?(search|searchText|query|q|term)["']?\s*:/gi)) add(match[2], match[1], match[3])
+  const variableStrings = new Map([...source.matchAll(/(?:\b(?:const|let|var)\s+|,)\s*([\w$]+)\s*=\s*["'](\/[^"']+)["']/g)].map(match => [match[1], match[2]]))
+  const variableParameters = new Map([...source.matchAll(/(?:\b(?:const|let|var)\s+|,)\s*([\w$]+)\s*=\s*\{([^}]{0,500})\}/g)].flatMap(match => {
+    const parameter = match[2].match(/["']?(address|adresse|search|searchString|searchText|query|q|term)["']?\s*:/i)?.[1]
+    return parameter ? [[match[1], parameter] as const] : []
+  }))
+  const resolveEndpoint = (literal: string, variable: string) => literal || variableStrings.get(variable) || ''
+  const resolveParameter = (context: string) => context.match(/(?:data|params|body)\s*:\s*\{[^}]*?["']?(address|adresse|search|searchString|searchText|query|q|term)["']?\s*:/i)?.[1]
+    || context.match(/(?:URLSearchParams|FormData)[\s\S]{0,250}?(?:append|set)\s*\(\s*["'](address|adresse|search|searchString|searchText|query|q|term)["']/i)?.[1]
+    || variableParameters.get(context.match(/(?:data|params|body)\s*:\s*([\w$]+)/i)?.[1] || '')
+  for (const match of source.matchAll(/\$\.(get|post)\s*\(\s*(?:["']([^"']+)["']|([\w$]+))\s*,\s*(?:\{\s*["']?(address|adresse|search|searchString|searchText|query|q|term)["']?\s*:|([\w$]+))/gi)) {
+    const parameter = match[4] || variableParameters.get(match[5]) || ''
+    add(resolveEndpoint(match[2], match[3]), match[1], parameter)
+  }
+  for (const match of source.matchAll(/axios\.(get|post)\s*\(\s*(?:["']([^"']+)["']|([\w$]+))[\s\S]{0,600}?(?:params|data)\s*:\s*(?:\{\s*["']?(address|adresse|search|searchString|searchText|query|q|term)["']?\s*:|([\w$]+))/gi)) add(resolveEndpoint(match[2], match[3]), match[1], match[4] || variableParameters.get(match[5]) || '')
   for (const match of source.matchAll(/(?:url\s*:\s*|fetch\s*\(|axios\s*\(\s*)["']([^"']+)["']/gi)) {
     const context = source.slice(Math.max(0, (match.index || 0) - 500), (match.index || 0) + match[0].length + 700)
-    const parameter = context.match(/(?:data|params|body)\s*:\s*\{[^}]*?["']?(search|searchText|query|q|term)["']?\s*:/i)?.[1]
-      || context.match(/(?:URLSearchParams|FormData)[\s\S]{0,250}?(?:append|set)\s*\(\s*["'](search|searchText|query|q|term)["']/i)?.[1]
+    const parameter = resolveParameter(context)
     const method = context.match(/(?:method|type)\s*:\s*["'](GET|POST)["']/i)?.[1] || 'GET'
     if (parameter) add(match[1], method, parameter)
   }
+  for (const ajax of source.matchAll(/\$\.ajax\s*\(\s*(?:\{([\s\S]{0,1200}?)\}|([\w$]+))\s*\)/gi)) {
+    const object = ajax[1] || source.match(new RegExp(`(?:\\b(?:const|let|var)\\s+|,)\\s*${ajax[2]}\\s*=\\s*\\{([\\s\\S]{0,1200}?)\\}`))?.[1] || ''
+    const endpointMatch = object.match(/url\s*:\s*(?:["']([^"']+)["']|([\w$]+))/i)
+    const parameter = resolveParameter(object)
+    if (endpointMatch && parameter) add(resolveEndpoint(endpointMatch[1], endpointMatch[2]), object.match(/(?:method|type)\s*:\s*["'](GET|POST)["']/i)?.[1] || 'GET', parameter)
+  }
   return { contracts, endpointPaths: [...endpointPaths].slice(0, 20) }
+}
+
+function scriptStructure(source: string, base: string) {
+  const interesting = /(?:address|adresse|search|sok|søk|waste|avfall|renov|calendar|tomme|tømme)/i
+  const mechanismPattern = /\b(ajax|get|post|fetch|axios|autocomplete|source)\b/gi
+  const sanitize = (value: string) => value.replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, '<uuid>').replace(/\b[0-9a-f]{24,}\b/gi, '<opaque-id>')
+  const candidates: Array<{ value: string; valueKind: string; keys: string[]; mechanisms: string[]; constructed: boolean }> = [...source.matchAll(/["']([^"'\r\n]{1,300})["']/g)].flatMap(match => {
+    const value = match[1]
+    const urlLike = /^(?:https?:\/\/|\/)/.test(value)
+    if (!urlLike && !interesting.test(value)) return []
+    const context = source.slice(Math.max(0, (match.index || 0) - 300), (match.index || 0) + match[0].length + 300)
+    const keys = [...new Set([...context.matchAll(/(?:^|[,{;])\s*["']?([A-Za-z_$][\w$-]*)["']?\s*:/g)].map(x => x[1]))].slice(0, 12)
+    const mechanisms = [...new Set([...context.matchAll(mechanismPattern)].map(x => x[1].toLowerCase()))]
+    let path = ''
+    if (urlLike) try { const url = new URL(value, base); path = url.pathname } catch { /* Ignore invalid URL literals. */ }
+    return [{ value: sanitize(path || (interesting.test(value) ? value.slice(0, 120) : '')), valueKind: urlLike ? 'literal-path' : 'interesting-literal', keys, mechanisms, constructed: false }]
+  }).filter(item => item.value)
+  for (const match of source.matchAll(/(?:url\s*:\s*|fetch\s*\()([^,}\n]{1,200})/gi)) {
+    if (/^\s*["']/.test(match[1])) continue
+    const context = source.slice(Math.max(0, (match.index || 0) - 300), (match.index || 0) + match[0].length + 300)
+    candidates.push({ value: '<constructed>', valueKind: 'constructed-url', keys: [...new Set([...context.matchAll(/(?:^|[,{;])\s*["']?([A-Za-z_$][\w$-]*)["']?\s*:/g)].map(x => x[1]))].slice(0, 12), mechanisms: [...new Set([...context.matchAll(mechanismPattern)].map(x => x[1].toLowerCase()))], constructed: true })
+  }
+  return candidates.slice(0, 30)
 }
 
 function discoveryStructure(html: string, base: string) {
@@ -312,16 +355,17 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
       if (!landing.ok) throw new WasteProviderError(landing.status >= 500 ? 'temporary_failure' : 'unsupported', 'Waste collection isn’t available for this address yet.', landing.status >= 500)
       const html = await landing.text()
       const contracts = addressSearchContracts(html, `${base}/`)
-      const bundleDiagnostics: Array<{ path: string; status: number | 'network-error'; contentType?: string; endpointPaths?: string[] }> = []
+      const bundleDiagnostics: Array<{ path: string; status: number | 'network-error'; contentType?: string; endpointPaths?: string[]; structure?: unknown }> = []
       if (!contracts.length) for (const bundleUrl of relevantBundleUrls(html, `${base}/`)) {
         let bundleResponse: Response
         try { bundleResponse = await fetcher(bundleUrl, { headers: { Accept: 'application/javascript, text/javascript' }, signal: AbortSignal.timeout(10000) }) }
         catch { bundleDiagnostics.push({ path: bundleUrl.pathname, status: 'network-error' }); continue }
         const contentType = (bundleResponse.headers.get('content-type') || '').split(';')[0]
         if (!bundleResponse.ok) { bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType }); continue }
-        const discovered = scriptSearchContracts(await bundleResponse.text(), bundleUrl.toString())
+        const bundleSource = await bundleResponse.text()
+        const discovered = scriptSearchContracts(bundleSource, bundleUrl.toString())
         contracts.push(...discovered.contracts.filter(contract => !contracts.some(existing => existing.endpoint === contract.endpoint && existing.method === contract.method && existing.parameter === contract.parameter)))
-        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, endpointPaths: discovered.endpointPaths })
+        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, endpointPaths: discovered.endpointPaths, ...(discovered.contracts.length ? {} : { structure: scriptStructure(bundleSource, bundleUrl.toString()) }) })
       }
       let propertyId = propertyCandidateFromHtml(html, address, stavanger)
       console.info('[waste] property resolution discovered', {

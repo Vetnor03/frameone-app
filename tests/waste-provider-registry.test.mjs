@@ -49,7 +49,7 @@ test('Sandnes uses the published POST contract and extracts id from the observed
   const fetcher = async (url, init = {}) => {
     calls.push({ url: String(url), init })
     if (calls.length === 1) return new Response('<script src="/bundles/waste-calendar"></script>')
-    if (calls.length === 2) return new Response('$.post("/provider/address", { query: request.term }, response);', { headers: { 'Content-Type': 'application/javascript' } })
+    if (calls.length === 2) return new Response('var u="/provider/address",d={query:e.term},o={data:d,type:"POST",url:u};$.ajax(o);', { headers: { 'Content-Type': 'application/javascript' } })
     return Response.json({ results: [{ text: 'Selected address', href: '/show?gnumber=70&bnumber=152&snumber=0&id=resolved-property&municipality=Sandnes+kommune' }] })
   }
   const resolved = await createHentavfallProvider(fetcher).resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '70', bnr: '152', snr: '0' })
