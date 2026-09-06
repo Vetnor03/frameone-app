@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
 import { providerForAddress, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type WasteAddress, type WasteCollection } from './providers'
 import { norwayLocalYmd } from './date'
 import { wasteCachePlan } from './cache'
+import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from './display.ts'
 export { norwayLocalYmd } from './date'
 
 export const WASTE_PROVIDER = 'waste'
@@ -73,9 +74,9 @@ export async function refreshWasteForUser(userId: string, address?: WasteAddress
   }
 }
 
-export async function previewWasteAddress(address: WasteAddress) {
+export async function previewWasteAddress(address: WasteAddress, language: WasteDisplayLanguage = 'en') {
   const { resolved, collections } = await fetchForAddress(address)
-  return { status: 'preview' as const, resolvedAddress: resolved, previewItems: wasteRows('preview', resolved, collections).slice(0, 3).map(row => ({ date: row.raw.date, title: row.title })) }
+  return { status: 'preview' as const, resolvedAddress: resolved, previewItems: wasteRows('preview', resolved, collections).slice(0, 3).map(row => ({ date: row.raw.date, title: wasteCollectionDisplayTitle(row.raw.normalized_type, language, row.raw.original_provider_label) })) }
 }
 
 export async function searchWasteAddresses(query: string) { return searchKartverketAddresses(query) }

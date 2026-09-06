@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}))
     const address = body?.address as WasteAddress
     if (!address?.addressId || !address?.municipalityNumber) return NextResponse.json({ error: 'Select an address from the search results.' }, { status: 400 })
-    const result = body?.preview === true ? await previewWasteAddress(address) : await connectWasteForUser(userId, address)
+    const result = body?.preview === true ? await previewWasteAddress(address, body?.language === 'no' ? 'no' : 'en') : await connectWasteForUser(userId, address)
     return NextResponse.json(result)
   } catch (error: unknown) {
     const providerError = error instanceof WasteProviderError ? error : null

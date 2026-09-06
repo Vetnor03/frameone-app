@@ -29,7 +29,7 @@ export default function WasteSetupModal({ language, onClose, onSaved }: { langua
 
   async function choose(address: Address) {
     setSelected(address); setQuery(address.label); setResults([]); setLoading(true); setError('')
-    try { const response = await fetch('/api/integrations/waste/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ address, preview: true }) }); const json = await response.json(); if (!response.ok) throw new Error(json.error); setPreview(json.previewItems || []) }
+    try { const response = await fetch('/api/integrations/waste/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ address, preview: true, language }) }); const json = await response.json(); if (!response.ok) throw new Error(json.error); setPreview(json.previewItems || []) }
     catch (e) { setErrorKind('preview'); const message = (e as Error).message; setError(message === 'Waste collection isn’t available for this address yet.' && language === 'no' ? 'Renovasjon er ikke tilgjengelig for denne adressen ennå.' : message || (language === 'no' ? 'Renovasjon er ikke tilgjengelig for denne adressen ennå.' : 'Waste collection isn’t available for this address yet.')) }
     finally { setLoading(false) }
   }

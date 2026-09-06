@@ -1,3 +1,5 @@
+import { wasteCollectionDisplayTitle } from './display.ts'
+
 export type WasteType = 'restavfall' | 'matavfall' | 'papir' | 'plast' | 'glass_metall' | 'hageavfall' | 'christmas_tree' | 'hazardous' | 'textile' | 'other'
 export type WasteProviderKey = 'stavanger' | 'hentavfall' | 'sandnes' | 'min_renovasjon'
 
@@ -58,8 +60,7 @@ export function normalizeWasteType(label: unknown): WasteType {
 }
 
 export function wasteCollectionTitle(type: WasteType, original = '') {
-  const labels: Record<WasteType, string> = { restavfall: 'Restavfall', matavfall: 'Matavfall', papir: 'Papir', plast: 'Plast', glass_metall: 'Glass og metall', hageavfall: 'Hageavfall', christmas_tree: 'Juletre', hazardous: 'Farlig avfall', textile: 'Tekstil', other: original || 'Annet avfall' }
-  return labels[type]
+  return wasteCollectionDisplayTitle(type, 'no', original)
 }
 
 function parseKartverketHit(hit: Record<string, any>): WasteAddress {

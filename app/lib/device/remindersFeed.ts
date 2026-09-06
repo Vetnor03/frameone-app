@@ -1,3 +1,5 @@
+import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from '../integrations/waste/display.ts'
+
 const MS_PER_MINUTE = 60 * 1000
 
 function floorDateToMinute(date: Date) {
@@ -227,16 +229,18 @@ export function buildWasteCollectionItems(
   todayYmd: string,
   horizonEndYmd: string,
   timeZone: string,
-  includeOverdue: boolean
+  includeOverdue: boolean,
+  language: WasteDisplayLanguage = 'no'
 ): DeviceReminderItem[] {
   const seen = new Set<string>()
   return rows.flatMap((row) => {
-    const title = String(row.title || '').trim()
+    const storedTitle = String(row.title || '').trim()
     const externalId = String(row.external_id || '').trim()
-    if (!title || !externalId) return []
+    if (!storedTitle || !externalId) return []
 
     const raw = row.raw && typeof row.raw === 'object' ? row.raw : {}
     if (raw.source !== 'waste' || raw.type !== 'waste_collection') return []
+    const title = wasteCollectionDisplayTitle(raw.normalized_type || raw.waste_fraction, language, raw.original_provider_label) || storedTitle
 
     const dateFromRaw = typeof raw.date === 'string' ? raw.date.slice(0, 10) : ''
     const occurrenceDate = /^\d{4}-\d{2}-\d{2}$/.test(dateFromRaw)

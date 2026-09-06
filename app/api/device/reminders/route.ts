@@ -512,6 +512,7 @@ export async function GET(req: Request) {
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     const configuredModules = (deviceSettingsData?.settings_json as any)?.modules
+    const frameLanguage = (deviceSettingsData?.settings_json as any)?.language === 'no' ? 'no' : 'en'
     const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
     const selectedIntegrations = configuredModules?.integrations || {}
     const providerEnabled = (provider: string) => !deviceSettingsError && (!explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true)
@@ -585,7 +586,8 @@ export async function GET(req: Request) {
           todayYmd,
           horizonEndYmd,
           timeZone,
-          includeOverdue
+          includeOverdue,
+          frameLanguage
         )
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)

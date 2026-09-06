@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createMinRenovasjonProvider, createStavangerProvider, normalizeWasteType, searchKartverketAddresses, WasteProviderError } from '../app/lib/integrations/waste/providers.ts'
 import { norwayLocalYmd } from '../app/lib/integrations/waste/date.ts'
+import { wasteCollectionDisplayTitle } from '../app/lib/integrations/waste/display.ts'
 
 test('Norwegian canonical today differs from UTC around Oslo midnight', () => {
   const instant = new Date('2026-01-15T23:30:00.000Z')
@@ -20,6 +21,11 @@ test('Kartverket autocomplete preserves multiple complete address candidates', a
 
 test('normalization never turns unknown labels into residual waste', () => {
   assert.equal(normalizeWasteType('Bio'), 'matavfall'); assert.equal(normalizeWasteType('Juletre'), 'christmas_tree'); assert.equal(normalizeWasteType('Farlig avfall'), 'hazardous'); assert.equal(normalizeWasteType('Klær og tekstil'), 'textile'); assert.equal(normalizeWasteType('Mystisk fraksjon'), 'other'); assert.notEqual(normalizeWasteType('Mystisk fraksjon'), 'restavfall')
+})
+
+test('app preview grouping can render English and Norwegian titles from normalized data', () => {
+  assert.equal(wasteCollectionDisplayTitle(['matavfall', 'papir'], 'en', ['Bio', 'Papp']), 'Food waste + paper')
+  assert.equal(wasteCollectionDisplayTitle(['matavfall', 'papir'], 'no', ['Bio', 'Papp']), 'Matavfall + papir')
 })
 
 test('Stavanger dynamically resolves a property UUID then parses multiple fractions on one date', async () => {

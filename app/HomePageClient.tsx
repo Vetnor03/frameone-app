@@ -22,6 +22,7 @@ import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 import WasteSetupModal from './components/WasteSetupModal'
+import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
 import { deriveDynamicModuleKeys } from './lib/dynamicModuleTabs.mjs'
@@ -9816,12 +9817,12 @@ function integrationItemDateTime(row: any) {
   return { date: rawDate, time: null }
 }
 
-function integrationReminderTitle(row: any, source: ReminderSource) {
+function integrationReminderTitle(row: any, source: ReminderSource, language: AppLanguage) {
   const title = String(row?.title ?? '').trim()
   if (!title) return ''
   if (source === 'teams') return title
   if (source === 'spond') return title
-  if (source === 'waste') return title
+  if (source === 'waste') return wasteCollectionDisplayTitle(row?.raw?.normalized_type || row?.raw?.waste_fraction, language, row?.raw?.original_provider_label) || title
   return title
 }
 
@@ -13706,7 +13707,7 @@ const manualItems: ReminderUiItem[] = (data || [])
               const externalEventId = source === 'local-events' ? String(row.external_id || '').trim() : ''
               if (externalEventId && localEventHiddenSkippedIds.has(externalEventId)) return null
               const { date, time } = integrationItemDateTime(row)
-              const title = integrationReminderTitle(row, source)
+              const title = integrationReminderTitle(row, source, language)
               if (!title || !date) return null
               return {
                 id: `${source}:${String(row.external_id || row.id)}`,
