@@ -178,3 +178,29 @@ test('a mixed reminder and event day keeps both sources', () => {
   ], 10)
   assert.deepEqual(new Set(selected.map(x => x.source)), new Set(['remind', 'teams']))
 })
+
+test('mixed reminder and local-event list stays chronological after source selection', () => {
+  const makeTimedItem = (id, time, source) => ({
+    reminder_id: id,
+    title: id,
+    occurrence_date: '2026-09-06',
+    display_date: 'Today',
+    days_until: 0,
+    is_overdue: false,
+    repeat: 'none',
+    due_time: time,
+    display_time: time,
+    source,
+  })
+
+  const selected = selectReminderDisplayGroups([
+    makeTimedItem('personal-1900', '19:00', 'remind'),
+    makeTimedItem('event-1400', '14:00', 'local-events'),
+    makeTimedItem('event-2200', '22:00', 'local-events'),
+  ], 10)
+
+  assert.deepEqual(
+    selected.map((entry) => entry.display_time),
+    ['14:00', '19:00', '22:00']
+  )
+})
