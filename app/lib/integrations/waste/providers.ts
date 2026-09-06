@@ -198,10 +198,12 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
 
 function relevantBundleUrls(html: string, base: string) {
   const origin = new URL(base).origin
+  const hasAddressComponent = /(?:searchingforaddress|chooseaddress|addressplaceholder|address|adresse)/i.test(html)
   return [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].flatMap(match => {
     try {
       const url = new URL(match[1], base)
-      return url.origin === origin && /(?:waste|calendar|renov|tommekalender|tømmekalender|avfall)/i.test(url.pathname) ? [url] : []
+      const calendarSpecific = /(?:waste[-_.]?calendar|renov[^/]*calendar|tommekalender|tømmekalender|avfall[^/]*kalender)/i.test(url.pathname)
+      return url.origin === origin && hasAddressComponent && calendarSpecific ? [url] : []
     } catch { return [] }
   }).filter((url, index, urls) => urls.findIndex(other => other.toString() === url.toString()) === index).slice(0, 3)
 }
@@ -291,6 +293,26 @@ function discoveryStructure(html: string, base: string) {
   return { inputs, forms, scriptSrcPaths, inlineSearchPaths, showQueryNames }
 }
 
+function landingClueStructure(html: string) {
+  const clues = /\/(searchingforaddress|chooseaddress|addressplaceholder)\b/gi
+  const mechanismsPattern = /\b(ajax|get|post|fetch|axios|autocomplete|source|url|method|data)\b/gi
+  return [...html.matchAll(clues)].map(match => {
+    const index = match.index || 0
+    const scriptStart = html.lastIndexOf('<script', index), scriptEnd = html.indexOf('</script>', index)
+    const inScript = scriptStart >= 0 && scriptEnd >= index && html.lastIndexOf('</script>', index) < scriptStart
+    const tagStart = html.lastIndexOf('<', index), tagEnd = html.indexOf('>', index)
+    const inTag = tagStart >= 0 && tagEnd >= index
+    const context = html.slice(Math.max(0, index - 350), index + match[0].length + 350)
+    const scriptTag = inScript ? html.slice(scriptStart, html.indexOf('>', scriptStart) + 1) : ''
+    const scriptAttrs = attrs(scriptTag)
+    const propertyNames = [...new Set([...context.matchAll(/(?:^|[,{;])\s*["']?([A-Za-z_$][\w$-]*)["']?\s*:/g)].map(x => x[1]))].slice(0, 15)
+    const attributeNames = inTag ? [...new Set([...html.slice(tagStart, tagEnd + 1).matchAll(/\s([\w:-]+)(?:\s*=|\s|>)/g)].map(x => x[1].toLowerCase()))].slice(0, 15) : []
+    const mechanisms = [...new Set([...context.matchAll(mechanismsPattern)].map(x => x[1].toLowerCase()))]
+    const structuralContext = inScript ? (/application\/(?:ld\+)?json/i.test(scriptAttrs.type || '') ? 'json-script' : /\{[\s\S]*\}/.test(context) ? 'script-config' : 'inline-script') : inTag ? 'html-attribute' : /\{[\s\S]*\}/.test(context) ? 'json-or-template-config' : 'text-or-localization'
+    return { clue: `/${match[1].toLowerCase()}`, structuralContext, propertyNames, attributeNames, script: inScript ? { type: scriptAttrs.type || '', id: scriptAttrs.id || '' } : null, mechanisms }
+  }).slice(0, 20)
+}
+
 function propertyCandidateFromHtml(html: string, address: WasteAddress, stavanger: boolean) {
   const expected = normalizeAddress(address.label.split(',')[0])
   for (const tag of html.matchAll(/<(?:option|li|button|a)\b[^>]*(?:data-(?:ids?|uuid|property-id)|value)=["']([^"']+)["'][^>]*>[\s\S]*?<\/(?:option|li|button|a)>/gi)) {
@@ -374,13 +396,15 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
         if (structure) logWasteDiagnostic('bundle structure', { municipality, bundle: bundleUrl.pathname, structure })
       }
       let propertyId = propertyCandidateFromHtml(html, address, stavanger)
+      const landingClues = landingClueStructure(html)
+      if (landingClues.length) logWasteDiagnostic('landing clue structure', { municipality, clues: landingClues })
       logWasteDiagnostic('property resolution discovered', {
         municipality, provider: stavanger ? 'stavanger' : 'hentavfall', landingEndpoint: base,
         status: landing.status, contentType: (landing.headers.get('content-type') || '').split(';')[0],
         shape: responseShape(html, landing.headers.get('content-type') || 'text/html'),
         contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })),
         relevantBundles: bundleDiagnostics,
-        ...(contracts.length ? {} : { discoveryStructure: discoveryStructure(html, `${base}/`) }),
+        ...(contracts.length ? {} : { discoveryStructure: discoveryStructure(html, `${base}/`), landingClues }),
       })
       const attempts: Array<{ endpoint: string; method: string; status: number | 'network-error'; contentType?: string; shape?: unknown }> = []
       for (const contract of contracts) {
@@ -407,7 +431,7 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
         propertyId = match ? propertyIdFromRecord(match, stavanger) : propertyCandidateFromHtml(body, address, stavanger)
       }
       if (!propertyId) {
-        logWasteDiagnostic('property resolution failed', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })), attempts, relevantBundles: bundleDiagnostics, discoveryStructure: discoveryStructure(html, `${base}/`) })
+        logWasteDiagnostic('property resolution failed', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })), attempts, relevantBundles: bundleDiagnostics, discoveryStructure: discoveryStructure(html, `${base}/`), landingClues })
         throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this address yet.', false)
       }
       return { ...address, propertyId }

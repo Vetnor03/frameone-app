@@ -32,7 +32,7 @@ test('Stavanger dynamically resolves a property UUID then parses multiple fracti
   const calls = []
   const fetcher = async url => {
     calls.push(String(url))
-    if (calls.length === 1) return new Response('<form action="/finn/" method="get"><input type="search" name="q"></form><script src="/assets/waste-calendar.js"></script>')
+    if (calls.length === 1) return new Response('<form action="/finn/" method="get"><input type="search" name="q"></form><div data-component="address"><script src="/assets/waste-calendar.js"></script></div>')
     if (calls.length === 2) return new Response('$.get("/provider/address", { searchText: request.term }, response);', { headers: { 'Content-Type': 'application/javascript' } })
     if (calls.length === 3) return Response.json([{ label: 'Selected address', value: '/show?gnumber=16&bnumber=489&snumber=0&ids=dynamic-property-id&municipality=Stavanger' }])
     return new Response('<section data-month="2026-09"><table><tr class="waste-calendar__item"><td>08.09 - tirsdag</td><td><img alt="Matavfall"><img title="Papir"></td></tr></table></section>')
@@ -48,7 +48,7 @@ test('Sandnes uses the published POST contract and extracts id from the observed
   const calls = []
   const fetcher = async (url, init = {}) => {
     calls.push({ url: String(url), init })
-    if (calls.length === 1) return new Response('<script src="/bundles/waste-calendar"></script>')
+    if (calls.length === 1) return new Response('<input type="text" name="address"><script src="/bundles/waste-calendar"></script>')
     if (calls.length === 2) return new Response('var u="/provider/address",d={query:e.term},o={data:d,type:"POST",url:u};$.ajax(o);', { headers: { 'Content-Type': 'application/javascript' } })
     return Response.json({ results: [{ text: 'Selected address', href: '/show?gnumber=70&bnumber=152&snumber=0&id=resolved-property&municipality=Sandnes+kommune' }] })
   }
@@ -74,11 +74,26 @@ test('failed bundle diagnostics are serialized, visible and privacy-safe', async
   try {
     const provider = createHentavfallProvider(async url => String(url).includes('/bundles/')
       ? new Response('var path="/address/123e4567-e89b-12d3-a456-426614174000"; source:function(){}', { headers: { 'Content-Type': 'text/javascript' } })
-      : new Response('<input type="text" name="query" id="lookup" class="field"><script src="/bundles/waste-calendar"></script>'))
+      : new Response('<div data-component="address"><input type="text" name="query" id="lookup" class="field"><script src="/bundles/waste-calendar"></script></div>'))
     await assert.rejects(() => provider.resolveAddress({ addressId: 'private', label: 'Private Street 99', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '123', bnr: '456', snr: '7' }), error => error instanceof WasteProviderError && error.code === 'unsupported')
   } finally { console.info = originalInfo }
   const output = messages.map(args => args.join(' ')).join('\n')
   assert.ok(messages.length >= 3); assert.ok(messages.every(args => typeof args[1] === 'string')); assert.doesNotMatch(output, /\[Array\]|\[Object\]|Private Street|123e4567-e89b-12d3-a456-426614174000|"gnr"|"bnr"|"snr"/); assert.match(output, /<uuid>/); assert.match(output, /"inputs":\[/); assert.match(output, /"showQueryNames":\[/)
+})
+
+test('Stavanger landing clues are classified without treating waste-container code as calendar lookup', async () => {
+  const messages = [], calls = []
+  const originalInfo = console.info
+  console.info = (...args) => messages.push(args.join(' '))
+  try {
+    const provider = createStavangerProvider(async url => {
+      calls.push(String(url))
+      return new Response('<script type="application/json" id="calendar-copy">{"loading":"/searchingforaddress","choose":"/chooseaddress","placeholder":"/addressplaceholder"}</script><script src="/js/waste-containers.js"></script>')
+    })
+    await assert.rejects(() => provider.resolveAddress({ addressId: 'private', label: 'Private Street 99', municipalityNumber: '1103', municipalityName: 'Stavanger' }), error => error instanceof WasteProviderError && error.code === 'unsupported')
+  } finally { console.info = originalInfo }
+  const output = messages.join('\n')
+  assert.equal(calls.length, 1); assert.match(output, /landing clue structure/); assert.match(output, /"clue":"\/searchingforaddress"/); assert.match(output, /"structuralContext":"json-script"/); assert.doesNotMatch(output, /Private Street|\[Array\]|\[Object\]/)
 })
 
 test('Stavanger structured calendar derives years across December and January', () => {
