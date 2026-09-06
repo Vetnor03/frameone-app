@@ -13,6 +13,15 @@ def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'LiveUpdate::probe' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
+def test_idle_manual_probe_is_separate_from_smart_content_scheduler():
+    loop = MAIN[MAIN.index('// Exactly one cheap revision probe'):MAIN.index('// --------------------------------------\n// Setup')]
+    assert 'LiveUpdate::probe' in loop
+    assert '/api/device/content-revision' not in loop
+    assert '/api/device/render-state' not in loop
+    assert 'SmartRefresh::probeRevision' not in loop
+    assert 'SmartRefresh::fetchRenderState' not in loop
+    assert 'ensureDisplay' not in loop
+
 def test_app_activity_is_not_a_firmware_gate():
     assert 'appActive' not in MAIN + LIVE
     assert 'app_active' not in LIVE

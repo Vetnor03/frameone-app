@@ -112,6 +112,12 @@ test('connected manual detection remains ten seconds while true deep sleep is dy
   assert.match(firmware, /enablePowerSenseWakeForNextSleep\(usbPresent\)/)
 })
 
+test('idle ten-second live probe cannot invoke smart content or display paths', () => {
+  const idle = firmware.slice(firmware.indexOf('// Exactly one cheap revision probe'), firmware.indexOf('// --------------------------------------\n// Setup'))
+  assert.match(idle, /LiveUpdate::probe/)
+  assert.doesNotMatch(idle, /probeRevision|fetchRenderState|content-revision|render-state|ensureDisplay|renderSmartDashboard/)
+})
+
 test('unchanged revision rebases and persists scheduler progress without display work', () => {
   const branch = firmware.slice(firmware.indexOf('} else if (!revisionState.changed'), firmware.indexOf('} else {', firmware.indexOf('} else if (!revisionState.changed')))
   assert.match(branch, /g_revisionCheckedAt = time\(nullptr\)/)
