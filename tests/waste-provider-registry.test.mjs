@@ -32,28 +32,32 @@ test('Stavanger dynamically resolves a property UUID then parses multiple fracti
   const calls = []
   const fetcher = async url => {
     calls.push(String(url))
-    if (calls.length === 1) return new Response('<form action="/finn/" method="get"><input type="search" name="q"></form><div data-component="address"><script src="/assets/waste-calendar.js"></script></div>')
-    if (calls.length === 2) return new Response('$.get("/provider/address", { searchText: request.term }, response);', { headers: { 'Content-Type': 'application/javascript' } })
-    if (calls.length === 3) return Response.json([{ label: 'Selected address', value: '/show?gnumber=16&bnumber=489&snumber=0&ids=dynamic-property-id&municipality=Stavanger' }])
+    const value = String(url)
+    if (calls.length === 1) return new Response('<form action="/finn/" method="get"><input type="search" name="q"></form><input type="text" id="address-search" class="js-address-search"><script src="/js/waste-containers.js"></script><script src="/js/main.js"></script>')
+    if (value.endsWith('/js/waste-containers.js')) return new Response('$(".js-waste-container-form").submit(orderContainer);')
+    if (value.endsWith('/js/main.js')) return new Response('$(".js-address-search").autocomplete({source:function(request,response){$.get("/provider/address",{searchText:request.term},response)}});', { headers: { 'Content-Type': 'application/javascript' } })
+    if (value.includes('/provider/address')) return Response.json([{ label: 'Selected address', value: '/show?gnumber=16&bnumber=489&snumber=0&ids=dynamic-property-id&municipality=Stavanger' }])
     return new Response('<section data-month="2026-09"><table><tr class="waste-calendar__item"><td>08.09 - tirsdag</td><td><img alt="Matavfall"><img title="Papir"></td></tr></table></section>')
   }
   const provider = createStavangerProvider(fetcher)
   const resolved = await provider.resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1103', municipalityName: 'Stavanger', gnr: '16', bnr: '489', snr: '0' })
   assert.equal(resolved.propertyId, 'dynamic-property-id'); assert.doesNotMatch(JSON.stringify(provider), /6fa154fe|Boganesstraen/)
   const rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
-  assert.deepEqual(rows.map(x => x.normalizedType).sort(), ['matavfall', 'papir']); assert.equal(calls.some(call => call.includes('/finn/')), false); assert.equal(new URL(calls[2]).searchParams.get('searchText'), 'Selected address'); assert.match(calls[3], /ids=dynamic-property-id/)
+  assert.deepEqual(rows.map(x => x.normalizedType).sort(), ['matavfall', 'papir']); assert.equal(calls.some(call => call.includes('/finn/')), false); assert.equal(new URL(calls.find(call => call.includes('/provider/address'))).searchParams.get('searchText'), 'Selected address'); assert.match(calls.at(-1), /ids=dynamic-property-id/)
 })
 
 test('Sandnes uses the published POST contract and extracts id from the observed result link', async () => {
   const calls = []
   const fetcher = async (url, init = {}) => {
     calls.push({ url: String(url), init })
-    if (calls.length === 1) return new Response('<input type="text" name="address"><script src="/bundles/waste-calendar"></script>')
-    if (calls.length === 2) return new Response('var u="/provider/address",d={query:e.term},o={data:d,type:"POST",url:u};$.ajax(o);', { headers: { 'Content-Type': 'application/javascript' } })
+    const value = String(url)
+    if (calls.length === 1) return new Response('<input type="text" id="address-search" class="js-address-search"><script src="/bundles/js"></script><script src="/bundles/waste-calendar"></script>')
+    if (value.endsWith('/bundles/js')) return new Response('$(".js-address-search").autocomplete({source:function(e,r){var u="/provider/address",d={query:e.term},o={data:d,type:"POST",url:u};$.ajax(o)}});', { headers: { 'Content-Type': 'application/javascript' } })
+    if (value.endsWith('/bundles/waste-calendar')) return new Response('$(".js-waste-container-form").submit(updateContainer);')
     return Response.json({ results: [{ text: 'Selected address', href: '/show?gnumber=70&bnumber=152&snumber=0&id=resolved-property&municipality=Sandnes+kommune' }] })
   }
   const resolved = await createHentavfallProvider(fetcher).resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '70', bnr: '152', snr: '0' })
-  assert.equal(resolved.propertyId, 'resolved-property'); assert.equal(calls[2].url, 'https://www.hentavfall.no/provider/address'); assert.equal(calls[2].init.method, 'POST'); assert.equal(String(calls[2].init.body), 'query=Selected+address')
+  assert.equal(resolved.propertyId, 'resolved-property'); const request = calls.find(call => call.url.includes('/provider/address')); assert.equal(request.url, 'https://www.hentavfall.no/provider/address'); assert.equal(request.init.method, 'POST'); assert.equal(String(request.init.body), 'query=Selected+address')
 })
 
 test('inline provider config can publish a contract without address-specific markup', async () => {
@@ -73,7 +77,7 @@ test('failed bundle diagnostics are serialized, visible and privacy-safe', async
   console.info = (...args) => messages.push(args)
   try {
     const provider = createHentavfallProvider(async url => String(url).includes('/bundles/')
-      ? new Response('var path="/address/123e4567-e89b-12d3-a456-426614174000"; source:function(){}', { headers: { 'Content-Type': 'text/javascript' } })
+      ? new Response('$(".js-address-search");var path="/address/123e4567-e89b-12d3-a456-426614174000"; source:function(){}', { headers: { 'Content-Type': 'text/javascript' } })
       : new Response('<div data-component="address"><input type="text" name="query" id="lookup" class="field"><script src="/bundles/waste-calendar"></script></div>'))
     await assert.rejects(() => provider.resolveAddress({ addressId: 'private', label: 'Private Street 99', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '123', bnr: '456', snr: '7' }), error => error instanceof WasteProviderError && error.code === 'unsupported')
   } finally { console.info = originalInfo }
@@ -93,7 +97,7 @@ test('Stavanger landing clues are classified without treating waste-container co
     await assert.rejects(() => provider.resolveAddress({ addressId: 'private', label: 'Private Street 99', municipalityNumber: '1103', municipalityName: 'Stavanger' }), error => error instanceof WasteProviderError && error.code === 'unsupported')
   } finally { console.info = originalInfo }
   const output = messages.join('\n')
-  assert.equal(calls.length, 1); assert.match(output, /landing clue structure/); assert.match(output, /"clue":"\/searchingforaddress"/); assert.match(output, /"structuralContext":"json-script"/); assert.doesNotMatch(output, /Private Street|\[Array\]|\[Object\]/)
+  assert.equal(calls.length, 2); assert.match(output, /landing clue structure/); assert.match(output, /"clue":"\/searchingforaddress"/); assert.match(output, /"structuralContext":"json-script"/); assert.match(output, /"selectorFound":false/); assert.doesNotMatch(output, /property resolution attempt|Private Street|\[Array\]|\[Object\]/)
 })
 
 test('Stavanger structured calendar derives years across December and January', () => {

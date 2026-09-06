@@ -196,16 +196,26 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
   return contracts
 }
 
-function relevantBundleUrls(html: string, base: string) {
+function sameOriginScriptUrls(html: string, base: string) {
   const origin = new URL(base).origin
-  const hasAddressComponent = /(?:searchingforaddress|chooseaddress|addressplaceholder|address|adresse)/i.test(html)
   return [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].flatMap(match => {
     try {
       const url = new URL(match[1], base)
-      const calendarSpecific = /(?:waste[-_.]?calendar|renov[^/]*calendar|tommekalender|tømmekalender|avfall[^/]*kalender)/i.test(url.pathname)
-      return url.origin === origin && hasAddressComponent && calendarSpecific ? [url] : []
+      return url.origin === origin ? [url] : []
     } catch { return [] }
-  }).filter((url, index, urls) => urls.findIndex(other => other.toString() === url.toString()) === index).slice(0, 3)
+  }).filter((url, index, urls) => urls.findIndex(other => other.toString() === url.toString()) === index).slice(0, 5)
+}
+
+function selectorComponentSource(source: string) {
+  const matches = [...source.matchAll(/(?:\.js-address-search|#address-search|["']js-address-search["'])/g)].slice(0, 5)
+  if (!matches.length) return { source: '', helpers: [] as string[] }
+  const regions = matches.map(match => source.slice(Math.max(0, (match.index || 0) - 4000), (match.index || 0) + match[0].length + 4000))
+  const helpers = [...new Set(regions.flatMap(region => [...region.matchAll(/(?:source\s*:\s*|\b)([A-Za-z_$][\w$]*)\s*(?:\(|[,}])/g)].map(x => x[1])).filter(name => !/^(?:function|source|ajax|get|post|fetch|autocomplete)$/i.test(name)))].slice(0, 12)
+  for (const helper of helpers) {
+    const definition = source.search(new RegExp(`(?:function\\s+${helper}\\s*\\(|(?:const|let|var)\\s+${helper}\\s*=)`))
+    if (definition >= 0) regions.push(source.slice(definition, definition + 5000))
+  }
+  return { source: regions.join('\n'), helpers }
 }
 
 function scriptSearchContracts(source: string, base: string) {
@@ -381,19 +391,21 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
       if (!landing.ok) throw new WasteProviderError(landing.status >= 500 ? 'temporary_failure' : 'unsupported', 'Waste collection isn’t available for this address yet.', landing.status >= 500)
       const html = await landing.text()
       const contracts = addressSearchContracts(html, `${base}/`)
-      const bundleDiagnostics: Array<{ path: string; status: number | 'network-error'; contentType?: string; endpointPaths?: string[]; structure?: unknown }> = []
-      if (!contracts.length) for (const bundleUrl of relevantBundleUrls(html, `${base}/`)) {
+      const bundleDiagnostics: Array<{ path: string; status: number | 'network-error'; contentType?: string; selectorFound?: boolean; endpointPaths?: string[]; structure?: unknown; helpers?: string[] }> = []
+      if (!contracts.length) for (const bundleUrl of sameOriginScriptUrls(html, `${base}/`)) {
         let bundleResponse: Response
         try { bundleResponse = await fetcher(bundleUrl, { headers: { Accept: 'application/javascript, text/javascript' }, signal: AbortSignal.timeout(10000) }) }
         catch { bundleDiagnostics.push({ path: bundleUrl.pathname, status: 'network-error' }); continue }
         const contentType = (bundleResponse.headers.get('content-type') || '').split(';')[0]
         if (!bundleResponse.ok) { bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType }); continue }
         const bundleSource = await bundleResponse.text()
-        const discovered = scriptSearchContracts(bundleSource, bundleUrl.toString())
+        const component = selectorComponentSource(bundleSource)
+        if (!component.source) { bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, selectorFound: false }); continue }
+        const discovered = scriptSearchContracts(component.source, bundleUrl.toString())
         contracts.push(...discovered.contracts.filter(contract => !contracts.some(existing => existing.endpoint === contract.endpoint && existing.method === contract.method && existing.parameter === contract.parameter)))
-        const structure = discovered.contracts.length ? undefined : scriptStructure(bundleSource, bundleUrl.toString())
-        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, endpointPaths: discovered.endpointPaths, ...(structure ? { structure } : {}) })
-        if (structure) logWasteDiagnostic('bundle structure', { municipality, bundle: bundleUrl.pathname, structure })
+        const structure = discovered.contracts.length ? undefined : scriptStructure(component.source, bundleUrl.toString())
+        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, selectorFound: true, endpointPaths: discovered.endpointPaths, helpers: component.helpers, ...(structure ? { structure } : {}) })
+        if (structure) logWasteDiagnostic('selector structure', { municipality, script: bundleUrl.pathname, selectorFound: true, helpers: component.helpers, structure })
       }
       let propertyId = propertyCandidateFromHtml(html, address, stavanger)
       const landingClues = landingClueStructure(html)
