@@ -147,6 +147,13 @@ function propertyCandidate(value: unknown, address: WasteAddress, stavanger: boo
 }
 
 type AddressSearchContract = { endpoint: string; method: 'GET' | 'POST'; parameter: string }
+const searchParameter = /^(?:search|searchtext|query|q|term)$/i
+const attrs = (tag: string) => Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(x => [x[1].toLowerCase(), x[2]]))
+const textInput = (tag: string) => {
+  const values = attrs(tag)
+  const type = (values.type || 'text').toLowerCase()
+  return type === 'text' || type === 'search' ? values : null
+}
 
 function addressSearchContracts(html: string, base: string): AddressSearchContract[] {
   const contracts: AddressSearchContract[] = []
@@ -156,22 +163,53 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
       if (parameter && !contracts.some(x => x.endpoint === contract.endpoint && x.method === contract.method && x.parameter === parameter)) contracts.push(contract)
     } catch { /* Ignore invalid page metadata. */ }
   }
-  // The official pages publish the autocomplete request contract on the address input.
-  for (const tag of html.matchAll(/<input\b[^>]*(?:autocomplete|address|adresse)[^>]*>/gi)) {
-    const attrs = Object.fromEntries([...tag[0].matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(x => [x[1].toLowerCase(), x[2]]))
-    const endpoint = attrs['data-url'] || attrs['data-search-url'] || attrs['data-autocomplete-url'] || attrs['data-endpoint']
-    if (endpoint) add(endpoint, attrs['data-method'] || 'GET', attrs['data-parameter'] || attrs.name || 'search')
+  // The official pages publish the request contract on otherwise generic text inputs.
+  for (const tag of html.matchAll(/<input\b[^>]*>/gi)) {
+    const values = textInput(tag[0])
+    if (!values) continue
+    const endpoint = values['data-url'] || values['data-search-url'] || values['data-autocomplete-url'] || values['data-endpoint']
+    const parameter = values['data-parameter'] || values.name || ''
+    if (endpoint && searchParameter.test(parameter)) add(endpoint, values['data-method'] || 'GET', parameter)
   }
-  // Some versions put the same contract on the form rather than the input.
+  // Other versions use an ordinary form with a text/search input.
   for (const form of html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)) {
-    if (!/(?:autocomplete|address|adresse)/i.test(form[0])) continue
     const open = form[0].match(/^<form\b[^>]*>/i)?.[0] || ''
-    const attrs = Object.fromEntries([...open.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)].map(x => [x[1].toLowerCase(), x[2]]))
-    const input = [...form[0].matchAll(/<input\b[^>]*name=["']([^"']+)["'][^>]*>/gi)].find(x => /(?:autocomplete|address|adresse|search|søk|sok)/i.test(x[0]))
-    const endpoint = attrs['data-search-url'] || attrs['data-autocomplete-url'] || attrs.action
-    if (endpoint && input) add(endpoint, attrs['data-method'] || attrs.method || 'GET', input[1])
+    const formAttrs = attrs(open)
+    const input = [...form[0].matchAll(/<input\b[^>]*>/gi)].map(x => textInput(x[0])).find(x => x?.name && searchParameter.test(x.name))
+    const endpoint = formAttrs['data-search-url'] || formAttrs['data-autocomplete-url'] || formAttrs.action
+    if (endpoint && input?.name) add(endpoint, formAttrs['data-method'] || formAttrs.method || 'GET', input.name)
+  }
+  // Inline configuration occasionally carries the same three contract fields.
+  for (const script of html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+    for (const endpointMatch of script[1].matchAll(/(?:url|searchUrl|autocompleteUrl|endpoint)\s*[:=]\s*["']([^"']+)["']/gi)) {
+      const context = script[1].slice(Math.max(0, (endpointMatch.index || 0) - 300), (endpointMatch.index || 0) + endpointMatch[0].length + 300)
+      const method = context.match(/method\s*[:=]\s*["'](GET|POST)["']/i)?.[1] || 'GET'
+      const parameter = context.match(/(?:parameter|param|queryParameter)\s*[:=]\s*["'](search|searchText|query|q|term)["']/i)?.[1]
+      if (parameter) add(endpointMatch[1], method, parameter)
+    }
   }
   return contracts
+}
+
+function discoveryStructure(html: string, base: string) {
+  const safePath = (value: string) => {
+    if (!/^(?:https?:\/\/|\/)/i.test(value)) return ''
+    try { const url = new URL(value, base); return `${url.origin === new URL(base).origin ? '' : url.origin}${url.pathname}` } catch { return '' }
+  }
+  const inputs = [...html.matchAll(/<input\b[^>]*>/gi)].map(match => textInput(match[0])).filter(Boolean).map(values => ({
+    type: values!.type || 'text', name: values!.name || '', id: values!.id || '', classes: (values!.class || '').split(/\s+/).filter(Boolean).slice(0, 8),
+    dataAttributes: Object.keys(values!).filter(name => name.startsWith('data-')),
+    urlValues: Object.entries(values!).filter(([name, value]) => name.startsWith('data-') && /^(?:https?:\/\/|\/)/.test(value)).map(([name, value]) => ({ name, path: safePath(value) })).filter(x => x.path),
+  })).slice(0, 20)
+  const forms = [...html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)].map(match => {
+    const formAttrs = attrs(match[0].match(/^<form\b[^>]*>/i)?.[0] || '')
+    const containedInputs = [...match[0].matchAll(/<input\b[^>]*>/gi)].map(x => attrs(x[0])).map(x => ({ name: x.name || '', type: x.type || 'text' })).slice(0, 20)
+    return { actionPath: safePath(formAttrs.action || ''), method: (formAttrs.method || 'GET').toUpperCase(), inputs: containedInputs }
+  }).slice(0, 20)
+  const scriptSrcPaths = [...new Set([...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].map(x => safePath(x[1])).filter(Boolean))].slice(0, 20)
+  const inlineSearchPaths = [...html.matchAll(/["']([^"']*(?:search|sok|søk|address|adresse|autocomplete)[^"']*)["']/gi)].map(x => safePath(x[1])).filter(Boolean).slice(0, 20)
+  const showQueryNames = [...html.matchAll(/(?:href|value)=["']([^"']*\/show\?[^"']*)["']/gi)].map(x => { try { return [...new URL(x[1], base).searchParams.keys()] } catch { return [] } }).slice(0, 20)
+  return { inputs, forms, scriptSrcPaths, inlineSearchPaths, showQueryNames }
 }
 
 function propertyCandidateFromHtml(html: string, address: WasteAddress, stavanger: boolean) {
@@ -244,6 +282,7 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
         status: landing.status, contentType: (landing.headers.get('content-type') || '').split(';')[0],
         shape: responseShape(html, landing.headers.get('content-type') || 'text/html'),
         contracts: contracts.map(x => ({ endpoint: x.endpoint, method: x.method, parameter: x.parameter })),
+        ...(contracts.length ? {} : { discoveryStructure: discoveryStructure(html, `${base}/`) }),
       })
       for (const contract of contracts) {
         if (propertyId) break

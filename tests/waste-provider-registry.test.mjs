@@ -32,7 +32,7 @@ test('Stavanger dynamically resolves a property UUID then parses multiple fracti
   const calls = []
   const fetcher = async url => {
     calls.push(String(url))
-    if (calls.length === 1) return new Response('<input class="address-autocomplete" name="searchText" data-url="/provider/address" data-method="GET">')
+    if (calls.length === 1) return new Response('<input type="text" name="searchText" data-url="/provider/address" data-method="GET">')
     if (calls.length === 2) return Response.json([{ label: 'Selected address', value: '/show?gnumber=16&bnumber=489&snumber=0&ids=dynamic-property-id&municipality=Stavanger' }])
     return new Response('<section data-month="2026-09"><table><tr class="waste-calendar__item"><td>08.09 - tirsdag</td><td><img alt="Matavfall"><img title="Papir"></td></tr></table></section>')
   }
@@ -47,11 +47,22 @@ test('Sandnes uses the published POST contract and extracts id from the observed
   const calls = []
   const fetcher = async (url, init = {}) => {
     calls.push({ url: String(url), init })
-    if (calls.length === 1) return new Response('<form action="/provider/address" method="post"><input class="address-search" name="query"></form>')
+    if (calls.length === 1) return new Response('<form action="/provider/address" method="post"><input type="text" name="query"></form>')
     return Response.json({ results: [{ text: 'Selected address', href: '/show?gnumber=70&bnumber=152&snumber=0&id=resolved-property&municipality=Sandnes+kommune' }] })
   }
   const resolved = await createHentavfallProvider(fetcher).resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '70', bnr: '152', snr: '0' })
   assert.equal(resolved.propertyId, 'resolved-property'); assert.equal(calls[1].url, 'https://www.hentavfall.no/provider/address'); assert.equal(calls[1].init.method, 'POST'); assert.equal(String(calls[1].init.body), 'query=Selected+address')
+})
+
+test('inline provider config can publish a contract without address-specific markup', async () => {
+  const calls = []
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url: String(url), init })
+    if (calls.length === 1) return new Response('<script>window.lookup = { endpoint: "/provider/lookup", method: "POST", parameter: "term" }</script>')
+    return Response.json([{ label: 'Selected address', value: '/show?ids=inline-property' }])
+  }
+  const resolved = await createStavangerProvider(fetcher).resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1103', municipalityName: 'Stavanger' })
+  assert.equal(resolved.propertyId, 'inline-property'); assert.equal(calls[1].url, 'https://www.stavanger.kommune.no/provider/lookup'); assert.equal(String(calls[1].init.body), 'term=Selected+address')
 })
 
 test('Stavanger structured calendar derives years across December and January', () => {
