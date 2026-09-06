@@ -1,48 +1,51 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildWasteCollectionItems, compareReminderItems } from '../app/lib/device/remindersFeed.ts'
-import { wasteCollectionTitle } from '../app/lib/integrations/waste/providers.ts'
+import fs from 'node:fs'
+import { buildWasteCollectionItems } from '../app/lib/device/remindersFeed.ts'
+import { wasteCachePlan } from '../app/lib/integrations/waste/cache.ts'
+import { wasteCollectionDisplayTitle } from '../app/lib/integrations/waste/display.ts'
 
-test('waste collection items are all-day reminders without display time', () => {
-  const items = buildWasteCollectionItems([
-    {
-      id: '1', user_id: 'u1', provider: 'waste', external_id: 'stavanger:1103:a1:plast:2026-06-22',
-      title: 'Tøm plast', body: null, starts_at: '2026-06-22T00:00:00+01:00', due_at: '2026-06-22T00:00:00+01:00', priority: 5,
-      raw: { source: 'waste', type: 'waste_collection', waste_fraction: 'plast', date: '2026-06-22', all_day: true },
-    },
-  ], '2026-06-21', '2026-07-21', 'Europe/Oslo', false)
-  assert.equal(items.length, 1)
-  assert.equal(items[0].source, 'waste')
-  assert.equal(items[0].title, 'Tøm plast')
-  assert.equal(items[0].display_time, null)
-  assert.equal(items[0].due_time, null)
-  assert.equal(items[0].occurrence_date, '2026-06-22')
+const row = (date, title = 'Matavfall + papir') => ({ id: date, user_id: 'u', provider: 'waste', external_id: `w:${date}`, title, starts_at: null, due_at: null, priority: 5, raw: { source: 'waste', type: 'waste_collection', date, collection_date: date, all_day: true, normalized_type: ['matavfall', 'papir'] } })
+
+test('grouped all-day waste dates remain unchanged and show Today/Tomorrow', () => {
+  const result = buildWasteCollectionItems([row('2026-03-29'), row('2026-03-30', 'Plast')], '2026-03-29', '2026-06-30', 'America/Los_Angeles', false)
+  assert.equal(result.length, 2); assert.equal(result[0].title, 'Matavfall + papir'); assert.equal(result[0].occurrence_date, '2026-03-29'); assert.equal(result[0].display_date, 'Today'); assert.equal(result[1].display_date, 'Tomorrow'); assert.equal(result[0].display_time, null)
 })
 
-test('waste collection builder deduplicates same fraction and date from multiple provider rows', () => {
-  const base = {
-    id: '1', user_id: 'u1', provider: 'waste', title: 'Tøm papir', body: null, starts_at: '2026-06-23T00:00:00+01:00', due_at: null, priority: 5,
-    raw: { source: 'waste', type: 'waste_collection', waste_fraction: 'papir', date: '2026-06-23' },
-  }
-  const items = buildWasteCollectionItems([
-    { ...base, external_id: 'min_renovasjon:1103:a1:papir:2026-06-23' },
-    { ...base, id: '2', external_id: 'generic_ics:1103:a1:papir:2026-06-23' },
-  ], '2026-06-21', '2026-07-21', 'Europe/Oslo', false)
-  assert.equal(items.length, 1)
+test('same-date grouped fractions stay one item while different dates remain separate', () => {
+  const result = buildWasteCollectionItems([row('2026-10-25'), row('2026-10-26', 'Restavfall')], '2026-10-24', '2026-12-01', 'Pacific/Auckland', false)
+  assert.deepEqual(result.map(x => x.occurrence_date), ['2026-10-25', '2026-10-26'])
 })
 
-test('waste collection sorting follows normal date order with no time', () => {
-  const waste = buildWasteCollectionItems([
-    { id: 'w', user_id: 'u1', provider: 'waste', external_id: 'waste:1', title: 'Tøm restavfall', body: null, starts_at: '2026-06-24T00:00:00+01:00', due_at: null, priority: 5, raw: { source: 'waste', type: 'waste_collection', waste_fraction: 'restavfall', date: '2026-06-24' } },
-  ], '2026-06-21', '2026-07-21', 'Europe/Oslo', false)[0]
-  const manual = { reminder_id: 'm', title: 'Manual', occurrence_date: '2026-06-22', display_date: 'Tomorrow', days_until: 1, is_overdue: false, repeat: 'none', due_time: '12:00', display_time: '12:00', source: 'remind' }
-  assert.deepEqual([waste, manual].sort(compareReminderItems).map((x) => x.reminder_id), ['m', 'waste:waste:1'])
+test('waste display labels are localized without changing normalized types', () => {
+  const types = ['restavfall', 'matavfall', 'papir', 'plast', 'glass_metall', 'hageavfall', 'christmas_tree', 'hazardous', 'textile']
+  assert.deepEqual(types.map(type => wasteCollectionDisplayTitle(type, 'en')), ['Residual waste', 'Food waste', 'Paper', 'Plastic', 'Glass and metal', 'Garden waste', 'Christmas tree', 'Hazardous waste', 'Textiles'])
+  assert.deepEqual(types.map(type => wasteCollectionDisplayTitle(type, 'no')), ['Restavfall', 'Matavfall', 'Papir', 'Plast', 'Glass og metall', 'Hageavfall', 'Juletre', 'Farlig avfall', 'Tekstil'])
 })
 
-test('Norwegian waste titles are normalized by fraction', () => {
-  assert.equal(wasteCollectionTitle('restavfall'), 'Tøm restavfall')
-  assert.equal(wasteCollectionTitle('plast'), 'Tøm plast')
-  assert.equal(wasteCollectionTitle('papir'), 'Tøm papir')
-  assert.equal(wasteCollectionTitle('matavfall'), 'Tøm matavfall')
-  assert.equal(wasteCollectionTitle('glass_metall'), 'Tøm glass og metall')
+test('physical-frame same-date waste titles use the frame language', () => {
+  const source = [row('2026-10-25')]
+  assert.equal(buildWasteCollectionItems(source, '2026-10-24', '2026-12-01', 'Europe/Oslo', false, 'en')[0].title, 'Food waste + paper')
+  assert.equal(buildWasteCollectionItems(source, '2026-10-24', '2026-12-01', 'Europe/Oslo', false, 'no')[0].title, 'Matavfall + papir')
+  assert.deepEqual(source[0].raw.normalized_type, ['matavfall', 'papir'])
+})
+
+test('physical frame route is cache-only and imports no waste provider or sync', () => {
+  const source = fs.readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
+  assert.match(source, /if \(raw == null\) return true/); assert.doesNotMatch(source, /integrations\/waste|refreshWaste|syncWaste|Kartverket|MinRenovasjon|Stavanger/)
+})
+
+test('waste persistence keeps starts_at null and canonical collection_date', () => {
+  const source = fs.readFileSync(new URL('../app/lib/integrations/waste/server.ts', import.meta.url), 'utf8')
+  assert.match(source, /starts_at: null/); assert.match(source, /collection_date: date/); assert.doesNotMatch(source, /T00:00:00\+01:00/); assert.match(source, /Promise\.allSettled/)
+})
+
+test('failed refresh preserves cache while success identifies only stale future rows', () => {
+  assert.deepEqual(wasteCachePlan(['old', 'keep'], [], false), { upsertIds: [], staleIds: [] })
+  assert.deepEqual(wasteCachePlan(['old', 'keep'], ['keep', 'new', 'new'], true), { upsertIds: ['keep', 'new'], staleIds: ['old'] })
+})
+
+test('cron rejects unauthorized requests before starting synchronization', () => {
+  const source = fs.readFileSync(new URL('../app/api/cron/waste-sync/route.ts', import.meta.url), 'utf8')
+  assert.match(source, /status: 401/); assert.match(source, /Bearer \$\{secret\}/)
 })

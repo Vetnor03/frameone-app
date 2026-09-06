@@ -282,7 +282,8 @@ function normalizeIncludeOverdue(raw: string | null) {
 }
 
 function normalizeSkipSync(raw: string | null) {
-  if (raw == null) return false
+  // Physical frames are cache-only by default. Upstream refresh is opt-in for app/admin callers.
+  if (raw == null) return true
   const v = raw.trim().toLowerCase()
   if (v === '0' || v === 'false' || v === 'no') return false
   return true
@@ -511,6 +512,7 @@ export async function GET(req: Request) {
     let wasteItems: DeviceReminderItem[] = []
     let localEventItems: DeviceReminderItem[] = []
     const configuredModules = (deviceSettingsData?.settings_json as any)?.modules
+    const frameLanguage = (deviceSettingsData?.settings_json as any)?.language === 'no' ? 'no' : 'en'
     const explicitIntegrationSelection = configuredModules?.integration_selection_explicit === true
     const selectedIntegrations = configuredModules?.integrations || {}
     const providerEnabled = (provider: string) => !deviceSettingsError && (!explicitIntegrationSelection || selectedIntegrations?.[provider]?.enabled === true)
@@ -584,7 +586,8 @@ export async function GET(req: Request) {
           todayYmd,
           horizonEndYmd,
           timeZone,
-          includeOverdue
+          includeOverdue,
+          frameLanguage
         )
       } catch (error) {
         logOptionalReminderProviderFailure('waste', error)
