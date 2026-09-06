@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
-import { providerForAddress, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type WasteAddress, type WasteCollection } from './providers'
+import { createHash } from 'node:crypto'
+import { providerForAddress, searchKartverketAddresses, WasteProviderError, wasteCollectionTitle, type ProviderFamily, type WasteAddress, type WasteCollection } from './providers'
 import { norwayLocalYmd } from './date'
 import { wasteCachePlan } from './cache'
 import { wasteCollectionDisplayTitle, type WasteDisplayLanguage } from './display.ts'
@@ -8,9 +9,18 @@ export { norwayLocalYmd } from './date'
 export const WASTE_PROVIDER = 'waste'
 export const WASTE_UNSUPPORTED_MESSAGE = 'Waste collection isn’t available for this address yet.'
 
-const externalId = (address: WasteAddress, item: WasteCollection) => `${address.municipalityNumber}:${address.addressId}:${item.date}:${item.normalizedType}`
+const collectionIdentity = (family: ProviderFamily, address: WasteAddress, item: WasteCollection) => item.providerEventId
+  ? `event:${item.providerEventId}`
+  : item.providerTypeId
+    ? `fraction:${item.providerTypeId}:${item.date}`
+    : `raw:${family}:${address.addressId}:${item.date}:${item.rawType.toLocaleLowerCase('nb-NO')}`
 
-export function wasteRows(userId: string, address: WasteAddress, collections: WasteCollection[], boundaryDate = norwayLocalYmd()) {
+const externalId = (family: ProviderFamily, address: WasteAddress, date: string, items: WasteCollection[]) => {
+  const identities = items.map(item => collectionIdentity(family, address, item)).sort().join('|')
+  return `${address.municipalityNumber}:${address.addressId}:${date}:${createHash('sha256').update(identities).digest('hex').slice(0, 24)}`
+}
+
+export function wasteRows(userId: string, address: WasteAddress, collections: WasteCollection[], boundaryDate = norwayLocalYmd(), family: ProviderFamily = providerForAddress(address).family) {
   const grouped = new Map<string, WasteCollection[]>()
   for (const item of collections) {
     if (item.date < boundaryDate) continue
@@ -25,9 +35,9 @@ export function wasteRows(userId: string, address: WasteAddress, collections: Wa
       return index ? value.toLocaleLowerCase('nb-NO') : value
     }).join(' + ')
     return {
-      user_id: userId, provider: WASTE_PROVIDER, external_id: externalId(address, { ...items[0], date, normalizedType: uniqueTypes.join('+') as any }),
+      user_id: userId, provider: WASTE_PROVIDER, external_id: externalId(family, address, date, items),
       title, body: null, starts_at: null, due_at: null, priority: 5,
-      raw: { source: 'waste', type: 'waste_collection', date, collection_date: date, all_day: true, normalized_type: uniqueTypes, original_provider_label: items.map(x => x.originalLabel), provider: address.municipalityNumber === '1103' ? 'stavanger' : address.municipalityNumber === '1108' ? 'hentavfall' : 'min_renovasjon', address_id: address.addressId, municipality_number: address.municipalityNumber, collection: items.map(x => x.raw ?? null) },
+      raw: { source: 'waste', type: 'waste_collection', date, collection_date: date, all_day: true, normalized_type: uniqueTypes, original_provider_label: items.map(x => x.originalLabel), provider_family: family, address_id: address.addressId, municipality_number: address.municipalityNumber, collection: items },
       updated_at: new Date().toISOString(),
     }
   })
@@ -35,9 +45,8 @@ export function wasteRows(userId: string, address: WasteAddress, collections: Wa
 
 async function fetchForAddress(address: WasteAddress) {
   const provider = providerForAddress(address)
-  if (!provider.canHandle(address)) throw new WasteProviderError('unsupported', WASTE_UNSUPPORTED_MESSAGE, false)
   const resolved = await provider.resolveAddress(address)
-  return { resolved, collections: provider.normalizeCollections(await provider.fetchCollections(resolved)) }
+  return { resolved, family: provider.family, collections: provider.normalizeCollections(await provider.fetchCollections(resolved)) }
 }
 
 export async function refreshWasteForUser(userId: string, address?: WasteAddress) {
@@ -50,8 +59,8 @@ export async function refreshWasteForUser(userId: string, address?: WasteAddress
   }
   if (!selected) throw new WasteProviderError('unsupported', WASTE_UNSUPPORTED_MESSAGE, false)
   try {
-    const { resolved, collections } = await fetchForAddress(selected)
-    const rows = wasteRows(userId, resolved, collections)
+    const { resolved, family, collections } = await fetchForAddress(selected)
+    const rows = wasteRows(userId, resolved, collections, norwayLocalYmd(), family)
     if (!rows.length) throw new WasteProviderError('invalid_response', 'The provider returned no future waste collections.')
     const boundaryDate = norwayLocalYmd()
     const { data: previous, error: previousError } = await db.from('integration_items').select('external_id').eq('user_id', userId).eq('provider', WASTE_PROVIDER).gte('raw->>date', boundaryDate)
@@ -75,8 +84,8 @@ export async function refreshWasteForUser(userId: string, address?: WasteAddress
 }
 
 export async function previewWasteAddress(address: WasteAddress, language: WasteDisplayLanguage = 'en') {
-  const { resolved, collections } = await fetchForAddress(address)
-  return { status: 'preview' as const, resolvedAddress: resolved, previewItems: wasteRows('preview', resolved, collections).slice(0, 3).map(row => ({ date: row.raw.date, title: wasteCollectionDisplayTitle(row.raw.normalized_type, language, row.raw.original_provider_label) })) }
+  const { resolved, family, collections } = await fetchForAddress(address)
+  return { status: 'preview' as const, resolvedAddress: resolved, previewItems: wasteRows('preview', resolved, collections, norwayLocalYmd(), family).slice(0, 3).map(row => ({ date: row.raw.date, title: wasteCollectionDisplayTitle(row.raw.normalized_type, language, row.raw.original_provider_label) })) }
 }
 
 export async function searchWasteAddresses(query: string) { return searchKartverketAddresses(query) }

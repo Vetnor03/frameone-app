@@ -1,75 +1,66 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createMinRenovasjonProvider, createStavangerProvider, normalizeWasteType, searchKartverketAddresses, WasteProviderError } from '../app/lib/integrations/waste/providers.ts'
+import { readFile } from 'node:fs/promises'
+import { createHimProvider, createMinRenovasjonProvider, createOsloProvider, createRenovasjonsportalProvider, normalizeWasteType, providerForAddress, providerRegistrationFor, searchKartverketAddresses, WasteProviderError } from '../app/lib/integrations/waste/providers.ts'
 import { norwayLocalYmd } from '../app/lib/integrations/waste/date.ts'
-import { wasteCollectionDisplayTitle } from '../app/lib/integrations/waste/display.ts'
+import { wasteCachePlan } from '../app/lib/integrations/waste/cache.ts'
 
-test('Norwegian canonical today differs from UTC around Oslo midnight', () => {
-  const instant = new Date('2026-01-15T23:30:00.000Z')
-  assert.equal(instant.toISOString().slice(0, 10), '2026-01-15')
-  assert.equal(norwayLocalYmd(instant), '2026-01-16')
+const fixture = name => readFile(new URL(`fixtures/waste/${name}`, import.meta.url), 'utf8')
+const address = (municipalityNumber = '1106') => ({ addressId: `${municipalityNumber}-1-2-`, label: 'Testveien 2, 0001 Test', municipalityNumber, municipalityName: 'Test', addressCode: '1', streetName: 'Testveien', houseNumber: '2' })
+
+test('Norwegian canonical date uses the Norway timezone', () => assert.equal(norwayLocalYmd(new Date('2026-01-15T23:30:00Z')), '2026-01-16'))
+
+test('Kartverket retains provider routing fields', async () => {
+  const rows = await searchKartverketAddresses('Test', async () => Response.json({ adresser: [{ adressetekst: 'Testveien 2B', adressenavn: 'Testveien', nummer: 2, bokstav: 'B', postnummer: '0001', poststed: 'Oslo', kommunenummer: '0301', kommunenavn: 'Oslo', adressekode: 123 }] }))
+  assert.deepEqual([rows[0].municipalityNumber, rows[0].addressCode, rows[0].houseNumber, rows[0].houseLetter], ['0301', '123', '2', 'B'])
 })
 
-test('Kartverket autocomplete preserves multiple complete address candidates', async () => {
-  const fetcher = async () => Response.json({ adresser: [
-    { adressetekst: 'Boganesstraen 36B', adressenavn: 'Boganesstraen', nummer: 36, bokstav: 'B', postnummer: '4020', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234, gardsnummer: 16, bruksnummer: 489, seksjonsnummer: 0, representasjonspunkt: { lat: 58.9, lon: 5.7 } },
-    { adressetekst: 'Boganesstraen 38', nummer: 38, postnummer: '4020', poststed: 'Stavanger', kommunenummer: '1103', kommunenavn: 'Stavanger', adressekode: 1234 },
-  ] })
-  const rows = await searchKartverketAddresses('Boganesstraen', fetcher)
-  assert.equal(rows.length, 2); assert.equal(rows[0].houseNumber, '36B'); assert.equal(rows[0].label, 'Boganesstraen 36B, 4020 Stavanger'); assert.equal(rows[0].municipalityNumber, '1103'); assert.equal(rows[0].addressCode, '1234'); assert.equal(rows[0].gnr, '16'); assert.equal(rows[0].bnr, '489')
+test('registry is authoritative: unknown does not silently become MinRenovasjon', () => {
+  assert.equal(providerRegistrationFor('9999'), undefined)
+  assert.throws(() => providerForAddress(address('9999')), error => error instanceof WasteProviderError && error.code === 'unsupported')
 })
 
-test('normalization never turns unknown labels into residual waste', () => {
-  assert.equal(normalizeWasteType('Bio'), 'matavfall'); assert.equal(normalizeWasteType('Juletre'), 'christmas_tree'); assert.equal(normalizeWasteType('Farlig avfall'), 'hazardous'); assert.equal(normalizeWasteType('Klær og tekstil'), 'textile'); assert.equal(normalizeWasteType('Mystisk fraksjon'), 'other'); assert.notEqual(normalizeWasteType('Mystisk fraksjon'), 'restavfall')
+test('Haugesund routes to HIM, while Stavanger and Sandnes remain unresolved preview', async () => {
+  assert.equal(providerForAddress(address('1106')).family, 'him')
+  assert.notEqual(providerForAddress(address('1106')).family, 'minrenovasjon')
+  for (const municipality of ['1103', '1108']) await assert.rejects(() => providerForAddress(address(municipality)).resolveAddress(address(municipality)), error => error instanceof WasteProviderError && error.code === 'unsupported')
 })
 
-test('app preview grouping can render English and Norwegian titles from normalized data', () => {
-  assert.equal(wasteCollectionDisplayTitle(['matavfall', 'papir'], 'en', ['Bio', 'Papp']), 'Food waste + paper')
-  assert.equal(wasteCollectionDisplayTitle(['matavfall', 'papir'], 'no', ['Bio', 'Papp']), 'Matavfall + papir')
+test('HIM fixture preserves dates, CSS semantics, same-day fractions, and unknowns', async () => {
+  const provider = createHimProvider(async url => { assert.equal(new URL(url).searchParams.get('adressesok'), 'Testveien 2'); return new Response(await fixture('him.html')) })
+  const rows = provider.normalizeCollections(await provider.fetchCollections(address()))
+  assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'matavfall', 'css_identifier'], ['2026-09-08', 'mysterieavfall', 'css_identifier'], ['2026-09-08', 'papir', 'css_identifier']])
+  assert.equal(rows.find(row => row.rawType === 'mysterieavfall').normalizedType, 'other')
+  assert.throws(() => provider.normalizeCollections({ html: '<html>broken</html>' }), error => error.code === 'invalid_response')
 })
 
-test('Stavanger dynamically resolves a property UUID then parses multiple fractions on one date', async () => {
-  const calls = []
-  const fetcher = async url => {
-    calls.push(String(url))
-    if (calls.length === 1) return new Response('<form data-search-url="/renovasjon-og-miljo/tommekalender/finn-kalender/api/address-search"></form>')
-    if (calls.length === 2) return Response.json({ suggestions: [{ ids: 'dynamic-property-id', gnumber: 16, bnumber: 489, snumber: 0 }] })
-    return new Response('<section data-month="2026-09"><table><tr class="waste-calendar__item"><td>08.09 - tirsdag</td><td><img alt="Matavfall"><img title="Papir"></td></tr></table></section>')
-  }
-  const provider = createStavangerProvider(fetcher)
-  const resolved = await provider.resolveAddress({ addressId: 'kartverket-id', label: 'Selected address', municipalityNumber: '1103', municipalityName: 'Stavanger', gnr: '16', bnr: '489', snr: '0' })
-  assert.equal(resolved.propertyId, 'dynamic-property-id'); assert.doesNotMatch(JSON.stringify(provider), /6fa154fe|Boganesstraen/)
-  const rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
-  assert.deepEqual(rows.map(x => x.normalizedType).sort(), ['matavfall', 'papir']); assert.match(calls[2], /ids=dynamic-property-id/)
+test('Oslo fixture preserves JSON labels, IDs, same-day fractions, and unknowns', async () => {
+  const provider = createOsloProvider(async url => { assert.equal(new URL(url).searchParams.get('street_id'), '1'); return new Response(await fixture('oslo.json'), { headers: { 'content-type': 'application/json' } }) })
+  const rows = provider.normalizeCollections(await provider.fetchCollections(address('0301')))
+  assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'Matavfall', 'json_field'], ['2026-09-08', 'Ukjent prøve', 'json_field']])
+  assert.equal(rows[1].normalizedType, 'other'); assert.equal(rows[1].providerEventId, 'event-2')
+  assert.throws(() => provider.normalizeCollections({ nope: [] }), error => error.code === 'invalid_response')
 })
 
-test('Stavanger structured calendar derives years across December and January', () => {
-  const provider = createStavangerProvider(async () => { throw new Error('unused') })
-  const rows = provider.normalizeCollections({ html: `
-    <section data-month="2026-12"><tr class="waste-calendar__item"><td>28.12 - mandag</td><td><img alt="Restavfall"></td></tr></section>
-    <section data-month="2027-01"><tr class="waste-calendar__item"><td>04.01 - mandag</td><td><img alt="Bio"><img title="Papir"></td></tr></section>` })
-  assert.deepEqual(rows.map(row => [row.date, row.normalizedType]), [['2026-12-28', 'restavfall'], ['2027-01-04', 'matavfall'], ['2027-01-04', 'papir']])
+test('MinRenovasjon fixture joins fraction identity to labels and preserves unknown fractions', async () => {
+  const responses = [JSON.parse(await fixture('minrenovasjon-fractions.json')), JSON.parse(await fixture('minrenovasjon-calendar.json'))]
+  const provider = createMinRenovasjonProvider('server-secret', async () => Response.json(responses.shift()))
+  const rows = provider.normalizeCollections(await provider.fetchCollections(address('3205')))
+  assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'Matavfall', 'fraction_id'], ['2026-09-08', 'Ukjent prøve', 'fraction_id']])
+  assert.equal(rows[1].normalizedType, 'other'); assert.equal(rows[1].providerTypeId, '99')
+  assert.throws(() => provider.normalizeCollections({ fractions: {}, calendar: [] }), error => error.code === 'invalid_response')
+  await assert.rejects(() => createMinRenovasjonProvider('').fetchCollections(address('3205')), error => error.code === 'configuration' && /server-only/.test(error.message))
 })
 
-test('MinRenovasjon fetches fractions and calendar, maps names and deduplicates', async () => {
-  const calls = []
-  const fetcher = async url => { calls.push(String(url)); return Response.json(calls.length === 1 ? [{ Id: 7, Navn: 'Bio' }] : [{ FraksjonId: 7, Tommedatoer: ['2026-09-08', '2026-09-08'] }]) }
-  const provider = createMinRenovasjonProvider('secret', fetcher); const address = { addressId: 'a', label: 'A', municipalityNumber: '9999', municipalityName: 'X', addressCode: '1', streetName: 'Gate', houseNumber: '2' }
-  const rows = provider.normalizeCollections(await provider.fetchCollections(address))
-  const first = new URL(calls[0]); const second = new URL(calls[1])
-  assert.equal(first.origin, 'https://norkartrenovasjon.azurewebsites.net'); assert.match(first.searchParams.get('server'), /MinRenovasjon\.Api\/api\/fraksjoner/); assert.match(second.searchParams.get('server'), /tommekalender/); assert.match(second.searchParams.get('server'), /kommunenr=9999/); assert.equal(rows.length, 1); assert.equal(rows[0].originalLabel, 'Bio'); assert.equal(rows[0].normalizedType, 'matavfall')
+test('Renovasjonsportal fixture uses searchResults/id/details and preserves raw fractions', async () => {
+  const calls = [], provider = createRenovasjonsportalProvider('https://provider.example/portal', async url => { calls.push(String(url)); return calls.length === 1 ? Response.json(JSON.parse(await fixture('renovasjonsportal-search.json'))) : Response.json(JSON.parse(await fixture('renovasjonsportal-details.json'))) })
+  const resolved = await provider.resolveAddress(address('5054')), rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
+  assert.equal(resolved.propertyId, 'stable-address-7'); assert.match(calls[1], /stable-address-7\/details$/)
+  assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'Restavfall', 'json_field'], ['2026-09-08', 'Ukjent portalfraksjon', 'json_field']])
+  assert.equal(rows[1].normalizedType, 'other')
+  assert.throws(() => provider.normalizeCollections({ disposals: 'bad' }), error => error.code === 'invalid_response')
 })
 
-test('MinRenovasjon malformed JSON and missing key are controlled errors', async () => {
-  const address = { addressId: 'a', label: 'A', municipalityNumber: '9999', municipalityName: 'X' }
-  await assert.rejects(() => createMinRenovasjonProvider('', fetch).fetchCollections(address), e => e instanceof WasteProviderError && e.code === 'configuration')
-  await assert.rejects(() => createMinRenovasjonProvider('key', async () => new Response('{oops')).fetchCollections(address), e => e instanceof WasteProviderError && e.code === 'invalid_response')
-})
+test('failed refresh keeps the old cache plan untouched', () => assert.deepEqual(wasteCachePlan(['old-event'], [], false), { upsertIds: [], staleIds: [] }))
 
-test('MinRenovasjon classifies authentication, throttling, server and no-service responses', async () => {
-  const address = { addressId: 'a', label: 'A', municipalityNumber: '9999', municipalityName: 'X' }
-  for (const [status, code] of [[401, 'configuration'], [403, 'configuration'], [429, 'temporary_failure'], [500, 'temporary_failure'], [503, 'temporary_failure'], [404, 'unsupported']]) {
-    const provider = createMinRenovasjonProvider('key', async () => new Response('', { status }))
-    await assert.rejects(() => provider.fetchCollections(address), error => error instanceof WasteProviderError && error.code === code)
-  }
-})
+test('normalization does not coerce unknown semantics', () => assert.equal(normalizeWasteType('Mystisk fraksjon'), 'other'))
