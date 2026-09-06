@@ -102,11 +102,22 @@ test('firmware uses actual partial windows and full windows only by plan', () =>
   assert.ok(smart.indexOf('commitSuccessfulDisplay') > smart.indexOf('SmartRefresh::plan'))
 })
 
-test('manual detection remains ten seconds while background safety is ten minutes', () => {
+test('connected manual detection remains ten seconds while true deep sleep is dynamic', () => {
   const header = read('frame/src/core/SmartRefresh.h')
   assert.match(header, /REVISION_SAFETY_SECONDS = 10 \* 60/)
   assert.match(header, /MANUAL_PROBE_SECONDS = 10/)
-  assert.match(firmware, /PROBE_WAKE_SECONDS = SmartRefresh::MANUAL_PROBE_SECONDS/)
+  assert.match(firmware, /BATTERY_CONNECTED_IDLE_LOOP_MS = 10000/)
+  assert.match(firmware, /nextDeepSleepDurationUs[\s\S]*secondsUntilNextWake/)
+  assert.doesNotMatch(firmware, /PROBE_WAKE_US|PROBE_WAKE_SECONDS/)
+  assert.match(firmware, /enablePowerSenseWakeForNextSleep\(usbPresent\)/)
+})
+
+test('unchanged revision rebases and persists scheduler progress without display work', () => {
+  const branch = firmware.slice(firmware.indexOf('} else if (!revisionState.changed'), firmware.indexOf('} else {', firmware.indexOf('} else if (!revisionState.changed')))
+  assert.match(branch, /g_revisionCheckedAt = time\(nullptr\)/)
+  assert.match(branch, /secondsUntilNextWake/)
+  assert.match(branch, /saveScheduler\(g_smartState, g_revisionCheckedAt\)/)
+  assert.doesNotMatch(branch, /fetchRenderState|ensureDisplay|renderSmartDashboard|commitSuccessfulDisplay|sourceSucceeded/)
 })
 
 test('one scheduler combines hard, soft, and revision safety deadlines', () => {

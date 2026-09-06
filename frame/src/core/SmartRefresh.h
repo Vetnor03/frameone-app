@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <time.h>
 #include "Types.h"
 
 enum SmartDeadlineType : uint8_t { SMART_HARD, SMART_SOFT };

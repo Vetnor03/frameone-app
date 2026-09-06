@@ -44,8 +44,6 @@ static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 // Keep the short fallback probe for fast explicit app updates. The independent
 // ten-minute background maximum and module deadlines decide content work; this
 // probe never implies a source fetch or redraw.
-static const uint32_t PROBE_WAKE_SECONDS = SmartRefresh::MANUAL_PROBE_SECONDS;
-static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
 static const uint32_t MAX_REVISION_POLL_SECONDS = 10 * 60;
 // USB stays fully realtime. On battery, a PM-capable Alfred remains connected
 // with MAX_MODEM/automatic light sleep and uses a short connected idle cadence.
@@ -56,8 +54,10 @@ static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
+RTC_DATA_ATTR static uint32_t plannedDeepSleepSeconds = SmartRefresh::REVISION_SAFETY_SECONDS;
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
-// Retained across the 10-second deep-sleep wake cycle. A cold boot may redraw
+RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
+// Retained across dynamically scheduled deep-sleep wake cycles. A cold boot may redraw
 // once, but ordinary setup-pending probes never refresh unchanged e-paper.
 RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
 
@@ -226,9 +226,26 @@ static void goToSleepForUs(uint64_t us, bool usbPresent) {
   esp_deep_sleep_start();
 }
 
+static uint64_t nextDeepSleepDurationUs() {
+  const time_t now = time(nullptr);
+  const time_t checkedAt = g_revisionCheckedAt > 0 ? g_revisionCheckedAt : now;
+  uint32_t seconds = SmartRefresh::secondsUntilNextWake(g_smartState, now, checkedAt);
+  if (seconds <= 1 && g_revisionRetryNotBefore > now)
+    seconds = (uint32_t)(g_revisionRetryNotBefore - now);
+  // Invalid/unset wall time or scheduler state falls back to the revision
+  // safety maximum, never the connected-mode manual probe cadence.
+  if (now < 1000000000 || seconds == 0) seconds = SmartRefresh::REVISION_SAFETY_SECONDS;
+  return (uint64_t)seconds * 1000000ULL;
+}
+
 static void goToSleep(bool usbPresent) {
-  Serial.println("LiveUpdate: sleep");
-  goToSleepForUs(PROBE_WAKE_US, usbPresent);
+  // A fully sleeping radio cannot see a cloud manual-update request. Alfred's
+  // connected/light-sleep path retains fast polling; true deep sleep wakes only
+  // for the combined module/revision deadline or the independent EXT1 event.
+  Serial.println("LiveUpdate: dynamic deep sleep");
+  const uint64_t durationUs = nextDeepSleepDurationUs();
+  plannedDeepSleepSeconds = (uint32_t)(durationUs / 1000000ULL);
+  goToSleepForUs(durationUs, usbPresent);
 }
 
 static void goToShelfSleep(bool usbPresent) {
@@ -812,7 +829,7 @@ static InteractiveModeResult runInteractiveMode(
 ) {
   Serial.println("LiveUpdate: entering interactive mode");
   if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
-    Serial.println("LiveUpdate: connected light sleep unavailable; use 10-second deep-sleep fallback");
+    Serial.println("LiveUpdate: connected light sleep unavailable; use dynamic deep-sleep fallback");
     return INTERACTIVE_FINISHED;
   }
 
@@ -828,7 +845,7 @@ static InteractiveModeResult runInteractiveMode(
       pwr = sampledPower;
       batt = BatteryManager::readAndUpdate(pwr.usbPresent);
       if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
-        Serial.println("LiveUpdate: unplugged -> 10-second deep-sleep fallback");
+        Serial.println("LiveUpdate: unplugged -> dynamic deep-sleep fallback");
         return INTERACTIVE_FINISHED;
       }
       bool hadPrevious = false;
@@ -987,7 +1004,7 @@ void setup() {
 
   const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
   if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
-    normalSyncElapsedSeconds += PROBE_WAKE_SECONDS;
+    normalSyncElapsedSeconds += plannedDeepSleepSeconds;
   }
   // Power events never advance, reset, or trigger the display-content clock.
   // Cold boot initializes the baseline; subsequent checks are interval-only.
@@ -1262,12 +1279,18 @@ run_normal_sync:
   String scheduledModules = SmartRefresh::dueModuleCsv(g_smartState, time(nullptr));
   if (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length()) scheduledModules = "all";
   if (!SmartRefresh::probeRevision(DeviceIdentity::getToken(), knownRevision, revisionState)) {
+    g_revisionRetryNotBefore = time(nullptr) + 60;
     Serial.println("Revision safety poll unavailable; preserving display and sources");
   } else if (!revisionState.changed && !scheduledModules.length()) {
+    g_revisionRetryNotBefore = 0;
     g_revisionCheckedAt = time(nullptr);
+    g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
+      g_smartState, g_revisionCheckedAt, g_revisionCheckedAt);
+    SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
     Serial.println("Revision unchanged; no config, source, or display work");
     postDeviceStatus(batt, pwr, false);
   } else {
+    g_revisionRetryNotBefore = 0;
     String affected = SmartRefresh::unionModuleCsv(revisionState.affectedModules, scheduledModules);
     if (!affected.length()) affected = "all";
     if (affected == "all" && FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) != FrameConfigApi::FETCH_OK) {

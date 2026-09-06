@@ -32,7 +32,8 @@ def test_renders_are_serial_and_new_layout_cannot_use_cached_config():
 
 def test_revision_safety_poll_replaces_four_hour_redraw_policy():
     assert 'MAX_REVISION_POLL_SECONDS = 10 * 60' in MAIN
-    assert 'PROBE_WAKE_SECONDS = SmartRefresh::MANUAL_PROBE_SECONDS' in MAIN
+    assert 'PROBE_WAKE_SECONDS' not in MAIN
+    assert 'nextDeepSleepDurationUs()' in MAIN
     assert 'SCHEDULED_CONTENT_CHECK_SECONDS' not in MAIN
     assert '4 * 60 * 60' not in MAIN
     assert 'NORMAL_SYNC_SECONDS' not in MAIN
@@ -58,6 +59,7 @@ def test_unchanged_revision_is_cheap_and_changed_content_uses_display_policy():
 def test_revision_and_render_state_failures_preserve_display():
     scheduled = MAIN[MAIN.index('ContentRevisionState revisionState;'):]
     assert 'Revision safety poll unavailable; preserving display and sources' in scheduled
+    assert 'g_revisionRetryNotBefore = time(nullptr) + 60' in scheduled
     assert 'Affected render-state fetch failed; preserving freshness and hashes' in scheduled
 
 def test_manual_ack_precedes_signature_bookkeeping():
@@ -169,3 +171,12 @@ def test_charger_events_do_not_trigger_or_reset_content_clock():
     assert 'chargerStateChanged' not in due
     assert 'wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED' in due
     assert 'normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS' in due
+
+def test_unchanged_revision_persists_successful_poll_and_rebased_wake_without_display():
+    scheduled = MAIN[MAIN.index('} else if (!revisionState.changed'):MAIN.index('} else {', MAIN.index('} else if (!revisionState.changed'))]
+    assert 'g_revisionCheckedAt = time(nullptr)' in scheduled
+    assert 'secondsUntilNextWake' in scheduled
+    assert 'saveScheduler(g_smartState, g_revisionCheckedAt)' in scheduled
+    assert 'fetchRenderState' not in scheduled
+    assert 'ensureDisplay' not in scheduled
+    assert 'renderSmartDashboard' not in scheduled

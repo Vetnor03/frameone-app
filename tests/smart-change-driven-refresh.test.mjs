@@ -122,3 +122,21 @@ test('selective merge preserves unrelated deadlines and failed replacement prese
 test('revision and nearby scheduled work are unioned and deduplicated', () => {
   assert.deepEqual(unionModuleKeys(['reminders'], ['weather', 'surf', 'reminders']), ['reminders', 'weather', 'surf'])
 })
+
+test('dynamic deep-sleep choice prefers hard work then revision safety over later work', () => {
+  const modules = [
+    tile('reminders', 1, [{ at: 4 * minute, type: DEADLINE_HARD }]),
+    tile('weather', 1, [{ at: 7 * minute, type: DEADLINE_SOFT }]),
+  ]
+  assert.equal(nextWake(modules, { now: 0, revisionCheckedAt: 0, revisionPollMs: 10 * minute }), 4 * minute)
+  assert.equal(nextWake([tile('weather', 1, [{ at: 20 * minute, type: DEADLINE_SOFT }])], { now: 0, revisionCheckedAt: 0, revisionPollMs: 10 * minute }), 10 * minute)
+})
+
+test('latest successful unchanged poll survives restoration and rebases revision safety', () => {
+  const state = new SmartRefreshState({ backendRevision: 9, revisionCheckedAt: 0, displayedHashes: { date: 'shown' } })
+  assert.equal(state.revisionResult(9, [], 5 * minute).changed, false)
+  const restored = new SmartRefreshState(JSON.parse(JSON.stringify(state.snapshot())))
+  assert.equal(nextWake([], { now: 6 * minute, revisionCheckedAt: restored.revisionCheckedAt }), 15 * minute)
+  assert.deepEqual(restored.displayedHashes, { date: 'shown' })
+  assert.deepEqual(restored.sourceFreshness, {})
+})
