@@ -44,10 +44,29 @@ language plpgsql security definer set search_path = '' as $$
 declare owner uuid; frame record;
 begin
   owner := case when tg_op = 'DELETE' then old.user_id else new.user_id end;
-  for frame in select distinct d.device_id from public.devices d
-    join public.device_members dm on dm.device_id = d.id where dm.user_id = owner
+  for frame in select distinct dm.device_id from public.device_members dm where dm.user_id = owner
   loop
     perform public.bump_frame_content_revision(frame.device_id, array['surf']);
+  end loop;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+
+create or replace function public.bump_integration_frame_content() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare row_data jsonb; owner uuid; scoped_device text; frame record;
+begin
+  row_data := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+  owner := nullif(row_data->>'user_id', '')::uuid;
+  scoped_device := nullif(row_data->>'device_id', '');
+  for frame in
+    select distinct candidate.device_id from (
+      select scoped_device as device_id where scoped_device is not null
+      union
+      select dm.device_id from public.device_members dm where dm.user_id = owner
+    ) candidate where candidate.device_id is not null
+  loop
+    perform public.bump_frame_content_revision(frame.device_id, array['reminders']);
   end loop;
   if tg_op = 'DELETE' then return old; end if;
   return new;
@@ -85,10 +104,20 @@ end $$;
 
 do $$ declare table_name text;
 begin
-  foreach table_name in array array['reminders','reminder_completions','countdown_events','device_settings','integration_items','local_event_frame_skips'] loop
+  foreach table_name in array array['reminders','reminder_completions','countdown_events','device_settings','local_event_frame_skips'] loop
     if to_regclass('public.' || table_name) is not null then
       execute format('drop trigger if exists frame_content_revision on public.%I', table_name);
       execute format('create trigger frame_content_revision after insert or update or delete on public.%I for each row execute function public.bump_direct_frame_content()', table_name);
+    end if;
+  end loop;
+end $$;
+
+do $$ declare table_name text;
+begin
+  foreach table_name in array array['integration_items','user_integrations'] loop
+    if to_regclass('public.' || table_name) is not null then
+      execute format('drop trigger if exists frame_content_revision on public.%I', table_name);
+      execute format('create trigger frame_content_revision after insert or update or delete on public.%I for each row execute function public.bump_integration_frame_content()', table_name);
     end if;
   end loop;
 end $$;

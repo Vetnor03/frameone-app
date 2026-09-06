@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEADLINE_HARD, DEADLINE_SOFT, SmartRefreshState, displayPlan, dueWork, nextWake, normalizeModule, renderHash } from '../app/lib/device/smartRefresh.mjs'
+import { DEADLINE_HARD, DEADLINE_SOFT, SmartRefreshState, displayPlan, dueWork, mergeModuleStates, nextWake, normalizeModule, renderHash, unionModuleKeys } from '../app/lib/device/smartRefresh.mjs'
 
 const minute = 60_000
 const tile = (key, render, at = [], bounds = { x: 0, y: 0, w: 400, h: 240 }) => normalizeModule({ key, render, bounds, deadlines: at })
@@ -97,4 +97,28 @@ test('midnight is hard and reboot restores physical hashes but recalculates wake
 test('display-health counters replace arbitrary elapsed-time full refreshes', () => {
   const changed = tile('weather', 2)
   assert.equal(displayPlan({}, [changed], { health: { partialCount: 20 } }).type, 'full')
+})
+
+test('deep-sleep snapshot restores a 10:00 reminder deadline and selects it with unchanged revision', () => {
+  const ten = Date.parse('2026-09-06T08:00:00Z') // 10:00 Europe/Oslo
+  const beforeSleep = [tile('reminders', ['later'], [{ at: ten, type: DEADLINE_HARD }])]
+  const persisted = JSON.parse(JSON.stringify(beforeSleep))
+  const afterRestart = persisted.map(normalizeModule)
+  assert.deepEqual(dueWork(afterRestart, { now: ten, revisionCheckedAt: ten - 5 * minute }).moduleKeys, ['reminders'])
+})
+
+test('selective merge preserves unrelated deadlines and failed replacement preserves all old state', () => {
+  const current = [
+    tile('reminders', 1, [{ at: 15 * minute, type: DEADLINE_HARD }]),
+    tile('weather', 1, [{ at: 14 * minute, type: DEADLINE_SOFT }]),
+    tile('date', 1, [{ at: 100 * minute, type: DEADLINE_HARD }]),
+  ]
+  const updated = mergeModuleStates(current, [tile('reminders', 1, [{ at: 10 * minute, type: DEADLINE_HARD }, { at: 15 * minute, type: DEADLINE_HARD }])])
+  assert.deepEqual(updated.map((m) => m.key), ['reminders', 'weather', 'date'])
+  assert.equal(nextWake(updated, { now: 0, revisionCheckedAt: 0, revisionPollMs: 30 * minute }), 10 * minute)
+  assert.deepEqual(mergeModuleStates(current, []), current)
+})
+
+test('revision and nearby scheduled work are unioned and deduplicated', () => {
+  assert.deepEqual(unionModuleKeys(['reminders'], ['weather', 'surf', 'reminders']), ['reminders', 'weather', 'surf'])
 })

@@ -42,4 +42,9 @@ namespace SmartRefresh {
   uint32_t secondsUntilNextWake(const SmartRenderState& state, time_t now,
                                 time_t revisionCheckedAt);
   String dueModuleCsv(const SmartRenderState& state, time_t now);
+  bool loadScheduler(SmartRenderState& out, time_t& revisionCheckedAt);
+  bool saveScheduler(const SmartRenderState& state, time_t revisionCheckedAt);
+  void mergeScheduler(SmartRenderState& complete, const SmartRenderState& update,
+                      bool screenWide);
+  String unionModuleCsv(const String& first, const String& second);
 }

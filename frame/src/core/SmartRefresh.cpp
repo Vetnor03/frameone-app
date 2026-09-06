@@ -22,6 +22,9 @@ Cell unite(const Cell& a, const Cell& b) {
   Cell c = a; int right = max(a.x + a.w, b.x + b.w), bottom = max(a.y + a.h, b.y + b.h);
   c.x = min(a.x, b.x); c.y = min(a.y, b.y); c.w = right - c.x; c.h = bottom - c.y; return c;
 }
+bool csvContains(const String& csv, const String& wanted) {
+  return ("," + csv + ",").indexOf("," + wanted + ",") >= 0;
+}
 }
 
 bool SmartRefresh::probeRevision(const String& token, uint64_t since, ContentRevisionState& out) {
@@ -121,4 +124,74 @@ String SmartRefresh::dueModuleCsv(const SmartRenderState& state, time_t now) {
     if (due) { if (result.length()) result += ','; result += state.modules[i].key; }
   }
   return result;
+}
+
+String SmartRefresh::unionModuleCsv(const String& first, const String& second) {
+  if (csvContains(first, "all") || csvContains(second, "all")) return "all";
+  String result;
+  const String inputs[2] = { first, second };
+  for (uint8_t source = 0; source < 2; ++source) {
+    int start = 0;
+    while (start < (int)inputs[source].length()) {
+      int end = inputs[source].indexOf(',', start); if (end < 0) end = inputs[source].length();
+      String key = inputs[source].substring(start, end); key.trim();
+      if (key.length() && ("," + result + ",").indexOf("," + key + ",") < 0) {
+        if (result.length()) result += ','; result += key;
+      }
+      start = end + 1;
+    }
+  }
+  return result;
+}
+
+void SmartRefresh::mergeScheduler(SmartRenderState& complete, const SmartRenderState& update,
+                                  bool screenWide) {
+  if (screenWide) { complete = update; return; }
+  if (update.layoutHash.length()) complete.layoutHash = update.layoutHash;
+  for (uint8_t i = 0; i < update.moduleCount; ++i) {
+    int destination = -1;
+    for (uint8_t j = 0; j < complete.moduleCount; ++j)
+      if (complete.modules[j].key == update.modules[i].key) { destination = j; break; }
+    if (destination < 0 && complete.moduleCount < MAX_GRID_CELLS) destination = complete.moduleCount++;
+    if (destination >= 0) complete.modules[destination] = update.modules[i];
+  }
+}
+
+bool SmartRefresh::saveScheduler(const SmartRenderState& state, time_t revisionCheckedAt) {
+  DynamicJsonDocument doc(8192);
+  doc["version"] = 1; doc["layout"] = state.layoutHash; doc["revision_checked_at"] = (int64_t)revisionCheckedAt;
+  JsonArray modules = doc.createNestedArray("modules");
+  for (uint8_t i = 0; i < state.moduleCount; ++i) {
+    JsonObject module = modules.createNestedObject(); module["key"] = state.modules[i].key;
+    JsonArray deadlines = module.createNestedArray("deadlines");
+    for (uint8_t j = 0; j < state.modules[i].deadlineCount; ++j) {
+      JsonObject deadline = deadlines.createNestedObject();
+      deadline["at"] = (int64_t)state.modules[i].deadlines[j].at;
+      deadline["type"] = state.modules[i].deadlines[j].type == SMART_HARD ? "hard" : "soft";
+    }
+  }
+  String encoded; serializeJson(doc, encoded);
+  prefs.begin("smart_refresh", false); const size_t written = prefs.putString("schedule", encoded); prefs.end();
+  return written == encoded.length();
+}
+
+bool SmartRefresh::loadScheduler(SmartRenderState& out, time_t& revisionCheckedAt) {
+  prefs.begin("smart_refresh", true); String encoded = prefs.getString("schedule", ""); prefs.end();
+  if (!encoded.length()) return false;
+  DynamicJsonDocument doc(8192);
+  if (deserializeJson(doc, encoded) || doc["version"] != 1) return false;
+  out = SmartRenderState{}; out.layoutHash = String((const char*)(doc["layout"] | ""));
+  revisionCheckedAt = (time_t)doc["revision_checked_at"].as<int64_t>();
+  for (JsonObject item : doc["modules"].as<JsonArray>()) {
+    if (out.moduleCount >= MAX_GRID_CELLS) return false;
+    SmartModuleState& module = out.modules[out.moduleCount++]; module.key = String((const char*)(item["key"] | ""));
+    if (!module.key.length()) return false;
+    for (JsonObject itemDeadline : item["deadlines"].as<JsonArray>()) {
+      if (module.deadlineCount >= 12) return false;
+      SmartDeadline& deadline = module.deadlines[module.deadlineCount++];
+      deadline.at = (time_t)itemDeadline["at"].as<int64_t>();
+      deadline.type = String((const char*)(itemDeadline["type"] | "soft")) == "hard" ? SMART_HARD : SMART_SOFT;
+    }
+  }
+  return out.moduleCount > 0 && revisionCheckedAt > 0;
 }

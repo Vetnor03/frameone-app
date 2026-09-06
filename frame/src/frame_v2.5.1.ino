@@ -692,10 +692,11 @@ static bool fetchAndRenderExplicit(
   if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired)) return false;
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
   if (!renderSmartDashboard(batt, pwr, desired, displayPlan)) return false;
-  g_smartState = desired;
+  SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
-    desired, g_revisionCheckedAt, g_revisionCheckedAt);
+    g_smartState, g_revisionCheckedAt, g_revisionCheckedAt);
+  SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
   ContentRevisionState contentRevision;
   if (SmartRefresh::probeRevision(DeviceIdentity::getToken(), SmartRefresh::displayedRevision(), contentRevision))
     SmartRefresh::saveDisplayedRevision(contentRevision.revision);
@@ -1114,6 +1115,15 @@ void setup() {
   }
 
   TimeSync::ensure(8000);
+  if (SmartRefresh::loadScheduler(g_smartState, g_revisionCheckedAt)) {
+    const time_t restoredNow = time(nullptr);
+    g_nextScheduledWake = restoredNow + SmartRefresh::secondsUntilNextWake(
+      g_smartState, restoredNow, g_revisionCheckedAt);
+    Serial.printf("SmartRefresh: restored %u module schedules\n", g_smartState.moduleCount);
+  } else {
+    g_nextScheduledWake = 0;
+    Serial.println("SmartRefresh: scheduler unavailable; screen-wide re-evaluation required");
+  }
 
   activeSetupStep = SETUP_STEP_PAIRING;
   PairingResult pairing = ensurePairedNoReboot(chargerStateChanged);
@@ -1258,10 +1268,9 @@ run_normal_sync:
     Serial.println("Revision unchanged; no config, source, or display work");
     postDeviceStatus(batt, pwr, false);
   } else {
-    String affected = revisionState.affectedModules;
-    if (!affected.length()) affected = scheduledModules;
+    String affected = SmartRefresh::unionModuleCsv(revisionState.affectedModules, scheduledModules);
     if (!affected.length()) affected = "all";
-    if (affected.indexOf("all") >= 0 && FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) != FrameConfigApi::FETCH_OK) {
+    if (affected == "all" && FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) != FrameConfigApi::FETCH_OK) {
       Serial.println("Changed layout/config fetch failed; preserving physical state");
     } else {
       SmartRenderState desired;
@@ -1270,12 +1279,14 @@ run_normal_sync:
       } else {
         SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
         if (renderSmartDashboard(batt, pwr, desired, displayPlan)) {
-          g_smartState = desired;
+          const bool screenWide = affected == "all";
+          SmartRefresh::mergeScheduler(g_smartState, desired, screenWide);
           SmartRefresh::saveDisplayedRevision(revisionState.revision);
           if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
           g_revisionCheckedAt = time(nullptr);
           g_nextScheduledWake = time(nullptr) + SmartRefresh::secondsUntilNextWake(
-            desired, time(nullptr), g_revisionCheckedAt);
+            g_smartState, time(nullptr), g_revisionCheckedAt);
+          SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
           postDeviceStatus(batt, pwr, displayPlan.type != SmartDisplayPlan::NONE);
           Serial.println(displayPlan.type == SmartDisplayPlan::NONE
             ? "Revision changed schedule/source state only; display untouched"

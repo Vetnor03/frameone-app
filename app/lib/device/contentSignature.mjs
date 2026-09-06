@@ -27,7 +27,7 @@ const roundRendered = (key, value) => {
 // This projection is shared by the physical render-state endpoint. Inputs have
 // already been limited to the exact active module and stripped of sync metadata;
 // numeric weather values are quantized exactly as the e-paper labels are.
-export function physicalRenderDigest(moduleKey, visibleValue, cell = {}) {
+export function physicalRenderDigest(moduleKey, visibleValue, cell = {}, renderConfig = {}) {
   let projected = visibleValue
   if (moduleKey === 'reminders') {
     const key = Array.isArray(visibleValue?.items) ? 'items' : Array.isArray(visibleValue?.reminders) ? 'reminders' : null
@@ -37,7 +37,7 @@ export function physicalRenderDigest(moduleKey, visibleValue, cell = {}) {
       projected = { ...visibleValue, [key]: visibleValue[key].slice(0, capacity) }
     }
   }
-  return contentDigest({ module: moduleKey, visible: roundRendered('', canonicalVisible(projected)) })
+  return contentDigest({ module: moduleKey, config: canonicalVisible(renderConfig), visible: roundRendered('', canonicalVisible(projected)) })
 }
 
 function nextMidnight(now, timeZone = 'Europe/Oslo') {
@@ -53,10 +53,11 @@ function reminderBoundaries(source, now) {
   const rows = Array.isArray(source?.reminders) ? source.reminders : Array.isArray(source?.items) ? source.items : []
   const result = []
   for (const row of rows) {
-    for (const [dateKey, timeKey] of [['occurrence_date', 'due_time'], ['due_date', 'due_time'], ['end_date', 'end_time']]) {
+    for (const [dateKey, timeKeys] of [['occurrence_date', ['display_time', 'due_time']], ['due_date', ['due_time']], ['end_date', ['end_time']]]) {
       const date = String(row?.[dateKey] ?? '')
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
-      const time = /^\d{2}:\d{2}/.test(String(row?.[timeKey] ?? '')) ? String(row[timeKey]).slice(0, 5) : '00:00'
+      const actualTime = timeKeys.map((key) => String(row?.[key] ?? '')).find((value) => /^\d{2}:\d{2}/.test(value))
+      const time = actualTime ? actualTime.slice(0, 5) : '00:00'
       const [year, month, day] = date.split('-').map(Number), [hour, minute] = time.split(':').map(Number)
       const guess = Date.UTC(year, month - 1, day, hour, minute)
       const oslo = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
@@ -94,7 +95,13 @@ export function physicalRenderManifest({ settings, sources, now = Date.now() }) 
   const deadlines = physicalModuleDeadlines({ settings, sources, now })
   return [...refs.values()].map((ref) => ({
     key: ref.key,
-    render_hash: physicalRenderDigest(ref.key, sources[ref.key] ?? null, ref.cell),
+    render_hash: physicalRenderDigest(ref.key, sources[ref.key] ?? null, ref.cell, {
+      language: settings?.language ?? settings?.locale ?? 'en',
+      timeZone: settings?.timeZone ?? settings?.timezone ?? 'Europe/Oslo',
+      module: ref.id == null
+        ? canonicalVisible(object(settings?.modules)[ref.base] ?? {})
+        : canonicalVisible(configuredInstance(settings?.modules, ref.base, ref.id) ?? {}),
+    }),
     bounds: { x: Number(ref.cell.col ?? 0) * 200, y: Number(ref.cell.row ?? 0) * 120, w: Number(ref.cell.w ?? 800), h: Number(ref.cell.h ?? 480) },
     partial_safe: true,
     deadlines: deadlines[ref.key] ?? [],

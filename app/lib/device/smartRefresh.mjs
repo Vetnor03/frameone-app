@@ -51,6 +51,19 @@ export function dueWork(modules, { now, revisionCheckedAt, revisionPollMs = DEFA
   return { moduleKeys: [...due], revisionPoll: manual || revisionAt <= now + coalesceMs, screenWide: manual }
 }
 
+export function unionModuleKeys(...groups) {
+  const keys = groups.flatMap((group) => Array.isArray(group) ? group : String(group ?? '').split(','))
+    .map((key) => key.trim()).filter(Boolean)
+  return keys.includes('all') ? ['all'] : [...new Set(keys)]
+}
+
+export function mergeModuleStates(current, update, { screenWide = false } = {}) {
+  if (screenWide) return update.map(normalizeModule)
+  const merged = new Map(current.map((module) => [module.key, normalizeModule(module)]))
+  for (const module of update) merged.set(module.key, normalizeModule(module))
+  return [...merged.values()]
+}
+
 const union = (rectangles) => rectangles.reduce((out, rect) => !out ? { ...rect } : ({
   x: Math.min(out.x, rect.x), y: Math.min(out.y, rect.y),
   w: Math.max(out.x + out.w, rect.x + rect.w) - Math.min(out.x, rect.x),

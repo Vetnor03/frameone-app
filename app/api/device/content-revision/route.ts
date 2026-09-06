@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
+import { affectedModulesSince } from '@/app/lib/device/contentRevision.mjs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// Intentionally one indexed ledger read; no source or configuration fan-out.
+// Intentionally limited to indexed ledger reads; no source/configuration fan-out.
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const deviceId = deviceIdFrom(url.searchParams.get('device_id'))
@@ -22,9 +23,11 @@ export async function GET(req: Request) {
   let affectedModules: string[] = []
   if (changed) {
     const changes = await auth.supabase.from('frame_content_revision_changes')
-      .select('changed_modules').eq('device_id', deviceId).gt('revision', since).lte('revision', revision)
+      .select('revision, changed_modules').eq('device_id', deviceId).gt('revision', since).lte('revision', revision)
+      .order('revision', { ascending: true })
     if (changes.error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
-    affectedModules = [...new Set((changes.data ?? []).flatMap((row) => row.changed_modules ?? []))]
+    const rows = changes.data ?? []
+    affectedModules = affectedModulesSince({ since, currentRevision: revision, changes: rows, fallback: data?.changed_modules ?? ['all'] })
   }
   return NextResponse.json({
     revision,
