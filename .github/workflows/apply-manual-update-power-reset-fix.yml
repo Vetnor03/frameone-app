@@ -17,6 +17,9 @@ jobs:
           ref: fix/manual-update-power-reset-refresh
           fetch-depth: 0
 
+      - name: Install Python test dependency
+        run: python3 -m pip install pytest
+
       - name: Apply firmware fix
         run: python3 tools/apply_manual_update_power_reset_fix.py
 
