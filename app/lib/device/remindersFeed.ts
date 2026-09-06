@@ -401,7 +401,7 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   const relevant = orderedItems.filter((item) => selectedGroupKeys.includes(item.occurrence_date || item.display_date))
   const personal = relevant.filter((item) => item.source !== 'local-events')
   const localEvents = relevant.filter((item) => item.source === 'local-events')
-  return [...personal, ...localEvents].slice(0, cap)
+  return [...personal, ...localEvents].slice(0, cap).sort(compareReminderItems)
 }
 
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
