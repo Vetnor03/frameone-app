@@ -38,15 +38,17 @@ static const char* FW_VER = "v2.5.7";
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 
-// Cheap live-update discovery wake. The normal full sync has its own RTC clock.
-// Keep this isolated from the normal-sync scheduler so the active-use wake
-// cadence can be tuned independently when battery policy is revisited.
-static const uint32_t PROBE_WAKE_SECONDS = 10;
+// Cheap live-update discovery wake. Keep it isolated from display decisions:
+// waking and observing a revision never imply an e-paper transaction.
+// This battery timer is a cheap revision safety poll, never a redraw timer.
+// Ten minutes is the configurable maximum freshness interval; nearer hard or
+// coalesced soft module deadlines may select an earlier wake.
+static const uint32_t PROBE_WAKE_SECONDS = 10 * 60;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
-static const uint32_t SCHEDULED_CONTENT_CHECK_SECONDS = 4 * 60 * 60;
+static const uint32_t MAX_REVISION_POLL_SECONDS = 10 * 60;
 // USB stays fully realtime. On battery, a PM-capable Alfred remains connected
-// with MAX_MODEM/automatic light sleep and uses a 10-second idle cadence. Builds
-// without automatic light sleep fall back to the existing 10-second deep sleep.
+// with MAX_MODEM/automatic light sleep and uses a short connected idle cadence.
+// Builds without automatic light sleep use the revision-safety deep sleep.
 static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;
 static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;
 static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
@@ -744,8 +746,8 @@ static InteractiveModeResult finishInteractiveMode(
 }
 
 static void consumeNormalSyncPeriod() {
-  if (normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
-    normalSyncElapsedSeconds -= SCHEDULED_CONTENT_CHECK_SECONDS;
+  if (normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
+    normalSyncElapsedSeconds -= MAX_REVISION_POLL_SECONDS;
   }
 }
 
@@ -815,7 +817,7 @@ static InteractiveModeResult runInteractiveMode(
       Serial.println("LiveUpdate: Wi-Fi reconnected");
     }
     const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
-    if (baselineElapsedAtEntry + awakeSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
+    if (baselineElapsedAtEntry + awakeSeconds >= MAX_REVISION_POLL_SECONDS) {
       Serial.println("LiveUpdate: normal sync became due while interactive");
       // Carry the freshest revision state into the baseline path. A failure is
       // non-blocking: the normal sync is already due and must not be postponed.
@@ -953,10 +955,10 @@ void setup() {
   // Cold boot initializes the baseline; subsequent checks are interval-only.
   bool normalSyncDue =
     wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
-    normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS;
+    normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS;
   if (normalSyncDue) {
-    if (normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS) {
-      normalSyncElapsedSeconds -= SCHEDULED_CONTENT_CHECK_SECONDS;
+    if (normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
+      normalSyncElapsedSeconds -= MAX_REVISION_POLL_SECONDS;
     } else {
       normalSyncElapsedSeconds = 0;
     }
@@ -1181,7 +1183,7 @@ run_normal_sync:
 
   // The just-completed physical render satisfies a coincident content boundary.
   // If signature bookkeeping failed, do not immediately duplicate that render;
-  // the next four-hour cycle will conservatively re-evaluate it.
+  // the next revision-safety evaluation will conservatively re-evaluate it.
   if (renderedWithoutSignature) normalSyncDue = false;
 
   // Battery, recharge, pairing and OTA maintenance remain independent of the
@@ -1220,13 +1222,12 @@ run_normal_sync:
     if (result == FrameConfigApi::FETCH_UNPAIRED) {
       if (recoverPairingIfTokenLost("scheduled frame fetch", pwr.usbPresent)) return;
     } else if (result == FrameConfigApi::FETCH_OK) {
-      DisplayCore::forceNextFullRefresh(true);
       if (renderLoadedDashboard(batt, pwr)) {
         UpdateChecker::saveContentSignature(nextSignature);
         UpdateChecker::saveFirmwareVersion(FW_VER);
         if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
         postDeviceStatus(batt, pwr, true);
-        Serial.println("Scheduled changed content fully refreshed");
+        Serial.println("Scheduled changed visible content refreshed using display policy");
       }
     }
   }

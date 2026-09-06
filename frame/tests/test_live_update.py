@@ -30,8 +30,11 @@ def test_renders_are_serial_and_new_layout_cannot_use_cached_config():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
     assert 'FrameConfigApi::fetchWithStatus(g_cfg' in explicit
 
-def test_single_four_hour_content_policy():
-    assert 'SCHEDULED_CONTENT_CHECK_SECONDS = 4 * 60 * 60' in MAIN
+def test_revision_safety_poll_replaces_four_hour_redraw_policy():
+    assert 'MAX_REVISION_POLL_SECONDS = 10 * 60' in MAIN
+    assert 'PROBE_WAKE_SECONDS = 10 * 60' in MAIN
+    assert 'SCHEDULED_CONTENT_CHECK_SECONDS' not in MAIN
+    assert '4 * 60 * 60' not in MAIN
     assert 'NORMAL_SYNC_SECONDS' not in MAIN
     assert 'WAKES_PER_REFRESH' not in MAIN
     assert 'shouldForcePeriodicRefresh' not in MAIN
@@ -44,12 +47,12 @@ def test_signature_uses_exact_active_instances_and_physical_endpoints():
     assert 'competitionId: config.competitionId' in SIGNATURE
     assert 'optimizeFrameContent' not in SIGNATURE
 
-def test_scheduled_same_signature_does_not_render_and_change_forces_full_refresh():
+def test_scheduled_same_signature_does_not_render_and_changed_content_uses_display_policy():
     scheduled = MAIN[MAIN.index('String nextSignature;'):MAIN.index('normalSyncDue = false;', MAIN.index('String nextSignature;'))]
     same = scheduled[scheduled.index('nextSignature =='):scheduled.index('} else {', scheduled.index('nextSignature =='))]
     assert 'renderLoadedDashboard' not in same
     assert 'postDeviceStatus(batt, pwr, false)' in same
-    assert 'DisplayCore::forceNextFullRefresh(true)' in scheduled
+    assert 'DisplayCore::forceNextFullRefresh(true)' not in scheduled
     assert scheduled.index('renderLoadedDashboard') < scheduled.index('saveContentSignature(nextSignature)')
 
 def test_signature_failure_preserves_display_and_backs_off():
@@ -166,4 +169,4 @@ def test_charger_events_do_not_trigger_or_reset_content_clock():
     due = scheduler[scheduler.index('bool normalSyncDue'):scheduler.index('if (normalSyncDue)')]
     assert 'chargerStateChanged' not in due
     assert 'wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED' in due
-    assert 'normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS' in due
+    assert 'normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS' in due
