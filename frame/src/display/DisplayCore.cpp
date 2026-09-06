@@ -73,14 +73,8 @@ void begin() {
   display.init(115200);
   display.setRotation(0);
   display.setTextColor(Theme::ink());
-
-  display.setFullWindow();
-#if !defined(FRAME_IS_ALFRED_V1_2)
-  display.firstPage();
-  do {
-    fillThemeBackground();
-  } while (display.nextPage());
-#endif
+  // Initialization must not itself touch the panel: the caller selects either
+  // a full or a true partial window after render-state comparison.
 }
 
 void end() {
@@ -258,6 +252,17 @@ void beginFrameUpdate() {
 
   display.setFullWindow();
   display.firstPage();
+}
+
+bool beginPartialUpdate(int x, int y, int w, int h, bool grayscaleMode) {
+  if (grayscaleMode || x < 0 || y < 0 || w <= 0 || h <= 0 ||
+      x + w > display.width() || y + h > display.height()) return false;
+  g_fullThisCycle = false;
+  g_forceFullNext = false;
+  // GxEPD2 aligns the controller window as required by the monochrome panel.
+  display.setPartialWindow(x, y, w, h);
+  display.firstPage();
+  return true;
 }
 
 bool nextFrameUpdate() {

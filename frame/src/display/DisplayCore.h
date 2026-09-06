@@ -40,6 +40,9 @@ namespace DisplayCore {
 
   // Start a draw cycle (picks partial vs full automatically).
   void beginFrameUpdate();
+  // Start a true driver partial-window transaction. Grayscale callers must use
+  // the full-window path until a panel-specific waveform is explicitly enabled.
+  bool beginPartialUpdate(int x, int y, int w, int h, bool grayscaleMode = false);
 
   // Continue paged drawing
   bool nextFrameUpdate();

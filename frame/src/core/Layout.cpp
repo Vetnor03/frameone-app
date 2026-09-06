@@ -421,4 +421,46 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   } while (DisplayCore::nextFrameUpdate());
 }
 
+bool drawRegionWithContent(LayoutKey key, const FrameConfig& cfg, const Cell& region,
+                           bool grayscaleMode) {
+  if (!DisplayCore::beginPartialUpdate(region.x, region.y, region.w, region.h, grayscaleMode)) return false;
+  const SlotModule* assigns = cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable
+    ? cfg.customLayout.assigns : cfg.assigns;
+  const int assignCount = cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable
+    ? cfg.customLayout.assignCount : cfg.assignCount;
+  Cell* cells = g_renderWorkspace.namedCells; int count = 0;
+  if (cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable)
+    buildGridCells(cfg.customLayout.grid, cells, MAX_GRID_CELLS, count);
+  else count = buildCells(key == LAYOUT_CUSTOM ? LAYOUT_DEFAULT : key, cells, MAX_GRID_CELLS);
+  do {
+    // The driver clips these operations to the selected partial window. Redraw
+    // only intersecting modules; never compose the full dashboard for a tile.
+    DisplayCore::fillThemeBackground();
+    for (int i = 0; i < count; ++i) {
+      const Cell& cell = cells[i];
+      if (cell.x >= region.x + region.w || region.x >= cell.x + cell.w ||
+          cell.y >= region.y + region.h || region.y >= cell.y + cell.h) continue;
+      ModuleRenderer::renderPlaceholders(assigns, assignCount, &cell, 1);
+    }
+    // Restore the same chrome painted by the full dashboard. The partial
+    // window clips dividers and the power overlay to the dirty rectangle.
+    if (cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable) {
+      CustomRenderPlan& plan = g_renderWorkspace.prepared;
+      if (prepareCustomRender(cfg, plan)) for (int i = 0; i < plan.dividerCount; ++i) {
+        const PixelDivider& divider = plan.dividers[i];
+        if (divider.y0 == divider.y1) drawHLine(divider.y0, divider.x0, divider.x1);
+        else drawVLine(divider.x0, divider.y0, divider.y1);
+      }
+    } else {
+      int hx0, hx1, vy0, vy1; span95(FRAME_X, FRAME_W, hx0, hx1); span95(FRAME_Y, FRAME_H, vy0, vy1);
+      const int halfY = FRAME_Y + FRAME_H / 2, quarterY = FRAME_Y + FRAME_H / 4, midX = FRAME_X + FRAME_W / 2;
+      if (key == LAYOUT_DEFAULT || key == LAYOUT_PYRAMID) { drawHLine(quarterY, hx0, hx1); drawHLine(halfY, hx0, hx1); }
+      if (key == LAYOUT_SQUARE) { drawHLine(halfY, hx0, hx1); drawVLine(midX, vy0, vy1); }
+      if (key == LAYOUT_PYRAMID) { int y0, y1; span95(halfY, FRAME_H - FRAME_H / 2, y0, y1); drawVLine(midX, y0, y1); }
+    }
+    DisplayCore::drawBatteryOverlay(FORCE_SHOW_BATTERY_UI);
+  } while (DisplayCore::nextFrameUpdate());
+  return true;
+}
+
 } // namespace Layout

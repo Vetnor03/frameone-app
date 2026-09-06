@@ -17,6 +17,97 @@ export function contentDigest(value) {
   return createHash('sha256').update(JSON.stringify(canonicalVisible(value))).digest('hex')
 }
 
+const roundRendered = (key, value) => {
+  if (typeof value === 'number' && /(^|_)(temp|temperature|high|low|degrees?)$/i.test(key)) return Math.round(value)
+  if (Array.isArray(value)) return value.map((child) => roundRendered(key, child))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([childKey, child]) => [childKey, roundRendered(childKey, child)]))
+}
+
+// This projection is shared by the physical render-state endpoint. Inputs have
+// already been limited to the exact active module and stripped of sync metadata;
+// numeric weather values are quantized exactly as the e-paper labels are.
+export function physicalRenderDigest(moduleKey, visibleValue, cell = {}, renderConfig = {}) {
+  let projected = visibleValue
+  if (moduleKey === 'reminders') {
+    const key = Array.isArray(visibleValue?.items) ? 'items' : Array.isArray(visibleValue?.reminders) ? 'reminders' : null
+    if (key) {
+      const area = Number(cell.w ?? 0) * Number(cell.h ?? 0)
+      const capacity = area >= 300_000 ? 10 : area >= 150_000 ? 6 : area >= 80_000 ? 4 : 2
+      projected = { ...visibleValue, [key]: visibleValue[key].slice(0, capacity) }
+    }
+  }
+  return contentDigest({ module: moduleKey, config: canonicalVisible(renderConfig), visible: roundRendered('', canonicalVisible(projected)) })
+}
+
+function nextMidnight(now, timeZone = 'Europe/Oslo') {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(now)).filter((p) => p.type !== 'literal').map((p) => [p.type, Number(p.value)]))
+  const localAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  const offset = localAsUtc - now
+  return Date.UTC(parts.year, parts.month - 1, parts.day + 1) - offset
+}
+
+function reminderBoundaries(source, now) {
+  const rows = Array.isArray(source?.reminders) ? source.reminders : Array.isArray(source?.items) ? source.items : []
+  const result = []
+  for (const row of rows) {
+    for (const [dateKey, timeKeys] of [['occurrence_date', ['display_time', 'due_time']], ['due_date', ['due_time']], ['end_date', ['end_time']]]) {
+      const date = String(row?.[dateKey] ?? '')
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
+      const actualTime = timeKeys.map((key) => String(row?.[key] ?? '')).find((value) => /^\d{2}:\d{2}/.test(value))
+      const time = actualTime ? actualTime.slice(0, 5) : '00:00'
+      const [year, month, day] = date.split('-').map(Number), [hour, minute] = time.split(':').map(Number)
+      const guess = Date.UTC(year, month - 1, day, hour, minute)
+      const oslo = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit',
+      }).formatToParts(new Date(guess)).filter((p) => p.type !== 'literal').map((p) => [p.type, Number(p.value)]))
+      const offset = Date.UTC(oslo.year, oslo.month - 1, oslo.day, oslo.hour, oslo.minute) - guess
+      const at = guess - offset
+      if (Number.isFinite(at) && at > now) result.push(at)
+    }
+  }
+  return [...new Set(result)].sort((a, b) => a - b)
+}
+
+export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
+  const refs = activePhysicalReferences(settings)
+  const midnight = nextMidnight(now)
+  const deadlines = {}
+  for (const ref of refs.values()) {
+    if (ref.base === 'date' || ref.base === 'countdown') deadlines[ref.key] = [{ at: midnight, type: 'hard', reason: 'midnight' }]
+    else if (ref.base === 'reminders') deadlines[ref.key] = [
+      ...reminderBoundaries(sources[ref.key], now).map((at) => ({ at, type: 'hard', reason: 'reminder_boundary' })),
+      { at: midnight, type: 'hard', reason: 'midnight' },
+    ]
+    else {
+      const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
+      const interval = Math.max(5 * 60_000, Number(configured?.refresh) || (ref.base === 'weather' ? 10 * 60_000 : 30 * 60_000))
+      deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
+    }
+  }
+  return deadlines
+}
+
+export function physicalRenderManifest({ settings, sources, now = Date.now() }) {
+  const refs = activePhysicalReferences(settings)
+  const deadlines = physicalModuleDeadlines({ settings, sources, now })
+  return [...refs.values()].map((ref) => ({
+    key: ref.key,
+    render_hash: physicalRenderDigest(ref.key, sources[ref.key] ?? null, ref.cell, {
+      language: settings?.language ?? settings?.locale ?? 'en',
+      timeZone: settings?.timeZone ?? settings?.timezone ?? 'Europe/Oslo',
+      module: ref.id == null
+        ? canonicalVisible(object(settings?.modules)[ref.base] ?? {})
+        : canonicalVisible(configuredInstance(settings?.modules, ref.base, ref.id) ?? {}),
+    }),
+    bounds: { x: Number(ref.cell.col ?? 0) * 200, y: Number(ref.cell.row ?? 0) * 120, w: Number(ref.cell.w ?? 800), h: Number(ref.cell.h ?? 480) },
+    partial_safe: true,
+    deadlines: deadlines[ref.key] ?? [],
+  }))
+}
+
 function physicalGeometry(cell) {
   const colSpan = Number(cell?.colSpan), rowSpan = Number(cell?.rowSpan)
   const geometry = `${colSpan}x${rowSpan}`

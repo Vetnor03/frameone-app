@@ -13,14 +13,23 @@ def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'LiveUpdate::probe' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
+def test_idle_manual_probe_is_separate_from_smart_content_scheduler():
+    loop = MAIN[MAIN.index('// Exactly one cheap revision probe'):MAIN.index('// --------------------------------------\n// Setup')]
+    assert 'LiveUpdate::probe' in loop
+    assert '/api/device/content-revision' not in loop
+    assert '/api/device/render-state' not in loop
+    assert 'SmartRefresh::probeRevision' not in loop
+    assert 'SmartRefresh::fetchRenderState' not in loop
+    assert 'ensureDisplay' not in loop
+
 def test_app_activity_is_not_a_firmware_gate():
     assert 'appActive' not in MAIN + LIVE
     assert 'app_active' not in LIVE
 
 def test_manual_revision_fetches_new_config_then_renders_persists_and_acks():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
-    assert explicit.index('FrameConfigApi::fetchWithStatus') < explicit.index('renderLoadedDashboard')
-    assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
+    assert explicit.index('FrameConfigApi::fetchWithStatus') < explicit.index('SmartRefresh::fetchRenderState')
+    assert explicit.index('renderSmartDashboard') < explicit.index('saveRenderedAwaitingAck')
     retry = MAIN[MAIN.index('static bool retryRenderedAck'):MAIN.index('static void consumeNormalSyncPeriod')]
     assert retry.index('getRenderedAwaitingAck') < retry.index('LiveUpdate::acknowledge')
 
@@ -30,8 +39,12 @@ def test_renders_are_serial_and_new_layout_cannot_use_cached_config():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool retryRenderedAck')]
     assert 'FrameConfigApi::fetchWithStatus(g_cfg' in explicit
 
-def test_single_four_hour_content_policy():
-    assert 'SCHEDULED_CONTENT_CHECK_SECONDS = 4 * 60 * 60' in MAIN
+def test_revision_safety_poll_replaces_four_hour_redraw_policy():
+    assert 'MAX_REVISION_POLL_SECONDS = 10 * 60' in MAIN
+    assert 'PROBE_WAKE_SECONDS' not in MAIN
+    assert 'nextDeepSleepDurationUs()' in MAIN
+    assert 'SCHEDULED_CONTENT_CHECK_SECONDS' not in MAIN
+    assert '4 * 60 * 60' not in MAIN
     assert 'NORMAL_SYNC_SECONDS' not in MAIN
     assert 'WAKES_PER_REFRESH' not in MAIN
     assert 'shouldForcePeriodicRefresh' not in MAIN
@@ -44,26 +57,26 @@ def test_signature_uses_exact_active_instances_and_physical_endpoints():
     assert 'competitionId: config.competitionId' in SIGNATURE
     assert 'optimizeFrameContent' not in SIGNATURE
 
-def test_scheduled_same_signature_does_not_render_and_change_forces_full_refresh():
-    scheduled = MAIN[MAIN.index('String nextSignature;'):MAIN.index('normalSyncDue = false;', MAIN.index('String nextSignature;'))]
-    same = scheduled[scheduled.index('nextSignature =='):scheduled.index('} else {', scheduled.index('nextSignature =='))]
-    assert 'renderLoadedDashboard' not in same
-    assert 'postDeviceStatus(batt, pwr, false)' in same
-    assert 'DisplayCore::forceNextFullRefresh(true)' in scheduled
-    assert scheduled.index('renderLoadedDashboard') < scheduled.index('saveContentSignature(nextSignature)')
+def test_unchanged_revision_is_cheap_and_changed_content_uses_display_policy():
+    scheduled = MAIN[MAIN.index('ContentRevisionState revisionState;'):MAIN.index('normalSyncDue = false;', MAIN.index('ContentRevisionState revisionState;'))]
+    unchanged = scheduled[scheduled.index('!revisionState.changed'):scheduled.index('} else {', scheduled.index('!revisionState.changed'))]
+    assert 'fetchRenderState' not in unchanged and 'FrameConfigApi::fetchWithStatus' not in unchanged
+    assert 'postDeviceStatus(batt, pwr, false)' in unchanged
+    assert 'UpdateChecker::fetchContentSignature' not in scheduled
+    assert 'SmartRefresh::plan' in scheduled and 'renderSmartDashboard' in scheduled
 
-def test_signature_failure_preserves_display_and_backs_off():
-    scheduled = MAIN[MAIN.index('String nextSignature;'):]
-    failed = scheduled[:scheduled.index('} else if')]
-    assert 'renderLoadedDashboard' not in failed
-    assert 'preserving display' in failed
+def test_revision_and_render_state_failures_preserve_display():
+    scheduled = MAIN[MAIN.index('ContentRevisionState revisionState;'):]
+    assert 'Revision safety poll unavailable; preserving display and sources' in scheduled
+    assert 'g_revisionRetryNotBefore = time(nullptr) + 60' in scheduled
+    assert 'Affected render-state fetch failed; preserving freshness and hashes' in scheduled
 
 def test_manual_ack_precedes_signature_bookkeeping():
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
     accepted = loop[loop.index('if (!fetchAndRenderExplicit'):loop.index('// Exactly one cheap revision probe')]
     assert accepted.index('retryRenderedAck') < accepted.index('refreshContentSignatureBestEffort')
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
-    assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
+    assert explicit.index('renderSmartDashboard') < explicit.index('saveRenderedAwaitingAck')
     assert 'fetchContentSignature' not in explicit
 
 
@@ -110,7 +123,7 @@ def test_firmware_version_change_redraws_once_and_success_persists_version():
     setup = MAIN[MAIN.index('void setup()'):]
     assert setup.index('runFirmwareMaintenanceIfNeeded') < setup.index('LiveUpdate::probe')
     manual = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
-    assert manual.index('renderLoadedDashboard') < manual.index('saveFirmwareVersion(FW_VER)')
+    assert manual.index('renderSmartDashboard') < manual.index('saveFirmwareVersion(FW_VER)')
 
 def test_recharge_pairing_wifi_and_ota_maintenance_remain():
     for token in ('requiresRecharge', 'ensurePairedNoReboot', 'WiFiManagerV2::connectSaved', 'runOtaCheckIfDue'):
@@ -153,7 +166,7 @@ def test_probe_failure_diagnostics_are_safe_and_specific():
 
 def test_render_persistence_ack_order_and_serial_retry_are_preserved():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static InteractiveModeResult runInteractiveMode')]
-    assert explicit.index('renderLoadedDashboard') < explicit.index('saveRenderedAwaitingAck')
+    assert explicit.index('renderSmartDashboard') < explicit.index('saveRenderedAwaitingAck')
     assert explicit.index('saveRenderedAwaitingAck') < explicit.index('LiveUpdate::acknowledge')
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
     assert loop.count('fetchAndRenderExplicit(batt, pwr, revisionToDisplay)') == 1
@@ -166,4 +179,13 @@ def test_charger_events_do_not_trigger_or_reset_content_clock():
     due = scheduler[scheduler.index('bool normalSyncDue'):scheduler.index('if (normalSyncDue)')]
     assert 'chargerStateChanged' not in due
     assert 'wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED' in due
-    assert 'normalSyncElapsedSeconds >= SCHEDULED_CONTENT_CHECK_SECONDS' in due
+    assert 'normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS' in due
+
+def test_unchanged_revision_persists_successful_poll_and_rebased_wake_without_display():
+    scheduled = MAIN[MAIN.index('} else if (!revisionState.changed'):MAIN.index('} else {', MAIN.index('} else if (!revisionState.changed'))]
+    assert 'g_revisionCheckedAt = time(nullptr)' in scheduled
+    assert 'secondsUntilNextWake' in scheduled
+    assert 'saveScheduler(g_smartState, g_revisionCheckedAt)' in scheduled
+    assert 'fetchRenderState' not in scheduled
+    assert 'ensureDisplay' not in scheduled
+    assert 'renderSmartDashboard' not in scheduled
