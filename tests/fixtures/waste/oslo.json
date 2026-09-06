@@ -1,0 +1,1 @@
+{"result":[{"Adresse":"Testveien 2","HentePunkts":[{"Id":"point-1","Tjenester":[{"Id":"event-1","Fraksjon":{"Id":"food","Tekst":"Matavfall"},"TommeDato":"08.09.2026","Hyppighet":{"Faktor":10000}},{"Id":"event-2","Fraksjon":{"Id":"unknown","Tekst":"Ukjent prøve"},"TommeDato":"08.09.2026","Hyppighet":{"Faktor":40000}}]}]}]}
