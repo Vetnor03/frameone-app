@@ -4,14 +4,16 @@ alter table public.waste_provider_registry
   drop constraint if exists waste_provider_registry_provider_valid,
   drop constraint if exists waste_provider_registry_status_valid;
 
+-- The #1203 seed contains provider='stavanger' and provider='sandnes'. Remove
+-- those incompatible values before PostgreSQL validates the replacement check.
+delete from public.waste_provider_registry;
+
 alter table public.waste_provider_registry
   add column if not exists provider_brand text,
   add constraint waste_provider_registry_provider_valid
     check (provider in ('him', 'oslo', 'minrenovasjon', 'renovasjonsportal', 'norconsult_unresolved')),
   add constraint waste_provider_registry_status_valid
     check (status in ('supported', 'preview', 'unsupported', 'disabled'));
-
-delete from public.waste_provider_registry;
 
 insert into public.waste_provider_registry
   (municipality_number, municipality_name, provider, provider_brand, provider_config, status)

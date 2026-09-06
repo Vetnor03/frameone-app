@@ -41,6 +41,8 @@ test('Oslo fixture preserves JSON labels, IDs, same-day fractions, and unknowns'
   const firstDay = rows.filter(row => row.date === '2026-09-08')
   assert.deepEqual(firstDay.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'Matavfall', 'json_field'], ['2026-09-08', 'Ukjent prøve', 'json_field']])
   assert.equal(firstDay[1].normalizedType, 'other'); assert.equal(firstDay[1].providerEventId, 'event-2:2026-09-08')
+  assert.deepEqual(rows.filter(row => row.rawType === 'Matavfall').slice(0, 3).map(row => row.date), ['2026-09-08', '2026-09-15', '2026-09-22'])
+  assert.deepEqual(rows.filter(row => row.rawType === 'Ukjent prøve').slice(0, 3).map(row => row.date), ['2026-09-08', '2026-09-22', '2026-10-06'])
   assert.throws(() => provider.normalizeCollections({ nope: [] }), error => error.code === 'invalid_response')
 })
 
@@ -50,8 +52,9 @@ test('MinRenovasjon fixture joins fraction identity to labels and preserves unkn
   const rows = provider.normalizeCollections(await provider.fetchCollections(address('3205')))
   assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'Matavfall', 'fraction_id'], ['2026-09-08', 'Ukjent prøve', 'fraction_id']])
   assert.equal(rows[1].normalizedType, 'other'); assert.equal(rows[1].providerTypeId, '99')
-  assert.equal(calls[0].url.origin, 'https://komteksky.norkart.no'); assert.equal(calls[0].url.searchParams.get('kommunenr'), '3205'); assert.equal(calls[0].url.searchParams.has('gatekode'), false)
-  assert.equal(calls[1].url.searchParams.get('gatekode'), '1'); assert.equal(calls[1].options.headers.Kommunenr, '3205'); assert.equal(calls[1].options.headers.RenovasjonAppKey, 'server-secret')
+  assert.equal(calls[0].url.origin, 'https://norkartrenovasjon.azurewebsites.net'); const fractionsUrl = new URL(calls[0].url.searchParams.get('server')); const calendarUrl = new URL(calls[1].url.searchParams.get('server'))
+  assert.equal(fractionsUrl.origin, 'https://komteksky.norkart.no'); assert.equal(fractionsUrl.searchParams.get('kommunenr'), '3205'); assert.equal(fractionsUrl.searchParams.has('gatekode'), false)
+  assert.equal(calendarUrl.searchParams.get('gatekode'), '1'); assert.equal(calls[1].options.headers.Kommunenr, '3205'); assert.equal(calls[1].options.headers.RenovasjonAppKey, 'server-secret')
   assert.throws(() => provider.normalizeCollections({ fractions: {}, calendar: [] }), error => error.code === 'invalid_response')
   await assert.rejects(() => createMinRenovasjonProvider('').fetchCollections(address('3205')), error => error.code === 'configuration' && /server-only/.test(error.message))
 })
@@ -74,3 +77,10 @@ test('registry config uses the pinned Fosen and ReMidt Renovasjonsportal API ori
 test('failed refresh keeps the old cache plan untouched', () => assert.deepEqual(wasteCachePlan(['old-event'], [], false), { upsertIds: [], staleIds: [] }))
 
 test('normalization does not coerce unknown semantics', () => assert.equal(normalizeWasteType('Mystisk fraksjon'), 'other'))
+
+test('registry migration removes legacy Stavanger/Sandnes rows before validating the new provider check', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20260906120000_authoritative_waste_provider_families.sql', import.meta.url), 'utf8')
+  assert.ok(migration.indexOf('delete from public.waste_provider_registry') < migration.indexOf('add constraint waste_provider_registry_provider_valid'))
+  assert.match(migration, /'1103', 'Stavanger', 'norconsult_unresolved'.*'preview'/)
+  assert.match(migration, /'1108', 'Sandnes', 'norconsult_unresolved'.*'preview'/)
+})
