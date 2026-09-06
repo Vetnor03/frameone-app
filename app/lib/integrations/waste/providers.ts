@@ -315,6 +315,10 @@ function responseShape(body: string, contentType: string) {
   } catch { return { kind: 'invalid-json', bytes: body.length } }
 }
 
+function logWasteDiagnostic(event: string, details: unknown) {
+  console.info(`[waste] ${event}`, JSON.stringify(details))
+}
+
 function calendarYear(dataMonth: string) {
   const match = dataMonth.match(/(?:^|\D)((?:19|20)\d{2})(?:\D|$)/)
   return match?.[1] || ''
@@ -365,14 +369,16 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
         const bundleSource = await bundleResponse.text()
         const discovered = scriptSearchContracts(bundleSource, bundleUrl.toString())
         contracts.push(...discovered.contracts.filter(contract => !contracts.some(existing => existing.endpoint === contract.endpoint && existing.method === contract.method && existing.parameter === contract.parameter)))
-        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, endpointPaths: discovered.endpointPaths, ...(discovered.contracts.length ? {} : { structure: scriptStructure(bundleSource, bundleUrl.toString()) }) })
+        const structure = discovered.contracts.length ? undefined : scriptStructure(bundleSource, bundleUrl.toString())
+        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, endpointPaths: discovered.endpointPaths, ...(structure ? { structure } : {}) })
+        if (structure) logWasteDiagnostic('bundle structure', { municipality, bundle: bundleUrl.pathname, structure })
       }
       let propertyId = propertyCandidateFromHtml(html, address, stavanger)
-      console.info('[waste] property resolution discovered', {
+      logWasteDiagnostic('property resolution discovered', {
         municipality, provider: stavanger ? 'stavanger' : 'hentavfall', landingEndpoint: base,
         status: landing.status, contentType: (landing.headers.get('content-type') || '').split(';')[0],
         shape: responseShape(html, landing.headers.get('content-type') || 'text/html'),
-        contracts: contracts.map(x => ({ endpoint: x.endpoint, method: x.method, parameter: x.parameter })),
+        contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })),
         relevantBundles: bundleDiagnostics,
         ...(contracts.length ? {} : { discoveryStructure: discoveryStructure(html, `${base}/`) }),
       })
@@ -388,20 +394,20 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
         let response: Response
         try { response = await fetcher(url, request) } catch {
           const attempt = { endpoint: url.origin + url.pathname, method: contract.method, status: 'network-error' as const }
-          attempts.push(attempt); console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', ...attempt })
+          attempts.push(attempt); logWasteDiagnostic('property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', ...attempt })
           continue
         }
         const body = await response.text()
         const contentType = response.headers.get('content-type') || ''
         const attempt = { endpoint: url.origin + url.pathname, method: contract.method, status: response.status, contentType: contentType.split(';')[0], shape: responseShape(body, contentType) }
-        attempts.push(attempt); console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', ...attempt })
+        attempts.push(attempt); logWasteDiagnostic('property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', ...attempt })
         if (!response.ok) continue
         let parsed: unknown = null; try { parsed = JSON.parse(body) } catch { /* Some official selectors return option HTML. */ }
         const match = propertyCandidate(parsed, address, stavanger)
         propertyId = match ? propertyIdFromRecord(match, stavanger) : propertyCandidateFromHtml(body, address, stavanger)
       }
       if (!propertyId) {
-        console.info('[waste] property resolution failed', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })), attempts, relevantBundles: bundleDiagnostics, discoveryStructure: discoveryStructure(html, `${base}/`) })
+        logWasteDiagnostic('property resolution failed', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })), attempts, relevantBundles: bundleDiagnostics, discoveryStructure: discoveryStructure(html, `${base}/`) })
         throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this address yet.', false)
       }
       return { ...address, propertyId }

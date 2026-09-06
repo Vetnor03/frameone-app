@@ -67,6 +67,20 @@ test('inline provider config can publish a contract without address-specific mar
   assert.equal(resolved.propertyId, 'inline-property'); assert.equal(calls[1].url, 'https://www.stavanger.kommune.no/provider/lookup'); assert.equal(String(calls[1].init.body), 'term=Selected+address')
 })
 
+test('failed bundle diagnostics are serialized, visible and privacy-safe', async () => {
+  const messages = []
+  const originalInfo = console.info
+  console.info = (...args) => messages.push(args)
+  try {
+    const provider = createHentavfallProvider(async url => String(url).includes('/bundles/')
+      ? new Response('var path="/address/123e4567-e89b-12d3-a456-426614174000"; source:function(){}', { headers: { 'Content-Type': 'text/javascript' } })
+      : new Response('<input type="text" name="query" id="lookup" class="field"><script src="/bundles/waste-calendar"></script>'))
+    await assert.rejects(() => provider.resolveAddress({ addressId: 'private', label: 'Private Street 99', municipalityNumber: '1108', municipalityName: 'Sandnes', gnr: '123', bnr: '456', snr: '7' }), error => error instanceof WasteProviderError && error.code === 'unsupported')
+  } finally { console.info = originalInfo }
+  const output = messages.map(args => args.join(' ')).join('\n')
+  assert.ok(messages.length >= 3); assert.ok(messages.every(args => typeof args[1] === 'string')); assert.doesNotMatch(output, /\[Array\]|\[Object\]|Private Street|123e4567-e89b-12d3-a456-426614174000|"gnr"|"bnr"|"snr"/); assert.match(output, /<uuid>/); assert.match(output, /"inputs":\[/); assert.match(output, /"showQueryNames":\[/)
+})
+
 test('Stavanger structured calendar derives years across December and January', () => {
   const provider = createStavangerProvider(async () => { throw new Error('unused') })
   const rows = provider.normalizeCollections({ html: `
