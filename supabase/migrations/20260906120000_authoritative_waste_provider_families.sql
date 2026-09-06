@@ -29,10 +29,11 @@ values
   ('3226', 'Aurskog-Høland', 'minrenovasjon', 'ROAF', '{}'::jsonb, 'supported'),
   ('3230', 'Gjerdrum', 'minrenovasjon', 'ROAF', '{}'::jsonb, 'supported'),
   ('3232', 'Nittedal', 'minrenovasjon', 'ROAF', '{}'::jsonb, 'supported'),
-  ('5006', 'Steinkjer', 'renovasjonsportal', 'ReMidt', '{"base_url":"https://kalender.renovasjonsportal.no/api"}'::jsonb, 'supported'),
+  ('5006', 'Steinkjer', 'minrenovasjon', 'Steinkjer kommune', '{}'::jsonb, 'supported'),
   ('5055', 'Heim', 'renovasjonsportal', 'ReMidt', '{"base_url":"https://kalender.renovasjonsportal.no/api"}'::jsonb, 'supported'),
   ('5059', 'Orkland', 'renovasjonsportal', 'ReMidt', '{"base_url":"https://kalender.renovasjonsportal.no/api"}'::jsonb, 'supported'),
-  ('5020', 'Osen', 'renovasjonsportal', 'Fosen Renovasjon', '{"base_url":"https://fosen.renovasjonsportal.no/api"}'::jsonb, 'supported'),
-  ('5054', 'Indre Fosen', 'renovasjonsportal', 'Fosen Renovasjon', '{"base_url":"https://fosen.renovasjonsportal.no/api"}'::jsonb, 'supported');
+  ('5054', 'Indre Fosen', 'renovasjonsportal', 'Fosen Renovasjon', '{"base_url":"https://fosen.renovasjonsportal.no/api"}'::jsonb, 'supported'),
+  ('5057', 'Ørland', 'renovasjonsportal', 'Fosen Renovasjon', '{"base_url":"https://fosen.renovasjonsportal.no/api"}'::jsonb, 'supported'),
+  ('5058', 'Åfjord', 'renovasjonsportal', 'Fosen Renovasjon', '{"base_url":"https://fosen.renovasjonsportal.no/api"}'::jsonb, 'supported');
 
 notify pgrst, 'reload schema';

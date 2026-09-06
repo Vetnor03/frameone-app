@@ -59,11 +59,12 @@ export const WASTE_PROVIDER_REGISTRY: readonly ProviderRegistration[] = [
   { municipalityNumber: '3226', municipalityName: 'Aurskog-Høland', family: 'minrenovasjon', brand: 'ROAF', status: 'supported' },
   { municipalityNumber: '3230', municipalityName: 'Gjerdrum', family: 'minrenovasjon', brand: 'ROAF', status: 'supported' },
   { municipalityNumber: '3232', municipalityName: 'Nittedal', family: 'minrenovasjon', brand: 'ROAF', status: 'supported' },
-  { municipalityNumber: '5006', municipalityName: 'Steinkjer', family: 'renovasjonsportal', brand: 'ReMidt', status: 'supported', baseUrl: 'https://kalender.renovasjonsportal.no/api' },
+  { municipalityNumber: '5006', municipalityName: 'Steinkjer', family: 'minrenovasjon', brand: 'Steinkjer kommune', status: 'supported' },
   { municipalityNumber: '5055', municipalityName: 'Heim', family: 'renovasjonsportal', brand: 'ReMidt', status: 'supported', baseUrl: 'https://kalender.renovasjonsportal.no/api' },
   { municipalityNumber: '5059', municipalityName: 'Orkland', family: 'renovasjonsportal', brand: 'ReMidt', status: 'supported', baseUrl: 'https://kalender.renovasjonsportal.no/api' },
-  { municipalityNumber: '5020', municipalityName: 'Osen', family: 'renovasjonsportal', brand: 'Fosen Renovasjon', status: 'supported', baseUrl: 'https://fosen.renovasjonsportal.no/api' },
   { municipalityNumber: '5054', municipalityName: 'Indre Fosen', family: 'renovasjonsportal', brand: 'Fosen Renovasjon', status: 'supported', baseUrl: 'https://fosen.renovasjonsportal.no/api' },
+  { municipalityNumber: '5057', municipalityName: 'Ørland', family: 'renovasjonsportal', brand: 'Fosen Renovasjon', status: 'supported', baseUrl: 'https://fosen.renovasjonsportal.no/api' },
+  { municipalityNumber: '5058', municipalityName: 'Åfjord', family: 'renovasjonsportal', brand: 'Fosen Renovasjon', status: 'supported', baseUrl: 'https://fosen.renovasjonsportal.no/api' },
 ] as const
 
 type Fetch = typeof fetch
@@ -151,13 +152,34 @@ export function createOsloProvider(fetcher: Fetch = fetch): WasteProvider {
   const endpoint = 'https://www.oslo.kommune.no/actions/snap-lib-waste-complaint/search-by-address'
   return { family: 'oslo', resolveAddress: async address => address,
     async fetchCollections(address) { if (!address.addressCode || !address.streetName || !address.houseNumber) throw new WasteProviderError('invalid_response', 'Oslo address fields are missing.'); const url = new URL(endpoint); url.searchParams.set('street', address.streetName); url.searchParams.set('number', address.houseNumber); if (address.houseLetter) url.searchParams.set('letter', address.houseLetter); url.searchParams.set('street_id', address.addressCode); let response: Response; try { response = await fetcher(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12000) }) } catch { throw new WasteProviderError('temporary_failure', 'Oslo is temporarily unavailable.') }; return responseBody(response, 'Oslo') },
-    normalizeCollections(raw) { const root = record(raw), results = root.result; if (!Array.isArray(results)) throw new WasteProviderError('invalid_response', 'Oslo returned an invalid response.'); const services = results.flatMap((result: unknown) => { const points = record(result).HentePunkts; return Array.isArray(points) ? points.flatMap((point: unknown) => Array.isArray(record(point).Tjenester) ? record(point).Tjenester : []) : [] }); const intervals: Record<string, number> = { '10000': 7, '20000': 4, '30000': 3, '40000': 14, '50000': 28 }, today = norwayLocalYmd(); const rows = services.flatMap((entry: unknown) => { const e = record(entry), fraction = record(e.Fraksjon), rawType = string(fraction.Tekst), typeId = string(fraction.Id), eventId = string(e.Id), match = string(e.TommeDato).match(/^(\d{2})\.(\d{2})\.(\d{4})$/); if (!match) return [makeCollection({ date: '', rawType, providerTypeId: typeId || undefined, providerEventId: eventId || undefined, semanticSource: 'json_field', raw: entry })]; const start = `${match[3]}-${match[2]}-${match[1]}`, intervalDays = intervals[string(record(e.Hyppighet).Faktor)] ?? 7, date = new Date(`${start}T12:00:00Z`); while (date.toISOString().slice(0, 10) < today) date.setUTCDate(date.getUTCDate() + intervalDays); return Array.from({ length: 10 }, (_, index) => { const occurrence = new Date(date); occurrence.setUTCDate(date.getUTCDate() + index * intervalDays); const value = occurrence.toISOString().slice(0, 10); return makeCollection({ date: value, rawType, providerTypeId: typeId || undefined, providerEventId: eventId ? `${eventId}:${value}` : undefined, semanticSource: 'json_field', raw: entry }) }) }); return finish(rows, 'Oslo') }
+    normalizeCollections(raw) { return normalizeOsloCollections(raw) }
   }
+}
+
+export function normalizeOsloCollections(raw: unknown, today = norwayLocalYmd()) {
+  const root = record(raw), results = root.result
+  if (!Array.isArray(results)) throw new WasteProviderError('invalid_response', 'Oslo returned an invalid response.')
+  const services = results.flatMap((result: unknown) => { const points = record(result).HentePunkts; return Array.isArray(points) ? points.flatMap((point: unknown) => Array.isArray(record(point).Tjenester) ? record(point).Tjenester : []) : [] })
+  const intervals: Record<string, number> = { '10000': 7, '20000': 4, '30000': 3, '40000': 14, '50000': 28 }
+  const rows = services.flatMap((entry: unknown) => {
+    const e = record(entry), fraction = record(e.Fraksjon), rawType = string(fraction.Tekst), typeId = string(fraction.Id), eventId = string(e.Id), match = string(e.TommeDato).match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
+    if (!match) return [makeCollection({ date: '', rawType, providerTypeId: typeId || undefined, providerEventId: eventId || undefined, semanticSource: 'json_field', raw: entry })]
+    const start = `${match[3]}-${match[2]}-${match[1]}`
+    const values: string[] = []
+    if (start >= today) values.push(start)
+    else {
+      const intervalDays = intervals[string(record(e.Hyppighet).Faktor)] ?? 7, date = new Date(`${start}T12:00:00Z`)
+      while (date.toISOString().slice(0, 10) < today) date.setUTCDate(date.getUTCDate() + intervalDays)
+      for (let index = 0; index < 8; index++) { values.push(date.toISOString().slice(0, 10)); date.setUTCDate(date.getUTCDate() + intervalDays) }
+    }
+    return values.map(value => makeCollection({ date: value, rawType, providerTypeId: typeId || undefined, providerEventId: eventId ? `${eventId}:${value}` : undefined, semanticSource: 'json_field', raw: entry }))
+  })
+  return finish(rows, 'Oslo')
 }
 
 export function createMinRenovasjonProvider(appKey = process.env.MINRENOVASJON_APP_KEY || '', fetcher: Fetch = fetch): WasteProvider {
   const base = 'https://komteksky.norkart.no/MinRenovasjon.Api/api', proxy = 'https://norkartrenovasjon.azurewebsites.net/proxyserver.ashx'
-  const request = async (path: string, address: WasteAddress) => { if (!appKey) throw new WasteProviderError('configuration', 'MinRenovasjon requires a valid server-only RE:MIND credential.'); const upstream = new URL(`${base}/${path}`); upstream.searchParams.set('kommunenr', address.municipalityNumber); if (path === 'tommekalender') { upstream.searchParams.set('gatekode', address.addressCode || ''); upstream.searchParams.set('gatenavn', address.streetName || ''); upstream.searchParams.set('husnr', `${address.houseNumber || ''}${address.houseLetter || ''}`) } const url = new URL(proxy); url.searchParams.set('server', upstream.toString()); let response: Response; try { response = await fetcher(url, { headers: { Accept: 'application/json', RenovasjonAppKey: appKey, Kommunenr: address.municipalityNumber }, signal: AbortSignal.timeout(12000) }) } catch { throw new WasteProviderError('temporary_failure', 'MinRenovasjon is temporarily unavailable.') }; return responseBody(response, 'MinRenovasjon') }
+  const request = async (path: string, address: WasteAddress) => { if (!appKey) throw new WasteProviderError('configuration', 'MinRenovasjon requires a valid server-only RE:MIND credential.'); const upstream = new URL(`${base}/${path}`); if (path === 'tommekalender') { upstream.searchParams.set('gatekode', address.addressCode || ''); upstream.searchParams.set('gatenavn', address.streetName || ''); upstream.searchParams.set('husnr', `${address.houseNumber || ''}${address.houseLetter || ''}`) } const url = new URL(proxy); url.searchParams.set('server', upstream.toString()); let response: Response; try { response = await fetcher(url, { headers: { Accept: 'application/json', RenovasjonAppKey: appKey, Kommunenr: address.municipalityNumber }, signal: AbortSignal.timeout(12000) }) } catch { throw new WasteProviderError('temporary_failure', 'MinRenovasjon is temporarily unavailable.') }; return responseBody(response, 'MinRenovasjon') }
   return { family: 'minrenovasjon', resolveAddress: async address => address, async fetchCollections(address) { return { fractions: await request('fraksjoner', address), calendar: await request('tommekalender', address) } }, normalizeCollections(raw) { const r = record(raw); if (!Array.isArray(r.fractions) || !Array.isArray(r.calendar)) throw new WasteProviderError('invalid_response', 'MinRenovasjon returned an invalid response.'); const names = new Map(r.fractions.map((v: unknown) => { const x = record(v); return [string(x.FraksjonId ?? x.Id ?? x.id), string(x.Navn ?? x.navn)] })); const rows = r.calendar.flatMap((v: unknown) => { const x = record(v), id = string(x.FraksjonId ?? x.fraksjonId ?? x.Id), rawType = names.get(id) || string(x.Fraksjon ?? x.fraksjon) || `Unknown fraction ${id}`, dates = Array.isArray(x.Tommedatoer ?? x.tommedatoer) ? x.Tommedatoer ?? x.tommedatoer : [x.Tommedato ?? x.tommedato ?? x.Dato ?? x.dato]; return dates.map((date: unknown) => makeCollection({ date: string(date), rawType, providerTypeId: id || undefined, providerEventId: string(x.Id ?? x.id) || undefined, semanticSource: 'fraction_id', raw: v })) }); return finish(rows, 'MinRenovasjon') } }
 }
 
