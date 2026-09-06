@@ -29,11 +29,27 @@ test('Haugesund routes to HIM, while Stavanger and Sandnes remain unresolved pre
 
 test('HIM fixture preserves dates, CSS semantics, same-day fractions, and unknowns', async () => {
   const provider = createHimProvider(async url => { assert.equal(new URL(url).searchParams.get('adressesok'), 'Testveien 2'); return new Response(await fixture('him.html')) })
-  const rows = provider.normalizeCollections(await provider.fetchCollections(address()))
+  const resolved = await provider.resolveAddress(address()), rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
   assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'matavfall', 'css_identifier'], ['2026-09-08', 'mysterieavfall', 'css_identifier'], ['2026-09-08', 'papir', 'css_identifier']])
   assert.equal(rows.find(row => row.rawType === 'mysterieavfall').normalizedType, 'other')
   assert.doesNotMatch(rows[0].raw, /2026|08\.09/)
   assert.throws(() => provider.normalizeCollections({ html: '<html>broken</html>' }), error => error.code === 'invalid_response')
+})
+
+test('HIM deterministically follows an exact provider suggestion for spaced house letters', async () => {
+  const calls = [], provider = createHimProvider(async url => { calls.push(new URL(url).searchParams.get('adressesok')); return new Response(await fixture(calls.length === 1 ? 'him-suggestions.html' : 'him.html')) })
+  const selected = { ...address(), addressId: 'him-77e', label: 'Haugevegen 77E, 5515 Haugesund', streetName: 'Haugevegen', houseNumber: '77', houseLetter: 'E' }
+  const resolved = await provider.resolveAddress(selected)
+  assert.equal(resolved.label, selected.label); assert.equal(resolved.propertyId, 'Haugevegen 77 E')
+  const rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
+  assert.deepEqual(calls, ['Haugevegen 77 E', 'Haugevegen 77 E']); assert.equal(rows[0].date, '2026-09-08')
+})
+
+test('HIM ambiguous normalized suggestions are unsupported and never select the first result', async () => {
+  const calls = [], provider = createHimProvider(async url => { calls.push(String(url)); return new Response(await fixture('him-suggestions-ambiguous.html')) })
+  const selected = { ...address(), label: 'Haugevegen 77E, 5515 Haugesund', streetName: 'Haugevegen', houseNumber: '77', houseLetter: 'E' }
+  await assert.rejects(() => provider.resolveAddress(selected), error => error instanceof WasteProviderError && error.code === 'unsupported')
+  assert.equal(calls.length, 1)
 })
 
 test('Oslo fixture preserves JSON labels, IDs, same-day fractions, and unknowns', async () => {
@@ -76,6 +92,15 @@ test('Renovasjonsportal fixture uses address paths, deterministic matching, and 
   assert.deepEqual(rows.map(row => [row.date, row.rawType, row.semanticSource]), [['2026-09-08', 'Restavfall', 'json_field'], ['2026-09-08', 'Ukjent portalfraksjon', 'json_field']])
   assert.equal(rows[1].normalizedType, 'other')
   assert.throws(() => provider.normalizeCollections({ disposals: 'bad' }), error => error.code === 'invalid_response')
+})
+
+test('ReMidt formats the real Follovegen house letter as a separate provider token', async () => {
+  const calls = [], provider = createRenovasjonsportalProvider('https://kalender.renovasjonsportal.no/api', async url => { calls.push(String(url)); return calls.length === 1 ? Response.json({ searchResults: [{ id: 'other', title: 'Follovegen 2' }, { id: 'remidt-1b', title: 'Follovegen 1 B' }] }) : Response.json(JSON.parse(await fixture('renovasjonsportal-details.json'))) })
+  const selected = { ...address('5059'), label: 'Follovegen 1B, 7300 Orkanger', streetName: 'Follovegen', houseNumber: '1', houseLetter: 'B' }
+  const resolved = await provider.resolveAddress(selected); await provider.fetchCollections(resolved)
+  assert.equal(resolved.label, selected.label); assert.equal(resolved.propertyId, 'remidt-1b')
+  assert.equal(calls[0], 'https://kalender.renovasjonsportal.no/api/address/Follovegen%201%20B')
+  assert.equal(calls[1], 'https://kalender.renovasjonsportal.no/api/address/remidt-1b/details')
 })
 
 test('registry config uses the pinned Fosen and ReMidt Renovasjonsportal API origins', () => {
