@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { createHimProvider, createMinRenovasjonProvider, createOsloProvider, createRenovasjonsportalProvider, normalizeOsloCollections, normalizeWasteType, providerForAddress, providerRegistrationFor, searchKartverketAddresses, WasteProviderError } from '../app/lib/integrations/waste/providers.ts'
 import { norwayLocalYmd } from '../app/lib/integrations/waste/date.ts'
 import { wasteCachePlan } from '../app/lib/integrations/waste/cache.ts'
+import { wasteCollectionDisplayTitle } from '../app/lib/integrations/waste/display.ts'
 
 const fixture = name => readFile(new URL(`fixtures/waste/${name}`, import.meta.url), 'utf8')
 const address = (municipalityNumber = '1106') => ({ addressId: `${municipalityNumber}-1-2-`, label: 'Testveien 2, 0001 Test', municipalityNumber, municipalityName: 'Test', addressCode: '1', streetName: 'Testveien', houseNumber: '2' })
@@ -93,7 +94,25 @@ test('registry assigns Steinkjer to MinRenovasjon and never assigns Osen to Fose
 
 test('failed refresh keeps the old cache plan untouched', () => assert.deepEqual(wasteCachePlan(['old-event'], [], false), { upsertIds: [], staleIds: [] }))
 
-test('normalization does not coerce unknown semantics', () => assert.equal(normalizeWasteType('Mystisk fraksjon'), 'other'))
+test('evidence-backed provider aliases normalize exactly without losing compound semantics', () => {
+  const cases = {
+    restavfall: ['Rest', 'Restavfall', 'Restavfall til forbrenning', 'restavfall'],
+    matavfall: ['Mat', 'Matavfall', 'Bio', 'matavfall'],
+    papir: ['Papir', 'Papp', 'Papp og papir', 'Papp/papir', 'papir'],
+    plast: ['Plast', 'Plastemballasje', 'plastemballasje'],
+    glass_metall: ['Glass', 'Metall', 'Glass og metall', 'Glass og metallemballasje', 'glassemballasje', 'metallemballasje'],
+    hageavfall: ['Hage', 'Hageavfall'], christmas_tree: ['Juletre'], hazardous: ['Farlig avfall'], textile: ['Tekstil', 'Klær'],
+  }
+  for (const [expected, labels] of Object.entries(cases)) for (const label of labels) assert.equal(normalizeWasteType(label), expected, label)
+  for (const label of ['Papir og plastemballasje', 'Mystisk fraksjon', 'Plast og matavfall']) assert.equal(normalizeWasteType(label), 'other', label)
+})
+
+test('compound Fosen semantics survive as other and use the localized raw-label display fallback', () => {
+  assert.equal(wasteCollectionDisplayTitle('other', 'no', 'Papir og plastemballasje'), 'Papir og plastemballasje')
+  assert.equal(wasteCollectionDisplayTitle('other', 'en', 'Papir og plastemballasje'), 'Paper and plastic packaging')
+  assert.equal(wasteCollectionDisplayTitle('other', 'en', 'Mystisk fraksjon'), 'Mystisk fraksjon')
+  assert.equal(wasteCollectionDisplayTitle('other', 'en'), 'Other waste')
+})
 
 test('registry migration removes legacy Stavanger/Sandnes rows before validating the new provider check', async () => {
   const migration = await readFile(new URL('../supabase/migrations/20260906120000_authoritative_waste_provider_families.sql', import.meta.url), 'utf8')

@@ -75,11 +75,20 @@ const string = (v: unknown) => typeof v === 'string' || typeof v === 'number' ? 
 export function providerRegistrationFor(municipalityNumber: string) { return WASTE_PROVIDER_REGISTRY.find(row => row.municipalityNumber === municipalityNumber) }
 
 export function normalizeWasteType(label: unknown): WasteType {
-  const value = string(label).toLocaleLowerCase('nb-NO').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (/juletre/.test(value)) return 'christmas_tree'; if (/farlig/.test(value)) return 'hazardous'; if (/tekstil|kl[æe]r/.test(value)) return 'textile'
-  if (/mat|bio/.test(value)) return 'matavfall'; if (/papir|papp/.test(value)) return 'papir'; if (/plast/.test(value)) return 'plast'
-  if (/glass|metall/.test(value)) return 'glass_metall'; if (/hage/.test(value)) return 'hageavfall'; if (/rest/.test(value)) return 'restavfall'
-  return 'other'
+  const value = string(label).toLocaleLowerCase('nb-NO').replace(/[_-]/g, ' ').replace(/\s*\/\s*/g, ' og ').replace(/\s+/g, ' ').trim()
+  const aliases: Readonly<Record<WasteType, readonly string[]>> = {
+    restavfall: ['rest', 'restavfall', 'restavfall til forbrenning'],
+    matavfall: ['mat', 'matavfall', 'bio'],
+    papir: ['papir', 'papp', 'papp og papir', 'papir og papp'],
+    plast: ['plast', 'plastemballasje'],
+    glass_metall: ['glass', 'metall', 'glass og metall', 'glass og metallemballasje', 'glassemballasje', 'metallemballasje'],
+    hageavfall: ['hage', 'hageavfall'],
+    christmas_tree: ['juletre'],
+    hazardous: ['farlig avfall'],
+    textile: ['tekstil', 'klær'],
+    other: [],
+  }
+  return (Object.entries(aliases).find(([, values]) => values.includes(value))?.[0] as WasteType | undefined) ?? 'other'
 }
 
 export function wasteCollectionTitle(type: WasteType, original = '') { return wasteCollectionDisplayTitle(type, 'no', original) }
