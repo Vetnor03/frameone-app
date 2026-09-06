@@ -15,6 +15,7 @@
 #include "TimeSync.h"
 #include "BatteryManager.h"
 #include "HardwareProfile.h"
+#include "SmartRefresh.h"
 
 // Modules
 #include "ModuleDate.h"
@@ -40,10 +41,10 @@ static const char* APP_LOGIN_URL = "https://re-mind.no/login";
 
 // Cheap live-update discovery wake. Keep it isolated from display decisions:
 // waking and observing a revision never imply an e-paper transaction.
-// This battery timer is a cheap revision safety poll, never a redraw timer.
-// Ten minutes is the configurable maximum freshness interval; nearer hard or
-// coalesced soft module deadlines may select an earlier wake.
-static const uint32_t PROBE_WAKE_SECONDS = 10 * 60;
+// Keep the short fallback probe for fast explicit app updates. The independent
+// ten-minute background maximum and module deadlines decide content work; this
+// probe never implies a source fetch or redraw.
+static const uint32_t PROBE_WAKE_SECONDS = SmartRefresh::MANUAL_PROBE_SECONDS;
 static const uint64_t PROBE_WAKE_US = (uint64_t)PROBE_WAKE_SECONDS * 1000000ULL;
 static const uint32_t MAX_REVISION_POLL_SECONDS = 10 * 60;
 // USB stays fully realtime. On battery, a PM-capable Alfred remains connected
@@ -55,6 +56,7 @@ static const uint32_t REALTIME_FAILURE_BACKOFF_MS = 5000;
 
 // Survives ESP32 deep sleep, but intentionally resets on reset/power loss.
 RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
+RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
 // Retained across the 10-second deep-sleep wake cycle. A cold boot may redraw
 // once, but ordinary setup-pending probes never refresh unchanged e-paper.
 RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
@@ -68,11 +70,14 @@ static constexpr int POWER_SENSE_PIN = HardwareProfile::kPowerSense;
 
 // Keep one config globally to avoid stack overflow
 static FrameConfig g_cfg;
+static SmartRenderState g_smartState;
+RTC_DATA_ATTR static time_t g_revisionCheckedAt = 0;
 
 // Only initialize the display if we actually need to draw
 static bool g_displayReady = false;
 static bool g_dashboardLoaded = false;
 static bool g_powerRefreshPending = false;
+static bool g_lastEvaluationDrew = false;
 
 enum SetupStep {
   SETUP_STEP_NONE = 0,
@@ -633,6 +638,28 @@ static bool renderLoadedDashboard(const BatteryState& batt, const PowerSenseDebu
   return true;
 }
 
+static bool renderSmartDashboard(const BatteryState& batt, const PowerSenseDebug& pwr,
+                                 const SmartRenderState& desired, const SmartDisplayPlan& plan) {
+  g_lastEvaluationDrew = plan.type != SmartDisplayPlan::NONE;
+  if (plan.type == SmartDisplayPlan::NONE) return true;
+  DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
+  ModuleDate::setConfig(&g_cfg); ModuleWeather::setConfig(&g_cfg); ModuleSurf::setConfig(&g_cfg);
+  ModuleReminders::setConfig(&g_cfg); ModuleSoccer::setConfig(&g_cfg); ModuleStocks::setConfig(&g_cfg);
+  ModuleReminders::setRequiredProfiles(Layout::reminderProfileMask(g_cfg.layout, g_cfg));
+  ModuleReminders::preload();
+  ensureDisplay(); Theme::set(g_cfg.theme); resetTextStateForDashboard();
+  bool success = true;
+  if (plan.type == SmartDisplayPlan::FULL) success = renderLoadedDashboard(batt, pwr);
+  else {
+    for (uint8_t i = 0; i < plan.regionCount && success; ++i)
+      success = Layout::drawRegionWithContent(g_cfg.layout, g_cfg, plan.regions[i], false);
+    shutdownDisplay();
+  }
+  // Never publish hashes/counters until every synchronous panel operation has completed.
+  if (success) SmartRefresh::commitSuccessfulDisplay(desired, plan);
+  return success;
+}
+
 static uint64_t explicitTimingRevision = 0;
 static uint32_t explicitTimingStartedAtMs = 0;
 static uint32_t explicitRevisionObservedAtMs = 0;
@@ -661,13 +688,23 @@ static bool fetchAndRenderExplicit(
   }
 
   setupPendingScreenDisplayed = false;
-
-  if (!renderLoadedDashboard(batt, pwr)) return false;
+  SmartRenderState desired;
+  if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired)) return false;
+  SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
+  if (!renderSmartDashboard(batt, pwr, desired, displayPlan)) return false;
+  g_smartState = desired;
+  g_revisionCheckedAt = time(nullptr);
+  g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
+    desired, g_revisionCheckedAt, g_revisionCheckedAt);
+  ContentRevisionState contentRevision;
+  if (SmartRefresh::probeRevision(DeviceIdentity::getToken(), SmartRefresh::displayedRevision(), contentRevision))
+    SmartRefresh::saveDisplayedRevision(contentRevision.revision);
   LiveUpdate::saveRenderedAwaitingAck(revision);
   // A successful physical render also satisfies the one-time renderer-version
   // maintenance redraw, even if its revision ACK needs a network retry.
   UpdateChecker::saveFirmwareVersion(FW_VER);
-  Serial.printf("LiveUpdate: revision %" PRIu64 " physically displayed\n", revision);
+  Serial.printf("LiveUpdate: revision %" PRIu64 " evaluated; display=%s\n", revision,
+                g_lastEvaluationDrew ? "updated" : "unchanged");
   return true;
 }
 
@@ -955,6 +992,7 @@ void setup() {
   // Cold boot initializes the baseline; subsequent checks are interval-only.
   bool normalSyncDue =
     wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ||
+    (g_nextScheduledWake > 0 && time(nullptr) >= g_nextScheduledWake) ||
     normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS;
   if (normalSyncDue) {
     if (normalSyncElapsedSeconds >= MAX_REVISION_POLL_SECONDS) {
@@ -1187,7 +1225,7 @@ run_normal_sync:
   if (renderedWithoutSignature) normalSyncDue = false;
 
   // Battery, recharge, pairing and OTA maintenance remain independent of the
-  // display-content cadence. Only a revision or a changed signature draws.
+  // display-content cadence. A safety wake performs only the tiny revision read.
   PowerSenseDebug pwr = readPowerSenseDebug();
   BatteryState batt = BatteryManager::readAndUpdate(pwr.usbPresent);
   BatteryManager::logState("post-wifi-pair", batt);
@@ -1209,25 +1247,40 @@ run_normal_sync:
   }
 
   runOtaCheckIfDue();
-  String nextSignature;
-  if (!UpdateChecker::fetchContentSignature(DeviceIdentity::getToken(), nextSignature)) {
-    Serial.println("Scheduled content signature unavailable; preserving display");
-    // The period was consumed before entering this block. A failed lookup
-    // therefore backs off until the next scheduled boundary, never a tight loop.
-  } else if (nextSignature == UpdateChecker::getLastContentSignature()) {
-    Serial.println("Scheduled content unchanged; preserving display");
+  ContentRevisionState revisionState;
+  const uint64_t knownRevision = SmartRefresh::displayedRevision();
+  String scheduledModules = SmartRefresh::dueModuleCsv(g_smartState, time(nullptr));
+  if (wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED && !scheduledModules.length()) scheduledModules = "all";
+  if (!SmartRefresh::probeRevision(DeviceIdentity::getToken(), knownRevision, revisionState)) {
+    Serial.println("Revision safety poll unavailable; preserving display and sources");
+  } else if (!revisionState.changed && !scheduledModules.length()) {
+    g_revisionCheckedAt = time(nullptr);
+    Serial.println("Revision unchanged; no config, source, or display work");
     postDeviceStatus(batt, pwr, false);
   } else {
-    FrameConfigApi::FetchResult result = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
-    if (result == FrameConfigApi::FETCH_UNPAIRED) {
-      if (recoverPairingIfTokenLost("scheduled frame fetch", pwr.usbPresent)) return;
-    } else if (result == FrameConfigApi::FETCH_OK) {
-      if (renderLoadedDashboard(batt, pwr)) {
-        UpdateChecker::saveContentSignature(nextSignature);
-        UpdateChecker::saveFirmwareVersion(FW_VER);
-        if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
-        postDeviceStatus(batt, pwr, true);
-        Serial.println("Scheduled changed visible content refreshed using display policy");
+    String affected = revisionState.affectedModules;
+    if (!affected.length()) affected = scheduledModules;
+    if (!affected.length()) affected = "all";
+    if (affected.indexOf("all") >= 0 && FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken()) != FrameConfigApi::FETCH_OK) {
+      Serial.println("Changed layout/config fetch failed; preserving physical state");
+    } else {
+      SmartRenderState desired;
+      if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), affected, desired)) {
+        Serial.println("Affected render-state fetch failed; preserving freshness and hashes");
+      } else {
+        SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
+        if (renderSmartDashboard(batt, pwr, desired, displayPlan)) {
+          g_smartState = desired;
+          SmartRefresh::saveDisplayedRevision(revisionState.revision);
+          if (batt.percent >= 0) UpdateChecker::saveBatteryPercent(batt.percent);
+          g_revisionCheckedAt = time(nullptr);
+          g_nextScheduledWake = time(nullptr) + SmartRefresh::secondsUntilNextWake(
+            desired, time(nullptr), g_revisionCheckedAt);
+          postDeviceStatus(batt, pwr, displayPlan.type != SmartDisplayPlan::NONE);
+          Serial.println(displayPlan.type == SmartDisplayPlan::NONE
+            ? "Revision changed schedule/source state only; display untouched"
+            : "Changed visible modules committed after display success");
+        }
       }
     }
   }

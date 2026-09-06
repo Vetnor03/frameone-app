@@ -421,4 +421,29 @@ void drawWithContent(LayoutKey key, const FrameConfig& cfg) {
   } while (DisplayCore::nextFrameUpdate());
 }
 
+bool drawRegionWithContent(LayoutKey key, const FrameConfig& cfg, const Cell& region,
+                           bool grayscaleMode) {
+  if (!DisplayCore::beginPartialUpdate(region.x, region.y, region.w, region.h, grayscaleMode)) return false;
+  const SlotModule* assigns = cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable
+    ? cfg.customLayout.assigns : cfg.assigns;
+  const int assignCount = cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable
+    ? cfg.customLayout.assignCount : cfg.assignCount;
+  Cell cells[MAX_GRID_CELLS]; int count = 0;
+  if (cfg.layout == LAYOUT_CUSTOM && cfg.customLayout.renderable)
+    buildGridCells(cfg.customLayout.grid, cells, MAX_GRID_CELLS, count);
+  else count = buildCells(key == LAYOUT_CUSTOM ? LAYOUT_DEFAULT : key, cells, MAX_GRID_CELLS);
+  do {
+    // The driver clips these operations to the selected partial window. Redraw
+    // only intersecting modules; never compose the full dashboard for a tile.
+    DisplayCore::fillThemeBackground();
+    for (int i = 0; i < count; ++i) {
+      const Cell& cell = cells[i];
+      if (cell.x >= region.x + region.w || region.x >= cell.x + cell.w ||
+          cell.y >= region.y + region.h || region.y >= cell.y + cell.h) continue;
+      ModuleRenderer::renderPlaceholders(assigns, assignCount, &cell, 1);
+    }
+  } while (DisplayCore::nextFrameUpdate());
+  return true;
+}
+
 } // namespace Layout

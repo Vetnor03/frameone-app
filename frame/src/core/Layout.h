@@ -27,4 +27,6 @@ namespace Layout {
 
   // NEW: draw layout dividers + allow caller to draw inside cells during same refresh
   void drawWithContent(LayoutKey key, const FrameConfig& cfg);
+  bool drawRegionWithContent(LayoutKey key, const FrameConfig& cfg, const Cell& region,
+                             bool grayscaleMode = false);
 }
