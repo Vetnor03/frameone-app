@@ -37,12 +37,12 @@ test('HIM fixture preserves dates, CSS semantics, same-day fractions, and unknow
 })
 
 test('HIM deterministically follows an exact provider suggestion for spaced house letters', async () => {
-  const calls = [], provider = createHimProvider(async url => { calls.push(new URL(url).searchParams.get('adressesok')); return new Response(await fixture(calls.length === 1 ? 'him-suggestions.html' : 'him.html')) })
+  const urls = [], calls = [], provider = createHimProvider(async url => { const parsed = new URL(url); urls.push(parsed); calls.push(parsed.searchParams.get('adressesok')); return new Response(await fixture(calls.length === 1 ? 'him-suggestions.html' : 'him.html')) })
   const selected = { ...address(), addressId: 'him-77e', label: 'Haugevegen 77E, 5515 Haugesund', streetName: 'Haugevegen', houseNumber: '77', houseLetter: 'E' }
   const resolved = await provider.resolveAddress(selected)
-  assert.equal(resolved.label, selected.label); assert.equal(resolved.propertyId, 'Haugevegen 77 E')
+  assert.equal(resolved.label, selected.label); assert.equal(resolved.propertyId, '6fa154fe-1111-4222-8333-acde00000077')
   const rows = provider.normalizeCollections(await provider.fetchCollections(resolved))
-  assert.deepEqual(calls, ['Haugevegen 77 E', 'Haugevegen 77 E']); assert.equal(rows[0].date, '2026-09-08')
+  assert.equal(calls[0], 'Haugevegen 77 E'); assert.equal(calls[1], null); assert.equal(urls[1].searchParams.get('eiendomId'), '6fa154fe-1111-4222-8333-acde00000077'); assert.equal(rows[0].date, '2026-09-08')
 })
 
 test('HIM ambiguous normalized suggestions are unsupported and never select the first result', async () => {

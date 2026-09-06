@@ -135,8 +135,10 @@ async function responseBody(response: Response, provider: string, json = true) {
 export function createHimProvider(fetcher: Fetch = fetch): WasteProvider {
   const endpoint = 'https://him.as/tommekalender/'
   const prefetched = new Map<string, { html: string; sourceUrl: string }>()
-  const providerQuery = (address: WasteAddress) => address.propertyId || [address.streetName, address.houseNumber, address.houseLetter].filter(Boolean).join(' ') || address.label.split(',')[0]
-  const requestCalendar = async (query: string) => { const url = new URL(endpoint); url.searchParams.set('adressesok', query); let response: Response; try { response = await fetcher(url, { headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(12000) }) } catch { throw new WasteProviderError('temporary_failure', 'HIM is temporarily unavailable.') }; return { html: await responseBody(response, 'HIM', false) as string, sourceUrl: url.toString() } }
+  const providerQuery = (address: WasteAddress) => [address.streetName, address.houseNumber, address.houseLetter].filter(Boolean).join(' ') || address.label.split(',')[0]
+  const requestUrl = async (url: URL) => { let response: Response; try { response = await fetcher(url, { headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(12000) }) } catch { throw new WasteProviderError('temporary_failure', 'HIM is temporarily unavailable.') }; return { html: await responseBody(response, 'HIM', false) as string, sourceUrl: url.toString() } }
+  const requestCalendar = (query: string) => { const url = new URL(endpoint); url.searchParams.set('adressesok', query); return requestUrl(url) }
+  const requestProperty = (propertyId: string) => { const url = new URL(endpoint); url.searchParams.set('eiendomId', propertyId); return requestUrl(url) }
   const normalizedAddress = (value: string) => value.toLocaleLowerCase('nb-NO').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9æøå]+/g, '')
   const calendarExists = (html: string) => /<table\b[^>]*class=["'][^"']*tommekalender__calendartable[^"']*["']/i.test(html)
   return { family: 'him',
@@ -144,13 +146,16 @@ export function createHimProvider(fetcher: Fetch = fetch): WasteProvider {
       const initial = await requestCalendar(providerQuery(address))
       if (calendarExists(initial.html)) { prefetched.set(address.addressId, initial); return address }
       const suggestions = [...initial.html.matchAll(/<div\b[^>]*class=["'][^"']*table-wrap[^"']*["'][^>]*>[\s\S]*?<table\b[^>]*>[\s\S]*?<tbody\b[^>]*>([\s\S]*?)<\/tbody>[\s\S]*?<\/table>[\s\S]*?<\/div>/gi)]
-        .flatMap(table => [...table[1].matchAll(/<tr\b[^>]*>[\s\S]*?<td\b[^>]*>[\s\S]*?<a\b[^>]*href=["'][^"']+["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/td>[\s\S]*?<\/tr>/gi)])
-        .map(match => match[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim())
-      const expected = normalizedAddress([address.streetName, address.houseNumber, address.houseLetter].filter(Boolean).join(' ')), matches = suggestions.filter(label => normalizedAddress(label) === expected)
+        .flatMap(table => [...table[1].matchAll(/<tr\b[^>]*>[\s\S]*?<td\b[^>]*>[\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/td>[\s\S]*?<\/tr>/gi)])
+        .map(match => ({ href: match[1].replace(/&amp;/gi, '&'), label: match[2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim() }))
+      const expected = normalizedAddress([address.streetName, address.houseNumber, address.houseLetter].filter(Boolean).join(' ')), matches = suggestions.filter(suggestion => normalizedAddress(suggestion.label) === expected)
       if (matches.length !== 1) throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this HIM address yet.', false)
-      return { ...address, propertyId: matches[0] }
+      let propertyUrl: URL; try { propertyUrl = new URL(matches[0].href, endpoint) } catch { throw new WasteProviderError('unsupported', 'HIM returned an invalid property link.', false) }
+      const propertyId = propertyUrl.origin === new URL(endpoint).origin ? propertyUrl.searchParams.get('eiendomId') : ''
+      if (!propertyId) throw new WasteProviderError('unsupported', 'HIM returned an invalid property link.', false)
+      return { ...address, propertyId }
     },
-    async fetchCollections(address) { const cached = prefetched.get(address.addressId); if (cached) { prefetched.delete(address.addressId); return cached } return requestCalendar(providerQuery(address)) },
+    async fetchCollections(address) { const cached = prefetched.get(address.addressId); if (cached) { prefetched.delete(address.addressId); return cached } return address.propertyId ? requestProperty(address.propertyId) : requestCalendar(providerQuery(address)) },
     normalizeCollections(raw) {
       const r = record(raw); if (typeof r.html !== 'string') throw new WasteProviderError('invalid_response', 'HIM returned an invalid response.')
       const months: Record<string, string> = { januar: '01', februar: '02', mars: '03', april: '04', mai: '05', juni: '06', juli: '07', august: '08', september: '09', oktober: '10', november: '11', desember: '12' }
