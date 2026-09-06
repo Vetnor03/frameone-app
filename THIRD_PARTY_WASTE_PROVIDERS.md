@@ -10,11 +10,11 @@ No upstream MinRenovasjon application key is included in RE:MIND.
 
 | RE:MIND adapter | Upstream source file(s) consulted |
 | --- | --- |
-| HIM | `custom_components/waste_collection_schedule/waste_collection_schedule/source/him.py` |
-| Oslo | `custom_components/waste_collection_schedule/waste_collection_schedule/source/oslo.py` |
-| MinRenovasjon / ROAF | `custom_components/waste_collection_schedule/waste_collection_schedule/source/min_renovasjon.py` |
-| Renovasjonsportal / Fosen Renovasjon | `custom_components/waste_collection_schedule/waste_collection_schedule/source/fosen_renovasjon.py` |
-| Renovasjonsportal / ReMidt | `custom_components/waste_collection_schedule/waste_collection_schedule/source/remidt.py` |
+| HIM | `custom_components/waste_collection_schedule/waste_collection_schedule/source/him_as.py` |
+| Oslo | `custom_components/waste_collection_schedule/waste_collection_schedule/source/oslokommune_no.py` |
+| MinRenovasjon / ROAF | `custom_components/waste_collection_schedule/waste_collection_schedule/source/minrenovasjon_no.py` |
+| Renovasjonsportal / Fosen Renovasjon | `custom_components/waste_collection_schedule/waste_collection_schedule/source/fosenrenovasjon_no.py` |
+| Renovasjonsportal / ReMidt | `custom_components/waste_collection_schedule/waste_collection_schedule/source/remidt_no.py` |
 
 Only the explicitly documented provider contracts were adapted. RE:MIND does not use
 generic municipality HTML or JavaScript endpoint discovery.
