@@ -173,14 +173,16 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
   }
   // Other versions use an ordinary form with a text/search input.
   for (const form of html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)) {
+    if (!/(?:waste|calendar|renov|tommekalender|tømmekalender|avfall)/i.test(form[0])) continue
     const open = form[0].match(/^<form\b[^>]*>/i)?.[0] || ''
     const formAttrs = attrs(open)
     const input = [...form[0].matchAll(/<input\b[^>]*>/gi)].map(x => textInput(x[0])).find(x => x?.name && searchParameter.test(x.name))
     const endpoint = formAttrs['data-search-url'] || formAttrs['data-autocomplete-url'] || formAttrs.action
     if (endpoint && input?.name) add(endpoint, formAttrs['data-method'] || formAttrs.method || 'GET', input.name)
   }
-  // Inline configuration occasionally carries the same three contract fields.
+  // Inline configuration is accepted only when it identifies the waste-calendar component.
   for (const script of html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+    if (!/(?:waste|calendar|renov|tommekalender|tømmekalender|avfall)/i.test(script[1])) continue
     for (const endpointMatch of script[1].matchAll(/(?:url|searchUrl|autocompleteUrl|endpoint)\s*[:=]\s*["']([^"']+)["']/gi)) {
       const context = script[1].slice(Math.max(0, (endpointMatch.index || 0) - 300), (endpointMatch.index || 0) + endpointMatch[0].length + 300)
       const method = context.match(/method\s*[:=]\s*["'](GET|POST)["']/i)?.[1] || 'GET'
@@ -189,6 +191,40 @@ function addressSearchContracts(html: string, base: string): AddressSearchContra
     }
   }
   return contracts
+}
+
+function relevantBundleUrls(html: string, base: string) {
+  const origin = new URL(base).origin
+  return [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].flatMap(match => {
+    try {
+      const url = new URL(match[1], base)
+      return url.origin === origin && /(?:waste|calendar|renov|tommekalender|tømmekalender|avfall)/i.test(url.pathname) ? [url] : []
+    } catch { return [] }
+  }).filter((url, index, urls) => urls.findIndex(other => other.toString() === url.toString()) === index).slice(0, 3)
+}
+
+function scriptSearchContracts(source: string, base: string) {
+  const contracts: AddressSearchContract[] = []
+  const endpointPaths = new Set<string>()
+  const add = (endpoint: string, method: string, parameter: string) => {
+    if (!searchParameter.test(parameter)) return
+    try {
+      const url = new URL(endpoint, base)
+      endpointPaths.add(url.pathname)
+      const contract = { endpoint: url.toString(), method: method.toUpperCase() === 'POST' ? 'POST' as const : 'GET' as const, parameter }
+      if (!contracts.some(x => x.endpoint === contract.endpoint && x.method === contract.method && x.parameter === parameter)) contracts.push(contract)
+    } catch { /* Ignore non-URL JavaScript expressions. */ }
+  }
+  for (const match of source.matchAll(/\$\.(get|post)\s*\(\s*["']([^"']+)["']\s*,\s*\{\s*["']?(search|searchText|query|q|term)["']?\s*:/gi)) add(match[2], match[1], match[3])
+  for (const match of source.matchAll(/axios\.(get|post)\s*\(\s*["']([^"']+)["'][\s\S]{0,400}?(?:params|data)\s*:\s*\{\s*["']?(search|searchText|query|q|term)["']?\s*:/gi)) add(match[2], match[1], match[3])
+  for (const match of source.matchAll(/(?:url\s*:\s*|fetch\s*\(|axios\s*\(\s*)["']([^"']+)["']/gi)) {
+    const context = source.slice(Math.max(0, (match.index || 0) - 500), (match.index || 0) + match[0].length + 700)
+    const parameter = context.match(/(?:data|params|body)\s*:\s*\{[^}]*?["']?(search|searchText|query|q|term)["']?\s*:/i)?.[1]
+      || context.match(/(?:URLSearchParams|FormData)[\s\S]{0,250}?(?:append|set)\s*\(\s*["'](search|searchText|query|q|term)["']/i)?.[1]
+    const method = context.match(/(?:method|type)\s*:\s*["'](GET|POST)["']/i)?.[1] || 'GET'
+    if (parameter) add(match[1], method, parameter)
+  }
+  return { contracts, endpointPaths: [...endpointPaths].slice(0, 20) }
 }
 
 function discoveryStructure(html: string, base: string) {
@@ -276,14 +312,27 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
       if (!landing.ok) throw new WasteProviderError(landing.status >= 500 ? 'temporary_failure' : 'unsupported', 'Waste collection isn’t available for this address yet.', landing.status >= 500)
       const html = await landing.text()
       const contracts = addressSearchContracts(html, `${base}/`)
+      const bundleDiagnostics: Array<{ path: string; status: number | 'network-error'; contentType?: string; endpointPaths?: string[] }> = []
+      if (!contracts.length) for (const bundleUrl of relevantBundleUrls(html, `${base}/`)) {
+        let bundleResponse: Response
+        try { bundleResponse = await fetcher(bundleUrl, { headers: { Accept: 'application/javascript, text/javascript' }, signal: AbortSignal.timeout(10000) }) }
+        catch { bundleDiagnostics.push({ path: bundleUrl.pathname, status: 'network-error' }); continue }
+        const contentType = (bundleResponse.headers.get('content-type') || '').split(';')[0]
+        if (!bundleResponse.ok) { bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType }); continue }
+        const discovered = scriptSearchContracts(await bundleResponse.text(), bundleUrl.toString())
+        contracts.push(...discovered.contracts.filter(contract => !contracts.some(existing => existing.endpoint === contract.endpoint && existing.method === contract.method && existing.parameter === contract.parameter)))
+        bundleDiagnostics.push({ path: bundleUrl.pathname, status: bundleResponse.status, contentType, endpointPaths: discovered.endpointPaths })
+      }
       let propertyId = propertyCandidateFromHtml(html, address, stavanger)
       console.info('[waste] property resolution discovered', {
         municipality, provider: stavanger ? 'stavanger' : 'hentavfall', landingEndpoint: base,
         status: landing.status, contentType: (landing.headers.get('content-type') || '').split(';')[0],
         shape: responseShape(html, landing.headers.get('content-type') || 'text/html'),
         contracts: contracts.map(x => ({ endpoint: x.endpoint, method: x.method, parameter: x.parameter })),
+        relevantBundles: bundleDiagnostics,
         ...(contracts.length ? {} : { discoveryStructure: discoveryStructure(html, `${base}/`) }),
       })
+      const attempts: Array<{ endpoint: string; method: string; status: number | 'network-error'; contentType?: string; shape?: unknown }> = []
       for (const contract of contracts) {
         if (propertyId) break
         const url = new URL(contract.endpoint)
@@ -294,18 +343,23 @@ function createNorconsultProvider(fetcher: Fetch, municipalityNumber: '1103' | '
         } else url.searchParams.set(contract.parameter, address.label)
         let response: Response
         try { response = await fetcher(url, request) } catch {
-          console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', endpoint: url.origin + url.pathname, method: contract.method, status: 'network-error' })
+          const attempt = { endpoint: url.origin + url.pathname, method: contract.method, status: 'network-error' as const }
+          attempts.push(attempt); console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', ...attempt })
           continue
         }
         const body = await response.text()
         const contentType = response.headers.get('content-type') || ''
-        console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', endpoint: url.origin + url.pathname, method: contract.method, status: response.status, contentType: contentType.split(';')[0], shape: responseShape(body, contentType) })
+        const attempt = { endpoint: url.origin + url.pathname, method: contract.method, status: response.status, contentType: contentType.split(';')[0], shape: responseShape(body, contentType) }
+        attempts.push(attempt); console.info('[waste] property resolution attempt', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', ...attempt })
         if (!response.ok) continue
         let parsed: unknown = null; try { parsed = JSON.parse(body) } catch { /* Some official selectors return option HTML. */ }
         const match = propertyCandidate(parsed, address, stavanger)
         propertyId = match ? propertyIdFromRecord(match, stavanger) : propertyCandidateFromHtml(body, address, stavanger)
       }
-      if (!propertyId) throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this address yet.', false)
+      if (!propertyId) {
+        console.info('[waste] property resolution failed', { municipality, provider: stavanger ? 'stavanger' : 'hentavfall', contracts: contracts.map(x => ({ endpoint: new URL(x.endpoint).origin + new URL(x.endpoint).pathname, method: x.method, parameter: x.parameter })), attempts, relevantBundles: bundleDiagnostics, discoveryStructure: discoveryStructure(html, `${base}/`) })
+        throw new WasteProviderError('unsupported', 'Waste collection isn’t available for this address yet.', false)
+      }
       return { ...address, propertyId }
     },
     async fetchCollections(address) {
