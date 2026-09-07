@@ -4,6 +4,7 @@ import { INTEGRATION_CATALOGUE, integrationStatusLabel } from '../app/lib/integr
 
 test('shared integrations are ordered and expose lifecycle capabilities', () => {
   assert.equal(INTEGRATION_CATALOGUE[0].key, 'waste')
+  assert.equal(INTEGRATION_CATALOGUE.find(item => item.key === 'teams').name.en, 'Teams')
   const spond = INTEGRATION_CATALOGUE.find(item => item.key === 'spond')
   assert.deepEqual({ status: spond.status, connectable: spond.connectable }, { status: 'experimental', connectable: true })
   for (const key of ['vigilo', 'transponder']) {

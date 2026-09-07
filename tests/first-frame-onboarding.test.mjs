@@ -217,3 +217,24 @@ test('guided reminders is integrations-only and countdown stays optional', () =>
   assert.match(setup, /ADD COUNTDOWN/)
   assert.match(setup, /moduleIndex === guidedModules\.length - 1.*Finish/)
 })
+
+test('startup Local Events explicitly connects and commits the selected area', () => {
+  assert.match(connect, /const connectingDeviceId = activeDeviceId/)
+  assert.match(connect, /const connectionGeneration = \+\+localEventsRequestGenerationRef\.current/)
+  assert.match(connect, /fetch\('\/api\/integrations\/local-events\/connect',[\s\S]*JSON\.stringify\(\{ deviceId: connectingDeviceId, areaPreference \}\)/)
+  assert.match(connect, /connectionGeneration !== localEventsRequestGenerationRef\.current \|\| connectingDeviceId !== activeConnectDeviceIdRef\.current/)
+  assert.match(connect, /setLocalEventsSavedArea\(saved\)[\s\S]*setLocalEventsAccountConnected\(true\)[\s\S]*setLocalEventsStatusDeviceId\(connectingDeviceId\)[\s\S]*changeFrameIntegration\('local-events', \{ enabled: true, areaPreference: saved \}\)[\s\S]*setLocalEventsOpen\(false\)/)
+  assert.match(connect, /disabled=\{localEventsLoading \|\| \(!startup && !localEventsCanManage\) \|\| !activeDeviceId \|\| !area\.primaryPlaceId\}/)
+  assert.match(connect, /frameUsesIntegration\(modulesJson, 'local-events'\).*setLocalEventsSavedArea/)
+})
+
+test('startup Connect Apps suppresses its nested heading', () => {
+  assert.match(connect, /\{!startup && <div className="flex items-center justify-between/)
+})
+
+test('countdown preview receives the final edited values from the save sheet', () => {
+  assert.match(setup, /onSaved=\{\(saved\) => \{ setAddedCountdown\(saved\)/)
+  assert.match(home, /onSaved: \(saved: \{ title: string; date: string \}\)/)
+  assert.match(home, /await onSaved\(\{ title: cleanTitle, date \}\)/)
+  assert.doesNotMatch(setup, /setAddedCountdown\(countdownDraft\)/)
+})

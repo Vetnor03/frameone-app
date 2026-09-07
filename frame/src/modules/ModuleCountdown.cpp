@@ -451,6 +451,22 @@ static const char* weekdayNameFromYMD(int y, int m, int d) {
   }
 }
 
+static const char* mediumBadgeMonthName(int month) {
+  static const char* const names[] = {
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  };
+  return month >= 1 && month <= 12 ? names[month - 1] : "";
+}
+
+static const char* mediumBadgeMonthShortName(int month) {
+  static const char* const names[] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  };
+  return month >= 1 && month <= 12 ? names[month - 1] : "";
+}
+
 static void formatMediumBadge(const CountdownItem& item, char* out, size_t outSize) {
   if (!out || outSize == 0) return;
   out[0] = 0;
@@ -466,49 +482,22 @@ static void formatMediumBadge(const CountdownItem& item, char* out, size_t outSi
   }
 
   int y = 0, m = 0, d = 0;
-  if (!parseYMD10(item.targetDate, y, m, d)) {
-    formatShortStatus(item, out, outSize);
-    return;
-  }
+  if (!parseYMD10(item.targetDate, y, m, d)) return;
 
   const char* wd = weekdayNameFromYMD(y, m, d);
-
   if (item.daysLeft <= 6) {
     safeCopy(out, outSize, wd);
     return;
   }
-
   if (item.daysLeft <= 13) {
     snprintf(out, outSize, "Next %s", wd);
     return;
   }
-
-  if (item.daysLeft == 14) {
-    safeCopy(out, outSize, "In 2 weeks");
-    return;
-  }
-
-  if (item.daysLeft == 21) {
-    safeCopy(out, outSize, "In 3 weeks");
-    return;
-  }
-
-  if (item.daysLeft == 28) {
-    safeCopy(out, outSize, "In 4 weeks");
-    return;
-  }
-
-  if (item.daysLeft < 30) {
-    snprintf(out, outSize, "In %d days", item.daysLeft);
-    return;
-  }
-
   if (item.daysLeft < 60) {
-    safeCopy(out, outSize, "Next month");
+    safeCopy(out, outSize, mediumBadgeMonthName(m));
     return;
   }
-
-  formatShortStatus(item, out, outSize);
+  snprintf(out, outSize, "%d %s", d, mediumBadgeMonthShortName(m));
 }
 
 static void formatEventDaysLine(const CountdownItem& item, char* out, size_t outSize) {

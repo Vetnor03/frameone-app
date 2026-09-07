@@ -3172,21 +3172,32 @@ function ConnectAppsScreen({
 
   async function connectLocalEvents() {
     if (localEventsLoading) return
+    const connectingDeviceId = activeDeviceId
+    // A discovery request started while this integration was still disabled
+    // must never overwrite the explicit connection that follows it.
+    const connectionGeneration = ++localEventsRequestGenerationRef.current
     setLocalEventsLoading(true)
     setStatus(null)
     setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til lokale arrangementer' : 'Sign in to connect Local Events')
-      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
-      if (!localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
+      if (!connectingDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
+      // Startup frames can be connected before their initial settings row is
+      // complete. The production endpoint remains the authority for membership.
+      if (!startup && !localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
       const areaPreference = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
-      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: activeDeviceId, areaPreference }) })
+      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: connectingDeviceId, areaPreference }) })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
+      if (connectionGeneration !== localEventsRequestGenerationRef.current || connectingDeviceId !== activeConnectDeviceIdRef.current) return
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
       setLocalEventsAccountConnected(true)
+      setLocalEventsStatusDeviceId(connectingDeviceId)
+      setLocalEventsStatusResolved(true)
+      setLocalEventsStatusFailed(false)
+      setLocalEventsCanManage(true)
       changeFrameIntegration('local-events', { enabled: true, areaPreference: saved })
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
@@ -3388,7 +3399,7 @@ function ConnectAppsScreen({
           </div>
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !localEventsCanManage || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
+            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || (!startup && !localEventsCanManage) || !activeDeviceId || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
           </div>
         </div>
       </div>
@@ -3399,34 +3410,20 @@ function ConnectAppsScreen({
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
       <div className="pt-5 pb-6">
-        <div className="flex items-center justify-between gap-3 px-1">
-          {startup ? (
-            <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">
-              {language === 'no' ? 'Valgfritt' : 'Optional'}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onBack}
-              className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
-            >
-              {language === 'no' ? 'TILBAKE' : 'BACK'}
-            </button>
-          )}
+        {!startup && <div className="flex items-center justify-between gap-3 px-1">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
+          >
+            {language === 'no' ? 'TILBAKE' : 'BACK'}
+          </button>
           <div className="text-[color:var(--fg-90)] text-sm font-semibold">
             {language === 'no' ? 'Koble til apper' : 'Connect Apps'}
           </div>
-        </div>
+        </div>}
 
-        {startup && (
-          <p className="mt-3 px-1 text-xs leading-5 text-[color:var(--fg-50)]">
-            {language === 'no'
-              ? 'Koble til det du ønsker.'
-              : 'Connect anything you want.'}
-          </p>
-        )}
-
-        <div className="mt-4 space-y-2.5">
+        <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
           {sortedApps.map(({ app, connected }) => {
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
             const localEventsSelectedName = localEventsSavedArea ? (getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger') : null
@@ -8805,7 +8802,7 @@ function FrameSetupFlow({
     {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en nedtelling hvis du ønsker.' : 'Add a countdown if you want.'}</p>{addedCountdown && <div className="mt-5 rounded-2xl border border-[color:var(--bd-15)] px-4 py-4"><div className="font-medium">{addedCountdown.title}</div><div className="mt-1 text-xs text-[color:var(--fg-55)]">{formatReminderFullDateLabel(language, addedCountdown.date)}</div></div>}<button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL NEDTELLING' : 'ADD COUNTDOWN'}</button></>}
     {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Neste' : 'Next')}</button>
     {countdownComposerOpen && <NaturalCountdownComposer language={language} onClose={() => setCountdownComposerOpen(false)} onDraft={(draft) => { setCountdownComposerOpen(false); setCountdownDraft(draft) }} />}
-    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={() => { setAddedCountdown(countdownDraft); setCountdownDraft(null) }} onDeleted={() => setCountdownDraft(null)} />}
+    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={(saved) => { setAddedCountdown(saved); setCountdownDraft(null) }} onDeleted={() => setCountdownDraft(null)} />}
   </>, true)
 }
 function FirstFrameOnboarding({
@@ -10487,7 +10484,7 @@ function CountdownDraftSheet({
   initialTitle?: string
   initialDate?: string
   onClose: () => void
-  onSaved: () => void | Promise<void>
+  onSaved: (saved: { title: string; date: string }) => void | Promise<void>
   onDeleted: () => void | Promise<void>
 }) {
   const [title, setTitle] = useState(editingItem?.title ?? initialTitle ?? '')
@@ -10556,7 +10553,7 @@ function CountdownDraftSheet({
       setStatusKind('ok')
       setStatus(editingItem ? t.updated : t.savedWord)
 
-      await onSaved()
+      await onSaved({ title: cleanTitle, date })
     } catch (e: any) {
       setStatusKind('error')
       setStatus(String(e?.message || e))
