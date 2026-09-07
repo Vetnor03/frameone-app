@@ -54,16 +54,71 @@ const displayTemperature = (value, units) => {
   if (n == null) return null
   return firmwareRound(String(units).toLowerCase() === 'imperial' ? n * 9 / 5 + 32 : n)
 }
+const osloParts = (now) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', second: '2-digit',
+}).formatToParts(new Date(now)).filter((part) => part.type !== 'literal').map((part) => [part.type, Number(part.value)]))
+const osloLocalTime = (year, month, day, hour = 0, minute = 0) => {
+  const guess = Date.UTC(year, month - 1, day, hour, minute), probe = osloParts(guess)
+  return guess - (Date.UTC(probe.year, probe.month - 1, probe.day, probe.hour, probe.minute) - guess)
+}
 
-function weatherProjection(value, cell, config) {
+function weatherCommon(value, config) {
   const source = object(value), current = object(source.current), daily = object(source.daily)
+  return { source, current, daily, temperature: displayTemperature(first(current.temperature_2m, source.temperature_2m, source.temperature), config.units), code: first(current.weather_code, source.weather_code, source.wmo) }
+}
+function weatherDay(common, i, config) {
+  return { time: common.daily.time?.[i], high: displayTemperature(common.daily.temperature_2m_max?.[i], config.units), low: displayTemperature(common.daily.temperature_2m_min?.[i], config.units),
+    code: common.daily.weather_code?.[i], wind: rounded(common.daily.wind_speed_10m_max?.[i]), precipitation: rounded(common.daily.precipitation_sum?.[i]) }
+}
+function weatherRest(common, config) {
+  const source = common.source, rest = object(source.rest_of_today ?? source.restToday)
+  const times = source.hourly?.time ?? [], current = String(common.current.time ?? ''), currentHour = Number(current.slice(11, 13)), currentDate = current.slice(0, 10)
+  const indexes = times.map((time, index) => ({ time: String(time), index })).filter(({ time }) => time.slice(0, 10) === currentDate && Number(time.slice(11, 13)) >= currentHour)
+  const values = (key) => indexes.map(({ index }) => finite(source.hourly?.[key]?.[index])).filter((value) => value != null)
+  const temps = values('temperature_2m'), winds = values('wind_speed_10m'), precipitationValues = values('precipitation')
+  const codes = indexes.map(({ index }) => finite(source.hourly?.weather_code?.[index])).filter((value) => value != null)
+  const severity = (code) => [71, 73, 75, 77, 85, 86].includes(code) ? 100 : [95, 96, 99].includes(code) ? 90 : [66, 67].includes(code) ? 85 : (code >= 51 && code <= 65) || (code >= 80 && code <= 82) ? 80 : [45, 48].includes(code) ? 60 : code === 3 ? 40 : [1, 2].includes(code) ? 30 : code === 0 ? 10 : 20
+  const counts = new Map(); for (const code of codes) counts.set(code, (counts.get(code) ?? 0) + 1)
+  const precipTotal = precipitationValues.reduce((sum, value) => sum + Math.max(0, value), 0)
+  const precipCode = (code) => [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99].includes(code)
+  const ranked = [...counts].sort(([a, ac], [b, bc]) => bc - ac || severity(b) - severity(a))
+  const precipRanked = ranked.filter(([code]) => precipCode(code))
+  let derivedCode = (precipTotal > 2 && precipRanked.length ? precipRanked : ranked)[0]?.[0] ?? common.code
+  const derivedLow = temps.length ? Math.min(...temps) : undefined, derivedHigh = temps.length ? Math.max(...temps) : undefined
+  if ([71, 73, 75, 77, 85, 86].includes(derivedCode) && (derivedLow >= 1 || derivedHigh >= 3)) derivedCode = 63
+  const rawHigh = first(rest.temperature_2m_max, source.restHiC, derivedHigh, common.daily.temperature_2m_max?.[0]), rawLow = first(rest.temperature_2m_min, source.restLoC, derivedLow, common.daily.temperature_2m_min?.[0])
+  return { rawHigh, rawLow, high: displayTemperature(rawHigh, config.units), low: displayTemperature(rawLow, config.units),
+    wind: rounded(first(rest.wind_speed_10m_max, source.restWindMaxMs, winds.length ? Math.max(...winds) : undefined, common.daily.wind_speed_10m_max?.[0])),
+    precipitation: first(rest.precipitation_sum, source.restPrecipMm, indexes.length ? precipTotal : undefined, common.daily.precipitation_sum?.[0]),
+    code: first(rest.weather_code, source.restWmo, indexes.length ? derivedCode : undefined, common.daily.weather_code?.[0], common.code) }
+}
+function weatherPrecipLabel(mmValue, code, low, high) {
+  const mm = finite(mmValue), snow = [71, 73, 75, 77, 85, 86].includes(Number(code)) || (finite(low) != null && finite(high) != null && Number(high) <= 0)
+  if (mm == null || mm <= .2) return 'Mostly dry'
+  if (snow) return `Snow:${Math.max(0, Math.floor(mm + .5))}`
+  if (mm > 2) return `Rain:${Math.max(0, Math.floor(mm + .5))}`
+  if ([51, 53, 55, 56, 57].includes(Number(code))) return 'Light drizzle'
+  if ([80, 81, 82].includes(Number(code))) return 'Light showers'
+  if ((Number(code) >= 51 && Number(code) <= 67) || [80, 81, 82].includes(Number(code))) return 'Light rain later'
+  return 'Mostly dry'
+}
+function weatherProjectionLegacy(value, cell, config) {
+  const common = weatherCommon(value, config), size = String(cell?.size).toUpperCase(), rest = weatherRest(common, config)
+  const precipitation = weatherPrecipLabel(rest.precipitation, rest.code, rest.rawLow, rest.rawHigh)
+  if (size === 'SMALL') return { location: config.label, range: config.showHiLo === false ? common.temperature : [rest.low, rest.high], wind: rest.wind, precipitation, code: rest.code }
+  if (size === 'MEDIUM') return { range: config.showHiLo === false ? [common.temperature, common.temperature] : [rest.low, rest.high], wind: rest.wind, precipitation, code: rest.code, insight: first(common.source.insight, common.source.nice_to_know) }
+  const days = Array.from({ length: 4 }, (_, i) => weatherDay(common, i, config))
+  if (size === 'LARGE') return { location: config.label, days }
+  return { location: config.label, current: common.temperature, humidity: rounded(common.current.relative_humidity_2m), today: days[0], sunrise: common.daily.sunrise?.[0], sunset: common.daily.sunset?.[0], insight: first(common.source.insight, common.source.nice_to_know), forecast: days.slice(1) }
+}
+function weatherProjectionAdaptive(value, cell, config) {
+  const common = weatherCommon(value, config), { source, current, daily } = common
   const { w, h } = dimensions(cell); const area = Number(cell?.colSpan ?? Math.max(1, Math.round(w / 200))) * Number(cell?.rowSpan ?? Math.max(1, Math.round(h / 120)))
   const currentTime = String(current.time ?? '')
   const currentHourIndex = (source.hourly?.time ?? []).findIndex((time) => String(time).slice(0, 13) === currentTime.slice(0, 13))
   const hourlyProbability = currentHourIndex >= 0 ? source.hourly?.precipitation_probability?.[currentHourIndex] : undefined
   const result = { current: {
-    temperature_2m: displayTemperature(first(current.temperature_2m, source.temperature_2m, source.temperature), config.units),
-    weather_code: first(current.weather_code, source.weather_code, source.wmo),
+    temperature_2m: common.temperature, weather_code: common.code,
   } }
   if (area >= 2) result.condition = first(source.condition, source.weather_label)
   if (area >= 3) Object.assign(result.current, {
@@ -86,6 +141,10 @@ function weatherProjection(value, cell, config) {
   else if (area >= 8) result.insight = first(source.insight, source.nice_to_know)
   return result
 }
+function weatherProjection(value, cell, config) {
+  return String(cell?.size ?? 'ADAPTIVE').toUpperCase() === 'ADAPTIVE'
+    ? weatherProjectionAdaptive(value, cell, config) : weatherProjectionLegacy(value, cell, config)
+}
 
 function surfRow(row) {
   const source = object(row), inputs = object(first(source.inputs, source.picked?.inputs))
@@ -105,11 +164,35 @@ function surfRow(row) {
     line1: first(source.line1, source.summary),
   }
 }
-function surfProjection(value, cell) {
+function surfTrend(source, now) {
+  const rows = source.dayparts ?? source.forecast?.dayparts ?? source.forecast?.parts ?? []
+  const ratings = rows.slice(0, 4).map((row) => rounded(first(row?.rating, row?.score, row?.breakdown?.experience?.blended_rating_1_6, row?.experience?.blended_rating_1_6)))
+  const hour = osloParts(now).hour
+  let from = hour >= 21 || hour < 10 ? 0 : hour < 14 ? 1 : 2
+  let a = ratings[from], b = ratings[from + 1]
+  if (!(a >= 1 && b >= 1)) for (let i = 0; i < 3; i++) if (ratings[i] >= 1 && ratings[i + 1] >= 1) { a = ratings[i]; b = ratings[i + 1]; break }
+  return a >= 1 && b >= 1 ? b > a ? '^' : b < a ? 'v' : '-' : null
+}
+function surfProjection(value, cell, now) {
   const wrapper = object(value), source = object(wrapper.visible ?? wrapper), { w, h } = dimensions(cell)
   const needs = surfNeeds({ w, h }); const result = surfRow(source)
+  const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
+  const trendVisible = size === 'MEDIUM' || (size === 'ADAPTIVE' && w >= 300 && h >= 175)
+  if (trendVisible) result.trend = surfTrend(source, now)
   if (needs.dayparts) result.dayparts = (source.dayparts ?? source.forecast?.dayparts ?? source.forecast?.parts ?? []).slice(0, w >= 500 ? 4 : 2).map(surfRow)
   if (needs.daily) result.daily = (source.daily ?? source.forecast?.daily ?? []).slice(0, 5).map(surfRow)
+  if (size === 'XL') {
+    const picked = object(source.picked), air = object(first(source.air, source.weather, picked.air, picked.weather)), water = object(first(source.water, picked.water))
+    result.conditions = {
+      airMin: rounded(first(air.temp_min_c, source.temp_min_c, source.temps?.air_min_c, air.temp_c, source.temp_c)),
+      airMax: rounded(first(air.temp_max_c, source.temp_max_c, source.temps?.air_max_c, air.temp_c, source.temp_c)),
+      waterMin: rounded(first(water.temp_min_c, source.water_temp_min_c, source.temps?.water_min_c)),
+      waterMax: rounded(first(water.temp_max_c, source.water_temp_max_c, source.temps?.water_max_c)),
+      weatherWmo: first(source.weather?.code, source.weather?.wmo, source.forecast?.wmo, source.wmo, source.weather_code, 3),
+      sunrise: first(source.sun?.sunrise, source.sunrise, source.forecast?.sunrise, '--:--'),
+      sunset: first(source.sun?.sunset, source.sunset, source.forecast?.sunset, '--:--'),
+    }
+  }
   return result
 }
 
@@ -175,7 +258,7 @@ function stocksProjection(value, cell, config) {
   const selectedRangePercent = values.length >= 2 && Math.abs(values[0]) > .00001 ? (values.at(-1) - values[0]) / values[0] * 100 : null
   const purchasePrice = finite(source.purchasePrice), personal = finite(source.personalChangePercent)
   const purchaseAware = purchasePrice != null && purchasePrice > 0 && personal != null
-  const adaptive = String(cell?.size ?? 'ADAPTIVE').toUpperCase() === 'ADAPTIVE'
+  const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase(), adaptive = size === 'ADAPTIVE'
   const result = { symbol: source.symbol, name: source.name, currency: source.currency,
     price: renderedPrice(first(quote.price, quote.c)), changePercent: rounded(first(quote.changePercent, quote.dp), 2),
     rangePercent: policy.family === 'micro' ? undefined : rounded(selectedRangePercent, 2),
@@ -183,7 +266,7 @@ function stocksProjection(value, cell, config) {
   }
   const chartRect = stockChartRect(cell, policy)
   if (chartRect) { result.chartRange = first(source.chartRange, config.chartRange, 'day'); result.chart = stockChartPixels(values, source.baselinePrice, chartRect) }
-  if (policy.showDetails) Object.assign(result, {
+  if ((adaptive && policy.showDetails) || size === 'LARGE' || size === 'XL') Object.assign(result, {
     open: renderedPrice(first(quote.open, quote.o)), high: renderedPrice(first(quote.high, quote.h)), low: renderedPrice(first(quote.low, quote.l)),
     previousClose: renderedPrice(first(quote.previousClose, quote.pc)), change: rounded(first(quote.change, quote.d), 2),
   })
@@ -194,12 +277,29 @@ function soccerProjection(value, cell) {
   const source = object(value), { w, h } = dimensions(cell)
   const next = source.next ? pick(source.next, ['isHome', 'homeShort', 'home', 'awayShort', 'away', 'utc']) : null
   const last = source.last ? pick(source.last, ['isHome', 'homeShort', 'home', 'awayShort', 'away', 'score']) : null
+  const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
+  const standingSummary = source.standing ? pick(source.standing, ['position', 'points']) : null
+  const detail = source.standing ? pick(source.standing, ['playedGames', 'played', 'won', 'draw', 'lost', 'goalsFor', 'goalsAgainst', 'goalDifference', 'form']) : null
+  const tableWindow = (wanted) => {
+    const table = Array.isArray(source.table) ? source.table : [], count = Math.min(table.length, wanted)
+    const selected = table.findIndex((row) => row?.isSelected)
+    let start = selected < 0 ? 0 : Math.max(0, selected - Math.floor(count / 2))
+    if (start + count > table.length) start = table.length - count
+    return table.slice(start, start + count).map((row) => pick(row, ['position', 'teamShort', 'points', 'goalDifference', 'gap', 'isSelected']))
+  }
+  if (size !== 'ADAPTIVE') {
+    const common = { next, standing: standingSummary }
+    if (size === 'SMALL') return { ...common, teamName: source.teamName }
+    if (size === 'MEDIUM') return { ...common, last }
+    if (size === 'LARGE') return { ...common, last, table: tableWindow(6) }
+    return { ...common, last, table: tableWindow(12), competitionName: source.competitionName,
+      topScorer: source.topScorer ? pick(source.topScorer, ['name', 'goals']) : null, details: detail }
+  }
   const result = { teamName: source.teamName, competitionName: source.competitionName, next }
   if (!(w < 230 && h < 150)) result.standing = source.standing ? pick(source.standing, ['position', 'points']) : null
   if ((w < 260 && h >= 160) || (w >= 260 && h >= 250)) result.last = last
   const showTable = (w >= 560 && h >= 300) || (h >= 390 && w >= 360)
-  if (showTable) result.table = (Array.isArray(source.table) ? source.table : []).slice(0, Math.max(3, Math.floor((Math.min(180, h * .38) - 30) / 22)))
-    .map((row) => pick(row, ['position', 'teamShort', 'points', 'goalDifference', 'gap', 'isSelected']))
+  if (showTable) result.table = tableWindow(Math.max(3, Math.floor((Math.min(180, h * .38) - 30) / 22)))
   if (h >= 420 && w >= 360) Object.assign(result, {
     standingDetails: source.standing ? pick(source.standing, ['playedGames', 'played', 'won', 'draw', 'lost', 'goalsFor', 'goalsAgainst', 'goalDifference', 'form']) : null,
     topScorer: source.topScorer ? pick(source.topScorer, ['name', 'goals']) : null, lastScorers: source.lastScorers,
@@ -212,6 +312,20 @@ function groceryProjection(value, cell, now) {
   const dinners = Array.isArray(source.dinner_plan) ? source.dinner_plan : [], insights = object(source.insights)
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now))
   const todayDinner = dinners.find((row) => row?.date === today), future = dinners.filter((row) => String(row?.date) > today)
+  const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
+  if (size !== 'ADAPTIVE') {
+    const capacity = size === 'SMALL' ? 3 : 12, rotation = items.length ? rotationStep(now) % items.length : 0
+    const visible = Array.from({ length: Math.min(capacity, items.length) }, (_, i) => items[(rotation + i) % items.length])
+      .map((item) => ({ name: first(item.name, item.label), quantity: first(item.quantity, item.qty, 1) }))
+    const result = { ok: source.ok, language: source.language, heading: size === 'SMALL' || size === 'MEDIUM' ? todayDinner?.title : undefined,
+      items: visible, overflow: Math.max(0, items.length - capacity) }
+    if (size === 'LARGE' || size === 'XL') result.menu = { heading: todayDinner?.title, rows: future.slice(0, 7).map((row) => pick(row, ['date', 'title'])) }
+    if (size === 'XL') {
+      result.running_low = (insights.running_low ?? []).slice(0, 3).map((row) => pick(row, ['name', 'label']))
+      result.recipes = (insights.recipes ?? []).slice(0, 2).map((row) => ({ name: row?.name, missing: row?.missing ?? [] }))
+    }
+    return result
+  }
   let family = 'list_columns'
   if (w < 230 && h < 150) family = 'micro'; else if (h < 165) family = 'item_strip'; else if (w < 270) family = 'list_stack'
   else if ((w >= 620 && h >= 300) || (w >= 360 && h >= 390)) family = 'expanded'; else if (w >= 480 && h >= 190) family = 'list_menu'
@@ -303,7 +417,9 @@ function reminderProjection(value, cell, now) {
   capacity = Math.min(primary.rows.length, capacity)
   const start = adaptive ? 0 : rotationStep(now) % primary.rows.length
   const visible = Array.from({ length: capacity }, (_, i) => primary.rows[(start + i) % primary.rows.length])
-  return { ok: source.ok, primary: { daysUntil: primary.daysUntil, overdue: primary.overdue, visible, overflow: primary.rows.length - capacity } }
+  const local = osloParts(now), tomorrow = buckets.find((bucket) => bucket.daysUntil === 1)
+  const tomorrowNote = (String(cell?.size).toUpperCase() === 'SMALL' || String(cell?.size).toUpperCase() === 'MEDIUM') && primary.daysUntil === 0 && local.hour >= 17 && tomorrow?.rows.length
+  return { ok: source.ok, primary: { daysUntil: primary.daysUntil, overdue: primary.overdue, visible, overflow: primary.rows.length - capacity }, tomorrowNote: tomorrowNote ? tomorrow.rows.length : undefined }
 }
 
 const countdownTemplate = (days, now) => {
@@ -312,10 +428,11 @@ const countdownTemplate = (days, now) => {
   return choices[rotationStep(now) % choices.length]
 }
 function countdownProjection(value, cell, now) {
-  const source = object(value), limit = dimensions(cell).h >= 390 ? 6 : 1
+  const source = object(value), size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
+  const limit = size === 'LARGE' || size === 'XL' ? 5 : size === 'ADAPTIVE' && dimensions(cell).h >= 390 ? 6 : 1
   const items = (source.items ?? []).slice(0, limit).map((row) => pick(row, ['title', 'name', 'target_date', 'date', 'display_date', 'days_left']))
-  if (String(cell?.size).toUpperCase() === 'SMALL' && Number(items[0]?.days_left) > 0) items[0].template = countdownTemplate(Number(items[0].days_left), now)
-  return { ok: source.ok, items }
+  if (size === 'SMALL' && Number(items[0]?.days_left) > 0) items[0].template = countdownTemplate(Number(items[0].days_left), now)
+  return { ok: source.ok, items, calendarToday: size === 'XL' ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now)) : undefined }
 }
 
 function renderConfigProjection(base, cell, config) {
@@ -327,7 +444,7 @@ function renderConfigProjection(base, cell, config) {
     visibleModule = { configured: Boolean(Number(module.lat) && Number(module.lon)), units: module.units ?? 'metric',
       showHiLo: !adaptive || area >= 3 ? module.showHiLo ?? module.hiLo ?? true : undefined,
       showCondition: adaptive && area >= 2 ? module.showCondition ?? true : undefined,
-      label: area >= 3 || !adaptive ? module.label : undefined }
+      label: adaptive ? (area >= 3 ? module.label : undefined) : ['SMALL', 'LARGE'].includes(String(cell?.size).toUpperCase()) ? module.label : undefined }
   } else if (base === 'surf') visibleModule = { spot: module.spot, todaysBest: todaysBest(module) }
   else if (base === 'stocks') visibleModule = pick(module, ['symbol', 'name', 'chartRange'])
   else if (base === 'soccer') visibleModule = pick(module, ['teamName', 'competitionName'])
@@ -339,7 +456,7 @@ export function physicalRenderProjection(moduleKey, visibleValue, cell = {}, ren
   const base = String(moduleKey).split(':')[0]
   let visible = canonicalVisible(visibleValue)
   if (base === 'weather') visible = weatherProjection(visible, cell, object(renderConfig?.module))
-  else if (base === 'surf') visible = surfProjection(visible, cell)
+  else if (base === 'surf') visible = surfProjection(visible, cell, now)
   else if (base === 'stocks') visible = stocksProjection(visible, cell, object(renderConfig?.module))
   else if (base === 'soccer') visible = soccerProjection(visible, cell)
   else if (base === 'groceries') visible = groceryProjection(visible, cell, now)
@@ -403,9 +520,12 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
     } else if (ref.base === 'reminders') {
       const at = nextRotation(now)
       const rotates = JSON.stringify(reminderProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(reminderProjection(sources[ref.key], ref.cell, at))
+      const local = osloParts(now), eveningAt = osloLocalTime(local.year, local.month, local.day, 17)
+      const eveningChanges = now < eveningAt && JSON.stringify(reminderProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(reminderProjection(sources[ref.key], ref.cell, eveningAt))
       deadlines[ref.key] = [
         ...reminderBoundaries(sources[ref.key], now).map((boundary) => ({ at: boundary, type: 'hard', reason: 'reminder_boundary' })),
         ...(rotates ? [{ at, type: 'hard', reason: 'reminder_rotation' }] : []),
+        ...(eveningChanges ? [{ at: eveningAt, type: 'hard', reason: 'reminder_evening' }] : []),
         { at: midnight, type: 'hard', reason: 'midnight' },
       ]
     }
@@ -414,8 +534,21 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       const rotates = JSON.stringify(groceryProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(groceryProjection(sources[ref.key], ref.cell, at))
       deadlines[ref.key] = [
         ...(rotates ? [{ at, type: 'hard', reason: 'grocery_rotation' }] : []),
+        ...(JSON.stringify(groceryProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(groceryProjection(sources[ref.key], ref.cell, midnight))
+          ? [{ at: midnight, type: 'hard', reason: 'grocery_midnight' }] : []),
         { at: now + 30 * 60_000, type: 'soft', reason: 'source_freshness' },
       ]
+    }
+    else if (ref.base === 'surf') {
+      const local = osloParts(now)
+      const candidates = [10, 14, 18, 21].map((hour) => osloLocalTime(local.year, local.month, local.day, hour))
+      candidates.push(osloLocalTime(local.year, local.month, local.day + 1, 10))
+      const currentProjection = JSON.stringify(surfProjection(sources[ref.key], ref.cell, now))
+      const at = candidates.find((candidate) => candidate > now && currentProjection !== JSON.stringify(surfProjection(sources[ref.key], ref.cell, candidate)))
+      const changes = Boolean(at)
+      const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
+      const interval = Math.max(5 * 60_000, Number(configured?.refresh) || 30 * 60_000)
+      deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: now + interval, type: 'soft', reason: 'source_freshness' }]
     }
     else {
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
