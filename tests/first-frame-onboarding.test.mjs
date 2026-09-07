@@ -210,3 +210,10 @@ test('Local Events discovery is scoped to the active device and rejects stale re
 test('Teams OAuth success replaces finishing status only after safe frame conversion', () => {
   assert.match(connect, /setStatusTone\('success'\)[\s\S]*setStatus\(language === 'no' \? 'Teams er tilkoblet' : 'Teams connected'\)[\s\S]*changeFrameIntegration\('teams'/)
 })
+
+test('guided reminders is integrations-only and countdown stays optional', () => {
+  assert.match(setup, /current === 'reminders'.*ConnectAppsScreen/)
+  assert.doesNotMatch(setup, /NaturalReminderComposer|ReminderDraftSheet|ADD REMINDER|Add a reminder/)
+  assert.match(setup, /ADD COUNTDOWN/)
+  assert.match(setup, /moduleIndex === guidedModules\.length - 1.*Finish/)
+})
