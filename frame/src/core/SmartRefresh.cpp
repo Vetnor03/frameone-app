@@ -1,4 +1,5 @@
 #include "SmartRefresh.h"
+#include "HardwareProfile.h"
 #include "Config.h"
 #include "DeviceIdentity.h"
 #include "NetClient.h"
@@ -87,6 +88,14 @@ SmartDisplayPlan SmartRefresh::plan(const SmartRenderState& desired, bool graysc
   }
   if (result.type != SmartDisplayPlan::FULL && (partialCount >= 20 || dirtyArea + addedArea >= 3UL * 800UL * 480UL)) result.type = SmartDisplayPlan::FULL;
   if (result.type != SmartDisplayPlan::FULL) result.type = result.regionCount ? SmartDisplayPlan::PARTIAL : SmartDisplayPlan::NONE;
+#if defined(FRAME_IS_ALFRED_V1_2)
+  // Alfred switches the e-paper rail fully off after each display transaction.
+  // The next DisplayCore::begin() therefore reinitializes GxEPD2/controller state,
+  // so a controller-level partial update is not safe across wake cycles. Keep
+  // smart hash/deadline detection, but promote any actual partial draw to a full
+  // physical refresh until panel/controller state is intentionally retained.
+  if (result.type == SmartDisplayPlan::PARTIAL) result.type = SmartDisplayPlan::FULL;
+#endif
   if (result.type == SmartDisplayPlan::FULL) { result.regionCount = 1; result.regions[0] = Cell{0, 0, 800, 480, 0, 0, 0, 4, 4, CELL_XL}; }
   return result;
 }
