@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { inferRecurringReminderStartDate, parseReminder, reminderParseJsonSchema, validateParsedReminder, validateReminderParseResult, REMINDER_PARSE_VERSION } from '../app/lib/reminders/parser.ts'
+import { inferBirthdayRecurrence, inferRecurringReminderStartDate, parseReminder, reminderParseJsonSchema, validateParsedReminder, validateReminderParseResult, REMINDER_PARSE_VERSION } from '../app/lib/reminders/parser.ts'
 
 const originalKey = process.env.OPENAI_API_KEY
 process.env.OPENAI_API_KEY = 'test-key'
@@ -27,6 +27,27 @@ test('daily reminders infer today or tomorrow from the user-local requested time
   assert.equal(inferRecurringReminderStartDate(daily, '2026-08-26T16:30:00.000Z', 'Europe/Oslo').due_date, '2026-08-26')
   assert.equal(inferRecurringReminderStartDate(daily, '2026-08-26T20:01:00.000Z', 'Europe/Oslo').due_date, '2026-08-27')
   assert.equal(inferRecurringReminderStartDate(daily, '2026-08-26T20:00:00.000Z', 'Europe/Oslo').due_date, '2026-08-26')
+})
+
+test('birthday wording implies yearly recurrence in English and Norwegian', () => {
+  const birthday = { ...base, title: "Ada's birthday", due_date: '2026-12-10', due_time: null }
+  assert.equal(inferBirthdayRecurrence(birthday, "Ada's birthday December 10").repeat_type, 'yearly')
+  assert.equal(inferBirthdayRecurrence({ ...birthday, title: 'Adas bursdag' }, 'Adas bursdag 10. desember').repeat_type, 'yearly')
+  assert.equal(inferBirthdayRecurrence({ ...birthday, title: 'Adas fødselsdag' }, 'Adas fødselsdag 10. desember').repeat_type, 'yearly')
+})
+
+test('birthday recurrence respects explicit recurrence and one-time wording', () => {
+  const birthday = { ...base, title: "Ada's birthday", due_date: '2026-12-10', due_time: null }
+  assert.equal(inferBirthdayRecurrence({ ...birthday, repeat_type: '2years' }, "Ada's birthday December 10").repeat_type, '2years')
+  assert.equal(inferBirthdayRecurrence(birthday, "Ada's birthday this year only").repeat_type, 'none')
+})
+
+test('parser corrects a non-recurring model result for a birthday reminder', async () => {
+  const birthday = { ...base, title: 'Adas bursdag', due_date: '2026-12-10', due_time: null }
+  assert.deepEqual(
+    await parseReminder(context('Adas bursdag 10. desember', 'no'), responseFor(candidate(birthday))),
+    ready({ ...birthday, repeat_type: 'yearly' }),
+  )
 })
 
 test('daily follow-ups complete as soon as recurrence and time are known', async () => {
@@ -57,7 +78,7 @@ for (const [name, text, language, reminder] of [
   ['multi-day range', 'Trip to Bergen 5–7 September', 'en', { ...base, title: 'Trip to Bergen', due_date: '2026-09-05', due_time: null, end_date: '2026-09-07' }],
   ['clean Thursday title', 'Ring mamma på torsdag', 'no', { ...base, title: 'Ring mamma', due_date: '2026-08-20', due_time: null }],
   ['clean Thursday and time title', 'Ring mamma torsdag kl. 18', 'no', { ...base, title: 'Ring mamma', due_date: '2026-08-20', due_time: '18:00' }],
-  ['meaningful relationship phrase retained', 'Ring mamma om bursdagen hennes på torsdag', 'no', { ...base, title: 'Ring mamma om bursdagen hennes', due_date: '2026-08-20', due_time: null }],
+  ['meaningful relationship phrase retained', 'Ring mamma om bursdagen hennes på torsdag', 'no', { ...base, title: 'Ring mamma om bursdagen hennes', due_date: '2026-08-20', due_time: null, repeat_type: 'yearly' }],
   ['location phrase retained', 'Møte på kontoret torsdag', 'no', { ...base, title: 'Møte på kontoret', due_date: '2026-08-20', due_time: null }],
   ['date without time is ready', 'Møte fredag', 'no', { ...base, title: 'Møte', due_date: '2026-08-21', due_time: null }],
 ]) test(name, async () => assert.deepEqual(await parseReminder(context(text, language), responseFor(candidate(reminder))), ready(reminder)))
@@ -291,8 +312,9 @@ test('end values round-trip while device output remains unchanged', () => {
 })
 
 test('parser version and occurrence end semantics are explicit', () => {
-  assert.equal(REMINDER_PARSE_VERSION, 'reminder-parse-v3')
+  assert.equal(REMINDER_PARSE_VERSION, 'reminder-parse-v4')
   const source = readFileSync(new URL('../app/lib/reminders/parser.ts', import.meta.url), 'utf8')
+  assert.match(source, /birthday or bursdag\/fødselsdag is inherently an annual anniversary/)
   assert.match(source, /end_date\/end_time describe this occurrence, never recurrence termination/)
   assert.doesNotMatch(source, /repeat_until/)
 })
