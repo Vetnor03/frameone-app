@@ -28,6 +28,8 @@ type ReminderRow = {
   title: string | null
   due_date: string | null
   due_time: string | null
+  end_date: string | null
+  end_time: string | null
   repeat_type: ReminderRepeatKey | null
   custom_repeat_days: number | null
   is_done: boolean | null
@@ -333,6 +335,92 @@ function isTimedOccurrenceAlreadyPassed(
   return dueTime < nowHm
 }
 
+function hasExplicitReminderEnd(row: ReminderRow) {
+  return Boolean(String(row.end_date ?? '').trim() || normalizeReminderTime(row.end_time))
+}
+
+function getOccurrenceEndBoundary(row: ReminderRow, occurrenceYmd: string) {
+  const dueDate = String(row.due_date ?? '').trim()
+  const endDate = String(row.end_date ?? '').trim()
+  const endTime = normalizeReminderTime(row.end_time)
+
+  if (!endDate && !endTime) return null
+
+  let endYmd = occurrenceYmd
+  if (endDate) {
+    const occurrence = parseYmdToLocalDate(occurrenceYmd)
+    const durationDays = diffDaysFromYmd(dueDate, endDate)
+    if (!occurrence || durationDays < 0) return null
+    endYmd = toLocalYmd(addDaysLocal(occurrence, durationDays))
+  }
+
+  return { endYmd, endTime }
+}
+
+function isOccurrencePastExplicitEnd(
+  row: ReminderRow,
+  occurrenceYmd: string,
+  todayYmd: string,
+  nowHm: string
+) {
+  const boundary = getOccurrenceEndBoundary(row, occurrenceYmd)
+  if (!boundary) return false
+  if (boundary.endYmd < todayYmd) return true
+  if (boundary.endYmd > todayYmd) return false
+  if (!boundary.endTime) return false
+  return boundary.endTime < nowHm
+}
+
+function recurringOccurrencesExpiringNow(
+  row: ReminderRow,
+  todayYmd: string,
+  nowHm: string
+) {
+  if (!hasExplicitReminderEnd(row) || row.starter_key) return []
+
+  const repeat: ReminderRepeatKey = isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none'
+  if (repeat === 'none') return []
+
+  const dueDate = String(row.due_date ?? '').trim()
+  const base = parseYmdToLocalDate(dueDate)
+  if (!base) return []
+
+  const today = parseYmdToLocalDate(todayYmd)
+  if (!today) return []
+  const yesterdayYmd = toLocalYmd(addDaysLocal(today, -1))
+  const customRepeatDays = Number(row.custom_repeat_days)
+  const expired: string[] = []
+  let current = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  let guard = 0
+
+  while (guard < 1000) {
+    const occurrenceYmd = toLocalYmd(current)
+    if (occurrenceYmd > todayYmd) break
+
+    const boundary = getOccurrenceEndBoundary(row, occurrenceYmd)
+    if (boundary && isOccurrencePastExplicitEnd(row, occurrenceYmd, todayYmd, nowHm)) {
+      const expiredAtRelevantBoundary = boundary.endTime
+        ? boundary.endYmd === todayYmd
+        : boundary.endYmd === yesterdayYmd
+      if (expiredAtRelevantBoundary) expired.push(occurrenceYmd)
+    }
+
+    const next = nextReminderOccurrenceDate(
+      current,
+      repeat,
+      Number.isFinite(customRepeatDays) && customRepeatDays > 0 ? customRepeatDays : null
+    )
+    if (!next) break
+
+    const nextYmd = toLocalYmd(next)
+    if (nextYmd <= occurrenceYmd) break
+    current = next
+    guard += 1
+  }
+
+  return expired
+}
+
 function buildOccurrencesForRow(
   row: ReminderRow,
   todayYmd: string,
@@ -345,6 +433,7 @@ function buildOccurrencesForRow(
   const dueTime = normalizeReminderTime(row.due_time)
   const repeat: ReminderRepeatKey = isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none'
   const customRepeatDays = Number(row.custom_repeat_days)
+  const hasExplicitEnd = hasExplicitReminderEnd(row)
 
   if (!title || !dueDate) return []
 
@@ -354,13 +443,16 @@ function buildOccurrencesForRow(
   const items: DeviceReminderItem[] = []
 
   const addOccurrence = (occurrenceYmd: string) => {
-    if (isTimedOccurrenceAlreadyPassed(occurrenceYmd, dueTime, todayYmd, nowHm)) {
+    if (hasExplicitEnd) {
+      if (isOccurrencePastExplicitEnd(row, occurrenceYmd, todayYmd, nowHm)) return
+    } else if (isTimedOccurrenceAlreadyPassed(occurrenceYmd, dueTime, todayYmd, nowHm)) {
       return
     }
 
     const days_until = diffDaysFromYmd(todayYmd, occurrenceYmd)
 
-    if (!includeOverdue && days_until < 0) return
+    // An occurrence with an explicit end remains active even after its start date.
+    if (!includeOverdue && days_until < 0 && !hasExplicitEnd) return
 
     items.push({
       reminder_id: String(row.id),
@@ -447,7 +539,7 @@ export async function GET(req: Request) {
     // These reads share only sharedDeviceIds, so overlap their network latency.
     const [remindersResult, completionsResult, membersResult, deviceSettingsResult] = await Promise.all([supabase
       .from('reminders')
-      .select('id, device_id, title, due_date, due_time, repeat_type, custom_repeat_days, is_done, starter_key')
+      .select('id, device_id, title, due_date, due_time, end_date, end_time, repeat_type, custom_repeat_days, is_done, starter_key')
       .in('device_id', sharedDeviceIds)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true, nullsFirst: false })
@@ -491,6 +583,56 @@ export async function GET(req: Request) {
         (x: { reminder_id?: unknown; occurrence_date?: unknown }) => `${String(x.reminder_id)}__${String(x.occurrence_date)}`
       )
     )
+
+    // End fields describe an occurrence, not recurrence termination. Persist one-off
+    // expiry on the reminder itself, and recurring expiry in reminder_completions.
+    const expiredOneOffIds = rows
+      .filter((row) => !row.is_done && !row.starter_key && (isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none') === 'none')
+      .filter((row) => hasExplicitReminderEnd(row))
+      .filter((row) => {
+        const dueDate = String(row.due_date ?? '').trim()
+        return Boolean(dueDate && isOccurrencePastExplicitEnd(row, dueDate, todayYmd, nowHm))
+      })
+      .map((row) => String(row.id))
+
+    const recurringCompletionRows = rows
+      .flatMap((row) => recurringOccurrencesExpiringNow(row, todayYmd, nowHm).map((occurrenceDate) => ({
+        reminder_id: String(row.id),
+        device_id: String(row.device_id),
+        occurrence_date: occurrenceDate,
+        completed_by_user_id: null,
+      })))
+      .filter((completion) => !completedKeySet.has(`${completion.reminder_id}__${completion.occurrence_date}`))
+
+    await Promise.all([
+      expiredOneOffIds.length > 0
+        ? supabase.from('reminders').update({ is_done: true, updated_at: now.toISOString() }).in('id', expiredOneOffIds)
+          .then(({ error: autoCompleteError }) => {
+            if (autoCompleteError) {
+              logOptionalReminderProviderFailure('auto-complete-one-off', autoCompleteError)
+              return
+            }
+            const expiredIdSet = new Set(expiredOneOffIds)
+            rows.forEach((row) => {
+              if (expiredIdSet.has(String(row.id))) row.is_done = true
+            })
+          })
+        : Promise.resolve(),
+      recurringCompletionRows.length > 0
+        ? supabase.from('reminder_completions').upsert(recurringCompletionRows, {
+          onConflict: 'reminder_id,occurrence_date',
+          ignoreDuplicates: true,
+        }).then(({ error: autoCompleteError }) => {
+          if (autoCompleteError) {
+            logOptionalReminderProviderFailure('auto-complete-recurring', autoCompleteError)
+            return
+          }
+          recurringCompletionRows.forEach((completion) => {
+            completedKeySet.add(`${completion.reminder_id}__${completion.occurrence_date}`)
+          })
+        })
+        : Promise.resolve(),
+    ])
 
     const manualItems: DeviceReminderItem[] = rows
       .flatMap((row) => buildOccurrencesForRow(row, todayYmd, nowHm, horizonEndYmd, includeOverdue))
