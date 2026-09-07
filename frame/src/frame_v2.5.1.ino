@@ -233,8 +233,13 @@ static uint64_t nextDeepSleepDurationUs() {
   if (seconds <= 1 && g_revisionRetryNotBefore > now)
     seconds = (uint32_t)(g_revisionRetryNotBefore - now);
   // Invalid/unset wall time or scheduler state falls back to the revision
-  // safety maximum, never the connected-mode manual probe cadence.
+  // safety maximum for normal smart-refresh work.
   if (now < 1000000000 || seconds == 0) seconds = SmartRefresh::REVISION_SAFETY_SECONDS;
+  // Deep sleep cannot receive a cloud manual-update request. Keep the smart
+  // scheduler's due-work calculation, but never sleep longer than the manual
+  // discovery ceiling so the app Update button remains responsive on battery.
+  if (seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
+    seconds = SmartRefresh::MANUAL_PROBE_SECONDS;
   return (uint64_t)seconds * 1000000ULL;
 }
 
@@ -806,9 +811,10 @@ static void consumeNormalSyncPeriod() {
   }
 }
 
-// A cable event refreshes the current dashboard without inventing a revision
-// or changing the normal content-check clock. An actual revision render can
-// satisfy this refresh too, and clears the pending flag in renderLoadedDashboard.
+// Plugging or unplugging the charger is also the user's physical display-reset
+// gesture. Always perform a full-screen dashboard refresh: never partial-update
+// a power edge, and never let it advance the normal content-check clock.
+// An actual full render clears the pending flag in renderLoadedDashboard.
 static void refreshPowerOverlayIfNeeded(const BatteryState& batt, const PowerSenseDebug& pwr) {
   if (!g_powerRefreshPending) return;
   if (!g_dashboardLoaded) {
@@ -818,7 +824,7 @@ static void refreshPowerOverlayIfNeeded(const BatteryState& batt, const PowerSen
   DisplayCore::forceNextFullRefresh(true);
   if (renderLoadedDashboard(batt, pwr)) {
     postDeviceStatus(batt, pwr, true);
-    Serial.println("Power state change: dashboard refreshed");
+    Serial.println("Power state change: full-screen dashboard reset refresh complete");
   }
 }
 
@@ -844,16 +850,21 @@ static InteractiveModeResult runInteractiveMode(
     if (sampledPower.stable && sampledPower.usbPresent != pwr.usbPresent) {
       pwr = sampledPower;
       batt = BatteryManager::readAndUpdate(pwr.usbPresent);
-      if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
-        Serial.println("LiveUpdate: unplugged -> dynamic deep-sleep fallback");
-        return INTERACTIVE_FINISHED;
-      }
       bool hadPrevious = false;
       UpdateChecker::detectAndPersistUsbStateChange(pwr.usbPresent, true, hadPrevious);
       g_powerRefreshPending = true;
       Serial.println(pwr.usbPresent ? "USB connected" : "USB disconnected");
       if (batt.requiresRecharge) {
         showRechargeAndSleep(batt, pwr);
+        return INTERACTIVE_FINISHED;
+      }
+
+      // A charger edge is a deliberate full-screen reset gesture. Complete the
+      // physical refresh while the current network session is still alive,
+      // before an unplug can transition the device into deep-sleep fallback.
+      refreshPowerOverlayIfNeeded(batt, pwr);
+      if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
+        Serial.println("LiveUpdate: unplugged after full-screen reset -> dynamic deep-sleep fallback");
         return INTERACTIVE_FINISHED;
       }
     }
