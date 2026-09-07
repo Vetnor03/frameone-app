@@ -1,0 +1,36 @@
+name: Alfred partial refresh fix
+
+on:
+  push:
+    branches:
+      - fix/alfred-full-refresh-promotion
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply fix
+        run: python3 .github/alfred_partial_fix.py
+      - name: Install pytest
+        run: python3 -m pip install pytest
+      - name: Run firmware regression tests
+        run: python3 -m pytest frame/tests/test_alfred_partial_refresh_guard.py frame/tests/test_live_update.py frame/tests/test_manual_update_power_reset.py -q
+      - name: Run smart refresh tests
+        run: node --test tests/smart-change-driven-refresh.test.mjs tests/smart-refresh-production-wiring.test.mjs
+      - name: Check diff
+        run: git diff --check
+      - name: Commit validated fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/alfred_partial_fix.py .github/workflows/alfred-partial-fix.yml
+          git add frame/src/core/SmartRefresh.cpp frame/tests/test_alfred_partial_refresh_guard.py
+          git commit -m "Promote Alfred partial updates to safe full refreshes"
+          git push origin HEAD:fix/alfred-full-refresh-promotion
