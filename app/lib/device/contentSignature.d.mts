@@ -36,7 +36,8 @@ export type VisibleContent = {
 
 export function canonicalVisible(value: unknown): unknown
 export function contentDigest(value: unknown): string
-export function physicalRenderDigest(moduleKey: string, visibleValue: unknown, cell?: PhysicalCell, renderConfig?: UnknownRecord): string
+export function physicalRenderProjection(moduleKey: string, visibleValue: unknown, cell?: PhysicalCell, renderConfig?: UnknownRecord, now?: number): unknown
+export function physicalRenderDigest(moduleKey: string, visibleValue: unknown, cell?: PhysicalCell, renderConfig?: UnknownRecord, now?: number): string
 export function physicalModuleDeadlines(args: { settings: PhysicalSettings; sources: UnknownRecord; now?: number }): Record<string, PhysicalDeadline[]>
 export function physicalRenderManifest(args: { settings: PhysicalSettings; sources: UnknownRecord; now?: number }): PhysicalModuleManifest[]
 export function withPhysicalCellGeometry(settings: UnknownRecord, layouts: UnknownRecord): PhysicalSettings
