@@ -21,6 +21,7 @@ import { groceryItemEditPayload, isUnmeasuredGroceryItem, parseManualIngredients
 import { sanitizeAiAssistantMirrorSummary } from './lib/device/aiAssistantFrame'
 import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAssistantTopicTitle } from './lib/device/aiAssistantTopicTitle.ts'
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
+import { INTEGRATION_CATALOGUE, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
@@ -2908,7 +2909,6 @@ async function handleSelectTab(k: TabKey) {
   )
 }
 
-type ConnectAppKey = 'spond' | 'transponder' | 'teams' | 'waste' | 'vigilo' | 'local-events'
 type DisconnectableConnectAppKey = 'spond' | 'teams'
 
 function connectAppIsConnected(modulesJson: Record<string, any>, key: ConnectAppKey) {
@@ -3172,21 +3172,32 @@ function ConnectAppsScreen({
 
   async function connectLocalEvents() {
     if (localEventsLoading) return
+    const connectingDeviceId = activeDeviceId
+    // A discovery request started while this integration was still disabled
+    // must never overwrite the explicit connection that follows it.
+    const connectionGeneration = ++localEventsRequestGenerationRef.current
     setLocalEventsLoading(true)
     setStatus(null)
     setStatusTone('info')
     try {
       const accessToken = (await supabase.auth.getSession())?.data?.session?.access_token || ''
       if (!accessToken) throw new Error(language === 'no' ? 'Logg inn for å koble til lokale arrangementer' : 'Sign in to connect Local Events')
-      if (!activeDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
-      if (!localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
+      if (!connectingDeviceId) throw new Error(language === 'no' ? 'Velg en frame først' : 'Select a frame first')
+      // Startup frames can be connected before their initial settings row is
+      // complete. The production endpoint remains the authority for membership.
+      if (!startup && !localEventsCanManage) throw new Error(language === 'no' ? 'Du har ikke tilgang til å administrere denne framen' : 'You do not have permission to manage this frame')
       const areaPreference = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
-      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: activeDeviceId, areaPreference }) })
+      const resp = await fetch('/api/integrations/local-events/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ deviceId: connectingDeviceId, areaPreference }) })
       const json = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(json?.error || 'Could not connect Local Events')
+      if (connectionGeneration !== localEventsRequestGenerationRef.current || connectingDeviceId !== activeConnectDeviceIdRef.current) return
       const saved = normalizeLocalEventAreaPreference(json?.areaPreference) || areaPreference
       setLocalEventsSavedArea(saved)
       setLocalEventsAccountConnected(true)
+      setLocalEventsStatusDeviceId(connectingDeviceId)
+      setLocalEventsStatusResolved(true)
+      setLocalEventsStatusFailed(false)
+      setLocalEventsCanManage(true)
       changeFrameIntegration('local-events', { enabled: true, areaPreference: saved })
       setLocalEventsDraftArea(saved)
       setLocalEventsOpen(false)
@@ -3339,55 +3350,14 @@ function ConnectAppsScreen({
       setLocalEventsStatusFailed(true)
     })
   }, [activeDeviceId])
-  const apps: Array<{ key: ConnectAppKey; name: string; description: string; comingSoon?: boolean }> = [
-    {
-      key: 'spond',
-      name: 'Spond',
-      description:
-        language === 'no'
-          ? 'Vis Spond-meldinger på framen din'
-          : 'Show Spond messages on your frame',
-    },
-    {
-      key: 'teams',
-      name: 'Teams',
-      description:
-        language === 'no' ? 'Vis dagens møter på framen din' : "Show today's meetings on your frame",
-    },
-    {
-      key: 'local-events',
-      name: language === 'no' ? 'Lokale arrangementer' : 'Local Events',
-      description:
-        language === 'no'
-          ? 'Velg nærområdet ditt for lokale arrangementer'
-          : 'Choose your local area for nearby events',
-    },
-    {
-      key: 'vigilo',
-      name: 'Vigilo',
-      description:
-        language === 'no' ? 'Vigilo-tilkobling kommer snart' : 'Vigilo connection coming soon',
-      comingSoon: true,
-    },
-    {
-      key: 'transponder',
-      name: 'Transponder',
-      description:
-        language === 'no'
-          ? 'Transponder-tilkobling kommer snart'
-          : 'Transponder connection coming soon',
-      comingSoon: true,
-    },
-    {
-      key: 'waste',
-      name: language === 'no' ? 'Renovasjon' : 'Waste collection',
-      description:
-        language === 'no' ? 'Finn hentedager automatisk fra hjemmeadressen din' : 'Automatically find collections for your home address',
-    },
-  ]
+  const apps = INTEGRATION_CATALOGUE.map(definition => ({
+    ...definition,
+    name: definition.name[language],
+    description: definition.description[language],
+  }))
 
-  function getAppConnected(app: { key: ConnectAppKey; comingSoon?: boolean }) {
-    if (app.comingSoon) return false
+  function getAppConnected(app: { key: ConnectAppKey; connectable: boolean }) {
+    if (!app.connectable) return false
     if (locallyDisconnectedApps[app.key]) return false
     if (app.key === 'spond') return spondConnected
     if (app.key === 'teams') return teamsConnected
@@ -3396,9 +3366,7 @@ function ConnectAppsScreen({
     return connectAppIsConnected(modulesJson, app.key)
   }
 
-  const sortedApps = apps
-    .map((app, index) => ({ app, index, connected: getAppConnected(app) }))
-    .sort((a, b) => Number(b.connected) - Number(a.connected) || a.index - b.index)
+  const sortedApps = apps.map(app => ({ app, connected: getAppConnected(app) }))
 
   const renderLocalEventsModal = () => {
     const area = suggestedLocalEventArea(localEventsDraftArea.primaryPlaceId)
@@ -3431,7 +3399,7 @@ function ConnectAppsScreen({
           </div>
           <div className="mt-5 flex gap-2">
             <button type="button" onClick={() => setLocalEventsOpen(false)} disabled={localEventsLoading} className="h-11 flex-1 rounded-2xl border border-[color:var(--bd-15)] text-xs tracking-widest text-[color:var(--fg-70)] disabled:opacity-60">{language === 'no' ? 'AVBRYT' : 'CANCEL'}</button>
-            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || !localEventsCanManage || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
+            <button type="button" onClick={connectLocalEvents} disabled={localEventsLoading || (!startup && !localEventsCanManage) || !activeDeviceId || !area.primaryPlaceId} className="h-11 flex-1 rounded-2xl border border-[#2aa3ff] text-xs tracking-widest text-[#2aa3ff] disabled:border-[color:var(--bd-20)] disabled:text-[color:var(--fg-35)]">{localEventsLoading ? (language === 'no' ? 'KOBLER…' : 'CONNECTING…') : (language === 'no' ? 'KOBLE TIL' : 'CONNECT')}</button>
           </div>
         </div>
       </div>
@@ -3442,34 +3410,20 @@ function ConnectAppsScreen({
   return (
     <div className="h-full min-h-0 overflow-y-auto no-scrollbar pr-1 [-webkit-overflow-scrolling:touch]">
       <div className="pt-5 pb-6">
-        <div className="flex items-center justify-between gap-3 px-1">
-          {startup ? (
-            <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">
-              {language === 'no' ? 'Valgfritt' : 'Optional'}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onBack}
-              className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
-            >
-              {language === 'no' ? 'TILBAKE' : 'BACK'}
-            </button>
-          )}
+        {!startup && <div className="flex items-center justify-between gap-3 px-1">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-8 px-3 rounded-xl border border-[color:var(--bd-15)] text-[11px] tracking-widest text-[color:var(--fg-70)]"
+          >
+            {language === 'no' ? 'TILBAKE' : 'BACK'}
+          </button>
           <div className="text-[color:var(--fg-90)] text-sm font-semibold">
-            {language === 'no' ? 'Koble til' : 'Connect'}
+            {language === 'no' ? 'Koble til apper' : 'Connect Apps'}
           </div>
-        </div>
+        </div>}
 
-        {startup && (
-          <p className="mt-3 px-1 text-xs leading-5 text-[color:var(--fg-50)]">
-            {language === 'no'
-              ? 'Koble til tjenestene du bruker nå, eller se hvilke integrasjoner som kommer snart – inkludert renovasjonsvarsler.'
-              : 'Connect the services you use now, or preview coming-soon integrations — including waste collection reminders.'}
-          </p>
-        )}
-
-        <div className="mt-4 space-y-2.5">
+        <div className={`${startup ? '' : 'mt-4'} space-y-2.5`}>
           {sortedApps.map(({ app, connected }) => {
             const setupError = app.key === 'spond' ? integrationSetupErrors.spond : app.key === 'teams' ? integrationSetupErrors.teams : null
             const localEventsSelectedName = localEventsSavedArea ? (getLocalEventPlace(localEventsSavedArea.primaryPlaceId)?.displayName || 'Stavanger') : null
@@ -3485,13 +3439,13 @@ function ConnectAppsScreen({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[color:var(--fg-90)]">{app.name}</div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--fg-90)]"><span>{app.name}</span>{app.status === 'experimental' && <span className="rounded-full border border-[#2aa3ff]/35 px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#2aa3ff]">{integrationStatusLabel(app.status, language)}</span>}</div>
                     <div className="mt-1 text-xs leading-snug text-[color:var(--fg-45)]">{description}</div>
                   </div>
 
-                  {app.comingSoon ? (
+                  {!app.connectable ? (
                     <span className="shrink-0 h-8 px-3 rounded-xl border border-[#2aa3ff]/30 bg-[#2aa3ff]/10 text-[11px] tracking-widest text-[#2aa3ff] inline-flex items-center">
-                      {language === 'no' ? 'KOMMER SNART' : 'COMING SOON'}
+                      {integrationStatusLabel(app.status, language)}
                     </span>
                   ) : connected ? (
                     app.key === 'local-events' ? (
@@ -4403,24 +4357,17 @@ function formatMirrorCountdownShortStatus(daysLeft: number) {
   return `In ${daysLeft} days`
 }
 
-function formatMirrorCountdownMediumBadge(daysLeft: number, targetDate: string | undefined) {
-  if (daysLeft <= 0) return 'Today'
-  if (daysLeft === 1) return 'Tomorrow'
-
+function formatMirrorCountdownMediumBadge(language: AppLanguage, daysLeft: number, targetDate: string | undefined) {
   const date = parseMirrorCountdownDate(targetDate)
-  if (!date) return formatMirrorCountdownShortStatus(daysLeft)
-
-  const weekday = mirrorCountdownWeekdayName(date)
-
+  if (!date) return ''
+  if (daysLeft <= 0) return language === 'no' ? 'I dag' : 'Today'
+  if (daysLeft === 1) return language === 'no' ? 'I morgen' : 'Tomorrow'
+  const locale = language === 'no' ? 'nb-NO' : 'en-US'
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
   if (daysLeft <= 6) return weekday
-  if (daysLeft <= 13) return `Next ${weekday}`
-  if (daysLeft === 14) return 'In 2 weeks'
-  if (daysLeft === 21) return 'In 3 weeks'
-  if (daysLeft === 28) return 'In 4 weeks'
-  if (daysLeft < 30) return `In ${daysLeft} days`
-  if (daysLeft < 60) return 'Next month'
-
-  return formatMirrorCountdownShortStatus(daysLeft)
+  if (daysLeft <= 13) return language === 'no' ? `Neste ${weekday}` : `Next ${weekday}`
+  if (daysLeft < 60) return new Intl.DateTimeFormat(locale, { month: 'long' }).format(date)
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(date)
 }
 
 function formatMirrorCountdownUpcomingStatus(daysLeft: number, targetDate: string | undefined) {
@@ -4550,9 +4497,11 @@ function MirrorCountdownCalendarMonth({
 function MirrorMediumCountdownCard({
   detail,
   fallbackTitle,
+  language,
 }: {
   detail: MirrorModuleDetail
   fallbackTitle: string
+  language: AppLanguage
 }) {
   const title = detail.countdownTitle || detail.primary || fallbackTitle || 'COUNTDOWN'
   const daysLeft = typeof detail.countdownDaysLeft === 'number' ? detail.countdownDaysLeft : null
@@ -4567,7 +4516,7 @@ function MirrorMediumCountdownCard({
 
   const daysNumber = formatMirrorCountdownDaysNumber(daysLeft)
   const daysUnit = formatMirrorCountdownDaysUnit(daysLeft)
-  const badge = formatMirrorCountdownMediumBadge(daysLeft, detail.countdownTargetDate)
+  const badge = formatMirrorCountdownMediumBadge(language, daysLeft, detail.countdownTargetDate)
 
   return (
     <div className="flex h-full w-full items-center justify-center overflow-hidden px-[clamp(0.5rem,1.45vw,0.95rem)] py-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-none">
@@ -4582,12 +4531,12 @@ function MirrorMediumCountdownCard({
           {daysUnit}
         </div>
 
-        <div
+        {badge && <div
           className="max-w-[calc(100%-clamp(0.7rem,2vw,1.2rem))] shrink-0 truncate bg-white px-[clamp(0.78rem,2.1vw,1.25rem)] py-[clamp(0.36rem,0.92vw,0.62rem)] text-[clamp(0.72rem,1.65vw,1.08rem)] font-semibold tracking-[0.08em] text-black"
           title={badge}
         >
           {badge}
-        </div>
+        </div>}
       </div>
     </div>
   )
@@ -4596,16 +4545,18 @@ function MirrorMediumCountdownCard({
 function MirrorLargeCountdownCard({
   detail,
   fallbackTitle,
+  language,
 }: {
   detail: MirrorModuleDetail
   fallbackTitle: string
+  language: AppLanguage
 }) {
   const upcoming = Array.isArray(detail.countdownUpcoming) ? detail.countdownUpcoming : []
 
   return (
     <div className="grid h-full w-full grid-cols-[1fr_1fr] gap-[clamp(0.45rem,1.45vw,0.95rem)] overflow-hidden">
       <div className="min-w-0 overflow-hidden">
-        <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+        <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} language={language} />
       </div>
 
       <div className="flex min-w-0 items-center justify-center overflow-hidden px-[clamp(0.25rem,0.75vw,0.5rem)] py-[clamp(0.45rem,1.2vw,0.8rem)] text-center leading-none">
@@ -4643,10 +4594,12 @@ function MirrorLargeCountdownCard({
 function MirrorXLCountdownCard({
   detail,
   fallbackTitle,
+  language,
   textColor,
 }: {
   detail: MirrorModuleDetail
   fallbackTitle: string
+  language: AppLanguage
   textColor: string
 }) {
   const upcoming = Array.isArray(detail.countdownUpcoming) ? detail.countdownUpcoming : []
@@ -4654,7 +4607,7 @@ function MirrorXLCountdownCard({
   return (
     <div className="grid h-full w-full grid-cols-[1fr_1fr] grid-rows-[1fr_1fr] gap-[clamp(0.52rem,1.55vw,0.9rem)] overflow-hidden">
       <div className="min-h-0 min-w-0 overflow-hidden">
-        <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+        <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} language={language} />
       </div>
 
       <div className="min-h-0 min-w-0 overflow-hidden">
@@ -7949,14 +7902,14 @@ function LandscapeFrameMirror({
     if (module === 'countdown' && size === 'large') {
       const fallbackTitle = String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
       if (snapshot.layoutKey === 'full') {
-        return <MirrorXLCountdownCard detail={detail} fallbackTitle={fallbackTitle} textColor={textColor} />
+        return <MirrorXLCountdownCard detail={detail} fallbackTitle={fallbackTitle} textColor={textColor} language={language} />
       }
-      return <MirrorLargeCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+      return <MirrorLargeCountdownCard detail={detail} fallbackTitle={fallbackTitle} language={language} />
     }
 
     if (module === 'countdown' && size === 'medium') {
       const fallbackTitle = String(cfg.title ?? cfg.name ?? '').trim() || tx(language).modules.countdown
-      return <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} />
+      return <MirrorMediumCountdownCard detail={detail} fallbackTitle={fallbackTitle} language={language} />
     }
 
     if (module === 'countdown' && size === 'small') {
@@ -8793,10 +8746,9 @@ function FrameSetupFlow({
   const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [reminderComposerOpen, setReminderComposerOpen] = useState(false)
-  const [reminderDraft, setReminderDraft] = useState<ReminderUiItem | null>(null)
   const [countdownComposerOpen, setCountdownComposerOpen] = useState(false)
   const [countdownDraft, setCountdownDraft] = useState<{ title: string; date: string } | null>(null)
+  const [addedCountdown, setAddedCountdown] = useState<{ title: string; date: string } | null>(null)
   const isNo = language === 'no'
   const current = guidedModules[moduleIndex]
 
@@ -8844,15 +8796,13 @@ function FrameSetupFlow({
 
   if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
 
-  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Påminnelser' : 'Reminders') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
-    {current === 'reminders' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en påminnelse eller koble til tjenester du vil ha på framen.' : 'Add a reminder or connect services you want on your frame.'}</p><button type="button" onClick={() => setReminderComposerOpen(true)} className="mt-4 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL PÅMINNELSE' : 'ADD REMINDER'}</button><div className="mt-5 h-[min(330px,36vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div></>}
-    {current === 'weather' && <div className="mt-6"><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
-    {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Beskriv nedtellingen med egne ord, eller legg inn tittel og dato manuelt.' : 'Describe your countdown in your own words, or enter its title and date manually.'}</p><button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'BESKRIV NEDTELLING' : 'DESCRIBE COUNTDOWN'}</button></>}
-    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Fortsett / hopp over' : 'Continue / Skip')}</button>
-    {reminderComposerOpen && <NaturalReminderComposer language={language} activeDeviceId={activeDeviceId} fallbackDate={toLocalYmd(new Date())} selectedDate={null} onClose={() => setReminderComposerOpen(false)} onSaved={() => setReminderComposerOpen(false)} onEditDetails={(draft) => { setReminderComposerOpen(false); setReminderDraft(draft) }} />}
-    {reminderDraft && <ReminderDraftSheet language={language} activeDeviceId={activeDeviceId} editingReminder={null} initialDraft={reminderDraft} initialDate={reminderDraft.date || toLocalYmd(new Date())} onClose={() => setReminderDraft(null)} onSaved={() => setReminderDraft(null)} onDeleted={() => setReminderDraft(null)} />}
+  return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">{current === 'reminders' ? (isNo ? 'Koble til apper' : 'Connect Apps') : current === 'weather' ? (isNo ? 'Vær' : 'Weather') : (isNo ? 'Nedtelling' : 'Countdown')}</h1>
+    {current === 'reminders' && <div className="mt-3 h-[min(430px,48vh)]"><ConnectAppsScreen language={language} modulesJson={modules} activeDeviceId={activeDeviceId} onBack={() => undefined} startup onIntegrationChanged={selectIntegration} /></div>}
+    {current === 'weather' && <div className="mt-6"><div className="mb-3 text-sm text-[color:var(--fg-65)]">{isNo ? 'Velg sted' : 'Select location'}</div><WeatherLocationRow language={language} id={1} title={isNo ? 'Sted' : 'Location'} label={modules.weather?.[0]?.label || (isNo ? 'Velg sted' : 'Select location')} cfg={modules.weather?.[0] || null} onPicked={(picked) => setModules(value => ({ ...value, weather: [{ id: 1, ...picked, units: 'metric', refresh: 1800000, hiLo: true, cond: true }] }))} /></div>}
+    {current === 'countdown' && <><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Legg til en nedtelling hvis du ønsker.' : 'Add a countdown if you want.'}</p>{addedCountdown && <div className="mt-5 rounded-2xl border border-[color:var(--bd-15)] px-4 py-4"><div className="font-medium">{addedCountdown.title}</div><div className="mt-1 text-xs text-[color:var(--fg-55)]">{formatReminderFullDateLabel(language, addedCountdown.date)}</div></div>}<button type="button" onClick={() => setCountdownComposerOpen(true)} className="mt-5 h-11 w-full rounded-2xl border border-[#2aa3ff] text-sm text-[#2aa3ff]">{isNo ? 'LEGG TIL NEDTELLING' : 'ADD COUNTDOWN'}</button></>}
+    {error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={advance} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : moduleIndex === guidedModules.length - 1 ? (isNo ? 'Fullfør' : 'Finish') : (isNo ? 'Neste' : 'Next')}</button>
     {countdownComposerOpen && <NaturalCountdownComposer language={language} onClose={() => setCountdownComposerOpen(false)} onDraft={(draft) => { setCountdownComposerOpen(false); setCountdownDraft(draft) }} />}
-    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={() => setCountdownDraft(null)} onDeleted={() => setCountdownDraft(null)} />}
+    {countdownDraft && <CountdownDraftSheet language={language} activeDeviceId={activeDeviceId} editingItem={null} initialTitle={countdownDraft.title} initialDate={countdownDraft.date} onClose={() => setCountdownDraft(null)} onSaved={(saved) => { setAddedCountdown(saved); setCountdownDraft(null) }} onDeleted={() => setCountdownDraft(null)} />}
   </>, true)
 }
 function FirstFrameOnboarding({
@@ -10534,7 +10484,7 @@ function CountdownDraftSheet({
   initialTitle?: string
   initialDate?: string
   onClose: () => void
-  onSaved: () => void | Promise<void>
+  onSaved: (saved: { title: string; date: string }) => void | Promise<void>
   onDeleted: () => void | Promise<void>
 }) {
   const [title, setTitle] = useState(editingItem?.title ?? initialTitle ?? '')
@@ -10603,7 +10553,7 @@ function CountdownDraftSheet({
       setStatusKind('ok')
       setStatus(editingItem ? t.updated : t.savedWord)
 
-      await onSaved()
+      await onSaved({ title: cleanTitle, date })
     } catch (e: any) {
       setStatusKind('error')
       setStatus(String(e?.message || e))

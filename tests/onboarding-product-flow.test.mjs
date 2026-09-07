@@ -15,7 +15,7 @@ function setupSource() {
 test('first setup guides Reminders, Weather, Countdown and excludes AI Follow', () => {
   assert.match(setupSource(), /guidedModules = \['reminders', 'weather', 'countdown'\] as const/)
   assert.doesNotMatch(setupSource(), /AI Follow|assistant|ai-intro|plans/)
-  assert.match(setupSource(), /Continue \/ Skip/)
+  assert.match(setupSource(), /isNo \? 'Neste' : 'Next'/)
 })
 
 test('completion uses canonical weather and an atomic idempotent transaction', () => {
