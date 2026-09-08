@@ -1,0 +1,2858 @@
+[
+  {
+    "municipality_number": "0301",
+    "municipality_name": "Oslo",
+    "county_number": "03",
+    "county_name": "Oslo",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1101",
+    "municipality_name": "Eigersund",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1103",
+    "municipality_name": "Stavanger",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1106",
+    "municipality_name": "Haugesund",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1108",
+    "municipality_name": "Sandnes",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1111",
+    "municipality_name": "Sokndal",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1112",
+    "municipality_name": "Lund",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1114",
+    "municipality_name": "Bjerkreim",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1119",
+    "municipality_name": "Hå",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1120",
+    "municipality_name": "Klepp",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1121",
+    "municipality_name": "Time",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1122",
+    "municipality_name": "Gjesdal",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1124",
+    "municipality_name": "Sola",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1127",
+    "municipality_name": "Randaberg",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1130",
+    "municipality_name": "Strand",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1133",
+    "municipality_name": "Hjelmeland",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1134",
+    "municipality_name": "Suldal",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1135",
+    "municipality_name": "Sauda",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1144",
+    "municipality_name": "Kvitsøy",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1145",
+    "municipality_name": "Bokn",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1146",
+    "municipality_name": "Tysvær",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1149",
+    "municipality_name": "Karmøy",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1151",
+    "municipality_name": "Utsira",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1160",
+    "municipality_name": "Vindafjord",
+    "county_number": "11",
+    "county_name": "Rogaland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1505",
+    "municipality_name": "Kristiansund",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1506",
+    "municipality_name": "Molde",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1508",
+    "municipality_name": "Ålesund",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1511",
+    "municipality_name": "Vanylven",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1514",
+    "municipality_name": "Sande",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1515",
+    "municipality_name": "Herøy",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1516",
+    "municipality_name": "Ulstein",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1517",
+    "municipality_name": "Hareid",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1520",
+    "municipality_name": "Ørsta",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1525",
+    "municipality_name": "Stranda",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1528",
+    "municipality_name": "Sykkylven",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1531",
+    "municipality_name": "Sula",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1532",
+    "municipality_name": "Giske",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1535",
+    "municipality_name": "Vestnes",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1539",
+    "municipality_name": "Rauma",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1547",
+    "municipality_name": "Aukra",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1554",
+    "municipality_name": "Averøy",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1557",
+    "municipality_name": "Gjemnes",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1560",
+    "municipality_name": "Tingvoll",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1563",
+    "municipality_name": "Sunndal",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1566",
+    "municipality_name": "Surnadal",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1573",
+    "municipality_name": "Smøla",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1576",
+    "municipality_name": "Aure",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1577",
+    "municipality_name": "Volda",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1578",
+    "municipality_name": "Fjord",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1579",
+    "municipality_name": "Hustadvika",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1580",
+    "municipality_name": "Haram",
+    "county_number": "15",
+    "county_name": "Møre og Romsdal",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1804",
+    "municipality_name": "Bodø",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1806",
+    "municipality_name": "Narvik",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1811",
+    "municipality_name": "Bindal",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1812",
+    "municipality_name": "Sømna",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1813",
+    "municipality_name": "Brønnøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1815",
+    "municipality_name": "Vega",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1816",
+    "municipality_name": "Vevelstad",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1818",
+    "municipality_name": "Herøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1820",
+    "municipality_name": "Alstahaug",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1822",
+    "municipality_name": "Leirfjord",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1824",
+    "municipality_name": "Vefsn",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1825",
+    "municipality_name": "Grane",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1826",
+    "municipality_name": "Hattfjelldal",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1827",
+    "municipality_name": "Dønna",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1828",
+    "municipality_name": "Nesna",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1832",
+    "municipality_name": "Hemnes",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1833",
+    "municipality_name": "Rana",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1834",
+    "municipality_name": "Lurøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1835",
+    "municipality_name": "Træna",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1836",
+    "municipality_name": "Rødøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1837",
+    "municipality_name": "Meløy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1838",
+    "municipality_name": "Gildeskål",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1839",
+    "municipality_name": "Beiarn",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1840",
+    "municipality_name": "Saltdal",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1841",
+    "municipality_name": "Fauske",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1845",
+    "municipality_name": "Sørfold",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1848",
+    "municipality_name": "Steigen",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1851",
+    "municipality_name": "Lødingen",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1853",
+    "municipality_name": "Evenes",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1856",
+    "municipality_name": "Røst",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1857",
+    "municipality_name": "Værøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1859",
+    "municipality_name": "Flakstad",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1860",
+    "municipality_name": "Vestvågøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1865",
+    "municipality_name": "Vågan",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1866",
+    "municipality_name": "Hadsel",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1867",
+    "municipality_name": "Bø",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1868",
+    "municipality_name": "Øksnes",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1870",
+    "municipality_name": "Sortland",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1871",
+    "municipality_name": "Andøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1874",
+    "municipality_name": "Moskenes",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "1875",
+    "municipality_name": "Hamarøy",
+    "county_number": "18",
+    "county_name": "Nordland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3101",
+    "municipality_name": "Halden",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3103",
+    "municipality_name": "Moss",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3105",
+    "municipality_name": "Sarpsborg",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3107",
+    "municipality_name": "Fredrikstad",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3110",
+    "municipality_name": "Hvaler",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3112",
+    "municipality_name": "Råde",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3114",
+    "municipality_name": "Våler",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3116",
+    "municipality_name": "Skiptvet",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3118",
+    "municipality_name": "Indre Østfold",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3120",
+    "municipality_name": "Rakkestad",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3122",
+    "municipality_name": "Marker",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3124",
+    "municipality_name": "Aremark",
+    "county_number": "31",
+    "county_name": "Østfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3201",
+    "municipality_name": "Bærum",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3203",
+    "municipality_name": "Asker",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3205",
+    "municipality_name": "Lillestrøm",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3207",
+    "municipality_name": "Nordre Follo",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3209",
+    "municipality_name": "Ullensaker",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3212",
+    "municipality_name": "Nesodden",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3214",
+    "municipality_name": "Frogn",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3216",
+    "municipality_name": "Vestby",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3218",
+    "municipality_name": "Ås",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3220",
+    "municipality_name": "Enebakk",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3222",
+    "municipality_name": "Lørenskog",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3224",
+    "municipality_name": "Rælingen",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3226",
+    "municipality_name": "Aurskog-Høland",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3228",
+    "municipality_name": "Nes",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3230",
+    "municipality_name": "Gjerdrum",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3232",
+    "municipality_name": "Nittedal",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3234",
+    "municipality_name": "Lunner",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3236",
+    "municipality_name": "Jevnaker",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3238",
+    "municipality_name": "Nannestad",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3240",
+    "municipality_name": "Eidsvoll",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3242",
+    "municipality_name": "Hurdal",
+    "county_number": "32",
+    "county_name": "Akershus",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3301",
+    "municipality_name": "Drammen",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3303",
+    "municipality_name": "Kongsberg",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3305",
+    "municipality_name": "Ringerike",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3310",
+    "municipality_name": "Hole",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3312",
+    "municipality_name": "Lier",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3314",
+    "municipality_name": "Øvre Eiker",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3316",
+    "municipality_name": "Modum",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3318",
+    "municipality_name": "Krødsherad",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3320",
+    "municipality_name": "Flå",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3322",
+    "municipality_name": "Nesbyen",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3324",
+    "municipality_name": "Gol",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3326",
+    "municipality_name": "Hemsedal",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3328",
+    "municipality_name": "Ål",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3330",
+    "municipality_name": "Hol",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3332",
+    "municipality_name": "Sigdal",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3334",
+    "municipality_name": "Flesberg",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3336",
+    "municipality_name": "Rollag",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3338",
+    "municipality_name": "Nore og Uvdal",
+    "county_number": "33",
+    "county_name": "Buskerud",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3401",
+    "municipality_name": "Kongsvinger",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3403",
+    "municipality_name": "Hamar",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3405",
+    "municipality_name": "Lillehammer",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3407",
+    "municipality_name": "Gjøvik",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3411",
+    "municipality_name": "Ringsaker",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3412",
+    "municipality_name": "Løten",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3413",
+    "municipality_name": "Stange",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3414",
+    "municipality_name": "Nord-Odal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3415",
+    "municipality_name": "Sør-Odal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3416",
+    "municipality_name": "Eidskog",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3417",
+    "municipality_name": "Grue",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3418",
+    "municipality_name": "Åsnes",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3419",
+    "municipality_name": "Våler",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3420",
+    "municipality_name": "Elverum",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3421",
+    "municipality_name": "Trysil",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3422",
+    "municipality_name": "Åmot",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3423",
+    "municipality_name": "Stor-Elvdal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3424",
+    "municipality_name": "Rendalen",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3425",
+    "municipality_name": "Engerdal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3426",
+    "municipality_name": "Tolga",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3427",
+    "municipality_name": "Tynset",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3428",
+    "municipality_name": "Alvdal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3429",
+    "municipality_name": "Folldal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3430",
+    "municipality_name": "Os",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3431",
+    "municipality_name": "Dovre",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3432",
+    "municipality_name": "Lesja",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3433",
+    "municipality_name": "Skjåk",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3434",
+    "municipality_name": "Lom",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3435",
+    "municipality_name": "Vågå",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3436",
+    "municipality_name": "Nord-Fron",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3437",
+    "municipality_name": "Sel",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3438",
+    "municipality_name": "Sør-Fron",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3439",
+    "municipality_name": "Ringebu",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3440",
+    "municipality_name": "Øyer",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3441",
+    "municipality_name": "Gausdal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3442",
+    "municipality_name": "Østre Toten",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3443",
+    "municipality_name": "Vestre Toten",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3446",
+    "municipality_name": "Gran",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3447",
+    "municipality_name": "Søndre Land",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3448",
+    "municipality_name": "Nordre Land",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3449",
+    "municipality_name": "Sør-Aurdal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3450",
+    "municipality_name": "Etnedal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3451",
+    "municipality_name": "Nord-Aurdal",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3452",
+    "municipality_name": "Vestre Slidre",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3453",
+    "municipality_name": "Øystre Slidre",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3454",
+    "municipality_name": "Vang",
+    "county_number": "34",
+    "county_name": "Innlandet",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3901",
+    "municipality_name": "Horten",
+    "county_number": "39",
+    "county_name": "Vestfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3903",
+    "municipality_name": "Holmestrand",
+    "county_number": "39",
+    "county_name": "Vestfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3905",
+    "municipality_name": "Tønsberg",
+    "county_number": "39",
+    "county_name": "Vestfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3907",
+    "municipality_name": "Sandefjord",
+    "county_number": "39",
+    "county_name": "Vestfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3909",
+    "municipality_name": "Larvik",
+    "county_number": "39",
+    "county_name": "Vestfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "3911",
+    "municipality_name": "Færder",
+    "county_number": "39",
+    "county_name": "Vestfold",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4001",
+    "municipality_name": "Porsgrunn",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4003",
+    "municipality_name": "Skien",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4005",
+    "municipality_name": "Notodden",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4010",
+    "municipality_name": "Siljan",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4012",
+    "municipality_name": "Bamble",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4014",
+    "municipality_name": "Kragerø",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4016",
+    "municipality_name": "Drangedal",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4018",
+    "municipality_name": "Nome",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4020",
+    "municipality_name": "Midt-Telemark",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4022",
+    "municipality_name": "Seljord",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4024",
+    "municipality_name": "Hjartdal",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4026",
+    "municipality_name": "Tinn",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4028",
+    "municipality_name": "Kviteseid",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4030",
+    "municipality_name": "Nissedal",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4032",
+    "municipality_name": "Fyresdal",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4034",
+    "municipality_name": "Tokke",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4036",
+    "municipality_name": "Vinje",
+    "county_number": "40",
+    "county_name": "Telemark",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4201",
+    "municipality_name": "Risør",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4202",
+    "municipality_name": "Grimstad",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4203",
+    "municipality_name": "Arendal",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4204",
+    "municipality_name": "Kristiansand",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4205",
+    "municipality_name": "Lindesnes",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4206",
+    "municipality_name": "Farsund",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4207",
+    "municipality_name": "Flekkefjord",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4211",
+    "municipality_name": "Gjerstad",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4212",
+    "municipality_name": "Vegårshei",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4213",
+    "municipality_name": "Tvedestrand",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4214",
+    "municipality_name": "Froland",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4215",
+    "municipality_name": "Lillesand",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4216",
+    "municipality_name": "Birkenes",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4217",
+    "municipality_name": "Åmli",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4218",
+    "municipality_name": "Iveland",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4219",
+    "municipality_name": "Evje og Hornnes",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4220",
+    "municipality_name": "Bygland",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4221",
+    "municipality_name": "Valle",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4222",
+    "municipality_name": "Bykle",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4223",
+    "municipality_name": "Vennesla",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4224",
+    "municipality_name": "Åseral",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4225",
+    "municipality_name": "Lyngdal",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4226",
+    "municipality_name": "Hægebostad",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4227",
+    "municipality_name": "Kvinesdal",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4228",
+    "municipality_name": "Sirdal",
+    "county_number": "42",
+    "county_name": "Agder",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4601",
+    "municipality_name": "Bergen",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4602",
+    "municipality_name": "Kinn",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4611",
+    "municipality_name": "Etne",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4612",
+    "municipality_name": "Sveio",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4613",
+    "municipality_name": "Bømlo",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4614",
+    "municipality_name": "Stord",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4615",
+    "municipality_name": "Fitjar",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4616",
+    "municipality_name": "Tysnes",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4617",
+    "municipality_name": "Kvinnherad",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4618",
+    "municipality_name": "Ullensvang",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4619",
+    "municipality_name": "Eidfjord",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4620",
+    "municipality_name": "Ulvik",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4621",
+    "municipality_name": "Voss",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4622",
+    "municipality_name": "Kvam",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4623",
+    "municipality_name": "Samnanger",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4624",
+    "municipality_name": "Bjørnafjorden",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4625",
+    "municipality_name": "Austevoll",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4626",
+    "municipality_name": "Øygarden",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4627",
+    "municipality_name": "Askøy",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4628",
+    "municipality_name": "Vaksdal",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4629",
+    "municipality_name": "Modalen",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4630",
+    "municipality_name": "Osterøy",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4631",
+    "municipality_name": "Alver",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4632",
+    "municipality_name": "Austrheim",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4633",
+    "municipality_name": "Fedje",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4634",
+    "municipality_name": "Masfjorden",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4635",
+    "municipality_name": "Gulen",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4636",
+    "municipality_name": "Solund",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4637",
+    "municipality_name": "Hyllestad",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4638",
+    "municipality_name": "Høyanger",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4639",
+    "municipality_name": "Vik",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4640",
+    "municipality_name": "Sogndal",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4641",
+    "municipality_name": "Aurland",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4642",
+    "municipality_name": "Lærdal",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4643",
+    "municipality_name": "Årdal",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4644",
+    "municipality_name": "Luster",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4645",
+    "municipality_name": "Askvoll",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4646",
+    "municipality_name": "Fjaler",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4647",
+    "municipality_name": "Sunnfjord",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4648",
+    "municipality_name": "Bremanger",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4649",
+    "municipality_name": "Stad",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4650",
+    "municipality_name": "Gloppen",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "4651",
+    "municipality_name": "Stryn",
+    "county_number": "46",
+    "county_name": "Vestland",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5001",
+    "municipality_name": "Trondheim",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5006",
+    "municipality_name": "Steinkjer",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5007",
+    "municipality_name": "Namsos",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5014",
+    "municipality_name": "Frøya",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5020",
+    "municipality_name": "Osen",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5021",
+    "municipality_name": "Oppdal",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5022",
+    "municipality_name": "Rennebu",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5025",
+    "municipality_name": "Røros",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5026",
+    "municipality_name": "Holtålen",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5027",
+    "municipality_name": "Midtre Gauldal",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5028",
+    "municipality_name": "Melhus",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5029",
+    "municipality_name": "Skaun",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5031",
+    "municipality_name": "Malvik",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5032",
+    "municipality_name": "Selbu",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5033",
+    "municipality_name": "Tydal",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5034",
+    "municipality_name": "Meråker",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5035",
+    "municipality_name": "Stjørdal",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5036",
+    "municipality_name": "Frosta",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5037",
+    "municipality_name": "Levanger",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5038",
+    "municipality_name": "Verdal",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5041",
+    "municipality_name": "Snåase - Snåsa",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5042",
+    "municipality_name": "Lierne",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5043",
+    "municipality_name": "Raarvihke - Røyrvik",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5044",
+    "municipality_name": "Namsskogan",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5045",
+    "municipality_name": "Grong",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5046",
+    "municipality_name": "Høylandet",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5047",
+    "municipality_name": "Overhalla",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5049",
+    "municipality_name": "Flatanger",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5052",
+    "municipality_name": "Leka",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5053",
+    "municipality_name": "Inderøy",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5054",
+    "municipality_name": "Indre Fosen",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5055",
+    "municipality_name": "Heim",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5056",
+    "municipality_name": "Hitra",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5057",
+    "municipality_name": "Ørland",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5058",
+    "municipality_name": "Åfjord",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5059",
+    "municipality_name": "Orkland",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5060",
+    "municipality_name": "Nærøysund",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5061",
+    "municipality_name": "Rindal",
+    "county_number": "50",
+    "county_name": "Trøndelag - Trööndelage",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5501",
+    "municipality_name": "Tromsø",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5503",
+    "municipality_name": "Harstad - Hárstták",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5510",
+    "municipality_name": "Kvæfjord",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5512",
+    "municipality_name": "Tjeldsund - Dielddanuorri",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5514",
+    "municipality_name": "Ibestad",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5516",
+    "municipality_name": "Gratangen",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5518",
+    "municipality_name": "Loabák - Lavangen",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5520",
+    "municipality_name": "Bardu",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5522",
+    "municipality_name": "Salangen",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5524",
+    "municipality_name": "Målselv",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5526",
+    "municipality_name": "Sørreisa",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5528",
+    "municipality_name": "Dyrøy",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5530",
+    "municipality_name": "Senja",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5532",
+    "municipality_name": "Balsfjord",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5534",
+    "municipality_name": "Karlsøy",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5536",
+    "municipality_name": "Lyngen",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5538",
+    "municipality_name": "Storfjord - Omasvuotna - Omasvuono",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5540",
+    "municipality_name": "Gáivuotna - Kåfjord - Kaivuono",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5542",
+    "municipality_name": "Skjervøy",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5544",
+    "municipality_name": "Nordreisa - Ráisa - Raisi",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5546",
+    "municipality_name": "Kvænangen",
+    "county_number": "55",
+    "county_name": "Troms - Romsa - Tromssa",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5601",
+    "municipality_name": "Alta",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5603",
+    "municipality_name": "Hammerfest - Hámmerfeasta",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5605",
+    "municipality_name": "Sør-Varanger",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5607",
+    "municipality_name": "Vadsø",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5610",
+    "municipality_name": "Kárášjohka - Karasjok",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5612",
+    "municipality_name": "Guovdageaidnu - Kautokeino",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5614",
+    "municipality_name": "Loppa",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5616",
+    "municipality_name": "Hasvik",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5618",
+    "municipality_name": "Måsøy",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5620",
+    "municipality_name": "Nordkapp",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5622",
+    "municipality_name": "Porsanger - Porsáŋgu - Porsanki",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5624",
+    "municipality_name": "Lebesby",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5626",
+    "municipality_name": "Gamvik",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5628",
+    "municipality_name": "Tana - Deatnu",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5630",
+    "municipality_name": "Berlevåg",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5632",
+    "municipality_name": "Båtsfjord",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5634",
+    "municipality_name": "Vardø",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  },
+  {
+    "municipality_number": "5636",
+    "municipality_name": "Nesseby - Unjárga",
+    "county_number": "56",
+    "county_name": "Finnmark - Finnmárku - Finmarkku",
+    "source": "Statistics Norway (SSB), Classification of municipalities 131",
+    "source_snapshot_date": "2026-09-08"
+  }
+]
