@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 
-import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, selectReminderDisplayGroups } from '../app/lib/device/remindersFeed.ts'
+import { buildSpondReminderItems, buildTeamsMeetingItems, compareReminderItems, selectReminderDisplayGroups, sortReminderItems } from '../app/lib/device/remindersFeed.ts'
 
 const item = ({ id, date, days, source }) => ({
   reminder_id: id, title: id, occurrence_date: date,
@@ -177,6 +177,76 @@ test('a mixed reminder and event day keeps both sources', () => {
     item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' }),
   ], 10)
   assert.deepEqual(new Set(selected.map(x => x.source)), new Set(['remind', 'teams']))
+})
+
+const timedItem = (id, date, time, source = 'remind', title = id) => ({
+  ...item({ id, date, days: date === '2026-09-08' ? 0 : date === '2026-09-09' ? 1 : 9, source }),
+  title,
+  due_time: time,
+  display_time: time,
+})
+
+test('canonical ordering sorts Today, Tomorrow, and arbitrary future days by local display time', () => {
+  const unordered = [
+    timedItem('future-20', '2026-09-17', '20:00'),
+    timedItem('tomorrow-20', '2026-09-09', '20:00'),
+    timedItem('today-20', '2026-09-08', '20:00'),
+    timedItem('future-19', '2026-09-17', '19:00'),
+    timedItem('today-19', '2026-09-08', '19:00'),
+    timedItem('tomorrow-19', '2026-09-09', '19:00'),
+  ]
+
+  assert.deepEqual(sortReminderItems(unordered).map(x => x.reminder_id), [
+    'today-19', 'today-20', 'tomorrow-19', 'tomorrow-20', 'future-19', 'future-20',
+  ])
+})
+
+test('canonical ordering normalizes UTC integration timestamps into the displayed timezone', () => {
+  const teams = buildTeamsMeetingItems([
+    { id: '2', user_id: 'u', provider: 'teams', external_id: 'late', title: 'Teams late', body: null, starts_at: '2026-09-09T18:00:00Z', due_at: null, priority: 0 },
+  ], '2026-09-08', '2026-09-30', 'Europe/Oslo', new Date('2026-09-08T00:00:00Z'))
+  const spond = buildSpondReminderItems([
+    { id: '1', user_id: 'u', provider: 'spond', external_id: 'event:early', title: 'Spond early', body: null, starts_at: '2026-09-09T17:00:00Z', due_at: null, priority: 0 },
+  ], '2026-09-08', '2026-09-30', 'Europe/Oslo', false)
+  const manual = timedItem('manual-middle', '2026-09-09', '19:30', 'remind')
+
+  assert.deepEqual(sortReminderItems([...teams, manual, ...spond]).map(x => [x.source, x.display_time]), [
+    ['spond', '19:00'], ['remind', '19:30'], ['teams', '20:00'],
+  ])
+})
+
+test('equal timestamps use source, title, and identity as deterministic tie-breakers', () => {
+  const input = [
+    timedItem('b', '2026-09-09', '20:00', 'remind', 'Same'),
+    timedItem('z', '2026-09-09', '20:00', 'spond', 'Zulu'),
+    timedItem('a', '2026-09-09', '20:00', 'remind', 'Same'),
+    timedItem('t', '2026-09-09', '20:00', 'teams', 'Teams'),
+  ]
+  const expected = ['t', 'z', 'a', 'b']
+  assert.deepEqual(sortReminderItems(input).map(x => x.reminder_id), expected)
+  assert.deepEqual(sortReminderItems([...input].reverse()).map(x => x.reminder_id), expected)
+})
+
+test('untimed items follow all timed items on their date without affecting timed order', () => {
+  const allDay = item({ id: 'all-day', date: '2026-09-09', days: 1, source: 'waste' })
+  assert.deepEqual(sortReminderItems([
+    timedItem('late', '2026-09-09', '20:00'), allDay, timedItem('early', '2026-09-09', '19:00'),
+  ]).map(x => x.reminder_id), ['early', 'late', 'all-day'])
+})
+
+test('physical feed and Mirror View share API ordering before every layout variant', () => {
+  const api = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
+  const mirror = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
+  const firmware = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
+
+  assert.match(api, /const allItems = sortReminderItems\(/)
+  assert.match(api, /const physicalItems = selectedItems\.map/)
+  assert.match(mirror, /const items = Array\.isArray\(data\.items\)/)
+  assert.match(mirror, /primaryBucketItems\.slice/)
+  for (const renderer of ['renderSmall', 'renderMedium', 'renderLarge', 'renderXL', 'renderAdaptiveReminders']) {
+    assert.match(firmware, new RegExp(`static void ${renderer}`))
+  }
+  assert.doesNotMatch(firmware, /std::sort|qsort/)
 })
 
 test('mixed reminder and local-event list stays chronological after source selection', () => {

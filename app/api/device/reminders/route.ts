@@ -4,7 +4,7 @@ import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, compareReminderItems, selectReminderDisplayGroups, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 
@@ -775,16 +775,15 @@ export async function GET(req: Request) {
       } })()])
     }
 
-    const integrationItems = [
+    const integrationItems = sortReminderItems([
       ...spondItems,
       ...teamsItems,
       ...wasteItems,
       ...localEventItems,
-    ].sort(compareReminderItems)
+    ])
 
     const seenKeys = new Set<string>()
-    const allItems = [...manualItems, ...integrationItems]
-      .sort(compareReminderItems)
+    const allItems = sortReminderItems([...manualItems, ...integrationItems])
       .filter((item) => {
         const key = item.external_id ? `${item.source || 'remind'}:${item.external_id}` : item.reminder_id
         if (seenKeys.has(key)) return false
