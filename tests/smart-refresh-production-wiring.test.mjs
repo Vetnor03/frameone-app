@@ -84,14 +84,15 @@ test('production hashes quantize rendered weather and carry physical bounds', ()
   assert.deepEqual(first.bounds, { x: 400, y: 240, w: 400, h: 240 })
 })
 
-test('later reminder outside physical capacity changes schedule without dirtying tile', () => {
+test('editing a reminder outside physical capacity changes schedule without dirtying tile', () => {
   const settings = { cells: [{ module: 'reminders', col: 0, row: 0, w: 400, h: 240 }], modules: {} }
   const items = ['10:00', '11:00', '12:00', '13:00', '14:00'].map((due_time, i) => ({ id: i, title: `R${i}`, occurrence_date: '2026-09-06', due_time }))
   const now = Date.parse('2026-09-06T06:00:00Z')
-  const before = physicalRenderManifest({ settings, sources: { reminders: { items: items.slice(0, 4) } }, now })[0]
-  const after = physicalRenderManifest({ settings, sources: { reminders: { items } }, now })[0]
+  const before = physicalRenderManifest({ settings, sources: { reminders: { items } }, now })[0]
+  const changed = structuredClone(items); changed[4].title = 'still hidden'
+  const after = physicalRenderManifest({ settings, sources: { reminders: { items: changed } }, now })[0]
   assert.equal(before.render_hash, after.render_hash)
-  assert.ok(after.deadlines.length > before.deadlines.length)
+  assert.deepEqual(after.deadlines, before.deadlines)
 })
 
 test('firmware uses actual partial windows and full windows only by plan', () => {

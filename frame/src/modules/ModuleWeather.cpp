@@ -1221,6 +1221,10 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
 
       DayForecast& day = out.days[di];
 
+      // Hourly observations are the canonical aggregate whenever present.
+      // Do not add them on top of Open-Meteo's already-aggregated daily sum.
+      if (!anyDay[di]) day.precipMm = 0.0f;
+
       if (!isnan(temp)) {
         if (!anyDay[di]) { day.loC = temp; day.hiC = temp; }
         else {
@@ -1455,15 +1459,15 @@ static void renderSmall(const Cell& c,
     return;
   }
 
+  char locationName[48] = {0};
+  getDisplayLocationName(cfg, locationName, sizeof(locationName));
+
   const bool useRest = data.restValid;
   float smallHiC     = useRest ? data.restHiC       : data.hiC;
   float smallLoC     = useRest ? data.restLoC       : data.loC;
   float smallWindMax = useRest ? data.restWindMaxMs : data.windMaxMs;
   float smallPrecip  = useRest ? data.restPrecipMm  : data.precipMm;
   int   smallWmo     = useRest ? data.restWmo       : data.wmo;
-
-  char locationName[48] = {0};
-  getDisplayLocationName(cfg, locationName, sizeof(locationName));
 
   const int gap = 18;
   const int dividerW = 1;
@@ -2046,9 +2050,6 @@ static void renderLargeXL(const Cell& c,
   char insightStr[96] = {0};
   buildWeatherInsight(insightStr, sizeof(insightStr), data);
 
-  char locationName[48] = {0};
-  getDisplayLocationName(cfg, locationName, sizeof(locationName));
-
   const int leftW   = c.w / 3;
   const int midW    = c.w / 3;
   const int rightW  = c.w - leftW - midW;
@@ -2073,12 +2074,6 @@ static void renderLargeXL(const Cell& c,
   measureText(title, FONT_B18, titleX1, titleY1, titleW, titleH);
 
   drawCenteredBox(midX, headerY, midW, headerH, title, FONT_B18, ink);
-
-  {
-    const int locPadX = 8;
-    const int locBaseline = c.y + 16;
-    drawLeft(c.x + locPadX, locBaseline, locationName, FONT_B9, ink);
-  }
 
   int titleBottomY = 0;
   {
