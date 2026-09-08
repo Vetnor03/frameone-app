@@ -7,17 +7,20 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const snapshotPath = path.join(root, 'scripts/data/norway-municipalities-2026.json')
 const registryPath = path.join(root, 'app/lib/integrations/waste/providers.ts')
 const docsPath = path.join(root, 'docs/waste/NORWAY_COVERAGE.md')
+export const DEFAULT_AUDIT_METADATA = Object.freeze({
+  as_of: '2026-09-08',
+  credentials: Object.freeze({ minrenovasjon: Object.freeze({ status: 'not_configured', note: 'RE:MIND server credential was not configured or live-tested at the audit snapshot date.' }) }),
+})
 export const STATUSES = ['supported', 'preview', 'adapter_exists_missing_registry', 'known_provider_no_adapter', 'credential_blocked', 'auth_gated', 'unknown_provider']
 
 const evidence = {
-  ssb: 'https://www.ssb.no/klass/klassifikasjoner/131',
-  upstream: 'https://github.com/mampfes/hacs_waste_collection_schedule/tree/1339b9b5b708f4ac825d91c274613b6647a29d68/custom_components/waste_collection_schedule/waste_collection_schedule/source',
-  him: 'https://him.as/om-him/', bir: 'https://bir.no/om-bir/selskaper-og-eiere/', remidt: 'https://remidt.no/om-remidt/', fosen: 'https://fosenrenovasjon.no/om-oss/',
+  him: 'https://him.as/om-him/', bir: 'https://bir.no/om-bir/selskaper-og-eiere/', remidt: 'https://remidt.no/om-remidt/',
   karmoy: 'https://www.karmoy.kommune.no/innbygger/teknisk-og-eiendom/renovasjon-og-avfall/tommekalender/',
+  mna: 'https://mna.no/om-oss/eierkommuner/',
 }
 const groups = [
   { nums: ['1145','4611','1146','1160'], brand:'HIM', family:'him', status:'adapter_exists_missing_registry', confidence:'High-confidence: same statutory provider and existing HIM address/calendar contract.', url:evidence.him },
-  { nums: ['5020'], brand:'Fosen Renovasjon', family:'renovasjonsportal', status:'adapter_exists_missing_registry', confidence:'High-confidence registry expansion candidate; validate an Osen address before routing.', url:evidence.fosen },
+  { nums: ['5020'], brand:'Midtre Namdal Avfallsselskap (MNA)', family:'mna', status:'known_provider_no_adapter', confidence:'Osen states that MNA provides all renovation services. No reusable MNA implementation is present in RE:MIND or listed among the pinned upstream sources adapted into RE:MIND; do not infer Renovasjonsportal compatibility.', url:evidence.mna },
   { nums: ['5014','5021','5022','5027','5028','5029','5026','5056','5061','1505','1560','1563','1566','1573','1576'], brand:'ReMidt', family:'renovasjonsportal', status:'adapter_exists_missing_registry', confidence:'Existing provider-family adapter; municipality/property acceptance still requires live validation.', url:evidence.remidt },
   { nums:['4601','4619','4620','4621','4622','4623','4624','4627','4628','4630'], brand:'BIR', family:'bir', status:'known_provider_no_adapter', confidence:'BIR statutory household-waste municipalities; upstream adapter exists. Øygarden intentionally excluded.', url:'https://bir.no/om-bir/selskaper-og-eiere/' },
   { nums:['4204','4223'], brand:'Avfall Sør', family:'avfallsor', status:'known_provider_no_adapter', url:'https://avfallsor.no/om-avfall-sor/' },
@@ -50,7 +53,7 @@ export function loadRegistry(file = registryPath) {
   return [...block.matchAll(/\{([^{}]+)\}/g)].map(match => Object.fromEntries([...match[1].matchAll(/(municipalityNumber|municipalityName|family|brand|status):\s*'([^']*)'/g)].map(value => [value[1], value[2]]))).filter(row => row.municipalityNumber)
 }
 
-export function buildAudit(municipalities = loadMunicipalities(), registry = loadRegistry()) {
+export function buildAudit(municipalities = loadMunicipalities(), registry = loadRegistry(), auditMetadata = DEFAULT_AUDIT_METADATA) {
   const official = new Map(municipalities.map(row => [row.municipality_number, row]))
   const duplicateRegistry = registry.find((row, i) => registry.findIndex(other => other.municipalityNumber === row.municipalityNumber) !== i)
   if (duplicateRegistry) throw new Error(`Duplicate registry municipality ${duplicateRegistry.municipalityNumber}`)
@@ -67,20 +70,24 @@ export function buildAudit(municipalities = loadMunicipalities(), registry = loa
     const overlay = special || overlays.get(municipality.municipality_number)
     let coverage_status = registered?.status || overlay?.status || 'unknown_provider'
     let live_verification_status = 'not_tested'
-    if (registered?.family === 'minrenovasjon') { coverage_status = 'credential_blocked'; live_verification_status = 'credential_not_configured' }
+    const credential = registered ? auditMetadata.credentials?.[registered.family] : undefined
+    const credential_status = credential?.status || 'not_applicable'
+    if (credential_status === 'not_configured') { coverage_status = 'credential_blocked'; live_verification_status = 'blocked_by_credential' }
     return {
       municipality_number: municipality.municipality_number, municipality_name: municipality.municipality_name,
       county: municipality.county_name, provider_brand: registered?.brand || overlay?.brand || '',
       provider_family: registered?.family || overlay?.family || '', registry_status: registered?.status || 'unmapped', coverage_status,
+      implementation_status: registered ? 'implemented' : overlay?.status === 'adapter_exists_missing_registry' ? 'implemented_unmapped' : overlay ? 'not_implemented' : 'unknown',
+      credential_status,
       adapter_status: registered ? (registered.family === 'norconsult_unresolved' ? 'parser_known_resolution_missing' : 'implemented') : overlay?.status === 'adapter_exists_missing_registry' ? 'implemented_unmapped' : overlay ? 'not_implemented' : 'unknown',
-      live_verification_status, evidence: registered ? evidence.upstream : overlay?.url || '', notes: overlay?.confidence || (registered?.family === 'norconsult_unresolved' ? 'Provider calendar parser known; automatic Kartverket-to-property-ID resolution unresolved.' : '')
+      live_verification_status, evidence: registered ? 'app/lib/integrations/waste/providers.ts#WASTE_PROVIDER_REGISTRY' : overlay?.url || '', evidence_kind: registered ? 'repository_registry' : overlay?.url ? 'first_party_service_area' : 'none', notes: overlay?.confidence || (registered?.family === 'norconsult_unresolved' ? 'Provider calendar parser known; automatic Kartverket-to-property-ID resolution unresolved.' : '')
     }
   })
 }
 export function totals(rows) { return Object.fromEntries(STATUSES.map(status => [status, rows.filter(row => row.coverage_status === status).length])) }
 export function renderMatrix(rows) {
-  const header='| Municipality | County | Provider / family | Registry | Coverage | Adapter | Live verification | Evidence / notes |\n|---|---|---|---|---|---|---|---|'
-  return [header,...rows.map(r=>`| ${r.municipality_number} ${r.municipality_name} | ${r.county} | ${r.provider_brand}${r.provider_family ? ` / \`${r.provider_family}\``:''} | ${r.registry_status} | \`${r.coverage_status}\` | ${r.adapter_status} | ${r.live_verification_status} | ${r.evidence ? `[source](${r.evidence})`:''}${r.notes ? ` ${r.notes}`:''} |`)].join('\n')
+  const header='| Municipality | County | Provider / family | Registry | Coverage | Implementation / credential | Live verification | Evidence / notes |\n|---|---|---|---|---|---|---|---|'
+  return [header,...rows.map(r=>`| ${r.municipality_number} ${r.municipality_name} | ${r.county} | ${r.provider_brand}${r.provider_family ? ` / \`${r.provider_family}\``:''} | ${r.registry_status} | \`${r.coverage_status}\` | ${r.implementation_status} / ${r.credential_status} | ${r.live_verification_status} | ${r.evidence ? (r.evidence_kind === 'repository_registry' ? `registry: \`${r.evidence}\`` : `[first-party service-area source](${r.evidence})`):''}${r.notes ? ` ${r.notes}`:''} |`)].join('\n')
 }
 export function updateDocumentation(rows, file = docsPath) {
   const text=fs.readFileSync(file,'utf8'), matrix=renderMatrix(rows)
