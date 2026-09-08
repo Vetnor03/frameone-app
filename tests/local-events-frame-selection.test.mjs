@@ -29,7 +29,7 @@ test('Local Events frame selection returns every eligible event in deterministic
   assert.equal(items[1].external_id, 'later')
 })
 
-test('Local Events use only the content budget left after personal reminders', () => {
+test('the first upcoming Local Event is not displaced by later personal reminders', () => {
   const personal = [
     { reminder_id: 'p1', title: 'Personal today', occurrence_date: today, display_date: 'Today', days_until: 0, is_overdue: false, repeat: 'none', due_time: '19:00', display_time: '19:00', source: 'remind' },
     { reminder_id: 'p2', title: 'Personal tomorrow', occurrence_date: '2026-07-13', display_date: 'Tomorrow', days_until: 1, is_overdue: false, repeat: 'none', due_time: null, display_time: null, source: 'remind' },
@@ -38,7 +38,7 @@ test('Local Events use only the content budget left after personal reminders', (
     row('early', 'Local before personal', '2026-07-12T17:00:00+02:00'),
     row('later', 'Local after personal', '2026-07-13T17:00:00+02:00'),
   ], [], today, at('2026-07-12T14:00:00Z'))
-  assert.deepEqual(selectReminderDisplayGroups([...local, ...personal].sort(compareReminderItems), 2).map((item) => item.reminder_id), ['p1', 'p2'])
+  assert.deepEqual(selectReminderDisplayGroups([...local, ...personal].sort(compareReminderItems), 2).map((item) => item.reminder_id), ['local-events:early', 'p1'])
   assert.equal(selectReminderDisplayGroups(local, 2).length, 2)
 })
 
