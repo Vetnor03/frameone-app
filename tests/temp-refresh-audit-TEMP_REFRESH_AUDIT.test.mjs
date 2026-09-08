@@ -30,7 +30,8 @@ test('TEMP_REFRESH_AUDIT sanitizer preserves facts and converts trustworthy devi
   assert.equal(record.occurred_at, '2026-09-08T16:00:00.000Z')
   assert.deepEqual(record.raw_changes.swell_height, { before: 0.94, after: 1.02 })
   assert.equal(record.decision, 'filtered_change')
-  assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: 12 })), null)
+  assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: 12 })).occurred_at, null)
+  assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: 4102444801 })).occurred_at, null)
   assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: null })).occurred_at, null)
 })
 

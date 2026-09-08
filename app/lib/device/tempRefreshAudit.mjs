@@ -6,6 +6,8 @@ export const TEMP_REFRESH_AUDIT_DECISIONS = new Set([
   'filtered_change', 'useful_redraw', 'wasted_redraw', 'no_redraw', 'avoidable_wake',
   'intentional_refresh',
 ])
+const TEMP_REFRESH_AUDIT_MIN_VALID_UNIX_TIME = 1577836800 // 2020-01-01 UTC
+const TEMP_REFRESH_AUDIT_MAX_VALID_UNIX_TIME = 4102444800 // 2100-01-01 UTC
 
 export function TEMP_REFRESH_AUDIT_classify(record) {
   if (record.metadata?.intentional_refresh === true) return 'intentional_refresh'
@@ -24,8 +26,13 @@ export function TEMP_REFRESH_AUDIT_sanitize(record) {
   if (!Number.isSafeInteger(eventSeq) || eventSeq < 1) return null
   let occurredAt = null
   if (record.occurred_at != null) {
-    if (!Number.isSafeInteger(record.occurred_at) || record.occurred_at < 1577836800 || record.occurred_at > 4102444800) return null
-    occurredAt = new Date(record.occurred_at * 1000).toISOString()
+    // TEMP_REFRESH_AUDIT: a corrupt RTC must not reject otherwise useful facts.
+    // Match firmware bounds and store an invalid device event time as null.
+    if (Number.isSafeInteger(record.occurred_at) &&
+        record.occurred_at >= TEMP_REFRESH_AUDIT_MIN_VALID_UNIX_TIME &&
+        record.occurred_at <= TEMP_REFRESH_AUDIT_MAX_VALID_UNIX_TIME) {
+      occurredAt = new Date(record.occurred_at * 1000).toISOString()
+    }
   }
   const sanitized = {
     event_seq: eventSeq, occurred_at: occurredAt,

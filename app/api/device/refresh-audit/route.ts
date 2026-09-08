@@ -14,7 +14,11 @@ export async function POST(req: Request) {
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
   const auth = await authenticatePhysicalDevice(req, deviceId)
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
-  const batch = TEMP_REFRESH_AUDIT_prepareBatch(body?.records, true)
+  const recordsInput = body?.records
+  if (!Array.isArray(recordsInput) || recordsInput.length < 1 || recordsInput.length > 8) {
+    return NextResponse.json({ error: 'invalid_batch' }, { status: 400 })
+  }
+  const batch = TEMP_REFRESH_AUDIT_prepareBatch(recordsInput, true)
   if (batch.error) return NextResponse.json({ error: batch.error }, { status: 400 })
   // TEMP_REFRESH_AUDIT: upsert + unique(device_id,event_seq) makes a resend after
   // a lost response idempotent while preserving the originally received row.

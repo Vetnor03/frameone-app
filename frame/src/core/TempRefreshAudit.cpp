@@ -9,6 +9,8 @@
 namespace {
 constexpr uint8_t TEMP_REFRESH_AUDIT_MAX_RECORDS = 8;
 constexpr uint8_t TEMP_REFRESH_AUDIT_BATTERY_BATCH_THRESHOLD = 4;
+constexpr time_t TEMP_REFRESH_AUDIT_MIN_VALID_UNIX_TIME = 1577836800; // 2020-01-01 UTC
+constexpr time_t TEMP_REFRESH_AUDIT_MAX_VALID_UNIX_TIME = 4102444800; // 2100-01-01 UTC
 Preferences auditPrefs;
 
 void persistTEMP_REFRESH_AUDIT(JsonDocument& doc) {
@@ -16,7 +18,8 @@ void persistTEMP_REFRESH_AUDIT(JsonDocument& doc) {
   const uint64_t eventSeq = auditPrefs.getULong64("event_seq", 0) + 1;
   auditPrefs.putULong64("event_seq", eventSeq); doc["event_seq"] = eventSeq;
   const time_t now = time(nullptr);
-  if (now >= 1577836800) doc["occurred_at"] = (int64_t)now;
+  if (now >= TEMP_REFRESH_AUDIT_MIN_VALID_UNIX_TIME &&
+      now <= TEMP_REFRESH_AUDIT_MAX_VALID_UNIX_TIME) doc["occurred_at"] = (int64_t)now;
   else doc["occurred_at"] = nullptr;
   String encoded; serializeJson(doc, encoded);
   uint8_t head = auditPrefs.getUChar("head", 0), count = auditPrefs.getUChar("count", 0);
