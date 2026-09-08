@@ -31,6 +31,12 @@ static const int FRAME_H = VIEWPORT_H;
 // =========================
 extern const char* BASE_URL;
 
+// TEMP_REFRESH_AUDIT: temporary, compile-time diagnostic switch. It is off by
+// default and must never affect normal scheduling or networking when disabled.
+#ifndef TEMP_REFRESH_AUDIT_ENABLED
+#define TEMP_REFRESH_AUDIT_ENABLED 0
+#endif
+
 // =========================
 // ePaper pins (EDIT THESE to your wiring)
 // =========================

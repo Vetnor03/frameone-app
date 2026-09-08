@@ -88,6 +88,9 @@ namespace SmartRefresh {
   bool fetchRenderState(const String& token, const String& modules, SmartRenderState& out);
   SmartDisplayPlan plan(const SmartRenderState& desired, bool grayscaleMode = false);
   void commitSuccessfulDisplay(const SmartRenderState& desired, const SmartDisplayPlan& plan);
+  // TEMP_REFRESH_AUDIT: aggregate of the backend's canonical per-module hashes.
+  String TEMP_REFRESH_AUDIT_renderHash(const SmartRenderState& state);
+  String TEMP_REFRESH_AUDIT_physicalRenderHash(const SmartRenderState& scope);
   uint64_t displayedRevision();
   void saveDisplayedRevision(uint64_t revision);
   uint32_t secondsUntilNextWake(const SmartRenderState& state, time_t now,

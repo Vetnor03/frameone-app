@@ -16,6 +16,7 @@
 #include "BatteryManager.h"
 #include "HardwareProfile.h"
 #include "SmartRefresh.h"
+#include "TempRefreshAudit.h" // TEMP_REFRESH_AUDIT temporary instrumentation
 
 // Modules
 #include "ModuleDate.h"
@@ -712,8 +713,15 @@ static bool fetchAndRenderExplicit(
   setupPendingScreenDisplayed = false;
   SmartRenderState desired;
   if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired)) return false;
+  const uint64_t TEMP_REFRESH_AUDIT_backendBefore = SmartRefresh::displayedRevision();
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
-  if (!renderSmartDashboard(batt, pwr, desired, displayPlan)) return false;
+  const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
+  const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_record("manual_refresh", "all", desired,
+    TEMP_REFRESH_AUDIT_previous, displayPlan, rendered, TEMP_REFRESH_AUDIT_backendBefore,
+    revision, batt, pwr.usbPresent, "interactive");
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken());
+  if (!rendered) return false;
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
@@ -1299,6 +1307,15 @@ run_normal_sync:
       g_smartState, g_revisionCheckedAt, g_revisionCheckedAt);
     SmartRefresh::saveScheduler(g_smartState, g_revisionCheckedAt);
     Serial.println("Revision unchanged; no config, source, or display work");
+    // TEMP_REFRESH_AUDIT: represent the cheap unchanged evaluation without
+    // manufacturing source/render detail that was deliberately not fetched.
+    SmartRenderState noDesiredState;
+    SmartDisplayPlan noDisplayPlan;
+    const String unchangedHash = SmartRefresh::TEMP_REFRESH_AUDIT_renderHash(noDesiredState);
+    TempRefreshAudit::TEMP_REFRESH_AUDIT_record("scheduled_revision_poll", "", noDesiredState,
+      unchangedHash, noDisplayPlan, true, knownRevision, revisionState.revision,
+      batt, pwr.usbPresent, wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" : "startup");
+    TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken());
     postDeviceStatus(batt, pwr, false);
   } else {
     g_revisionRetryNotBefore = 0;
@@ -1312,7 +1329,17 @@ run_normal_sync:
         Serial.println("Affected render-state fetch failed; preserving freshness and hashes");
       } else {
         SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
-        if (renderSmartDashboard(batt, pwr, desired, displayPlan)) {
+        const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);
+        const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
+        TempRefreshAudit::TEMP_REFRESH_AUDIT_record(
+          revisionState.changed ? "backend_revision_changed" : "scheduled_revision_poll",
+          affected, desired, TEMP_REFRESH_AUDIT_previous, displayPlan, rendered,
+          knownRevision, revisionState.revision, batt, pwr.usbPresent,
+          wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" : (wakeCause == ESP_SLEEP_WAKEUP_EXT1 ? "charger_edge" : "startup"));
+        // TEMP_REFRESH_AUDIT upload is only attempted here, immediately after
+        // the already-required revision/render-state session is known active.
+        TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken());
+        if (rendered) {
           const bool screenWide = affected == "all";
           SmartRefresh::mergeScheduler(g_smartState, desired, screenWide);
           SmartRefresh::saveDisplayedRevision(revisionState.revision);

@@ -242,3 +242,14 @@ bool NetClient::httpPostAuthJson(const String& url, const String& bearerToken, c
 int NetClient::lastContentLength() {
   return g_lastContentLength;
 }
+
+bool NetClient::TEMP_REFRESH_AUDIT_httpPostConnected(const String& url, const String& bearerToken, const String& jsonBody, int& httpCodeOut, String& bodyOut) {
+  // TEMP_REFRESH_AUDIT uses a single direct HTTP attempt. This method is
+  // permitted only as a piggyback on an existing session.
+  if (WiFi.status() != WL_CONNECTED) { httpCodeOut = 0; bodyOut = ""; return false; }
+  configureHttpSession();
+  if (!g_http.begin(g_tlsClient, url)) return false;
+  g_http.addHeader("Accept-Encoding", "identity"); g_http.addHeader("Authorization", "Bearer " + bearerToken); g_http.addHeader("Content-Type", "application/json");
+  httpCodeOut = g_http.POST(jsonBody); bodyOut = httpCodeOut > 0 ? g_http.getString() : String(""); g_http.end();
+  return httpCodeOut > 0;
+}
