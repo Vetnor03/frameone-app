@@ -54,6 +54,10 @@ const displayTemperature = (value, units) => {
   if (n == null) return null
   return firmwareRound(String(units).toLowerCase() === 'imperial' ? n * 9 / 5 + 32 : n)
 }
+const weatherWind = (value) => {
+  const wind = finite(value)
+  return wind == null ? null : wind > .20 ? { calm: false, roundedWind: firmwareRound(wind) } : { calm: true }
+}
 const osloParts = (now) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', second: '2-digit',
 }).formatToParts(new Date(now)).filter((part) => part.type !== 'literal').map((part) => [part.type, Number(part.value)]))
@@ -68,7 +72,7 @@ function weatherCommon(value, config) {
 }
 function weatherDay(common, i, config) {
   return { time: common.daily.time?.[i], high: displayTemperature(common.daily.temperature_2m_max?.[i], config.units), low: displayTemperature(common.daily.temperature_2m_min?.[i], config.units),
-    code: common.daily.weather_code?.[i], wind: rounded(common.daily.wind_speed_10m_max?.[i]), precipitation: rounded(common.daily.precipitation_sum?.[i]) }
+    code: first(common.daily.weather_code?.[i], i === 0 ? common.code : undefined), wind: rounded(common.daily.wind_speed_10m_max?.[i]), precipitation: rounded(common.daily.precipitation_sum?.[i]) }
 }
 function reconstructedWeatherDays(common, config) {
   const hourly = object(common.source.hourly), times = hourly.time ?? []
@@ -145,30 +149,31 @@ function weatherPrecipLabel(mmValue, code, low, high) {
 function weatherProjectionLegacy(value, cell, config, now) {
   const common = weatherCommon(value, config), size = String(cell?.size).toUpperCase(), rest = weatherRest(common, config)
   const precipitation = weatherPrecipLabel(rest.precipitation, rest.code, rest.rawLow, rest.rawHigh)
-  if (size === 'SMALL') return { location: config.label, range: config.showHiLo === false ? common.temperature : [rest.low, rest.high], wind: rest.wind, precipitation, code: rest.code }
-  if (size === 'MEDIUM') return { range: config.showHiLo === false ? [common.temperature, common.temperature] : [rest.low, rest.high], wind: rest.wind, precipitation, code: rest.code, insight: weatherInsight(common, now) }
-  const days = reconstructedWeatherDays(common, config).slice(0, 4); if (days.length) days[0] = { ...days[0], high: rest.high, low: rest.low, wind: rest.wind, precipitation, code: rest.code }
+  if (size === 'SMALL') return { location: config.label, range: config.showHiLo === false ? common.temperature : [rest.low, rest.high], wind: weatherWind(rest.wind), precipitation, code: rest.code }
+  if (size === 'MEDIUM') return { range: config.showHiLo === false ? [common.temperature, common.temperature] : [rest.low, rest.high], wind: weatherWind(rest.wind), precipitation, code: rest.code, insight: weatherInsight(common, now) }
+  const days = reconstructedWeatherDays(common, config).slice(0, 4); if (days.length) days[0] = { ...days[0], high: rest.high, low: rest.low, wind: weatherWind(rest.wind), precipitation, code: rest.code }
   if (size === 'LARGE') return { location: config.label, days }
   return { current: common.temperature, humidity: rounded(common.current.relative_humidity_2m), today: days[0], sunrise: common.daily.sunrise?.[0], sunset: common.daily.sunset?.[0], insight: weatherInsight(common, now), forecast: days.slice(1) }
 }
 function weatherProjectionAdaptive(value, cell, config, now) {
-  const common = weatherCommon(value, config), { source, current, daily } = common
+  const common = weatherCommon(value, config), { source, current } = common
+  const days = reconstructedWeatherDays(common, config), today = days[0] ?? weatherDay(common, 0, config)
   const { w, h } = dimensions(cell); const area = Number(cell?.colSpan ?? Math.max(1, Math.round(w / 200))) * Number(cell?.rowSpan ?? Math.max(1, Math.round(h / 120)))
   const currentTime = String(current.time ?? '')
   const currentHourIndex = (source.hourly?.time ?? []).findIndex((time) => String(time).slice(0, 13) === currentTime.slice(0, 13))
   const hourlyProbability = currentHourIndex >= 0 ? source.hourly?.precipitation_probability?.[currentHourIndex] : undefined
   const result = { current: {
-    temperature_2m: common.temperature, weather_code: common.code,
+    temperature_2m: common.temperature, weather_code: today.code,
   } }
-  if (area >= 2) result.condition = first(source.condition, source.weather_label)
+  if (area >= 2) result.condition = today.code
   if (area >= 3) Object.assign(result.current, {
-    wind_speed_10m: rounded(first(current.wind_speed_10m, source.wind_speed_10m)),
+    wind_speed_10m: weatherWind(first(current.wind_speed_10m, source.wind_speed_10m)),
     wind_direction_10m: direction(first(current.wind_direction_10m, source.wind_direction_10m)),
   })
   if (area >= 3) {
     result.today = {
-      temperature_2m_max: displayTemperature(Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max[0] : source.temperature_2m_max, config.units),
-      temperature_2m_min: displayTemperature(Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min[0] : source.temperature_2m_min, config.units),
+      temperature_2m_max: today.high,
+      temperature_2m_min: today.low,
     }
   }
   if (area >= 4) result.current.precipitation_probability = rounded(first(hourlyProbability, current.precipitation_probability, source.precipitation_probability))
@@ -176,7 +181,7 @@ function weatherProjectionAdaptive(value, cell, config, now) {
   const forecastCount = area >= 8 && h >= 300 ? (w >= 500 ? 4 : 3) : 0
   if (forecastCount) result.forecast = Array.from({ length: forecastCount }, (_, offset) => {
     const i = offset + 1
-    return { time: daily.time?.[i], temperature_2m_max: displayTemperature(daily.temperature_2m_max?.[i], config.units), weather_code: daily.weather_code?.[i] }
+    return { time: days[i]?.time, temperature_2m_max: days[i]?.high, weather_code: days[i]?.code }
   })
   else if (area >= 8) result.insight = weatherInsight(common, now)
   return result
@@ -186,9 +191,24 @@ function weatherProjection(value, cell, config, now) {
     ? weatherProjectionAdaptive(value, cell, config, now) : weatherProjectionLegacy(value, cell, config, now)
 }
 
+const surfValidRating = (...values) => {
+  const parsed = values.map((value) => typeof value === 'string' ? Number.parseInt(value, 10) : finite(value)).map((value) => value == null ? null : firmwareRound(value))
+  return first(...parsed.filter((value) => value != null && value >= 1 && value <= 6)) ?? null
+}
+const surfMatched = (value) => value === true || value === 1 || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase())
+function surfRatingState(row) {
+  const source = object(row), picked = object(source.picked)
+  const experiences = [source.breakdown?.experience, source.experience, picked.breakdown?.experience, picked.experience].map(object)
+  const rating = surfValidRating(source.rating, source.score, source.stars,
+    experiences[0].blended_rating_1_6, experiences[1].blended_rating_1_6,
+    picked.rating, picked.score, picked.stars, experiences[2].blended_rating_1_6, experiences[3].blended_rating_1_6)
+  const fromExperience = experiences.some((experience) => surfMatched(experience.matched))
+  const dice = fromExperience ? first(rating, surfValidRating(...experiences.flatMap((experience) => [experience.blended_rating_1_6, experience.rating_1_6]))) : null
+  return { rating, fromExperience, dice }
+}
 function surfRow(row) {
   const source = object(row), inputs = object(first(source.inputs, source.picked?.inputs))
-  const experience = object(first(source.breakdown?.experience, source.experience, source.picked?.breakdown?.experience, source.picked?.experience))
+  const rating = surfRatingState(source)
   return {
     label: first(source.label, source.day, source.dow, source.date),
     spot: first(source.spot, source.picked?.spot),
@@ -197,17 +217,13 @@ function surfRow(row) {
     swellDirection: direction(first(inputs.swell_direction_deg, source.swell_direction_deg)),
     wind: rounded(first(inputs.wind_speed_ms, source.wind_speed_ms, source.wind_ms, source.wind)),
     windDirection: direction(first(inputs.wind_direction_deg, source.wind_direction_deg)),
-    rating: rounded(first(source.finalRating, source.rating, source.score, source.stars,
-      source.breakdown?.experience?.blended_rating_1_6, source.experience?.blended_rating_1_6,
-      source.breakdown?.experience?.rating_1_6, source.experience?.rating_1_6)),
-    experienceRating: experience.matched ? rounded(first(experience.blended_rating_1_6, experience.rating_1_6)) : null,
+    rating: first(surfValidRating(source.finalRating), rating.rating), ratingFromExperience: rating.fromExperience, experienceDiceValue: rating.dice,
     line1: first(source.line1, source.summary),
   }
 }
 function surfTrend(source, now) {
   const rows = source.dayparts ?? source.forecast?.dayparts ?? source.forecast?.parts ?? []
-  const ratings = rows.slice(0, 4).map((row) => rounded(first(row?.rating, row?.score, row?.stars, row?.breakdown?.experience?.blended_rating_1_6, row?.experience?.blended_rating_1_6,
-    row?.picked?.rating, row?.picked?.score, row?.picked?.stars, row?.picked?.breakdown?.experience?.blended_rating_1_6, row?.picked?.experience?.blended_rating_1_6)))
+  const ratings = rows.slice(0, 4).map((row) => surfRatingState(row).rating ?? surfRatingState(row).dice)
   const hour = osloParts(now).hour
   let from = hour >= 21 || hour < 10 ? 0 : hour < 14 ? 1 : 2
   let a = ratings[from], b = ratings[from + 1]
@@ -371,6 +387,7 @@ function groceryProjection(value, cell, now) {
     }
     return result
   }
+  future.sort((a, b) => String(a?.date).localeCompare(String(b?.date)))
   let family = 'list_columns'
   if (w < 230 && h < 150) family = 'micro'; else if (h < 165) family = 'item_strip'; else if (w < 270) family = 'list_stack'
   else if ((w >= 620 && h >= 300) || (w >= 360 && h >= 390)) family = 'expanded'; else if (w >= 480 && h >= 190) family = 'list_menu'
@@ -415,7 +432,9 @@ const reminderRow = (row, cell) => {
   }
 }
 function reminderProjection(value, cell, now) {
-  const source = object(value), rows = (source.items ?? source.reminders ?? []).map((row) => reminderRow(row, cell))
+  const source = object(value), rows = (source.items ?? source.reminders ?? []).map((row, itemIdx) => {
+    const projected = reminderRow(row, cell); Object.defineProperty(projected, 'itemIdx', { value: itemIdx }); return projected
+  })
   const buckets = []
   for (const row of rows) {
     let bucket = buckets.find((candidate) => candidate.daysUntil === row.days_until)
@@ -464,7 +483,7 @@ function reminderProjection(value, cell, now) {
   const visible = Array.from({ length: capacity }, (_, i) => primary.rows[(start + i) % primary.rows.length])
   const local = osloParts(now), tomorrow = buckets.find((bucket) => bucket.daysUntil === 1)
   const tomorrowNote = (String(cell?.size).toUpperCase() === 'SMALL' || String(cell?.size).toUpperCase() === 'MEDIUM') && primary.daysUntil === 0 && local.hour >= 17 && tomorrow?.rows.length
-  const result = { ok: source.ok, primary: { daysUntil: primary.daysUntil, overdue: primary.overdue, visible, overflow: primary.rows.length - capacity }, tomorrowNote: tomorrowNote ? tomorrow.rows.length : undefined }
+  const result = { ok: source.ok, primary: { daysUntil: primary.daysUntil, overdue: primary.overdue, visible: visible.map(({ itemIdx: _itemIdx, ...row }) => row), overflow: primary.rows.length - capacity }, tomorrowNote: tomorrowNote ? tomorrow.rows.length : undefined }
   const size = String(cell?.size).toUpperCase()
   if (size === 'LARGE' || size === 'XL') {
     const monthKey = `${local.year}-${String(local.month).padStart(2, '0')}`, nextDate = new Date(Date.UTC(local.year, local.month, 1))
@@ -476,7 +495,8 @@ function reminderProjection(value, cell, now) {
     if (size === 'XL') {
       const shown = new Set(visible)
       result.next = rows.filter((row) => !shown.has(row) && String(row.occurrence_date) >= result.calendar.today)
-        .sort((a, b) => String(a.occurrence_date).localeCompare(String(b.occurrence_date)) || String(a.display_time).localeCompare(String(b.display_time)) || String(a.title).localeCompare(String(b.title))).slice(0, 5)
+        .sort((a, b) => String(a.occurrence_date).localeCompare(String(b.occurrence_date)) || a.itemIdx - b.itemIdx).slice(0, 5)
+        .map(({ itemIdx: _itemIdx, ...row }) => row)
     }
   }
   return result

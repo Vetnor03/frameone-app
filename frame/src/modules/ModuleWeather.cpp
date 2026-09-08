@@ -1221,6 +1221,10 @@ static bool fetchWeatherPayload(const WeatherInstanceConfig& cfg, WeatherCache& 
 
       DayForecast& day = out.days[di];
 
+      // Hourly observations are the canonical aggregate whenever present.
+      // Do not add them on top of Open-Meteo's already-aggregated daily sum.
+      if (!anyDay[di]) day.precipMm = 0.0f;
+
       if (!isnan(temp)) {
         if (!anyDay[di]) { day.loC = temp; day.hiC = temp; }
         else {

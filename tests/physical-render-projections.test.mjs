@@ -56,6 +56,25 @@ test('Weather derived-insight deadline is conditional on visible text changing',
   assert.ok(!physicalModuleDeadlines({ settings, sources: { 'weather:1': supplied }, now })['weather:1'].some((d) => d.reason === 'weather_insight'))
 })
 
+test('Adaptive Weather consumes reconstructed hourly cache and preserves wind threshold state', () => {
+  const medium = { w: 400, h: 240, size: 'ADAPTIVE', colSpan: 2, rowSpan: 2 }
+  const xl = { w: 800, h: 480, size: 'ADAPTIVE', colSpan: 4, rowSpan: 4 }
+  const base = { current: { time: '2026-09-08T10:00', temperature_2m: 12, weather_code: 1, wind_speed_10m: .1 }, daily: {
+    time: ['2026-09-08', '2026-09-09'], temperature_2m_min: [5, 6], temperature_2m_max: [15, 16], weather_code: [1, 1], precipitation_sum: [20, 20],
+  }, hourly: { time: ['2026-09-08T10:00', '2026-09-08T11:00', '2026-09-09T10:00'], temperature_2m: [10, 14, 12], wind_speed_10m: [.1, .1, 1], precipitation: [0, 0, 0], weather_code: [1, 1, 1] } }
+  const icon = structuredClone(base); icon.hourly.weather_code[0] = 63; icon.hourly.weather_code[1] = 63
+  const range = structuredClone(base); range.hourly.temperature_2m[1] = 18
+  const forecast = structuredClone(base); forecast.hourly.weather_code[2] = 63
+  assert.notEqual(hash('weather:1', base, medium), hash('weather:1', icon, medium))
+  assert.notEqual(hash('weather:1', base, medium), hash('weather:1', range, medium))
+  assert.notEqual(hash('weather:1', base, xl), hash('weather:1', forecast, xl))
+  const wind = (speed) => ({ ...base, current: { ...base.current, wind_speed_10m: speed }, hourly: { ...base.hourly, wind_speed_10m: [speed, speed, 1] } })
+  assert.equal(hash('weather:1', wind(.1), medium), hash('weather:1', wind(.2), medium))
+  assert.notEqual(hash('weather:1', wind(.1), medium), hash('weather:1', wind(.3), medium))
+  assert.equal(hash('weather:1', wind(.3), medium), hash('weather:1', wind(.4), medium))
+  assert.equal(physicalRenderProjection('weather:1', base, medium, { module: {} }).visible.today.temperature_2m_max, 14)
+})
+
 test('Surf excludes operational state and normalizes visible precision while retaining ratings and winners', () => {
   const base = { spotId: 'a', spot: 'A', rating: 3, inputs: { swell_height_m: 1.201, swell_period_s: 8.1, wind_speed_ms: 4.1, wind_direction_deg: 91 } }
   assert.equal(hash('surf:1', { ...base, cacheAge: 1, debug: { request: 'a' }, fetched_at: 'one' }),
@@ -234,6 +253,26 @@ test('Reminder LARGE calendar dots and XL next list are part of physical state',
   assert.equal(hash('reminders', base, large, {}, now), hash('reminders', hidden, large, {}, now))
 })
 
+test('Reminder XL next list preserves same-date cache order and ignores hidden sixth candidate', () => {
+  const now = Date.parse('2026-01-05T12:00Z'), cell = { w: 800, h: 480, size: 'XL' }
+  const items = [{ title: 'Today', occurrence_date: '2026-01-05', days_until: 0 }, ...['Zulu', 'Alpha', 'Late', 'Early', 'Fifth', 'Hidden'].map((title, i) => ({ title, occurrence_date: '2026-01-20', display_time: `${20 - i}:00`, days_until: 15 }))]
+  const visible = physicalRenderProjection('reminders', { items }, cell, {}, now).visible.next
+  assert.deepEqual(visible.map((row) => row.title), ['Zulu', 'Alpha', 'Late', 'Early', 'Fifth'])
+  const changed = structuredClone(items); changed[5].title = 'Changed fifth'
+  assert.notEqual(hash('reminders', { items }, cell, {}, now), hash('reminders', { items: changed }, cell, {}, now))
+  const hidden = structuredClone(items); hidden[6].title = 'Changed hidden'
+  assert.equal(hash('reminders', { items }, cell, {}, now), hash('reminders', { items: hidden }, cell, {}, now))
+})
+
+test('Adaptive Grocery menus select future dinners chronologically', () => {
+  const now = Date.parse('2026-09-08T12:00Z'), cell = { w: 600, h: 240, size: 'ADAPTIVE' }
+  const dinner_plan = ['12', '10', '11', '20', '21', '22', '23', '24', '25'].map((day) => ({ date: `2026-09-${day}`, title: `Dinner ${day}` }))
+  const projection = physicalRenderProjection('groceries', { items: [], dinner_plan }, cell, {}, now).visible
+  assert.deepEqual(projection.menu.rows.slice(0, 3).map((row) => row.date), ['2026-09-10', '2026-09-11', '2026-09-12'])
+  const visible = structuredClone(dinner_plan); visible[1].title = 'Changed'; assert.notEqual(hash('groceries', { dinner_plan }, cell, {}, now), hash('groceries', { dinner_plan: visible }, cell, {}, now))
+  const hidden = structuredClone(dinner_plan); hidden.at(-1).title = 'Hidden'; assert.equal(hash('groceries', { dinner_plan }, cell, {}, now), hash('groceries', { dinner_plan: hidden }, cell, {}, now))
+})
+
 test('Surf XL projects environmental panel and trend changes only at effective boundaries', () => {
   const xl = { w: 800, h: 480, size: 'XL' }, medium = { module: 'surf:1', w: 400, h: 240, size: 'MEDIUM' }
   const base = { spot: 'A', rating: 3, dayparts: [{ rating: 1 }, { rating: 3 }, { rating: 2 }, { rating: 2 }], air: { temp_min_c: 8, temp_max_c: 12 }, water: { temp_min_c: 9, temp_max_c: 10 }, sun: { sunrise: '07:00', sunset: '19:00' }, weather: { code: 2 } }
@@ -253,6 +292,19 @@ test('Surf XL and trend honor field-by-field and picked fallbacks', () => {
   assert.notEqual(hash('surf:1', base, xl), hash('surf:1', { ...base, picked: { ...base.picked, sunrise: '07:30' } }, xl))
   assert.notEqual(hash('surf:1', base, xl), hash('surf:1', { ...base, picked: { ...base.picked, weather_code: 61 } }, xl))
   assert.notEqual(hash('surf:1', base, medium, {}, Date.parse('2026-01-01T08:59Z')), hash('surf:1', base, medium, {}, Date.parse('2026-01-01T09:00Z')))
+})
+
+test('Surf visible rows and trend preserve picked and matched-experience rating state', () => {
+  const medium = { w: 400, h: 240, size: 'MEDIUM' }, xl = { w: 800, h: 480, size: 'XL' }, now = Date.parse('2026-01-01T09:00Z')
+  const parts = (second) => ({ dayparts: [{ rating: 1 }, second, { rating: 2 }, { rating: 2 }] })
+  assert.notEqual(hash('surf:1', parts({ rating: 2 }), medium, {}, now), hash('surf:1', parts({ breakdown: { experience: { matched: true, rating_1_6: 5 } } }), medium, {}, now))
+  assert.notEqual(hash('surf:1', parts({ picked: { rating: 2 } }), medium, {}, now), hash('surf:1', parts({ picked: { rating: 5 } }), medium, {}, now))
+  const normal = parts({ rating: 4 }), experience = parts({ rating: 4, experience: { matched: true, rating_1_6: 4 } })
+  assert.notEqual(hash('surf:1', normal, medium, {}, now), hash('surf:1', experience, medium, {}, now))
+  const unmatched = parts({ rating: 3, experience: { matched: false, rating_1_6: 6 } })
+  assert.equal(physicalRenderProjection('surf:1', unmatched, medium, {}, now).visible.dayparts[1].rating, 3)
+  const daily = { daily: [{ picked: { rating: 2 } }] }, dailyDice = { daily: [{ picked: { experience: { matched: true, rating_1_6: 5 } } }] }
+  assert.notEqual(hash('surf:1', daily, xl, {}, now), hash('surf:1', dailyDice, xl, {}, now))
 })
 
 test('Oslo midnight deadlines remain correct across both 2026 DST transitions', () => {
