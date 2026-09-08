@@ -75,6 +75,30 @@ test('Adaptive Weather consumes reconstructed hourly cache and preserves wind th
   assert.equal(physicalRenderProjection('weather:1', base, medium, { module: {} }).visible.today.temperature_2m_max, 14)
 })
 
+test('Compact-v2 Weather preserves daily fallback state for days without hourly rows', () => {
+  const days = Array.from({ length: 5 }, (_, i) => `2026-09-${String(i + 8).padStart(2, '0')}`)
+  const base = { current: { time: `${days[0]}T10:00`, temperature_2m: 12, weather_code: 1 }, daily: { time: days,
+    temperature_2m_min: [8, 9, 10, 11, 12], temperature_2m_max: [14, 15, 16, 17, 18], weather_code: [1, 2, 3, 1, 2],
+    wind_speed_10m_max: [2, .1, 3, 4, 5], precipitation_sum: [0, 4, 0, 0, 0] }, hourly: {
+    time: [`${days[0]}T10:00`, `${days[0]}T11:00`], temperature_2m: [11, 14], wind_speed_10m: [2, 2], precipitation: [0, 0], weather_code: [1, 1],
+  } }
+  const large = { w: 800, h: 240, size: 'LARGE' }, xl = { w: 800, h: 480, size: 'XL' }
+  const adaptive = { w: 800, h: 480, size: 'ADAPTIVE', colSpan: 4, rowSpan: 4 }, hidden = { w: 400, h: 240, size: 'ADAPTIVE', colSpan: 2, rowSpan: 2 }
+  for (const field of ['weather_code', 'precipitation_sum']) {
+    const changed = structuredClone(base); changed.daily[field][1] = field === 'weather_code' ? 63 : 8
+    for (const cell of field === 'weather_code' ? [large, xl, adaptive] : [large, xl]) assert.notEqual(hash('weather:1', base, cell), hash('weather:1', changed, cell))
+    if (field === 'precipitation_sum') assert.equal(hash('weather:1', base, adaptive), hash('weather:1', changed, adaptive))
+  }
+  const hiddenChange = structuredClone(base); hiddenChange.daily.weather_code[4] = 63
+  assert.equal(hash('weather:1', base, hidden), hash('weather:1', hiddenChange, hidden))
+  const wind = (speed) => { const value = structuredClone(base); value.daily.wind_speed_10m_max[1] = speed; return value }
+  assert.equal(hash('weather:1', wind(.1), large), hash('weather:1', wind(.2), large))
+  assert.notEqual(hash('weather:1', wind(.1), large), hash('weather:1', wind(.3), large))
+  assert.equal(hash('weather:1', wind(.3), large), hash('weather:1', wind(.4), large))
+  assert.equal(hash('weather:1', base, xl, { label: 'Oslo' }), hash('weather:1', base, xl, { label: 'Bergen' }))
+  assert.notEqual(hash('weather:1', base, large, { label: 'Oslo' }), hash('weather:1', base, large, { label: 'Bergen' }))
+})
+
 test('Surf excludes operational state and normalizes visible precision while retaining ratings and winners', () => {
   const base = { spotId: 'a', spot: 'A', rating: 3, inputs: { swell_height_m: 1.201, swell_period_s: 8.1, wind_speed_ms: 4.1, wind_direction_deg: 91 } }
   assert.equal(hash('surf:1', { ...base, cacheAge: 1, debug: { request: 'a' }, fetched_at: 'one' }),
@@ -305,6 +329,24 @@ test('Surf visible rows and trend preserve picked and matched-experience rating 
   assert.equal(physicalRenderProjection('surf:1', unmatched, medium, {}, now).visible.dayparts[1].rating, 3)
   const daily = { daily: [{ picked: { rating: 2 } }] }, dailyDice = { daily: [{ picked: { experience: { matched: true, rating_1_6: 5 } } }] }
   assert.notEqual(hash('surf:1', daily, xl, {}, now), hash('surf:1', dailyDice, xl, {}, now))
+})
+
+test('Surf resolves main, daypart and daily picked fields independently', () => {
+  const medium = { w: 400, h: 240, size: 'MEDIUM' }, xl = { w: 800, h: 480, size: 'XL' }
+  const main = { inputs: { swell_height_m: 1.2 }, picked: { inputs: { wind_speed_ms: 3, swell_period_s: 8 } } }
+  assert.notEqual(hash('surf:1', main, medium), hash('surf:1', { ...main, picked: { inputs: { ...main.picked.inputs, wind_speed_ms: 4 } } }, medium))
+  assert.notEqual(hash('surf:1', main, medium), hash('surf:1', { ...main, picked: { inputs: { ...main.picked.inputs, swell_period_s: 9 } } }, medium))
+  const daypart = { dayparts: [{ picked: { waveRange: '1-2 m', period_s: 8, wind_ms: 3, rating: 3 } }, {}, {}, {}] }
+  for (const [field, value] of [['waveRange', '2-3 m'], ['period_s', 9], ['wind_ms', 4]]) {
+    const changed = structuredClone(daypart); changed.dayparts[0].picked[field] = value
+    assert.notEqual(hash('surf:1', daypart, medium), hash('surf:1', changed, medium))
+  }
+  const daily = { daily: [{ picked: { label: 'Wed', wave_range: '1-2 m', period: 8, wind: 3, rating: 3 } }, {}] }
+  for (const [field, value] of [['label', 'Thu'], ['wave_range', '2-3 m'], ['period', 9], ['wind', 4]]) {
+    const changed = structuredClone(daily); changed.daily[0].picked[field] = value
+    assert.notEqual(hash('surf:1', daily, xl), hash('surf:1', changed, xl))
+  }
+  assert.equal(hash('surf:1', main, medium), hash('surf:1', { ...main, picked: { ...main.picked, requestId: 'hidden' } }, medium))
 })
 
 test('Oslo midnight deadlines remain correct across both 2026 DST transitions', () => {

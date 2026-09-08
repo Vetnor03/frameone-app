@@ -79,7 +79,13 @@ function reconstructedWeatherDays(common, config) {
   if (!times.length) return Array.from({ length: 5 }, (_, i) => weatherDay(common, i, config))
   const dates = [...(common.daily.time ?? []), ...times.map((time) => String(time).slice(0, 10))].filter((date, i, all) => date && all.indexOf(date) === i).slice(0, 5)
   return dates.map((date) => {
+    const dailyIndex = (common.daily.time ?? []).findIndex((value) => String(value).slice(0, 10) === date)
     const indexes = times.map((time, index) => ({ time: String(time), index })).filter((entry) => entry.time.slice(0, 10) === date)
+    const dailyLow = common.daily.temperature_2m_min?.[dailyIndex], dailyHigh = common.daily.temperature_2m_max?.[dailyIndex]
+    let dailyCode = first(common.daily.weather_code?.[dailyIndex], common.code)
+    if ([71,73,75,77,85,86].includes(dailyCode) && (dailyLow >= 1 || dailyHigh >= 3)) dailyCode = 63
+    if (!indexes.length) return { time: date, high: displayTemperature(dailyHigh, config.units), low: displayTemperature(dailyLow, config.units), code: dailyCode,
+      wind: weatherWind(common.daily.wind_speed_10m_max?.[dailyIndex]), precipitation: weatherPrecipLabel(common.daily.precipitation_sum?.[dailyIndex], dailyCode, dailyLow, dailyHigh) }
     const nums = (key) => indexes.map(({ index }) => finite(hourly[key]?.[index])).filter((value) => value != null)
     const temperatures = nums('temperature_2m'), winds = nums('wind_speed_10m'), precipitation = nums('precipitation')
     const codes = nums('weather_code'), counts = new Map(); for (const code of codes) counts.set(code, (counts.get(code) ?? 0) + 1)
@@ -87,10 +93,10 @@ function reconstructedWeatherDays(common, config) {
     const ranked = [...counts].sort(([a, ac], [b, bc]) => bc - ac || severity(b) - severity(a)), total = precipitation.reduce((sum, value) => sum + Math.max(0, value), 0)
     const precip = ranked.filter(([code]) => [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(code))
     let code = (total > 2 && precip.length ? precip : ranked)[0]?.[0] ?? common.code
-    const low = temperatures.length ? Math.min(...temperatures) : common.daily.temperature_2m_min?.[dates.indexOf(date)], high = temperatures.length ? Math.max(...temperatures) : common.daily.temperature_2m_max?.[dates.indexOf(date)]
+    const low = temperatures.length ? Math.min(...temperatures) : dailyLow, high = temperatures.length ? Math.max(...temperatures) : dailyHigh
     if ([71,73,75,77,85,86].includes(code) && (low >= 1 || high >= 3)) code = 63
     return { time: date, high: displayTemperature(high, config.units), low: displayTemperature(low, config.units), code,
-      wind: rounded(winds.length ? Math.max(...winds) : common.daily.wind_speed_10m_max?.[dates.indexOf(date)]), precipitation: weatherPrecipLabel(total, code, low, high) }
+      wind: weatherWind(winds.length ? Math.max(...winds) : common.daily.wind_speed_10m_max?.[dailyIndex]), precipitation: weatherPrecipLabel(total, code, low, high) }
   })
 }
 function weatherInsight(common, now) {
@@ -206,17 +212,19 @@ function surfRatingState(row) {
   const dice = fromExperience ? first(rating, surfValidRating(...experiences.flatMap((experience) => [experience.blended_rating_1_6, experience.rating_1_6]))) : null
   return { rating, fromExperience, dice }
 }
-function surfRow(row) {
-  const source = object(row), inputs = object(first(source.inputs, source.picked?.inputs))
+function surfRow(row, main = false) {
+  const source = object(row), inputs = object(source.inputs), picked = object(source.picked), pickedInputs = object(picked.inputs)
   const rating = surfRatingState(source)
   return {
-    label: first(source.label, source.day, source.dow, source.date),
+    label: first(source.label, source.day, source.dow, source.date, picked.label, picked.day, picked.dow, picked.date),
     spot: first(source.spot, source.picked?.spot),
-    wave: first(source.wave_height_range_label, source.waveRange, source.wave_range, source.forecast?.wave_height_range_label, rounded(first(inputs.swell_height_m, source.wave_height_m), 1)),
-    period: rounded(first(inputs.swell_period_s, source.swell_period_s, source.period_s, source.period)),
-    swellDirection: direction(first(inputs.swell_direction_deg, source.swell_direction_deg)),
-    wind: rounded(first(inputs.wind_speed_ms, source.wind_speed_ms, source.wind_ms, source.wind)),
-    windDirection: direction(first(inputs.wind_direction_deg, source.wind_direction_deg)),
+    wave: first(source.wave_height_range_label, source.waveRange, source.wave_range, picked.wave_height_range_label, picked.waveRange, picked.wave_range, source.forecast?.wave_height_range_label, rounded(first(inputs.swell_height_m, pickedInputs.swell_height_m, source.wave_height_m), 1)),
+    period: rounded(main ? first(inputs.swell_period_s, pickedInputs.swell_period_s, source.swell_period_s, source.period_s, source.period, picked.swell_period_s, picked.period_s, picked.period)
+      : first(source.swell_period_s, source.period_s, source.period, picked.swell_period_s, picked.period_s, picked.period)),
+    ...(main ? { swellDirection: direction(first(inputs.swell_direction_deg, pickedInputs.swell_direction_deg, source.swell_direction_deg, picked.swell_direction_deg)) } : {}),
+    wind: rounded(main ? first(inputs.wind_speed_ms, pickedInputs.wind_speed_ms, source.wind_speed_ms, source.wind_ms, source.wind, picked.wind_speed_ms, picked.wind_ms, picked.wind)
+      : first(source.wind_speed_ms, source.wind_ms, source.wind, picked.wind_speed_ms, picked.wind_ms, picked.wind)),
+    ...(main ? { windDirection: direction(first(inputs.wind_direction_deg, pickedInputs.wind_direction_deg, source.wind_direction_deg, picked.wind_direction_deg)) } : {}),
     rating: first(surfValidRating(source.finalRating), rating.rating), ratingFromExperience: rating.fromExperience, experienceDiceValue: rating.dice,
     line1: first(source.line1, source.summary),
   }
@@ -232,7 +240,7 @@ function surfTrend(source, now) {
 }
 function surfProjection(value, cell, now) {
   const wrapper = object(value), source = object(wrapper.visible ?? wrapper), { w, h } = dimensions(cell)
-  const needs = surfNeeds({ w, h }); const result = surfRow(source)
+  const needs = surfNeeds({ w, h }); const result = surfRow(source, true)
   const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
   const trendVisible = size === 'MEDIUM' || (size === 'ADAPTIVE' && w >= 300 && h >= 175)
   if (trendVisible) result.trend = surfTrend(source, now)
