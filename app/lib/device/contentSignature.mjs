@@ -71,12 +71,14 @@ function weatherCommon(value, config) {
   return { source, current, daily, temperature: displayTemperature(first(current.temperature_2m, source.temperature_2m, source.temperature), config.units), code: first(current.weather_code, source.weather_code, source.wmo) }
 }
 function weatherDay(common, i, config) {
-  return { time: common.daily.time?.[i], high: displayTemperature(common.daily.temperature_2m_max?.[i], config.units), low: displayTemperature(common.daily.temperature_2m_min?.[i], config.units),
-    code: first(common.daily.weather_code?.[i], i === 0 ? common.code : undefined), wind: rounded(common.daily.wind_speed_10m_max?.[i]), precipitation: rounded(common.daily.precipitation_sum?.[i]) }
+  const low = common.daily.temperature_2m_min?.[i], high = common.daily.temperature_2m_max?.[i]
+  let code = first(common.daily.weather_code?.[i], i === 0 ? common.code : undefined)
+  if ([71,73,75,77,85,86].includes(code) && (low >= 1 || high >= 3)) code = 63
+  return { time: common.daily.time?.[i], high: displayTemperature(high, config.units), low: displayTemperature(low, config.units), code,
+    wind: weatherWind(common.daily.wind_speed_10m_max?.[i]), precipitation: weatherPrecipLabel(common.daily.precipitation_sum?.[i], code, low, high) }
 }
 function reconstructedWeatherDays(common, config) {
   const hourly = object(common.source.hourly), times = hourly.time ?? []
-  if (!times.length) return Array.from({ length: 5 }, (_, i) => weatherDay(common, i, config))
   const dates = [...(common.daily.time ?? []), ...times.map((time) => String(time).slice(0, 10))].filter((date, i, all) => date && all.indexOf(date) === i).slice(0, 5)
   return dates.map((date) => {
     const dailyIndex = (common.daily.time ?? []).findIndex((value) => String(value).slice(0, 10) === date)
@@ -137,10 +139,12 @@ function weatherRest(common, config) {
   const derivedLow = temps.length ? Math.min(...temps) : undefined, derivedHigh = temps.length ? Math.max(...temps) : undefined
   if ([71, 73, 75, 77, 85, 86].includes(derivedCode) && (derivedLow >= 1 || derivedHigh >= 3)) derivedCode = 63
   const rawHigh = first(rest.temperature_2m_max, source.restHiC, derivedHigh, common.daily.temperature_2m_max?.[0]), rawLow = first(rest.temperature_2m_min, source.restLoC, derivedLow, common.daily.temperature_2m_min?.[0])
+  let code = first(rest.weather_code, source.restWmo, indexes.length ? derivedCode : undefined, common.daily.weather_code?.[0], common.code)
+  if ([71, 73, 75, 77, 85, 86].includes(code) && (rawLow >= 1 || rawHigh >= 3)) code = 63
   return { rawHigh, rawLow, high: displayTemperature(rawHigh, config.units), low: displayTemperature(rawLow, config.units),
-    wind: rounded(first(rest.wind_speed_10m_max, source.restWindMaxMs, winds.length ? Math.max(...winds) : undefined, common.daily.wind_speed_10m_max?.[0])),
+    wind: first(rest.wind_speed_10m_max, source.restWindMaxMs, winds.length ? Math.max(...winds) : undefined, common.daily.wind_speed_10m_max?.[0]),
     precipitation: first(rest.precipitation_sum, source.restPrecipMm, indexes.length ? precipTotal : undefined, common.daily.precipitation_sum?.[0]),
-    code: first(rest.weather_code, source.restWmo, indexes.length ? derivedCode : undefined, common.daily.weather_code?.[0], common.code) }
+    code }
 }
 function weatherPrecipLabel(mmValue, code, low, high) {
   const mm = finite(mmValue), snow = [71, 73, 75, 77, 85, 86].includes(Number(code)) || (finite(low) != null && finite(high) != null && Number(high) <= 0)
@@ -212,13 +216,25 @@ function surfRatingState(row) {
   const dice = fromExperience ? first(rating, surfValidRating(...experiences.flatMap((experience) => [experience.blended_rating_1_6, experience.rating_1_6]))) : null
   return { rating, fromExperience, dice }
 }
+const surfAscii = (value) => Array.from(new TextEncoder().encode(String(value ?? '')), (byte) => byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : '-').join('')
+const normalizeSurfWaveLabel = (value) => {
+  let label = surfAscii(value).replace(/\s*-\s*/g, ' - ').replace(/\s+$/g, '')
+  if (label.endsWith('m') && label.length >= 2 && label.at(-2) !== ' ') label = `${label.slice(0, -1)} m`
+  return label
+}
+function surfMainWaveLabel(source) {
+  const picked = object(source.picked)
+  const wave = first(source.forecast?.wave_height_range_label, picked.wave_height_range_label, picked.forecast?.wave_height_range_label)
+  const line = first(source.line1, source.summary, picked.line1, picked.summary)
+  return normalizeSurfWaveLabel(first(wave, line, '--'))
+}
 function surfRow(row, main = false) {
   const source = object(row), inputs = object(source.inputs), picked = object(source.picked), pickedInputs = object(picked.inputs)
   const rating = surfRatingState(source)
   return {
     label: first(source.label, source.day, source.dow, source.date, picked.label, picked.day, picked.dow, picked.date),
     spot: first(source.spot, source.picked?.spot),
-    wave: first(source.wave_height_range_label, source.waveRange, source.wave_range, picked.wave_height_range_label, picked.waveRange, picked.wave_range, source.forecast?.wave_height_range_label, rounded(first(inputs.swell_height_m, pickedInputs.swell_height_m, source.wave_height_m), 1)),
+    wave: main ? surfMainWaveLabel(source) : first(source.wave_height_range_label, source.waveRange, source.wave_range, picked.wave_height_range_label, picked.waveRange, picked.wave_range),
     period: rounded(main ? first(inputs.swell_period_s, pickedInputs.swell_period_s, source.swell_period_s, source.period_s, source.period, picked.swell_period_s, picked.period_s, picked.period)
       : first(source.swell_period_s, source.period_s, source.period, picked.swell_period_s, picked.period_s, picked.period)),
     ...(main ? { swellDirection: direction(first(inputs.swell_direction_deg, pickedInputs.swell_direction_deg, source.swell_direction_deg, picked.swell_direction_deg)) } : {}),
@@ -226,7 +242,6 @@ function surfRow(row, main = false) {
       : first(source.wind_speed_ms, source.wind_ms, source.wind, picked.wind_speed_ms, picked.wind_ms, picked.wind)),
     ...(main ? { windDirection: direction(first(inputs.wind_direction_deg, pickedInputs.wind_direction_deg, source.wind_direction_deg, picked.wind_direction_deg)) } : {}),
     rating: first(surfValidRating(source.finalRating), rating.rating), ratingFromExperience: rating.fromExperience, experienceDiceValue: rating.dice,
-    line1: first(source.line1, source.summary),
   }
 }
 function surfTrend(source, now) {
@@ -240,7 +255,7 @@ function surfTrend(source, now) {
 }
 function surfProjection(value, cell, now) {
   const wrapper = object(value), source = object(wrapper.visible ?? wrapper), { w, h } = dimensions(cell)
-  const needs = surfNeeds({ w, h }); const result = surfRow(source, true)
+  const needs = surfNeeds(cell); const result = surfRow(source, true)
   const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
   const trendVisible = size === 'MEDIUM' || (size === 'ADAPTIVE' && w >= 300 && h >= 175)
   if (trendVisible) result.trend = surfTrend(source, now)
@@ -723,6 +738,8 @@ function url(origin, path, params) {
   return result
 }
 function surfNeeds(cell) {
+  const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
+  if (size !== 'ADAPTIVE') return { dayparts: size === 'MEDIUM' || size === 'LARGE', daily: size === 'XL' }
   const width = Number(cell.w ?? 0), height = Number(cell.h ?? 0)
   const daily = width >= 500 && height >= 390 && width * height >= 210000
   return { daily, dayparts: daily || (width >= 330 && height >= 210) || (width >= 250 && height >= 300) }

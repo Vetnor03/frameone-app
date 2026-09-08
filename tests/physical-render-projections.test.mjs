@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { physicalModuleDeadlines, physicalRenderDigest, physicalRenderManifest, physicalRenderProjection } from '../app/lib/device/contentSignature.mjs'
+import { buildContentRequestPlan, physicalModuleDeadlines, physicalRenderDigest, physicalRenderManifest, physicalRenderProjection } from '../app/lib/device/contentSignature.mjs'
 
 const hash = (kind, value, cell = { w: 200, h: 120, colSpan: 1, rowSpan: 1 }, config = {}, now) =>
   physicalRenderDigest(kind, value, cell, { language: 'en', timeZone: 'Europe/Oslo', module: config }, now)
@@ -99,13 +99,26 @@ test('Compact-v2 Weather preserves daily fallback state for days without hourly 
   assert.notEqual(hash('weather:1', base, large, { label: 'Oslo' }), hash('weather:1', base, large, { label: 'Bergen' }))
 })
 
+test('Daily-only Weather retains renderer wind, precipitation and WMO thresholds', () => {
+  const daily = (wind, precipitation = .1, code = 61) => ({ current: { temperature_2m: 4, weather_code: 1 }, daily: {
+    time: ['2026-09-08', '2026-09-09'], temperature_2m_min: [3, 3], temperature_2m_max: [5, 5], weather_code: [code, code], wind_speed_10m_max: [wind, wind], precipitation_sum: [precipitation, precipitation],
+  }, hourly: { time: [], temperature_2m: [], weather_code: [], wind_speed_10m: [], precipitation: [] } })
+  for (const cell of [{ w: 800, h: 120, size: 'SMALL' }, { w: 400, h: 240, size: 'MEDIUM' }, { w: 800, h: 240, size: 'LARGE' }, { w: 800, h: 480, size: 'XL' }]) {
+    assert.equal(hash('weather:1', daily(.1), cell), hash('weather:1', daily(.2), cell))
+    assert.notEqual(hash('weather:1', daily(.1), cell), hash('weather:1', daily(.3), cell))
+    assert.equal(hash('weather:1', daily(.3), cell), hash('weather:1', daily(.4), cell))
+    assert.equal(hash('weather:1', daily(1, .1), cell), hash('weather:1', daily(1, .2), cell))
+    assert.notEqual(hash('weather:1', daily(1, .1), cell), hash('weather:1', daily(1, .3), cell))
+    assert.equal(hash('weather:1', daily(1, 0, 71), cell), hash('weather:1', daily(1, 0, 63), cell))
+  }
+})
+
 test('Surf excludes operational state and normalizes visible precision while retaining ratings and winners', () => {
   const base = { spotId: 'a', spot: 'A', rating: 3, inputs: { swell_height_m: 1.201, swell_period_s: 8.1, wind_speed_ms: 4.1, wind_direction_deg: 91 } }
   assert.equal(hash('surf:1', { ...base, cacheAge: 1, debug: { request: 'a' }, fetched_at: 'one' }),
     hash('surf:1', { ...base, cacheAge: 900, debug: { request: 'b' }, fetched_at: 'two' }))
   assert.equal(hash('surf:1', base), hash('surf:1', { ...base, inputs: { ...base.inputs, swell_height_m: 1.204 } }))
   for (const changed of [
-    { ...base, inputs: { ...base.inputs, swell_height_m: 1.3 } },
     { ...base, inputs: { ...base.inputs, swell_period_s: 9 } },
     { ...base, inputs: { ...base.inputs, wind_speed_ms: 5 } },
     { ...base, rating: 4 },
@@ -347,6 +360,29 @@ test('Surf resolves main, daypart and daily picked fields independently', () => 
     assert.notEqual(hash('surf:1', daily, xl), hash('surf:1', changed, xl))
   }
   assert.equal(hash('surf:1', main, medium), hash('surf:1', { ...main, picked: { ...main.picked, requestId: 'hidden' } }, medium))
+})
+
+test('Surf main wave text mirrors firmware fallback and normalization', () => {
+  const cell = { w: 800, h: 120, size: 'SMALL' }
+  assert.notEqual(hash('surf:1', { picked: { forecast: { wave_height_range_label: '1-2m' } } }, cell), hash('surf:1', { picked: { forecast: { wave_height_range_label: '2-3m' } } }, cell))
+  assert.notEqual(hash('surf:1', { picked: { line1: 'Clean waves' } }, cell), hash('surf:1', { picked: { line1: 'Messy waves' } }, cell))
+  assert.notEqual(hash('surf:1', { picked: { summary: 'Clean waves' } }, cell), hash('surf:1', { picked: { summary: 'Messy waves' } }, cell))
+  assert.equal(hash('surf:1', { forecast: { wave_height_range_label: '1-2m' }, picked: { summary: 'Hidden one' } }, cell), hash('surf:1', { forecast: { wave_height_range_label: '1-2m' }, picked: { summary: 'Hidden two' } }, cell))
+  assert.equal(hash('surf:1', { forecast: { wave_height_range_label: '1-2m' } }, cell), hash('surf:1', { forecast: { wave_height_range_label: '1 - 2 m' } }, cell))
+})
+
+test('Surf needs follow legacy renderer families and adaptive policy', () => {
+  const dayparts = [{ rating: 1 }, { rating: 2 }, { rating: 3 }, { rating: 4 }], daily = [{ label: 'A', rating: 1 }, { label: 'B', rating: 2 }]
+  const xl = { module: 'surf:1', w: 800, h: 480, size: 'XL' }, large = { module: 'surf:1', w: 800, h: 240, size: 'LARGE' }
+  assert.equal(hash('surf:1', { dayparts, daily }, xl), hash('surf:1', { dayparts: [{ rating: 6 }], daily }, xl))
+  assert.notEqual(hash('surf:1', { dayparts, daily }, xl), hash('surf:1', { dayparts, daily: [{ label: 'Changed', rating: 1 }, daily[1]] }, xl))
+  assert.notEqual(hash('surf:1', { dayparts, daily }, large), hash('surf:1', { dayparts: [{ rating: 6 }, ...dayparts.slice(1)], daily }, large))
+  assert.equal(hash('surf:1', { dayparts, daily }, large), hash('surf:1', { dayparts, daily: [{ label: 'Changed' }] }, large))
+  const settings = { cells: [xl], modules: { surf: [{ id: 1, spotId: 'spot' }] } }
+  const request = buildContentRequestPlan({ settings, deviceId: 'device', origin: 'https://example.test' }).requests[0].url
+  assert.equal(request.searchParams.get('daily'), '1'); assert.equal(request.searchParams.has('dayparts'), false)
+  const adaptive = { w: 800, h: 480, size: 'ADAPTIVE' }
+  assert.notEqual(hash('surf:1', { dayparts, daily }, adaptive), hash('surf:1', { dayparts: [{ rating: 6 }], daily }, adaptive))
 })
 
 test('Oslo midnight deadlines remain correct across both 2026 DST transitions', () => {
