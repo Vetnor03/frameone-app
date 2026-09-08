@@ -218,15 +218,23 @@ function surfRatingState(row) {
 }
 const surfAscii = (value) => Array.from(new TextEncoder().encode(String(value ?? '')), (byte) => byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : '-').join('')
 const normalizeSurfWaveLabel = (value) => {
-  let label = surfAscii(value).replace(/\s*-\s*/g, ' - ').replace(/\s+$/g, '')
+  const input = surfAscii(value); let label = ''
+  for (let i = 0; i < input.length; i++) {
+    if (input[i] !== '-') { label += input[i]; continue }
+    if (label && label.at(-1) !== ' ') label += ' '
+    label += '- '
+    while (input[i + 1] === ' ') i++
+  }
+  while (label.endsWith(' ')) label = label.slice(0, -1)
   if (label.endsWith('m') && label.length >= 2 && label.at(-2) !== ' ') label = `${label.slice(0, -1)} m`
   return label
 }
+const firstNonEmptyString = (...values) => values.find((value) => typeof value === 'string' && value.length > 0)
 function surfMainWaveLabel(source) {
   const picked = object(source.picked)
-  const wave = first(source.forecast?.wave_height_range_label, picked.wave_height_range_label, picked.forecast?.wave_height_range_label)
-  const line = first(source.line1, source.summary, picked.line1, picked.summary)
-  return normalizeSurfWaveLabel(first(wave, line, '--'))
+  const wave = firstNonEmptyString(source.forecast?.wave_height_range_label, picked.wave_height_range_label, picked.forecast?.wave_height_range_label)
+  const line = firstNonEmptyString(source.line1, source.summary, picked.line1, picked.summary)
+  return wave == null && line == null ? '--' : normalizeSurfWaveLabel(wave ?? line)
 }
 function surfRow(row, main = false) {
   const source = object(row), inputs = object(source.inputs), picked = object(source.picked), pickedInputs = object(picked.inputs)

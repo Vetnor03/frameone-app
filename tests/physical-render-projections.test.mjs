@@ -364,11 +364,19 @@ test('Surf resolves main, daypart and daily picked fields independently', () => 
 
 test('Surf main wave text mirrors firmware fallback and normalization', () => {
   const cell = { w: 800, h: 120, size: 'SMALL' }
+  const wave = (value) => physicalRenderProjection('surf:1', value, cell).visible.wave
   assert.notEqual(hash('surf:1', { picked: { forecast: { wave_height_range_label: '1-2m' } } }, cell), hash('surf:1', { picked: { forecast: { wave_height_range_label: '2-3m' } } }, cell))
   assert.notEqual(hash('surf:1', { picked: { line1: 'Clean waves' } }, cell), hash('surf:1', { picked: { line1: 'Messy waves' } }, cell))
   assert.notEqual(hash('surf:1', { picked: { summary: 'Clean waves' } }, cell), hash('surf:1', { picked: { summary: 'Messy waves' } }, cell))
   assert.equal(hash('surf:1', { forecast: { wave_height_range_label: '1-2m' }, picked: { summary: 'Hidden one' } }, cell), hash('surf:1', { forecast: { wave_height_range_label: '1-2m' }, picked: { summary: 'Hidden two' } }, cell))
   assert.equal(hash('surf:1', { forecast: { wave_height_range_label: '1-2m' } }, cell), hash('surf:1', { forecast: { wave_height_range_label: '1 - 2 m' } }, cell))
+  assert.equal(wave({ forecast: { wave_height_range_label: '' }, line1: '1-2m' }), '1 - 2 m')
+  assert.notEqual(hash('surf:1', { forecast: { wave_height_range_label: '' }, line1: '1-2m' }, cell), hash('surf:1', { forecast: { wave_height_range_label: '' }, line1: '2-3m' }, cell))
+  assert.equal(wave({ forecast: { wave_height_range_label: '' }, picked: { wave_height_range_label: '2-3m' } }), '2 - 3 m')
+  assert.equal(wave({ forecast: { wave_height_range_label: '' }, line1: '', summary: '', picked: { line1: '', summary: '' } }), '--')
+  assert.notEqual(hash('surf:1', { forecast: { wave_height_range_label: '1 - 2m' } }, cell), hash('surf:1', { forecast: { wave_height_range_label: '1  - 2m' } }, cell))
+  assert.equal(wave({ forecast: { wave_height_range_label: '1-   2m   ' } }), '1 - 2 m')
+  assert.equal(wave({ forecast: { wave_height_range_label: '1é-2m' } }), '1 - - - 2 m')
 })
 
 test('Surf needs follow legacy renderer families and adaptive policy', () => {
