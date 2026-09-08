@@ -399,9 +399,10 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   }
 
   const relevant = orderedItems.filter((item) => selectedGroupKeys.includes(item.occurrence_date || item.display_date))
-  const personal = relevant.filter((item) => item.source !== 'local-events')
-  const localEvents = relevant.filter((item) => item.source === 'local-events')
-  return [...personal, ...localEvents].slice(0, cap).sort(compareReminderItems)
+  // Apply the capacity limit to the chronological list itself. Reserving the
+  // available slots for one source first can discard an earlier event and make
+  // a later reminder appear to be the next item on the frame.
+  return relevant.slice(0, cap)
 }
 
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
