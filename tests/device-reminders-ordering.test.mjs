@@ -234,7 +234,7 @@ test('untimed items follow all timed items on their date without affecting timed
   ]).map(x => x.reminder_id), ['early', 'late', 'all-day'])
 })
 
-test('physical feed and Mirror View share API ordering before every layout variant', () => {
+test('physical reminder renderers preserve the same canonical API ordering as Mirror View', () => {
   const api = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
   const mirror = readFileSync(new URL('../app/api/device/mirror-snapshot/route.ts', import.meta.url), 'utf8')
   const firmware = readFileSync(new URL('../frame/src/modules/ModuleReminders.cpp', import.meta.url), 'utf8')
@@ -246,7 +246,44 @@ test('physical feed and Mirror View share API ordering before every layout varia
   for (const renderer of ['renderSmall', 'renderMedium', 'renderLarge', 'renderXL', 'renderAdaptiveReminders']) {
     assert.match(firmware, new RegExp(`static void ${renderer}`))
   }
+
+  // The bucket builder retains feed order, and every renderer/selection helper
+  // either consumes that array directly or delegates to a helper that does.
+  assert.match(firmware, /bk\.itemIdx\[bk\.count\] = i;\s*bk\.count\+\+;/)
+  assert.match(firmware, /collectPrimaryShownOccurrences[\s\S]*?int itemIdx = bucket\.itemIdx\[i\];/)
+  assert.match(firmware, /buildSmartReminderLayout[\s\S]*?int itemIdx = bucket\.itemIdx\[i\];/)
+  assert.match(firmware, /buildEmergencyReminderLayout[\s\S]*?int itemIdx = bucket\.itemIdx\[0\];/)
+  assert.match(firmware, /renderSmall[\s\S]*?int itemIdx = bucket\.itemIdx\[i\];/)
+  assert.match(firmware, /renderMedium[\s\S]*?drawBucketLinesCentered\(c, bucket, visibleCount,/)
+  assert.match(firmware, /renderLarge[\s\S]*?renderMedium\(leftCell, buckets, bucketCount, primaryIdx\)/)
+  assert.match(firmware, /renderXL[\s\S]*?renderMedium\(topLeft, buckets, bucketCount, primaryIdx\)/)
+  assert.match(firmware, /renderXL[\s\S]*?drawNextRemindersList\(leftX, botY, leftW, bottomH, buckets, bucketCount, primaryIdx\)/)
+  assert.match(firmware, /renderAdaptiveFallbackBucket[\s\S]*?bucket\.itemIdx\[i\]/)
+  assert.match(firmware, /renderAdaptiveReminders[\s\S]*?today->itemIdx\[i\]/)
+  assert.match(firmware, /renderAdaptiveReminders[\s\S]*?tomorrow->itemIdx\[i\]/)
+
+  assert.doesNotMatch(firmware, /getRotationStep4h/)
+  assert.doesNotMatch(firmware, /wrapIndex/)
+  assert.doesNotMatch(firmware, /\brotation\b/)
   assert.doesNotMatch(firmware, /std::sort|qsort/)
+})
+
+test('physical capacity keeps the earliest canonical reminders instead of a rotating subset', () => {
+  const canonicalApiItems = [
+    { title: 'Event B', display_time: '19:00' },
+    { title: 'Event A', display_time: '20:00' },
+    { title: 'Event C', display_time: '20:00' },
+  ]
+
+  // Firmware buckets append API indexes in order and capacity is applied from
+  // index zero. Mirror View likewise uses slice, so both surfaces select B, A.
+  const bucketItemIdx = canonicalApiItems.map((_, index) => index)
+  const physical = bucketItemIdx.slice(0, 2).map(index => canonicalApiItems[index])
+  const mirror = canonicalApiItems.slice(0, 2)
+
+  assert.deepEqual(physical.map(item => item.display_time), ['19:00', '20:00'])
+  assert.equal(physical[0].title, 'Event B')
+  assert.deepEqual(physical, mirror)
 })
 
 test('mixed reminder and local-event list stays chronological after source selection', () => {

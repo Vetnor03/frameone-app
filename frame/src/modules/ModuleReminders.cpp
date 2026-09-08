@@ -282,19 +282,6 @@ static void buildRelativeDateText(int daysUntil, bool isOverdue, char* out, size
   snprintf(out, outSize, "In %d days", daysUntil);
 }
 
-static int getRotationStep4h() {
-  time_t now = time(nullptr);
-  if (now <= 0) return 0;
-  return (int)(now / (4 * 3600));
-}
-
-static int wrapIndex(int idx, int count) {
-  if (count <= 0) return 0;
-  while (idx < 0) idx += count;
-  while (idx >= count) idx -= count;
-  return idx;
-}
-
 static void drawEmptyState(const Cell& c, const char* line1, const char* line2) {
   const GFXfont* f1 = FONT_B12;
   const GFXfont* f2 = FONT_B9;
@@ -944,12 +931,9 @@ static int collectPrimaryShownOccurrences(const ReminderBucket* buckets,
   if (!bucket.used || bucket.count <= 0) return 0;
 
   int visibleCount = computePrimaryVisibleCount(bucket);
-  int rotation = getRotationStep4h();
-
   int outCount = 0;
   for (int i = 0; i < visibleCount && outCount < maxCount; i++) {
-    int pick = wrapIndex(rotation + i, bucket.count);
-    int itemIdx = bucket.itemIdx[pick];
+    int itemIdx = bucket.itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
     int y = 0, m = 0, d = 0;
@@ -1156,7 +1140,6 @@ static bool ensureSmartReminderLayoutScratch() {
 
 static bool buildSmartReminderLayout(const ReminderBucket& bucket,
                                      int count,
-                                     int rotation,
                                      int maxTextW,
                                      int maxH,
                                      const char* label,
@@ -1178,8 +1161,7 @@ static bool buildSmartReminderLayout(const ReminderBucket& bucket,
   int maxLineW = 0;
 
   for (int i = 0; i < count; i++) {
-    int pick = wrapIndex(rotation + i, bucket.count);
-    int itemIdx = bucket.itemIdx[pick];
+    int itemIdx = bucket.itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
 
     SmartReminderLine& item = out.items[i];
@@ -1221,19 +1203,17 @@ static bool findSmartReminderLayout(const ReminderBucket& bucket,
                                     int maxH,
                                     const char* label,
                                     SmartReminderLayout& out) {
-  const int rotation = getRotationStep4h();
-
   for (int count = desiredCount; count >= 1; count--) {
-    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+    if (buildSmartReminderLayout(bucket, count, maxTextW, maxH, label,
                                  REMINDER_CONTENT_FONT, true, false, out)) return true;
 
-    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+    if (buildSmartReminderLayout(bucket, count, maxTextW, maxH, label,
                                  REMINDER_CONTENT_FONT, false, false, out)) return true;
 
-    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+    if (buildSmartReminderLayout(bucket, count, maxTextW, maxH, label,
                                  REMINDER_CONTENT_FONT, false, true, out)) return true;
 
-    if (buildSmartReminderLayout(bucket, count, rotation, maxTextW, maxH, label,
+    if (buildSmartReminderLayout(bucket, count, maxTextW, maxH, label,
                                  FONT_B9, false, true, out)) return true;
   }
 
@@ -1241,7 +1221,6 @@ static bool findSmartReminderLayout(const ReminderBucket& bucket,
 }
 
 static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
-                                         int rotation,
                                          int maxTextW,
                                          int maxH,
                                          SmartReminderLayout& out) {
@@ -1254,7 +1233,7 @@ static bool buildEmergencyReminderLayout(const ReminderBucket& bucket,
   out.itemGap = 0;
 
   if (bucket.count <= 0 || maxTextW <= 0) return false;
-  int itemIdx = bucket.itemIdx[wrapIndex(rotation, bucket.count)];
+  int itemIdx = bucket.itemIdx[0];
   if (itemIdx < 0 || itemIdx >= g_cache->count) return false;
 
   SmartReminderLine& item = out.items[0];
@@ -1302,7 +1281,7 @@ static void drawBucketLinesCentered(const Cell& c,
   const int desiredCount = min(visibleCount, 4);
   const int initialMaxTextW = (desiredCount == 1) ? singleItemMaxTextW : multiItemMaxTextW;
   if (!findSmartReminderLayout(bucket, desiredCount, initialMaxTextW, totalH, label, layout)) {
-    if (!buildEmergencyReminderLayout(bucket, getRotationStep4h(), singleItemMaxTextW, totalH, layout)) {
+    if (!buildEmergencyReminderLayout(bucket, singleItemMaxTextW, totalH, layout)) {
       return;
     }
   }
@@ -1312,7 +1291,7 @@ static void drawBucketLinesCentered(const Cell& c,
     resetSmartReminderLayout(singleLayout);
     if (findSmartReminderLayout(bucket, 1, singleItemMaxTextW, totalH, label, singleLayout)) {
       layout = singleLayout;
-    } else if (buildEmergencyReminderLayout(bucket, getRotationStep4h(), singleItemMaxTextW, totalH, singleLayout)) {
+    } else if (buildEmergencyReminderLayout(bucket, singleItemMaxTextW, totalH, singleLayout)) {
       layout = singleLayout;
     }
   }
@@ -1822,12 +1801,10 @@ static void renderSmall(const Cell& c, const ReminderBucket* buckets, int bucket
     d.drawFastVLine(div2X, dividerY, dividerH, ink);
   }
 
-  const int rotation = getRotationStep4h();
   const int textPadX = 8;
 
   for (int i = 0; i < visibleCount; i++) {
-    int pick = wrapIndex(rotation + i, bucket.count);
-    int itemIdx = bucket.itemIdx[pick];
+    int itemIdx = bucket.itemIdx[i];
     if (itemIdx < 0 || itemIdx >= g_cache->count) continue;
 
     int secX0 = c.x + (c.w * i) / visibleCount;
