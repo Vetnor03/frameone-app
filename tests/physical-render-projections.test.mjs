@@ -36,6 +36,26 @@ test('Weather legacy families project their renderer-specific state', () => {
   assert.notEqual(hash('weather:1', source, xl), hash('weather:1', { ...source, current: { ...source.current, relative_humidity_2m: 70 } }, xl))
 })
 
+test('Weather LARGE and XL rebuild visible days and derived insight from hourly cache data', () => {
+  const large = { w: 800, h: 240, size: 'LARGE' }, xl = { w: 800, h: 480, size: 'XL' }, medium = { w: 400, h: 240, size: 'MEDIUM' }
+  const base = { current: { time: '2026-01-01T09:00', temperature_2m: 5, weather_code: 1 }, daily: { time: ['2026-01-01', '2026-01-02'], temperature_2m_min: [1, 1], temperature_2m_max: [9, 9], weather_code: [1, 1] }, hourly: { time: ['2026-01-01T09:00', '2026-01-02T10:00'], temperature_2m: [5, 5], wind_speed_10m: [2, 2], precipitation: [0, 0], weather_code: [1, 1] } }
+  const changed = structuredClone(base); changed.hourly.temperature_2m[1] = 12
+  assert.notEqual(hash('weather:1', base, large), hash('weather:1', changed, large)); assert.notEqual(hash('weather:1', base, xl), hash('weather:1', changed, xl))
+  const morning = structuredClone(base); morning.hourly.time = ['2026-01-01T11:00']; morning.hourly.temperature_2m = [5]; morning.hourly.wind_speed_10m = [2]; morning.hourly.precipitation = [2]; morning.hourly.weather_code = [65]
+  const afternoon = structuredClone(morning); afternoon.hourly.time[0] = '2026-01-01T15:00'
+  assert.notEqual(hash('weather:1', morning, medium, {}, Date.parse('2026-01-01T08:00Z')), hash('weather:1', afternoon, medium, {}, Date.parse('2026-01-01T08:00Z')))
+  assert.equal(hash('weather:1', { ...morning, insight: 'Server text' }, medium, {}, 0), hash('weather:1', { ...afternoon, insight: 'Server text' }, medium, {}, 0))
+})
+
+test('Weather derived-insight deadline is conditional on visible text changing', () => {
+  const cell = { module: 'weather:1', w: 400, h: 240, size: 'MEDIUM' }, settings = { cells: [cell], modules: { weather: [{ id: 1 }] } }
+  const now = Date.parse('2026-01-01T08:30:00Z')
+  const source = { current: { time: '2026-01-01T09:00', temperature_2m: 5 }, hourly: { time: ['2026-01-01T10:00', '2026-01-01T15:00'], temperature_2m: [5, 5], wind_speed_10m: [1, 1], precipitation: [2, 2], weather_code: [65, 65] } }
+  assert.ok(physicalModuleDeadlines({ settings, sources: { 'weather:1': source }, now })['weather:1'].some((d) => d.reason === 'weather_insight' && d.type === 'hard'))
+  const supplied = { ...source, insight: 'Stable server text' }
+  assert.ok(!physicalModuleDeadlines({ settings, sources: { 'weather:1': supplied }, now })['weather:1'].some((d) => d.reason === 'weather_insight'))
+})
+
 test('Surf excludes operational state and normalizes visible precision while retaining ratings and winners', () => {
   const base = { spotId: 'a', spot: 'A', rating: 3, inputs: { swell_height_m: 1.201, swell_period_s: 8.1, wind_speed_ms: 4.1, wind_direction_deg: 91 } }
   assert.equal(hash('surf:1', { ...base, cacheAge: 1, debug: { request: 'a' }, fetched_at: 'one' }),
@@ -145,6 +165,15 @@ test('Countdown LARGE and XL include hero, four upcoming rows, and calendar stat
   const target = structuredClone(items); target[0].target_date = '2026-10-01'; assert.notEqual(hash('countdown', { items }, xl), hash('countdown', { items: target }, xl))
 })
 
+test('Countdown normalizes, derives and sorts before selecting visible rows', () => {
+  const cell = { w: 400, h: 240, size: 'MEDIUM' }, now = Date.parse('2026-01-01T12:00Z')
+  const sorted = { items: [{ title: 'Soon', target_date: '2026-01-02' }, { title: 'Later', target_date: '2026-01-05' }] }
+  const reversed = { items: [...sorted.items].reverse() }
+  assert.equal(hash('countdown', sorted, cell, {}, now), hash('countdown', reversed, cell, {}, now))
+  assert.notEqual(hash('countdown', sorted, cell, {}, now), hash('countdown', { items: [{ ...sorted.items[1], pinned: true }, sorted.items[0]] }, cell, {}, now))
+  assert.equal(physicalRenderProjection('countdown', sorted, cell, {}, now).visible.items[0].days_left, 1)
+})
+
 test('Groceries projects today heading, visible menus and bottom-panel-reduced item capacity', () => {
   const today = '1970-01-01', dinners = [{ date: today, title: 'Tacos' }, ...Array.from({ length: 9 }, (_, i) => ({ date: `1970-01-${String(i + 2).padStart(2, '0')}`, title: i === 0 ? 'Soup' : i === 1 ? 'Fish' : `Dinner ${i}` }))]
   const items = Array.from({ length: 12 }, (_, i) => ({ name: `I${i}` }))
@@ -194,6 +223,17 @@ test('Reminder SMALL evening note is projected and conditionally scheduled', () 
   assert.ok(!physicalModuleDeadlines({ settings, sources: { reminders: noTomorrow }, now: before }).reminders.some((d) => d.reason === 'reminder_evening'))
 })
 
+test('Reminder LARGE calendar dots and XL next list are part of physical state', () => {
+  const now = Date.parse('2026-01-05T12:00Z'), large = { w: 800, h: 240, size: 'LARGE' }, xl = { w: 800, h: 480, size: 'XL' }
+  const base = { items: [{ title: 'Today', occurrence_date: '2026-01-05', days_until: 0 }, { title: 'Calendar', occurrence_date: '2026-01-20', days_until: 15 }] }
+  const moved = structuredClone(base); moved.items[1].occurrence_date = '2026-02-20'
+  assert.notEqual(hash('reminders', base, large, {}, now), hash('reminders', moved, large, {}, now))
+  const renamed = structuredClone(base); renamed.items[1].title = 'Changed next'
+  assert.notEqual(hash('reminders', base, xl, {}, now), hash('reminders', renamed, xl, {}, now))
+  const hidden = structuredClone(base); hidden.items.push({ title: 'Far', occurrence_date: '2027-01-01', days_until: 361 })
+  assert.equal(hash('reminders', base, large, {}, now), hash('reminders', hidden, large, {}, now))
+})
+
 test('Surf XL projects environmental panel and trend changes only at effective boundaries', () => {
   const xl = { w: 800, h: 480, size: 'XL' }, medium = { module: 'surf:1', w: 400, h: 240, size: 'MEDIUM' }
   const base = { spot: 'A', rating: 3, dayparts: [{ rating: 1 }, { rating: 3 }, { rating: 2 }, { rating: 2 }], air: { temp_min_c: 8, temp_max_c: 12 }, water: { temp_min_c: 9, temp_max_c: 10 }, sun: { sunrise: '07:00', sunset: '19:00' }, weather: { code: 2 } }
@@ -204,6 +244,30 @@ test('Surf XL projects environmental panel and trend changes only at effective b
   assert.equal(hash('surf:1', flat, medium, {}, before), hash('surf:1', flat, medium, {}, after))
   const settings = { cells: [medium], modules: { surf: [{ id: 1 }] } }
   assert.ok(physicalModuleDeadlines({ settings, sources: { 'surf:1': base }, now: before })['surf:1'].some((d) => d.reason === 'surf_daypart'))
+})
+
+test('Surf XL and trend honor field-by-field and picked fallbacks', () => {
+  const xl = { w: 800, h: 480, size: 'XL' }, medium = { w: 400, h: 240, size: 'MEDIUM' }
+  const base = { air: { temp_c: 10 }, weather: { temp_min_c: 7 }, picked: { sunrise: '07:00', sunset: '19:00', weather_code: 2 }, dayparts: [{ stars: 1 }, { picked: { rating: 4 } }, { stars: 2 }, { stars: 2 }] }
+  assert.notEqual(hash('surf:1', base, xl), hash('surf:1', { ...base, weather: { temp_min_c: 8 } }, xl))
+  assert.notEqual(hash('surf:1', base, xl), hash('surf:1', { ...base, picked: { ...base.picked, sunrise: '07:30' } }, xl))
+  assert.notEqual(hash('surf:1', base, xl), hash('surf:1', { ...base, picked: { ...base.picked, weather_code: 61 } }, xl))
+  assert.notEqual(hash('surf:1', base, medium, {}, Date.parse('2026-01-01T08:59Z')), hash('surf:1', base, medium, {}, Date.parse('2026-01-01T09:00Z')))
+})
+
+test('Oslo midnight deadlines remain correct across both 2026 DST transitions', () => {
+  const modules = ['date', 'countdown', 'reminders', 'groceries']
+  const settings = { cells: modules.map((module) => ({ module, w: 200, h: 120, size: 'ADAPTIVE' })), modules: {} }
+  for (const [now, expected, today, tomorrow] of [
+    ['2026-03-28T12:00:00Z', '2026-03-28T23:00:00Z', '2026-03-28', '2026-03-29'],
+    ['2026-10-24T12:00:00Z', '2026-10-24T22:00:00Z', '2026-10-24', '2026-10-25'],
+  ]) {
+    const deadlines = physicalModuleDeadlines({ settings, sources: { countdown: { items: [] }, reminders: { items: [] }, groceries: { items: [], dinner_plan: [{ date: today, title: 'Today' }, { date: tomorrow, title: 'Tomorrow' }] } }, now: Date.parse(now) })
+    assert.equal(deadlines.date.find((d) => d.reason === 'midnight').at, Date.parse(expected))
+    assert.equal(deadlines.countdown.find((d) => d.reason === 'midnight').at, Date.parse(expected))
+    assert.equal(deadlines.reminders.find((d) => d.reason === 'midnight').at, Date.parse(expected))
+    assert.equal(deadlines.groceries.find((d) => d.reason === 'grocery_midnight').at, Date.parse(expected))
+  }
 })
 
 test('Surf identifiers and unused line2 do not contaminate visible hashes', () => {
