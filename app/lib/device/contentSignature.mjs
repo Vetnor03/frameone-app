@@ -229,12 +229,15 @@ const normalizeSurfWaveLabel = (value) => {
   if (label.endsWith('m') && label.length >= 2 && label.at(-2) !== ' ') label = `${label.slice(0, -1)} m`
   return label
 }
-const firstNonEmptyString = (...values) => values.find((value) => typeof value === 'string' && value.length > 0)
+const firstArduinoJsonStringVariant = (...values) => values.find((value) => typeof value === 'string')
 function surfMainWaveLabel(source) {
   const picked = object(source.picked)
-  const wave = firstNonEmptyString(source.forecast?.wave_height_range_label, picked.wave_height_range_label, picked.forecast?.wave_height_range_label)
-  const line = firstNonEmptyString(source.line1, source.summary, picked.line1, picked.summary)
-  return wave == null && line == null ? '--' : normalizeSurfWaveLabel(wave ?? line)
+  const selectedWave = firstArduinoJsonStringVariant(source.forecast?.wave_height_range_label, picked.wave_height_range_label, picked.forecast?.wave_height_range_label)
+  const waveRangeNext = selectedWave?.length ? selectedWave : ''
+  const selectedLine = firstArduinoJsonStringVariant(source.line1, source.summary, picked.line1, picked.summary)
+  const line1 = selectedLine?.length ? selectedLine : ''
+  const visible = waveRangeNext || line1
+  return visible ? normalizeSurfWaveLabel(visible) : '--'
 }
 function surfRow(row, main = false) {
   const source = object(row), inputs = object(source.inputs), picked = object(source.picked), pickedInputs = object(picked.inputs)
