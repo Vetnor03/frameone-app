@@ -375,19 +375,24 @@ export function buildLocalEventFrameItem(
   })
 }
 
-function sortTimeValue(value: string | null) {
-  return value || '99:99'
+function normalizedSortTime(value: string | null | undefined) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/)
+  if (!match) return null
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+  return `${pad2(hour)}:${pad2(minute)}`
 }
 
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
-  return `${item.occurrence_date} ${sortTimeValue(item.display_time || item.due_time)}`
+  return `${item.occurrence_date} ${normalizedSortTime(item.display_time || item.due_time) || '99:99'}`
 }
 
 export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItems: number) {
   if (!Number.isFinite(maxItems) || maxItems <= 0) return []
 
   const cap = Math.floor(maxItems)
-  const orderedItems = [...items].sort(compareReminderItems)
+  const orderedItems = sortReminderItems(items)
   // Dates are selected before source priority. Otherwise an optional event today
   // can disappear merely because personal content exists on two later dates.
   const selectedGroupKeys: string[] = []
@@ -406,19 +411,35 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
 }
 
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
-  if (a.days_until !== b.days_until) return a.days_until - b.days_until
+  // occurrence_date and the displayed local time are the canonical occurrence
+  // coordinates for every source. In particular, do not compare days_until
+  // first: a stale/incorrect relative-day value must not override the date.
   if (a.occurrence_date < b.occurrence_date) return -1
   if (a.occurrence_date > b.occurrence_date) return 1
 
-  const at = sortTimeValue(a.display_time || a.due_time)
-  const bt = sortTimeValue(b.display_time || b.due_time)
-  if (at < bt) return -1
-  if (at > bt) return 1
+  const at = normalizedSortTime(a.display_time || a.due_time)
+  const bt = normalizedSortTime(b.display_time || b.due_time)
+  // Preserve the existing timed-before-all-day behavior while ensuring an
+  // untimed item can never split or reorder the chronological timed sequence.
+  if (at && bt && at !== bt) return at.localeCompare(bt)
+  if (at !== bt) return at ? -1 : 1
 
   const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : source === 'local-events' ? 3 : 4
   const as = sourceRank(a.source)
   const bs = sourceRank(b.source)
   if (as !== bs) return as - bs
 
-  return a.title.localeCompare(b.title)
+  const titleOrder = a.title.localeCompare(b.title, 'en', { sensitivity: 'base' })
+  if (titleOrder) return titleOrder
+
+  // IDs make exact timestamp/title ties deterministic across database fetches,
+  // integrations, JavaScript engines, physical layouts, and Mirror View.
+  const aid = `${a.reminder_id}\u0000${a.external_id || ''}`
+  const bid = `${b.reminder_id}\u0000${b.external_id || ''}`
+  return aid.localeCompare(bid)
+}
+
+/** Canonical list builder used before any display capacity/layout selection. */
+export function sortReminderItems(items: readonly DeviceReminderItem[]) {
+  return [...items].sort(compareReminderItems)
 }
