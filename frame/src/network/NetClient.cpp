@@ -20,6 +20,12 @@ namespace {
   static HTTPClient g_http;
   static bool g_httpConfigured = false;
 
+  // TEMP_REFRESH_AUDIT shares the same header helper as production requests so
+  // neither transport ever logs bearer credentials in timing diagnostics.
+  void addBearerAuthHeader(const String& bearerToken) {
+    g_http.addHeader("Authorization", "Bearer " + bearerToken);
+  }
+
   String sanitizedPath(const String& url) {
     int pathStart = url.indexOf("://");
     pathStart = pathStart >= 0 ? url.indexOf('/', pathStart + 3) : 0;
@@ -139,7 +145,7 @@ namespace {
       g_http.addHeader("Accept-Encoding", "identity");
 
       if (bearerToken && bearerToken->length() > 0) {
-        g_http.addHeader("Authorization", "Bearer " + *bearerToken);
+        addBearerAuthHeader(*bearerToken);
       }
 
       if (strcmp(method, "POST") == 0) {
@@ -249,7 +255,7 @@ bool NetClient::TEMP_REFRESH_AUDIT_httpPostConnected(const String& url, const St
   if (WiFi.status() != WL_CONNECTED) { httpCodeOut = 0; bodyOut = ""; return false; }
   configureHttpSession();
   if (!g_http.begin(g_tlsClient, url)) return false;
-  g_http.addHeader("Accept-Encoding", "identity"); g_http.addHeader("Authorization", "Bearer " + bearerToken); g_http.addHeader("Content-Type", "application/json");
+  g_http.addHeader("Accept-Encoding", "identity"); addBearerAuthHeader(bearerToken); g_http.addHeader("Content-Type", "application/json");
   httpCodeOut = g_http.POST(jsonBody); bodyOut = httpCodeOut > 0 ? g_http.getString() : String(""); g_http.end();
   return httpCodeOut > 0;
 }

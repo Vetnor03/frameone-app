@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authenticatePhysicalDevice, deviceIdFrom } from '@/app/lib/device/updateStateAuth'
-import { TEMP_REFRESH_AUDIT_ENABLED, TEMP_REFRESH_AUDIT_sanitize } from '@/app/lib/device/tempRefreshAudit'
+import { TEMP_REFRESH_AUDIT_ENABLED, TEMP_REFRESH_AUDIT_prepareBatch } from '@/app/lib/device/tempRefreshAudit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,13 +14,14 @@ export async function POST(req: Request) {
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
   const auth = await authenticatePhysicalDevice(req, deviceId)
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
-  if (!Array.isArray(body?.records) || body.records.length < 1 || body.records.length > 8)
-    return NextResponse.json({ error: 'invalid_batch' }, { status: 400 })
-  const records = body.records.map(TEMP_REFRESH_AUDIT_sanitize)
-  if (records.some((record) => !record)) return NextResponse.json({ error: 'invalid_record' }, { status: 400 })
-  const { error } = await auth.supabase.from('temp_refresh_audit_logs').insert(
-    records.map((record) => ({ ...record, device_id: deviceId })),
+  const batch = TEMP_REFRESH_AUDIT_prepareBatch(body?.records, true)
+  if (batch.error) return NextResponse.json({ error: batch.error }, { status: 400 })
+  // TEMP_REFRESH_AUDIT: upsert + unique(device_id,event_seq) makes a resend after
+  // a lost response idempotent while preserving the originally received row.
+  const { error } = await auth.supabase.from('temp_refresh_audit_logs').upsert(
+    batch.records.map((record) => ({ ...record, device_id: deviceId })),
+    { onConflict: 'device_id,event_seq', ignoreDuplicates: true },
   )
   if (error) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
-  return NextResponse.json({ accepted: records.length })
+  return NextResponse.json({ accepted: batch.records.length })
 }

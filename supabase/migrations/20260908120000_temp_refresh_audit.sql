@@ -3,7 +3,9 @@
 create table public.temp_refresh_audit_logs (
   id bigint generated always as identity primary key,
   created_at timestamptz not null default clock_timestamp(),
+  occurred_at timestamptz,
   device_id text not null,
+  event_seq bigint not null check (event_seq > 0),
   firmware_version text, trigger text not null, source text, module text,
   raw_changes jsonb not null default '{}'::jsonb,
   display_changes jsonb not null default '{}'::jsonb,
@@ -11,7 +13,7 @@ create table public.temp_refresh_audit_logs (
   physical_refresh boolean not null default false,
   refresh_type text not null check (refresh_type in ('none', 'partial', 'full')),
   dirty_regions jsonb not null default '[]'::jsonb,
-  decision text not null check (decision in ('filtered_change', 'useful_redraw', 'wasted_redraw', 'no_redraw', 'avoidable_wake')),
+  decision text not null check (decision in ('filtered_change', 'useful_redraw', 'wasted_redraw', 'no_redraw', 'avoidable_wake', 'intentional_refresh')),
   decision_reason text, backend_revision_before bigint, backend_revision_after bigint,
   battery_percent real, battery_voltage real, charger_connected boolean,
   wake_reason text, metadata jsonb not null default '{}'::jsonb
@@ -19,6 +21,7 @@ create table public.temp_refresh_audit_logs (
 comment on table public.temp_refresh_audit_logs is
   'TEMP_REFRESH_AUDIT temporary diagnostic data; remove after refresh tuning';
 create index temp_refresh_audit_device_created on public.temp_refresh_audit_logs(device_id, created_at desc);
+create unique index temp_refresh_audit_device_event on public.temp_refresh_audit_logs(device_id, event_seq);
 create index temp_refresh_audit_wasted on public.temp_refresh_audit_logs(created_at desc)
   where physical_refresh = true and render_changed = false;
 create index temp_refresh_audit_grouping on public.temp_refresh_audit_logs(trigger, module, source);

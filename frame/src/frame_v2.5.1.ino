@@ -719,8 +719,9 @@ static bool fetchAndRenderExplicit(
   const bool rendered = renderSmartDashboard(batt, pwr, desired, displayPlan);
   TempRefreshAudit::TEMP_REFRESH_AUDIT_record("manual_refresh", "all", desired,
     TEMP_REFRESH_AUDIT_previous, displayPlan, rendered, TEMP_REFRESH_AUDIT_backendBefore,
-    revision, batt, pwr.usbPresent, "interactive");
-  TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken());
+    revision, batt, pwr.usbPresent, "interactive", FW_VER);
+  // TEMP_REFRESH_AUDIT manual work is an explicit opportunity to drain a batch.
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken(), true);
   if (!rendered) return false;
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
   g_revisionCheckedAt = time(nullptr);
@@ -796,7 +797,12 @@ static void runFirmwareMaintenanceIfNeeded(
   }
 
   DisplayCore::forceNextFullRefresh(true);
-  if (!renderLoadedDashboard(batt, pwr)) return;
+  const bool maintenanceRendered = renderLoadedDashboard(batt, pwr);
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_recordIntentionalRefresh(
+    "firmware_maintenance", "Intentional full refresh after renderer version change",
+    maintenanceRendered, batt, pwr.usbPresent, "startup", FW_VER);
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken(), pwr.usbPresent);
+  if (!maintenanceRendered) return;
   UpdateChecker::saveFirmwareVersion(FW_VER);
   postDeviceStatus(batt, pwr, true);
   refreshContentSignatureBestEffort();
@@ -830,7 +836,15 @@ static void refreshPowerOverlayIfNeeded(const BatteryState& batt, const PowerSen
         FrameConfigApi::FETCH_OK) return;
   }
   DisplayCore::forceNextFullRefresh(true);
-  if (renderLoadedDashboard(batt, pwr)) {
+  const bool powerRendered = renderLoadedDashboard(batt, pwr);
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_recordIntentionalRefresh(
+    pwr.usbPresent ? "charger_connected" : "charger_disconnected",
+    "Intentional full refresh for local battery/USB overlay and display reset gesture",
+    powerRendered, batt, pwr.usbPresent, "charger_edge", FW_VER);
+  // TEMP_REFRESH_AUDIT USB may drain immediately; battery retains records until
+  // the normal threshold without delaying this operational path.
+  TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken(), pwr.usbPresent);
+  if (powerRendered) {
     postDeviceStatus(batt, pwr, true);
     Serial.println("Power state change: full-screen dashboard reset refresh complete");
   }
@@ -1314,8 +1328,8 @@ run_normal_sync:
     const String unchangedHash = SmartRefresh::TEMP_REFRESH_AUDIT_renderHash(noDesiredState);
     TempRefreshAudit::TEMP_REFRESH_AUDIT_record("scheduled_revision_poll", "", noDesiredState,
       unchangedHash, noDisplayPlan, true, knownRevision, revisionState.revision,
-      batt, pwr.usbPresent, wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" : "startup");
-    TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken());
+      batt, pwr.usbPresent, wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" : "startup", FW_VER);
+    TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken(), pwr.usbPresent);
     postDeviceStatus(batt, pwr, false);
   } else {
     g_revisionRetryNotBefore = 0;
@@ -1335,10 +1349,10 @@ run_normal_sync:
           revisionState.changed ? "backend_revision_changed" : "scheduled_revision_poll",
           affected, desired, TEMP_REFRESH_AUDIT_previous, displayPlan, rendered,
           knownRevision, revisionState.revision, batt, pwr.usbPresent,
-          wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" : (wakeCause == ESP_SLEEP_WAKEUP_EXT1 ? "charger_edge" : "startup"));
+          wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" : (wakeCause == ESP_SLEEP_WAKEUP_EXT1 ? "charger_edge" : "startup"), FW_VER);
         // TEMP_REFRESH_AUDIT upload is only attempted here, immediately after
         // the already-required revision/render-state session is known active.
-        TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken());
+        TempRefreshAudit::TEMP_REFRESH_AUDIT_flushPiggyback(DeviceIdentity::getToken(), pwr.usbPresent);
         if (rendered) {
           const bool screenWide = affected == "all";
           SmartRefresh::mergeScheduler(g_smartState, desired, screenWide);
