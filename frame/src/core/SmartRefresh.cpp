@@ -109,6 +109,31 @@ void SmartRefresh::commitSuccessfulDisplay(const SmartRenderState& desired, cons
   else { prefs.putUInt("partial_n", prefs.getUInt("partial_n", 0) + 1); uint32_t area = 0; for (uint8_t i = 0; i < plan.regionCount; ++i) area += plan.regions[i].w * plan.regions[i].h; prefs.putUInt("dirty_area", prefs.getUInt("dirty_area", 0) + area); }
   prefs.end();
 }
+
+#if TEMP_REFRESH_AUDIT_ENABLED
+String SmartRefresh::TEMP_REFRESH_AUDIT_renderHash(const SmartRenderState& state) {
+  uint32_t hash = 2166136261u;
+  const String values[] = { state.layoutHash };
+  for (const String& value : values) for (size_t j = 0; j < value.length(); ++j) { hash ^= (uint8_t)value[j]; hash *= 16777619u; }
+  for (uint8_t i = 0; i < state.moduleCount; ++i) {
+    const String value = state.modules[i].key + "=" + state.modules[i].hash + ";";
+    for (size_t j = 0; j < value.length(); ++j) { hash ^= (uint8_t)value[j]; hash *= 16777619u; }
+  }
+  char text[9]; snprintf(text, sizeof(text), "%08lx", (unsigned long)hash); return String(text);
+}
+String SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(const SmartRenderState& scope) {
+  SmartRenderState shown; shown.layoutHash = scope.layoutHash; shown.moduleCount = scope.moduleCount;
+  prefs.begin("smart_refresh", true);
+  const String physicalLayout = prefs.getString("layout", "");
+  if (physicalLayout.length()) shown.layoutHash = physicalLayout;
+  for (uint8_t i = 0; i < scope.moduleCount; ++i) {
+    shown.modules[i].key = scope.modules[i].key;
+    shown.modules[i].hash = prefs.getString(keyFor(scope.modules[i].key).c_str(), "");
+  }
+  prefs.end();
+  return TEMP_REFRESH_AUDIT_renderHash(shown);
+}
+#endif // TEMP_REFRESH_AUDIT_ENABLED
 uint64_t SmartRefresh::displayedRevision() { prefs.begin("smart_refresh", true); uint64_t value = prefs.getULong64("revision", 0); prefs.end(); return value; }
 void SmartRefresh::saveDisplayedRevision(uint64_t value) { prefs.begin("smart_refresh", false); prefs.putULong64("revision", value); prefs.end(); }
 

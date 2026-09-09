@@ -18,6 +18,8 @@ jobs:
       - run: pip install platformio pytest
       - run: pytest -q frame/tests
       - run: pio run -v -d frame -e alfred_v1_2
+      # TEMP_REFRESH_AUDIT: compile the gated diagnostic code until removal.
+      - run: pio run -d frame -e alfred_v1_2_refresh_audit
       - run: pio run -d frame -e frame_esp32
       - run: pio run -d frame -e alfred_v1_2 -t size
 
