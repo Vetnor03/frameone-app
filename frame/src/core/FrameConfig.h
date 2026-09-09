@@ -43,7 +43,7 @@ struct WeatherModuleConfig {
   char label[40] = {0};           // "Oslo, NO"
   char units[8] = "metric";       // "metric" or "imperial"
 
-  uint32_t refreshMs = 600000UL;  // default 10 min
+  uint32_t refreshMs = 1800000UL; // default 30 min
   bool showHiLo = true;
   bool showCondition = true;
 };

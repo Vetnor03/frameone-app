@@ -53,7 +53,7 @@ static void resetWeather(FrameConfig& out) {
     out.weather[i].lon = 0;
     out.weather[i].label[0] = '\0';
     strlcpy(out.weather[i].units, "metric", sizeof(out.weather[i].units));
-    out.weather[i].refreshMs = 600000UL;
+    out.weather[i].refreshMs = 1800000UL;
     out.weather[i].showHiLo = true;
     out.weather[i].showCondition = true;
   }
@@ -350,7 +350,7 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
         if (units && units[0]) strlcpy(dst.units, units, sizeof(dst.units));
         else strlcpy(dst.units, "metric", sizeof(dst.units));
 
-        dst.refreshMs = (uint32_t)(w["refresh"] | 600000UL);
+        dst.refreshMs = (uint32_t)(w["refresh"] | 1800000UL);
         dst.showHiLo = (bool)(w["hiLo"] | true);
         dst.showCondition = (bool)(w["cond"] | true);
 

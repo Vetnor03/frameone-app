@@ -242,7 +242,7 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
             lat: 59.9139,
             lon: 10.7522,
             units: 'metric',
-            refresh: 600000,
+            refresh: 1800000,
             hiLo: true,
             cond: true,
           },
@@ -289,7 +289,7 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
           lat: 59.9139,
           lon: 10.7522,
           units: 'metric',
-          refresh: 600000,
+          refresh: 1800000,
           hiLo: true,
           cond: true,
         })
