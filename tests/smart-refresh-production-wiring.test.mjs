@@ -11,6 +11,10 @@ const display = read('frame/src/display/DisplayCore.cpp')
 const revisionRoute = read('app/api/device/content-revision/route.ts')
 const renderRoute = read('app/api/device/render-state/route.ts')
 const revisionMigration = read('supabase/migrations/20260906190000_frame_content_revisions.sql')
+const frameConfigBuilder = read('app/api/device/frame-config/builder.ts')
+const frameConfigHeader = read('frame/src/core/FrameConfig.h')
+const frameConfigSource = read('frame/src/core/FrameConfig.cpp')
+const weatherModule = read('frame/src/modules/ModuleWeather.cpp')
 
 test('cheap production revision endpoint uses only indexed ledgers with no content fan-out', () => {
   assert.match(revisionRoute, /from\('frame_content_revisions'\)/)
@@ -34,7 +38,8 @@ test('real reminder/date/countdown and source deadlines are in production manife
     { module: 'reminders', col: 0, row: 0, w: 400, h: 240 },
     { module: 'date', col: 2, row: 0, w: 400, h: 240 },
     { module: 'weather:1', col: 0, row: 2, w: 400, h: 240 },
-  ], modules: { weather: [{ id: 1, refresh: 600_000 }] } }
+    { module: 'surf:1', col: 2, row: 2, w: 400, h: 240 },
+  ], modules: { weather: [{ id: 1, refresh: 1_800_000 }], surf: [{ id: 1, refresh: 1_800_000 }] } }
   const now = Date.parse('2026-09-06T07:05:00Z')
   const sources = { reminders: { items: [
     { title: 'Morning', occurrence_date: '2026-09-06', display_date: 'Today', days_until: 0, is_overdue: false, display_time: '10:00' },
@@ -46,8 +51,24 @@ test('real reminder/date/countdown and source deadlines are in production manife
   assert.ok(deadlines.reminders.every((d) => d.type === 'hard'))
   assert.equal(deadlines.date[0].type, 'hard')
   assert.equal(deadlines['weather:1'][0].type, 'soft')
+  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
+  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
   const laterAdded = { reminders: { items: [...sources.reminders.items, { occurrence_date: '2026-09-06', due_time: '17:00' }] } }
   assert.equal(physicalModuleDeadlines({ settings, sources: laterAdded, now }).reminders[0].at, deadlines.reminders[0].at)
+})
+
+test('Weather and Surf normal source freshness are 30 minutes with no Weather 10-minute fallback', () => {
+  const settings = { cells: [
+    { module: 'weather:1', col: 0, row: 0, w: 400, h: 240 },
+    { module: 'surf:1', col: 2, row: 0, w: 400, h: 240 },
+  ], modules: {} }
+  const now = Date.parse('2026-09-06T07:05:00Z')
+  const deadlines = physicalModuleDeadlines({ settings, sources: {}, now })
+  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
+  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
+  for (const source of [frameConfigBuilder, frameConfigHeader, frameConfigSource, weatherModule]) {
+    assert.doesNotMatch(source, /600000UL|refresh:\s*600000/)
+  }
 })
 
 test('physical display_time deadlines are Europe/Oslo DST-safe', () => {
@@ -156,10 +177,10 @@ test('partial renderer restores full-render chrome through the same module dispa
 })
 
 test('manual screen-wide evaluation rebases nearby soft work from completion time', () => {
-  const settings = { cells: [{ module: 'weather:1', col: 0, row: 0, w: 400, h: 240 }], modules: { weather: [{ id: 1, refresh: 600_000 }] } }
+  const settings = { cells: [{ module: 'weather:1', col: 0, row: 0, w: 400, h: 240 }], modules: { weather: [{ id: 1, refresh: 1_800_000 }] } }
   const manualAt = Date.parse('2026-09-06T08:00:00Z')
   const refreshed = physicalModuleDeadlines({ settings, sources: {}, now: manualAt })
-  assert.equal(refreshed['weather:1'][0].at, manualAt + 600_000)
+  assert.equal(refreshed['weather:1'][0].at, manualAt + 1_800_000)
   assert.match(firmware, /fetchRenderState\(DeviceIdentity::getToken\(\), "all", desired\)/)
   assert.match(firmware, /mergeScheduler\(g_smartState, desired, true\)/)
 })

@@ -32,7 +32,7 @@ struct WeatherInstanceConfig {
   float lon = 10.7522f;
   char label[40] = "Oslo";
   char units[8] = "metric";
-  uint32_t refreshMs = 600000UL; // 10 min
+  uint32_t refreshMs = 1800000UL; // 30 min
   bool showHiLo = true;
   bool showCondition = true;
 };
@@ -1378,7 +1378,7 @@ static WeatherInstanceConfig makeInactiveWeatherInstance(uint8_t id) {
   cfg.lon = 0.0f;
   cfg.label[0] = 0;
   strlcpy(cfg.units, "metric", sizeof(cfg.units));
-  cfg.refreshMs = 600000UL;
+  cfg.refreshMs = 1800000UL;
   cfg.showHiLo = true;
   cfg.showCondition = true;
   return cfg;

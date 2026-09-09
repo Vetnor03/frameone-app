@@ -679,11 +679,11 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
       const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
       const at = candidates.find((candidate) => candidate > now && current !== JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, candidate)))
-      deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + 10 * 60_000, type: 'soft', reason: 'source_freshness' }]
+      deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + 30 * 60_000, type: 'soft', reason: 'source_freshness' }]
     }
     else {
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
-      const interval = Math.max(5 * 60_000, Number(configured?.refresh) || (ref.base === 'weather' ? 10 * 60_000 : 30 * 60_000))
+      const interval = Math.max(5 * 60_000, Number(configured?.refresh) || 30 * 60_000)
       deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
     }
   }
