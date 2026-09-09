@@ -47,12 +47,15 @@ no-op). `physical_refresh` is true only on success. A required but failed panel
 operation is classified as `display_failed`, never `no_redraw`, and the stored
 physical hash is not advanced.
 
-`avoidable_wake` has a deliberately narrow TEMP_REFRESH_AUDIT definition: a
-timer wake reached a due-module `scheduled_revision_poll`, the backend revision
-and canonical render were unchanged, no display work was requested, and the
-module scope is non-empty. Cheap revision-safety polls, manual actions, charger
-events, and firmware maintenance are therefore not labeled avoidable merely
-because they produce no redraw.
+`avoidable_wake` has a deliberately conservative TEMP_REFRESH_AUDIT definition:
+the producer must provide `metadata.avoidable_wake_confident=true`, and the event
+must also be a timer-driven, non-empty-module `scheduled_revision_poll` where the
+backend revision and canonical render were unchanged and no display was
+attempted. Current firmware does not assert that confidence because its due-work
+state does not retain enough context to distinguish a genuinely unnecessary wake
+from a required hard deadline, midnight rollover, or due source refresh. Those
+legitimate no-redraw evaluations remain `no_redraw`; no wake is called avoidable
+merely because it had no visual consequence.
 
 ## Queries
 

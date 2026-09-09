@@ -9,7 +9,14 @@ export const dynamic = 'force-dynamic'
 // reuses physical device tokens and exposes no anonymous/client table writes.
 export async function POST(req: Request) {
   if (!TEMP_REFRESH_AUDIT_ENABLED) return NextResponse.json({ disabled: true }, { status: 404 })
-  const body = await req.json().catch(() => null) as { device_id?: unknown, records?: unknown } | null
+  // TEMP_REFRESH_AUDIT firmware batches serialize within 16 KiB; leave modest
+  // headroom while rejecting authenticated-but-pathological diagnostic input.
+  const rawBody = await req.text()
+  if (rawBody.length > 32_768) return NextResponse.json({ error: 'batch_too_large' }, { status: 413 })
+  const body = (() => {
+    try { return JSON.parse(rawBody) as { device_id?: unknown, records?: unknown } }
+    catch { return null }
+  })()
   const deviceId = deviceIdFrom(body?.device_id)
   if (!deviceId) return NextResponse.json({ error: 'missing_device_id' }, { status: 400 })
   const auth = await authenticatePhysicalDevice(req, deviceId)

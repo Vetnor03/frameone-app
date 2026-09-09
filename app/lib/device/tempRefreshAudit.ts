@@ -18,11 +18,13 @@ export function TEMP_REFRESH_AUDIT_classify(record: TEMP_REFRESH_AUDIT_UnknownRe
   if ((record.metadata as TEMP_REFRESH_AUDIT_UnknownRecord | undefined)?.intentional_refresh === true) return 'intentional_refresh'
   if (record.physical_refresh === true) return record.render_changed === false ? 'wasted_redraw' : 'useful_redraw'
   if (record.render_changed === false && record.backend_revision_before !== record.backend_revision_after) return 'filtered_change'
-  const deadlineOnlyTimerWake = record.trigger === 'scheduled_revision_poll' &&
+  const metadata = record.metadata as TEMP_REFRESH_AUDIT_UnknownRecord | undefined
+  const confidentlyAvoidableTimerWake = metadata?.avoidable_wake_confident === true &&
+    record.trigger === 'scheduled_revision_poll' &&
     record.wake_reason === 'timer' && typeof record.module === 'string' && record.module.length > 0 &&
     record.backend_revision_before === record.backend_revision_after && record.render_changed === false &&
     record.display_attempted === false
-  if (deadlineOnlyTimerWake) return 'avoidable_wake'
+  if (confidentlyAvoidableTimerWake) return 'avoidable_wake'
   return 'no_redraw'
 }
 
@@ -34,6 +36,16 @@ export function TEMP_REFRESH_AUDIT_sanitize(record: unknown): TEMP_REFRESH_AUDIT
     input[key] !== null && typeof input[key] === 'object' ? input[key] as object : fallback
   const refreshType = text('refresh_type', 16)
   if (!['none', 'partial', 'full'].includes(refreshType ?? '')) return null
+  if (typeof input.display_attempted !== 'boolean') return null
+  const displayAttempted = input.display_attempted
+  const displaySucceeded = typeof input.display_succeeded === 'boolean' ? input.display_succeeded : null
+  const attemptedType = String(input.refresh_type_attempted)
+  const physicalRefresh = input.physical_refresh === true
+  if (displayAttempted) {
+    if (displaySucceeded === null || !['partial', 'full'].includes(attemptedType)) return null
+  } else if (displaySucceeded !== null || attemptedType !== 'none') return null
+  if (physicalRefresh !== (displayAttempted && displaySucceeded === true)) return null
+  if ((physicalRefresh && refreshType !== attemptedType) || (!physicalRefresh && refreshType !== 'none')) return null
   const eventSeq = input.event_seq
   if (typeof eventSeq !== 'number' || !Number.isSafeInteger(eventSeq) || eventSeq < 1) return null
   let occurredAt: string | null = null
@@ -53,11 +65,10 @@ export function TEMP_REFRESH_AUDIT_sanitize(record: unknown): TEMP_REFRESH_AUDIT
     raw_changes: jsonObject('raw_changes', {}), display_changes: jsonObject('display_changes', {}),
     previous_render_hash: text('previous_render_hash', 128), new_render_hash: text('new_render_hash', 128),
     render_changed: typeof input.render_changed === 'boolean' ? input.render_changed : null,
-    physical_refresh: typeof input.physical_refresh === 'boolean' ? input.physical_refresh : false,
-    display_attempted: input.display_attempted === true,
-    display_succeeded: typeof input.display_succeeded === 'boolean' ? input.display_succeeded : null,
-    refresh_type_attempted: ['none', 'partial', 'full'].includes(String(input.refresh_type_attempted))
-      ? String(input.refresh_type_attempted) : refreshType,
+    physical_refresh: physicalRefresh,
+    display_attempted: displayAttempted,
+    display_succeeded: displaySucceeded,
+    refresh_type_attempted: attemptedType,
     refresh_type: refreshType,
     dirty_regions: Array.isArray(input.dirty_regions) ? input.dirty_regions.slice(0, 16) : [],
     decision_reason: text('decision_reason'),

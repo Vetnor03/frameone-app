@@ -20,18 +20,25 @@ const base = (overrides = {}) => ({
 
 test('TEMP_REFRESH_AUDIT classifies filtered, useful, wasted, intentional, failed, and avoidable values', () => {
   assert.equal(TEMP_REFRESH_AUDIT_classify(base()), 'filtered_change')
-  assert.equal(TEMP_REFRESH_AUDIT_classify(base({ physical_refresh: true, render_changed: true })), 'useful_redraw')
-  assert.equal(TEMP_REFRESH_AUDIT_classify(base({ physical_refresh: true, render_changed: false })), 'wasted_redraw')
-  assert.equal(TEMP_REFRESH_AUDIT_classify(base({ physical_refresh: true, render_changed: null, metadata: { intentional_refresh: true } })), 'intentional_refresh')
+  const successful = { physical_refresh: true, display_attempted: true, display_succeeded: true, refresh_type: 'partial', refresh_type_attempted: 'partial' }
+  assert.equal(TEMP_REFRESH_AUDIT_classify(base({ ...successful, render_changed: true })), 'useful_redraw')
+  assert.equal(TEMP_REFRESH_AUDIT_classify(base({ ...successful, render_changed: false })), 'wasted_redraw')
+  assert.equal(TEMP_REFRESH_AUDIT_classify(base({ ...successful, render_changed: null, metadata: { intentional_refresh: true } })), 'intentional_refresh')
   assert.equal(TEMP_REFRESH_AUDIT_classify(base({ display_attempted: true, display_succeeded: false, refresh_type_attempted: 'partial' })), 'display_failed')
   assert.equal(TEMP_REFRESH_AUDIT_classify(base({
     backend_revision_after: 10, trigger: 'scheduled_revision_poll', wake_reason: 'timer', module: 'surf',
+    metadata: { avoidable_wake_confident: true },
   })), 'avoidable_wake')
   assert.equal(TEMP_REFRESH_AUDIT_classify(base({
-    backend_revision_after: 10, trigger: 'scheduled_revision_poll', wake_reason: 'timer', module: '',
+    backend_revision_after: 10, trigger: 'scheduled_revision_poll', wake_reason: 'timer', module: 'surf',
   })), 'no_redraw')
   assert.equal(TEMP_REFRESH_AUDIT_classify(base({
     backend_revision_after: 10, trigger: 'manual_refresh', wake_reason: 'interactive', module: 'surf',
+    metadata: { avoidable_wake_confident: true },
+  })), 'no_redraw')
+  assert.equal(TEMP_REFRESH_AUDIT_classify(base({
+    backend_revision_after: 10, trigger: 'scheduled_revision_poll', wake_reason: 'timer', module: 'date',
+    metadata: { deadline_type: 'hard' },
   })), 'no_redraw')
 })
 
@@ -45,6 +52,7 @@ test('TEMP_REFRESH_AUDIT sanitizer preserves facts and converts trustworthy devi
   assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: 12 })).occurred_at, null)
   assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: 4102444801 })).occurred_at, null)
   assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ occurred_at: null })).occurred_at, null)
+  assert.equal(TEMP_REFRESH_AUDIT_sanitize(base({ physical_refresh: true })), null)
 })
 
 test('TEMP_REFRESH_AUDIT distinguishes a no-op from an attempted failed display update', () => {
@@ -71,6 +79,7 @@ test('TEMP_REFRESH_AUDIT duplicate sequence ingestion is idempotently deduplicat
   assert.equal(batch.records[0].trigger, 'resent_copy')
   const route = readFileSync('app/api/device/refresh-audit/route.ts', 'utf8')
   assert.match(route, /\.upsert\([\s\S]*onConflict: 'device_id,event_seq'[\s\S]*ignoreDuplicates: true/)
+  assert.match(route, /rawBody\.length > 32_768/)
 })
 
 test('TEMP_REFRESH_AUDIT disabled and bounded batch validation return actual errors', () => {

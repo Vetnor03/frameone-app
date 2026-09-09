@@ -46,12 +46,8 @@ void TempRefreshAudit::TEMP_REFRESH_AUDIT_record(const char* trigger, const Stri
   const bool physical = plan.type != SmartDisplayPlan::NONE && displaySucceeded;
   const bool displayAttempted = plan.type != SmartDisplayPlan::NONE;
   const bool sourceChanged = backendAfter != backendBefore;
-  const bool avoidableWake = !displayAttempted && !changed && !sourceChanged &&
-    strcmp(trigger, "scheduled_revision_poll") == 0 && sourceModules.length() > 0 &&
-    strcmp(wakeReason, "timer") == 0;
   const char* decision = displayAttempted && !displaySucceeded ? "display_failed"
     : physical ? (changed ? "useful_redraw" : "wasted_redraw")
-    : avoidableWake ? "avoidable_wake"
     : (!changed && sourceChanged ? "filtered_change" : "no_redraw");
   DynamicJsonDocument doc(2048);
   doc["firmware_version"] = firmwareVersion; doc["trigger"] = trigger;
@@ -71,7 +67,6 @@ void TempRefreshAudit::TEMP_REFRESH_AUDIT_record(const char* trigger, const Stri
   doc["decision"] = decision;
   doc["decision_reason"] = displayAttempted && !displaySucceeded ? "Required physical display update was attempted but failed"
     : physical ? (changed ? "Physical refresh changed canonical rendered output" : "Physical refresh occurred despite unchanged canonical render hash")
-    : avoidableWake ? "Timer woke for due module evaluation but source revision and canonical display output were unchanged"
     : (!changed && sourceChanged ? "Source changed but normalized render output was identical" : "Evaluation required no physical display update");
   doc["backend_revision_before"] = backendBefore; doc["backend_revision_after"] = backendAfter;
   doc["battery_percent"] = battery.percent; doc["battery_voltage"] = battery.smoothedVoltage;
@@ -91,8 +86,10 @@ void TempRefreshAudit::TEMP_REFRESH_AUDIT_recordIntentionalRefresh(const char* t
   doc["display_attempted"] = true; doc["display_succeeded"] = displaySucceeded;
   doc["refresh_type_attempted"] = "full";
   doc["refresh_type"] = displaySucceeded ? "full" : "none";
-  doc.createNestedArray("dirty_regions"); doc["decision"] = "intentional_refresh";
-  doc["decision_reason"] = reason; doc["battery_percent"] = battery.percent;
+  doc.createNestedArray("dirty_regions");
+  doc["decision"] = displaySucceeded ? "intentional_refresh" : "display_failed";
+  doc["decision_reason"] = displaySucceeded ? reason : "Intentional full display update was attempted but failed";
+  doc["battery_percent"] = battery.percent;
   doc["battery_voltage"] = battery.smoothedVoltage; doc["charger_connected"] = chargerConnected;
   doc["wake_reason"] = wakeReason; JsonObject metadata = doc.createNestedObject("metadata");
   metadata["intentional_refresh"] = true;

@@ -19,7 +19,15 @@ create table public.temp_refresh_audit_logs (
   decision text not null check (decision in ('filtered_change', 'useful_redraw', 'wasted_redraw', 'no_redraw', 'avoidable_wake', 'intentional_refresh', 'display_failed')),
   decision_reason text, backend_revision_before bigint, backend_revision_after bigint,
   battery_percent real, battery_voltage real, charger_connected boolean,
-  wake_reason text, metadata jsonb not null default '{}'::jsonb
+  wake_reason text, metadata jsonb not null default '{}'::jsonb,
+  constraint temp_refresh_audit_display_facts_consistent check (
+    (not display_attempted and display_succeeded is null and refresh_type_attempted = 'none'
+      and not physical_refresh and refresh_type = 'none')
+    or (display_attempted and display_succeeded = false and refresh_type_attempted in ('partial', 'full')
+      and not physical_refresh and refresh_type = 'none')
+    or (display_attempted and display_succeeded = true and physical_refresh
+      and refresh_type = refresh_type_attempted)
+  )
 );
 comment on table public.temp_refresh_audit_logs is
   'TEMP_REFRESH_AUDIT temporary diagnostic data; remove after refresh tuning';
