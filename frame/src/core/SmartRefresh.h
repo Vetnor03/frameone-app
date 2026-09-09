@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <time.h>
 #include "Types.h"
+#include "Config.h"
 
 // Smart refresh state is created from setup()/loopTask in several paths. Keep the
 // container objects themselves tiny: the ESP32 Arduino loop task has limited
