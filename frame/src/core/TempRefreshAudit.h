@@ -1,5 +1,7 @@
 #pragma once
 #include <Arduino.h>
+#include "Config.h"
+#if TEMP_REFRESH_AUDIT_ENABLED
 #include "SmartRefresh.h"
 #include "BatteryManager.h"
 
@@ -28,3 +30,4 @@ namespace TempRefreshAudit {
   // is active; this function never connects Wi-Fi and is always best effort.
   void TEMP_REFRESH_AUDIT_flushPiggyback(const String& token, bool force = false);
 }
+#endif // TEMP_REFRESH_AUDIT_ENABLED

@@ -110,6 +110,7 @@ void SmartRefresh::commitSuccessfulDisplay(const SmartRenderState& desired, cons
   prefs.end();
 }
 
+#if TEMP_REFRESH_AUDIT_ENABLED
 String SmartRefresh::TEMP_REFRESH_AUDIT_renderHash(const SmartRenderState& state) {
   uint32_t hash = 2166136261u;
   const String values[] = { state.layoutHash };
@@ -120,7 +121,6 @@ String SmartRefresh::TEMP_REFRESH_AUDIT_renderHash(const SmartRenderState& state
   }
   char text[9]; snprintf(text, sizeof(text), "%08lx", (unsigned long)hash); return String(text);
 }
-
 String SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(const SmartRenderState& scope) {
   SmartRenderState shown; shown.layoutHash = scope.layoutHash; shown.moduleCount = scope.moduleCount;
   prefs.begin("smart_refresh", true);
@@ -133,6 +133,7 @@ String SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(const SmartRenderStat
   prefs.end();
   return TEMP_REFRESH_AUDIT_renderHash(shown);
 }
+#endif // TEMP_REFRESH_AUDIT_ENABLED
 uint64_t SmartRefresh::displayedRevision() { prefs.begin("smart_refresh", true); uint64_t value = prefs.getULong64("revision", 0); prefs.end(); return value; }
 void SmartRefresh::saveDisplayedRevision(uint64_t value) { prefs.begin("smart_refresh", false); prefs.putULong64("revision", value); prefs.end(); }
 

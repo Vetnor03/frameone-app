@@ -40,6 +40,20 @@ updates are `intentional_refresh` because local pixels can change independently
 of backend hashes. Pairing, setup, recharge, and shelf-recovery screens are
 explicitly outside the normal operational audit set.
 
+`display_attempted` records whether the refresh plan requested panel work,
+`refresh_type_attempted` records partial/full/none before the operation, and
+`display_succeeded` records the synchronous result (null for an intentional
+no-op). `physical_refresh` is true only on success. A required but failed panel
+operation is classified as `display_failed`, never `no_redraw`, and the stored
+physical hash is not advanced.
+
+`avoidable_wake` has a deliberately narrow TEMP_REFRESH_AUDIT definition: a
+timer wake reached a due-module `scheduled_revision_poll`, the backend revision
+and canonical render were unchanged, no display work was requested, and the
+module scope is non-empty. Cheap revision-safety polls, manual actions, charger
+events, and firmware maintenance are therefore not labeled avoidable merely
+because they produce no redraw.
+
 ## Queries
 
 ```sql

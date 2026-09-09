@@ -8,15 +8,21 @@ export const TEMP_REFRESH_AUDIT_ENABLED = process.env.TEMP_REFRESH_AUDIT_ENABLED
 
 export const TEMP_REFRESH_AUDIT_DECISIONS = new Set([
   'filtered_change', 'useful_redraw', 'wasted_redraw', 'no_redraw', 'avoidable_wake',
-  'intentional_refresh',
+  'intentional_refresh', 'display_failed',
 ])
 const TEMP_REFRESH_AUDIT_MIN_VALID_UNIX_TIME = 1577836800 // 2020-01-01 UTC
 const TEMP_REFRESH_AUDIT_MAX_VALID_UNIX_TIME = 4102444800 // 2100-01-01 UTC
 
 export function TEMP_REFRESH_AUDIT_classify(record: TEMP_REFRESH_AUDIT_UnknownRecord): string {
+  if (record.display_attempted === true && record.display_succeeded === false) return 'display_failed'
   if ((record.metadata as TEMP_REFRESH_AUDIT_UnknownRecord | undefined)?.intentional_refresh === true) return 'intentional_refresh'
   if (record.physical_refresh === true) return record.render_changed === false ? 'wasted_redraw' : 'useful_redraw'
   if (record.render_changed === false && record.backend_revision_before !== record.backend_revision_after) return 'filtered_change'
+  const deadlineOnlyTimerWake = record.trigger === 'scheduled_revision_poll' &&
+    record.wake_reason === 'timer' && typeof record.module === 'string' && record.module.length > 0 &&
+    record.backend_revision_before === record.backend_revision_after && record.render_changed === false &&
+    record.display_attempted === false
+  if (deadlineOnlyTimerWake) return 'avoidable_wake'
   return 'no_redraw'
 }
 
@@ -48,6 +54,10 @@ export function TEMP_REFRESH_AUDIT_sanitize(record: unknown): TEMP_REFRESH_AUDIT
     previous_render_hash: text('previous_render_hash', 128), new_render_hash: text('new_render_hash', 128),
     render_changed: typeof input.render_changed === 'boolean' ? input.render_changed : null,
     physical_refresh: typeof input.physical_refresh === 'boolean' ? input.physical_refresh : false,
+    display_attempted: input.display_attempted === true,
+    display_succeeded: typeof input.display_succeeded === 'boolean' ? input.display_succeeded : null,
+    refresh_type_attempted: ['none', 'partial', 'full'].includes(String(input.refresh_type_attempted))
+      ? String(input.refresh_type_attempted) : refreshType,
     refresh_type: refreshType,
     dirty_regions: Array.isArray(input.dirty_regions) ? input.dirty_regions.slice(0, 16) : [],
     decision_reason: text('decision_reason'),

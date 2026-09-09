@@ -249,6 +249,7 @@ int NetClient::lastContentLength() {
   return g_lastContentLength;
 }
 
+#if TEMP_REFRESH_AUDIT_ENABLED
 bool NetClient::TEMP_REFRESH_AUDIT_httpPostConnected(const String& url, const String& bearerToken, const String& jsonBody, int& httpCodeOut, String& bodyOut) {
   // TEMP_REFRESH_AUDIT uses a single direct HTTP attempt. This method is
   // permitted only as a piggyback on an existing session.
@@ -259,3 +260,4 @@ bool NetClient::TEMP_REFRESH_AUDIT_httpPostConnected(const String& url, const St
   httpCodeOut = g_http.POST(jsonBody); bodyOut = httpCodeOut > 0 ? g_http.getString() : String(""); g_http.end();
   return httpCodeOut > 0;
 }
+#endif // TEMP_REFRESH_AUDIT_ENABLED
