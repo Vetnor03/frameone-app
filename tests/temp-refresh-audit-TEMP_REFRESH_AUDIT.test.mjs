@@ -6,7 +6,7 @@ import {
   TEMP_REFRESH_AUDIT_classify,
   TEMP_REFRESH_AUDIT_prepareBatch,
   TEMP_REFRESH_AUDIT_sanitize,
-} from '../app/lib/device/tempRefreshAudit.mjs'
+} from '../app/lib/device/tempRefreshAudit.ts'
 
 const base = (overrides = {}) => ({
   event_seq: 41, occurred_at: 1788883200, trigger: 'surf_source_changed',
