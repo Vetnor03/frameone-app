@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 # Rebuild the ESP32-S3 SDK used by Arduino-ESP32 2.0.14 with the two
 # ESP-IDF features required for automatic light sleep:
@@ -8,6 +8,8 @@ set -euo pipefail
 #
 # This deliberately keeps the same Arduino core generation as the existing
 # RE:MIND Alfred build rather than migrating firmware APIs/framework versions.
+# Note: Espressif's legacy release/v4.4 builder intentionally probes optional
+# unset shell variables, so this wrapper does not enable bash `nounset`.
 
 ARDUINO_TAG="2.0.14"
 LIB_BUILDER_BRANCH="release/v4.4"
@@ -28,14 +30,11 @@ git clone --depth 1 --branch "$LIB_BUILDER_BRANCH" \
 
 cd "$BUILDER_DIR"
 
-# The legacy official v4.4 builder's helper scripts expect these variables to
-# exist before they source tools/config.sh. Define them explicitly so this
-# wrapper can safely use `set -u`.
+# Define the IDF location/version before the legacy helper scripts source their
+# shared config.
 export IDF_PATH="$BUILDER_DIR/esp-idf"
 export IDF_BRANCH
 export IDF_COMMIT
-export GITHUB_EVENT_ACTION="${GITHUB_EVENT_ACTION:-}"
-export GITHUB_ACTOR="${GITHUB_ACTOR:-remind-local-build}"
 
 # Let the official builder fetch the component set expected by its v4.4 branch.
 ./tools/update-components.sh
