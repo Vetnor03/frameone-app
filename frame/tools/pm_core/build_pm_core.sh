@@ -28,6 +28,15 @@ git clone --depth 1 --branch "$LIB_BUILDER_BRANCH" \
 
 cd "$BUILDER_DIR"
 
+# The legacy official v4.4 builder's helper scripts expect these variables to
+# exist before they source tools/config.sh. Define them explicitly so this
+# wrapper can safely use `set -u`.
+export IDF_PATH="$BUILDER_DIR/esp-idf"
+export IDF_BRANCH
+export IDF_COMMIT
+export GITHUB_EVENT_ACTION="${GITHUB_EVENT_ACTION:-}"
+export GITHUB_ACTOR="${GITHUB_ACTOR:-remind-local-build}"
+
 # Let the official builder fetch the component set expected by its v4.4 branch.
 ./tools/update-components.sh
 
@@ -40,8 +49,6 @@ git -C components/arduino checkout --detach "$ARDUINO_TAG"
 cat "$SCRIPT_DIR/defconfig.remind_pm" >> configs/defconfig.common
 
 # Pin the underlying IDF exactly to the release used by Arduino-ESP32 2.0.14.
-export IDF_BRANCH
-export IDF_COMMIT
 source ./tools/install-esp-idf.sh
 
 # Components/IDF are now pinned and installed; -s prevents the builder from
