@@ -1,0 +1,7 @@
+# RE:MIND Alfred V1.2 automatic connected light-sleep support.
+# Applied while rebuilding Arduino-ESP32 2.0.14's ESP-IDF 4.4.6 libraries.
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+# Arduino-ESP32 2.x requires a 1000 Hz FreeRTOS tick.
+CONFIG_FREERTOS_HZ=1000
