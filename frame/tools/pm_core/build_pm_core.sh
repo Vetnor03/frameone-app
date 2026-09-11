@@ -50,6 +50,20 @@ cat "$SCRIPT_DIR/defconfig.remind_pm" >> configs/defconfig.common
 # Pin the underlying IDF exactly to the release used by Arduino-ESP32 2.0.14.
 source ./tools/install-esp-idf.sh
 
+# ESP-IDF 4.4 installs Jinja2 2.x, which imports MarkupSafe.soft_unicode.
+# MarkupSafe 2.1+ removed that symbol, so a modern CI runner can otherwise
+# break this historical, pinned toolchain before compilation begins. Install
+# the final compatible MarkupSafe release into the *IDF Python environment*
+# selected by export.sh above. Keeping this here makes local and CI builds
+# deterministic instead of relying on whatever Python packages happen to be
+# present on the machine.
+python -m pip install --disable-pip-version-check --no-input "MarkupSafe==2.0.1"
+python - <<'PY'
+import markupsafe
+assert hasattr(markupsafe, "soft_unicode"), "ESP-IDF 4.4 requires MarkupSafe.soft_unicode"
+print("Verified ESP-IDF Python compatibility: MarkupSafe", markupsafe.__version__)
+PY
+
 # Components/IDF are now pinned and installed; -s prevents the builder from
 # updating them again. Build the complete ESP32-S3 Arduino SDK output.
 ./build.sh -s -t esp32s3
