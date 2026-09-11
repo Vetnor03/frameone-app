@@ -1,0 +1,55 @@
+name: Alfred PM-enabled Arduino SDK
+
+on:
+  pull_request:
+    paths:
+      - "frame/tools/pm_core/**"
+      - ".github/workflows/frame-pm-core-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build-pm-sdk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build PM-enabled ESP32-S3 Arduino SDK
+        run: bash frame/tools/pm_core/build_pm_core.sh
+
+      - name: Show build manifest
+        run: cat frame/tools/pm_core/dist/BUILD_INFO.txt
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: "1.5.1"
+
+      - name: Install Arduino-ESP32 2.0.14 and inject PM-enabled S3 SDK
+        run: |
+          arduino-cli core update-index \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@2.0.14 \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          CORE_ROOT="$HOME/.arduino15/packages/esp32/hardware/esp32/2.0.14"
+          rm -rf "$CORE_ROOT/tools/sdk/esp32s3"
+          unzip -q frame/tools/pm_core/dist/remind-arduino-esp32-2.0.14-esp32s3-pm-sdk.zip -d "$CORE_ROOT/tools/sdk"
+          grep -R -q '^#define CONFIG_PM_ENABLE 1$' "$CORE_ROOT/tools/sdk/esp32s3"
+          grep -R -q '^#define CONFIG_FREERTOS_USE_TICKLESS_IDLE 1$' "$CORE_ROOT/tools/sdk/esp32s3"
+
+      - name: Compile exact RE:MIND PM API probe with Arduino core
+        run: |
+          arduino-cli compile --verbose --warnings default \
+            --fqbn "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc" \
+            frame/tools/pm_core/pm_compile_probe
+
+      - name: Upload PM-enabled SDK
+        uses: actions/upload-artifact@v4
+        with:
+          name: remind-arduino-esp32-2.0.14-esp32s3-pm-sdk
+          path: |
+            frame/tools/pm_core/dist/remind-arduino-esp32-2.0.14-esp32s3-pm-sdk.zip
+            frame/tools/pm_core/dist/BUILD_INFO.txt
+            frame/tools/pm_core/install_pm_sdk_windows.ps1
+          if-no-files-found: error
+          retention-days: 14
