@@ -26,6 +26,20 @@ jobs:
       - name: Apply Ski hierarchy patch
         run: node scripts/tmp-ski-hierarchy-patch.cjs
 
+      - name: Normalize patch boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/HomePageClient.tsx')
+          source = path.read_text()
+          duplicate = '\n  )\n  )\n}\n\ntype CountdownItem'
+          fixed = '\n  )\n}\n\ntype CountdownItem'
+          if duplicate not in source:
+              raise SystemExit('Expected duplicate Ski patch boundary not found')
+          path.write_text(source.replace(duplicate, fixed, 1))
+          PY
+
       - name: Verify TypeScript
         run: |
           npm install --no-package-lock --ignore-scripts --no-audit --no-fund
