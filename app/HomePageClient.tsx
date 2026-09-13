@@ -10166,6 +10166,38 @@ function ModuleSettingsTab({
   )
 }
 
+type SkiMetSummary = {
+  location: { label: string; lat: number; lon: number }
+  generated_at: string
+  current: {
+    temp_c: number | null
+    wind_mps: number | null
+    wind_dir_deg: number | null
+    gust_mps: number | null
+    precipitation_1h_mm: number | null
+  }
+}
+
+function skiWindDirectionLabel(degrees: number | null | undefined) {
+  const value = Number(degrees)
+  if (!Number.isFinite(value)) return '–'
+  const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const normalized = ((value % 360) + 360) % 360
+  return labels[Math.round(normalized / 45) % labels.length]
+}
+
+function formatSkiTemperature(value: number | null | undefined) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '–°'
+  return `${Math.round(number)}`.replace('-', '−') + '°'
+}
+
+function formatSkiMetric(value: number | null | undefined, digits = 0) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '–'
+  return number.toFixed(digits).replace(/\.0+$/, '')
+}
+
 function SkiModuleSettingsTab({
   language,
   modulesJson,
@@ -10180,6 +10212,12 @@ function SkiModuleSettingsTab({
   const isNo = language === 'no'
   const cfg = Array.isArray(modulesJson?.ski) ? modulesJson.ski[0] ?? null : null
   const locationLabel = String(cfg?.label ?? cfg?.name ?? '').trim() || (isNo ? 'Velg sted' : 'Select location')
+  const lat = Number(cfg?.lat ?? cfg?.latitude)
+  const lon = Number(cfg?.lon ?? cfg?.longitude)
+  const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon)
+  const [summary, setSummary] = useState<SkiMetSummary | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   function saveLocation(picked: Record<string, unknown>) {
     const next = {
@@ -10189,6 +10227,48 @@ function SkiModuleSettingsTab({
     setModulesJson(next)
     markDirty({ modulesJson: next })
   }
+
+  useEffect(() => {
+    if (!hasCoordinates) {
+      setSummary(null)
+      setLoading(false)
+      setLoadError(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lon),
+      label: locationLabel,
+    })
+
+    setLoading(true)
+    setLoadError(false)
+
+    fetch(`/api/ski/summary?${params.toString()}`, { signal: controller.signal })
+      .then(async (response) => {
+        const json = await response.json().catch(() => null)
+        if (!response.ok || !json?.current) throw new Error('ski_summary_failed')
+        return json as SkiMetSummary
+      })
+      .then((nextSummary) => setSummary(nextSummary))
+      .catch((error) => {
+        if (error?.name === 'AbortError') return
+        setSummary(null)
+        setLoadError(true)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [hasCoordinates, lat, lon, locationLabel])
+
+  const current = summary?.current ?? null
+  const mainLine = current
+    ? `${formatSkiTemperature(current.temp_c)} · ${skiWindDirectionLabel(current.wind_dir_deg)} ${formatSkiMetric(current.wind_mps)} m/s`
+    : null
 
   return (
     <div className="h-full min-h-0 flex flex-col">
@@ -10204,11 +10284,43 @@ function SkiModuleSettingsTab({
       </div>
 
       <div className="mt-5 flex-1 min-h-0 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-5 py-5">
-        <div className="text-sm text-[color:var(--fg-55)] leading-6">
-          {cfg
-            ? (isNo ? 'Snøforhold, vær, skredfare og prognose vises her når Ski-datakildene kobles til.' : 'Snow conditions, weather, avalanche risk, and forecast will appear here when the Ski data sources are connected.')
-            : (isNo ? 'Velg et skiområde over. Deretter vises den viktigste skioversikten her.' : 'Choose a ski area above. The main ski summary will appear here.')}
-        </div>
+        {!cfg ? (
+          <div className="text-sm text-[color:var(--fg-55)] leading-6">
+            {isNo ? 'Velg et skiområde over. Deretter vises den viktigste skioversikten her.' : 'Choose a ski area above. The main ski summary will appear here.'}
+          </div>
+        ) : !hasCoordinates ? (
+          <div className="text-sm text-[color:var(--fg-55)] leading-6">
+            {isNo ? 'Velg stedet på nytt for å hente værdata.' : 'Choose the location again to load weather data.'}
+          </div>
+        ) : loading && !summary ? (
+          <div className="space-y-3" aria-label={isNo ? 'Laster skivær' : 'Loading ski weather'}>
+            <div className="h-3 w-20 animate-pulse rounded bg-[color:var(--bd-10)]" />
+            <div className="h-8 w-48 animate-pulse rounded bg-[color:var(--bd-10)]" />
+            <div className="h-4 w-36 animate-pulse rounded bg-[color:var(--bd-10)]" />
+          </div>
+        ) : loadError ? (
+          <div className="text-sm text-[color:var(--fg-55)] leading-6">
+            {isNo ? 'Kunne ikke hente værdata akkurat nå.' : 'Could not load weather data right now.'}
+          </div>
+        ) : current && mainLine ? (
+          <div className="flex h-full flex-col">
+            <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">{isNo ? 'NÅ' : 'NOW'}</div>
+            <div className="mt-2 text-3xl font-medium tracking-[-0.03em] text-[color:var(--fg-95)]">{mainLine}</div>
+
+            <div className="mt-5 space-y-2 text-sm text-[color:var(--fg-65)]">
+              {current.gust_mps != null && (
+                <div>{isNo ? 'Vindkast' : 'Gusts'} {formatSkiMetric(current.gust_mps)} m/s</div>
+              )}
+              {current.precipitation_1h_mm != null && (
+                <div>{isNo ? 'Nedbør neste time' : 'Precip next hour'} {formatSkiMetric(current.precipitation_1h_mm, 1)} mm</div>
+              )}
+            </div>
+
+            <div className="mt-auto pt-6 text-xs leading-5 text-[color:var(--fg-45)]">
+              {isNo ? 'Snødybde, nysnø og skredvarsel kommer i neste steg.' : 'Snow depth, fresh snow and avalanche warning coming next.'}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )
