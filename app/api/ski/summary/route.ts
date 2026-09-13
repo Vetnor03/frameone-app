@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const MET_USER_AGENT = 'RE:MIND Ski/1.0 https://re-mind.no'
+const OSLO_TIMEZONE = 'Europe/Oslo'
 
 function finiteNumber(value: unknown) {
   const number = Number(value)
@@ -9,6 +10,80 @@ function finiteNumber(value: unknown) {
 
 function roundCoordinate(value: number) {
   return Math.round(value * 10_000) / 10_000
+}
+
+function osloParts(value: string | Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: OSLO_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(typeof value === 'string' ? new Date(value) : value)
+
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || ''
+  return {
+    date: `${get('year')}-${get('month')}-${get('day')}`,
+    hour: Number(get('hour')),
+  }
+}
+
+function compactForecast(timeseries: any[]) {
+  const today = osloParts(new Date()).date
+  const grouped = new Map<
+    string,
+    {
+      temps: number[]
+      precipitation: number
+      representative: { score: number; symbol: string | null; wind: number | null; windDir: number | null }
+    }
+  >()
+
+  for (const point of timeseries) {
+    const time = String(point?.time || '')
+    if (!time) continue
+
+    const local = osloParts(time)
+    if (!local.date || local.date <= today) continue
+
+    const instant = point?.data?.instant?.details ?? {}
+    const nextHour = point?.data?.next_1_hours ?? {}
+    const temp = finiteNumber(instant.air_temperature)
+    const precip = finiteNumber(nextHour?.details?.precipitation_amount)
+    const symbol = String(nextHour?.summary?.symbol_code || point?.data?.next_6_hours?.summary?.symbol_code || '').trim() || null
+    const wind = finiteNumber(instant.wind_speed)
+    const windDir = finiteNumber(instant.wind_from_direction)
+
+    const existing = grouped.get(local.date) || {
+      temps: [],
+      precipitation: 0,
+      representative: { score: Number.POSITIVE_INFINITY, symbol: null, wind: null, windDir: null },
+    }
+
+    if (temp != null) existing.temps.push(temp)
+    if (precip != null) existing.precipitation += precip
+
+    const score = Math.abs(local.hour - 12)
+    if (score < existing.representative.score) {
+      existing.representative = { score, symbol, wind, windDir }
+    }
+
+    grouped.set(local.date, existing)
+  }
+
+  return Array.from(grouped.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 6)
+    .map(([date, day]) => ({
+      date,
+      min_temp_c: day.temps.length ? Math.min(...day.temps) : null,
+      max_temp_c: day.temps.length ? Math.max(...day.temps) : null,
+      precipitation_mm: Math.round(day.precipitation * 10) / 10,
+      symbol_code: day.representative.symbol,
+      wind_mps: day.representative.wind,
+      wind_dir_deg: day.representative.windDir,
+    }))
 }
 
 export async function GET(request: Request) {
@@ -52,7 +127,8 @@ export async function GET(request: Request) {
   }
 
   const payload = await response.json().catch(() => null)
-  const point = Array.isArray(payload?.properties?.timeseries) ? payload.properties.timeseries[0] : null
+  const timeseries = Array.isArray(payload?.properties?.timeseries) ? payload.properties.timeseries : []
+  const point = timeseries[0] ?? null
 
   if (!point) {
     return NextResponse.json({ error: 'met_data_unavailable' }, { status: 502 })
@@ -71,5 +147,6 @@ export async function GET(request: Request) {
       gust_mps: finiteNumber(instant.wind_speed_of_gust),
       precipitation_1h_mm: finiteNumber(nextHour.precipitation_amount),
     },
+    forecast: compactForecast(timeseries),
   })
 }
