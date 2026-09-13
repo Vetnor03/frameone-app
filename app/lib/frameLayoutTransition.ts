@@ -1,10 +1,10 @@
 import { BUILT_IN_LAYOUT_KEYS } from './customLayouts.ts'
 
 export type BuiltInLayoutKey = typeof BUILT_IN_LAYOUT_KEYS[number]
-export type FrameModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+export type FrameModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 
 const SLOT_COUNT: Record<BuiltInLayoutKey, number> = { default: 3, pyramid: 4, square: 4, full: 1 }
-const MODULES = new Set<FrameModuleKey>(['assistant', 'date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+const MODULES = new Set<FrameModuleKey>(['assistant', 'date', 'weather', 'surf', 'ski', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
 
 export function isBuiltInLayoutKey(value: unknown): value is BuiltInLayoutKey {
   return typeof value === 'string' && BUILT_IN_LAYOUT_KEYS.includes(value as BuiltInLayoutKey)
@@ -39,7 +39,7 @@ export function projectSlotMemoryIntoBuiltInLayout(memory: Array<FrameModuleKey 
 export function serializeBuiltInLayoutCells(cells: Record<number, FrameModuleKey | null>) {
   const counters: Partial<Record<FrameModuleKey, number>> = {}
   return Object.entries(cells).filter(([, module]) => module).map(([slot, module]) => {
-    if (!module || !['weather', 'surf', 'soccer', 'stocks', 'groceries'].includes(module)) return { slot: Number(slot), module: module ?? '' }
+    if (!module || !['weather', 'surf', 'ski', 'soccer', 'stocks', 'groceries'].includes(module)) return { slot: Number(slot), module: module ?? '' }
     counters[module] = (counters[module] ?? 0) + 1
     return { slot: Number(slot), module: `${module}:${counters[module]}` }
   })
