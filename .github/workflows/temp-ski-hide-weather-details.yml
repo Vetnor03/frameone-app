@@ -1,0 +1,43 @@
+name: Temporary Ski weather cleanup
+
+on:
+  push:
+    branches:
+      - fix/ski-hide-weather-details
+    paths:
+      - .github/workflows/temp-ski-hide-weather-details.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ski-hide-weather-details
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply Ski weather cleanup
+        run: node scripts/tmp-ski-hide-weather-details.cjs
+
+      - name: Verify TypeScript
+        run: |
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+
+      - name: Commit cleanup and remove temporary files
+        shell: bash
+        run: |
+          rm .github/workflows/temp-ski-hide-weather-details.yml scripts/tmp-ski-hide-weather-details.cjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/HomePageClient.tsx .github/workflows/temp-ski-hide-weather-details.yml scripts/tmp-ski-hide-weather-details.cjs
+          git diff --cached --check
+          git commit -m "Hide weather details from Ski location row"
+          git push origin HEAD:fix/ski-hide-weather-details
