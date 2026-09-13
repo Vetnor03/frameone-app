@@ -45,7 +45,7 @@ import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
 
 type CoreTabKey = 'frame' | 'settings'
-type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
@@ -71,6 +71,7 @@ const UI = {
       date: 'DATE',
       weather: 'WEATHER',
       surf: 'SURF',
+      ski: 'SKI',
       reminders: 'REMINDERS',
       countdown: 'COUNTDOWN',
       soccer: 'SOCCER',
@@ -201,6 +202,7 @@ const UI = {
       date: 'DATO',
       weather: 'VÆR',
       surf: 'SURF',
+      ski: 'SKI',
       reminders: 'PÅMINNELSER',
       countdown: 'NEDTELLING',
       soccer: 'FOTBALL',
@@ -8097,8 +8099,7 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
-  const prominentOption: ModuleKey = 'assistant'
-  const options: ModuleKey[] = ['reminders', 'date', 'weather', 'countdown', 'surf', 'soccer', 'groceries', 'stocks']
+  const options: ModuleKey[] = ['assistant', 'reminders', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks']
   const t = tx(language)
 
   return (
@@ -8112,13 +8113,6 @@ function PickerModal({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button
-            key={prominentOption}
-            onClick={() => onPick(prominentOption)}
-            className="col-span-2 min-h-11 rounded-2xl border border-[color:var(--bd-10)] px-4 py-3 text-sm text-[color:var(--fg-80)] tracking-widest transition hover:border-[color:var(--bd-30)] hover:text-[color:var(--fg)]"
-          >
-            {moduleLabel(language, prominentOption)}
-          </button>
           {options.map((m) => (
             <button
               key={m}
