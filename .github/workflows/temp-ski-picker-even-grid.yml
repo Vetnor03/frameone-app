@@ -70,7 +70,7 @@ jobs:
 
       - name: Verify TypeScript
         run: |
-          npm ci
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
           npm run typecheck
 
       - name: Commit UI change and remove temporary workflow
