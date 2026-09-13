@@ -10104,6 +10104,17 @@ function ModuleSettingsTab({
     )
   }
 
+  if (module === 'ski') {
+    return (
+      <SkiModuleSettingsTab
+        language={language}
+        modulesJson={modulesJson}
+        setModulesJson={setModulesJson}
+        markDirty={markDirty}
+      />
+    )
+  }
+
   if (module === 'reminders') {
     return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
   }
@@ -10151,6 +10162,54 @@ function ModuleSettingsTab({
     <div className="h-full flex flex-col">
       <div className="mt-2 text-xl font-semibold tracking-widest">{moduleLabel(language, module)}</div>
       <div className="flex-1" />
+    </div>
+  )
+}
+
+function SkiModuleSettingsTab({
+  language,
+  modulesJson,
+  setModulesJson,
+  markDirty,
+}: {
+  language: AppLanguage
+  modulesJson: Record<string, any>
+  setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>
+  markDirty: (next?: { modulesJson?: Record<string, any> }) => void
+}) {
+  const isNo = language === 'no'
+  const cfg = Array.isArray(modulesJson?.ski) ? modulesJson.ski[0] ?? null : null
+  const locationLabel = String(cfg?.label ?? cfg?.name ?? '').trim() || (isNo ? 'Velg sted' : 'Select location')
+
+  function saveLocation(picked: Record<string, unknown>) {
+    const next = {
+      ...modulesJson,
+      ski: [{ id: 1, ...picked }],
+    }
+    setModulesJson(next)
+    markDirty({ modulesJson: next })
+  }
+
+  return (
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="mt-2">
+        <WeatherLocationRow
+          language={language}
+          id={1}
+          title={isNo ? 'Sted' : 'Location'}
+          label={locationLabel}
+          cfg={cfg}
+          onPicked={saveLocation}
+        />
+      </div>
+
+      <div className="mt-5 flex-1 min-h-0 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-5 py-5">
+        <div className="text-sm text-[color:var(--fg-55)] leading-6">
+          {cfg
+            ? (isNo ? 'Snøforhold, vær, skredfare og prognose vises her når Ski-datakildene kobles til.' : 'Snow conditions, weather, avalanche risk, and forecast will appear here when the Ski data sources are connected.')
+            : (isNo ? 'Velg et skiområde over. Deretter vises den viktigste skioversikten her.' : 'Choose a ski area above. The main ski summary will appear here.')}
+        </div>
+      </div>
     </div>
   )
 }
