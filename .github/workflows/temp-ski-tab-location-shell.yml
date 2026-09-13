@@ -1,0 +1,110 @@
+name: Temporary Ski tab location shell
+
+on:
+  push:
+    branches:
+      - feature/ski-tab-location-shell
+    paths:
+      - .github/workflows/temp-ski-tab-location-shell.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-ski-tab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ski-tab-location-shell
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Add Ski location tab shell
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'app/HomePageClient.tsx'
+          let source = fs.readFileSync(path, 'utf8')
+
+          function replaceExact(oldText, newText, label) {
+            const parts = source.split(oldText)
+            if (parts.length !== 2) {
+              throw new Error(`${label}: expected exactly one match, found ${parts.length - 1}`)
+            }
+            source = parts.join(newText)
+          }
+
+          replaceExact(
+`  if (module === 'weather') {
+    return (
+      <WeatherModuleSettingsTab
+        language={language}
+        layoutKey={layoutKey}
+        cells={cells}
+        modulesJson={modulesJson}
+        setModulesJson={setModulesJson}
+        markDirty={markDirty}
+      />
+    )
+  }
+
+  if (module === 'reminders') {`,
+`  if (module === 'weather') {
+    return (
+      <WeatherModuleSettingsTab
+        language={language}
+        layoutKey={layoutKey}
+        cells={cells}
+        modulesJson={modulesJson}
+        setModulesJson={setModulesJson}
+        markDirty={markDirty}
+      />
+    )
+  }
+
+  if (module === 'ski') {
+    return (
+      <SkiModuleSettingsTab
+        language={language}
+        modulesJson={modulesJson}
+        setModulesJson={setModulesJson}
+        markDirty={markDirty}
+      />
+    )
+  }
+
+  if (module === 'reminders') {`,
+            'Ski module settings route'
+          )
+
+          const marker = `type CountdownItem = {`
+          if (!source.includes(marker)) throw new Error('Countdown marker not found')
+
+          const skiComponent = `function SkiModuleSettingsTab({\n  language,\n  modulesJson,\n  setModulesJson,\n  markDirty,\n}: {\n  language: AppLanguage\n  modulesJson: Record<string, any>\n  setModulesJson: React.Dispatch<React.SetStateAction<Record<string, any>>>\n  markDirty: (next?: { modulesJson?: Record<string, any> }) => void\n}) {\n  const isNo = language === 'no'\n  const cfg = Array.isArray(modulesJson?.ski) ? modulesJson.ski[0] ?? null : null\n  const locationLabel = String(cfg?.label ?? cfg?.name ?? '').trim() || (isNo ? 'Velg sted' : 'Select location')\n\n  function saveLocation(picked: Record<string, unknown>) {\n    const next = {\n      ...modulesJson,\n      ski: [{ id: 1, ...picked }],\n    }\n    setModulesJson(next)\n    markDirty({ modulesJson: next })\n  }\n\n  return (\n    <div className=\"h-full min-h-0 flex flex-col\">\n      <div className=\"mt-2\">\n        <WeatherLocationRow\n          language={language}\n          id={1}\n          title={isNo ? 'Sted' : 'Location'}\n          label={locationLabel}\n          cfg={cfg}\n          onPicked={saveLocation}\n        />\n      </div>\n\n      <div className=\"mt-5 flex-1 min-h-0 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-5 py-5\">\n        <div className=\"text-sm text-[color:var(--fg-55)] leading-6\">\n          {cfg\n            ? (isNo ? 'Snøforhold, vær, skredfare og prognose vises her når Ski-datakildene kobles til.' : 'Snow conditions, weather, avalanche risk, and forecast will appear here when the Ski data sources are connected.')\n            : (isNo ? 'Velg et skiområde over. Deretter vises den viktigste skioversikten her.' : 'Choose a ski area above. The main ski summary will appear here.')}
+        </div>\n      </div>\n    </div>\n  )\n}\n\n`
+
+          source = source.replace(marker, skiComponent + marker)
+          fs.writeFileSync(path, source)
+          NODE
+
+      - name: Verify TypeScript
+        run: |
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+
+      - name: Commit Ski tab shell and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/temp-ski-tab-location-shell.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/HomePageClient.tsx .github/workflows/temp-ski-tab-location-shell.yml
+          git diff --cached --check
+          git commit -m "Add Weather-style Ski location tab"
+          git push origin HEAD:feature/ski-tab-location-shell
