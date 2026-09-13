@@ -10271,57 +10271,85 @@ function SkiModuleSettingsTab({
     : null
 
   return (
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain pr-1 pb-10">
       <div className="mt-2">
         <WeatherLocationRow
           language={language}
           id={1}
-          title={isNo ? 'Sted' : 'Location'}
+          title={isNo ? 'Skiområde' : 'Ski area'}
           label={locationLabel}
           cfg={cfg}
           onPicked={saveLocation}
         />
       </div>
 
-      <div className="mt-5 flex-1 min-h-0 rounded-3xl border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-5 py-5">
-        {!cfg ? (
-          <div className="text-sm text-[color:var(--fg-55)] leading-6">
-            {isNo ? 'Velg et skiområde over. Deretter vises den viktigste skioversikten her.' : 'Choose a ski area above. The main ski summary will appear here.'}
+      <section className="mt-9">
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">
+            {isNo ? 'SKIFORHOLD' : 'SKI CONDITIONS'}
           </div>
-        ) : !hasCoordinates ? (
-          <div className="text-sm text-[color:var(--fg-55)] leading-6">
-            {isNo ? 'Velg stedet på nytt for å hente værdata.' : 'Choose the location again to load weather data.'}
+          <div className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[color:var(--fg-95)]">
+            {cfg ? locationLabel : (isNo ? 'Velg et område' : 'Choose an area')}
           </div>
-        ) : loading && !summary ? (
-          <div className="space-y-3" aria-label={isNo ? 'Laster skivær' : 'Loading ski weather'}>
-            <div className="h-3 w-20 animate-pulse rounded bg-[color:var(--bd-10)]" />
-            <div className="h-8 w-48 animate-pulse rounded bg-[color:var(--bd-10)]" />
-            <div className="h-4 w-36 animate-pulse rounded bg-[color:var(--bd-10)]" />
-          </div>
-        ) : loadError ? (
-          <div className="text-sm text-[color:var(--fg-55)] leading-6">
-            {isNo ? 'Kunne ikke hente værdata akkurat nå.' : 'Could not load weather data right now.'}
-          </div>
-        ) : current && mainLine ? (
-          <div className="flex h-full flex-col">
-            <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">{isNo ? 'NÅ' : 'NOW'}</div>
-            <div className="mt-2 text-3xl font-medium tracking-[-0.03em] text-[color:var(--fg-95)]">{mainLine}</div>
+        </div>
 
-            <div className="mt-5 space-y-2 text-sm text-[color:var(--fg-65)]">
-              {current.gust_mps != null && (
-                <div>{isNo ? 'Vindkast' : 'Gusts'} {formatSkiMetric(current.gust_mps)} m/s</div>
-              )}
-              {current.precipitation_1h_mm != null && (
-                <div>{isNo ? 'Nedbør neste time' : 'Precip next hour'} {formatSkiMetric(current.precipitation_1h_mm, 1)} mm</div>
-              )}
+        <div className="rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-6 py-6">
+          {!cfg ? (
+            <div className="max-w-sm text-sm leading-6 text-[color:var(--fg-55)]">
+              {isNo ? 'Velg et skiområde over. Her samler vi vær, snø og skredfare i én enkel oversikt.' : 'Choose a ski area above. Weather, snow and avalanche information will be collected here in one simple summary.'}
             </div>
+          ) : !hasCoordinates ? (
+            <div className="text-sm leading-6 text-[color:var(--fg-55)]">
+              {isNo ? 'Velg stedet på nytt for å hente data.' : 'Choose the location again to load data.'}
+            </div>
+          ) : loading && !summary ? (
+            <div className="space-y-4" aria-label={isNo ? 'Laster skiforhold' : 'Loading ski conditions'}>
+              <div className="h-10 w-48 animate-pulse rounded bg-[color:var(--bd-10)]" />
+              <div className="h-4 w-32 animate-pulse rounded bg-[color:var(--bd-10)]" />
+              <div className="h-4 w-40 animate-pulse rounded bg-[color:var(--bd-10)]" />
+            </div>
+          ) : loadError ? (
+            <div className="text-sm leading-6 text-[color:var(--fg-55)]">
+              {isNo ? 'Kunne ikke hente skidata akkurat nå.' : 'Could not load ski data right now.'}
+            </div>
+          ) : current && mainLine ? (
+            <div>
+              <div className="text-4xl font-medium tracking-[-0.04em] text-[color:var(--fg-95)]">{mainLine}</div>
 
-            <div className="mt-auto pt-6 text-xs leading-5 text-[color:var(--fg-45)]">
-              {isNo ? 'Snødybde, nysnø og skredvarsel kommer i neste steg.' : 'Snow depth, fresh snow and avalanche warning coming next.'}
+              <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="border-t border-[color:var(--bd-10)] pt-4">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--fg-45)]">
+                    {isNo ? 'VINDKAST' : 'GUSTS'}
+                  </div>
+                  <div className="mt-1 text-lg text-[color:var(--fg-80)]">
+                    {current.gust_mps != null ? formatSkiMetric(current.gust_mps) + ' m/s' : '–'}
+                  </div>
+                </div>
+
+                <div className="border-t border-[color:var(--bd-10)] pt-4">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--fg-45)]">
+                    {isNo ? 'NEDBØR NESTE TIME' : 'PRECIP NEXT HOUR'}
+                  </div>
+                  <div className="mt-1 text-lg text-[color:var(--fg-80)]">
+                    {current.precipitation_1h_mm != null ? formatSkiMetric(current.precipitation_1h_mm, 1) + ' mm' : '–'}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="mt-10 border-t border-[color:var(--bd-10)] pt-6 pb-2">
+        <div className="text-sm font-medium text-[color:var(--fg-80)]">
+          {isNo ? 'Kommer i denne oversikten' : 'Coming to this summary'}
+        </div>
+        <div className="mt-3 space-y-3 text-sm leading-6 text-[color:var(--fg-50)]">
+          <div>{isNo ? 'Snødybde og nysnø' : 'Snow depth and fresh snow'}</div>
+          <div>{isNo ? 'Skredfare og utsatte himmelretninger' : 'Avalanche danger and exposed aspects'}</div>
+          <div>{isNo ? 'Neste snøfall' : 'Next snowfall'}</div>
+        </div>
+      </section>
     </div>
   )
 }
