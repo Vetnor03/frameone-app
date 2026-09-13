@@ -1,0 +1,43 @@
+name: Temporary Ski hierarchy
+
+on:
+  push:
+    branches:
+      - fix/ski-hierarchy-spacing
+    paths:
+      - .github/workflows/temp-ski-hierarchy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ski-hierarchy-spacing
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply Ski hierarchy patch
+        run: node scripts/tmp-ski-hierarchy-patch.cjs
+
+      - name: Verify TypeScript
+        run: |
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+
+      - name: Commit Ski hierarchy and remove temporary files
+        shell: bash
+        run: |
+          rm .github/workflows/temp-ski-hierarchy.yml scripts/tmp-ski-hierarchy-patch.cjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/HomePageClient.tsx app/api/ski/summary/route.ts .github/workflows/temp-ski-hierarchy.yml scripts/tmp-ski-hierarchy-patch.cjs
+          git diff --cached --check
+          git commit -m "Refine Ski hierarchy and weekly forecast"
+          git push origin HEAD:fix/ski-hierarchy-spacing
