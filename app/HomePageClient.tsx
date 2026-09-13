@@ -10308,6 +10308,7 @@ function SkiModuleSettingsTab({
           title={isNo ? 'Skiområde' : 'Ski area'}
           label={locationLabel}
           cfg={cfg}
+          showDetails={false}
           onPicked={saveLocation}
         />
 
@@ -17624,6 +17625,7 @@ function WeatherLocationRow({
   title,
   label,
   cfg,
+  showDetails = true,
   onPicked,
 }: {
   language: AppLanguage
@@ -17631,6 +17633,7 @@ function WeatherLocationRow({
   title: string
   label: string
   cfg: WeatherLocationCfg | null
+  showDetails?: boolean
   onPicked: (cfgPatch: any) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -17653,7 +17656,7 @@ function WeatherLocationRow({
         </div>
       </div>
 
-      {cfg && Number.isFinite(Number(cfg.lat)) && Number.isFinite(Number(cfg.lon)) && (
+      {showDetails && cfg && Number.isFinite(Number(cfg.lat)) && Number.isFinite(Number(cfg.lon)) && (
         <WeatherDetailsCard language={language} cfg={cfg} />
       )}
 
