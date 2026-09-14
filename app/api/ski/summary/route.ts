@@ -546,9 +546,9 @@ function estimateNextPowderDay(
 }
 
 async function loadPowderForecastTimeseries(resort: any, fallback: any[]) {
-  const resortLat = finiteNumber(resort?.forecast_lat)
-  const resortLon = finiteNumber(resort?.forecast_lon)
-  const explicitElevation = finiteNumber(resort?.top_elevation_m)
+  const resortLat = resort?.forecast_lat == null ? null : finiteNumber(resort.forecast_lat)
+  const resortLon = resort?.forecast_lon == null ? null : finiteNumber(resort.forecast_lon)
+  const explicitElevation = resort?.top_elevation_m == null ? null : finiteNumber(resort.top_elevation_m)
   if (resortLat == null || resortLon == null) {
     return { timeseries: fallback, basis: 'selected_location' as const, elevationM: null }
   }
