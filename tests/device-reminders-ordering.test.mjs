@@ -163,9 +163,18 @@ test('event-only Tomorrow is selected when Today is empty', () => {
   assert.equal(selectReminderDisplayGroups(events, 10)[0].occurrence_date, '2026-09-06')
 })
 
-test('event tomorrow wins over a reminder three days away', () => {
+test('user-created reminder reserves frame capacity ahead of an earlier imported event', () => {
   const selected = selectReminderDisplayGroups([
     item({ id: 'r1', date: '2026-09-08', days: 3, source: 'remind' }),
+    item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' }),
+  ], 1)
+  assert.equal(selected[0].reminder_id, 'r1')
+})
+
+test('starter reminder does not get user-created priority', () => {
+  const starter = { ...item({ id: 'starter', date: '2026-09-08', days: 3, source: 'remind' }), is_user_created: false }
+  const selected = selectReminderDisplayGroups([
+    starter,
     item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' }),
   ], 1)
   assert.equal(selected[0].reminder_id, 'e1')
@@ -215,14 +224,14 @@ test('canonical ordering normalizes UTC integration timestamps into the displaye
   ])
 })
 
-test('equal timestamps use source, title, and identity as deterministic tie-breakers', () => {
+test('equal timestamps put user-created reminders first, then use source, title, and identity as deterministic tie-breakers', () => {
   const input = [
     timedItem('b', '2026-09-09', '20:00', 'remind', 'Same'),
     timedItem('z', '2026-09-09', '20:00', 'spond', 'Zulu'),
     timedItem('a', '2026-09-09', '20:00', 'remind', 'Same'),
     timedItem('t', '2026-09-09', '20:00', 'teams', 'Teams'),
   ]
-  const expected = ['t', 'z', 'a', 'b']
+  const expected = ['a', 'b', 't', 'z']
   assert.deepEqual(sortReminderItems(input).map(x => x.reminder_id), expected)
   assert.deepEqual(sortReminderItems([...input].reverse()).map(x => x.reminder_id), expected)
 })
