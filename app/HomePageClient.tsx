@@ -10202,6 +10202,26 @@ type SkiMetSummary = {
     full_warning_url: string
     attribution: string
   }
+  resort: {
+    available: boolean
+    id: number | null
+    name: string | null
+    distance_km: number | null
+    resort_open: boolean
+    ski_open: boolean
+    lift_only: boolean
+    lifts_open: number | null
+    lifts_total: number | null
+    slopes_open: number | null
+    slopes_total: number | null
+    today_hours: {
+      closed: boolean
+      from: string | null
+      to: string | null
+    } | null
+    url: string | null
+    last_updated: string | null
+  }
   forecast: Array<{
     date: string
     min_temp_c: number | null
@@ -10324,12 +10344,25 @@ function SkiModuleSettingsTab({
   const current = summary?.current ?? null
   const snow = summary?.snow ?? null
   const avalanche = summary?.avalanche ?? null
+  const resort = summary?.resort ?? null
   const snowLine = snow && (snow.fresh_24h_cm != null || snow.snow_depth_cm != null)
     ? `${formatSkiMetric(snow.fresh_24h_cm)} cm ${isNo ? 'nysnø' : 'fresh'} · ${formatSkiMetric(snow.snow_depth_cm)} cm ${isNo ? 'totalt' : 'total'}`
     : null
   const mainLine = snowLine || (current
     ? `${formatSkiTemperature(current.temp_c)} · ${skiWindDirectionLabel(current.wind_dir_deg)} ${formatSkiMetric(current.wind_mps)} m/s`
     : null)
+  const resortStatus = resort?.ski_open
+    ? (isNo ? 'Åpent for ski' : 'Skiing open')
+    : resort?.lift_only
+      ? (isNo ? 'Heis åpen · ingen åpne nedfarter' : 'Lift open · no runs open')
+      : (isNo ? 'Stengt' : 'Closed')
+  const resortHours = resort?.resort_open
+    && resort?.today_hours
+    && !resort.today_hours.closed
+    && resort.today_hours.from
+    && resort.today_hours.to
+      ? `${resort.today_hours.from}–${resort.today_hours.to}`
+      : null
 
   return (
     <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain pb-10 pr-1">
@@ -10446,6 +10479,56 @@ function SkiModuleSettingsTab({
             ) : null}
           </div>
         </section>
+
+        {resort?.available ? (
+          <section className="rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-6 py-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">
+                  {isNo ? 'LOKALT SKIANLEGG' : 'LOCAL RESORT'}
+                </div>
+                <div className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[color:var(--fg-95)]">
+                  {resort.name}
+                </div>
+                <div className="mt-1 text-sm text-[color:var(--fg-55)]">
+                  {resortStatus}{resortHours ? ` · ${isNo ? 'i dag' : 'today'} ${resortHours}` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-03)] px-4 py-4">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">
+                  {isNo ? 'HEISER' : 'LIFTS'}
+                </div>
+                <div className="mt-2 text-3xl font-medium tracking-[-0.04em] text-[color:var(--fg-95)]">
+                  {formatSkiMetric(resort.lifts_open)} <span className="text-[color:var(--fg-40)]">/ {formatSkiMetric(resort.lifts_total)}</span>
+                </div>
+                <div className="mt-1 text-xs text-[color:var(--fg-45)]">{isNo ? 'åpne' : 'open'}</div>
+              </div>
+              <div className="rounded-2xl border border-[color:var(--bd-10)] bg-[color:var(--panel-03)] px-4 py-4">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">
+                  {isNo ? 'NEDFARTER' : 'RUNS'}
+                </div>
+                <div className="mt-2 text-3xl font-medium tracking-[-0.04em] text-[color:var(--fg-95)]">
+                  {formatSkiMetric(resort.slopes_open)} <span className="text-[color:var(--fg-40)]">/ {formatSkiMetric(resort.slopes_total)}</span>
+                </div>
+                <div className="mt-1 text-xs text-[color:var(--fg-45)]">{isNo ? 'åpne' : 'open'}</div>
+              </div>
+            </div>
+
+            {resort.url ? (
+              <a
+                href={resort.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-block text-[11px] text-[color:var(--fg-45)] underline underline-offset-4"
+              >
+                {isNo ? 'Data fra Fnugg.no' : 'Data from Fnugg.no'} ↗
+              </a>
+            ) : null}
+          </section>
+        ) : null}
 
         {summary?.forecast?.length ? (
           <section className="rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-5 py-6">
