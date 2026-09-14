@@ -3,7 +3,7 @@ MAIN = Path('frame/src/frame_v2.5.1.ino').read_text()
 LIVE = Path('frame/src/network/LiveUpdate.cpp').read_text()
 NET = Path('frame/src/network/NetClient.cpp').read_text()
 CHECKER = Path('frame/src/network/UpdateChecker.cpp').read_text()
-SIGNATURE = Path('app/lib/device/contentSignature.mjs').read_text()
+SIGNATURE = Path('app/lib/device/contentSignature.mjs').read_text() + Path('app/lib/device/contentSignatureBase.mjs').read_text()
 
 def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
