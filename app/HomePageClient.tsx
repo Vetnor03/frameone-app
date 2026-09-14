@@ -10222,6 +10222,19 @@ type SkiMetSummary = {
     url: string | null
     last_updated: string | null
   }
+  next_powder_day: {
+    found: boolean
+    date: string | null
+    estimated_fresh_cm_low: number | null
+    estimated_fresh_cm_high: number | null
+    estimated_fresh_cm_mid: number | null
+    precipitation_mm: number | null
+    mean_snow_temp_c: number | null
+    peak_wind_mps: number | null
+    elevation_m: number | null
+    basis: 'resort_top' | 'resort_location' | 'selected_location'
+    confidence: 'medium' | 'low' | null
+  }
   forecast: Array<{
     date: string
     min_temp_c: number | null
@@ -10345,6 +10358,7 @@ function SkiModuleSettingsTab({
   const snow = summary?.snow ?? null
   const avalanche = summary?.avalanche ?? null
   const resort = summary?.resort ?? null
+  const powder = summary?.next_powder_day ?? null
   const snowLine = snow && (snow.fresh_24h_cm != null || snow.snow_depth_cm != null)
     ? `${formatSkiMetric(snow.fresh_24h_cm)} cm ${isNo ? 'nysnø' : 'fresh'} · ${formatSkiMetric(snow.snow_depth_cm)} cm ${isNo ? 'totalt' : 'total'}`
     : null
@@ -10406,6 +10420,27 @@ function SkiModuleSettingsTab({
             ) : current && mainLine ? (
               <div>
                 <div className="text-4xl font-medium tracking-[-0.04em] text-[color:var(--fg-95)]">{mainLine}</div>
+                <div className="mt-7 border-t border-[color:var(--bd-10)] pt-5">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">
+                    {isNo ? 'NESTE PUDDERDAG' : 'NEXT POWDER DAY'}
+                  </div>
+                  {powder?.found && powder.date ? (
+                    <>
+                      <div className="mt-1 text-xl font-semibold text-[color:var(--fg-95)]">
+                        {skiForecastDayLabel(powder.date, language)} · {formatSkiMetric(powder.estimated_fresh_cm_low)}–{formatSkiMetric(powder.estimated_fresh_cm_high)} cm
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[color:var(--fg-50)]">
+                        {isNo ? 'Estimert nysnø' : 'Estimated fresh snow'}
+                        {powder.basis === 'resort_top' && powder.elevation_m != null ? ` · ~${formatSkiMetric(powder.elevation_m)} m` : ''}
+                        {powder.confidence === 'low' ? ` · ${isNo ? 'lav sikkerhet' : 'low confidence'}` : ''}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-1 text-lg text-[color:var(--fg-70)]">
+                      {isNo ? 'Ingen pudderdag i prognosen' : 'No powder day in forecast'}
+                    </div>
+                  )}
+                </div>
                 <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-[color:var(--bd-10)] pt-5">
                   <div>
                     <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'NYSNØ 3 DØGN' : 'FRESH 3 DAYS'}</div>
@@ -10532,12 +10567,9 @@ function SkiModuleSettingsTab({
 
         {summary?.forecast?.length ? (
           <section className="rounded-[28px] border border-[color:var(--bd-10)] bg-[color:var(--panel-05)] px-5 py-6">
-            <div className="flex items-end justify-between gap-4 px-1">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">{isNo ? 'NESTE UKE' : 'NEXT WEEK'}</div>
-                <div className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[color:var(--fg-90)]">{isNo ? 'Prognose' : 'Forecast'}</div>
-              </div>
-              <div className="text-xs text-[color:var(--fg-45)]">MET Norway</div>
+            <div className="px-1">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--fg-45)]">{isNo ? 'NESTE UKE' : 'NEXT WEEK'}</div>
+              <div className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[color:var(--fg-90)]">{isNo ? 'Prognose' : 'Forecast'}</div>
             </div>
 
             <div className="mt-5 flex snap-x gap-3 overflow-x-auto pb-2">
