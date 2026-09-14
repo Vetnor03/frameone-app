@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('../app/api/device/reminders/route.ts', import.meta.url), 'utf8')
 const rowType = source.slice(source.indexOf('type ReminderRow = {'), source.indexOf('type PhysicalDeviceReminderItem'))
-const endHelpers = source.slice(source.indexOf('function hasExplicitReminderEnd('), source.indexOf('function buildOccurrencesForRow('))
+const endHelpers = source.slice(source.indexOf('function hasExplicitReminderEnd('), source.indexOf('function recurringOccurrencesExpiringNow('))
 const occurrenceBuilder = source.slice(source.indexOf('function buildOccurrencesForRow('), source.indexOf('export async function GET('))
 const getRoute = source.slice(source.indexOf('export async function GET('))
 
@@ -17,18 +17,23 @@ test('device reminder feed loads explicit end date and time fields', () => {
 test('explicit end boundaries are shifted with recurring occurrence dates', () => {
   assert.match(endHelpers, /durationDays = diffDaysFromYmd\(dueDate, endDate\)/)
   assert.match(endHelpers, /endYmd = toLocalYmd\(addDaysLocal\(occurrence, durationDays\)\)/)
-  assert.match(endHelpers, /if \(boundary\.endYmd < todayYmd\) return true/)
-  assert.match(endHelpers, /if \(!boundary\.endTime\) return false/)
-  assert.match(endHelpers, /return boundary\.endTime < nowHm/)
 })
 
-test('explicit end overrides start-time expiry and keeps active multi-day reminders visible', () => {
-  assert.match(occurrenceBuilder, /if \(hasExplicitEnd\) \{\s*if \(isOccurrencePastExplicitEnd\(row, occurrenceYmd, todayYmd, nowHm\)\) return/)
-  assert.match(occurrenceBuilder, /else if \(isTimedOccurrenceAlreadyPassed\(occurrenceYmd, dueTime, todayYmd, nowHm\)\)/)
-  assert.match(occurrenceBuilder, /if \(!includeOverdue && days_until < 0 && !hasExplicitEnd\) return/)
+test('frame expiry uses start time first, end time only as fallback, then the occurrence day', () => {
+  assert.match(endHelpers, /const startTime = normalizeReminderTime\(row\.due_time\)/)
+  assert.match(endHelpers, /if \(startTime\) \{[\s\S]*?return startTime < nowHm/)
+  assert.match(endHelpers, /const endTime = normalizeReminderTime\(row\.end_time\)/)
+  assert.match(endHelpers, /if \(endTime\) \{[\s\S]*?const endYmd = boundary\?\.endYmd \|\| occurrenceYmd[\s\S]*?return endTime < nowHm/)
+  assert.match(endHelpers, /return occurrenceYmd < todayYmd/)
 })
 
-test('expired one-offs persist is_done while recurring reminders complete per occurrence', () => {
+test('occurrence builder always applies frame expiry before adding an item', () => {
+  assert.match(occurrenceBuilder, /if \(isOccurrenceExpiredForFrame\(row, occurrenceYmd, todayYmd, nowHm\)\) return/)
+  assert.doesNotMatch(occurrenceBuilder, /if \(hasExplicitEnd\)/)
+  assert.match(occurrenceBuilder, /is_user_created: !row\.starter_key/)
+})
+
+test('expired explicit-end records still persist completion bookkeeping', () => {
   assert.match(getRoute, /update\(\{ is_done: true, updated_at: now\.toISOString\(\) \}\)/)
   assert.match(getRoute, /from\('reminder_completions'\)\.upsert\(recurringCompletionRows/)
   assert.match(getRoute, /onConflict: 'reminder_id,occurrence_date'/)
