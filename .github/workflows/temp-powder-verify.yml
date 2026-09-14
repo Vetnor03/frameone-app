@@ -1,0 +1,59 @@
+name: Temporary powder day verifier
+
+on:
+  push:
+    branches:
+      - feature/ski-next-powder-day-impl
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply powder patch
+        run: python .github/scripts/temp_powder_patch.py
+      - name: Install dependencies
+        run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Smoke-test powder estimator inputs
+        run: |
+          node <<'NODE'
+          async function inspect(label, lat, lon) {
+            const url = new URL('https://api.fnugg.no/geodata/getnearest')
+            url.searchParams.set('lat', String(lat))
+            url.searchParams.set('lon', String(lon))
+            url.searchParams.set('distance', '30')
+            url.searchParams.set('sourceFields', 'id,name,location,lifts,slopes,weather_zones,default_weather_zones')
+            const payload = await fetch(url).then(r => r.json())
+            const hits = Array.isArray(payload?.hits?.hits) ? payload.hits.hits : []
+            const candidate = hits.find(hit => {
+              const s = hit?._source || {}
+              const name = String(s.name || '')
+              if (/(sommer|summer|bike)/i.test(name)) return false
+              return Number(s?.lifts?.count || 0) >= 2 || Number(s?.slopes?.count || 0) >= 2
+            })
+            if (!candidate?._source) throw new Error(`${label}: no winter resort`)
+            const s = candidate._source
+            const zones = Array.isArray(s.weather_zones) ? s.weather_zones : []
+            const topId = String(s?.default_weather_zones?.top || '')
+            const top = zones.find(z => String(z?.id || '') === topId) || zones.sort((a,b) => Number(b?.elevation || 0) - Number(a?.elevation || 0))[0]
+            console.log(label, s.name, 'top elevation', top?.elevation ?? null)
+          }
+          await inspect('Voss', 60.63, 6.42)
+          await inspect('Hovden', 59.56, 7.36)
+          NODE
+      - name: Commit verified feature and remove temporary files
+        run: |
+          rm -f .github/workflows/temp-powder-verify.yml .github/scripts/temp_powder_patch.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/HomePageClient.tsx app/api/ski/summary/route.ts .github/workflows/temp-powder-verify.yml .github/scripts/temp_powder_patch.py
+          git commit -m "Add next powder day estimate to Ski"
+          git push
