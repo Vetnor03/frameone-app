@@ -1,0 +1,34 @@
+name: Temporary Ski snow verifier
+
+on:
+  push:
+    branches:
+      - fix/ski-senorge-snow
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply Ski snow UI
+        run: python scripts/temp_patch_ski_snow.py
+      - name: Verify TypeScript
+        run: |
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+      - name: Commit verified change and remove temporary files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/HomePageClient.tsx
+          git rm scripts/temp_patch_ski_snow.py .github/workflows/temp-ski-snow.yml
+          git commit -m "Show SeNorge snow in Ski conditions"
+          git push
