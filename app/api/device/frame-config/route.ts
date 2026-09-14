@@ -30,17 +30,24 @@ async function startPairingPayload(rpcClient: PairingRpcClient, deviceId: string
 }
 
 export async function GET(req: Request) {
+  let deviceIdForLog = ''
+  let phase = 'parse_request'
+
   try {
     const url = new URL(req.url)
     const device_id = url.searchParams.get('device_id')
+    deviceIdForLog = device_id || ''
 
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
     }
 
+    phase = 'build_payload'
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const builtPayload = await buildFrameConfigPayload(supabase, device_id)
     const isUnpaired = 'pair_required' in builtPayload && builtPayload.pair_required === true
+
+    phase = isUnpaired ? 'start_pairing' : 'serialize_payload'
     const payload = isUnpaired
       ? await startPairingPayload(supabase as unknown as PairingRpcClient, device_id)
       : builtPayload
@@ -56,6 +63,12 @@ export async function GET(req: Request) {
       },
     })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    console.error('frame-config request failed', {
+      device_id: deviceIdForLog || null,
+      phase,
+      error: message,
+    })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
