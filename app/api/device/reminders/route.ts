@@ -324,17 +324,6 @@ function toPhysicalDeviceReminderItem(item: DeviceReminderItem): PhysicalDeviceR
   }
 }
 
-function isTimedOccurrenceAlreadyPassed(
-  occurrenceYmd: string,
-  dueTime: string | null,
-  todayYmd: string,
-  nowHm: string
-) {
-  if (!dueTime) return false
-  if (occurrenceYmd !== todayYmd) return false
-  return dueTime < nowHm
-}
-
 function hasExplicitReminderEnd(row: ReminderRow) {
   return Boolean(String(row.end_date ?? '').trim() || normalizeReminderTime(row.end_time))
 }
@@ -369,6 +358,32 @@ function isOccurrencePastExplicitEnd(
   if (boundary.endYmd > todayYmd) return false
   if (!boundary.endTime) return false
   return boundary.endTime < nowHm
+}
+
+function isOccurrenceExpiredForFrame(
+  row: ReminderRow,
+  occurrenceYmd: string,
+  todayYmd: string,
+  nowHm: string
+) {
+  const startTime = normalizeReminderTime(row.due_time)
+  if (startTime) {
+    if (occurrenceYmd < todayYmd) return true
+    if (occurrenceYmd > todayYmd) return false
+    return startTime < nowHm
+  }
+
+  const endTime = normalizeReminderTime(row.end_time)
+  if (endTime) {
+    const boundary = getOccurrenceEndBoundary(row, occurrenceYmd)
+    const endYmd = boundary?.endYmd || occurrenceYmd
+    if (endYmd < todayYmd) return true
+    if (endYmd > todayYmd) return false
+    return endTime < nowHm
+  }
+
+  // With no clock time at all, the reminder lives for its occurrence date only.
+  return occurrenceYmd < todayYmd
 }
 
 function recurringOccurrencesExpiringNow(
@@ -426,14 +441,13 @@ function buildOccurrencesForRow(
   todayYmd: string,
   nowHm: string,
   horizonEndYmd: string,
-  includeOverdue: boolean
+  _includeOverdue: boolean
 ): DeviceReminderItem[] {
   const title = String(row.title ?? '').trim()
   const dueDate = String(row.due_date ?? '').trim()
   const dueTime = normalizeReminderTime(row.due_time)
   const repeat: ReminderRepeatKey = isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none'
   const customRepeatDays = Number(row.custom_repeat_days)
-  const hasExplicitEnd = hasExplicitReminderEnd(row)
 
   if (!title || !dueDate) return []
 
@@ -443,16 +457,9 @@ function buildOccurrencesForRow(
   const items: DeviceReminderItem[] = []
 
   const addOccurrence = (occurrenceYmd: string) => {
-    if (hasExplicitEnd) {
-      if (isOccurrencePastExplicitEnd(row, occurrenceYmd, todayYmd, nowHm)) return
-    } else if (isTimedOccurrenceAlreadyPassed(occurrenceYmd, dueTime, todayYmd, nowHm)) {
-      return
-    }
+    if (isOccurrenceExpiredForFrame(row, occurrenceYmd, todayYmd, nowHm)) return
 
     const days_until = diffDaysFromYmd(todayYmd, occurrenceYmd)
-
-    // An occurrence with an explicit end remains active even after its start date.
-    if (!includeOverdue && days_until < 0 && !hasExplicitEnd) return
 
     items.push({
       reminder_id: String(row.id),
@@ -464,6 +471,7 @@ function buildOccurrencesForRow(
       repeat,
       due_time: dueTime,
       display_time: dueTime,
+      is_user_created: !row.starter_key,
     })
   }
 
