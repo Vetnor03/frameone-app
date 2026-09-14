@@ -1,5 +1,6 @@
 import { EDGE_OF_NORWAY_PROVIDER, runEdgeOfNorwayShadowDiagnostic, type EdgeOfNorwayAcceptedEvent } from './edge-of-norway-shadow'
 import { getSupabaseAdmin } from '@/app/lib/integrations/spond/server'
+import { localEventDisplayTitle } from './display'
 import { getLocalEventPlace, normalizeLocalEventAreaPreference, suggestedLocalEventArea, type LocalEventAreaPreference } from './places'
 
 export type LocalEventsSyncResult = { importedCount: number; zeroEvents: boolean; areaPreference: LocalEventAreaPreference }
@@ -36,34 +37,38 @@ export async function syncLocalEventsForFrame(userId: string, deviceId: string, 
   if (result.error || result.diagnosticError) throw new Error(result.error || result.diagnosticError?.message || 'Local Events sync failed')
   const now = new Date().toISOString()
   const supabase = getSupabaseAdmin()
-  const rows = result.acceptedEvents.map((event) => ({
-    user_id: userId,
-    device_id: deviceId,
-    provider: EDGE_OF_NORWAY_PROVIDER,
-    external_id: event.externalId || event.sourceUrl,
-    title: event.title,
-    body: null,
-    starts_at: eventStartsAt(event),
-    due_at: eventStartsAt(event),
-    priority: 0,
-    raw: {
+  const rows = result.acceptedEvents.map((event) => {
+    const displayTitle = localEventDisplayTitle(event.title, event.date) || event.title
+    return {
+      user_id: userId,
+      device_id: deviceId,
       provider: EDGE_OF_NORWAY_PROVIDER,
-      externalId: event.externalId || event.sourceUrl,
-      title: event.title,
-      sourceUrl: event.sourceUrl,
-      date: event.date,
-      startTime: event.startTime,
-      allDay: event.allDay,
-      sourceLocation: event.sourceLocation,
-      areaKey: event.areaKey || area.primaryPlaceId,
-      areaKeys: event.areaKeys?.length ? event.areaKeys : [event.areaKey || area.primaryPlaceId],
-      primaryPlaceId: area.primaryPlaceId,
-      includedPlaceIds: area.includedPlaceIds,
-      type: 'local-event',
-      scope: 'frame',
-    },
-    updated_at: now,
-  }))
+      external_id: event.externalId || event.sourceUrl,
+      title: displayTitle,
+      body: null,
+      starts_at: eventStartsAt(event),
+      due_at: eventStartsAt(event),
+      priority: 0,
+      raw: {
+        provider: EDGE_OF_NORWAY_PROVIDER,
+        externalId: event.externalId || event.sourceUrl,
+        title: event.title,
+        displayTitle,
+        sourceUrl: event.sourceUrl,
+        date: event.date,
+        startTime: event.startTime,
+        allDay: event.allDay,
+        sourceLocation: event.sourceLocation,
+        areaKey: event.areaKey || area.primaryPlaceId,
+        areaKeys: event.areaKeys?.length ? event.areaKeys : [event.areaKey || area.primaryPlaceId],
+        primaryPlaceId: area.primaryPlaceId,
+        includedPlaceIds: area.includedPlaceIds,
+        type: 'local-event',
+        scope: 'frame',
+      },
+      updated_at: now,
+    }
+  })
   if (rows.length) {
     const { error } = await supabase.from('integration_items').upsert(rows, { onConflict: 'device_id,provider,external_id' })
     if (error) throw new Error(error.message)
