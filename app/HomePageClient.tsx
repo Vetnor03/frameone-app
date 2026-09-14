@@ -10184,6 +10184,24 @@ type SkiMetSummary = {
     source_date: string | null
     grid: { x: number; y: number }
   }
+  avalanche: {
+    available: boolean
+    assessed: boolean
+    danger_level: number | null
+    danger_name: string | null
+    region_name: string | null
+    valid_from: string | null
+    main_text: string | null
+    problems: Array<{
+      name: string | null
+      aspects: string[]
+      elevation: string | null
+      trigger: string | null
+      size: string | null
+    }>
+    full_warning_url: string
+    attribution: string
+  }
   forecast: Array<{
     date: string
     min_temp_c: number | null
@@ -10278,6 +10296,7 @@ function SkiModuleSettingsTab({
       lat: String(lat),
       lon: String(lon),
       label: locationLabel,
+      lang: language,
     })
 
     setLoading(true)
@@ -10300,10 +10319,11 @@ function SkiModuleSettingsTab({
       })
 
     return () => controller.abort()
-  }, [hasCoordinates, lat, lon, locationLabel])
+  }, [hasCoordinates, lat, lon, locationLabel, language])
 
   const current = summary?.current ?? null
   const snow = summary?.snow ?? null
+  const avalanche = summary?.avalanche ?? null
   const snowLine = snow && (snow.fresh_24h_cm != null || snow.snow_depth_cm != null)
     ? `${formatSkiMetric(snow.fresh_24h_cm)} cm ${isNo ? 'nysnø' : 'fresh'} · ${formatSkiMetric(snow.snow_depth_cm)} cm ${isNo ? 'totalt' : 'total'}`
     : null
@@ -10370,6 +10390,56 @@ function SkiModuleSettingsTab({
                     <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'VINDKAST' : 'GUSTS'}</div>
                     <div className="mt-1 text-lg text-[color:var(--fg-80)]">{current.gust_mps != null ? formatSkiMetric(current.gust_mps) + ' m/s' : '–'}</div>
                   </div>
+                </div>
+                <div className="mt-6 border-t border-[color:var(--bd-10)] pt-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'SNØSKRED' : 'AVALANCHE'}</div>
+                      {avalanche?.region_name ? (
+                        <div className="mt-1 text-xs text-[color:var(--fg-45)]">{avalanche.region_name}</div>
+                      ) : null}
+                    </div>
+                    <a
+                      href={avalanche?.full_warning_url || 'https://www.varsom.no/snoskred/varsling/'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-xs text-[color:var(--fg-55)] underline underline-offset-4"
+                    >
+                      Varsom.no ↗
+                    </a>
+                  </div>
+
+                  {!avalanche?.available ? (
+                    <div className="mt-3 text-base text-[color:var(--fg-60)]">{isNo ? 'Data ikke tilgjengelig' : 'Data unavailable'}</div>
+                  ) : avalanche.danger_level === 0 || !avalanche.assessed ? (
+                    <div className="mt-3 text-xl font-semibold text-[color:var(--fg-90)]">{isNo ? 'Ikke vurdert' : 'Not assessed'}</div>
+                  ) : (
+                    <>
+                      <div className="mt-3 text-xl font-semibold text-[color:var(--fg-95)]">
+                        ⚠ {isNo ? 'Faregrad' : 'Danger'} {avalanche.danger_level} · {avalanche.danger_name}
+                      </div>
+                      {avalanche.problems?.length ? (
+                        <div className="mt-4 space-y-3">
+                          {avalanche.problems.map((problem, index) => {
+                            const terrain = [
+                              problem.aspects?.length ? problem.aspects.join(' · ') : null,
+                              problem.elevation,
+                            ].filter(Boolean).join(' · ')
+                            return (
+                              <div key={`${problem.name || 'problem'}-${index}`}>
+                                <div className="text-sm font-medium text-[color:var(--fg-85)]">{problem.name || (isNo ? 'Skredproblem' : 'Avalanche problem')}</div>
+                                {terrain ? <div className="mt-0.5 text-xs leading-5 text-[color:var(--fg-50)]">{terrain}</div> : null}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+
+                  {avalanche?.attribution ? (
+                    <div className="mt-4 text-[10px] leading-4 text-[color:var(--fg-35)]">{avalanche.attribution}</div>
+                  ) : null}
                 </div>
                 <div className="mt-5 text-[11px] text-[color:var(--fg-40)]">NVE SeNorge · MET Norway</div>
               </div>

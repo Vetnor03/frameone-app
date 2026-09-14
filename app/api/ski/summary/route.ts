@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 const MET_USER_AGENT = 'RE:MIND Ski/1.0 https://re-mind.no'
 const OSLO_TIMEZONE = 'Europe/Oslo'
 const NVE_GTS_BASE = 'https://gts.nve.no/api/GridTimeSeries'
+const VARSOM_API_BASE = 'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/api'
+const VARSOM_WARNING_URL = 'https://www.varsom.no/snoskred/varsling/'
 
 function finiteNumber(value: unknown) {
   const number = Number(value)
@@ -159,6 +161,130 @@ async function loadSeNorgeSnow(latitude: number, longitude: number) {
   }
 }
 
+function avalancheDangerName(level: number | null, language: 'no' | 'en') {
+  const namesNo: Record<number, string> = {
+    0: 'Ikke vurdert',
+    1: 'Liten',
+    2: 'Moderat',
+    3: 'Betydelig',
+    4: 'Stor',
+    5: 'Meget stor',
+  }
+  const namesEn: Record<number, string> = {
+    0: 'Not assessed',
+    1: 'Low',
+    2: 'Moderate',
+    3: 'Considerable',
+    4: 'High',
+    5: 'Very high',
+  }
+  if (level == null) return null
+  return (language === 'no' ? namesNo : namesEn)[level] ?? null
+}
+
+function avalancheAspects(value: unknown, language: 'no' | 'en') {
+  const mask = String(value || '').trim()
+  if (!/^[01]{8}$/.test(mask)) return []
+  const labels = language === 'no'
+    ? ['N', 'NØ', 'Ø', 'SØ', 'S', 'SV', 'V', 'NV']
+    : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  return labels.filter((_, index) => mask[index] === '1')
+}
+
+function avalancheElevationLabel(problem: any, language: 'no' | 'en') {
+  const height1 = finiteNumber(problem?.ExposedHeight1)
+  const height2 = finiteNumber(problem?.ExposedHeight2)
+  const fill = finiteNumber(problem?.ExposedHeightFill)
+  const valid1 = height1 != null && height1 > 0 ? Math.round(height1) : null
+  const valid2 = height2 != null && height2 > 0 ? Math.round(height2) : null
+
+  if (valid1 == null && valid2 == null) return null
+  if (fill === 1 && valid1 != null) return language === 'no' ? `Over ${valid1} m` : `Above ${valid1} m`
+  if (fill === 2 && valid1 != null) return language === 'no' ? `Under ${valid1} m` : `Below ${valid1} m`
+
+  if (valid1 != null && valid2 != null && valid1 !== valid2) {
+    const low = Math.min(valid1, valid2)
+    const high = Math.max(valid1, valid2)
+    if (fill === 3) {
+      return language === 'no' ? `Under ${low} m eller over ${high} m` : `Below ${low} m or above ${high} m`
+    }
+    if (fill === 4) {
+      return language === 'no' ? `${low}–${high} m` : `${low}–${high} m`
+    }
+    return `${low}–${high} m`
+  }
+
+  const height = valid1 ?? valid2
+  return height == null ? null : `${height} m`
+}
+
+function unavailableAvalanche(language: 'no' | 'en') {
+  return {
+    available: false,
+    assessed: false,
+    danger_level: null as number | null,
+    danger_name: null as string | null,
+    region_name: null as string | null,
+    valid_from: null as string | null,
+    main_text: null as string | null,
+    problems: [] as Array<{
+      name: string | null
+      aspects: string[]
+      elevation: string | null
+      trigger: string | null
+      size: string | null
+    }>,
+    full_warning_url: VARSOM_WARNING_URL,
+    attribution: 'Varsler fra Snøskredvarslingen i Norge og www.varsom.no',
+    language,
+  }
+}
+
+async function loadVarsomAvalanche(latitude: number, longitude: number, language: 'no' | 'en') {
+  const today = osloParts(new Date()).date
+  const langKey = language === 'no' ? 1 : 2
+  const url = `${VARSOM_API_BASE}/Warning/Coordinate/${latitude}/${longitude}/${langKey}/${today}/${today}`
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      next: { revalidate: 1800 },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!response.ok) return unavailableAvalanche(language)
+
+    const payload = await response.json().catch(() => null)
+    const warning = Array.isArray(payload) ? payload[0] ?? null : null
+    if (!warning) return unavailableAvalanche(language)
+
+    const dangerLevel = finiteNumber(warning?.DangerLevel)
+    const rawProblems = Array.isArray(warning?.AvalancheProblems) ? warning.AvalancheProblems : []
+    const problems = rawProblems.map((problem: any) => ({
+      name: String(problem?.AvalancheProblemTypeName || problem?.AvalancheExtName || '').trim() || null,
+      aspects: avalancheAspects(problem?.ValidExpositions, language),
+      elevation: avalancheElevationLabel(problem, language),
+      trigger: String(problem?.AvalTriggerSimpleName || problem?.AvalTriggerSensitivityName || '').trim() || null,
+      size: String(problem?.DestructiveSizeExtName || '').trim() || null,
+    }))
+
+    return {
+      available: true,
+      assessed: dangerLevel != null && dangerLevel > 0,
+      danger_level: dangerLevel,
+      danger_name: avalancheDangerName(dangerLevel, language),
+      region_name: String(warning?.RegionName || '').trim() || null,
+      valid_from: String(warning?.ValidFrom || '').trim() || null,
+      main_text: String(warning?.MainText || '').trim() || null,
+      problems,
+      full_warning_url: VARSOM_WARNING_URL,
+      attribution: 'Varsler fra Snøskredvarslingen i Norge og www.varsom.no',
+      language,
+    }
+  } catch {
+    return unavailableAvalanche(language)
+  }
+}
+
 function compactForecast(timeseries: any[]) {
   const today = osloParts(new Date()).date
   const grouped = new Map<
@@ -221,6 +347,7 @@ export async function GET(request: Request) {
   const latitude = Number(searchParams.get('lat'))
   const longitude = Number(searchParams.get('lon'))
   const label = String(searchParams.get('label') || '').trim().slice(0, 120)
+  const language: 'no' | 'en' = searchParams.get('lang') === 'no' ? 'no' : 'en'
 
   if (
     !Number.isFinite(latitude) ||
@@ -236,6 +363,7 @@ export async function GET(request: Request) {
   const lat = roundCoordinate(latitude)
   const lon = roundCoordinate(longitude)
   const snowPromise = loadSeNorgeSnow(lat, lon)
+  const avalanchePromise = loadVarsomAvalanche(lat, lon, language)
   const metUrl = new URL('https://api.met.no/weatherapi/locationforecast/2.0/compact')
   metUrl.searchParams.set('lat', String(lat))
   metUrl.searchParams.set('lon', String(lon))
@@ -267,7 +395,7 @@ export async function GET(request: Request) {
 
   const instant = point?.data?.instant?.details ?? {}
   const nextHour = point?.data?.next_1_hours?.details ?? {}
-  const snow = await snowPromise
+  const [snow, avalanche] = await Promise.all([snowPromise, avalanchePromise])
 
   return NextResponse.json({
     location: { label, lat, lon },
@@ -280,10 +408,12 @@ export async function GET(request: Request) {
       precipitation_1h_mm: finiteNumber(nextHour.precipitation_amount),
     },
     snow,
+    avalanche,
     forecast: compactForecast(timeseries),
     sources: {
       weather: 'MET Norway',
       snow: 'NVE SeNorge',
+      avalanche: 'Varsom / Snøskredvarslingen i Norge',
     },
   })
 }
