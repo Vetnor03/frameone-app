@@ -378,6 +378,23 @@ async function loadFnuggResort(latitude: number, longitude: number) {
     const name = String(source?.name || '').trim() || null
     if (id == null || !name) return unavailableFnuggResort()
 
+    let detailSource: any = source
+    try {
+      const detailUrl = new URL(`${FNUGG_API_BASE}/get/resort/${id}`)
+      detailUrl.searchParams.set('sourceFields', 'location,weather_zones,default_weather_zones')
+      const detailResponse = await fetch(detailUrl, {
+        headers: { Accept: 'application/json' },
+        next: { revalidate: 3600 },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (detailResponse.ok) {
+        const detailPayload = await detailResponse.json().catch(() => null)
+        if (detailPayload?._source) detailSource = { ...source, ...detailPayload._source }
+      }
+    } catch {
+      // Resort status still works without altitude; powder estimation falls back to selected coordinates.
+    }
+
     const liftsOpen = fnuggCount(source?.lifts?.open)
     const liftsTotal = fnuggCount(source?.lifts?.count)
     const slopesOpen = fnuggCount(source?.slopes?.open)
@@ -387,10 +404,10 @@ async function loadFnuggResort(latitude: number, longitude: number) {
     const liftOnly = resortOpen && !skiOpen && (liftsOpen ?? 0) > 0
     const sitePath = String(source?.site_path || '').trim()
     const distanceM = finiteNumber(Array.isArray(candidate?.sort) ? candidate.sort[0] : null)
-    const resortLat = finiteNumber(source?.location?.lat)
-    const resortLon = finiteNumber(source?.location?.lon)
-    const weatherZones = Array.isArray(source?.weather_zones) ? source.weather_zones : []
-    const preferredTopId = String(source?.default_weather_zones?.top || '').trim()
+    const resortLat = finiteNumber(detailSource?.location?.lat)
+    const resortLon = finiteNumber(detailSource?.location?.lon)
+    const weatherZones = Array.isArray(detailSource?.weather_zones) ? detailSource.weather_zones : []
+    const preferredTopId = String(detailSource?.default_weather_zones?.top || '').trim()
     const preferredTop = weatherZones.find((zone: any) => String(zone?.id || '').trim() === preferredTopId)
     const highestZone = weatherZones
       .map((zone: any) => ({ zone, elevation: finiteNumber(zone?.elevation) }))
