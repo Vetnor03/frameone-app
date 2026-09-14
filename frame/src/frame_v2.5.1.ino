@@ -1207,6 +1207,24 @@ void setup() {
   // the frame-config endpoint's former arbitrary fallback dashboard.
   FrameConfigApi::FetchResult postPairConfig =
     FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+
+  // A wake-time backend/network hiccup must never replace a valid e-paper
+  // dashboard with a fatal setup screen. Retry briefly in-place first; if the
+  // service is still unavailable, leave the physical pixels untouched and
+  // retry from a clean wake.
+  if (postPairConfig == FrameConfigApi::FETCH_ERROR) {
+    const uint32_t retryDelaysMs[] = {2000UL, 5000UL};
+    for (uint8_t attempt = 0; attempt < 2 && postPairConfig == FrameConfigApi::FETCH_ERROR; ++attempt) {
+      Serial.printf(
+        "frame-config transient failure; retry %u/2 in %lu ms\n",
+        (unsigned int)(attempt + 1),
+        (unsigned long)retryDelaysMs[attempt]
+      );
+      delay(retryDelaysMs[attempt]);
+      postPairConfig = FrameConfigApi::fetchWithStatus(g_cfg, DeviceIdentity::getToken());
+    }
+  }
+
   if (postPairConfig == FrameConfigApi::FETCH_SETUP_PENDING) {
     if (!setupPendingScreenDisplayed) {
       ensureDisplay();
@@ -1220,9 +1238,10 @@ void setup() {
     Serial.println("frame-config unpaired");
     if (recoverPairingIfTokenLost("initial frame fetch", pwrEarly.usbPresent)) return;
   } else if (postPairConfig == FrameConfigApi::FETCH_ERROR) {
-    ensureDisplay();
-    ScreenPairing::showError("Could not load frame");
-    shutdownDisplay();
+    Serial.println("frame-config still unavailable; preserving existing e-paper content");
+    Serial.println("Retrying frame-config on a clean wake in 10 seconds");
+    plannedDeepSleepSeconds = 10;
+    goToSleepForUs(10ULL * 1000000ULL, pwrEarly.usbPresent);
   } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
     setupPendingScreenDisplayed = false;
   }
