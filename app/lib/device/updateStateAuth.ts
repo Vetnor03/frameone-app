@@ -1,8 +1,6 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createServiceClient } from '@/app/lib/supabase/serviceClient'
 
-export function createServiceClient(): SupabaseClient {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-}
+export { createServiceClient }
 
 export function bearerToken(req: Request): string {
   const match = (req.headers.get('authorization') ?? '').match(/^Bearer\s+(.+)$/i)
