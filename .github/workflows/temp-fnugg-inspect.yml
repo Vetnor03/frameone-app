@@ -1,0 +1,32 @@
+name: Temporary Fnugg inspect
+
+on:
+  push:
+    branches:
+      - fix/ski-fnugg-resort-status
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Hovden and Voss candidates
+        run: |
+          node <<'NODE'
+          async function inspect(label, lat, lon) {
+            const fields = 'id,name,site_path,location,resort_type,resort_open,resort_opening_date,resort_closing_date,opening_hours,lifts,slopes,last_updated'
+            const url = new URL('https://api.fnugg.no/geodata/getnearest')
+            url.searchParams.set('lat', String(lat))
+            url.searchParams.set('lon', String(lon))
+            url.searchParams.set('distance', '30')
+            url.searchParams.set('sourceFields', fields)
+            const r = await fetch(url)
+            const data = await r.json()
+            console.log('\n###', label, r.status)
+            console.log(JSON.stringify(data, null, 2).slice(0, 30000))
+          }
+          await inspect('HOVDEN', 59.56, 7.36)
+          await inspect('VOSS', 60.63, 6.42)
+          const resort = await fetch('https://api.fnugg.no/get/resort/17?sourceFields=id,name,site_path,resort_type,resort_open,opening_hours,lifts,slopes,last_updated').then(r => r.json())
+          console.log('\n### VOSS RESORT DETAIL')
+          console.log(JSON.stringify(resort, null, 2).slice(0, 30000))
+          NODE
