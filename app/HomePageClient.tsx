@@ -10176,6 +10176,14 @@ type SkiMetSummary = {
     gust_mps: number | null
     precipitation_1h_mm: number | null
   }
+  snow: {
+    snow_depth_cm: number | null
+    fresh_24h_cm: number | null
+    fresh_72h_cm: number | null
+    altitude_m: number | null
+    source_date: string | null
+    grid: { x: number; y: number }
+  }
   forecast: Array<{
     date: string
     min_temp_c: number | null
@@ -10295,9 +10303,13 @@ function SkiModuleSettingsTab({
   }, [hasCoordinates, lat, lon, locationLabel])
 
   const current = summary?.current ?? null
-  const mainLine = current
-    ? `${formatSkiTemperature(current.temp_c)} · ${skiWindDirectionLabel(current.wind_dir_deg)} ${formatSkiMetric(current.wind_mps)} m/s`
+  const snow = summary?.snow ?? null
+  const snowLine = snow && (snow.fresh_24h_cm != null || snow.snow_depth_cm != null)
+    ? `${formatSkiMetric(snow.fresh_24h_cm)} cm ${isNo ? 'nysnø' : 'fresh'} · ${formatSkiMetric(snow.snow_depth_cm)} cm ${isNo ? 'totalt' : 'total'}`
     : null
+  const mainLine = snowLine || (current
+    ? `${formatSkiTemperature(current.temp_c)} · ${skiWindDirectionLabel(current.wind_dir_deg)} ${formatSkiMetric(current.wind_mps)} m/s`
+    : null)
 
   return (
     <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain pb-10 pr-1">
@@ -10343,14 +10355,23 @@ function SkiModuleSettingsTab({
                 <div className="text-4xl font-medium tracking-[-0.04em] text-[color:var(--fg-95)]">{mainLine}</div>
                 <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-[color:var(--bd-10)] pt-5">
                   <div>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'NYSNØ 3 DØGN' : 'FRESH 3 DAYS'}</div>
+                    <div className="mt-1 text-lg text-[color:var(--fg-80)]">{snow?.fresh_72h_cm != null ? formatSkiMetric(snow.fresh_72h_cm) + ' cm' : '–'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'TEMPERATUR' : 'TEMPERATURE'}</div>
+                    <div className="mt-1 text-lg text-[color:var(--fg-80)]">{formatSkiTemperature(current.temp_c)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'VIND' : 'WIND'}</div>
+                    <div className="mt-1 text-lg text-[color:var(--fg-80)]">{skiWindDirectionLabel(current.wind_dir_deg)} · {formatSkiMetric(current.wind_mps)} m/s</div>
+                  </div>
+                  <div>
                     <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'VINDKAST' : 'GUSTS'}</div>
                     <div className="mt-1 text-lg text-[color:var(--fg-80)]">{current.gust_mps != null ? formatSkiMetric(current.gust_mps) + ' m/s' : '–'}</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--fg-45)]">{isNo ? 'NEDBØR NESTE TIME' : 'PRECIP NEXT HOUR'}</div>
-                    <div className="mt-1 text-lg text-[color:var(--fg-80)]">{current.precipitation_1h_mm != null ? formatSkiMetric(current.precipitation_1h_mm, 1) + ' mm' : '–'}</div>
-                  </div>
                 </div>
+                <div className="mt-5 text-[11px] text-[color:var(--fg-40)]">NVE SeNorge · MET Norway</div>
               </div>
             ) : null}
           </div>
