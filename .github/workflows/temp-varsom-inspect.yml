@@ -9,32 +9,18 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Varsom v6.3.2 swagger
+      - name: Smoke-test Varsom coordinate warning
         run: |
           node <<'NODE'
-          const urls = [
-            'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/swagger/docs/v6.3.2',
-            'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/swagger/v1/swagger.json'
-          ]
-          let spec = null
-          for (const url of urls) {
-            const r = await fetch(url)
-            console.log('SPEC', url, r.status, r.headers.get('content-type'))
+          const x = 68838
+          const y = 6627251
+          const start = '2026-09-14'
+          const end = '2026-09-16'
+          for (const lang of [1, 2]) {
+            const url = `https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/api/AvalancheWarningByCoordinates/Detail/${x}/${y}/${lang}/${start}/${end}`
+            const r = await fetch(url, { headers: { Accept: 'application/json' } })
             const text = await r.text()
-            console.log(text.slice(0, 300))
-            if (r.ok) {
-              try { spec = JSON.parse(text); break } catch {}
-            }
-          }
-          if (!spec) process.exit(1)
-          console.log('PATHS')
-          for (const p of Object.keys(spec.paths || {})) {
-            if (/AvalancheWarning|Region|Coordinate|Summary/i.test(p)) console.log(p)
-          }
-          console.log('MODELS')
-          for (const [name, model] of Object.entries(spec.definitions || spec.components?.schemas || {})) {
-            if (/AvalancheWarning|AvalancheProblem|RegionSummary|Region$/i.test(name)) {
-              console.log(name, JSON.stringify(model).slice(0, 5000))
-            }
+            console.log('LANG', lang, 'STATUS', r.status, 'URL', url)
+            console.log(text.slice(0, 12000))
           }
           NODE
