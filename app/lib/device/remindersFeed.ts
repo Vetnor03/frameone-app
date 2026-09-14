@@ -424,6 +424,60 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   return sortReminderItems(selected)
 }
 
+export type ReminderVisibilityProfile = 'compact' | 'standard' | 'spacious'
+
+function visibleReminderCapacity(item: DeviceReminderItem, profiles: readonly ReminderVisibilityProfile[]) {
+  const isTodayOrTomorrow = item.days_until === 0 || item.days_until === 1
+  if (!isTodayOrTomorrow) return 3
+  return profiles.includes('compact') ? 3 : 4
+}
+
+/**
+ * The firmware keeps API order inside each date bucket and then renders only a
+ * prefix of that bucket. Choose that prefix with personal-reminder priority,
+ * sort the chosen visible items chronologically, and leave overflow behind it
+ * so +N more still represents the full bucket.
+ */
+export function prioritizeReminderVisiblePrefix(
+  items: readonly DeviceReminderItem[],
+  profiles: readonly ReminderVisibilityProfile[] = ['standard']
+) {
+  const orderedItems = sortReminderItems(items)
+  const groups = new Map<string, DeviceReminderItem[]>()
+
+  for (const item of orderedItems) {
+    const key = item.occurrence_date || item.display_date
+    const group = groups.get(key)
+    if (group) group.push(item)
+    else groups.set(key, [item])
+  }
+
+  const output: DeviceReminderItem[] = []
+  for (const group of groups.values()) {
+    if (group.length === 0) continue
+
+    const capacity = visibleReminderCapacity(group[0], profiles)
+    const personal = group.filter(isUserCreatedReminder)
+    if (group.length <= capacity || personal.length === 0) {
+      output.push(...group)
+      continue
+    }
+
+    const imported = group.filter((item) => !isUserCreatedReminder(item))
+    const visibleSelection = [
+      ...personal.slice(0, capacity),
+      ...imported.slice(0, Math.max(0, capacity - Math.min(personal.length, capacity))),
+    ]
+    const visibleSet = new Set(visibleSelection)
+    const visible = sortReminderItems(visibleSelection)
+    const overflow = group.filter((item) => !visibleSet.has(item))
+
+    output.push(...visible, ...overflow)
+  }
+
+  return output
+}
+
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
   // occurrence_date and the displayed local time are the canonical occurrence
   // coordinates for every source. In particular, do not compare days_until
