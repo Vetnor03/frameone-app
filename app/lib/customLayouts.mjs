@@ -54,16 +54,21 @@ export function supportsPhysicalCustomCell(cell) {
   if (!module) return true
   const baseModule = module.split(':', 1)[0]
   const surfModule = /^surf(?::(?:[1-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))?$/u.test(module)
+  const skiModule = /^ski(?::(?:[1-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))?$/u.test(module)
   const soccerModule = /^soccer(?::[1-4])?$/u.test(module)
   const stocksModule = /^stocks(?::(?:[1-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))?$/u.test(module)
   const groceriesModule = module === 'groceries'
   const assistantModule = module === 'assistant'
   if (module.startsWith('surf') && !surfModule) return false
+  if (module.startsWith('ski') && !skiModule) return false
   if (module.startsWith('soccer') && !soccerModule) return false
   if (module.startsWith('stocks') && !stocksModule) return false
   if (module.startsWith('groceries') && !groceriesModule) return false
   if (module.startsWith('assistant') && !assistantModule) return false
   if (module === 'ai-follow') return false
+  // Ski intentionally has one physical reference geometry for now. Do not
+  // silently enable the other 15 geometries until each is designed/reviewed.
+  if (skiModule) return geometry === '2x2'
   const adaptiveModule = module === 'date' || groceriesModule || assistantModule || baseModule === 'weather' || baseModule === 'reminders' || baseModule === 'countdown' || surfModule || soccerModule || stocksModule
   return SUPPORTED_PHYSICAL_GEOMETRIES.has(geometry) || (ADAPTIVE_DATE_GEOMETRIES.has(geometry) && adaptiveModule)
 }
