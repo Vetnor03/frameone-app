@@ -9,23 +9,26 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect and smoke-test current Varsom coordinate endpoint
+      - name: Inspect historical Varsom problem shape
         run: |
           node <<'NODE'
-          const specUrl = 'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/swagger/docs/v6.3.2'
-          const spec = await (await fetch(specUrl)).json()
-          const path = '/api/Warning/Coordinate/{x}/{y}/{langkey}/{startdate}/{enddate}'
-          console.log('SPEC', JSON.stringify(spec.paths[path], null, 2))
-
           const lat = 59.56
           const lon = 7.36
-          const start = '2026-09-14'
-          const end = '2026-09-16'
-          for (const lang of [1, 2]) {
-            const url = `https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/api/Warning/Coordinate/${lat}/${lon}/${lang}/${start}/${end}`
+          const dates = ['2026-02-01','2026-02-15','2026-03-01']
+          for (const date of dates) {
+            const url = `https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/api/Warning/Coordinate/${lat}/${lon}/2/${date}/${date}`
             const r = await fetch(url, { headers: { Accept: 'application/json' } })
-            const text = await r.text()
-            console.log('LANG', lang, 'STATUS', r.status, 'URL', url)
-            console.log(text.slice(0, 16000))
+            const data = await r.json().catch(() => null)
+            const warning = Array.isArray(data) ? data[0] : null
+            console.log('DATE', date, 'STATUS', r.status)
+            console.log(JSON.stringify({
+              RegionName: warning?.RegionName,
+              DangerLevel: warning?.DangerLevel,
+              DangerLevelName: warning?.DangerLevelName,
+              MainText: warning?.MainText,
+              AvalancheProblems: warning?.AvalancheProblems,
+              ExposedHeightFill: warning?.ExposedHeightFill,
+              ExposedHeight1: warning?.ExposedHeight1,
+            }, null, 2).slice(0, 18000))
           }
           NODE
