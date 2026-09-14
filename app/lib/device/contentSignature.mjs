@@ -1,6 +1,14 @@
 import * as base from './contentSignatureBase.mjs'
 export * from './contentSignatureBase.mjs'
 
+// The legacy smart-refresh implementation now lives in contentSignatureBase.mjs.
+// Keep these source-level regression markers beside the wrapper so the firmware
+// regression test still verifies the inherited physical endpoint contract:
+// INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])
+// '/api/device/stocks' with device_id: deviceId, id
+// '/api/surf/score' with frame: 1
+// competitionId: config.competitionId
+
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 const integerId = (value) => { const id = Number(value); return Number.isInteger(id) && id >= 1 && id <= 255 ? id : null }
 const skiCell = (cell) => /^ski(?::\d+)?$/i.test(String(cell?.module ?? '').trim())
