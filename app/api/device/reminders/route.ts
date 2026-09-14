@@ -4,7 +4,7 @@ import { after, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { syncSpondIfStaleForUsers } from '@/app/lib/integrations/spond/server'
 import { syncTeamsIfStaleForUser } from '@/app/lib/integrations/teams/server'
-import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
+import { buildLocalEventFrameItem, buildSpondReminderItems, buildTeamsMeetingItems, buildWasteCollectionItems, prioritizeReminderVisiblePrefix, selectReminderDisplayGroups, sortReminderItems, type DeviceReminderItem, type IntegrationItemRow, type LocalEventSkipRow } from '@/app/lib/device/remindersFeed'
 import { optimizeFrameContent, PHYSICAL_AI_TIMEOUT_MS, supabaseTitleCache, type DisplayCapacityProfile } from '@/app/lib/frameContentOptimizer'
 import { norwegianStarterReminderDate } from '@/app/lib/onboardingDefaults'
 
@@ -798,10 +798,13 @@ export async function GET(req: Request) {
         seenKeys.add(key)
         return true
       })
-    const selectedItems = selectReminderDisplayGroups(allItems, limit)
     const requestedProfiles = String(url.searchParams.get('display_profiles') || url.searchParams.get('display_profile') || 'standard')
       .split(',').map(value => value.trim()).filter((value): value is DisplayCapacityProfile => value === 'compact' || value === 'standard' || value === 'spacious')
     const displayProfiles = [...new Set<DisplayCapacityProfile>(requestedProfiles.length ? requestedProfiles : ['standard'])]
+    const selectedItems = prioritizeReminderVisiblePrefix(
+      selectReminderDisplayGroups(allItems, limit),
+      displayProfiles
+    )
     const optimizerItems = selectedItems.map((item, index) => ({
         id: String(index),
         title: item.title,
