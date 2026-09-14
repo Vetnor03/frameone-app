@@ -10431,7 +10431,7 @@ function SkiModuleSettingsTab({
                       </div>
                       <div className="mt-1 text-xs leading-5 text-[color:var(--fg-50)]">
                         {isNo ? 'Estimert nysnø' : 'Estimated fresh snow'}
-                        {powder.elevation_m != null ? ` · ~${formatSkiMetric(powder.elevation_m)} m` : ''}
+                        {powder.basis === 'resort_top' && powder.elevation_m != null ? ` · ~${formatSkiMetric(powder.elevation_m)} m` : ''}
                         {powder.confidence === 'low' ? ` · ${isNo ? 'lav sikkerhet' : 'low confidence'}` : ''}
                       </div>
                     </>

@@ -463,7 +463,10 @@ function estimateNextPowderDay(
     const time = String(point?.time || '')
     if (!time) continue
     const local = osloParts(time)
-    if (!local.date || local.date <= today) continue
+    if (!local.date) continue
+    // Snow from mid/late afternoon onward is mainly relevant for the next ski morning.
+    const skiDate = local.hour >= 15 ? shiftDate(local.date, 1) : local.date
+    if (skiDate <= today) continue
 
     const instant = point?.data?.instant?.details ?? {}
     const period = point?.data?.next_1_hours ?? point?.data?.next_6_hours ?? null
@@ -485,7 +488,7 @@ function estimateNextPowderDay(
     let estimatedSnowCm = precipitation * snowRatioForTemperature(temp)
     if (sleet) estimatedSnowCm *= 0.5
 
-    const day = grouped.get(local.date) || {
+    const day = grouped.get(skiDate) || {
       snowCm: 0,
       precipitationMm: 0,
       weightedTemp: 0,
@@ -499,7 +502,7 @@ function estimateNextPowderDay(
     day.weight += precipitation
     day.maxWind = wind == null ? day.maxWind : Math.max(day.maxWind ?? wind, wind)
     if (explicitSnow) day.explicitSnowPoints += 1
-    grouped.set(local.date, day)
+    grouped.set(skiDate, day)
   }
 
   for (const [date, day] of Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b))) {
