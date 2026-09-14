@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildContentRequestPlan, physicalRenderDigest, physicalRenderProjection } from '../app/lib/device/contentSignature.mjs'
+import { supportsPhysicalCustomCell } from '../app/lib/customLayouts.mjs'
 
 const cell = { slot: 0, module: 'ski:1', col: 0, row: 0, colSpan: 2, rowSpan: 2, w: 400, h: 240, size: 'MEDIUM' }
 const settings = {
@@ -64,4 +65,11 @@ test('Avalanche danger 0 is projected as Not assessed, never safe', () => {
   }, cell, { theme: 'dark' })
   assert.equal(projected.visible.avalanche, 'not_assessed')
   assert.equal(JSON.stringify(projected).toLowerCase().includes('safe'), false)
+})
+
+test('Ski physical custom capability is deliberately limited to the 2x2 reference', () => {
+  assert.equal(supportsPhysicalCustomCell({ ...cell, colSpan: 2, rowSpan: 2 }), true)
+  for (const [colSpan, rowSpan] of [[1, 1], [4, 1], [4, 2], [4, 4], [3, 3]]) {
+    assert.equal(supportsPhysicalCustomCell({ ...cell, colSpan, rowSpan }), false)
+  }
 })
