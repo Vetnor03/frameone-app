@@ -9,18 +9,11 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Smoke-test Varsom coordinate warning
+      - name: Inspect Varsom coordinate parameters
         run: |
           node <<'NODE'
-          const x = 68838
-          const y = 6627251
-          const start = '2026-09-14'
-          const end = '2026-09-16'
-          for (const lang of [1, 2]) {
-            const url = `https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/api/AvalancheWarningByCoordinates/Detail/${x}/${y}/${lang}/${start}/${end}`
-            const r = await fetch(url, { headers: { Accept: 'application/json' } })
-            const text = await r.text()
-            console.log('LANG', lang, 'STATUS', r.status, 'URL', url)
-            console.log(text.slice(0, 12000))
-          }
+          const specUrl = 'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/swagger/docs/v6.3.2'
+          const spec = await (await fetch(specUrl)).json()
+          const path = '/api/AvalancheWarningByCoordinates/Detail/{x}/{y}/{langkey}/{startdate}/{enddate}'
+          console.log(JSON.stringify(spec.paths[path], null, 2))
           NODE
