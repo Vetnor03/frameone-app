@@ -5,6 +5,8 @@ const OSLO_TIMEZONE = 'Europe/Oslo'
 const NVE_GTS_BASE = 'https://gts.nve.no/api/GridTimeSeries'
 const VARSOM_API_BASE = 'https://api01.nve.no/hydrology/forecast/avalanche/v6.3.2/api'
 const VARSOM_WARNING_URL = 'https://www.varsom.no/snoskred/varsling/'
+const FNUGG_API_BASE = 'https://api.fnugg.no'
+const FNUGG_SITE_BASE = 'https://fnugg.no'
 
 function finiteNumber(value: unknown) {
   const number = Number(value)
@@ -285,6 +287,125 @@ async function loadVarsomAvalanche(latitude: number, longitude: number, language
   }
 }
 
+
+function unavailableFnuggResort() {
+  return {
+    available: false,
+    id: null as number | null,
+    name: null as string | null,
+    distance_km: null as number | null,
+    resort_open: false,
+    ski_open: false,
+    lift_only: false,
+    lifts_open: null as number | null,
+    lifts_total: null as number | null,
+    slopes_open: null as number | null,
+    slopes_total: null as number | null,
+    today_hours: null as { closed: boolean; from: string | null; to: string | null } | null,
+    url: null as string | null,
+    last_updated: null as string | null,
+  }
+}
+
+function osloWeekdayKey(value: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: OSLO_TIMEZONE,
+    weekday: 'long',
+  }).format(value).toLowerCase()
+}
+
+function fnuggTodayHours(openingHours: any) {
+  if (!openingHours || typeof openingHours !== 'object') return null
+
+  const now = new Date()
+  const today = osloParts(now).date
+  const exceptions = Array.isArray(openingHours?.exception_days) ? openingHours.exception_days : []
+  const exception = exceptions.find((entry: any) => String(entry?.date || '').slice(0, 10) === today)
+  const regular = openingHours?.[osloWeekdayKey(now)]
+  const hours = exception ?? regular
+
+  if (!hours || typeof hours !== 'object') return null
+
+  return {
+    closed: Boolean(hours.closed),
+    from: String(hours.from || '').trim() || null,
+    to: String(hours.to || '').trim() || null,
+  }
+}
+
+function fnuggCount(value: unknown) {
+  const number = finiteNumber(value)
+  return number == null ? null : Math.max(0, Math.round(number))
+}
+
+function isFnuggWinterResortCandidate(source: any) {
+  const name = String(source?.name || '').trim()
+  if (!name || /(sommer|summer|bike)/i.test(name)) return false
+
+  const lifts = fnuggCount(source?.lifts?.count) ?? 0
+  const slopes = fnuggCount(source?.slopes?.count) ?? 0
+  return lifts >= 2 || slopes >= 2
+}
+
+async function loadFnuggResort(latitude: number, longitude: number) {
+  const url = new URL(`${FNUGG_API_BASE}/geodata/getnearest`)
+  url.searchParams.set('lat', String(latitude))
+  url.searchParams.set('lon', String(longitude))
+  url.searchParams.set('distance', '30')
+  url.searchParams.set(
+    'sourceFields',
+    'id,name,site_path,location,resort_open,resort_opening_date,resort_closing_date,opening_hours,lifts,slopes,last_updated'
+  )
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!response.ok) return unavailableFnuggResort()
+
+    const payload = await response.json().catch(() => null)
+    const hits = Array.isArray(payload?.hits?.hits) ? payload.hits.hits : []
+    const candidate = hits.find((hit: any) => isFnuggWinterResortCandidate(hit?._source))
+    if (!candidate?._source) return unavailableFnuggResort()
+
+    const source = candidate._source
+    const id = fnuggCount(source?.id)
+    const name = String(source?.name || '').trim() || null
+    if (id == null || !name) return unavailableFnuggResort()
+
+    const liftsOpen = fnuggCount(source?.lifts?.open)
+    const liftsTotal = fnuggCount(source?.lifts?.count)
+    const slopesOpen = fnuggCount(source?.slopes?.open)
+    const slopesTotal = fnuggCount(source?.slopes?.count)
+    const resortOpen = Boolean(source?.resort_open)
+    const skiOpen = resortOpen && (slopesOpen ?? 0) > 0
+    const liftOnly = resortOpen && !skiOpen && (liftsOpen ?? 0) > 0
+    const sitePath = String(source?.site_path || '').trim()
+    const distanceM = finiteNumber(Array.isArray(candidate?.sort) ? candidate.sort[0] : null)
+
+    return {
+      available: true,
+      id,
+      name,
+      distance_km: distanceM == null ? null : round1(distanceM / 1000),
+      resort_open: resortOpen,
+      ski_open: skiOpen,
+      lift_only: liftOnly,
+      lifts_open: liftsOpen,
+      lifts_total: liftsTotal,
+      slopes_open: slopesOpen,
+      slopes_total: slopesTotal,
+      today_hours: fnuggTodayHours(source?.opening_hours),
+      url: sitePath.startsWith('/') ? `${FNUGG_SITE_BASE}${sitePath}` : FNUGG_SITE_BASE,
+      last_updated: String(source?.last_updated || '').trim() || null,
+    }
+  } catch {
+    return unavailableFnuggResort()
+  }
+}
+
 function compactForecast(timeseries: any[]) {
   const today = osloParts(new Date()).date
   const grouped = new Map<
@@ -364,6 +485,7 @@ export async function GET(request: Request) {
   const lon = roundCoordinate(longitude)
   const snowPromise = loadSeNorgeSnow(lat, lon)
   const avalanchePromise = loadVarsomAvalanche(lat, lon, language)
+  const resortPromise = loadFnuggResort(lat, lon)
   const metUrl = new URL('https://api.met.no/weatherapi/locationforecast/2.0/compact')
   metUrl.searchParams.set('lat', String(lat))
   metUrl.searchParams.set('lon', String(lon))
@@ -395,7 +517,7 @@ export async function GET(request: Request) {
 
   const instant = point?.data?.instant?.details ?? {}
   const nextHour = point?.data?.next_1_hours?.details ?? {}
-  const [snow, avalanche] = await Promise.all([snowPromise, avalanchePromise])
+  const [snow, avalanche, resort] = await Promise.all([snowPromise, avalanchePromise, resortPromise])
 
   return NextResponse.json({
     location: { label, lat, lon },
@@ -409,11 +531,13 @@ export async function GET(request: Request) {
     },
     snow,
     avalanche,
+    resort,
     forecast: compactForecast(timeseries),
     sources: {
       weather: 'MET Norway',
       snow: 'NVE SeNorge',
       avalanche: 'Varsom / Snøskredvarslingen i Norge',
+      resort: 'Fnugg.no',
     },
   })
 }
