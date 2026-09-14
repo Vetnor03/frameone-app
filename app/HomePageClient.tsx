@@ -10232,7 +10232,7 @@ type SkiMetSummary = {
     mean_snow_temp_c: number | null
     peak_wind_mps: number | null
     elevation_m: number | null
-    basis: 'resort_top' | 'selected_location'
+    basis: 'resort_top' | 'resort_location' | 'selected_location'
     confidence: 'medium' | 'low' | null
   }
   forecast: Array<{

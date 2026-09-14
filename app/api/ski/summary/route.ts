@@ -378,23 +378,6 @@ async function loadFnuggResort(latitude: number, longitude: number) {
     const name = String(source?.name || '').trim() || null
     if (id == null || !name) return unavailableFnuggResort()
 
-    let detailSource: any = source
-    try {
-      const detailUrl = new URL(`${FNUGG_API_BASE}/get/resort/${id}`)
-      detailUrl.searchParams.set('sourceFields', 'location,weather_zones,default_weather_zones')
-      const detailResponse = await fetch(detailUrl, {
-        headers: { Accept: 'application/json' },
-        next: { revalidate: 3600 },
-        signal: AbortSignal.timeout(5000),
-      })
-      if (detailResponse.ok) {
-        const detailPayload = await detailResponse.json().catch(() => null)
-        if (detailPayload?._source) detailSource = { ...source, ...detailPayload._source }
-      }
-    } catch {
-      // Resort status still works without altitude; powder estimation falls back to selected coordinates.
-    }
-
     const liftsOpen = fnuggCount(source?.lifts?.open)
     const liftsTotal = fnuggCount(source?.lifts?.count)
     const slopesOpen = fnuggCount(source?.slopes?.open)
@@ -404,10 +387,10 @@ async function loadFnuggResort(latitude: number, longitude: number) {
     const liftOnly = resortOpen && !skiOpen && (liftsOpen ?? 0) > 0
     const sitePath = String(source?.site_path || '').trim()
     const distanceM = finiteNumber(Array.isArray(candidate?.sort) ? candidate.sort[0] : null)
-    const resortLat = finiteNumber(detailSource?.location?.lat)
-    const resortLon = finiteNumber(detailSource?.location?.lon)
-    const weatherZones = Array.isArray(detailSource?.weather_zones) ? detailSource.weather_zones : []
-    const preferredTopId = String(detailSource?.default_weather_zones?.top || '').trim()
+    const resortLat = finiteNumber(source?.location?.lat)
+    const resortLon = finiteNumber(source?.location?.lon)
+    const weatherZones = Array.isArray(source?.weather_zones) ? source.weather_zones : []
+    const preferredTopId = String(source?.default_weather_zones?.top || '').trim()
     const preferredTop = weatherZones.find((zone: any) => String(zone?.id || '').trim() === preferredTopId)
     const highestZone = weatherZones
       .map((zone: any) => ({ zone, elevation: finiteNumber(zone?.elevation) }))
@@ -449,7 +432,7 @@ type NextPowderDay = {
   mean_snow_temp_c: number | null
   peak_wind_mps: number | null
   elevation_m: number | null
-  basis: 'resort_top' | 'selected_location'
+  basis: 'resort_top' | 'resort_location' | 'selected_location'
   confidence: 'medium' | 'low' | null
 }
 
@@ -463,7 +446,7 @@ function snowRatioForTemperature(tempC: number) {
 
 function estimateNextPowderDay(
   timeseries: any[],
-  basis: 'resort_top' | 'selected_location',
+  basis: 'resort_top' | 'resort_location' | 'selected_location',
   elevationM: number | null
 ): NextPowderDay {
   const today = osloParts(new Date()).date
@@ -562,15 +545,15 @@ function estimateNextPowderDay(
 async function loadPowderForecastTimeseries(resort: any, fallback: any[]) {
   const resortLat = finiteNumber(resort?.forecast_lat)
   const resortLon = finiteNumber(resort?.forecast_lon)
-  const elevation = finiteNumber(resort?.top_elevation_m)
-  if (resortLat == null || resortLon == null || elevation == null) {
+  const explicitElevation = finiteNumber(resort?.top_elevation_m)
+  if (resortLat == null || resortLon == null) {
     return { timeseries: fallback, basis: 'selected_location' as const, elevationM: null }
   }
 
   const url = new URL('https://api.met.no/weatherapi/locationforecast/2.0/compact')
   url.searchParams.set('lat', String(roundCoordinate(resortLat)))
   url.searchParams.set('lon', String(roundCoordinate(resortLon)))
-  url.searchParams.set('altitude', String(Math.round(elevation)))
+  if (explicitElevation != null) url.searchParams.set('altitude', String(Math.round(explicitElevation)))
 
   try {
     const response = await fetch(url, {
@@ -582,7 +565,12 @@ async function loadPowderForecastTimeseries(resort: any, fallback: any[]) {
     const payload = await response.json().catch(() => null)
     const timeseries = Array.isArray(payload?.properties?.timeseries) ? payload.properties.timeseries : []
     if (!timeseries.length) return { timeseries: fallback, basis: 'selected_location' as const, elevationM: null }
-    return { timeseries, basis: 'resort_top' as const, elevationM: elevation }
+    const modelElevation = finiteNumber(Array.isArray(payload?.geometry?.coordinates) ? payload.geometry.coordinates[2] : null)
+    return {
+      timeseries,
+      basis: explicitElevation != null ? 'resort_top' as const : 'resort_location' as const,
+      elevationM: explicitElevation ?? modelElevation,
+    }
   } catch {
     return { timeseries: fallback, basis: 'selected_location' as const, elevationM: null }
   }
