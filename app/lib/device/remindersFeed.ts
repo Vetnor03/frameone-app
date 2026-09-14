@@ -40,6 +40,7 @@ export type DeviceReminderItem = {
   due_time: string | null
   display_time: string | null
   source?: DeviceReminderSource
+  is_user_created?: boolean
   external_id?: string
   raw?: Record<string, unknown>
   provider?: string
@@ -384,6 +385,10 @@ function normalizedSortTime(value: string | null | undefined) {
   return `${pad2(hour)}:${pad2(minute)}`
 }
 
+function isUserCreatedReminder(item: DeviceReminderItem) {
+  return item.source === 'remind' && item.is_user_created !== false
+}
+
 export function reminderSortTimestamp(item: Pick<DeviceReminderItem, 'occurrence_date' | 'display_time' | 'due_time'>) {
   return `${item.occurrence_date} ${normalizedSortTime(item.display_time || item.due_time) || '99:99'}`
 }
@@ -393,10 +398,13 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
 
   const cap = Math.floor(maxItems)
   const orderedItems = sortReminderItems(items)
-  // Dates are selected before source priority. Otherwise an optional event today
-  // can disappear merely because personal content exists on two later dates.
+  const personalItems = orderedItems.filter(isUserCreatedReminder)
+  const importedItems = orderedItems.filter((item) => !isUserCreatedReminder(item))
+
+  // User-created reminders own the scarce display groups first. Integrations can
+  // use remaining groups, but must never push a personal reminder off the frame.
   const selectedGroupKeys: string[] = []
-  for (const item of orderedItems) {
+  for (const item of [...personalItems, ...importedItems]) {
     const groupKey = item.occurrence_date || item.display_date
     if (!groupKey) continue
     if (!selectedGroupKeys.includes(groupKey)) selectedGroupKeys.push(groupKey)
@@ -404,10 +412,16 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
   }
 
   const relevant = orderedItems.filter((item) => selectedGroupKeys.includes(item.occurrence_date || item.display_date))
-  // Apply the capacity limit to the chronological list itself. Reserving the
-  // available slots for one source first can discard an earlier event and make
-  // a later reminder appear to be the next item on the frame.
-  return relevant.slice(0, cap)
+  const personalRelevant = relevant.filter(isUserCreatedReminder)
+  const importedRelevant = relevant.filter((item) => !isUserCreatedReminder(item))
+  const selected = [
+    ...personalRelevant.slice(0, cap),
+    ...importedRelevant.slice(0, Math.max(0, cap - personalRelevant.length)),
+  ]
+
+  // Priority decides which entries survive capacity pressure; chronological
+  // ordering still decides where those surviving entries are drawn.
+  return sortReminderItems(selected)
 }
 
 export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderItem) {
@@ -424,9 +438,16 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   if (at && bt && at !== bt) return at.localeCompare(bt)
   if (at !== bt) return at ? -1 : 1
 
-  const sourceRank = (source: DeviceReminderItem['source']) => source === 'teams' ? 0 : source === 'spond' ? 1 : source === 'waste' ? 2 : source === 'local-events' ? 3 : 4
-  const as = sourceRank(a.source)
-  const bs = sourceRank(b.source)
+  const sourceRank = (item: DeviceReminderItem) => {
+    if (isUserCreatedReminder(item)) return 0
+    if (item.source === 'teams') return 1
+    if (item.source === 'spond') return 2
+    if (item.source === 'waste') return 3
+    if (item.source === 'local-events') return 4
+    return 5
+  }
+  const as = sourceRank(a)
+  const bs = sourceRank(b)
   if (as !== bs) return as - bs
 
   const titleOrder = a.title.localeCompare(b.title, 'en', { sensitivity: 'base' })
