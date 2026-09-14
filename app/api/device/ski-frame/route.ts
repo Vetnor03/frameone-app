@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,7 +21,7 @@ function finite(value: unknown) {
   return Number.isFinite(number) ? number : null
 }
 
-async function canReadDevice(supabase: ReturnType<typeof createClient>, deviceId: string, token: string) {
+async function canReadDevice(supabase: SupabaseClient, deviceId: string, token: string) {
   const { data: device, error: deviceError } = await supabase
     .from('devices')
     .select('device_id, device_token')
