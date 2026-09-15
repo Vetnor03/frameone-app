@@ -446,6 +446,8 @@ function buildOccurrencesForRow(
   const title = String(row.title ?? '').trim()
   const dueDate = String(row.due_date ?? '').trim()
   const dueTime = normalizeReminderTime(row.due_time)
+  const endTime = normalizeReminderTime(row.end_time)
+  const effectiveTime = dueTime || endTime
   const repeat: ReminderRepeatKey = isReminderRepeatKey(row.repeat_type) ? row.repeat_type : 'none'
   const customRepeatDays = Number(row.custom_repeat_days)
 
@@ -469,8 +471,8 @@ function buildOccurrencesForRow(
       days_until,
       is_overdue: days_until < 0,
       repeat,
-      due_time: dueTime,
-      display_time: dueTime,
+      due_time: effectiveTime,
+      display_time: effectiveTime,
       is_user_created: !row.starter_key,
     })
   }
