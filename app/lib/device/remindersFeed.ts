@@ -398,30 +398,20 @@ export function selectReminderDisplayGroups(items: DeviceReminderItem[], maxItem
 
   const cap = Math.floor(maxItems)
   const orderedItems = sortReminderItems(items)
-  const personalItems = orderedItems.filter(isUserCreatedReminder)
-  const importedItems = orderedItems.filter((item) => !isUserCreatedReminder(item))
 
-  // User-created reminders own the scarce display groups first. Integrations can
-  // use remaining groups, but must never push a personal reminder off the frame.
+  // Dates always win before sources. This prevents a future personal reminder
+  // from displacing an earlier day containing only integration items.
   const selectedGroupKeys: string[] = []
-  for (const item of [...personalItems, ...importedItems]) {
+  for (const item of orderedItems) {
     const groupKey = item.occurrence_date || item.display_date
     if (!groupKey) continue
     if (!selectedGroupKeys.includes(groupKey)) selectedGroupKeys.push(groupKey)
     if (selectedGroupKeys.length >= 2) break
   }
 
-  const relevant = orderedItems.filter((item) => selectedGroupKeys.includes(item.occurrence_date || item.display_date))
-  const personalRelevant = relevant.filter(isUserCreatedReminder)
-  const importedRelevant = relevant.filter((item) => !isUserCreatedReminder(item))
-  const selected = [
-    ...personalRelevant.slice(0, cap),
-    ...importedRelevant.slice(0, Math.max(0, cap - personalRelevant.length)),
-  ]
-
-  // Priority decides which entries survive capacity pressure; chronological
-  // ordering still decides where those surviving entries are drawn.
-  return sortReminderItems(selected)
+  return orderedItems
+    .filter((item) => selectedGroupKeys.includes(item.occurrence_date || item.display_date))
+    .slice(0, cap)
 }
 
 export type ReminderVisibilityProfile = 'compact' | 'standard' | 'spacious'
@@ -434,9 +424,9 @@ function visibleReminderCapacity(item: DeviceReminderItem, profiles: readonly Re
 
 /**
  * The firmware keeps API order inside each date bucket and then renders only a
- * prefix of that bucket. Choose that prefix with personal-reminder priority,
- * sort the chosen visible items chronologically, and leave overflow behind it
- * so +N more still represents the full bucket.
+ * prefix of that bucket. Canonical feed order already puts personal reminders
+ * first within each date, so retaining it gives every geometry the same visible
+ * prefix while leaving overflow behind it for an accurate +N count.
  */
 export function prioritizeReminderVisiblePrefix(
   items: readonly DeviceReminderItem[],
@@ -457,22 +447,7 @@ export function prioritizeReminderVisiblePrefix(
     if (group.length === 0) continue
 
     const capacity = visibleReminderCapacity(group[0], profiles)
-    const personal = group.filter(isUserCreatedReminder)
-    if (group.length <= capacity || personal.length === 0) {
-      output.push(...group)
-      continue
-    }
-
-    const imported = group.filter((item) => !isUserCreatedReminder(item))
-    const visibleSelection = [
-      ...personal.slice(0, capacity),
-      ...imported.slice(0, Math.max(0, capacity - Math.min(personal.length, capacity))),
-    ]
-    const visibleSet = new Set(visibleSelection)
-    const visible = sortReminderItems(visibleSelection)
-    const overflow = group.filter((item) => !visibleSet.has(item))
-
-    output.push(...visible, ...overflow)
+    output.push(...group.slice(0, capacity), ...group.slice(capacity))
   }
 
   return output
@@ -484,6 +459,12 @@ export function compareReminderItems(a: DeviceReminderItem, b: DeviceReminderIte
   // first: a stale/incorrect relative-day value must not override the date.
   if (a.occurrence_date < b.occurrence_date) return -1
   if (a.occurrence_date > b.occurrence_date) return 1
+
+  // Within the selected day, user-created reminders are the first priority
+  // group even when an imported event has an earlier clock time.
+  const ap = isUserCreatedReminder(a)
+  const bp = isUserCreatedReminder(b)
+  if (ap !== bp) return ap ? -1 : 1
 
   const at = normalizedSortTime(a.display_time || a.due_time)
   const bt = normalizedSortTime(b.display_time || b.due_time)

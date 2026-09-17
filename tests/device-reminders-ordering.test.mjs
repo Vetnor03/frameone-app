@@ -163,12 +163,12 @@ test('event-only Tomorrow is selected when Today is empty', () => {
   assert.equal(selectReminderDisplayGroups(events, 10)[0].occurrence_date, '2026-09-06')
 })
 
-test('user-created reminder reserves frame capacity ahead of an earlier imported event', () => {
+test('an earlier imported day wins over a later user-created reminder', () => {
   const selected = selectReminderDisplayGroups([
     item({ id: 'r1', date: '2026-09-08', days: 3, source: 'remind' }),
     item({ id: 'e1', date: '2026-09-06', days: 1, source: 'teams' }),
   ], 1)
-  assert.equal(selected[0].reminder_id, 'r1')
+  assert.equal(selected[0].reminder_id, 'e1')
 })
 
 test('starter reminder does not get user-created priority', () => {
@@ -210,7 +210,7 @@ test('canonical ordering sorts Today, Tomorrow, and arbitrary future days by loc
   ])
 })
 
-test('canonical ordering normalizes UTC integration timestamps into the displayed timezone', () => {
+test('same-day ordering puts manual reminders before imported items, then sorts each group by time', () => {
   const teams = buildTeamsMeetingItems([
     { id: '2', user_id: 'u', provider: 'teams', external_id: 'late', title: 'Teams late', body: null, starts_at: '2026-09-09T18:00:00Z', due_at: null, priority: 0 },
   ], '2026-09-08', '2026-09-30', 'Europe/Oslo', new Date('2026-09-08T00:00:00Z'))
@@ -220,8 +220,29 @@ test('canonical ordering normalizes UTC integration timestamps into the displaye
   const manual = timedItem('manual-middle', '2026-09-09', '19:30', 'remind')
 
   assert.deepEqual(sortReminderItems([...teams, manual, ...spond]).map(x => [x.source, x.display_time]), [
-    ['spond', '19:00'], ['remind', '19:30'], ['teams', '20:00'],
+    ['remind', '19:30'], ['spond', '19:00'], ['teams', '20:00'],
   ])
+})
+
+test('limited slots keep multiple manual reminders before earlier imported events on the earliest day', () => {
+  const selected = selectReminderDisplayGroups([
+    timedItem('event-1200', '2026-09-08', '12:00', 'local-events'),
+    timedItem('manual-1800', '2026-09-08', '18:00', 'remind'),
+    timedItem('event-1100', '2026-09-08', '11:00', 'local-events'),
+    timedItem('manual-0900', '2026-09-08', '09:00', 'remind'),
+  ], 3)
+
+  assert.deepEqual(selected.map(x => x.reminder_id), ['manual-0900', 'manual-1800', 'event-1100'])
+})
+
+test('event-only earliest day remains active when the next manual reminder is several days away', () => {
+  const selected = selectReminderDisplayGroups([
+    timedItem('manual-saturday', '2026-09-12', '10:00', 'remind'),
+    timedItem('event-thursday-1200', '2026-09-08', '12:00', 'local-events'),
+    timedItem('event-thursday-1100', '2026-09-08', '11:00', 'local-events'),
+  ], 2)
+
+  assert.deepEqual(selected.map(x => x.reminder_id), ['event-thursday-1100', 'event-thursday-1200'])
 })
 
 test('equal timestamps put user-created reminders first, then use source, title, and identity as deterministic tie-breakers', () => {
@@ -295,7 +316,7 @@ test('physical capacity keeps the earliest canonical reminders instead of a rota
   assert.deepEqual(physical, mirror)
 })
 
-test('mixed reminder and local-event list stays chronological after source selection', () => {
+test('mixed reminder and local-event list keeps manual group ahead of chronological imports', () => {
   const makeTimedItem = (id, time, source) => ({
     reminder_id: id,
     title: id,
@@ -317,6 +338,6 @@ test('mixed reminder and local-event list stays chronological after source selec
 
   assert.deepEqual(
     selected.map((entry) => entry.display_time),
-    ['14:00', '19:00', '22:00']
+    ['19:00', '14:00', '22:00']
   )
 })
