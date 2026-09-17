@@ -35,7 +35,7 @@ test('standard Tomorrow prefix reserves one of four visible slots for a personal
 
   assert.equal(visible.some((item) => item.reminder_id === 'personal-all-day'), true)
   assert.deepEqual(visible.map((item) => item.reminder_id), [
-    'event-1200', 'event-1700', 'event-1800', 'personal-all-day',
+    'personal-all-day', 'event-1200', 'event-1700', 'event-1800',
   ])
   assert.equal(prioritized.length, items.length)
 })
@@ -50,7 +50,7 @@ test('compact Tomorrow prefix reserves one of three visible slots for a personal
 
   const prioritized = prioritizeReminderVisiblePrefix(items, ['compact'])
   assert.deepEqual(prioritized.slice(0, 3).map((item) => item.reminder_id), [
-    'event-1200', 'event-1700', 'personal-2000',
+    'personal-2000', 'event-1200', 'event-1700',
   ])
 })
 

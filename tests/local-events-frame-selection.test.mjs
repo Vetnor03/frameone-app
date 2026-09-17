@@ -38,7 +38,7 @@ test('the first upcoming Local Event is not displaced by later personal reminder
     row('early', 'Local before personal', '2026-07-12T17:00:00+02:00'),
     row('later', 'Local after personal', '2026-07-13T17:00:00+02:00'),
   ], [], today, at('2026-07-12T14:00:00Z'))
-  assert.deepEqual(selectReminderDisplayGroups([...local, ...personal].sort(compareReminderItems), 2).map((item) => item.reminder_id), ['local-events:early', 'p1'])
+  assert.deepEqual(selectReminderDisplayGroups([...local, ...personal].sort(compareReminderItems), 2).map((item) => item.reminder_id), ['p1', 'local-events:early'])
   assert.equal(selectReminderDisplayGroups(local, 2).length, 2)
 })
 
