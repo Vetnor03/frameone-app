@@ -21,7 +21,8 @@ The canonical source stays organized under `frame/src/`. The preparation script 
 Requirements:
 
 - Arduino IDE 2.x
-- Espressif ESP32 boards package `2.0.14`
+- Espressif ESP32 boards package `3.3.11`
+- RE:MIND PM-enabled ESP32-S3 libraries built from `frame/tools/production_pm/`
 - ArduinoJson `6.21.5`
 - Adafruit BusIO `1.17.4`
 - Adafruit GFX Library `1.12.6`
@@ -58,13 +59,15 @@ Select these Tools menu values:
 
 Use **Sketch > Verify/Compile** or **Sketch > Export Compiled Binary**. For the first physical test, use the IDE's USB **Upload** only after the PR's required builds are green. Exporting does not publish or replace the production OTA binary/manifest; that remains a separate release action after physical validation.
 
-The CI job executes the same Arduino build non-interactively with this FQBN:
+The production CI job executes the same Arduino build non-interactively with this FQBN after replacing the stock ESP32-S3 SDK directory with the verified PM-enabled 3.3.11 libraries:
 
 ```text
 esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc
 ```
 
 ## PlatformIO workflow
+
+The existing PlatformIO profiles remain compatibility/regression builds on the older Arduino-ESP32 2.0.14 generation. They are not the Alfred production power build and must not be used as evidence that automatic connected light sleep is enabled.
 
 Build from the repository root without producing or publishing any release artifact:
 
@@ -87,8 +90,20 @@ The selected Alfred partition table is `partitions_alfred_16mb.csv`: app0 spans 
 
 Alfred uses an explicit S3 FSPI instance at 4 MHz, the MAX17048 rather than ADC35, and active-low BQ24074 status signals. Deep-sleep source-change wake uses the ESP32-S3-supported `esp_sleep_enable_ext1_wakeup` API on RTC-capable GPIO17. Display power is asserted only around panel operations and held LOW across deep sleep.
 
+## Production PM libraries
+
+Automatic connected light sleep is a build-time capability, not only a runtime setting. Alfred production builds therefore use the reproducible builder in `frame/tools/production_pm/`, pinned to Arduino-ESP32 3.3.11 and the ESP-IDF 5.5.5 generation. The builder enables `CONFIG_PM_ENABLE=y` and `CONFIG_FREERTOS_USE_TICKLESS_IDLE=y`, then builds the ESP32-S3 `qio_opi` memory variant used by Alfred.
+
+From Linux/WSL:
+
+```sh
+bash frame/tools/production_pm/build_pm_libraries.sh
+```
+
+The verified output is written to `.pm-production-dist/esp32s3` by default. Do not treat a stock Boards Manager S3 SDK as equivalent unless those PM/tickless settings have been verified in the actual libraries used for compilation.
+
 ## Continuous compilation
 
-The `Frame firmware build` GitHub Actions job installs the pinned PlatformIO and Arduino dependencies, runs the complete Python firmware test suite, compiles both PlatformIO hardware environments, reports the Alfred size, generates the flat Arduino sketch, and compiles that sketch with the exact Alfred Arduino configuration. It uploads and publishes nothing.
+The `Frame firmware build` GitHub Actions job runs the Python firmware tests and both existing PlatformIO compatibility builds, then installs Arduino-ESP32 3.3.11, builds/caches the PM-enabled ESP32-S3 libraries, discovers Arduino CLI's active S3 SDK path, injects the verified custom libraries, and compiles the real flat Alfred sketch. The CI step explicitly checks the injected SDK for both PM and tickless support before compilation. It uploads and publishes no production OTA image.
 
 The PlatformIO Alfred environment resolves `boards/alfred_v1_2.json`, rather than inheriting the misleading N8/no-PSRAM DevKitC label. That manifest declares ESP32-S3-WROOM-1-N16R8, 16 MiB flash, 80 MHz QIO flash mode, `qio_opi` Arduino memory type, OPI PSRAM with an expected size of 8 MiB, and the USB CDC/JTAG build flags. PlatformIO 6.6.0 deliberately emits a DIO-compatible ROM image header for a `qio` board setting while selecting `bootloader_qio_80m.elf`; the selected QIO bootloader and `qio_opi` SDK configuration are visible in the verbose CI log. `platformio.ini` independently selects the checked-in `partitions_alfred_16mb.csv` table.
