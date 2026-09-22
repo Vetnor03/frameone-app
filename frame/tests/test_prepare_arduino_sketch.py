@@ -63,12 +63,14 @@ def test_ci_compiles_the_generated_sketch_with_exact_alfred_options():
         encoding="utf-8"
     )
     assert 'version: "1.5.1"' in workflow
-    assert "esp32:esp32@2.0.14" in workflow
+    assert "esp32:esp32@3.3.11" in workflow
     assert 'arduino-cli lib install "ArduinoJson@6.21.5"' in workflow
     assert 'arduino-cli lib install "Adafruit BusIO@1.17.4"' in workflow
     assert 'arduino-cli lib install "Adafruit GFX Library@1.12.6"' in workflow
     assert 'arduino-cli lib install "GxEPD2@1.6.4"' in workflow
     assert "python frame/tools/prepare_arduino_sketch.py" in workflow
+    assert "build_pm_libraries.sh" in workflow
+    assert "Inject verified PM-enabled S3 libraries" in workflow
     assert (
         "esp32:esp32:esp32s3:CPUFreq=240,FlashMode=qio,FlashSize=16M,"
         "PartitionScheme=min_spiffs,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc"
