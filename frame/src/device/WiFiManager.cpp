@@ -15,6 +15,13 @@ static const uint16_t CONNECTED_IDLE_LISTEN_INTERVAL_BEACONS = 100;
 static bool g_policyInitialized = false;
 static bool g_lastPolicyUsbPresent = false;
 static bool g_lastBatteryConnectedIdleReady = false;
+static bool g_lastAssociationPreparedForConnectedIdle = false;
+
+bool stationHasIp() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  const IPAddress ip = WiFi.localIP();
+  return (uint32_t)ip != 0;
+}
 
 bool configureAutomaticLightSleep(bool enable) {
 #if defined(CONFIG_PM_ENABLE) && CONFIG_PM_ENABLE && \
@@ -91,11 +98,22 @@ bool connectSaved(uint32_t timeoutMs) {
 
   WiFi.mode(WIFI_STA);
 
-  // Configure credentials without starting association yet. MAX_MODEM's listen
-  // interval is part of the station association parameters, so it must be set
-  // before esp_wifi_connect(), not after the frame is already online.
+  // Proven production association sequence:
+  // 1) associate with Wi-Fi power save disabled,
+  // 2) advertise listen_interval=100 before association,
+  // 3) wait for a real DHCP address,
+  // 4) only then may the caller enable MAX_MODEM + automatic light sleep.
+  const esp_err_t connectPsErr = esp_wifi_set_ps(WIFI_PS_NONE);
+  if (connectPsErr != ESP_OK) {
+    Serial.print("WiFi connect policy: WIFI_PS_NONE failed: ");
+    Serial.println((int)connectPsErr);
+  }
+
+  // WiFi.begin(..., connect=false) writes credentials without associating.
   WiFi.begin(ssid.c_str(), pass.c_str(), 0, nullptr, false);
-  configureListenIntervalBeforeConnect();
+  const bool listenIntervalReady = configureListenIntervalBeforeConnect();
+  g_lastAssociationPreparedForConnectedIdle =
+    connectPsErr == ESP_OK && listenIntervalReady;
   esp_wifi_connect();
   g_policyInitialized = false;  // Association/reconnect can reset Wi-Fi PS state.
 
@@ -103,19 +121,23 @@ bool connectSaved(uint32_t timeoutMs) {
   Serial.println(ssid);
 
   uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs) {
+  while (!stationHasIp() && (millis() - start) < timeoutMs) {
     delay(250);
     Serial.print(".");
   }
   Serial.println();
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (stationHasIp()) {
     Serial.print("✅ WiFi connected. IP: ");
     Serial.println(WiFi.localIP());
     return true;
   }
 
-  Serial.println("❌ WiFi connect failed.");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("❌ WiFi associated but DHCP/IP was not ready before timeout.");
+  } else {
+    Serial.println("❌ WiFi connect failed.");
+  }
   return false;
 }
 
@@ -138,14 +160,21 @@ bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
     return err == ESP_OK;
   }
 
-  // Battery policy: remain associated, let the AP buffer unicast traffic, and
-  // wake on the configured listen interval. Automatic light sleep is required
-  // to make the CPU side of this worthwhile; stock Arduino builds without the
-  // PM/tickless options must fall back to 10-second deep-sleep probes instead.
+  // Battery policy: only enter the measured connected-idle sequence after
+  // association and DHCP are complete.
+  if (!stationHasIp()) {
+    Serial.println("WiFi power policy: battery policy requested before IP is ready");
+    g_lastBatteryConnectedIdleReady = false;
+    return false;
+  }
+
   WiFi.setSleep(true);
   const esp_err_t psErr = esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
   const bool lightSleepReady = configureAutomaticLightSleep(true);
-  g_lastBatteryConnectedIdleReady = (psErr == ESP_OK && lightSleepReady);
+  g_lastBatteryConnectedIdleReady =
+    g_lastAssociationPreparedForConnectedIdle &&
+    psErr == ESP_OK &&
+    lightSleepReady;
 
   if (g_lastBatteryConnectedIdleReady) {
     Serial.println("WiFi power policy: battery connected-idle (~10s listen interval)");

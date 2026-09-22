@@ -7,14 +7,21 @@ def read(path: str) -> str:
     return (ROOT / path).read_text()
 
 
-def test_saved_wifi_association_sets_roughly_ten_second_listen_interval():
+def test_saved_wifi_association_uses_proven_preconnect_sequence_and_waits_for_ip():
     source = read("src/device/WiFiManager.cpp")
     assert "CONNECTED_IDLE_LISTEN_INTERVAL_BEACONS = 100" in source
-    connect = source.split("bool connectSaved(uint32_t timeoutMs)", 1)[1]
-    assert "WiFi.begin(ssid.c_str(), pass.c_str(), 0, nullptr, false);" in connect
+    assert "config.sta.listen_interval = CONNECTED_IDLE_LISTEN_INTERVAL_BEACONS;" in source
+    assert "return (uint32_t)ip != 0;" in source
+
+    connect = source.split("bool connectSaved(uint32_t timeoutMs)", 1)[1].split(
+        "bool applyOperationalPowerPolicy", 1
+    )[0]
+    assert connect.index("esp_wifi_set_ps(WIFI_PS_NONE)") < connect.index("WiFi.begin(")
     assert connect.index("WiFi.begin(") < connect.index("configureListenIntervalBeforeConnect();")
     assert connect.index("configureListenIntervalBeforeConnect();") < connect.index("esp_wifi_connect();")
-    assert "config.sta.listen_interval = CONNECTED_IDLE_LISTEN_INTERVAL_BEACONS;" in source
+    assert "while (!stationHasIp()" in connect
+    assert "if (stationHasIp())" in connect
+    assert "connectPsErr == ESP_OK && listenIntervalReady" in connect
 
 
 def test_battery_policy_prefers_max_modem_and_requires_automatic_light_sleep():
@@ -22,7 +29,12 @@ def test_battery_policy_prefers_max_modem_and_requires_automatic_light_sleep():
     policy = source.split("bool applyOperationalPowerPolicy(bool usbPresent, bool force)", 1)[1]
     assert "esp_wifi_set_ps(WIFI_PS_MAX_MODEM)" in policy
     assert "configureAutomaticLightSleep(true)" in policy
-    assert "psErr == ESP_OK && lightSleepReady" in policy
+    assert policy.index("if (!stationHasIp())") < policy.index("WiFi.setSleep(true);")
+    assert policy.index("WiFi.setSleep(true);") < policy.index("esp_wifi_set_ps(WIFI_PS_MAX_MODEM)")
+    assert policy.index("esp_wifi_set_ps(WIFI_PS_MAX_MODEM)") < policy.index("configureAutomaticLightSleep(true)")
+    assert "g_lastAssociationPreparedForConnectedIdle" in policy
+    assert "psErr == ESP_OK &&" in policy
+    assert "lightSleepReady;" in policy
     assert "CONFIG_PM_ENABLE" in source
     assert "CONFIG_FREERTOS_USE_TICKLESS_IDLE" in source
     assert "return false;" in policy
