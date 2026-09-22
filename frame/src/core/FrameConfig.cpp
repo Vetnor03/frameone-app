@@ -173,6 +173,7 @@ static const size_t FRAME_CONFIG_JSON_CAPACITY = 12288;
 FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   // reset core
   out.layout = LAYOUT_DEFAULT;
+  out.powerSaver = false;
   out.theme = THEME_DARK;
   resetCustomLayout(out);
 
@@ -255,6 +256,9 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
     Serial.println("frame-config missing settings_json");
     return FETCH_ERROR;
   }
+
+  // power mode: absent/invalid remains Normal mode for backwards compatibility.
+  out.powerSaver = (bool)(settings["powerSaver"] | false);
 
   // theme
   const char* themeStr = settings["theme"] | "dark";
