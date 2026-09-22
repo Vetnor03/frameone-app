@@ -65,6 +65,17 @@ def test_main_uses_ten_second_connected_idle_and_dynamic_deep_sleep_fallback():
     assert "PROBE_WAKE_US" not in sleep
 
 
+def test_normal_mode_applies_power_policy_before_time_sync():
+    source = read("src/frame_v2.5.1.ino")
+    setup = source.split("void setup()", 1)[1]
+    connect = setup.index("WiFiManagerV2::connectSaved(12000)")
+    startup_policy = setup.index("const bool startupOperationalPolicyReady")
+    time_sync = setup.index("TimeSync::ensure(8000)")
+    assert connect < startup_policy < time_sync
+    policy_block = setup[startup_policy:time_sync]
+    assert "WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true)" in policy_block
+
+
 def test_network_probe_is_capped_at_ten_seconds_and_restores_power_policy():
     source = read("src/network/LiveUpdate.cpp")
     assert "LIVE_PROBE_MIN_NETWORK_INTERVAL_MS = 10000" in source
