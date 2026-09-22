@@ -77,3 +77,23 @@ def test_production_http_read_timeout_is_twenty_seconds():
     assert "HTTP_TIMEOUT_MS = 20000" in source
     assert "g_http.setTimeout(HTTP_TIMEOUT_MS);" in source
 
+
+
+def test_production_build_pins_pm_enabled_arduino_stack():
+    workflow = (ROOT.parent / ".github/workflows/frame-firmware-build.yml").read_text()
+    pm_config = read("tools/production_pm/defconfig.remind_pm")
+    pm_builder = read("tools/production_pm/build_pm_libraries.sh")
+    wifi = read("src/device/WiFiManager.cpp")
+
+    assert "platformio==6.1.19" in workflow
+    assert "esp32:esp32@3.3.11" in workflow
+    assert "build_pm_libraries.sh" in workflow
+    assert "Inject verified PM-enabled S3 libraries" in workflow
+    assert "CONFIG_PM_ENABLE=y" in pm_config
+    assert "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y" in pm_config
+    assert "b774170ff46c393eeb5e495ea37936038d3f4f4f" in pm_builder
+    assert "7c1afa837a28c7bd5210f57eda4afba4e171cad4" in pm_builder
+    assert "6671d0bd65cdb9d4cc1001b759e8610de945a8d5" in pm_builder
+    assert "mem-variant remind_pm qio 80m opi_ram" in pm_builder
+    assert "ESP_IDF_VERSION_MAJOR >= 5" in wifi
+    assert "esp_pm_config_t config{};" in wifi
