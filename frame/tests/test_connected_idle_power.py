@@ -13,8 +13,9 @@ def test_saved_wifi_association_uses_proven_no_ps_listen_interval_then_ip_sequen
     connect = source.split("bool connectSaved(uint32_t timeoutMs)", 1)[1]
     assert "esp_wifi_set_ps(WIFI_PS_NONE)" in connect
     assert "WiFi.begin(ssid.c_str(), pass.c_str(), 0, nullptr, false);" in connect
-    assert connect.index("esp_wifi_set_ps(WIFI_PS_NONE)") < connect.index("WiFi.begin(")
-    assert connect.index("WiFi.begin(") < connect.index("configureListenIntervalBeforeConnect();")
+    begin_call = "WiFi.begin(ssid.c_str(), pass.c_str(), 0, nullptr, false);"
+    assert connect.index("const esp_err_t connectPsErr = esp_wifi_set_ps(WIFI_PS_NONE);") < connect.index(begin_call)
+    assert connect.index(begin_call) < connect.index("configureListenIntervalBeforeConnect();")
     assert connect.index("configureListenIntervalBeforeConnect();") < connect.index("esp_wifi_connect();")
     assert "while (!stationHasIp()" in connect
     assert connect.index("esp_wifi_connect();") < connect.index("while (!stationHasIp()")
