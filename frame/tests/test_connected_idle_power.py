@@ -59,3 +59,9 @@ def test_network_probe_is_capped_at_ten_seconds_and_restores_power_policy():
     assert "restoreOperationalPowerPolicyAfterProbe();" in source
     helper = source.split("void restoreOperationalPowerPolicyAfterProbe()", 1)[1].split("}\n}\n\nbool LiveUpdate::probe", 1)[0]
     assert "applyOperationalPowerPolicy(usbPresent, true)" in helper
+
+def test_production_http_read_timeout_is_twenty_seconds():
+    source = read("src/network/NetClient.cpp")
+    assert "HTTP_TIMEOUT_MS = 20000" in source
+    assert "g_http.setTimeout(HTTP_TIMEOUT_MS);" in source
+
