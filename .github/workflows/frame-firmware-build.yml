@@ -79,8 +79,8 @@ jobs:
           cp -a "$GITHUB_WORKSPACE/.cache/remind-pm-sdk/esp32s3" "$SDK_PATH"
 
           test -d "$SDK_PATH/qio_opi"
-          grep -R -E -q '^(#define CONFIG_PM_ENABLE 1|CONFIG_PM_ENABLE=y) "$SDK_PATH"
-          grep -R -E -q '^(#define CONFIG_FREERTOS_USE_TICKLESS_IDLE 1|CONFIG_FREERTOS_USE_TICKLESS_IDLE=y) "$SDK_PATH"
+          grep -R -E -q "^(#define CONFIG_PM_ENABLE 1|CONFIG_PM_ENABLE=y)$" "$SDK_PATH"
+          grep -R -E -q "^(#define CONFIG_FREERTOS_USE_TICKLESS_IDLE 1|CONFIG_FREERTOS_USE_TICKLESS_IDLE=y)$" "$SDK_PATH"
 
       - name: Compile production Alfred with Arduino CLI + PM libraries
         run: |
