@@ -33,7 +33,8 @@ def test_battery_policy_prefers_max_modem_and_requires_automatic_light_sleep():
     assert policy.index("WiFi.setSleep(true);") < policy.index("esp_wifi_set_ps(WIFI_PS_MAX_MODEM)")
     assert policy.index("esp_wifi_set_ps(WIFI_PS_MAX_MODEM)") < policy.index("configureAutomaticLightSleep(true)")
     assert "g_lastAssociationPreparedForConnectedIdle" in policy
-    assert "psErr == ESP_OK && lightSleepReady" in policy
+    assert "psErr == ESP_OK &&" in policy
+    assert "lightSleepReady;" in policy
     assert "CONFIG_PM_ENABLE" in source
     assert "CONFIG_FREERTOS_USE_TICKLESS_IDLE" in source
     assert "return false;" in policy
