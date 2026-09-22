@@ -10,8 +10,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 ARDUINO_TAG="${ARDUINO_TAG:-3.3.11}"
 IDF_BRANCH="${IDF_BRANCH:-release/v5.5}"
-IDF_COMMIT="${IDF_COMMIT:-b774170f}"
-BUILDER_REF="${BUILDER_REF:-idf-release_v5.5}"
+IDF_COMMIT="${IDF_COMMIT:-b774170ff46c393eeb5e495ea37936038d3f4f4f}"
+BUILDER_COMMIT="${BUILDER_COMMIT:-e68e30112ffad75e96535408dfe25bff6d2f26fb}"
+TINYUSB_COMMIT="${TINYUSB_COMMIT:-7c1afa837a28c7bd5210f57eda4afba4e171cad4}"
 
 WORK_DIR="${PM_WORK_DIR:-$REPO_ROOT/.pm-production-build}"
 DIST_DIR="${PM_DIST_DIR:-$REPO_ROOT/.pm-production-dist}"
@@ -22,19 +23,25 @@ mkdir -p "$WORK_DIR"
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-git clone --depth 1 --branch "$BUILDER_REF" \
-  https://github.com/espressif/esp32-arduino-lib-builder.git "$BUILDER_DIR"
+git init "$BUILDER_DIR"
+git -C "$BUILDER_DIR" remote add origin https://github.com/espressif/esp32-arduino-lib-builder.git
+git -C "$BUILDER_DIR" fetch --depth 1 origin "$BUILDER_COMMIT"
+git -C "$BUILDER_DIR" checkout --detach FETCH_HEAD
 
 cd "$BUILDER_DIR"
 export IDF_PATH="$BUILDER_DIR/esp-idf"
 export IDF_BRANCH
 export IDF_COMMIT
 
-# Fetch the component set expected by the pinned v5.5 builder, then pin the
-# Arduino component itself to the exact release used by the proven tests.
-./tools/update-components.sh
-git -C components/arduino fetch --tags --force
-git -C components/arduino checkout --detach "$ARDUINO_TAG"
+# Pin the Arduino component and TinyUSB dependency instead of using the
+# builder's update-components.sh, which follows TinyUSB HEAD.
+mkdir -p components/arduino_tinyusb
+git clone --depth 1 --branch "$ARDUINO_TAG" \
+  https://github.com/espressif/arduino-esp32.git components/arduino
+git init components/arduino_tinyusb/tinyusb
+git -C components/arduino_tinyusb/tinyusb remote add origin https://github.com/hathach/tinyusb.git
+git -C components/arduino_tinyusb/tinyusb fetch --depth 1 origin "$TINYUSB_COMMIT"
+git -C components/arduino_tinyusb/tinyusb checkout --detach FETCH_HEAD
 
 # Install and export the matching IDF/toolchain, pinned to the same IDF commit
 # used by the official 3.3.11 library package.
@@ -75,7 +82,8 @@ RE:MIND Alfred V1.2 production PM libraries
 Arduino-ESP32: $ARDUINO_TAG
 ESP-IDF branch: $IDF_BRANCH
 ESP-IDF commit: $IDF_COMMIT (v5.5.5 generation)
-Builder ref: $BUILDER_REF
+Builder commit: $BUILDER_COMMIT
+TinyUSB commit: $TINYUSB_COMMIT
 Target: esp32s3
 Memory variant: qio_opi
 CONFIG_PM_ENABLE=y
