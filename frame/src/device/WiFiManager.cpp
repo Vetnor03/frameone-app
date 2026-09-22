@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include <esp_pm.h>
 #include <esp_wifi.h>
+#include <esp_idf_version.h>
 #include <sdkconfig.h>
 
 static Preferences prefs;
@@ -27,7 +28,11 @@ bool configureAutomaticLightSleep(bool enable) {
 #if defined(CONFIG_PM_ENABLE) && CONFIG_PM_ENABLE && \
     defined(CONFIG_FREERTOS_USE_TICKLESS_IDLE) && CONFIG_FREERTOS_USE_TICKLESS_IDLE && \
     defined(CONFIG_IDF_TARGET_ESP32S3)
+#if ESP_IDF_VERSION_MAJOR >= 5
+  esp_pm_config_t config{};
+#else
   esp_pm_config_esp32s3_t config{};
+#endif
   config.max_freq_mhz = 240;
   config.min_freq_mhz = 40;
   config.light_sleep_enable = enable;
