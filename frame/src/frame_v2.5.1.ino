@@ -1174,6 +1174,15 @@ void setup() {
     shutdownDisplay();
   }
 
+  // connectSaved() returns only after association + DHCP/IP are complete.
+  // Apply the measured source-aware policy immediately so all following HTTPS
+  // work uses the same production Wi-Fi/PM behavior proven by Test B.
+  const bool startupConnectedIdleReady =
+    WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
+  if (!pwrEarly.usbPresent && !startupConnectedIdleReady) {
+    Serial.println("WiFi power policy: startup ALS unavailable; deep-sleep fallback remains armed");
+  }
+
   TimeSync::ensure(8000);
   if (SmartRefresh::loadScheduler(g_smartState, g_revisionCheckedAt)) {
     const time_t restoredNow = time(nullptr);
