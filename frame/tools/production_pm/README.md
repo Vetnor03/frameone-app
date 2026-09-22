@@ -8,7 +8,7 @@ Pinned production generation:
 
 - Arduino-ESP32 3.3.11
 - ESP-IDF 5.5.5 generation (commit `b774170f`)
-- Espressif lib-builder ref `idf-release_v5.5`
+- ESP32 Arduino lib-builder commit `6671d0bd65cdb9d4cc1001b759e8610de945a8d5` (reproducible build pin; not claimed as the historical battery-test builder commit)
 - ESP32-S3
 - QIO flash at 80 MHz + OPI PSRAM (`qio_opi`)
 - `CONFIG_PM_ENABLE=y`
