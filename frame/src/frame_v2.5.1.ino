@@ -1174,6 +1174,14 @@ void setup() {
     shutdownDisplay();
   }
 
+  // Normal mode uses the measured connected-idle policy as soon as saved Wi-Fi
+  // has association + DHCP, before time sync or any following backend traffic.
+  const bool startupOperationalPolicyReady =
+    WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
+  if (!pwrEarly.usbPresent && !startupOperationalPolicyReady) {
+    Serial.println("WiFi power policy: startup connected-idle unavailable; fallback remains armed");
+  }
+
   TimeSync::ensure(8000);
   if (SmartRefresh::loadScheduler(g_smartState, g_revisionCheckedAt)) {
     const time_t restoredNow = time(nullptr);
