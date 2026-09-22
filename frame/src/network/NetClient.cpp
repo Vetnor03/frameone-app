@@ -6,7 +6,8 @@
 #include <esp_wifi.h>
 
 namespace {
-  // Measured production read timeout: valid HTTPS responses can exceed 10 s through ALS.\n  static const uint32_t HTTP_TIMEOUT_MS = 20000;
+  // Measured production read timeout: valid HTTPS responses can exceed 10 s through ALS.
+  static const uint32_t HTTP_TIMEOUT_MS = 20000;
   static const int MAX_RETRIES = 3;
   static const int TRANSPORT_FAILURES_BEFORE_WIFI_RESET = 2;
   static int g_lastContentLength = -1;
