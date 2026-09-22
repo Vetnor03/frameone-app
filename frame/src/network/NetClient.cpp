@@ -6,7 +6,7 @@
 #include <esp_wifi.h>
 
 namespace {
-  static const uint32_t HTTP_TIMEOUT_MS = 15000;
+  static const uint32_t HTTP_TIMEOUT_MS = 20000;
   static const int MAX_RETRIES = 3;
   static const int TRANSPORT_FAILURES_BEFORE_WIFI_RESET = 2;
   static int g_lastContentLength = -1;
