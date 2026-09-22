@@ -3,7 +3,9 @@ set -euo pipefail
 
 # Build only the ESP32-S3 libraries RE:MIND needs for Alfred V1.2.
 # This reproduces the PM-enabled Arduino-ESP32 3.3.11 / IDF 5.5.5 library
-# generation used for the completed connected-light-sleep battery tests.\n# The builder implementation itself is pinned separately for reproducible CI;\n# its exact commit was not part of the battery-test record.
+# generation used for the completed connected-light-sleep battery tests.
+# The builder implementation itself is pinned separately for reproducible CI;
+# its exact commit was not part of the battery-test record.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
