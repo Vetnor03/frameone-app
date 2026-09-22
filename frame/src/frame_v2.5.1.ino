@@ -60,6 +60,7 @@ RTC_DATA_ATTR static uint32_t normalSyncElapsedSeconds = 0;
 RTC_DATA_ATTR static uint32_t plannedDeepSleepSeconds = SmartRefresh::REVISION_SAFETY_SECONDS;
 RTC_DATA_ATTR static time_t g_nextScheduledWake = 0;
 RTC_DATA_ATTR static time_t g_revisionRetryNotBefore = 0;
+RTC_DATA_ATTR static bool g_powerSaverMode = false;
 // Retained across dynamically scheduled deep-sleep wake cycles. A cold boot may redraw
 // once, but ordinary setup-pending probes never refresh unchanged e-paper.
 RTC_DATA_ATTR static bool setupPendingScreenDisplayed = false;
@@ -238,10 +239,10 @@ static uint64_t nextDeepSleepDurationUs() {
   // Invalid/unset wall time or scheduler state falls back to the revision
   // safety maximum for normal smart-refresh work.
   if (now < 1000000000 || seconds == 0) seconds = SmartRefresh::REVISION_SAFETY_SECONDS;
-  // Deep sleep cannot receive a cloud manual-update request. Keep the smart
-  // scheduler's due-work calculation, but never sleep longer than the manual
-  // discovery ceiling so the app Update button remains responsive on battery.
-  if (seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
+  // Normal mode keeps the manual-update discovery ceiling. Power Saver never
+  // live-listens or wakes just to discover app updates; it sleeps to the smart
+  // scheduler and picks up any pending revision on that scheduled wake.
+  if (!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS)
     seconds = SmartRefresh::MANUAL_PROBE_SECONDS;
   return (uint64_t)seconds * 1000000ULL;
 }
@@ -1252,6 +1253,10 @@ void setup() {
     goToSleepForUs(10ULL * 1000000ULL, pwrEarly.usbPresent);
   } else if (postPairConfig == FrameConfigApi::FETCH_OK) {
     setupPendingScreenDisplayed = false;
+    g_powerSaverMode = g_cfg.powerSaver;
+    Serial.println(g_powerSaverMode
+      ? "Power mode: Power Saver (schedule-only deep sleep)"
+      : "Power mode: Normal (persistent Wi-Fi + live updates)");
   }
 
   // Complete one-time renderer maintenance deterministically after networking
@@ -1262,9 +1267,11 @@ void setup() {
   );
 
   LiveUpdateState liveState{};
-  const uint32_t liveProbeStartedAtMs = millis();
-  const bool liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
-  if (liveProbeOk) {
+  bool liveProbeOk = false;
+  if (!g_powerSaverMode) {
+    const uint32_t liveProbeStartedAtMs = millis();
+    liveProbeOk = LiveUpdate::probe(DeviceIdentity::getToken(), liveState);
+    if (liveProbeOk) {
     if (liveState.requestedRevision > liveState.displayedRevision) {
       explicitRevisionObservedAtMs = liveProbeStartedAtMs;
     }
@@ -1278,8 +1285,11 @@ void setup() {
       liveState.displayedRevision = awaitingAck;
       refreshContentSignatureBestEffort();
     }
+    } else {
+      Serial.println("LiveUpdate: probe failed");
+    }
   } else {
-    Serial.println("LiveUpdate: probe failed");
+    Serial.println("Power Saver: live update probe skipped");
   }
 
   const uint64_t locallyRendered = LiveUpdate::getRenderedAwaitingAck();
@@ -1288,15 +1298,18 @@ void setup() {
     liveState.requestedRevision > liveState.displayedRevision &&
     liveState.requestedRevision > locallyRendered;
 
-  if (!explicitRevisionPending && LiveUpdate::getRenderedAwaitingAck() == 0) {
+  if (!g_powerSaverMode &&
+      !explicitRevisionPending && LiveUpdate::getRenderedAwaitingAck() == 0) {
     PowerSenseDebug overlayPwr = readPowerSenseDebug();
     BatteryState overlayBatt = BatteryManager::readAndUpdate(overlayPwr.usbPresent);
     refreshPowerOverlayIfNeeded(overlayBatt, overlayPwr);
   }
 
-  const bool connectedIdleReady =
-    WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
-  if (!pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending) {
+  const bool connectedIdleReady = g_powerSaverMode
+    ? false
+    : WiFiManagerV2::applyOperationalPowerPolicy(pwrEarly.usbPresent, true);
+  if (!g_powerSaverMode &&
+      !pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending) {
     goToSleep(pwrEarly.usbPresent);
     return;
   }
@@ -1334,7 +1347,8 @@ run_normal_sync:
   }
 
   if (!normalSyncDue) {
-    if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+    if (!g_powerSaverMode &&
+        runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
       consumeNormalSyncPeriod();
       normalSyncDue = true;
       goto run_normal_sync;
@@ -1415,7 +1429,8 @@ run_normal_sync:
   }
 
   normalSyncDue = false;
-  if (runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
+  if (!g_powerSaverMode &&
+      runInteractiveMode(batt, pwr, liveState) == INTERACTIVE_NORMAL_SYNC_DUE) {
     consumeNormalSyncPeriod();
     normalSyncDue = true;
     goto run_normal_sync;
