@@ -159,6 +159,15 @@ static bool waitForBatteryIdleCadenceOrUsbConnect() {
     usbConnected = digitalRead(POWER_SENSE_PIN) == LOW;
   }
 
+  // Important: do this here, immediately after the PGOOD_N wake, instead of
+  // waiting for the next loop's ~100 ms debounced power sample. Windows starts
+  // USB enumeration as soon as VBUS is present; leaving automatic light sleep
+  // enabled during that debounce window can make the S3 USB PHY miss the first
+  // descriptor requests and appear as "USB device not recognized".
+  if (usbConnected) {
+    WiFiManagerV2::applyOperationalPowerPolicy(true, true);
+  }
+
   gpio_wakeup_disable((gpio_num_t)POWER_SENSE_PIN);
   detachInterrupt(digitalPinToInterrupt(POWER_SENSE_PIN));
   g_interactiveWaitTask = nullptr;
