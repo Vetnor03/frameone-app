@@ -34,6 +34,9 @@
 #include <time.h>
 #include <esp_sleep.h>
 #include <esp_wifi.h>
+#include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
@@ -81,6 +84,66 @@ static bool g_displayReady = false;
 static bool g_dashboardLoaded = false;
 static bool g_powerRefreshPending = false;
 static bool g_lastEvaluationDrew = false;
+
+#if defined(FRAME_IS_ALFRED_V1_2)
+// While battery ALS is active, PGOOD_N must wake the blocked interactive task
+// immediately when USB is inserted. Otherwise Windows can attempt enumeration
+// while the S3 USB PHY is still clock-gated in light sleep.
+static TaskHandle_t g_interactiveWaitTask = nullptr;
+
+static void IRAM_ATTR onInteractiveUsbPowerEdge() {
+  BaseType_t higherPriorityTaskWoken = pdFALSE;
+  TaskHandle_t task = g_interactiveWaitTask;
+  if (task != nullptr) {
+    vTaskNotifyGiveFromISR(task, &higherPriorityTaskWoken);
+    if (higherPriorityTaskWoken == pdTRUE) portYIELD_FROM_ISR();
+  }
+}
+
+static void waitForBatteryIdleCadenceOrUsbConnect() {
+  g_interactiveWaitTask = xTaskGetCurrentTaskHandle();
+
+  pinMode(POWER_SENSE_PIN, INPUT);
+  attachInterrupt(
+    digitalPinToInterrupt(POWER_SENSE_PIN),
+    onInteractiveUsbPowerEdge,
+    FALLING
+  );
+
+  const esp_err_t gpioWakeErr =
+    gpio_wakeup_enable((gpio_num_t)POWER_SENSE_PIN, GPIO_INTR_LOW_LEVEL);
+  const esp_err_t sleepWakeErr =
+    gpioWakeErr == ESP_OK ? esp_sleep_enable_gpio_wakeup() : gpioWakeErr;
+
+  // Close the race where USB was inserted between the main power sample and
+  // arming the falling-edge interrupt.
+  if (digitalRead(POWER_SENSE_PIN) != LOW &&
+      gpioWakeErr == ESP_OK &&
+      sleepWakeErr == ESP_OK) {
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS));
+  } else if (digitalRead(POWER_SENSE_PIN) != LOW) {
+    // Wake-source setup is only a USB-enumeration aid; preserve the proven
+    // 10-second battery cadence if it is unavailable.
+    delay(BATTERY_CONNECTED_IDLE_LOOP_MS);
+  }
+
+  gpio_wakeup_disable((gpio_num_t)POWER_SENSE_PIN);
+  detachInterrupt(digitalPinToInterrupt(POWER_SENSE_PIN));
+  g_interactiveWaitTask = nullptr;
+}
+#endif
+
+static void waitForInteractiveCadence(bool usbPresent) {
+  if (usbPresent) {
+    delay(REALTIME_UPDATE_POLL_MS);
+    return;
+  }
+#if defined(FRAME_IS_ALFRED_V1_2)
+  waitForBatteryIdleCadenceOrUsbConnect();
+#else
+  delay(BATTERY_CONNECTED_IDLE_LOOP_MS);
+#endif
+}
 
 enum SetupStep {
   SETUP_STEP_NONE = 0,
@@ -898,13 +961,24 @@ static InteractiveModeResult runInteractiveMode(
         return INTERACTIVE_FINISHED;
       }
 
-      // A charger edge is a deliberate full-screen reset gesture. Complete the
-      // physical refresh while the current network session is still alive,
-      // before an unplug can transition the device into deep-sleep fallback.
+      // On USB insertion, stop automatic light sleep before doing any lengthy
+      // display/network work so the native USB PHY can enumerate immediately.
+      if (pwr.usbPresent) {
+        WiFiManagerV2::applyOperationalPowerPolicy(true, true);
+      }
+
+      // A charger edge remains a deliberate full-screen reset gesture. On
+      // unplug, complete it before entering the battery policy/fallback.
       refreshPowerOverlayIfNeeded(batt, pwr);
-      if (!WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true) && !pwr.usbPresent) {
-        Serial.println("LiveUpdate: unplugged after full-screen reset -> dynamic deep-sleep fallback");
-        return INTERACTIVE_FINISHED;
+
+      if (!pwr.usbPresent) {
+        if (!WiFiManagerV2::applyOperationalPowerPolicy(false, true)) {
+          Serial.println("LiveUpdate: unplugged after full-screen reset -> dynamic deep-sleep fallback");
+          return INTERACTIVE_FINISHED;
+        }
+        // Correct the one-shot power-edge status telemetry after the battery
+        // policy has actually become active.
+        postDeviceStatus(batt, pwr, false);
       }
     }
     if (WiFi.status() != WL_CONNECTED) {
@@ -953,7 +1027,30 @@ static InteractiveModeResult runInteractiveMode(
       const uint64_t revisionToDisplay = state.requestedRevision;
       if (explicitRevisionObservedAtMs == 0) explicitRevisionObservedAtMs = millis();
       Serial.printf("LiveUpdate: revision %" PRIu64 " pending\n", revisionToDisplay);
-      if (!fetchAndRenderExplicit(batt, pwr, revisionToDisplay)) {
+
+      // The low-power connected-idle policy is for discovery. Once a manual
+      // revision is observed, temporarily run the radio/CPU at realtime speed
+      // for config/content fetches, e-paper preparation and the revision ACK.
+      WiFiManagerV2::beginRealtimeNetworkBurst();
+      const bool explicitRendered =
+        fetchAndRenderExplicit(batt, pwr, revisionToDisplay);
+
+      bool explicitAcked = false;
+      if (explicitRendered && retryRenderedAck(state.displayedRevision)) {
+        state.displayedRevision = revisionToDisplay;
+        refreshContentSignatureBestEffort();
+        explicitRevisionObservedAtMs = 0;
+        explicitAcked = true;
+      }
+
+      const bool operationalPolicyRestored =
+        WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true);
+      if (!pwr.usbPresent && !operationalPolicyRestored) {
+        Serial.println("LiveUpdate: update burst complete but connected light sleep restore failed");
+        return INTERACTIVE_FINISHED;
+      }
+
+      if (!explicitRendered) {
         // The revision remains pending. Stay interactive and retry with a
         // bounded backoff rather than turning one transient fetch into sleep.
         delay(configRetryMs);
@@ -962,11 +1059,10 @@ static InteractiveModeResult runInteractiveMode(
           : configRetryMs * 2U;
       } else {
         configRetryMs = REALTIME_UPDATE_POLL_MS;
-        if (retryRenderedAck(state.displayedRevision)) {
-          state.displayedRevision = revisionToDisplay;
+        if (explicitAcked) {
+          // Report after restoring ALS so telemetry records the steady-state
+          // power mode rather than the short realtime burst.
           postDeviceStatus(batt, pwr, true);
-          refreshContentSignatureBestEffort();
-          explicitRevisionObservedAtMs = 0;
         }
       }
     }
@@ -979,7 +1075,7 @@ static InteractiveModeResult runInteractiveMode(
 
     // Exactly one cheap revision probe per idle cadence. Rendering above is
     // synchronous, so a revision arriving during it is observed serially here.
-    delay(pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS);
+    waitForInteractiveCadence(pwr.usbPresent);
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
