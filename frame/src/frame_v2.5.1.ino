@@ -748,19 +748,28 @@ static bool renderSmartDashboard(const BatteryState& batt, const PowerSenseDebug
                                  const SmartRenderState& desired, const SmartDisplayPlan& plan) {
   g_lastEvaluationDrew = plan.type != SmartDisplayPlan::NONE;
   if (plan.type == SmartDisplayPlan::NONE) return true;
+
+  // A full render already performs all module setup/preload inside
+  // renderLoadedDashboard(). Do not prepare modules here first: doing so clears
+  // and refetches module caches a second time (notably Reminders).
+  if (plan.type == SmartDisplayPlan::FULL) {
+    const bool success = renderLoadedDashboard(batt, pwr);
+    if (success) SmartRefresh::commitSuccessfulDisplay(desired, plan);
+    return success;
+  }
+
   DisplayCore::setBatteryStatus(batt.percent, batt.isCharging, pwr.usbPresent);
   ModuleDate::setConfig(&g_cfg); ModuleWeather::setConfig(&g_cfg); ModuleSurf::setConfig(&g_cfg);
   ModuleReminders::setConfig(&g_cfg); ModuleSoccer::setConfig(&g_cfg); ModuleStocks::setConfig(&g_cfg);
   ModuleReminders::setRequiredProfiles(Layout::reminderProfileMask(g_cfg.layout, g_cfg));
   ModuleReminders::preload();
   ensureDisplay(); Theme::set(g_cfg.theme); resetTextStateForDashboard();
+
   bool success = true;
-  if (plan.type == SmartDisplayPlan::FULL) success = renderLoadedDashboard(batt, pwr);
-  else {
-    for (uint8_t i = 0; i < plan.regionCount && success; ++i)
-      success = Layout::drawRegionWithContent(g_cfg.layout, g_cfg, plan.regions[i], false);
-    shutdownDisplay();
-  }
+  for (uint8_t i = 0; i < plan.regionCount && success; ++i)
+    success = Layout::drawRegionWithContent(g_cfg.layout, g_cfg, plan.regions[i], false);
+  shutdownDisplay();
+
   // Never publish hashes/counters until every synchronous panel operation has completed.
   if (success) SmartRefresh::commitSuccessfulDisplay(desired, plan);
   return success;
@@ -795,7 +804,14 @@ static bool fetchAndRenderExplicit(
 
   setupPendingScreenDisplayed = false;
   SmartRenderState desired;
-  if (!SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired)) return false;
+  const uint32_t renderStateStartedAtMs = millis();
+  const bool renderStateOk =
+    SmartRefresh::fetchRenderState(DeviceIdentity::getToken(), "all", desired);
+  Serial.printf(
+    "LiveUpdate timing render_state_fetch_ms=%lu\n",
+    (unsigned long)(millis() - renderStateStartedAtMs)
+  );
+  if (!renderStateOk) return false;
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
 #if TEMP_REFRESH_AUDIT_ENABLED
   const uint64_t TEMP_REFRESH_AUDIT_backendBefore = SmartRefresh::displayedRevision();
