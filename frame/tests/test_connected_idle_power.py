@@ -55,7 +55,7 @@ def test_main_uses_ten_second_connected_idle_and_dynamic_deep_sleep_fallback():
     interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split("void setup()", 1)[0]
     assert "applyOperationalPowerPolicy(pwr.usbPresent, true)" in interactive
     assert "connected light sleep unavailable; use dynamic deep-sleep fallback" in interactive
-    assert "waitForInteractiveCadence(pwr.usbPresent);" in interactive
+    assert "if (waitForInteractiveCadence(pwr.usbPresent)) continue;" in interactive
     assert "waitForBatteryIdleCadenceOrUsbConnect" in source
     assert "gpio_wakeup_enable((gpio_num_t)POWER_SENSE_PIN, GPIO_INTR_LOW_LEVEL)" in source
     assert "ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS))" in source
