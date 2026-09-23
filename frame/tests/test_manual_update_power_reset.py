@@ -11,7 +11,7 @@ def test_battery_deep_sleep_keeps_ten_second_manual_update_ceiling():
     end = MAIN.index("static void goToSleep(bool usbPresent)", start)
     block = MAIN[start:end]
     assert "SmartRefresh::secondsUntilNextWake" in block
-    assert "if (seconds > SmartRefresh::MANUAL_PROBE_SECONDS)" in block
+    assert "if (!g_powerSaverMode && seconds > SmartRefresh::MANUAL_PROBE_SECONDS)" in block
     assert "seconds = SmartRefresh::MANUAL_PROBE_SECONDS;" in block
 
 
