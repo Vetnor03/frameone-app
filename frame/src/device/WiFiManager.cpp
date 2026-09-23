@@ -185,4 +185,12 @@ bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
   return false;
 }
 
+const char* operationalPowerMode() {
+  if (!g_policyInitialized) return "uninitialized";
+  if (g_lastPolicyUsbPresent) return "usb_realtime";
+  return g_lastBatteryConnectedIdleReady
+    ? "battery_connected_idle"
+    : "deep_sleep_fallback";
+}
+
 }
