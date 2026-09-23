@@ -55,7 +55,10 @@ def test_main_uses_ten_second_connected_idle_and_dynamic_deep_sleep_fallback():
     interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split("void setup()", 1)[0]
     assert "applyOperationalPowerPolicy(pwr.usbPresent, true)" in interactive
     assert "connected light sleep unavailable; use dynamic deep-sleep fallback" in interactive
-    assert "delay(pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS);" in interactive
+    assert "waitForInteractiveCadence(pwr.usbPresent);" in interactive
+    assert "waitForBatteryIdleCadenceOrUsbConnect" in source
+    assert "gpio_wakeup_enable((gpio_num_t)POWER_SENSE_PIN, GPIO_INTR_LOW_LEVEL)" in source
+    assert "ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS))" in source
     setup = source.split("void setup()", 1)[1]
     assert "!pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending" in setup
     assert "goToSleep(pwrEarly.usbPresent);" in setup
@@ -88,3 +91,37 @@ def test_production_http_read_timeout_is_twenty_seconds():
     assert "HTTP_TIMEOUT_MS = 20000" in source
     assert "g_http.setTimeout(HTTP_TIMEOUT_MS);" in source
 
+
+
+def test_manual_update_uses_realtime_network_burst_then_restores_als():
+    wifi = read("src/device/WiFiManager.cpp")
+    burst = wifi.split("bool beginRealtimeNetworkBurst()", 1)[1].split(
+        "const char* operationalPowerMode()", 1
+    )[0]
+    assert "configureAutomaticLightSleep(false)" in burst
+    assert "WiFi.setSleep(false);" in burst
+    assert "esp_wifi_set_ps(WIFI_PS_NONE)" in burst
+
+    source = read("src/frame_v2.5.1.ino")
+    interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split(
+        "void setup()", 1
+    )[0]
+    pending = interactive.split('Serial.printf("LiveUpdate: revision %"', 1)[1]
+    assert pending.index("WiFiManagerV2::beginRealtimeNetworkBurst();") < pending.index(
+        "fetchAndRenderExplicit"
+    )
+    assert pending.index("fetchAndRenderExplicit") < pending.index(
+        "WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true)"
+    )
+
+
+def test_usb_connect_disables_als_before_power_edge_refresh():
+    source = read("src/frame_v2.5.1.ino")
+    interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split(
+        "void setup()", 1
+    )[0]
+    edge = interactive.split('Serial.println(pwr.usbPresent ? "USB connected" : "USB disconnected");', 1)[1]
+    edge = edge.split("if (WiFi.status() != WL_CONNECTED)", 1)[0]
+    assert edge.index("applyOperationalPowerPolicy(true, true)") < edge.index(
+        "refreshPowerOverlayIfNeeded(batt, pwr)"
+    )
