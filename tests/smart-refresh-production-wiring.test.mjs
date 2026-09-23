@@ -51,21 +51,21 @@ test('real reminder/date/countdown and source deadlines are in production manife
   assert.ok(deadlines.reminders.every((d) => d.type === 'hard'))
   assert.equal(deadlines.date[0].type, 'hard')
   assert.equal(deadlines['weather:1'][0].type, 'soft')
-  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
-  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
+  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 2 * 60 * 60_000)
+  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 3 * 60 * 60_000)
   const laterAdded = { reminders: { items: [...sources.reminders.items, { occurrence_date: '2026-09-06', due_time: '17:00' }] } }
   assert.equal(physicalModuleDeadlines({ settings, sources: laterAdded, now }).reminders[0].at, deadlines.reminders[0].at)
 })
 
-test('Weather and Surf normal source freshness are 30 minutes with no Weather 10-minute fallback', () => {
+test('Weather and Surf normal source freshness are multi-hour with no fast fallback', () => {
   const settings = { cells: [
     { module: 'weather:1', col: 0, row: 0, w: 400, h: 240 },
     { module: 'surf:1', col: 2, row: 0, w: 400, h: 240 },
   ], modules: {} }
   const now = Date.parse('2026-09-06T07:05:00Z')
   const deadlines = physicalModuleDeadlines({ settings, sources: {}, now })
-  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
-  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 30 * 60_000)
+  assert.equal(deadlines['weather:1'].find((d) => d.reason === 'source_freshness').at, now + 2 * 60 * 60_000)
+  assert.equal(deadlines['surf:1'].find((d) => d.reason === 'source_freshness').at, now + 3 * 60 * 60_000)
   for (const source of [frameConfigBuilder, frameConfigHeader, frameConfigSource, weatherModule]) {
     assert.doesNotMatch(source, /600000UL|refresh:\s*600000/)
   }
@@ -180,7 +180,17 @@ test('manual screen-wide evaluation rebases nearby soft work from completion tim
   const settings = { cells: [{ module: 'weather:1', col: 0, row: 0, w: 400, h: 240 }], modules: { weather: [{ id: 1, refresh: 1_800_000 }] } }
   const manualAt = Date.parse('2026-09-06T08:00:00Z')
   const refreshed = physicalModuleDeadlines({ settings, sources: {}, now: manualAt })
-  assert.equal(refreshed['weather:1'][0].at, manualAt + 1_800_000)
+  assert.equal(refreshed['weather:1'].find((d) => d.reason === 'source_freshness').at, manualAt + 2 * 60 * 60_000)
   assert.match(firmware, /fetchRenderState\(DeviceIdentity::getToken\(\), "all", desired\)/)
   assert.match(firmware, /mergeScheduler\(g_smartState, desired, true\)/)
+})
+
+
+test('connected idle honors the persisted next module deadline instead of waiting for ten-minute safety', () => {
+  assert.match(firmware, /scheduledSyncDueNow\(\)/)
+  assert.match(firmware, /g_nextScheduledWake > 0[\s\S]*now >= g_nextScheduledWake/)
+  assert.match(firmware, /interactiveWaitMs\(maximumMs\)/)
+  assert.match(firmware, /scheduled module deadline became due while interactive/)
+  const idle = firmware.slice(firmware.indexOf('static InteractiveModeResult runInteractiveMode'), firmware.indexOf('// --------------------------------------\n// Setup'))
+  assert.ok(idle.indexOf('if (scheduledSyncDueNow()) continue;') < idle.indexOf('LiveUpdateState next{};'))
 })

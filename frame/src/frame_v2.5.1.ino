@@ -125,7 +125,7 @@ static void IRAM_ATTR onInteractiveUsbPowerEdge() {
   }
 }
 
-static bool waitForBatteryIdleCadenceOrUsbConnect() {
+static bool waitForBatteryIdleCadenceOrUsbConnect(uint32_t waitMs) {
   g_interactiveWaitTask = xTaskGetCurrentTaskHandle();
   ulTaskNotifyTake(pdTRUE, 0);  // discard any stale edge notification
 
@@ -150,12 +150,12 @@ static bool waitForBatteryIdleCadenceOrUsbConnect() {
       gpioWakeErr == ESP_OK &&
       sleepWakeErr == ESP_OK) {
     usbConnected =
-      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS)) > 0;
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(waitMs)) > 0;
     if (!usbConnected) usbConnected = digitalRead(POWER_SENSE_PIN) == LOW;
   } else if (!usbConnected) {
     // Wake-source setup is only a USB-enumeration aid; preserve the proven
     // 10-second battery cadence if it is unavailable.
-    delay(BATTERY_CONNECTED_IDLE_LOOP_MS);
+    delay(waitMs);
     usbConnected = digitalRead(POWER_SENSE_PIN) == LOW;
   }
 
@@ -175,15 +175,38 @@ static bool waitForBatteryIdleCadenceOrUsbConnect() {
 }
 #endif
 
+static bool scheduledSyncDueNow() {
+  const time_t now = time(nullptr);
+  return g_nextScheduledWake > 0 && now >= 1000000000 && now >= g_nextScheduledWake;
+}
+
+static uint32_t interactiveWaitMs(uint32_t maximumMs) {
+  const time_t now = time(nullptr);
+  if (g_nextScheduledWake <= 0 || now < 1000000000 || g_nextScheduledWake <= now) {
+    return g_nextScheduledWake > 0 && now >= g_nextScheduledWake ? 0 : maximumMs;
+  }
+
+  const uint64_t untilScheduledMs =
+    (uint64_t)(g_nextScheduledWake - now) * 1000ULL;
+  return untilScheduledMs < maximumMs
+    ? (uint32_t)untilScheduledMs
+    : maximumMs;
+}
+
 static bool waitForInteractiveCadence(bool usbPresent) {
+  const uint32_t maximumMs =
+    usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS;
+  const uint32_t waitMs = interactiveWaitMs(maximumMs);
+  if (waitMs == 0) return false;
+
   if (usbPresent) {
-    delay(REALTIME_UPDATE_POLL_MS);
+    delay(waitMs);
     return false;
   }
 #if defined(FRAME_IS_ALFRED_V1_2)
-  return waitForBatteryIdleCadenceOrUsbConnect();
+  return waitForBatteryIdleCadenceOrUsbConnect(waitMs);
 #else
-  delay(BATTERY_CONNECTED_IDLE_LOOP_MS);
+  delay(waitMs);
   return false;
 #endif
 }
@@ -1032,10 +1055,15 @@ static InteractiveModeResult runInteractiveMode(
       Serial.println("LiveUpdate: Wi-Fi reconnected");
     }
     const uint32_t awakeSeconds = (millis() - interactiveStartedAtMs) / 1000U;
-    if (baselineElapsedAtEntry + awakeSeconds >= MAX_REVISION_POLL_SECONDS) {
-      Serial.println("LiveUpdate: normal sync became due while interactive");
-      // Carry the freshest revision state into the baseline path. A failure is
-      // non-blocking: the normal sync is already due and must not be postponed.
+    const bool scheduledSyncDue = scheduledSyncDueNow();
+    const bool revisionSafetyDue =
+      baselineElapsedAtEntry + awakeSeconds >= MAX_REVISION_POLL_SECONDS;
+    if (scheduledSyncDue || revisionSafetyDue) {
+      Serial.println(scheduledSyncDue
+        ? "LiveUpdate: scheduled module deadline became due while interactive"
+        : "LiveUpdate: normal sync became due while interactive");
+      // Carry the freshest manual-update state into the baseline path. A failure
+      // is non-blocking: scheduled/safety work is already due and must not wait.
       LiveUpdateState deadlineState{};
       if (LiveUpdate::probe(DeviceIdentity::getToken(), deadlineState)) {
         state = deadlineState;
@@ -1115,6 +1143,10 @@ static InteractiveModeResult runInteractiveMode(
     // so the source-aware USB policy disables light sleep before any network
     // request or e-paper work can delay host enumeration.
     if (waitForInteractiveCadence(pwr.usbPresent)) continue;
+    // A hard module deadline may have landed inside the normal 1 s / 10 s idle
+    // wait. Return to the top before issuing another manual-update probe so the
+    // scheduled module work runs at its intended boundary.
+    if (scheduledSyncDueNow()) continue;
 
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();

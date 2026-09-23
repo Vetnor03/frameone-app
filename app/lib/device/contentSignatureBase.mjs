@@ -629,6 +629,9 @@ function reminderBoundaries(source, now) {
   return [...new Set(result)].sort((a, b) => a - b)
 }
 
+const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
+const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
+
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
   const midnight = nextMidnight(now)
@@ -672,14 +675,20 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       const at = candidates.find((candidate) => candidate > now && currentProjection !== JSON.stringify(surfProjection(sources[ref.key], ref.cell, candidate)))
       const changes = Boolean(at)
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
-      const interval = Math.max(5 * 60_000, Number(configured?.refresh) || 30 * 60_000)
+      // Surf forecast sources move on a multi-hour cadence. Keep any explicitly
+      // slower user/config interval, but never churn the source faster than the
+      // production three-hour floor. Hard daypart boundaries remain exact.
+      const interval = Math.max(SURF_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
       deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: now + interval, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'weather') {
       const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
       const candidates = Array.from({ length: 24 }, (_, offset) => osloLocalTime(local.year, local.month, local.day, local.hour + offset + 1))
       const at = candidates.find((candidate) => candidate > now && current !== JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, candidate)))
-      deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + 30 * 60_000, type: 'soft', reason: 'source_freshness' }]
+      // Weather source freshness is intentionally much slower than the manual
+      // Update path. Time-driven visible changes still use the exact hard
+      // weather_insight deadline above.
+      deadlines[ref.key] = [...(at ? [{ at, type: 'hard', reason: 'weather_insight' }] : []), { at: now + WEATHER_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
     }
     else {
       const configured = ref.id == null ? null : configuredInstance(settings?.modules, ref.base, ref.id)
