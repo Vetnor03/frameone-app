@@ -889,7 +889,6 @@ static bool fetchAndRenderExplicit(
 #endif
   if (!rendered) return false;
   SmartRefresh::mergeScheduler(g_smartState, desired, true);
-  setPowerSaverMode(g_cfg.powerSaver);
   g_revisionCheckedAt = time(nullptr);
   g_nextScheduledWake = g_revisionCheckedAt + SmartRefresh::secondsUntilNextWake(
     g_smartState, g_revisionCheckedAt, g_revisionCheckedAt, !g_powerSaverMode);
@@ -1136,6 +1135,13 @@ static InteractiveModeResult runInteractiveMode(
         refreshContentSignatureBestEffort();
         explicitRevisionObservedAtMs = 0;
         explicitAcked = true;
+        setPowerSaverMode(g_cfg.powerSaver);
+      }
+
+      if (g_powerSaverMode && explicitAcked) {
+        postDeviceStatus(batt, pwr, true);
+        Serial.println("Power Saver: explicit update committed; leaving interactive mode for deep sleep");
+        return INTERACTIVE_FINISHED;
       }
 
       const bool operationalPolicyRestored =
@@ -1527,6 +1533,7 @@ run_normal_sync:
     if (fetchAndRenderExplicit(manualBatt, manualPwr, liveState.requestedRevision) &&
         retryRenderedAck(liveState.displayedRevision)) {
       liveState.displayedRevision = liveState.requestedRevision;
+      setPowerSaverMode(g_cfg.powerSaver);
       postDeviceStatus(manualBatt, manualPwr, true);
       renderedWithoutSignature = !refreshContentSignatureBestEffort();
     }
