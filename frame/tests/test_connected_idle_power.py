@@ -125,3 +125,15 @@ def test_usb_connect_disables_als_before_power_edge_refresh():
     assert edge.index("applyOperationalPowerPolicy(true, true)") < edge.index(
         "refreshPowerOverlayIfNeeded(batt, pwr)"
     )
+
+
+def test_usb_edge_disables_automatic_light_sleep_before_debounce_path():
+    source = read("src/frame_v2.5.1.ino")
+    helper = source.split("static bool waitForBatteryIdleCadenceOrUsbConnect()", 1)[1].split(
+        "static bool waitForInteractiveCadence", 1
+    )[0]
+    assert "if (usbConnected)" in helper
+    assert "WiFiManagerV2::applyOperationalPowerPolicy(true, true);" in helper
+    assert helper.index("WiFiManagerV2::applyOperationalPowerPolicy(true, true);") < helper.index(
+        "gpio_wakeup_disable"
+    )
