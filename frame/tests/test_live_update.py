@@ -9,7 +9,7 @@ def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
     assert 'static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;' in MAIN
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
-    assert 'delay(pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS);' in loop
+    assert 'if (waitForInteractiveCadence(pwr.usbPresent)) continue;' in loop
     assert 'LiveUpdate::probe' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
@@ -73,8 +73,11 @@ def test_revision_and_render_state_failures_preserve_display():
 
 def test_manual_ack_precedes_signature_bookkeeping():
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
-    accepted = loop[loop.index('if (!fetchAndRenderExplicit'):loop.index('// Exactly one cheap revision probe')]
+    accepted = loop[loop.index('WiFiManagerV2::beginRealtimeNetworkBurst();'):loop.index('// Exactly one cheap revision probe')]
     assert accepted.index('retryRenderedAck') < accepted.index('refreshContentSignatureBestEffort')
+    assert accepted.index('refreshContentSignatureBestEffort') < accepted.index(
+        'WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true)'
+    )
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
     assert explicit.index('renderSmartDashboard') < explicit.index('saveRenderedAwaitingAck')
     assert 'fetchContentSignature' not in explicit
@@ -84,9 +87,14 @@ def test_status_reporting_is_outside_render_and_after_manual_ack():
     render = MAIN[MAIN.index('static bool renderLoadedDashboard'):MAIN.index('static bool fetchAndRenderExplicit')]
     assert 'postDeviceStatus' not in render
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// Exactly one cheap revision probe')]
-    accepted = loop[loop.index('if (!fetchAndRenderExplicit'):]
-    assert accepted.index('retryRenderedAck') < accepted.index('postDeviceStatus')
-    assert accepted.index('postDeviceStatus') < accepted.index('refreshContentSignatureBestEffort')
+    accepted = loop[loop.index('WiFiManagerV2::beginRealtimeNetworkBurst();'):]
+    assert accepted.index('retryRenderedAck') < accepted.index('refreshContentSignatureBestEffort')
+    assert accepted.index('refreshContentSignatureBestEffort') < accepted.index(
+        'WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true)'
+    )
+    assert accepted.index('WiFiManagerV2::applyOperationalPowerPolicy(pwr.usbPresent, true)') < accepted.index(
+        'postDeviceStatus(batt, pwr, true)'
+    )
 
 
 def test_later_ack_success_reports_completed_render_once_without_redraw():
@@ -98,7 +106,7 @@ def test_later_ack_success_reports_completed_render_once_without_redraw():
     assert 'fetchAndRenderExplicit' not in retry
     assert retry.count('postDeviceStatus(batt, pwr, true)') == 1
 
-    immediate = loop[loop.index('if (!fetchAndRenderExplicit'):loop.index('// Exactly one cheap revision probe')]
+    immediate = loop[loop.index('WiFiManagerV2::beginRealtimeNetworkBurst();'):loop.index('// Exactly one cheap revision probe')]
     assert immediate.count('postDeviceStatus(batt, pwr, true)') == 1
     assert immediate.index('retryRenderedAck') < immediate.index('postDeviceStatus(batt, pwr, true)')
 
@@ -170,7 +178,8 @@ def test_render_persistence_ack_order_and_serial_retry_are_preserved():
     assert explicit.index('saveRenderedAwaitingAck') < explicit.index('LiveUpdate::acknowledge')
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('void setup()')]
     assert loop.count('fetchAndRenderExplicit(batt, pwr, revisionToDisplay)') == 1
-    assert 'if (!fetchAndRenderExplicit' in loop
+    assert 'const bool explicitRendered =' in loop
+    assert 'if (!explicitRendered)' in loop
 
 
 def test_charger_events_do_not_trigger_or_reset_content_clock():
