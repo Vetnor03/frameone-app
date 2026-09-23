@@ -15,14 +15,15 @@ def test_battery_deep_sleep_keeps_ten_second_manual_update_ceiling():
     assert "seconds = SmartRefresh::MANUAL_PROBE_SECONDS;" in block
 
 
-def test_power_edge_full_refresh_happens_before_battery_sleep_fallback():
+def test_power_edge_orders_usb_and_battery_policies_safely():
     start = MAIN.index("if (sampledPower.stable && sampledPower.usbPresent != pwr.usbPresent)")
     end = MAIN.index("if (WiFi.status() != WL_CONNECTED)", start)
     block = MAIN[start:end]
     pending = block.index("g_powerRefreshPending = true")
+    usb_policy = block.index("WiFiManagerV2::applyOperationalPowerPolicy(true, true)")
     refresh = block.index("refreshPowerOverlayIfNeeded(batt, pwr)")
-    policy = block.index("WiFiManagerV2::applyOperationalPowerPolicy")
-    assert pending < refresh < policy
+    battery_policy = block.index("WiFiManagerV2::applyOperationalPowerPolicy(false, true)")
+    assert pending < usb_policy < refresh < battery_policy
 
 
 def test_power_edge_is_forced_full_screen_reset_not_partial_update():

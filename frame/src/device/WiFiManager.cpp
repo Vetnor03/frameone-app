@@ -16,6 +16,7 @@ static bool g_policyInitialized = false;
 static bool g_lastPolicyUsbPresent = false;
 static bool g_lastBatteryConnectedIdleReady = false;
 static bool g_lastAssociationPreparedForConnectedIdle = false;
+static bool g_realtimeNetworkBurstActive = false;
 
 bool stationHasIp() {
   if (WiFi.status() != WL_CONNECTED) return false;
@@ -148,6 +149,7 @@ bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
 
   g_policyInitialized = true;
   g_lastPolicyUsbPresent = usbPresent;
+  g_realtimeNetworkBurstActive = false;
 
   if (usbPresent) {
     // USB power is the debugging/realtime case: prioritize latency and native
@@ -185,7 +187,28 @@ bool applyOperationalPowerPolicy(bool usbPresent, bool force) {
   return false;
 }
 
+bool beginRealtimeNetworkBurst() {
+  if (!stationHasIp()) {
+    Serial.println("WiFi power policy: realtime burst requested before IP is ready");
+    return false;
+  }
+
+  const bool lightSleepDisabled = configureAutomaticLightSleep(false);
+  WiFi.setSleep(false);
+  const esp_err_t psErr = esp_wifi_set_ps(WIFI_PS_NONE);
+  g_realtimeNetworkBurstActive = lightSleepDisabled && psErr == ESP_OK;
+
+  if (g_realtimeNetworkBurstActive) {
+    Serial.println("WiFi power policy: realtime update burst");
+    return true;
+  }
+
+  Serial.println("WiFi power policy: realtime update burst unavailable");
+  return false;
+}
+
 const char* operationalPowerMode() {
+  if (g_realtimeNetworkBurstActive) return "battery_realtime_burst";
   if (!g_policyInitialized) return "uninitialized";
   if (g_lastPolicyUsbPresent) return "usb_realtime";
   return g_lastBatteryConnectedIdleReady
