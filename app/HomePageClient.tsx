@@ -2501,9 +2501,13 @@ export default function HomePage() {
     }
 
     try {
-      // Normal mode can see this explicit revision immediately. In Power Save,
-      // it remains pending and is picked up when the next scheduled wake occurs.
-      await requestDeviceUpdate(supabase, deviceId, crypto.randomUUID())
+      // Turning Power Save ON happens while the frame is still in Normal mode,
+      // so one explicit revision lets the connected frame adopt deep sleep now.
+      // Turning it OFF while sleeping needs no polling request: frame-config is
+      // already checked on the next planned wake and Normal mode resumes there.
+      if (!previous && next) {
+        await requestDeviceUpdate(supabase, deviceId, crypto.randomUUID())
+      }
     } catch {
       setFrameUpdateError(language === 'no'
         ? 'Strømsparing er lagret. Framet tar endringen ved neste planlagte oppvåkning.'
@@ -2554,6 +2558,19 @@ export default function HomePage() {
     const saved = await performSettingsSave(deviceId)
     if (!saved || activeDeviceIdRef.current !== deviceId || updateOperationIdRef.current !== operationId) {
       if (activeDeviceIdRef.current === deviceId && updateOperationIdRef.current === operationId) setExplicitUpdateStatus('idle')
+      updateActionInFlightRef.current = false
+      return
+    }
+
+    if (powerSaver) {
+      // Saving device_settings already bumps the smart content revision ledger.
+      // In Power Save we deliberately do not create a realtime/manual update
+      // request: the next planned wake will consume the saved changes together
+      // with whatever scheduled module work caused the wake.
+      setExplicitUpdateStatus('idle')
+      setFrameUpdateError(language === 'no'
+        ? 'Lagret. Strømsparing bruker endringene ved neste planlagte oppvåkning.'
+        : 'Saved. Power Save will apply these changes at the next scheduled wake.')
       updateActionInFlightRef.current = false
       return
     }
