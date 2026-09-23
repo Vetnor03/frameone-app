@@ -587,11 +587,74 @@ export function physicalRenderProjection(moduleKey, visibleValue, cell = {}, ren
   return { module: base, geometry: renderGeometry(cell), config: canonicalVisible(renderConfigProjection(base, cell, renderConfig)), visible: roundRendered('', canonicalVisible(visible)) }
 }
 
-// This projection is shared by the physical render-state endpoint. Inputs have
-// already been limited to the exact active module and stripped of sync metadata;
-// numeric weather values are quantized exactly as the e-paper labels are.
+// Automatic background refreshes should react to meaningful display changes,
+// not every tiny forecast/source wobble. Manual Update still forces a fresh
+// physical render in firmware, so these significance bands only suppress
+// unnecessary automatic e-paper transactions.
+const bandIndex = (value, upperBounds) => {
+  const n = finite(value)
+  if (n == null) return null
+  const index = upperBounds.findIndex((upper) => n < upper)
+  return index < 0 ? upperBounds.length : index
+}
+
+function significantWeatherProjection(value) {
+  if (Array.isArray(value)) return value.map(significantWeatherProjection)
+  if (!value || typeof value !== 'object') return value
+
+  const result = {}
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'roundedWind') {
+      // Calm is already represented separately. 0-3 / 4-7 / 8-11 / 12-15 /
+      // 16+ m/s keeps ordinary 1 m/s forecast jitter from refreshing the panel.
+      result[key] = bandIndex(child, [4, 8, 12, 16])
+    } else if (key === 'precipitation_probability') {
+      // Probability is advisory on the frame; 20-point bands are enough to
+      // represent a meaningful change in what the user sees.
+      result[key] = bandIndex(child, [20, 40, 60, 80])
+    } else if (key === 'humidity') {
+      result[key] = bandIndex(child, [30, 50, 70, 85])
+    } else {
+      result[key] = significantWeatherProjection(child)
+    }
+  }
+  return result
+}
+
+function significantSurfProjection(value) {
+  if (Array.isArray(value)) return value.map(significantSurfProjection)
+  if (!value || typeof value !== 'object') return value
+
+  const result = {}
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'wind') {
+      // The exact m/s value is still rendered after a real refresh. Automatic
+      // refresh only cares when conditions move into another useful wind band.
+      result[key] = bandIndex(child, [4, 7, 10, 13])
+    } else if (key === 'period') {
+      // Swell period is materially different in ~2 s bands; rating, wave bucket,
+      // trend and compass-sector changes remain exact triggers.
+      result[key] = bandIndex(child, [8, 10, 12, 14, 16])
+    } else {
+      result[key] = significantSurfProjection(child)
+    }
+  }
+  return result
+}
+
+function significantBackgroundProjection(moduleKey, projection) {
+  const base = String(moduleKey).split(':')[0]
+  if (base === 'weather') return { ...projection, visible: significantWeatherProjection(projection.visible) }
+  if (base === 'surf') return { ...projection, visible: significantSurfProjection(projection.visible) }
+  return projection
+}
+
+// This digest is the scheduler's automatic-refresh contract. User data modules
+// still hash their exact rendered projection; Weather and Surf apply the
+// significance policy above so tiny source fluctuations do not move e-paper.
 export function physicalRenderDigest(moduleKey, visibleValue, cell = {}, renderConfig = {}, now = Date.now()) {
-  return contentDigest(physicalRenderProjection(moduleKey, visibleValue, cell, renderConfig, now))
+  const projection = physicalRenderProjection(moduleKey, visibleValue, cell, renderConfig, now)
+  return contentDigest(significantBackgroundProjection(moduleKey, projection))
 }
 
 function nextMidnight(now, timeZone = 'Europe/Oslo') {
