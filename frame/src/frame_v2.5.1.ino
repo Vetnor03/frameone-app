@@ -423,6 +423,13 @@ static void postDeviceStatus(
   json += "\"is_usb_present\":" + String(pwr.usbPresent ? "true" : "false") + ",";
   json += "\"pwr_sense_raw\":" + String(pwr.raw) + ",";
   json += "\"pwr_sense_stable\":" + String(pwr.highCount) + ",";
+  json += "\"power_mode\":\"" + String(WiFiManagerV2::operationalPowerMode()) + "\",";
+  const esp_sleep_wakeup_cause_t statusWakeCause = esp_sleep_get_wakeup_cause();
+  const char* statusWakeReason =
+    statusWakeCause == ESP_SLEEP_WAKEUP_TIMER ? "timer" :
+    statusWakeCause == ESP_SLEEP_WAKEUP_EXT1 ? "ext1" :
+    statusWakeCause == ESP_SLEEP_WAKEUP_UNDEFINED ? "cold_boot" : "other";
+  json += "\"wake_reason\":\"" + String(statusWakeReason) + "\",";
   json += "\"did_render\":" + String(didRender ? "true" : "false");
   json += "}";
 
