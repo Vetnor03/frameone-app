@@ -100,8 +100,9 @@ static void IRAM_ATTR onInteractiveUsbPowerEdge() {
   }
 }
 
-static void waitForBatteryIdleCadenceOrUsbConnect() {
+static bool waitForBatteryIdleCadenceOrUsbConnect() {
   g_interactiveWaitTask = xTaskGetCurrentTaskHandle();
+  ulTaskNotifyTake(pdTRUE, 0);  // discard any stale edge notification
 
   pinMode(POWER_SENSE_PIN, INPUT);
   attachInterrupt(
@@ -115,33 +116,41 @@ static void waitForBatteryIdleCadenceOrUsbConnect() {
   const esp_err_t sleepWakeErr =
     gpioWakeErr == ESP_OK ? esp_sleep_enable_gpio_wakeup() : gpioWakeErr;
 
+  bool usbConnected = digitalRead(POWER_SENSE_PIN) == LOW;
+
   // Close the race where USB was inserted between the main power sample and
-  // arming the falling-edge interrupt.
-  if (digitalRead(POWER_SENSE_PIN) != LOW &&
+  // arming the falling-edge interrupt. A task notification makes the 10-second
+  // idle wait abort immediately on the PGOOD_N falling edge.
+  if (!usbConnected &&
       gpioWakeErr == ESP_OK &&
       sleepWakeErr == ESP_OK) {
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS));
-  } else if (digitalRead(POWER_SENSE_PIN) != LOW) {
+    usbConnected =
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS)) > 0;
+    if (!usbConnected) usbConnected = digitalRead(POWER_SENSE_PIN) == LOW;
+  } else if (!usbConnected) {
     // Wake-source setup is only a USB-enumeration aid; preserve the proven
     // 10-second battery cadence if it is unavailable.
     delay(BATTERY_CONNECTED_IDLE_LOOP_MS);
+    usbConnected = digitalRead(POWER_SENSE_PIN) == LOW;
   }
 
   gpio_wakeup_disable((gpio_num_t)POWER_SENSE_PIN);
   detachInterrupt(digitalPinToInterrupt(POWER_SENSE_PIN));
   g_interactiveWaitTask = nullptr;
+  return usbConnected;
 }
 #endif
 
-static void waitForInteractiveCadence(bool usbPresent) {
+static bool waitForInteractiveCadence(bool usbPresent) {
   if (usbPresent) {
     delay(REALTIME_UPDATE_POLL_MS);
-    return;
+    return false;
   }
 #if defined(FRAME_IS_ALFRED_V1_2)
-  waitForBatteryIdleCadenceOrUsbConnect();
+  return waitForBatteryIdleCadenceOrUsbConnect();
 #else
   delay(BATTERY_CONNECTED_IDLE_LOOP_MS);
+  return false;
 #endif
 }
 
@@ -1075,7 +1084,11 @@ static InteractiveModeResult runInteractiveMode(
 
     // Exactly one cheap revision probe per idle cadence. Rendering above is
     // synchronous, so a revision arriving during it is observed serially here.
-    waitForInteractiveCadence(pwr.usbPresent);
+    // If USB was inserted during battery ALS, return to the top immediately
+    // so the source-aware USB policy disables light sleep before any network
+    // request or e-paper work can delay host enumeration.
+    if (waitForInteractiveCadence(pwr.usbPresent)) continue;
+
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
