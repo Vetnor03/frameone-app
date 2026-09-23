@@ -13,6 +13,8 @@ type StatusPostBody = {
   is_usb_present?: boolean | string | number | null
   pwr_sense_raw?: number | string | null
   pwr_sense_stable?: number | string | null
+  power_mode?: string | null
+  wake_reason?: string | null
 }
 
 function parseBatteryPercent(value: unknown): number | null {
@@ -73,7 +75,7 @@ export async function GET(req: Request) {
     const { data, error } = await supabase
       .from('device_status')
       .select(
-        'current_version, battery_percent, battery_voltage, is_charging, is_usb_present, pwr_sense_raw, pwr_sense_stable, last_seen_at, last_render_at, last_refresh_at'
+        'current_version, battery_percent, battery_voltage, is_charging, is_usb_present, pwr_sense_raw, pwr_sense_stable, power_mode, wake_reason, last_seen_at, last_render_at, last_refresh_at'
       )
       .eq('device_id', device_id)
       .maybeSingle()
@@ -91,6 +93,8 @@ export async function GET(req: Request) {
       is_usb_present: parseBoolean(data?.is_usb_present),
       pwr_sense_raw: data?.pwr_sense_raw ?? null,
       pwr_sense_stable: data?.pwr_sense_stable ?? null,
+      power_mode: data?.power_mode ?? null,
+      wake_reason: data?.wake_reason ?? null,
       last_seen_at: data?.last_seen_at ?? data?.last_refresh_at ?? null,
       last_render_at: data?.last_render_at ?? data?.last_refresh_at ?? null,
     })
@@ -117,6 +121,8 @@ export async function POST(req: Request) {
     const is_usb_present = parseBoolean(body?.is_usb_present)
     const pwr_sense_raw = parseSmallInt(body?.pwr_sense_raw)
     const pwr_sense_stable = parseSmallInt(body?.pwr_sense_stable)
+    const power_mode = String(body?.power_mode ?? '').trim() || null
+    const wake_reason = String(body?.wake_reason ?? '').trim() || null
 
     if (!device_id) {
       return NextResponse.json({ error: 'Missing device_id' }, { status: 400 })
@@ -138,6 +144,8 @@ export async function POST(req: Request) {
       is_usb_present,
       pwr_sense_raw,
       pwr_sense_stable,
+      power_mode,
+      wake_reason,
       last_seen_at: nowIso,
     }
 
@@ -165,6 +173,8 @@ export async function POST(req: Request) {
       is_usb_present,
       pwr_sense_raw,
       pwr_sense_stable,
+      power_mode,
+      wake_reason,
       did_render: did_render === true,
       last_seen_at: nowIso,
       last_render_at: did_render === true ? nowIso : null,
