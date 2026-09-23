@@ -58,7 +58,7 @@ def test_main_uses_ten_second_connected_idle_and_dynamic_deep_sleep_fallback():
     assert "if (waitForInteractiveCadence(pwr.usbPresent)) continue;" in interactive
     assert "waitForBatteryIdleCadenceOrUsbConnect" in source
     assert "gpio_wakeup_enable((gpio_num_t)POWER_SENSE_PIN, GPIO_INTR_LOW_LEVEL)" in source
-    assert "ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BATTERY_CONNECTED_IDLE_LOOP_MS))" in source
+    assert "ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(waitMs))" in source
     setup = source.split("void setup()", 1)[1]
     assert "!pwrEarly.usbPresent && !connectedIdleReady && !normalSyncDue && !explicitRevisionPending" in setup
     assert "goToSleep(pwrEarly.usbPresent);" in setup
@@ -129,7 +129,7 @@ def test_usb_connect_disables_als_before_power_edge_refresh():
 
 def test_usb_edge_disables_automatic_light_sleep_before_debounce_path():
     source = read("src/frame_v2.5.1.ino")
-    helper = source.split("static bool waitForBatteryIdleCadenceOrUsbConnect()", 1)[1].split(
+    helper = source.split("static bool waitForBatteryIdleCadenceOrUsbConnect(uint32_t waitMs)", 1)[1].split(
         "static bool waitForInteractiveCadence", 1
     )[0]
     assert "if (usbConnected)" in helper
@@ -137,3 +137,18 @@ def test_usb_edge_disables_automatic_light_sleep_before_debounce_path():
     assert helper.index("WiFiManagerV2::applyOperationalPowerPolicy(true, true);") < helper.index(
         "gpio_wakeup_disable"
     )
+
+
+def test_connected_idle_wait_is_shortened_for_scheduled_module_deadlines():
+    source = read("src/frame_v2.5.1.ino")
+    helper = source.split("static uint32_t interactiveWaitMs(uint32_t maximumMs)", 1)[1].split(
+        "static bool waitForInteractiveCadence", 1
+    )[0]
+    assert "g_nextScheduledWake" in helper
+    assert "untilScheduledMs < maximumMs" in helper
+
+    interactive = source.split("static InteractiveModeResult runInteractiveMode(", 1)[1].split(
+        "void setup()", 1
+    )[0]
+    assert "const bool scheduledSyncDue = scheduledSyncDueNow();" in interactive
+    assert "scheduled module deadline became due while interactive" in interactive
