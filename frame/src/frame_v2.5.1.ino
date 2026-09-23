@@ -1139,7 +1139,8 @@ static InteractiveModeResult runInteractiveMode(
       }
 
       if (g_powerSaverMode && explicitAcked) {
-        postDeviceStatus(batt, pwr, true);
+        // Do not add a status-only network round-trip here. The update is
+        // already durably acknowledged; Power Save should go straight to sleep.
         Serial.println("Power Saver: explicit update committed; leaving interactive mode for deep sleep");
         return INTERACTIVE_FINISHED;
       }
