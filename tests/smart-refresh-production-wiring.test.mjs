@@ -194,3 +194,43 @@ test('connected idle honors the persisted next module deadline instead of waitin
   const idle = firmware.slice(firmware.indexOf('static InteractiveModeResult runInteractiveMode'), firmware.indexOf('// --------------------------------------\n// Setup'))
   assert.ok(idle.indexOf('if (scheduledSyncDueNow()) continue;') < idle.indexOf('LiveUpdateState next{};'))
 })
+
+
+test('automatic Weather hash ignores small forecast jitter but keeps meaningful changes', () => {
+  const settings = {
+    cells: [{ module: 'weather:1', col: 0, row: 0, colSpan: 2, rowSpan: 2, w: 400, h: 240, size: 'ADAPTIVE' }],
+    modules: { weather: [{ id: 1, units: 'metric' }] },
+  }
+  const source = (wind, precip) => ({
+    current: { temperature_2m: 12.2, weather_code: 2, wind_speed_10m: wind, wind_direction_10m: 220, precipitation_probability: precip },
+    daily: { time: ['2026-09-23'], temperature_2m_min: [9], temperature_2m_max: [14], weather_code: [2] },
+    hourly: { time: ['2026-09-23T20:00'], precipitation_probability: [precip] },
+  })
+  const now = Date.parse('2026-09-23T18:00:00Z')
+  const base = physicalRenderManifest({ settings, sources: { 'weather:1': source(5, 42) }, now })[0].render_hash
+  const tiny = physicalRenderManifest({ settings, sources: { 'weather:1': source(6, 48) }, now })[0].render_hash
+  const meaningful = physicalRenderManifest({ settings, sources: { 'weather:1': source(9, 65) }, now })[0].render_hash
+  assert.equal(base, tiny)
+  assert.notEqual(base, meaningful)
+})
+
+test('automatic Surf hash ignores small wind/period jitter but keeps rating and condition-band changes', () => {
+  const settings = {
+    cells: [{ module: 'surf:1', col: 0, row: 0, colSpan: 2, rowSpan: 2, w: 400, h: 240, size: 'ADAPTIVE' }],
+    modules: { surf: [{ id: 1, spot: 'Sele' }] },
+  }
+  const source = (wind, period, rating = 3) => ({
+    spot: 'Sele',
+    rating,
+    forecast: { wave_height_range_label: '0.8-1.2 m' },
+    inputs: { wind_speed_ms: wind, wind_direction_deg: 45, swell_period_s: period, swell_direction_deg: 315 },
+  })
+  const now = Date.parse('2026-09-23T18:00:00Z')
+  const base = physicalRenderManifest({ settings, sources: { 'surf:1': source(5, 10.2) }, now })[0].render_hash
+  const tiny = physicalRenderManifest({ settings, sources: { 'surf:1': source(6, 10.8) }, now })[0].render_hash
+  const windBand = physicalRenderManifest({ settings, sources: { 'surf:1': source(8, 10.8) }, now })[0].render_hash
+  const rating = physicalRenderManifest({ settings, sources: { 'surf:1': source(6, 10.8, 4) }, now })[0].render_hash
+  assert.equal(base, tiny)
+  assert.notEqual(base, windBand)
+  assert.notEqual(base, rating)
+})
