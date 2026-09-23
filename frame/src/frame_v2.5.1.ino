@@ -82,22 +82,6 @@ static FrameConfig g_cfg;
 static SmartRenderState g_smartState;
 RTC_DATA_ATTR static time_t g_revisionCheckedAt = 0;
 
-static void setPowerSaverMode(bool enabled) {
-  if (g_powerSaverMode == enabled) return;
-  g_powerSaverMode = enabled;
-  normalSyncElapsedSeconds = 0;
-
-  const time_t now = time(nullptr);
-  if (now >= 1000000000 && g_smartState.moduleCount > 0) {
-    g_nextScheduledWake = now + SmartRefresh::secondsUntilNextWake(
-      g_smartState, now, g_revisionCheckedAt, !g_powerSaverMode);
-  }
-
-  Serial.println(g_powerSaverMode
-    ? "Power mode: Power Saver (scheduled deep sleep only)"
-    : "Power mode: Normal (persistent Wi-Fi + live updates)");
-}
-
 // Only initialize the display if we actually need to draw
 static bool g_displayReady = false;
 static bool g_dashboardLoaded = false;
@@ -128,6 +112,22 @@ struct PowerSenseDebug {
   bool usbPresent;
   bool stable;
 };
+
+static void setPowerSaverMode(bool enabled) {
+  if (g_powerSaverMode == enabled) return;
+  g_powerSaverMode = enabled;
+  normalSyncElapsedSeconds = 0;
+
+  const time_t now = time(nullptr);
+  if (now >= 1000000000 && g_smartState.moduleCount > 0) {
+    g_nextScheduledWake = now + SmartRefresh::secondsUntilNextWake(
+      g_smartState, now, g_revisionCheckedAt, !g_powerSaverMode);
+  }
+
+  Serial.println(g_powerSaverMode
+    ? "Power mode: Power Saver (scheduled deep sleep only)"
+    : "Power mode: Normal (persistent Wi-Fi + live updates)");
+}
 
 #if defined(FRAME_IS_ALFRED_V1_2)
 // While battery ALS is active, PGOOD_N must wake the blocked interactive task
