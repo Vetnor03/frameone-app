@@ -509,6 +509,7 @@ type PhysicalFrameSnapshot = {
 
 type SettingsJson = {
   theme?: 'dark' | 'light'
+  powerSaver?: boolean
   language?: AppLanguage
   fontSize?: AppFontSize
   layout?: LayoutKey | 'custom'
@@ -1189,6 +1190,8 @@ export default function HomePage() {
 
   const [appTheme, setAppTheme] = useState<AppTheme>(initialTheme)
   const [frameTheme, setFrameTheme] = useState<AppTheme>('dark')
+  const [powerSaver, setPowerSaver] = useState(false)
+  const [powerSaverSaving, setPowerSaverSaving] = useState(false)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [language, setLanguage] = useState<AppLanguage>('en')
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -1576,6 +1579,7 @@ export default function HomePage() {
   const desiredStateRef = useRef<string>('')
   const savedFrameStateRef = useRef<{
     frameTheme: 'dark' | 'light'
+    powerSaver: boolean
     language: AppLanguage
     fontSize: AppFontSize
     layoutKey: LayoutKey
@@ -1585,6 +1589,7 @@ export default function HomePage() {
 
   function serializeComparableState(args: {
     frameTheme: 'dark' | 'light'
+    powerSaver: boolean
     language: AppLanguage
     fontSize: AppFontSize
     layoutKey: LayoutKey
@@ -1596,6 +1601,7 @@ export default function HomePage() {
 
     return JSON.stringify({
       theme: args.frameTheme,
+      powerSaver: args.powerSaver,
       language: args.language,
       fontSize: args.fontSize,
       layout: args.layoutKey,
@@ -1608,6 +1614,7 @@ export default function HomePage() {
   const dirtyFrameRef = useRef<number | null>(null)
   const pendingDirtyStateRef = useRef<{
     frameTheme?: 'dark' | 'light'
+    powerSaver?: boolean
     language?: AppLanguage
     fontSize?: AppFontSize
     layoutKey?: LayoutKey
@@ -1618,6 +1625,7 @@ export default function HomePage() {
 
   type DesiredFrameState = {
     frameTheme?: 'dark' | 'light'
+    powerSaver?: boolean
     language?: AppLanguage
     fontSize?: AppFontSize
     layoutKey?: LayoutKey
@@ -1629,6 +1637,7 @@ export default function HomePage() {
   function serializeDesiredState(next?: DesiredFrameState) {
     return serializeComparableState({
       frameTheme: next?.frameTheme ?? frameTheme,
+      powerSaver: next?.powerSaver ?? powerSaver,
       language: next?.language ?? language,
       fontSize: next?.fontSize ?? fontSize,
       layoutKey: next?.layoutKey ?? layoutKey,
@@ -1972,6 +1981,7 @@ export default function HomePage() {
     // `theme` remains the frame setting for backwards compatibility, so an
     // existing physical frame never changes appearance during migration.
     const nextFrameTheme = isAppTheme(json.theme) ? json.theme : 'dark'
+    const nextPowerSaver = json.powerSaver === true
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
     const storedCustomId = json.layout === 'custom' && typeof json.custom_layout_id === 'string' ? json.custom_layout_id : null
@@ -2001,6 +2011,7 @@ export default function HomePage() {
       : []
 
     setFrameTheme(nextFrameTheme)
+    setPowerSaver(nextPowerSaver)
     setLanguage(nextLanguage)
     setFontSize(nextFontSize)
     setCellsByLayout(nextCellsByLayout)
@@ -2013,6 +2024,7 @@ export default function HomePage() {
 
     const loadedState = serializeComparableState({
       frameTheme: nextFrameTheme,
+      powerSaver: nextPowerSaver,
       language: nextLanguage,
       fontSize: nextFontSize,
       layoutKey: nextLayout,
@@ -2024,6 +2036,7 @@ export default function HomePage() {
     desiredStateRef.current = loadedState
     savedFrameStateRef.current = {
       frameTheme: nextFrameTheme,
+      powerSaver: nextPowerSaver,
       language: nextLanguage,
       fontSize: nextFontSize,
       layoutKey: nextLayout,
@@ -2248,6 +2261,7 @@ export default function HomePage() {
     const nextLayoutModuleMemory = mergeCellsIntoSlotMemory(layoutModuleMemoryRef.current, nextLayout, currentCellsForLayout)
     const settingsJson: SettingsJson = {
       theme: frameTheme,
+      powerSaver,
       language,
       fontSize,
       layout: nextLayout,
@@ -2278,7 +2292,7 @@ export default function HomePage() {
     setCellsByLayout(nextCellsByLayout)
     setModulesJson(nextModules)
     setPinnedModuleTabs(nextPinnedTabs)
-    savedStateRef.current = serializeComparableState({ frameTheme, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
+    savedStateRef.current = serializeComparableState({ frameTheme, powerSaver, language, fontSize, layoutKey: nextLayout, cellsByLayout: nextCellsByLayout, modulesJson: nextModules, pinnedModuleTabs: nextPinnedTabs })
     desiredStateRef.current = savedStateRef.current
     setDirty(false)
     sessionStorage.removeItem(`remind:onboarding:${activeDeviceId}`)
@@ -2384,12 +2398,13 @@ export default function HomePage() {
     markDirty({ cellsByLayout: nextCellsByLayout })
   }
 
-  async function performSettingsSave(deviceId: string): Promise<boolean> {
+  async function performSettingsSave(deviceId: string, overrides: { powerSaver?: boolean } = {}): Promise<boolean> {
     try {
       setPersisting(true)
 
       // Snapshot every value used to build the physical draft before awaiting.
       const draftTheme = frameTheme
+      const draftPowerSaver = overrides.powerSaver ?? powerSaver
       const draftLanguage = language
       const draftFontSize = fontSize
       const draftLayoutKey = layoutKey
@@ -2404,6 +2419,7 @@ export default function HomePage() {
       )
       const persistedSignature = serializeComparableState({
         frameTheme: draftTheme,
+        powerSaver: draftPowerSaver,
         language: draftLanguage,
         fontSize: draftFontSize,
         layoutKey: draftLayoutKey,
@@ -2414,6 +2430,7 @@ export default function HomePage() {
 
       let settingsJson: SettingsJson = {
         theme: draftTheme,
+        powerSaver: draftPowerSaver,
         language: draftLanguage,
         fontSize: draftFontSize,
         layout: draftLayoutKey,
@@ -2445,6 +2462,7 @@ export default function HomePage() {
       savedStateRef.current = persistedSignature
       savedFrameStateRef.current = {
         frameTheme: draftTheme,
+        powerSaver: draftPowerSaver,
         language: draftLanguage,
         fontSize: draftFontSize,
         layoutKey: draftLayoutKey,
@@ -2459,6 +2477,39 @@ export default function HomePage() {
       return false
     } finally {
       setPersisting(false)
+    }
+  }
+
+  async function handlePowerSaverChange(next: boolean) {
+    const deviceId = activeDeviceId
+    if (!deviceId || powerSaverSaving || next === powerSaver) return
+
+    const previous = powerSaver
+    setFrameUpdateError('')
+    setPowerSaver(next)
+    markDirty({ powerSaver: next })
+    setPowerSaverSaving(true)
+
+    const saved = await performSettingsSave(deviceId, { powerSaver: next })
+    if (!saved || activeDeviceIdRef.current !== deviceId) {
+      if (activeDeviceIdRef.current === deviceId) {
+        setPowerSaver(previous)
+        markDirty({ powerSaver: previous })
+      }
+      setPowerSaverSaving(false)
+      return
+    }
+
+    try {
+      // Normal mode can see this explicit revision immediately. In Power Save,
+      // it remains pending and is picked up when the next scheduled wake occurs.
+      await requestDeviceUpdate(supabase, deviceId, crypto.randomUUID())
+    } catch {
+      setFrameUpdateError(language === 'no'
+        ? 'Strømsparing er lagret. Framet tar endringen ved neste planlagte oppvåkning.'
+        : 'Power Save is saved. The frame will pick it up at its next scheduled wake.')
+    } finally {
+      setPowerSaverSaving(false)
     }
   }
 
@@ -2717,6 +2768,9 @@ async function handleSelectTab(k: TabKey) {
                   language={language}
                   appTheme={appTheme}
                   frameTheme={frameTheme}
+                  powerSaver={powerSaver}
+                  powerSaverBusy={powerSaverSaving}
+                  onPowerSaverChange={handlePowerSaverChange}
                   onOpenTheme={() => setThemePickerOpen(true)}
                   onOpenLanguage={() => setLanguagePickerOpen(true)}
                   frames={frames}
@@ -8259,6 +8313,9 @@ function SettingsTab({
   language,
   appTheme,
   frameTheme,
+  powerSaver,
+  powerSaverBusy,
+  onPowerSaverChange,
   onOpenTheme,
   onOpenLanguage,
   frames,
@@ -8277,6 +8334,9 @@ function SettingsTab({
   language: AppLanguage
   appTheme: AppTheme
   frameTheme: AppTheme
+  powerSaver: boolean
+  powerSaverBusy: boolean
+  onPowerSaverChange: (next: boolean) => Promise<void>
   onOpenTheme: () => void
   onOpenLanguage: () => void
   frames: MemberRow[]
@@ -8356,7 +8416,7 @@ function SettingsTab({
       window.clearTimeout(t1)
       window.clearTimeout(t2)
     }
-  }, [frames.length, activeDeviceId, appTheme, frameTheme, language])
+  }, [frames.length, activeDeviceId, appTheme, frameTheme, powerSaver, language])
 
   if (subpage === 'subscription') {
     return <SubscriptionSettingsPage language={language} onBack={() => setSubpage(null)} />
@@ -8396,6 +8456,24 @@ function SettingsTab({
               />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
+              <div className="py-4">
+                <div className="flex min-h-12 items-center justify-between gap-4">
+                  <div className="min-w-0 pr-3">
+                    <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Strømsparing' : 'Power Save'}</div>
+                    <div className="mt-1 text-xs leading-5 text-[color:var(--fg-45)]">
+                      {language === 'no'
+                        ? 'Dyp søvn mellom planlagte oppdateringer. Ingen live-oppdatering; endringer i appen hentes ved neste planlagte oppvåkning.'
+                        : 'Deep sleep between planned updates. No live updates; app changes are picked up at the next scheduled wake.'}
+                    </div>
+                  </div>
+                  <SettingsToggle
+                    label={language === 'no' ? 'Strømsparing' : 'Power Save'}
+                    checked={powerSaver}
+                    disabled={!activeDeviceId || powerSaverBusy}
+                    onClick={() => void onPowerSaverChange(!powerSaver)}
+                  />
+                </div>
+              </div>
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
               <div className="py-4">
                 <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
