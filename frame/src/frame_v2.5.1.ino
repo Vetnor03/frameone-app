@@ -845,6 +845,14 @@ static bool fetchAndRenderExplicit(
   );
   if (!renderStateOk) return false;
   SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);
+
+  // The app's Update button is an explicit user request for the freshest
+  // visible values. Background hashes intentionally ignore insignificant
+  // Weather/Surf jitter, but manual Update must bypass that suppression and
+  // perform one screen-wide render with the latest fetched source values.
+  displayPlan.type = SmartDisplayPlan::FULL;
+  displayPlan.regionCount = 1;
+  displayPlan.regions[0] = Cell{0, 0, 800, 480, 0, 0, 0, 4, 4, CELL_XL};
 #if TEMP_REFRESH_AUDIT_ENABLED
   const uint64_t TEMP_REFRESH_AUDIT_backendBefore = SmartRefresh::displayedRevision();
   const String TEMP_REFRESH_AUDIT_previous = SmartRefresh::TEMP_REFRESH_AUDIT_physicalRenderHash(desired);

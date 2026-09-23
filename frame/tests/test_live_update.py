@@ -212,3 +212,12 @@ def test_full_manual_refresh_prepares_modules_only_once():
 def test_manual_refresh_reports_render_state_fetch_timing():
     explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
     assert 'LiveUpdate timing render_state_fetch_ms=' in explicit
+
+
+def test_manual_update_forces_fresh_full_render_even_when_background_hash_is_unchanged():
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
+    planned = explicit.index('SmartDisplayPlan displayPlan = SmartRefresh::plan(desired, false);')
+    forced = explicit.index('displayPlan.type = SmartDisplayPlan::FULL;')
+    rendered = explicit.index('renderSmartDashboard(batt, pwr, desired, displayPlan)')
+    assert planned < forced < rendered
+    assert 'displayPlan.regionCount = 1;' in explicit
