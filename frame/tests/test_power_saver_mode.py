@@ -37,7 +37,8 @@ def test_power_saver_skips_live_probe_and_interactive_listening():
     assert "Power Saver: live update probe skipped" in setup
     assert "if (!g_powerSaverMode) {" in setup
     assert "liveProbeOk = LiveUpdate::probe" in setup
-    assert setup.count("!g_powerSaverMode &&\n      runInteractiveMode") >= 2
+    assert setup.count("runInteractiveMode(batt, pwr, liveState)") == 2
+    assert setup.count("!g_powerSaverMode &&") >= 4
 
 
 def test_power_saver_applies_current_app_setting_on_every_planned_wake():
