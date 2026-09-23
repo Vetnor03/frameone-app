@@ -85,6 +85,31 @@ static bool g_dashboardLoaded = false;
 static bool g_powerRefreshPending = false;
 static bool g_lastEvaluationDrew = false;
 
+
+enum SetupStep {
+  SETUP_STEP_NONE = 0,
+  SETUP_STEP_WIFI = 1,
+  SETUP_STEP_PAIRING = 2
+};
+
+enum PairingResult {
+  PAIRING_PAIRED = 0,
+  PAIRING_EXPIRED = 1,
+  PAIRING_FAILED = 2
+};
+
+enum InteractiveModeResult {
+  INTERACTIVE_FINISHED,
+  INTERACTIVE_NORMAL_SYNC_DUE,
+};
+
+struct PowerSenseDebug {
+  int raw;
+  int highCount;
+  bool usbPresent;
+  bool stable;
+};
+
 #if defined(FRAME_IS_ALFRED_V1_2)
 // While battery ALS is active, PGOOD_N must wake the blocked interactive task
 // immediately when USB is inserted. Otherwise Windows can attempt enumeration
@@ -154,29 +179,6 @@ static bool waitForInteractiveCadence(bool usbPresent) {
 #endif
 }
 
-enum SetupStep {
-  SETUP_STEP_NONE = 0,
-  SETUP_STEP_WIFI = 1,
-  SETUP_STEP_PAIRING = 2
-};
-
-enum PairingResult {
-  PAIRING_PAIRED = 0,
-  PAIRING_EXPIRED = 1,
-  PAIRING_FAILED = 2
-};
-
-enum InteractiveModeResult {
-  INTERACTIVE_FINISHED,
-  INTERACTIVE_NORMAL_SYNC_DUE,
-};
-
-struct PowerSenseDebug {
-  int raw;
-  int highCount;
-  bool usbPresent;
-  bool stable;
-};
 
 static void ensureDisplay() {
   if (!g_displayReady) {
