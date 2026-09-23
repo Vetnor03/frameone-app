@@ -198,3 +198,17 @@ def test_unchanged_revision_persists_successful_poll_and_rebased_wake_without_di
     assert 'fetchRenderState' not in scheduled
     assert 'ensureDisplay' not in scheduled
     assert 'renderSmartDashboard' not in scheduled
+
+
+def test_full_manual_refresh_prepares_modules_only_once():
+    source = MAIN
+    smart = source[source.index('static bool renderSmartDashboard'):source.index('static uint64_t explicitTimingRevision')]
+    full = smart[smart.index('if (plan.type == SmartDisplayPlan::FULL)'):smart.index('DisplayCore::setBatteryStatus')]
+    assert 'renderLoadedDashboard(batt, pwr)' in full
+    assert 'ModuleReminders::preload()' not in full
+    assert 'ModuleReminders::setConfig' not in full
+
+
+def test_manual_refresh_reports_render_state_fetch_timing():
+    explicit = MAIN[MAIN.index('static bool fetchAndRenderExplicit'):MAIN.index('static bool refreshContentSignatureBestEffort')]
+    assert 'LiveUpdate timing render_state_fetch_ms=' in explicit
