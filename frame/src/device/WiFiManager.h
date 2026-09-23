@@ -19,6 +19,11 @@ namespace WiFiManagerV2 {
   // when another caller may have changed the Wi-Fi power-save mode.
   bool applyOperationalPowerPolicy(bool usbPresent, bool force = false);
 
+  // Temporarily disable automatic light sleep / Wi-Fi power save while a
+  // user-requested refresh downloads its content. The caller must restore the
+  // source-aware operational policy immediately after the burst.
+  bool beginRealtimeNetworkBurst();
+
   // Runtime telemetry for confirming whether battery operation is actually
   // staying in the connected automatic-light-sleep path or has fallen back
   // to timed deep sleep.
