@@ -40,7 +40,7 @@
 #include <inttypes.h>
 
 // Change this string whenever you want to force one redraw after flashing/OTA
-static const char* FW_VER = "v2.7.4";
+static const char* FW_VER = "v2.7.5";
 
 // Public app page shown during pairing
 static const char* APP_LOGIN_URL = "https://re-mind.no/login";
@@ -212,9 +212,7 @@ static uint32_t interactiveWaitMs(uint32_t maximumMs) {
     : maximumMs;
 }
 
-static bool waitForInteractiveCadence(bool usbPresent) {
-  const uint32_t maximumMs =
-    usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS;
+static bool waitForInteractiveCadence(bool usbPresent, uint32_t maximumMs) {
   const uint32_t waitMs = interactiveWaitMs(maximumMs);
   if (waitMs == 0) return false;
 
@@ -1191,7 +1189,15 @@ static InteractiveModeResult runInteractiveMode(
     // If USB was inserted during battery ALS, return to the top immediately
     // so the source-aware USB policy disables light sleep before any network
     // request or e-paper work can delay host enumeration.
-    if (waitForInteractiveCadence(pwr.usbPresent)) continue;
+    const uint32_t probeCadenceMs =
+      pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS;
+    const uint32_t lastProbeStartedAtMs = LiveUpdate::lastNetworkProbeStartedAtMs();
+    const uint32_t sinceProbeStartedMs =
+      lastProbeStartedAtMs == 0 ? probeCadenceMs : millis() - lastProbeStartedAtMs;
+    const uint32_t remainingProbeWaitMs =
+      sinceProbeStartedMs >= probeCadenceMs ? 0 : probeCadenceMs - sinceProbeStartedMs;
+    if (remainingProbeWaitMs > 0 &&
+        waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)) continue;
     // A hard module deadline may have landed inside the normal 1 s / 10 s idle
     // wait. Return to the top before issuing another manual-update probe so the
     // scheduled module work runs at its intended boundary.

@@ -13,7 +13,7 @@ namespace {
 static const uint32_t LIVE_PROBE_MIN_NETWORK_INTERVAL_MS = 10000;
 static bool g_haveCachedProbeState = false;
 static LiveUpdateState g_cachedProbeState{};
-static uint32_t g_lastProbeNetworkAtMs = 0;
+static uint32_t g_lastProbeNetworkStartedAtMs = 0;
 
 String revisionString(uint64_t revision) {
   char value[24];
@@ -42,7 +42,7 @@ void restoreOperationalPowerPolicyAfterProbe() {
 bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
   const uint32_t nowMs = millis();
   if (g_haveCachedProbeState &&
-      (uint32_t)(nowMs - g_lastProbeNetworkAtMs) < LIVE_PROBE_MIN_NETWORK_INTERVAL_MS) {
+      (uint32_t)(nowMs - g_lastProbeNetworkStartedAtMs) < LIVE_PROBE_MIN_NETWORK_INTERVAL_MS) {
     out = g_cachedProbeState;
     return true;
   }
@@ -50,6 +50,13 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
   String url = String(BASE_URL) + "/api/device/update-state?device_id=" + DeviceIdentity::getDeviceId();
   int code = 0;
   String body;
+  const uint32_t networkProbeStartedAtMs = millis();
+
+  // MAX_MODEM + automatic light sleep is ideal between probes, but it can add
+  // several seconds of latency to a new HTTPS exchange. Temporarily use the
+  // realtime network policy for this tiny revision read, then immediately
+  // restore the normal source-aware low-power policy.
+  WiFiManagerV2::beginRealtimeNetworkBurst();
   const bool ok = NetClient::httpGetAuth(url, deviceToken, code, body);
   restoreOperationalPowerPolicyAfterProbe();
   if (code <= 0) {
@@ -78,9 +85,16 @@ bool LiveUpdate::probe(const String& deviceToken, LiveUpdateState& out) {
   g_cachedProbeState.requestedRevision = requested;
   g_cachedProbeState.displayedRevision = displayed;
   g_haveCachedProbeState = true;
-  g_lastProbeNetworkAtMs = millis();
+  // Throttle from request START, not completion. Otherwise an 8-second network
+  // exchange plus a 10-second idle interval silently becomes an ~18-second
+  // user-visible update-detection cadence.
+  g_lastProbeNetworkStartedAtMs = networkProbeStartedAtMs;
   out = g_cachedProbeState;
   return true;
+}
+
+uint32_t LiveUpdate::lastNetworkProbeStartedAtMs() {
+  return g_lastProbeNetworkStartedAtMs;
 }
 
 bool LiveUpdate::acknowledge(const String& deviceToken, uint64_t revision) {

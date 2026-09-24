@@ -9,6 +9,7 @@ struct LiveUpdateState {
 
 namespace LiveUpdate {
   bool probe(const String& deviceToken, LiveUpdateState& out);
+  uint32_t lastNetworkProbeStartedAtMs();
   bool acknowledge(const String& deviceToken, uint64_t revision);
 
   uint64_t getRenderedAwaitingAck();
