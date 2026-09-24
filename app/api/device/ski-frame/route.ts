@@ -21,6 +21,19 @@ function finite(value: unknown) {
   return Number.isFinite(number) ? number : null
 }
 
+function shortDateLabel(value: unknown, language: string) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const date = new Date(raw + (raw.length === 10 ? 'T12:00:00Z' : ''))
+  if (Number.isNaN(date.getTime())) return raw.slice(0, 24)
+  return new Intl.DateTimeFormat(language === 'no' ? 'nb-NO' : 'en-GB', {
+    timeZone: 'Europe/Oslo',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(date).replace(/\./g, '')
+}
+
 async function canReadDevice(supabase: SupabaseClient, deviceId: string, token: string) {
   const { data: device, error: deviceError } = await supabase
     .from('devices')
@@ -99,11 +112,15 @@ export async function GET(req: Request) {
     const current = record(source.current)
     const snow = record(source.snow)
     const avalanche = record(source.avalanche)
+    const resort = record(source.resort)
+    const powder = record(source.next_powder_day)
     const dangerLevel = finite(avalanche.danger_level)
     const assessed = avalanche.assessed === true && dangerLevel != null && dangerLevel > 0
+    const powderDate = String(powder.date ?? '').trim()
 
     return NextResponse.json({
       module_id: id,
+      language,
       location: { label: String(location.label ?? label).trim().slice(0, 80) || label },
       current: {
         temp_c: finite(current.temp_c),
@@ -118,6 +135,24 @@ export async function GET(req: Request) {
         available: avalanche.available === true,
         assessed,
         danger_level: assessed ? dangerLevel : dangerLevel === 0 ? 0 : null,
+      },
+      resort: {
+        available: resort.available === true,
+        name: String(resort.name ?? '').trim().slice(0, 80) || null,
+        resort_open: resort.resort_open === true,
+        ski_open: resort.ski_open === true,
+        lifts_open: finite(resort.lifts_open),
+        lifts_total: finite(resort.lifts_total),
+        slopes_open: finite(resort.slopes_open),
+        slopes_total: finite(resort.slopes_total),
+      },
+      next_powder_day: {
+        found: powder.found === true,
+        date: powderDate || null,
+        display_date: powderDate ? shortDateLabel(powderDate, language) : null,
+        estimated_fresh_cm_low: finite(powder.estimated_fresh_cm_low),
+        estimated_fresh_cm_high: finite(powder.estimated_fresh_cm_high),
+        estimated_fresh_cm_mid: finite(powder.estimated_fresh_cm_mid),
       },
     })
   } catch (error: unknown) {
