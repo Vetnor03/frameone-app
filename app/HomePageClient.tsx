@@ -8685,14 +8685,12 @@ function SettingsTab({
               />
               <SettingRow label={t.languageRow} value={languageValue} onClick={onOpenLanguage} />
               <SettingRow label={t.subscription} value="" onClick={() => setSubpage('subscription')} />
-              <div className="py-4">
+              <div className="py-3">
                 <div className="flex min-h-12 items-center justify-between gap-4">
                   <div className="min-w-0 pr-3">
                     <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Strømsparing' : 'Power Save'}</div>
-                    <div className="mt-1 text-xs leading-5 text-[color:var(--fg-45)]">
-                      {language === 'no'
-                        ? 'For å spare batteri sjekker rammen etter endringer sjeldnere. Oppdateringer kan noen ganger bruke noen timer på å vises.'
-                        : 'To save battery, your frame checks for changes less often. Updates can sometimes take a few hours to appear.'}
+                    <div className="mt-0.5 text-xs text-[color:var(--fg-45)]">
+                      {language === 'no' ? 'Lengre batteritid, tregere oppdateringer.' : 'Longer battery life, slower updates.'}
                     </div>
                   </div>
                   <SettingsToggle
