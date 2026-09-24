@@ -53,3 +53,10 @@ test('generic Assistant copy is localized and does not promise notifications', (
   assert.match(assistant, /Only new and relevant changes are shown\./)
   assert.doesNotMatch(assistant, /notified|Notify me|Varsle meg|beskjed|push notification|push-varsel/i)
 })
+
+
+test('Power Save helper tip uses the approved concise copy', () => {
+  const tips = readFileSync(new URL('../app/lib/assistant/tips.ts', import.meta.url), 'utf8')
+  assert.match(tips, /Longer battery life, less responsive\./)
+  assert.match(tips, /Lengre batteritid, mindre responsiv\./)
+})
