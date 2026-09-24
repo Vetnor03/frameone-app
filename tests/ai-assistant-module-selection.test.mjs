@@ -16,17 +16,20 @@ test('AI Follow implementation remains intact behind the release UI switch', () 
   assert.match(home, /SHOW_AI_FOLLOW_UI && \(tab === 'assistant' \|\| tab === 'ai-assistant'\)/)
 })
 
-test('AI Follow navigation code is preserved but unreachable while hidden', () => {
+test('AI Follow tab stays hidden while the lightweight RE:MIND helper remains available', () => {
   assert.match(home, /deriveDynamicModuleKeys<ModuleKey>\(activeLayoutModules, pinnedModuleTabs\)/)
   assert.match(home, /setPinnedModuleTabs\(\(prev\) => \{[\s\S]*markDirty\(\{ pinnedModuleTabs: nextPinned \}\)/)
   assert.match(home, /activeTab === 'assistant' \? \(\s*<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
-  assert.match(home, /SHOW_AI_FOLLOW_UI && isPlainFrameAssistantSurface && showFrameAssistant/)
+  assert.match(home, /isPlainFrameAssistantSurface && showFrameAssistant/)
+  assert.doesNotMatch(home, /SHOW_AI_FOLLOW_UI && isPlainFrameAssistantSurface/)
   assert.match(home, /if \(tabs\.some\(\(tab\) => tab\.key === activeTab\)\) return/)
 })
 
-test('AI Follow is hidden from the module picker and Settings without deleting controls', () => {
+test('AI Follow module is hidden but helper and Tips & Tricks settings remain visible', () => {
   assert.match(home, /const options: ModuleKey\[] = \['assistant', 'reminders', 'news', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks'\][\s\S]*filter\(\(module\): module is ModuleKey => SHOW_AI_FOLLOW_UI \|\| module !== 'assistant'\)/)
-  assert.match(home, /SHOW_AI_FOLLOW_UI && \([\s\S]*KI-ASSISTENT[\s\S]*AI ASSISTANT/)
+  assert.match(home, /ASSISTANT & TIPS/)
+  assert.match(home, /Show RE:MIND Assistant/)
+  assert.match(home, /Tips & Tricks/)
   assert.match(home, /AssistantPreferenceToggle/)
 })
 
