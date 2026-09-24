@@ -214,8 +214,10 @@ void tick(uint8_t id) {
 }
 
 void snowText(const SkiCache& data, char* fresh, size_t freshSize, char* total, size_t totalSize) {
-  if (isfinite(data.freshCm)) snprintf(fresh, freshSize, "%d cm %s", rounded(data.freshCm), data.norwegian ? "nysnø" : "fresh");
-  else snprintf(fresh, freshSize, "-- cm %s", data.norwegian ? "nysnø" : "fresh");
+  char freshLabel[16] = {0};
+  FrameText::normalizeUtf8ForDisplay(freshLabel, sizeof(freshLabel), data.norwegian ? "nysnø" : "fresh");
+  if (isfinite(data.freshCm)) snprintf(fresh, freshSize, "%d cm %s", rounded(data.freshCm), freshLabel);
+  else snprintf(fresh, freshSize, "-- cm %s", freshLabel);
 
   if (isfinite(data.totalCm)) snprintf(total, totalSize, "%d cm %s", rounded(data.totalCm), data.norwegian ? "totalt" : "total");
   else snprintf(total, totalSize, "-- cm %s", data.norwegian ? "totalt" : "total");
@@ -244,17 +246,22 @@ void avalancheText(const SkiCache& data, char* out, size_t outSize, bool shortFo
 bool resortText(const SkiCache& data, char* out, size_t outSize) {
   if (!data.resortAvailable) return false;
   const bool open = data.skiOpen || data.resortOpen;
+  char status[16] = {0};
+  FrameText::normalizeUtf8ForDisplay(
+    status, sizeof(status),
+    open ? (data.norwegian ? "åpent" : "open") : (data.norwegian ? "stengt" : "closed")
+  );
   if (data.liftsOpen >= 0 && data.liftsTotal > 0) {
     snprintf(out, outSize, "%s%s%s · %d/%d %s",
       data.resortName[0] ? data.resortName : (data.norwegian ? "Anlegg" : "Resort"),
       data.resortName[0] ? " " : "",
-      open ? (data.norwegian ? "åpent" : "open") : (data.norwegian ? "stengt" : "closed"),
+      status,
       data.liftsOpen, data.liftsTotal, data.norwegian ? "heiser" : "lifts");
   } else {
     snprintf(out, outSize, "%s%s%s",
       data.resortName[0] ? data.resortName : (data.norwegian ? "Anlegg" : "Resort"),
       data.resortName[0] ? " " : "",
-      open ? (data.norwegian ? "åpent" : "open") : (data.norwegian ? "stengt" : "closed"));
+      status);
   }
   return true;
 }
