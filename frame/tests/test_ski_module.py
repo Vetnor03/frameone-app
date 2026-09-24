@@ -7,6 +7,7 @@ CAPABILITY = (ROOT / "frame" / "src" / "modules" / "AdaptiveModuleCapability.h")
 SKETCH = (ROOT / "frame" / "src" / "frame_v2.5.1.ino").read_text()
 REGISTRY = (ROOT / "shared" / "frame-modules.json").read_text()
 SKI_ROUTE = (ROOT / "app" / "api" / "device" / "ski-frame" / "route.ts").read_text()
+FRAME_CONFIG_BUILDER = (ROOT / "app" / "api" / "device" / "frame-config" / "builder.ts").read_text()
 
 
 def test_ski_is_a_full_physical_module_not_2x2_only():
@@ -34,6 +35,13 @@ def test_ski_device_adapter_exposes_resort_powder_and_language():
     assert "lifts_open" in SKI_ROUTE
     assert "next_powder_day" in SKI_ROUTE
     assert "display_date" in SKI_ROUTE
+
+
+def test_frame_config_preserves_only_lightweight_active_ski_locations():
+    assert "isActiveBase(active, 'ski')" in FRAME_CONFIG_BUILDER
+    assert "responseModules.ski = sanitizedSki" in FRAME_CONFIG_BUILDER
+    assert "refresh: 10800000" in FRAME_CONFIG_BUILDER
+    assert "/api/ski/summary" not in FRAME_CONFIG_BUILDER
 
 
 def test_ski_work_keeps_locked_firmware_label():
