@@ -50,7 +50,7 @@ test('Ski smart-refresh ignores invisible data and small background noise', () =
   const sameSignificance = physicalRenderDigest('ski:1', {
     ...source,
     generated_at: '2099-01-01T00:00:00Z',
-    current: { ...source.current, temp_c: -5.1, wind_mps: 6.9 },
+    current: { ...source.current, temp_c: -5.6, wind_mps: 6.9 },
     snow: { ...source.snow, fresh_24h_cm: 18.9, snow_depth_cm: 78.9 },
     resort: { ...source.resort, lifts_open: 2 },
   }, cell, { theme: 'dark' })
