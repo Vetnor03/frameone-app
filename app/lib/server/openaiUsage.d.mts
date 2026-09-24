@@ -19,6 +19,7 @@ export function openAIUsageFields(payload: OpenAIUsagePayload | null | undefined
   usage: Record<string, unknown>
 }
 
+export function costControlledModel(configured: unknown, fallback?: string): string
 export function reserveBackgroundOpenAICall(feature: string, model: string): Promise<{ allowed: boolean; id: string | null }>
 export function completeReservedOpenAICall(id: string | null, payload: OpenAIUsagePayload | null | undefined, status?: 'success' | 'error', errorCode?: string | null): Promise<void>
 export function recordOpenAIUsage(feature: string, model: string, payload: OpenAIUsagePayload | null | undefined, status?: 'success' | 'error', errorCode?: string | null): Promise<void>

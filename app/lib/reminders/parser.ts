@@ -1,4 +1,4 @@
-import { recordOpenAIUsage } from '../server/openaiUsage.mjs'
+import { costControlledModel, recordOpenAIUsage } from '../server/openaiUsage.mjs'
 
 export const REMINDER_PARSE_VERSION = 'reminder-parse-v4'
 export const REMINDER_PARSE_TIMEOUT_MS = 15_000
@@ -203,7 +203,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     logParseFailure('reminder_parse_validation_error')
     return null
   }
-  const model = process.env.REMINDER_PARSE_MODEL || 'gpt-6-luna'
+  const model = costControlledModel(process.env.REMINDER_PARSE_MODEL)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REMINDER_PARSE_TIMEOUT_MS)
   const requestStartedAt = Date.now()

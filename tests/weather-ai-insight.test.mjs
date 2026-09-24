@@ -2,6 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { compactWeatherInsightForecast, resolveWeatherInsight, clearWeatherInsightCache } from '../app/lib/server/weatherInsight.mjs'
 
+const originalBudgetBypass = process.env.OPENAI_BACKGROUND_BUDGET_BYPASS
+process.env.OPENAI_BACKGROUND_BUDGET_BYPASS = '1'
+
 function forecast({ now = '2026-08-24T14:00', changes = {} } = {}) {
   const time = Array.from({ length: 20 }, (_, index) => `2026-08-24T${String(10 + index).padStart(2, '0')}:00`)
   const field = (name, fallback) => time.map((_, index) => changes[name]?.[index] ?? fallback)
@@ -89,4 +92,9 @@ test('ordinary stable weather skips OpenAI entirely', async () => {
   const result = await resolveWeatherInsight(forecast(), { apiKey: 'test', locationKey: 'ordinary', fetcher: async () => { calls++; throw new Error('must not call') } })
   assert.equal(result, '')
   assert.equal(calls, 0)
+})
+
+test.after(() => {
+  if (originalBudgetBypass === undefined) delete process.env.OPENAI_BACKGROUND_BUDGET_BYPASS
+  else process.env.OPENAI_BACKGROUND_BUDGET_BYPASS = originalBudgetBypass
 })

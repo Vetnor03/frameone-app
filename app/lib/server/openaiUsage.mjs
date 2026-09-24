@@ -29,6 +29,13 @@ export function openAIUsageFields(payload) {
   }
 }
 
+const EXPENSIVE_MODEL_RE = /^gpt-5\.6(?:$|-)/i
+
+export function costControlledModel(configured, fallback = 'gpt-6-luna') {
+  const candidate = String(configured ?? '').trim()
+  return candidate && !EXPENSIVE_MODEL_RE.test(candidate) ? candidate : fallback
+}
+
 function envLimit(name, fallback) {
   const raw = process.env[name]
   if (raw == null || raw.trim() === '') return fallback
@@ -37,8 +44,12 @@ function envLimit(name, fallback) {
 }
 
 export async function reserveBackgroundOpenAICall(feature, model) {
+  if (process.env.OPENAI_BACKGROUND_BUDGET_BYPASS === '1') return { allowed: true, id: null }
   const db = getAdminClient()
-  if (!db) return { allowed: true, id: null }
+  if (!db) {
+    console.warn('[openai-usage] background budget unavailable; skipping AI', { feature, code: 'missing_supabase_admin' })
+    return { allowed: false, id: null }
+  }
   try {
     const { data, error } = await db.rpc('reserve_openai_background_call', {
       p_feature: feature,
