@@ -1,3 +1,5 @@
+import { recordOpenAIUsage } from '../server/openaiUsage.mjs'
+
 export const REMINDER_PARSE_VERSION = 'reminder-parse-v4'
 export const REMINDER_PARSE_TIMEOUT_MS = 15_000
 
@@ -201,6 +203,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
     logParseFailure('reminder_parse_validation_error')
     return null
   }
+  const model = process.env.REMINDER_PARSE_MODEL || 'gpt-6-luna'
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REMINDER_PARSE_TIMEOUT_MS)
   const requestStartedAt = Date.now()
@@ -209,8 +212,8 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
       method: 'POST', signal: controller.signal,
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: process.env.REMINDER_PARSE_MODEL || 'gpt-5-mini', store: false,
-        reasoning: { effort: 'minimal' },
+        model, store: false,
+        reasoning: { effort: 'none' },
         input: [
           { role: 'developer', content: [{ type: 'input_text', text: `Parse or complete a reminder in the existing RE:MIND schema. Version: ${REMINDER_PARSE_VERSION}. Always return exactly one reminder candidate plus missing_fields and question; never decide a status. Resolve relative dates only from localNow and timezone. Never invent a date, clock time, end, tag, person, place, or repeat rule. Treat every non-null field in existing_partial as already supplied structured context. Preserve it unless the user's current text or clarification answer explicitly changes that field. A clarification answer is additive: fill or modify what the question asks without clearing unrelated fields. due_date is required; due_time is generally optional. Put due_date in missing_fields whenever it is unknown. If wording clearly implies a time that is too vague to represent safely (for example later, after work, or an undefined evening), also put due_time in missing_fields. When missing_fields is non-empty, provide one calm, concise question written naturally in the requested language; otherwise question must be null. A birthday or bursdag/fødselsdag is inherently an annual anniversary: use repeat_type yearly even when the user does not explicitly say every year, unless they explicitly request a one-time reminder.\n\nCanonical title normalization: the title is the semantic reminder content, not a frame-optimized short label. Remove date, start-time, end-time, and recurrence wording only when that exact information was successfully represented in the corresponding structured field. Keep all unrepresented or meaningful content. Thus Norwegian equivalents of “Ring mamma på torsdag” and “Ring mamma torsdag kl. 18” become “Ring mamma” when their date/time fields are resolved, while “Ring mamma om bursdagen hennes på torsdag” keeps “om bursdagen hennes” and “Møte på kontoret torsdag” keeps “på kontoret”. Do not rewrite manually created reminders; this parser only normalizes the current natural-language request. Any meaningful information unsupported by structured fields remains in title. end_date/end_time describe this occurrence, never recurrence termination. Sunday recurrence is weekly with a Sunday due_date. custom_repeat_days is only for an explicit every-N-days rule. ambiguities may describe non-blocking unsupported intent.` }] },
           { role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ original_reminder_text: context.text.trim(), existing_partial: context.partial, clarification_question: context.clarificationQuestion, clarification_answer: context.clarificationAnswer, localNow: context.localNow, timezone: context.timezone || null, language: context.language }) }] },
@@ -223,6 +226,7 @@ export async function parseReminder(context: ReminderParseContext, fetcher: type
       return null
     }
     const payload = await response.json()
+    await recordOpenAIUsage('reminder_parse', model, payload)
     let decoded: unknown
     try { decoded = JSON.parse(outputText(payload)) } catch {
       logParseFailure('reminder_parse_invalid_json')
