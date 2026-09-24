@@ -56,7 +56,7 @@ test('AI NONE becomes an empty optional insight', async () => {
 })
 
 test('a concise useful AI response is returned', async () => {
-  assert.equal(await resolveWeatherInsight(forecast({ changes: { temperature: { 7: 23 } } }), { apiKey: 'test', locationKey: 'useful', fetcher: aiResponse('Warmer later.') }), 'Rain arrives around 15:00.')
+  assert.equal(await resolveWeatherInsight(forecast({ changes: { temperature: { 7: 23 } } }), { apiKey: 'test', locationKey: 'useful', fetcher: aiResponse('Warmer later.') }), 'Warmer later.')
 })
 
 test('AI failure returns the existing deterministic fallback', async () => {
