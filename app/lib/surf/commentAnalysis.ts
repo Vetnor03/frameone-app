@@ -1,4 +1,4 @@
-import { recordOpenAIUsage } from '../server/openaiUsage.mjs'
+import { costControlledModel, recordOpenAIUsage } from '../server/openaiUsage.mjs'
 
 export const SURF_COMMENT_ANALYSIS_VERSION = 'surf-comment-v1'
 export const SURF_COMMENT_MIN_CONFIDENCE = 0.55
@@ -61,7 +61,7 @@ export function validateSurfCommentAnalysis(value: unknown): SurfCommentAnalysis
 export async function analyzeSurfComment(context: AnalysisContext, fetcher: typeof fetch = fetch) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return null
-  const model = process.env.SURF_COMMENT_AI_MODEL || 'gpt-6-luna'
+  const model = costControlledModel(process.env.SURF_COMMENT_AI_MODEL)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
