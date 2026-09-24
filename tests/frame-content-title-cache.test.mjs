@@ -7,7 +7,9 @@ import {
 
 const originalFetch = globalThis.fetch
 const originalKey = process.env.OPENAI_API_KEY
+const originalBudgetBypass = process.env.OPENAI_BACKGROUND_BUDGET_BYPASS
 process.env.OPENAI_API_KEY = 'test-key'
+process.env.OPENAI_BACKGROUND_BUDGET_BYPASS = '1'
 
 function cache() {
   const rows = new Map()
@@ -98,4 +100,9 @@ test('concurrent identical misses share one AI operation', async () => {
   assert.equal(counter.calls, 1); assert.equal(persistentCache.rows.size, 1)
 })
 
-test.after(() => { globalThis.fetch = originalFetch; process.env.OPENAI_API_KEY = originalKey })
+test.after(() => {
+  globalThis.fetch = originalFetch
+  process.env.OPENAI_API_KEY = originalKey
+  if (originalBudgetBypass === undefined) delete process.env.OPENAI_BACKGROUND_BUDGET_BYPASS
+  else process.env.OPENAI_BACKGROUND_BUDGET_BYPASS = originalBudgetBypass
+})
