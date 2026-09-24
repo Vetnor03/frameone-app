@@ -35,4 +35,4 @@ def test_updating_screen_is_full_frame_and_theme_aware():
 
 
 def test_firmware_version_bumped_for_manual_update_feedback():
-    assert 'static const char* FW_VER = "v2.7.4";' in INO
+    assert 'static const char* FW_VER = "v2.7.5";' in INO
