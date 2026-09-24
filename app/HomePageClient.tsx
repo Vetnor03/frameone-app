@@ -8479,8 +8479,8 @@ function SettingsTab({
                     <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Strømsparing' : 'Power Save'}</div>
                     <div className="mt-1 text-xs leading-5 text-[color:var(--fg-45)]">
                       {language === 'no'
-                        ? 'Bruker mindre strøm for lengre batteritid. Rammen oppdateres bare når det trengs, så endringer kan bruke litt lengre tid på å vises.'
-                        : 'Uses less power for longer battery life. Your frame updates only when needed, so changes may take a little longer to appear.'}
+                        ? 'Rammen oppdateres bare når det trengs, så endringer kan bruke litt lengre tid på å vises.'
+                        : 'Your frame updates only when needed, so changes may take a little longer to appear.'}
                     </div>
                   </div>
                   <SettingsToggle
