@@ -6083,11 +6083,10 @@ function MirrorNewsCard({
     )
   }
 
-  const columns = size === 'large' ? 2 : 1
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.65rem,1.7vw,1.15rem)] pb-[clamp(0.45rem,1.05vw,0.72rem)] pt-[clamp(0.8rem,1.95vw,1.2rem)] leading-none">
       <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
-      <div className="mt-[clamp(0.48rem,1.2vw,0.8rem)] grid min-h-0 flex-1 content-center gap-x-[clamp(0.75rem,1.8vw,1.25rem)] gap-y-[clamp(0.28rem,0.72vw,0.5rem)]" style={{ gridTemplateColumns: 'repeat(' + columns + ', minmax(0, 1fr))' }}>
+      <div className="mt-[clamp(0.48rem,1.2vw,0.8rem)] grid min-h-0 flex-1 content-center gap-y-[clamp(0.28rem,0.72vw,0.5rem)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
         {titles.map((title, index) => (
           <div key={title + '-' + index} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.38rem,0.9vw,0.62rem)]">
             <span className="h-[clamp(0.22rem,0.48vw,0.32rem)] w-[clamp(0.22rem,0.48vw,0.32rem)] rounded-full bg-current" aria-hidden="true" />
