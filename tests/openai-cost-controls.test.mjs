@@ -9,7 +9,8 @@ test('high-volume AI defaults to Luna, blocks old Sol overrides, and disables re
   const weather = read('app/lib/server/weatherInsight.mjs')
   const titles = read('app/lib/frameContentOptimizer.ts')
   assert.match(helper, /fallback = 'gpt-6-luna'/)
-  assert.match(helper, /EXPENSIVE_MODEL_RE = \/\^gpt-5\\\.6/)
+  assert.match(helper, /EXPENSIVE_MODEL_RE/)
+  assert.ok(helper.includes("const EXPENSIVE_MODEL_RE = /^gpt-5\\.6"))
   assert.match(weather, /costControlledModel\(options\.model \?\? process\.env\.FRAME_AI_MODEL\)/)
   assert.match(titles, /DEFAULT_MODEL = 'gpt-6-luna'/)
   assert.match(titles, /costControlledModel\(process\.env\.FRAME_AI_MODEL, DEFAULT_MODEL\)/)
@@ -60,6 +61,11 @@ test('AI Follow backend is unconditionally hard-disabled', () => {
   }
   const provider = read('supabase/functions/_shared/monitoring/provider.ts')
   assert.match(provider, /DEFAULT_OPENAI_MONITORING_MODEL = 'gpt-6-luna'/)
+  const cronShutdown = read('supabase/migrations/20260924190500_disable_ai_follow_cron.sql')
+  assert.match(cronShutdown, /cron\.unschedule/)
+  assert.match(cronShutdown, /interpret-ai-assistant/)
+  assert.match(cronShutdown, /monitoring-worker/)
+  assert.match(cronShutdown, /monitoring-scheduler/)
 })
 
 test('database migration provides usage ledger, hard budget and durable weather cache', () => {
