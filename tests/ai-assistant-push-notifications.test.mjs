@@ -151,8 +151,10 @@ test('global switch works both ways without automatic permission prompts', () =>
   assert.match(home, /checked=\{enabled\} disabled=\{busy\}/)
 })
 
-test('settings prefetches notification state and renders a neutral cold-load skeleton', () => {
-  assert.match(home, /useEffect\(\(\) => \{[\s\S]*if \(!userId\)[\s\S]*loadNotificationState\(\)\.then[\s\S]*\}, \[userId\]\)/)
+test('notification implementation is preserved but hidden while AI Follow is unavailable', () => {
+  assert.match(home, /const SHOW_NOTIFICATIONS_UI = false/)
+  assert.match(home, /if \(!SHOW_NOTIFICATIONS_UI \|\| !userId\)/)
+  assert.match(home, /SHOW_NOTIFICATIONS_UI && \(\s*<NotificationsSetting/)
   assert.match(home, /notificationState=\{notificationState\}/)
   assert.match(home, /loading \? <div className="mt-2 h-3 w-36 animate-pulse/)
   assert.match(home, /loading \? <div className="h-7 w-12 animate-pulse/)
