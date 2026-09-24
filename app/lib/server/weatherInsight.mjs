@@ -1,11 +1,70 @@
+import { createHash } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
 import { buildWeatherInsight } from '../weatherMirror.ts'
 import { sanitizeFrameText } from '../frameText.mjs'
+import { completeReservedOpenAICall, reserveBackgroundOpenAICall } from './openaiUsage.mjs'
 
 const CACHE_TTL_MS = 150 * 60 * 1000
 const AI_TIMEOUT_MS = 4500
 const MAX_INSIGHT_CHARS = 88
 const MAX_FORECAST_HOURS = 15
 const cache = new Map()
+let persistentClient
+
+function getPersistentClient() {
+  if (persistentClient !== undefined) return persistentClient
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  persistentClient = url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null
+  return persistentClient
+}
+
+function persistentCacheKey(locationKey, model) {
+  return createHash('sha256').update(`${locationKey}|${model}`).digest('hex')
+}
+
+function rowsToObject(rows) { return Object.fromEntries(rows) }
+function objectToRows(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return new Map()
+  return new Map(Object.entries(value))
+}
+
+async function readPersistentInsight(locationKey, model) {
+  const db = getPersistentClient()
+  if (!db) return { available: false, row: null }
+  try {
+    const { data, error } = await db.from('weather_ai_insight_cache')
+      .select('model,period,rows,insight,expires_at')
+      .eq('cache_key', persistentCacheKey(locationKey, model))
+      .maybeSingle()
+    if (error) throw error
+    return { available: true, row: data || null }
+  } catch (error) {
+    console.warn('[weather-insight] durable cache unavailable; skipping AI', { code: error?.code || 'unknown' })
+    return { available: true, error: true, row: null }
+  }
+}
+
+async function writePersistentInsight(locationKey, model, compact, insight, expiresAt) {
+  const db = getPersistentClient()
+  if (!db) return true
+  try {
+    const { error } = await db.from('weather_ai_insight_cache').upsert({
+      cache_key: persistentCacheKey(locationKey, model),
+      model,
+      period: compact.period,
+      rows: rowsToObject(normalizedRows(compact)),
+      insight,
+      expires_at: new Date(expiresAt).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'cache_key' })
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.warn('[weather-insight] durable cache write failed', { code: error?.code || 'unknown' })
+    return false
+  }
+}
 
 function record(value) { return value && typeof value === 'object' ? value : {} }
 function array(value) { return Array.isArray(value) ? value : [] }
@@ -97,34 +156,74 @@ function insightIsPast(insight, localNow) {
 
 export function clearWeatherInsightCache() { cache.clear() }
 
+function noteworthyDryShift(compact) {
+  const temps = compact.hours.map(hour => Number(hour.temperatureC)).filter(Number.isFinite)
+  const winds = compact.hours.map(hour => Number(hour.windMs)).filter(Number.isFinite)
+  const gusts = compact.hours.map(hour => Number(hour.gustMs)).filter(Number.isFinite)
+  const span = values => values.length ? Math.max(...values) - Math.min(...values) : 0
+  return span(temps) >= 6 || span(winds) >= 5 || span(gusts) >= 6
+}
+
 export async function resolveWeatherInsight(payload, options = {}) {
   const fallbackInput = deterministicInput(payload)
-  const severe = severeInsight(fallbackInput)
-  if (severe) return sanitizeFrameText(severe)
+  const deterministic = sanitizeFrameText(buildWeatherInsight(fallbackInput))
+  // Rain, snow, fog, thunder and strong-wind messages are already deterministic.
+  // Never pay an LLM to paraphrase information we can express safely ourselves.
+  if (deterministic) return deterministic
+
   const compact = compactWeatherInsightForecast(payload)
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY
-  if (!compact || !apiKey) return sanitizeFrameText(buildWeatherInsight(fallbackInput))
-  const model = options.model ?? process.env.FRAME_AI_MODEL ?? 'gpt-5.6'
+  if (!compact || !apiKey || !noteworthyDryShift(compact)) return deterministic
+
+  const model = options.model ?? process.env.FRAME_AI_MODEL ?? 'gpt-6-luna'
   const locationKey = options.locationKey || 'default'
-  const cached = cache.get(locationKey)
   const now = options.now ?? Date.now()
+  const cached = cache.get(locationKey)
   if (cached && cached.model === model && cached.period === compact.period && cached.expiresAt > now && !insightIsPast(cached.insight, compact.localNow) && !materiallyChanged(cached, compact)) return cached.insight
+
+  const persistent = await readPersistentInsight(locationKey, model)
+  if (persistent.error) return deterministic
+  if (persistent.row) {
+    const durable = {
+      insight: String(persistent.row.insight || ''),
+      model: persistent.row.model,
+      period: persistent.row.period,
+      rows: objectToRows(persistent.row.rows),
+      expiresAt: Date.parse(persistent.row.expires_at),
+    }
+    if (durable.model === model && durable.period === compact.period && durable.expiresAt > now && !insightIsPast(durable.insight, compact.localNow) && !materiallyChanged(durable, compact)) {
+      cache.set(locationKey, durable)
+      return durable.insight
+    }
+  }
+
+  const reservation = await reserveBackgroundOpenAICall('weather_insight', model)
+  if (!reservation.allowed) return deterministic
 
   const fetcher = options.fetcher ?? fetch
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? AI_TIMEOUT_MS)
   try {
     const response = await fetcher('https://api.openai.com/v1/responses', { method: 'POST', signal: controller.signal, headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
-      model, store: false,
-      input: [{ role: 'system', content: [{ type: 'input_text', text: `Use plain typography: no emoji, decorative Unicode, smart quotes, or en/em dashes. Preserve Norwegian æ/ø/å; the degree symbol is allowed. Keep wording concise and glanceable. Decide whether the supplied upcoming forecast contains anything genuinely useful or noteworthy for someone glancing at a household information display. Prioritize meaningful changes, inconvenience, timing, unusual conditions, or particularly notable pleasant weather. Avoid ordinary descriptions and never mention weather before localNow. Use only supplied values; do not infer unsupported events. Return one very short natural sentence (maximum ${MAX_INSIGHT_CHARS} characters), or exactly NONE.` }] }, { role: 'user', content: [{ type: 'input_text', text: JSON.stringify(compact) }] }],
+      model, store: false, reasoning: { effort: 'none' },
+      input: [{ role: 'system', content: [{ type: 'input_text', text: `Use plain typography: no emoji, decorative Unicode, smart quotes, or en/em dashes. Preserve Norwegian æ/ø/å; the degree symbol is allowed. Keep wording concise and glanceable. Decide whether the supplied upcoming forecast contains anything genuinely useful or noteworthy for someone glancing at a household information display. Prioritize meaningful temperature or wind changes that are not already covered by deterministic weather warnings. Avoid ordinary descriptions and never mention weather before localNow. Use only supplied values; do not infer unsupported events. Return one very short natural sentence (maximum ${MAX_INSIGHT_CHARS} characters), or exactly NONE.` }] }, { role: 'user', content: [{ type: 'input_text', text: JSON.stringify(compact) }] }],
       max_output_tokens: 60,
     }) })
-    if (!response.ok) throw new Error(`OpenAI status ${response.status}`)
-    const insight = safeInsight(outputText(await response.json()))
-    cache.set(locationKey, { insight, model, period: compact.period, rows: normalizedRows(compact), expiresAt: now + CACHE_TTL_MS })
+    if (!response.ok) {
+      await completeReservedOpenAICall(reservation.id, null, 'error', `http_${response.status}`)
+      throw new Error(`OpenAI status ${response.status}`)
+    }
+    const payload = await response.json()
+    await completeReservedOpenAICall(reservation.id, payload)
+    const insight = safeInsight(outputText(payload))
+    const expiresAt = now + CACHE_TTL_MS
+    const entry = { insight, model, period: compact.period, rows: normalizedRows(compact), expiresAt }
+    cache.set(locationKey, entry)
+    await writePersistentInsight(locationKey, model, compact, insight, expiresAt)
     return insight
   } catch (error) {
+    await completeReservedOpenAICall(reservation.id, null, 'error', controller.signal.aborted ? 'timeout' : 'request_failed')
     console.warn('[weather-insight] AI unavailable; using deterministic fallback', { error: error instanceof Error ? error.message : 'unknown' })
-    return sanitizeFrameText(buildWeatherInsight(fallbackInput))
+    return deterministic
   } finally { clearTimeout(timeout) }
 }
