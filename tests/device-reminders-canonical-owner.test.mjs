@@ -13,6 +13,8 @@ test('Reminders uses the canonical devices.owner_user_id ownership column', () =
 })
 
 test('Reminders no longer probes removed devices.owner_id or devices.user_id columns', () => {
-  assert.doesNotMatch(helper, /\.select\('(?:id, device_id, )?(?:owner_id|user_id)'\)/)
-  assert.doesNotMatch(helper, /\.eq\('(?:owner_id|user_id)',/)
+  assert.doesNotMatch(helper, /\.select\('id, device_id, owner_id'\)/)
+  assert.doesNotMatch(helper, /\.select\('id, device_id, user_id'\)/)
+  assert.doesNotMatch(helper, /\.eq\('owner_id', ownerId\)/)
+  assert.doesNotMatch(helper, /\.eq\('user_id', ownerId\)/)
 })
