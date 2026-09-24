@@ -2951,7 +2951,7 @@ async function handleSelectTab(k: TabKey) {
               </div>
             )}
 
-            {SHOW_AI_FOLLOW_UI && isPlainFrameAssistantSurface && showFrameAssistant && (
+            {isPlainFrameAssistantSurface && showFrameAssistant && (
               <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { applyDocumentTheme(theme); persistTheme(theme); setAppTheme(theme) }} />
             )}
 
@@ -8706,13 +8706,11 @@ function SettingsTab({
               {SHOW_NOTIFICATIONS_UI && (
                 <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
               )}
-              {SHOW_AI_FOLLOW_UI && (
-                <div className="py-4">
-                  <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
-                  <AssistantPreferenceToggle label={language === 'no' ? 'Vis KI-assistent' : 'Show AI Assistant'} checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
-                  <AssistantPreferenceToggle label={language === 'no' ? 'Proaktive tips' : 'Proactive tips'} checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
-                </div>
-              )}
+              <div className="py-4">
+                <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'ASSISTENT & TIPS' : 'ASSISTANT & TIPS'}</div>
+                <AssistantPreferenceToggle label={language === 'no' ? 'Vis RE:MIND-assistent' : 'Show RE:MIND Assistant'} checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
+                <AssistantPreferenceToggle label={language === 'no' ? 'Tips og triks' : 'Tips & Tricks'} checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
+              </div>
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
