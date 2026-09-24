@@ -217,24 +217,22 @@ function diffDaysFromYmd(fromYmd: string, toYmd: string) {
 
 
 async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: string) {
-  for (const select of ['id, device_id, owner_id', 'id, device_id, user_id']) {
-    const { data: device, error: deviceError } = await supabase
-      .from('devices')
-      .select(select)
-      .eq('device_id', deviceId)
-      .maybeSingle()
+  // owner_user_id is the canonical ownership column on devices. The old
+  // owner_id/user_id probes were legacy fallbacks that now generate guaranteed
+  // PostgREST errors before every physical Reminders fetch.
+  const { data: device, error: deviceError } = await supabase
+    .from('devices')
+    .select('owner_user_id')
+    .eq('device_id', deviceId)
+    .maybeSingle()
 
-    if (deviceError) continue
-
-    const row = (device ?? {}) as { owner_id?: unknown; user_id?: unknown }
-    const ownerId = String(row.owner_id || row.user_id || '').trim()
-    if (!ownerId) break
-
-    for (const column of ['owner_id', 'user_id']) {
+  if (!deviceError) {
+    const ownerUserId = String((device as { owner_user_id?: unknown } | null)?.owner_user_id || '').trim()
+    if (ownerUserId) {
       const { data: ownedDevices, error: ownedError } = await supabase
         .from('devices')
         .select('device_id')
-        .eq(column, ownerId)
+        .eq('owner_user_id', ownerUserId)
 
       if (!ownedError) {
         const ownedDeviceIds = (Array.isArray(ownedDevices) ? ownedDevices : [])
@@ -245,6 +243,8 @@ async function sharedDeviceIdsForFrame(supabase: SupabaseClient, deviceId: strin
     }
   }
 
+  // Membership remains the compatibility fallback for shared/member frames or
+  // legacy rows without canonical device ownership.
   const { data: members, error: membersError } = await supabase
     .from('device_members')
     .select('user_id')
