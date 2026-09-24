@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-const INSTANCE_BASES = new Set(['weather', 'surf', 'soccer', 'stocks'])
+const INSTANCE_BASES = new Set(['weather', 'surf', 'ski', 'soccer', 'stocks'])
 export const VOLATILE_CONTENT_KEYS = new Set([
   'updated_at', 'requested_at', 'fetched_at', 'fetch_timestamp', 'fetchedAt', 'request_id', 'requestId',
   'debug_id', 'debugId', 'trace_id', 'last_probe_at', 'http_timing', 'http', 'fetch', 'metadata', 'meta',
@@ -536,6 +536,72 @@ function reminderProjection(value, cell, now) {
   return result
 }
 
+function skiProjection(value, cell) {
+  const source = object(value)
+  const current = object(source.current)
+  const snow = object(source.snow)
+  const avalanche = object(source.avalanche)
+  const resort = object(source.resort)
+  const powder = object(source.next_powder_day)
+  const { w, h } = dimensions(cell)
+  const colSpan = Number(cell?.colSpan ?? Math.max(1, Math.round(w / 200)))
+  const rowSpan = Number(cell?.rowSpan ?? Math.max(1, Math.round(h / 120)))
+  const area = colSpan * rowSpan
+
+  const danger = finite(avalanche.danger_level)
+  const avalancheVisible = avalanche.assessed === true && danger != null && danger > 0
+    ? firmwareRound(danger)
+    : avalanche.available === true || danger === 0 ? 'not_assessed' : 'unavailable'
+
+  const base = {
+    location: String(source.location?.label ?? 'Ski').toUpperCase(),
+    freshCm: finite(snow.fresh_24h_cm) == null ? null : firmwareRound(finite(snow.fresh_24h_cm)),
+    totalCm: finite(snow.snow_depth_cm) == null ? null : firmwareRound(finite(snow.snow_depth_cm)),
+  }
+  const conditions = {
+    tempC: finite(current.temp_c) == null ? null : firmwareRound(finite(current.temp_c)),
+    windMps: finite(current.wind_mps) == null ? null : firmwareRound(finite(current.wind_mps)),
+    windDir: direction(current.wind_dir_deg),
+  }
+  const resortVisible = resort.available === true ? {
+    available: true,
+    name: resort.name ?? null,
+    open: resort.ski_open === true || resort.resort_open === true,
+    liftsOpen: finite(resort.lifts_open),
+    liftsTotal: finite(resort.lifts_total),
+  } : null
+  const powderVisible = powder.found === true ? {
+    found: true,
+    date: powder.display_date ?? powder.date ?? null,
+    lowCm: finite(powder.estimated_fresh_cm_low) == null ? null : firmwareRound(finite(powder.estimated_fresh_cm_low)),
+    highCm: finite(powder.estimated_fresh_cm_high) == null ? null : firmwareRound(finite(powder.estimated_fresh_cm_high)),
+    midCm: finite(powder.estimated_fresh_cm_mid) == null ? null : firmwareRound(finite(powder.estimated_fresh_cm_mid)),
+  } : null
+
+  if (h <= 150) {
+    const result = { ...base }
+    if (w >= 360) result.avalanche = avalancheVisible
+    if (w >= 650) Object.assign(result, conditions)
+    return result
+  }
+
+  if (w <= 240) {
+    const result = { ...base }
+    if (h >= 190) Object.assign(result, conditions)
+    if (h >= 225) result.avalanche = avalancheVisible
+    if (h >= 300 && resortVisible) result.resort = resortVisible
+    if (h >= 350 && powderVisible) result.nextPowder = powderVisible
+    return result
+  }
+
+  if (area <= 4 && w < 600 && h < 300) return { ...base, ...conditions, avalanche: avalancheVisible }
+
+  const result = { ...base, ...conditions, avalanche: avalancheVisible }
+  if (h >= 300 && resortVisible) result.resort = resortVisible
+  if (h >= 330 && powderVisible) result.nextPowder = powderVisible
+  return result
+}
+
 function newsProjection(value, cell) {
   const source = object(value), rows = Array.isArray(source.items) ? source.items : []
   const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
@@ -599,6 +665,7 @@ export function physicalRenderProjection(moduleKey, visibleValue, cell = {}, ren
   let visible = canonicalVisible(visibleValue)
   if (base === 'weather') visible = weatherProjection(visible, cell, object(renderConfig?.module), now)
   else if (base === 'surf') visible = surfProjection(visible, cell, now)
+  else if (base === 'ski') visible = skiProjection(visible, cell)
   else if (base === 'stocks') visible = stocksProjection(visible, cell, object(renderConfig?.module))
   else if (base === 'soccer') visible = soccerProjection(visible, cell)
   else if (base === 'groceries') visible = groceryProjection(visible, cell, now)
@@ -664,15 +731,30 @@ function significantSurfProjection(value) {
   return result
 }
 
+function significantSkiProjection(value) {
+  if (Array.isArray(value)) return value.map(significantSkiProjection)
+  if (!value || typeof value !== 'object') return value
+  const result = {}
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'windMps') result[key] = bandIndex(child, [4, 7, 10, 13])
+    else if (key === 'tempC') result[key] = bandIndex(child, [-15, -10, -5, 0, 3, 7, 12])
+    else if (key === 'freshCm') result[key] = bandIndex(child, [1, 3, 5, 10, 20, 30, 50])
+    else if (key === 'totalCm') result[key] = bandIndex(child, [20, 40, 60, 80, 120, 180, 250])
+    else result[key] = significantSkiProjection(child)
+  }
+  return result
+}
+
 function significantBackgroundProjection(moduleKey, projection) {
   const base = String(moduleKey).split(':')[0]
   if (base === 'weather') return { ...projection, visible: significantWeatherProjection(projection.visible) }
   if (base === 'surf') return { ...projection, visible: significantSurfProjection(projection.visible) }
+  if (base === 'ski') return { ...projection, visible: significantSkiProjection(projection.visible) }
   return projection
 }
 
 // This digest is the scheduler's automatic-refresh contract. User data modules
-// still hash their exact rendered projection; Weather and Surf apply the
+// still hash their exact rendered projection; Weather, Surf and Ski apply the
 // significance policy above so tiny source fluctuations do not move e-paper.
 export function physicalRenderDigest(moduleKey, visibleValue, cell = {}, renderConfig = {}, now = Date.now()) {
   const projection = physicalRenderProjection(moduleKey, visibleValue, cell, renderConfig, now)
@@ -716,6 +798,7 @@ function reminderBoundaries(source, now) {
 
 const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
 const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
+const SKI_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
 const NEWS_POWER_SAVE_FRESHNESS_MS = 2 * 60 * 60_000
 
@@ -773,6 +856,9 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
       // production three-hour floor. Hard daypart boundaries remain exact.
       const interval = Math.max(SURF_SOURCE_FRESHNESS_MS, Number(configured?.refresh) || 0)
       deadlines[ref.key] = [...(changes ? [{ at, type: 'hard', reason: 'surf_daypart' }] : []), { at: now + interval, type: 'soft', reason: 'source_freshness' }]
+    }
+    else if (ref.base === 'ski') {
+      deadlines[ref.key] = [{ at: now + SKI_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'weather') {
       const local = osloParts(now), current = JSON.stringify(weatherProjection(sources[ref.key], ref.cell, configuredInstance(settings?.modules, 'weather', ref.id) ?? {}, now))
@@ -896,6 +982,7 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
     else if (ref.base === 'groceries') requests.push({ key: ref.key, url: url(origin, '/api/device/groceries', { device_id: deviceId }) })
     else if (ref.base === 'assistant') requests.push({ key: ref.key, url: url(origin, '/api/device/assistant', { device_id: deviceId }) })
     else if (ref.base === 'stocks') requests.push({ key: ref.key, url: url(origin, '/api/device/stocks', { device_id: deviceId, id }) })
+    else if (ref.base === 'ski') requests.push({ key: ref.key, url: url(origin, '/api/device/ski-frame', { device_id: deviceId, id }) })
     else if (ref.base === 'weather') {
       const config = configuredInstance(modules, 'weather', id)
       if (config) requests.push({ key: ref.key, url: url(origin, '/api/weather/details', { frame: 1, compact: 2, days: 5, lat: config.lat ?? 59.9139, lon: config.lon ?? 10.7522 }) })
