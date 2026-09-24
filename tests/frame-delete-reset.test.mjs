@@ -14,6 +14,7 @@ test('owner frame delete resets device instead of removing only the requester me
 
 test('owner frame reset clears pairing ownership and token candidates without touching user data tables', () => {
   assert.match(route, /owner_id: null/)
+  assert.match(route, /owner_user_id: null/)
   assert.match(route, /user_id: null/)
   assert.match(route, /device_token: null/)
   assert.match(route, /device_token_hash: null/)
