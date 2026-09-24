@@ -23,6 +23,7 @@ import { aiAssistantDefaultTopicTitle, aiAssistantNoUpdatesHeader, simplifyAiAss
 import { DEFAULT_LOCAL_EVENT_AREA, LOCAL_EVENT_PLACE_CATALOGUE, getLocalEventPlace, normalizeLocalEventAreaPreference, searchLocalEventPlaces, suggestedLocalEventArea, type LocalEventAreaPreference, type LocalEventPlaceId } from './lib/integrations/local-events/places'
 import { INTEGRATION_CATALOGUE, integrationStatusLabel, type ConnectAppKey } from './lib/integrations/catalog'
 import WasteSetupModal from './components/WasteSetupModal'
+import NewsModuleSettingsTab from './components/NewsModuleSettingsTab'
 import { wasteCollectionDisplayTitle } from './lib/integrations/waste/display'
 import { norwegianStarterCountdowns, norwegianStarterReminderDate, norwegianStarterReminders, OSLO_WEATHER } from './lib/onboardingDefaults'
 import { applyDocumentTheme, initialTheme, isAppTheme, persistTheme, type AppTheme } from './lib/theme'
@@ -45,7 +46,7 @@ import type { EditorCell } from './lib/frameLayoutEditor.mjs'
 import { MAX_FRAME_NAME_LENGTH, normalizeFrameName } from './lib/frameName.mjs'
 
 type CoreTabKey = 'frame' | 'settings'
-type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+type ModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'news' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 type CellSize = 'small' | 'medium' | 'large'
 type LayoutKey = 'default' | 'pyramid' | 'square' | 'full'
 type TabKey = CoreTabKey | ModuleKey
@@ -73,6 +74,7 @@ const UI = {
       surf: 'SURF',
       ski: 'SKI',
       reminders: 'REMINDERS',
+      news: 'NEWS',
       countdown: 'COUNTDOWN',
       soccer: 'SOCCER',
       stocks: 'INVESTMENTS',
@@ -204,6 +206,7 @@ const UI = {
       surf: 'SURF',
       ski: 'SKI',
       reminders: 'PÅMINNELSER',
+      news: 'NYHETER',
       countdown: 'NEDTELLING',
       soccer: 'FOTBALL',
       stocks: 'INVESTERINGER',
@@ -415,6 +418,7 @@ type MirrorModuleDetail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
+  newsItems?: Array<{ title: string; compactTitle?: string; standardTitle?: string; url?: string }>
   aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string; topicTitle?: string }>
   aiAssistantOverflowCount?: number
   aiAssistantActiveWatchCount?: number
@@ -896,6 +900,7 @@ function isModuleKey(value: unknown): value is ModuleKey {
     value === 'weather' ||
     value === 'surf' ||
     value === 'reminders' ||
+    value === 'news' ||
     value === 'countdown' ||
     value === 'soccer' ||
     value === 'stocks' ||
@@ -4232,6 +4237,10 @@ function frameModuleDetail(
     return { primary: t.modules.reminders, secondary: language === 'no' ? 'Lagrede påminnelser' : 'Saved reminders' }
   }
 
+  if (module === 'news') {
+    return { primary: language === 'no' ? 'Nyheter' : 'News', secondary: 'NRK' }
+  }
+
   if (module === 'assistant') {
     return { primary: 'AI Assistant', secondary: language === 'no' ? 'Nye oppdateringer' : 'New updates' }
   }
@@ -6018,6 +6027,76 @@ function MirrorSmallRemindersCard({ detail, language, borderColor, mutedColor }:
 }
 
 
+
+
+function MirrorNewsCard({
+  detail,
+  language,
+  size,
+  full,
+  borderColor,
+  mutedColor,
+}: {
+  detail: MirrorModuleDetail
+  language: AppLanguage
+  size: CellSize
+  full?: boolean
+  borderColor: string
+  mutedColor: string
+}) {
+  const header = language === 'no' ? 'Nyheter' : 'News'
+  const sourceItems = Array.isArray(detail.newsItems) ? detail.newsItems : []
+  const capacity = size === 'small' ? 3 : size === 'medium' ? 6 : full ? 14 : 12
+  const useCompact = size === 'small'
+  const titles = sourceItems.slice(0, capacity).map((item) =>
+    String((useCompact ? item.compactTitle : item.standardTitle) || item.title || '').trim()
+  ).filter(Boolean)
+
+  if (titles.length <= 0) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-[clamp(0.26rem,0.72vw,0.46rem)] px-[clamp(0.45rem,1.2vw,0.8rem)] py-[clamp(0.35rem,0.9vw,0.55rem)] text-center leading-none">
+        <MirrorModuleHeader title={header} />
+        <div className="max-w-full truncate text-[clamp(0.68rem,1.55vw,0.92rem)] font-medium tracking-[0.05em]" style={{ color: mutedColor }}>
+          {language === 'no' ? 'Ingen nyheter akkurat nå' : 'No news right now'}
+        </div>
+      </div>
+    )
+  }
+
+  if (size === 'small') {
+    return (
+      <div className="relative flex h-full w-full flex-col overflow-hidden px-[clamp(0.45rem,1.2vw,0.8rem)] pb-[clamp(0.25rem,0.7vw,0.45rem)] pt-[clamp(0.65rem,1.7vw,1rem)] text-center leading-none">
+        <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
+        <div className="relative mt-[clamp(0.52rem,1.28vw,0.78rem)] min-h-0 w-full flex-1">
+          {titles.length > 1 && Array.from({ length: titles.length - 1 }).map((_, index) => (
+            <div key={index} className="pointer-events-none absolute top-[12%] h-[76%] w-px" style={{ left: String(((index + 1) * 100) / titles.length) + '%', backgroundColor: borderColor }} aria-hidden="true" />
+          ))}
+          <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: 'repeat(' + titles.length + ', minmax(0, 1fr))' }}>
+            {titles.map((title, index) => (
+              <div key={title + '-' + index} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]" title={title}>
+                <span className="block max-w-full truncate">{title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden px-[clamp(0.65rem,1.7vw,1.15rem)] pb-[clamp(0.45rem,1.05vw,0.72rem)] pt-[clamp(0.8rem,1.95vw,1.2rem)] leading-none">
+      <div className="flex shrink-0 justify-center"><MirrorModuleHeader title={header} /></div>
+      <div className="mt-[clamp(0.48rem,1.2vw,0.8rem)] grid min-h-0 flex-1 content-center gap-y-[clamp(0.28rem,0.72vw,0.5rem)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+        {titles.map((title, index) => (
+          <div key={title + '-' + index} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.38rem,0.9vw,0.62rem)]">
+            <span className="h-[clamp(0.22rem,0.48vw,0.32rem)] w-[clamp(0.22rem,0.48vw,0.32rem)] rounded-full bg-current" aria-hidden="true" />
+            <span className="min-w-0 truncate text-[clamp(0.62rem,1.34vw,0.9rem)] font-medium tracking-[0.035em]" title={title}>{title}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function splitMirrorSoccerKickoff(kickoff: string | undefined) {
   const raw = String(kickoff || '').trim()
@@ -7900,6 +7979,10 @@ function LandscapeFrameMirror({
       return <MirrorAiAssistantCard detail={detail} language={language} mutedColor={mutedColor} borderColor={borderColor} maxItems={1} variant="small" />
     }
 
+    if (module === 'news') {
+      return <MirrorNewsCard detail={detail} language={language} size={size} full={snapshot.layoutKey === 'full'} borderColor={borderColor} mutedColor={mutedColor} />
+    }
+
     if (module === 'reminders' && size === 'large') {
       if (snapshot.layoutKey === 'full') {
         return <MirrorXLRemindersCard detail={detail} language={language} mutedColor={mutedColor} frameBackground={frameBackground} textColor={textColor} />
@@ -8170,7 +8253,7 @@ function PickerModal({
   onClear: () => void
   language: AppLanguage
 }) {
-  const options: ModuleKey[] = ['assistant', 'reminders', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks']
+  const options: ModuleKey[] = ['assistant', 'reminders', 'news', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks']
   const t = tx(language)
 
   return (
@@ -10212,6 +10295,10 @@ function ModuleSettingsTab({
 
   if (module === 'reminders') {
     return <RemindersModuleSettingsTab language={language} activeDeviceId={activeDeviceId} />
+  }
+
+  if (module === 'news') {
+    return <NewsModuleSettingsTab language={language} />
   }
 
   if (module === 'countdown') {

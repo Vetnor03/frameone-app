@@ -64,6 +64,7 @@ type Detail = {
   reminderMediumOverflowCount?: number
   reminderTomorrowCount?: number
   reminderDateBadge?: string
+  newsItems?: Array<{ title: string; compactTitle?: string; standardTitle?: string; url?: string }>
   aiAssistantItems?: Array<{ id: string; headline: string; summary?: string | null; created_at: string; topicTitle?: string }>
   aiAssistantOverflowCount?: number
   aiAssistantActiveWatchCount?: number
@@ -141,7 +142,7 @@ type Detail = {
 
 type UnknownRecord = Record<string, unknown>
 
-const MODULES = new Set(['assistant', 'date', 'weather', 'surf', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+const MODULES = new Set(['assistant', 'date', 'weather', 'surf', 'reminders', 'news', 'countdown', 'soccer', 'stocks', 'groceries'])
 const MIRROR_FETCH_TIMEOUT_MS = 8000
 const WEATHER_FETCH_TIMEOUT_MS = 6500
 
@@ -1888,6 +1889,31 @@ async function aiAssistantDetail(supabase: SupabaseClient, frameId: string, limi
   }
 }
 
+
+async function newsDetail(origin: string, language: string): Promise<Detail> {
+  const url = new URL('/api/news', origin)
+  url.searchParams.set('limit', '14')
+  url.searchParams.set('links', '0')
+  url.searchParams.set('display_profiles', 'compact,standard')
+  const data = asRecord(await fetchJson(url.toString()))
+  const rows = Array.isArray(data.items) ? data.items.map(asRecord) : []
+  const newsItems = rows.map((row) => {
+    const profiles = asRecord(row.profile_titles)
+    const title = asString(row.title).trim()
+    return {
+      title,
+      compactTitle: asString(profiles.compact, title).trim() || title,
+      standardTitle: asString(profiles.standard, title).trim() || title,
+    }
+  }).filter((item) => item.title)
+  return {
+    module: 'news',
+    primary: language === 'no' ? 'Nyheter' : 'News',
+    secondary: 'NRK',
+    newsItems,
+  }
+}
+
 async function remindersDetail(origin: string, deviceId: string, deviceToken: string, language: string): Promise<Detail> {
   const url = new URL('/api/device/reminders', origin)
   url.searchParams.set('device_id', deviceId)
@@ -2098,6 +2124,7 @@ export async function GET(req: Request) {
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
+        else if (parsed.base === 'news') detailsBySlot[String(slot)] = await newsDetail(origin, language)
         else if (parsed.base === 'assistant') detailsBySlot[String(slot)] = await aiAssistantDetail(supabase, deviceId)
         else if (parsed.base === 'groceries') detailsBySlot[String(slot)] = await groceriesDetail(supabase, mirrorScope.storageDeviceIds, mirrorScope.ownerId, language)
         else if (parsed.base === 'countdown') detailsBySlot[String(slot)] = await countdownDetail(supabase, mirrorScope.storageDeviceIds, language)

@@ -3,6 +3,7 @@
   { "id": "weather", "label": "Weather" },
   { "id": "surf", "label": "Surf" },
   { "id": "reminders", "label": "Reminders" },
+  { "id": "news", "label": "News" },
   { "id": "countdown", "label": "Countdown" },
   { "id": "soccer", "label": "Football" },
   { "id": "stocks", "label": "Stocks" },

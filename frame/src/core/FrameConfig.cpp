@@ -175,6 +175,7 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
   out.layout = LAYOUT_DEFAULT;
   out.theme = THEME_DARK;
   out.powerSaver = false;
+  strlcpy(out.language, "en", sizeof(out.language));
   resetCustomLayout(out);
 
   out.assignCount = 0;
@@ -259,6 +260,13 @@ FetchResult fetchWithStatus(FrameConfig& out, const String& deviceToken) {
 
   // Power Saver is opt-in. Missing/invalid values preserve Normal mode.
   out.powerSaver = (bool)(settings["powerSaver"] | false);
+
+  // language
+  const char* languageStr = settings["language"] | "en";
+  if (languageStr && (strcmp(languageStr, "no") == 0 || strcmp(languageStr, "nb") == 0 || strcmp(languageStr, "nb-NO") == 0))
+    strlcpy(out.language, "no", sizeof(out.language));
+  else
+    strlcpy(out.language, "en", sizeof(out.language));
 
   // theme
   const char* themeStr = settings["theme"] | "dark";

@@ -9,6 +9,7 @@
 #include "ModuleSurf.h"
 #include "ModuleSki.h"
 #include "ModuleReminders.h"
+#include "ModuleNews.h"
 #include "ModuleCountdown.h"
 #include "ModuleSoccer.h"
 #include "ModuleStocks.h"
@@ -137,6 +138,12 @@ void ModuleRenderer::renderPlaceholders(const SlotModule* assigns, int assignCou
     if (mod.startsWith("reminders")) {
       ModuleReminders::render(c, mod);
       Serial.printf("Render timing module=reminders slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
+      continue;
+    }
+
+    if (mod.equalsIgnoreCase("news")) {
+      ModuleNews::render(c, mod);
+      Serial.printf("Render timing module=news slot=%u ms=%lu\n", c.slot, (unsigned long)(millis() - moduleStartedAtMs));
       continue;
     }
 

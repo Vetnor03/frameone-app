@@ -536,6 +536,27 @@ function reminderProjection(value, cell, now) {
   return result
 }
 
+function newsProjection(value, cell) {
+  const source = object(value), rows = Array.isArray(source.items) ? source.items : []
+  const size = String(cell?.size ?? 'ADAPTIVE').toUpperCase()
+  const { w, h } = dimensions(cell)
+  const shallow = size === 'SMALL' || (size === 'ADAPTIVE' && h <= 150 && w >= 500)
+  const profile = shallow ? 'compact' : 'standard'
+  let capacity
+  if (shallow) capacity = 3
+  else if (size === 'MEDIUM') capacity = 6
+  else if (size === 'LARGE') capacity = 12
+  else if (size === 'XL') capacity = 14
+  else {
+    const columns = w >= 600 && h >= 180 ? 2 : 1
+    capacity = Math.min(14, Math.max(1, columns * Math.floor(Math.max(28, h - 60) / 28)))
+  }
+  return {
+    ok: source.ok,
+    items: rows.slice(0, capacity).map((row) => ({ title: first(row?.profile_titles?.[profile], row?.title) })),
+  }
+}
+
 const countdownTemplate = (days, now) => {
   const near = [0, 1, 9, 12, 11, 13, 10, 8], mid = [0, 1, 2, 3, 4, 5, 8, 10], far = [0, 1, 2, 3, 4, 5, 6]
   const choices = days <= 7 ? near : days <= 45 ? mid : far
@@ -584,6 +605,7 @@ export function physicalRenderProjection(moduleKey, visibleValue, cell = {}, ren
   else if (base === 'assistant') visible = assistantProjection(visible, cell)
   else if (base === 'countdown') visible = countdownProjection(visible, cell, now)
   else if (base === 'reminders') visible = reminderProjection(visible, cell, now)
+  else if (base === 'news') visible = newsProjection(visible, cell)
   return { module: base, geometry: renderGeometry(cell), config: canonicalVisible(renderConfigProjection(base, cell, renderConfig)), visible: roundRendered('', canonicalVisible(visible)) }
 }
 
@@ -694,6 +716,8 @@ function reminderBoundaries(source, now) {
 
 const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
 const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
+const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
+const NEWS_POWER_SAVE_FRESHNESS_MS = 2 * 60 * 60_000
 
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
@@ -719,6 +743,12 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
         ...(eveningChanges ? [{ at: eveningAt, type: 'hard', reason: 'reminder_evening' }] : []),
         { at: midnight, type: 'hard', reason: 'midnight' },
       ]
+    }
+    else if (ref.base === 'news') {
+      // Normal mode can keep headlines reasonably fresh, while Power Save
+      // avoids waking the frame 48 times per day just to poll an RSS feed.
+      const interval = settings?.powerSaver ? NEWS_POWER_SAVE_FRESHNESS_MS : NEWS_SOURCE_FRESHNESS_MS
+      deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
     }
     else if (ref.base === 'groceries') {
       const at = nextRotation(now)
@@ -861,6 +891,7 @@ export function buildContentRequestPlan({ settings, deviceId, origin, now = Date
   for (const ref of refs.values()) {
     const id = ref.id
     if (ref.base === 'reminders') requests.push({ key: ref.key, url: url(origin, '/api/device/reminders', { device_id: deviceId, limit: 10, tz: 'Europe/Oslo', skip_sync: 0 }) })
+    else if (ref.base === 'news') requests.push({ key: ref.key, url: url(origin, '/api/news', { limit: 14, links: 0, display_profiles: 'compact,standard' }) })
     else if (ref.base === 'countdown') requests.push({ key: ref.key, url: url(origin, '/api/device/countdowns', { device_id: deviceId }) })
     else if (ref.base === 'groceries') requests.push({ key: ref.key, url: url(origin, '/api/device/groceries', { device_id: deviceId }) })
     else if (ref.base === 'assistant') requests.push({ key: ref.key, url: url(origin, '/api/device/assistant', { device_id: deviceId }) })
