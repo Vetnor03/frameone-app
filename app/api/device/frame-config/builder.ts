@@ -354,6 +354,43 @@ export async function buildFrameConfigPayload(supabase: SupabaseClient, device_i
     }
 
     // -------------------------------
+    // Ski config: include only active locations. Conditions stay in the
+    // normalized /api/device/ski-frame adapter and never bloat frame-config.
+    // -------------------------------
+    if (isActiveBase(active, 'ski')) {
+      const skiList: UnknownRecord[] = Array.isArray(sourceModules.ski) ? sourceModules.ski : []
+      const sanitizedSki: UnknownRecord[] = []
+      const seenSkiIds = new Set<number>()
+
+      for (const item of skiList) {
+        if (!item || typeof item !== 'object') continue
+
+        const id = asInt(item.id, 0)
+        if (id < 1 || id > 4) continue
+        if (!isActiveInstance(active, 'ski', id)) continue
+        if (seenSkiIds.has(id)) continue
+
+        const lat = asNumber(item.lat ?? item.latitude)
+        const lon = asNumber(item.lon ?? item.longitude)
+        if (lat == null || lon == null || lat === 0 || lon === 0) continue
+
+        const label = asString(item.label, asString(item.name, '')).trim().slice(0, 80)
+        sanitizedSki.push({
+          id,
+          label: label || 'Ski',
+          lat,
+          lon,
+          refresh: 10800000,
+        })
+
+        seenSkiIds.add(id)
+        if (sanitizedSki.length >= 4) break
+      }
+
+      responseModules.ski = sanitizedSki
+    }
+
+    // -------------------------------
     // Soccer config: include only active team instances; no match lists.
     // -------------------------------
     if (isActiveBase(active, 'soccer')) {
