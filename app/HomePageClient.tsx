@@ -53,6 +53,11 @@ type TabKey = CoreTabKey | ModuleKey
 type SetupPurpose = 'normal' | 'custom'
 type FrameSetupSelection = { purpose: SetupPurpose; modules: Record<string, any> }
 
+// Release visibility switches. Keep the underlying implementation/data intact so
+// these features can be re-enabled without rebuilding them.
+const SHOW_AI_FOLLOW_UI = false
+const SHOW_CUSTOM_LAYOUT_UI = false
+
 type AppLanguage = 'en' | 'no'
 type AppFontSize = 'normal' | 'large'
 type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported'
@@ -1506,7 +1511,11 @@ export default function HomePage() {
     }
   }, [])
 
-  const layoutMeta = carouselItemId==='add-layout' ? {title:'CUSTOM',subtitle:'Tap + to create your own layout'} : activeCustomLayoutId ? {title:normalizeLayoutName(customLayouts.find(item=>item.id===activeCustomLayoutId)?.name)||'CUSTOM LAYOUT',subtitle:'CUSTOM'} : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
+  const layoutMeta = SHOW_CUSTOM_LAYOUT_UI && carouselItemId==='add-layout'
+    ? {title:'CUSTOM',subtitle:'Tap + to create your own layout'}
+    : SHOW_CUSTOM_LAYOUT_UI && activeCustomLayoutId
+      ? {title:normalizeLayoutName(customLayouts.find(item=>item.id===activeCustomLayoutId)?.name)||'CUSTOM LAYOUT',subtitle:'CUSTOM'}
+      : (allLayouts(language).find((l) => l.key === layoutKey) || allLayouts(language)[0])
   const activeFrameStatus = frames.find((frame) => frame.device_id === activeDeviceId) ?? null
   const mirrorSnapshot = useMemo<PhysicalFrameSnapshot | null>(() => {
     if (physicalFrameSnapshot) {
@@ -1543,7 +1552,7 @@ export default function HomePage() {
   useEffect(() => {
     const tab = searchParams?.get('tab')
     const watchId = searchParams?.get('watch')?.trim()
-    if ((tab === 'assistant' || tab === 'ai-assistant') && watchId) {
+    if (SHOW_AI_FOLLOW_UI && (tab === 'assistant' || tab === 'ai-assistant') && watchId) {
       preferInstantScrollRef.current = true
       setActiveTab('assistant')
       setAssistantDeepLink({ watchId, updateId: searchParams?.get('update')?.trim() || null })
@@ -1571,10 +1580,12 @@ export default function HomePage() {
       ? customAssignments[activeCustomLayoutId]
       : cellsByLayout[layoutKey]
 
-    return deriveDynamicModuleKeys<ModuleKey>(activeLayoutModules, pinnedModuleTabs).map((m) => ({
-      key: m as ModuleKey,
-      label: moduleLabel(language, m),
-    }))
+    return deriveDynamicModuleKeys<ModuleKey>(activeLayoutModules, pinnedModuleTabs)
+      .filter((m) => SHOW_AI_FOLLOW_UI || m !== 'assistant')
+      .map((m) => ({
+        key: m as ModuleKey,
+        label: moduleLabel(language, m),
+      }))
   }, [activeCustomLayoutId, cellsByLayout, customAssignments, language, layoutKey, pinnedModuleTabs])
 
   const tabs = useMemo(() => {
@@ -1984,11 +1995,15 @@ export default function HomePage() {
   }
 
   async function loadDeviceSettings(deviceId: string) {
-    const session = await supabase.auth.getSession()
-    const token = session.data.session?.access_token
-    if (token) {
-      const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
-      if (response.ok) setCustomLayouts((await response.json()).layouts || [])
+    if (SHOW_CUSTOM_LAYOUT_UI) {
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+      if (token) {
+        const response = await fetch(`/api/custom-layouts?device_id=${encodeURIComponent(deviceId)}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (response.ok) setCustomLayouts((await response.json()).layouts || [])
+      }
+    } else {
+      setCustomLayouts([])
     }
     const { data, error } = await supabase
       .from('device_settings')
@@ -2009,7 +2024,7 @@ export default function HomePage() {
     const nextPowerSaver = json.powerSaver === true
     const nextLanguage = (json.language || 'en') as AppLanguage
     const nextFontSize = (json.fontSize || 'normal') as AppFontSize
-    const storedCustomId = json.layout === 'custom' && typeof json.custom_layout_id === 'string' ? json.custom_layout_id : null
+    const storedCustomId = SHOW_CUSTOM_LAYOUT_UI && json.layout === 'custom' && typeof json.custom_layout_id === 'string' ? json.custom_layout_id : null
     const nextLayout = (json.layout === 'custom' ? 'default' : (json.layout || 'default')) as LayoutKey
     const nextCellsForLayout = cellsArrayToMap(nextLayout, json.cells || [])
 
@@ -2357,7 +2372,7 @@ export default function HomePage() {
   }
   async function deleteCustom(layout:CustomLayout){if(!window.confirm(`Delete “${layout.name}”?`))return;if(activeCustomLayoutId===layout.id&&activeDeviceId){const nextCells={...cellsByLayout,default:projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,'default')};setActiveCustomLayoutId(null);setLayoutKey('default');setCellsByLayout(nextCells);setCarouselItemId('built-in:default');markDirty({layoutKey:'default',cellsByLayout:nextCells})};await customLayoutRequest(`/api/custom-layouts/${layout.id}`,{method:'DELETE'});setCustomLayouts(items=>items.filter(item=>item.id!==layout.id));setLayoutFlow(null)}
   function selectCarouselItem(id:string){setCarouselItemId(id);if(id==='add-layout')return;const custom=customLayouts.find(item=>item.id===id);trackProductEvent({event:'layout_selected',surface:'frame',metadata:{layoutType:custom?'custom':'built_in'}});if(custom){setActiveCustomLayoutId(id);setCustomAssignments(items=>({...items,[id]:items[id]||Object.fromEntries(custom.cells.map(cell=>[cell.slot,layoutModuleMemoryRef.current[cell.slot]??null]))}));setActiveTab('frame');setDirty(true);return}const key=id.replace('built-in:','') as LayoutKey;const projected=projectSlotMemoryIntoLayout(layoutModuleMemoryRef.current,key),nextCells={...cellsByLayout,[key]:projected};setActiveCustomLayoutId(null);setLayoutKey(key);setCellsByLayout(nextCells);setActiveTab('frame');markDirty({layoutKey:key,cellsByLayout:nextCells})}
-  function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
+  function moveCarousel(delta:number){const items=orderedLayoutItems(customLayouts).filter(item=>SHOW_CUSTOM_LAYOUT_UI||item.type==='built-in'),idx=Math.max(0,items.findIndex(item=>item.id===carouselItemId)),next=(idx+delta+items.length)%items.length,target=items[next].id;if(target==='add-layout'){setCarouselItemId(target);return}selectCarouselItem(target)}
 
   function prevLayout() {
     moveCarousel(-1)
@@ -2464,7 +2479,7 @@ export default function HomePage() {
         pinned_tabs: draftPinnedTabs,
         layout_module_memory: nextLayoutModuleMemory,
       }
-      if (activeCustomLayoutId) {
+      if (SHOW_CUSTOM_LAYOUT_UI && activeCustomLayoutId) {
         const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
         const payload = custom && customPhysicalPayload(custom, customAssignments[activeCustomLayoutId] || {})
         if (!payload) throw new Error('This layout isn’t supported on the frame yet.')
@@ -2565,7 +2580,7 @@ export default function HomePage() {
   }
 
   async function runExplicitUpdate(deviceId: string) {
-    if (activeCustomLayoutId) {
+    if (SHOW_CUSTOM_LAYOUT_UI && activeCustomLayoutId) {
       const custom = customLayouts.find((item) => item.id === activeCustomLayoutId)
       const assigned = custom && geometryWithAssignments(custom.cells, customAssignments[activeCustomLayoutId] || {})
       if (assigned && !supportsPhysicalCustomLayout(assigned).valid) {
@@ -2790,16 +2805,16 @@ async function handleSelectTab(k: TabKey) {
                   onNext={nextLayout}
                   onCellTap={openPicker}
                   language={language}
-                  editorMode={layoutFlow?.mode}
+                  editorMode={SHOW_CUSTOM_LAYOUT_UI ? layoutFlow?.mode : undefined}
                   editorName={layoutDraftName}
                   editorCells={layoutDraftCells}
                   editorUnsupportedSlots={layoutDraftUnsupported}
                   onEditorNameChange={setLayoutDraftName}
                   onEditorCellsChange={(value)=>{setLayoutDraftCells(value);setLayoutDraftError('');setLayoutDraftUnsupported([])}}
                   onCancelEditor={cancelLayoutEditor}
-                  customLayout={customLayouts.find(item=>item.id===carouselItemId)}
-                  customAssignments={customAssignments[carouselItemId]||{}}
-                  isAddCard={carouselItemId==='add-layout'}
+                  customLayout={SHOW_CUSTOM_LAYOUT_UI ? customLayouts.find(item=>item.id===carouselItemId) : undefined}
+                  customAssignments={SHOW_CUSTOM_LAYOUT_UI ? (customAssignments[carouselItemId]||{}) : {}}
+                  isAddCard={SHOW_CUSTOM_LAYOUT_UI && carouselItemId==='add-layout'}
                   onAdd={beginCreateLayout}
                   onEdit={beginEditLayout}
                 />
@@ -2935,7 +2950,7 @@ async function handleSelectTab(k: TabKey) {
               </div>
             )}
 
-            {isPlainFrameAssistantSurface && showFrameAssistant && (
+            {SHOW_AI_FOLLOW_UI && isPlainFrameAssistantSurface && showFrameAssistant && (
               <FrameAssistant deviceId={activeDeviceId} language={language} tipsEnabled={proactiveAssistantTips} tipsShown={assistantTipsShown} tipsLoaded={assistantPreferencesLoaded} canSelectTip={!assistantTipPresentedThisSession} assistantVisitId={assistantVisitId} onTipShown={markAssistantTipShown} onNavigate={navigateFromAssistant} onAppThemeChange={(theme) => { applyDocumentTheme(theme); persistTheme(theme); setAppTheme(theme) }} />
             )}
 
@@ -8366,6 +8381,7 @@ function PickerModal({
   language: AppLanguage
 }) {
   const options: ModuleKey[] = ['assistant', 'reminders', 'news', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks']
+    .filter((module): module is ModuleKey => SHOW_AI_FOLLOW_UI || module !== 'assistant')
   const t = tx(language)
 
   return (
@@ -8687,11 +8703,13 @@ function SettingsTab({
                 </div>
               </div>
               <NotificationsSetting language={language} state={notificationState} onStateChange={onNotificationStateChange} />
-              <div className="py-4">
-                <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
-                <AssistantPreferenceToggle label={language === 'no' ? 'Vis KI-assistent' : 'Show AI Assistant'} checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
-                <AssistantPreferenceToggle label={language === 'no' ? 'Proaktive tips' : 'Proactive tips'} checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
-              </div>
+              {SHOW_AI_FOLLOW_UI && (
+                <div className="py-4">
+                  <div className="mb-3 text-xs tracking-[0.22em] text-[color:var(--fg-50)]">{language === 'no' ? 'KI-ASSISTENT' : 'AI ASSISTANT'}</div>
+                  <AssistantPreferenceToggle label={language === 'no' ? 'Vis KI-assistent' : 'Show AI Assistant'} checked={showAssistant} onChange={(show) => onAssistantPreferenceChange({ show })} />
+                  <AssistantPreferenceToggle label={language === 'no' ? 'Proaktive tips' : 'Proactive tips'} checked={proactiveAssistantTips} disabled={!showAssistant} onChange={(tips) => onAssistantPreferenceChange({ tips })} />
+                </div>
+              )}
               <SettingRow label={t.privacyPolicy} value="" onClick={() => onGo(`/privacy${from}`)} />
               <SettingRow label={t.termsAndConditions} value="" onClick={() => onGo(`/terms${from}`)} />
               <SettingRow label={t.contact} value="" onClick={() => onGo(`/contact${from}`)} />
@@ -9024,8 +9042,8 @@ function FrameSetupFlow({
 }) {
   const guidedModules = ['reminders', 'weather', 'countdown'] as const
   const savedDraft = typeof window === 'undefined' ? null : (() => { try { return JSON.parse(sessionStorage.getItem(`remind:onboarding:${activeDeviceId}`) || 'null') } catch { return null } })()
-  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(savedDraft?.step === 'guided' || savedDraft?.step === 'custom' ? savedDraft.step : 'purpose')
-  const [purpose, setPurpose] = useState<SetupPurpose>(savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
+  const [step, setStep] = useState<'purpose' | 'guided' | 'custom'>(SHOW_CUSTOM_LAYOUT_UI && (savedDraft?.step === 'guided' || savedDraft?.step === 'custom') ? savedDraft.step : savedDraft?.step === 'guided' ? 'guided' : 'purpose')
+  const [purpose, setPurpose] = useState<SetupPurpose>(SHOW_CUSTOM_LAYOUT_UI && savedDraft?.purpose === 'custom' ? 'custom' : 'normal')
   const [moduleIndex, setModuleIndex] = useState(Number.isInteger(savedDraft?.moduleIndex) ? Math.max(0, Math.min(2, savedDraft.moduleIndex)) : 0)
   const [modules, setModules] = useState<Record<string, any>>({ ...(savedDraft?.modules || {}), integration_selection_explicit: true, integrations: { ...(savedDraft?.modules?.integrations || {}) } })
   const [saving, setSaving] = useState(false)
@@ -9076,7 +9094,10 @@ function FrameSetupFlow({
     </div>
   </div>
 
-  if (step === 'purpose') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{(['normal', 'custom'] as SetupPurpose[]).map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nedtelling.' : 'Date, Reminders, Weather, and Countdown.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
+  if (step === 'purpose') {
+    const setupPurposes: SetupPurpose[] = SHOW_CUSTOM_LAYOUT_UI ? ['normal', 'custom'] : ['normal']
+    return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[color:var(--fg-50)]">{isNo ? 'Førstegangsoppsett' : 'First-time setup'}</div><h1 className="mt-3 text-2xl font-medium">{isNo ? 'Velg oppsett' : 'Choose your setup'}</h1><div className="mt-6 space-y-3">{setupPurposes.map(key => <button key={key} type="button" aria-pressed={purpose === key} onClick={() => setPurpose(key)} className={`w-full rounded-2xl border px-4 py-4 text-left ${purpose === key ? 'border-[#2aa3ff] bg-[#2aa3ff]/10' : 'border-[color:var(--bd-15)]'}`}><span className="flex items-center justify-between text-sm uppercase tracking-[0.18em]"><span>{key === 'normal' ? 'Normal' : 'Custom'}</span>{key === 'normal' && <span className="text-[10px] text-[#2aa3ff]">{isNo ? 'Anbefalt' : 'Recommended'}</span>}</span><span className="mt-2 block text-xs normal-case leading-5 tracking-normal text-[color:var(--fg-55)]">{key === 'normal' ? (isNo ? 'Dato, Påminnelser, Vær og Nedtelling.' : 'Date, Reminders, Weather, and Countdown.') : (isNo ? 'Velg egne moduler og layout.' : 'Choose your own modules and layout.')}</span></button>)}</div><button onClick={() => { setError(null); if (purpose === 'normal') { setModuleIndex(0); setStep('guided') } else setStep('custom') }} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white">{isNo ? 'Fortsett' : 'Continue'}</button></>)
+  }
 
   if (step === 'custom') return shell(<><div className="text-xs uppercase tracking-[0.24em] text-[#2aa3ff]">RE:MIND</div><h1 className="mt-3 text-2xl font-medium">Custom</h1><p className="mt-4 text-sm leading-6 text-[color:var(--fg-65)]">{isNo ? 'Fullfør førstegangsoppsettet, og bruk deretter frame-editoren til å velge egne moduler og layout.' : 'Finish first-time setup, then use the frame editor to choose your own modules and layout.'}</p>{error && <p role="alert" className="mt-4 text-sm text-[color:var(--danger)]">{error}</p>}<button onClick={() => finish('custom')} disabled={saving} className="mt-6 h-12 w-full rounded-2xl bg-[#2aa3ff] text-sm uppercase tracking-[0.2em] text-white disabled:opacity-50">{saving ? (isNo ? 'Lagrer…' : 'Saving…') : (isNo ? 'Åpne frame-editor' : 'Open frame editor')}</button></>)
 
