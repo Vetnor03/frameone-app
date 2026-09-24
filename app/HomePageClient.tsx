@@ -8479,8 +8479,8 @@ function SettingsTab({
                     <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Strømsparing' : 'Power Save'}</div>
                     <div className="mt-1 text-xs leading-5 text-[color:var(--fg-45)]">
                       {language === 'no'
-                        ? 'Rammen oppdateres bare når det trengs, så endringer kan bruke litt lengre tid på å vises.'
-                        : 'Your frame updates only when needed, so changes may take a little longer to appear.'}
+                        ? 'Rammen oppdateres bare når det trengs. Endringer vises kanskje ikke før neste planlagte oppdatering, som noen ganger kan ta flere timer.'
+                        : 'Your frame updates only when needed. Changes may not appear until the next scheduled update, which can sometimes take several hours.'}
                     </div>
                   </div>
                   <SettingsToggle
