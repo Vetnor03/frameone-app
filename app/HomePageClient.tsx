@@ -8690,7 +8690,7 @@ function SettingsTab({
                   <div className="min-w-0 pr-3">
                     <div className="text-sm text-[color:var(--fg-80)]">{language === 'no' ? 'Strømsparing' : 'Power Save'}</div>
                     <div className="mt-0.5 text-xs text-[color:var(--fg-45)]">
-                      {language === 'no' ? 'Lengre batteritid, tregere oppdateringer.' : 'Longer battery life, slower updates.'}
+                      {language === 'no' ? 'Lengre batteritid, mindre responsiv.' : 'Longer battery life, less responsive.'}
                     </div>
                   </div>
                   <SettingsToggle
