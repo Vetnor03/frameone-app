@@ -5,28 +5,29 @@ import { readFileSync } from 'node:fs'
 const home = readFileSync(new URL('../app/HomePageClient.tsx', import.meta.url), 'utf8')
 const assistant = readFileSync(new URL('../app/components/AIAssistantTab.tsx', import.meta.url), 'utf8')
 
-test('AI Assistant uses the stable assistant module identifier, not a permanent core tab', () => {
+test('AI Follow implementation remains intact behind the release UI switch', () => {
   assert.match(home, /type CoreTabKey = 'frame' \| 'settings'/)
   assert.match(home, /type ModuleKey = 'assistant' \| 'date'/)
   assert.match(home, /value === 'assistant'/)
+  assert.match(home, /const SHOW_AI_FOLLOW_UI = false/)
   const tabsBlock = home.match(/const tabs = useMemo\(\(\) => \{[\s\S]*?\}, \[dynamicTabs, language\]\)/)?.[0] ?? ''
   assert.doesNotMatch(tabsBlock, /key: 'assistant' as const/)
-  assert.match(home, /const dynamicTabs = useMemo/)
-  assert.match(home, /moduleLabel\(language, m\)/)
+  assert.match(home, /deriveDynamicModuleKeys<ModuleKey>[\s\S]*filter\(\(m\) => SHOW_AI_FOLLOW_UI \|\| m !== 'assistant'\)/)
+  assert.match(home, /SHOW_AI_FOLLOW_UI && \(tab === 'assistant' \|\| tab === 'ai-assistant'\)/)
 })
 
-test('AI Assistant navigation and pinning are driven by selected or pinned module state', () => {
+test('AI Follow navigation code is preserved but unreachable while hidden', () => {
   assert.match(home, /deriveDynamicModuleKeys<ModuleKey>\(activeLayoutModules, pinnedModuleTabs\)/)
   assert.match(home, /setPinnedModuleTabs\(\(prev\) => \{[\s\S]*markDirty\(\{ pinnedModuleTabs: nextPinned \}\)/)
   assert.match(home, /activeTab === 'assistant' \? \(\s*<AIAssistantTab language=\{language\} activeDeviceId=\{activeDeviceId\}/)
+  assert.match(home, /SHOW_AI_FOLLOW_UI && isPlainFrameAssistantSurface && showFrameAssistant/)
   assert.match(home, /if \(tabs\.some\(\(tab\) => tab\.key === activeTab\)\) return/)
 })
 
-test('AI Assistant appears first as one full-width top module picker card', () => {
-  assert.match(home, /const prominentOption: ModuleKey = 'assistant'/)
-  assert.match(home, /<button\s*key=\{prominentOption\}[\s\S]*?className="col-span-2 min-h-11 rounded-2xl border border-\[color:var\(--bd-10\)\]/)
-  assert.match(home, /\{moduleLabel\(language, prominentOption\)\}/)
-  assert.match(home, /const options: ModuleKey\[] = \['reminders', 'date', 'weather', 'countdown', 'surf', 'soccer', 'groceries', 'stocks'\]/)
+test('AI Follow is hidden from the module picker and Settings without deleting controls', () => {
+  assert.match(home, /const options: ModuleKey\[] = \['assistant', 'reminders', 'news', 'date', 'weather', 'countdown', 'surf', 'ski', 'soccer', 'groceries', 'stocks'\][\s\S]*filter\(\(module\): module is ModuleKey => SHOW_AI_FOLLOW_UI \|\| module !== 'assistant'\)/)
+  assert.match(home, /SHOW_AI_FOLLOW_UI && \([\s\S]*KI-ASSISTENT[\s\S]*AI ASSISTANT/)
+  assert.match(home, /AssistantPreferenceToggle/)
 })
 
 test('saved module configurations remain backwards compatible and pinned values are validated', () => {
