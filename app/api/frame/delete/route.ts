@@ -40,6 +40,7 @@ async function resetDevicePairingState(supabase: SupabaseClient, deviceId: strin
   const row = deviceRow as Record<string, unknown>
   const resetValues: Record<string, unknown> = {
     owner_id: null,
+    owner_user_id: null,
     user_id: null,
     device_token: null,
     device_token_hash: null,
