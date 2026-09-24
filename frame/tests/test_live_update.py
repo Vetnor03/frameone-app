@@ -9,7 +9,9 @@ def test_revision_probe_uses_source_aware_idle_cadence_and_is_cheap():
     assert 'static const uint32_t REALTIME_UPDATE_POLL_MS = 1000;' in MAIN
     assert 'static const uint32_t BATTERY_CONNECTED_IDLE_LOOP_MS = 10000;' in MAIN
     loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
-    assert 'if (waitForInteractiveCadence(pwr.usbPresent)) continue;' in loop
+    assert 'remainingProbeWaitMs' in loop
+    assert 'waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)' in loop
+    assert 'lastProbeStartedAtMs = probeStartedAtMs;' in loop
     assert 'LiveUpdate::probe' in loop
     assert 'FrameConfigApi::fetchWithStatus' not in loop.split('// Exactly one cheap revision probe')[1]
 
@@ -221,3 +223,15 @@ def test_manual_update_forces_fresh_full_render_even_when_background_hash_is_unc
     rendered = explicit.index('renderSmartDashboard(batt, pwr, desired, displayPlan)')
     assert planned < forced < rendered
     assert 'displayPlan.regionCount = 1;' in explicit
+
+
+def test_idle_probe_uses_short_realtime_network_burst_and_ten_seconds_from_probe_start():
+    assert 'WiFiManagerV2::beginRealtimeNetworkBurst();' in LIVE
+    assert 'restoreOperationalPowerPolicyAfterProbe();' in LIVE
+    assert 'const uint32_t networkProbeStartedAtMs = millis();' in LIVE
+    assert 'g_lastProbeNetworkStartedAtMs = networkProbeStartedAtMs;' in LIVE
+    assert 'g_lastProbeNetworkStartedAtMs = millis();' not in LIVE
+
+    loop = MAIN[MAIN.index('static InteractiveModeResult runInteractiveMode'):MAIN.index('// --------------------------------------\n// Setup')]
+    assert 'const uint32_t sinceProbeStartedMs = millis() - lastProbeStartedAtMs;' in loop
+    assert 'sinceProbeStartedMs >= probeCadenceMs ? 0 : probeCadenceMs - sinceProbeStartedMs' in loop
