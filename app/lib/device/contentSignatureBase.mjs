@@ -717,6 +717,7 @@ function reminderBoundaries(source, now) {
 const WEATHER_SOURCE_FRESHNESS_MS = 2 * 60 * 60_000
 const SURF_SOURCE_FRESHNESS_MS = 3 * 60 * 60_000
 const NEWS_SOURCE_FRESHNESS_MS = 30 * 60_000
+const NEWS_POWER_SAVE_FRESHNESS_MS = 2 * 60 * 60_000
 
 export function physicalModuleDeadlines({ settings, sources, now = Date.now() }) {
   const refs = activePhysicalReferences(settings)
@@ -743,7 +744,12 @@ export function physicalModuleDeadlines({ settings, sources, now = Date.now() })
         { at: midnight, type: 'hard', reason: 'midnight' },
       ]
     }
-    else if (ref.base === 'news') deadlines[ref.key] = [{ at: now + NEWS_SOURCE_FRESHNESS_MS, type: 'soft', reason: 'source_freshness' }]
+    else if (ref.base === 'news') {
+      // Normal mode can keep headlines reasonably fresh, while Power Save
+      // avoids waking the frame 48 times per day just to poll an RSS feed.
+      const interval = settings?.powerSaver ? NEWS_POWER_SAVE_FRESHNESS_MS : NEWS_SOURCE_FRESHNESS_MS
+      deadlines[ref.key] = [{ at: now + interval, type: 'soft', reason: 'source_freshness' }]
+    }
     else if (ref.base === 'groceries') {
       const at = nextRotation(now)
       const rotates = JSON.stringify(groceryProjection(sources[ref.key], ref.cell, now)) !== JSON.stringify(groceryProjection(sources[ref.key], ref.cell, at))
