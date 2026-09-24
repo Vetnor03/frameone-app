@@ -19,6 +19,8 @@ def test_news_module_uses_only_headline_space():
     assert '"Nyheter" : "News"' in NEWS_CPP
     assert 'profile_titles"]["compact"]' in NEWS_CPP
     assert 'profile_titles"]["standard"]' in NEWS_CPP
+    assert '#define NEWS_FONT_BODY (&FreeSansBold12pt8b)' in NEWS_CPP
+    assert "Match the Reminders module's centered list treatment" in NEWS_CPP
     assert 'calendar' not in NEWS_CPP.lower()
 
 
