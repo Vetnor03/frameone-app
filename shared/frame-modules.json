@@ -2,6 +2,7 @@
   { "id": "date", "label": "Date" },
   { "id": "weather", "label": "Weather" },
   { "id": "surf", "label": "Surf" },
+  { "id": "ski", "label": "Ski" },
   { "id": "reminders", "label": "Reminders" },
   { "id": "news", "label": "News" },
   { "id": "countdown", "label": "Countdown" },
