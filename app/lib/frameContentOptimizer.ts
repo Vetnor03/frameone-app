@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { sanitizeFrameText } from './frameText.mjs'
 
 type FrameContentSource = 'remind' | 'spond' | 'teams' | 'waste' | 'local-events' | string
-export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow'
+export type FrameContentType = 'reminder' | 'countdown' | 'ai-follow' | 'news'
 export type DisplayCapacityProfile = 'compact' | 'standard' | 'spacious'
 
 export type FrameContentInput = {
@@ -42,7 +42,7 @@ const PROFILE_LIMITS: Record<DisplayCapacityProfile, { maxTitleChars: number; ma
 const titleCache = new Map<string, string>()
 const inFlightOptimizations = new Map<string, Promise<string | null>>()
 
-const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. Return every supplied id and respect each display profile, maximum characters, and line count.`
+const INSTRUCTIONS = `Optimize titles for a calm e-ink home display. Keep the original language and facts. Remove filler and provider boilerplate. Dates and times are rendered separately. Use plain typography and no emoji. Preserve Norwegian æ/ø/å. For news items, state only what the report is about: shorten clickbait or teaser phrasing without changing the factual claim, preserve attribution and uncertainty when material, and never add motives, judgment, political evaluation, or sensational wording. Return every supplied id and respect each display profile, maximum characters, and line count.`
 
 const normalizeText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
 function truncateAtWordBoundary(value: string, maxChars: number) {

@@ -1,10 +1,10 @@
 import { BUILT_IN_LAYOUT_KEYS } from './customLayouts.ts'
 
 export type BuiltInLayoutKey = typeof BUILT_IN_LAYOUT_KEYS[number]
-export type FrameModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
+export type FrameModuleKey = 'assistant' | 'date' | 'weather' | 'surf' | 'ski' | 'reminders' | 'news' | 'countdown' | 'soccer' | 'stocks' | 'groceries'
 
 const SLOT_COUNT: Record<BuiltInLayoutKey, number> = { default: 3, pyramid: 4, square: 4, full: 1 }
-const MODULES = new Set<FrameModuleKey>(['assistant', 'date', 'weather', 'surf', 'ski', 'reminders', 'countdown', 'soccer', 'stocks', 'groceries'])
+const MODULES = new Set<FrameModuleKey>(['assistant', 'date', 'weather', 'surf', 'ski', 'reminders', 'news', 'countdown', 'soccer', 'stocks', 'groceries'])
 
 export function isBuiltInLayoutKey(value: unknown): value is BuiltInLayoutKey {
   return typeof value === 'string' && BUILT_IN_LAYOUT_KEYS.includes(value as BuiltInLayoutKey)
