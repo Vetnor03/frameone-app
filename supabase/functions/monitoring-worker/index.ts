@@ -38,6 +38,7 @@ const LIMIT_REASONS = new Set([
 ])
 
 Deno.serve(async (req) => {
+  if (!/^(1|true|yes|on)$/i.test(Deno.env.get('AI_FOLLOW_ENABLED') || '')) return Response.json({ ok: false, disabled: true, feature: 'ai_follow' }, { status: 503 })
   if (req.headers.get('x-monitoring-secret') !== Deno.env.get('MONITORING_WORKER_SECRET')) return new Response('Unauthorized', { status: 401 })
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const workerId = crypto.randomUUID()
