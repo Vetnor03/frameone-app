@@ -24,6 +24,8 @@ namespace DisplayCore {
   // New: boxed / shelf screen
   void drawShelfScreen(const String& deviceId);
   void drawRechargeScreen();
+  // Temporary acknowledgement shown only after an explicit app Update is detected.
+  void drawUpdatingScreen();
 
   // Battery / power UI state
   void setBatteryStatus(int percent, bool isCharging, bool isUsbPresent);
