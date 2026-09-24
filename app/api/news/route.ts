@@ -27,7 +27,7 @@ function requestedProfiles(value: string | null): DisplayCapacityProfile[] {
   const profiles = raw.filter((profile): profile is DisplayCapacityProfile =>
     profile === 'compact' || profile === 'standard' || profile === 'spacious'
   )
-  return [...new Set(profiles.length ? profiles : ['standard'])]
+  return [...new Set<DisplayCapacityProfile>(profiles.length ? profiles : ['standard'])]
 }
 
 function decodeXml(value: string) {
