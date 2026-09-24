@@ -40,5 +40,7 @@ test('News frame rendering uses the reminder-like list without date UI', () => {
   const home = read('app/HomePageClient.tsx')
   assert.match(home, /module === 'news'/)
   assert.match(home, /MirrorNewsCard/)
+  assert.match(home, /gridTemplateColumns: 'minmax\(0, 1fr\)'/)
+  assert.doesNotMatch(home, /const columns = size === 'large' \? 2 : 1/)
   assert.match(home, /NewsModuleSettingsTab/)
 })
