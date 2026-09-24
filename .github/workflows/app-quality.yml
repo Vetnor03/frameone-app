@@ -1,0 +1,120 @@
+name: App quality gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "public/**"
+      - "scripts/**"
+      - "supabase/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "eslint.config.*"
+      - "next.config.*"
+      - ".github/workflows/app-quality.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "public/**"
+      - "scripts/**"
+      - "supabase/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "eslint.config.*"
+      - "next.config.*"
+      - ".github/workflows/app-quality.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stable-tests:
+    name: Stable test gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run test:ci-stable
+
+  typecheck-layouts:
+    name: Typecheck and frame layouts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run check:frame-layouts
+
+  changed-file-lint:
+    name: No new lint debt
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Lint files changed by this revision
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run lint:changed
+
+  full-test-audit:
+    name: Full test audit (known debt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Run full suite and keep pre-existing failures visible
+        run: npm test
+
+  full-lint-audit:
+    name: Full lint audit (known debt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Run full lint and keep pre-existing failures visible
+        run: npm run lint

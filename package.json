@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
     "generate:frame-layouts": "node scripts/generate-frame-layouts.mjs",
-    "check:frame-layouts": "node scripts/generate-frame-layouts.mjs --check"
+    "check:frame-layouts": "node scripts/generate-frame-layouts.mjs --check",
+    "test:ci-stable": "node scripts/run-ci-stable-tests.mjs",
+    "lint:changed": "node scripts/lint-changed-files.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
