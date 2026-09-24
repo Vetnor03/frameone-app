@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { buildWeatherInsight } from '../weatherMirror.ts'
 import { sanitizeFrameText } from '../frameText.mjs'
-import { completeReservedOpenAICall, reserveBackgroundOpenAICall } from './openaiUsage.mjs'
+import { completeReservedOpenAICall, costControlledModel, reserveBackgroundOpenAICall } from './openaiUsage.mjs'
 
 const CACHE_TTL_MS = 150 * 60 * 1000
 const AI_TIMEOUT_MS = 4500
@@ -175,7 +175,7 @@ export async function resolveWeatherInsight(payload, options = {}) {
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY
   if (!compact || !apiKey || !noteworthyDryShift(compact)) return deterministic
 
-  const model = options.model ?? process.env.FRAME_AI_MODEL ?? 'gpt-6-luna'
+  const model = costControlledModel(options.model ?? process.env.FRAME_AI_MODEL)
   const locationKey = options.locationKey || 'default'
   const now = options.now ?? Date.now()
   const cached = cache.get(locationKey)
