@@ -20,9 +20,16 @@ def test_news_module_uses_only_headline_space():
     assert 'profile_titles"]["compact"]' in NEWS_CPP
     assert 'profile_titles"]["standard"]' in NEWS_CPP
     assert '#define NEWS_FONT_BODY (&FreeSansBold12pt8b)' in NEWS_CPP
-    assert "Match the Reminders module's centered list treatment" in NEWS_CPP
+    assert 'headlines arrive already semantically shortened by the title optimizer' in NEWS_CPP.lower()
     assert 'calendar' not in NEWS_CPP.lower()
 
 
 def test_news_module_is_adaptive():
     assert 'exactOnly(module, "news")' in CAPABILITY
+
+
+def test_news_wraps_complete_optimized_titles_before_reducing_story_count():
+    assert 'wrapTextToLines' in NEWS_CPP
+    assert 'show as many newest stories as actually fit' in NEWS_CPP
+    assert 'if (nextH > availableH) break;' in NEWS_CPP
+    assert 'fitTextToWidth(displayTitle(g_cache->items[i], false)' not in NEWS_CPP

@@ -6074,7 +6074,7 @@ function MirrorNewsCard({
           <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: 'repeat(' + titles.length + ', minmax(0, 1fr))' }}>
             {titles.map((title, index) => (
               <div key={title + '-' + index} className="flex min-w-0 items-center justify-center px-[clamp(0.32rem,0.9vw,0.58rem)] text-[clamp(0.68rem,1.6vw,0.96rem)] font-medium tracking-[0.04em]" title={title}>
-                <span className="block max-w-full truncate">{title}</span>
+                <span className="block max-w-full whitespace-normal break-words text-center leading-tight">{title}</span>
               </div>
             ))}
           </div>
@@ -6090,7 +6090,7 @@ function MirrorNewsCard({
         {titles.map((title, index) => (
           <div key={title + '-' + index} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[clamp(0.38rem,0.9vw,0.62rem)]">
             <span className="h-[clamp(0.22rem,0.48vw,0.32rem)] w-[clamp(0.22rem,0.48vw,0.32rem)] rounded-full bg-current" aria-hidden="true" />
-            <span className="min-w-0 truncate text-[clamp(0.62rem,1.34vw,0.9rem)] font-medium tracking-[0.035em]" title={title}>{title}</span>
+            <span className="min-w-0 whitespace-normal break-words text-[clamp(0.62rem,1.34vw,0.9rem)] font-medium leading-tight tracking-[0.035em]" title={title}>{title}</span>
           </div>
         ))}
       </div>
