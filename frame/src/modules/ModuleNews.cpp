@@ -116,6 +116,63 @@ static void fitTextToWidth(const char* src, char* dst, size_t dstSize, int maxWi
   safeCopy(dst, dstSize, "...");
 }
 
+static const int NEWS_MAX_WRAP_LINES = 4;
+static const int NEWS_WRAP_LINE_BYTES = 112;
+
+static int wrapTextToLines(const char* src,
+                           char lines[][NEWS_WRAP_LINE_BYTES],
+                           int maxLines,
+                           int maxWidth,
+                           const GFXfont* font,
+                           bool& complete) {
+  complete = false;
+  if (!src || !src[0] || !lines || maxLines <= 0 || maxWidth <= 0) return 0;
+
+  for (int i = 0; i < maxLines; ++i) lines[i][0] = '\0';
+
+  char work[NEWS_WRAP_LINE_BYTES] = {0};
+  safeCopy(work, sizeof(work), src);
+  char current[NEWS_WRAP_LINE_BYTES] = {0};
+  int lineCount = 0;
+
+  char* save = nullptr;
+  char* word = strtok_r(work, " ", &save);
+  while (word) {
+    char candidate[NEWS_WRAP_LINE_BYTES] = {0};
+    if (current[0]) snprintf(candidate, sizeof(candidate), "%s %s", current, word);
+    else safeCopy(candidate, sizeof(candidate), word);
+
+    if (textWidth(candidate, font) <= maxWidth) {
+      safeCopy(current, sizeof(current), candidate);
+    } else {
+      if (current[0]) {
+        if (lineCount >= maxLines) return lineCount;
+        safeCopy(lines[lineCount++], NEWS_WRAP_LINE_BYTES, current);
+        current[0] = '\0';
+      }
+
+      if (textWidth(word, font) <= maxWidth) {
+        safeCopy(current, sizeof(current), word);
+      } else {
+        // Pathological single tokens are the only case where pixel fitting is
+        // still allowed. Normal headlines are never ellipsis-truncated.
+        if (lineCount >= maxLines) return lineCount;
+        fitTextToWidth(word, lines[lineCount++], NEWS_WRAP_LINE_BYTES, maxWidth, font);
+      }
+    }
+
+    word = strtok_r(nullptr, " ", &save);
+  }
+
+  if (current[0]) {
+    if (lineCount >= maxLines) return lineCount;
+    safeCopy(lines[lineCount++], NEWS_WRAP_LINE_BYTES, current);
+  }
+
+  complete = true;
+  return lineCount;
+}
+
 static int drawHeader(const Cell& c) {
   auto& d = DisplayCore::get();
   const char* header = headerText();
@@ -243,18 +300,31 @@ static void renderShallow(const Cell& c) {
     d.drawFastVLine(x, contentTop + 6, max(4, contentH - 12), Theme::ink());
   }
 
+  const int lineStep = 22;
+  const int maxLines = min(NEWS_MAX_WRAP_LINES, max(1, contentH / lineStep));
   for (int i = 0; i < visible; ++i) {
     const int x0 = c.x + (c.w * i) / visible;
     const int x1Cell = c.x + (c.w * (i + 1)) / visible;
     const int width = x1Cell - x0;
-    char fit[96] = {0};
-    fitTextToWidth(displayTitle(g_cache->items[i], true), fit, sizeof(fit), width - 20, NEWS_FONT_BODY);
+    char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      displayTitle(g_cache->items[i], true),
+      lines, maxLines, width - 20, NEWS_FONT_BODY, complete
+    );
 
-    int16_t tx1, ty1;
-    uint16_t tw, th;
-    measureText(fit, NEWS_FONT_BODY, tx1, ty1, tw, th);
-    const int baseline = contentTop + (contentH - (int)th) / 2 - ty1;
-    drawLeft(x0 + (width - (int)tw) / 2 - tx1, baseline, fit, NEWS_FONT_BODY);
+    if (!complete || lineCount <= 0) continue;
+    const int blockH = lineCount * lineStep;
+    const int startY = contentTop + max(0, (contentH - blockH) / 2);
+
+    for (int line = 0; line < lineCount; ++line) {
+      int16_t tx1, ty1;
+      uint16_t tw, th;
+      measureText(lines[line], NEWS_FONT_BODY, tx1, ty1, tw, th);
+      const int centerY = startY + line * lineStep + lineStep / 2;
+      const int baseline = centerY - (int)th / 2 - ty1;
+      drawLeft(x0 + (width - (int)tw) / 2 - tx1, baseline, lines[line], NEWS_FONT_BODY);
+    }
   }
 }
 
@@ -262,52 +332,78 @@ static void renderList(const Cell& c) {
   auto& d = DisplayCore::get();
   const int contentTop = drawHeader(c);
   const int contentBottom = c.y + c.h - 12;
-  const int visible = min(g_cache->count, capacityForCell(c));
-  if (visible <= 0) { drawEmpty(c); return; }
+  if (g_cache->count <= 0) { drawEmpty(c); return; }
 
-  // Match the Reminders module's centered list treatment: bold content,
-  // compact bullets only when there is more than one item, and a centered
-  // block that uses the full cell instead of reserving secondary date-panel space.
+  // Headlines arrive already semantically shortened by the title optimizer.
+  // Do not run a second dumb truncation pass here. Wrap each complete optimized
+  // headline and show as many newest stories as actually fit in the available
+  // height.
   const int dotR = 3;
   const int gap = 10;
   const int sidePad = 18;
-  const bool drawBullets = visible > 1;
-  const int bulletSpace = drawBullets ? dotR * 2 + gap : 0;
-  const int maxTextW = max(24, c.w - sidePad * 2 - bulletSpace);
+  const int lineStep = 22;
+  const int itemGap = 6;
+  const int candidateCount = min(g_cache->count, capacityForCell(c));
+  const int maxTextW = max(24, c.w - sidePad * 2 - dotR * 2 - gap);
+  const int availableH = max(1, contentBottom - contentTop);
 
+  int visible = 0;
+  int usedH = 0;
   int maxLineW = 0;
-  for (int i = 0; i < visible; ++i) {
-    char fit[112] = {0};
-    fitTextToWidth(displayTitle(g_cache->items[i], false),
-                   fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
-    const int lineW = textWidth(fit, NEWS_FONT_BODY);
-    if (lineW > maxLineW) maxLineW = lineW;
+
+  for (int i = 0; i < candidateCount; ++i) {
+    char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      displayTitle(g_cache->items[i], false),
+      lines, NEWS_MAX_WRAP_LINES, maxTextW, NEWS_FONT_BODY, complete
+    );
+    if (!complete || lineCount <= 0) break;
+
+    const int itemH = lineCount * lineStep;
+    const int nextH = usedH + (visible > 0 ? itemGap : 0) + itemH;
+    if (nextH > availableH) break;
+
+    for (int line = 0; line < lineCount; ++line) {
+      const int lineW = textWidth(lines[line], NEWS_FONT_BODY);
+      if (lineW > maxLineW) maxLineW = lineW;
+    }
+    usedH = nextH;
+    ++visible;
   }
 
-  const int availableH = max(1, contentBottom - contentTop);
-  const int rowStep = min(28, max(20, availableH / max(1, visible)));
-  const int blockH = rowStep * visible;
-  const int startY = contentTop + max(0, (availableH - blockH) / 2);
+  if (visible <= 0) return;
 
+  const bool drawBullets = visible > 1;
+  const int bulletSpace = drawBullets ? dotR * 2 + gap : 0;
   const int rowW = bulletSpace + maxLineW;
   int textX = c.x + (c.w - rowW) / 2 + bulletSpace;
   const int minTextX = c.x + sidePad + bulletSpace;
   if (textX < minTextX) textX = minTextX;
   const int bulletX = drawBullets ? textX - gap - dotR : textX;
+  int y = contentTop + max(0, (availableH - usedH) / 2);
 
   for (int i = 0; i < visible; ++i) {
-    char fit[112] = {0};
-    fitTextToWidth(displayTitle(g_cache->items[i], false),
-                   fit, sizeof(fit), maxTextW, NEWS_FONT_BODY);
+    char lines[NEWS_MAX_WRAP_LINES][NEWS_WRAP_LINE_BYTES] = {{0}};
+    bool complete = false;
+    const int lineCount = wrapTextToLines(
+      displayTitle(g_cache->items[i], false),
+      lines, NEWS_MAX_WRAP_LINES, maxTextW, NEWS_FONT_BODY, complete
+    );
+    if (!complete || lineCount <= 0) break;
 
-    int16_t tx1, ty1;
-    uint16_t tw, th;
-    measureText(fit, NEWS_FONT_BODY, tx1, ty1, tw, th);
+    if (i > 0) y += itemGap;
+    if (drawBullets) d.fillCircle(bulletX, y + lineStep / 2, dotR, Theme::ink());
 
-    const int centerY = startY + i * rowStep + rowStep / 2;
-    const int baseline = centerY - (int)th / 2 - ty1;
-    if (drawBullets) d.fillCircle(bulletX, centerY, dotR, Theme::ink());
-    drawLeft(textX - tx1, baseline, fit, NEWS_FONT_BODY);
+    for (int line = 0; line < lineCount; ++line) {
+      int16_t tx1, ty1;
+      uint16_t tw, th;
+      measureText(lines[line], NEWS_FONT_BODY, tx1, ty1, tw, th);
+      const int centerY = y + line * lineStep + lineStep / 2;
+      const int baseline = centerY - (int)th / 2 - ty1;
+      drawLeft(textX - tx1, baseline, lines[line], NEWS_FONT_BODY);
+    }
+    y += lineCount * lineStep;
   }
 }
 
