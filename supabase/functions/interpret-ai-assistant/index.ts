@@ -39,7 +39,7 @@ function validateInterpretationLanguage(v: ReturnType<typeof normalize>) {
 }
 
 Deno.serve(async (req) => {
-  if (!/^(1|true|yes|on)$/i.test(Deno.env.get('AI_FOLLOW_ENABLED') || '')) return Response.json({ ok: false, disabled: true, feature: 'ai_follow' }, { status: 503 })
+  return Response.json({ ok: false, disabled: true, feature: 'ai_follow' }, { status: 503 })
   const service = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   if (req.headers.get('x-monitoring-secret') === Deno.env.get('MONITORING_WORKER_SECRET')) return processQueue(req, service)
   return enqueueRetry(req, service)
