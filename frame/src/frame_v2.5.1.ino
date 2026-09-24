@@ -212,9 +212,7 @@ static uint32_t interactiveWaitMs(uint32_t maximumMs) {
     : maximumMs;
 }
 
-static bool waitForInteractiveCadence(bool usbPresent) {
-  const uint32_t maximumMs =
-    usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS;
+static bool waitForInteractiveCadence(bool usbPresent, uint32_t maximumMs) {
   const uint32_t waitMs = interactiveWaitMs(maximumMs);
   if (waitMs == 0) return false;
 
@@ -1046,6 +1044,10 @@ static InteractiveModeResult runInteractiveMode(
   uint32_t configRetryMs = REALTIME_UPDATE_POLL_MS;
   const uint32_t interactiveStartedAtMs = millis();
   const uint32_t baselineElapsedAtEntry = normalSyncElapsedSeconds;
+  // The setup path just performed the initial live-update probe. Track cadence
+  // from probe START so network latency is part of the 10-second budget rather
+  // than added on top of it.
+  uint32_t lastProbeStartedAtMs = interactiveStartedAtMs;
 
   while (true) {
     const PowerSenseDebug sampledPower = readPowerSenseDebug();
@@ -1191,7 +1193,13 @@ static InteractiveModeResult runInteractiveMode(
     // If USB was inserted during battery ALS, return to the top immediately
     // so the source-aware USB policy disables light sleep before any network
     // request or e-paper work can delay host enumeration.
-    if (waitForInteractiveCadence(pwr.usbPresent)) continue;
+    const uint32_t probeCadenceMs =
+      pwr.usbPresent ? REALTIME_UPDATE_POLL_MS : BATTERY_CONNECTED_IDLE_LOOP_MS;
+    const uint32_t sinceProbeStartedMs = millis() - lastProbeStartedAtMs;
+    const uint32_t remainingProbeWaitMs =
+      sinceProbeStartedMs >= probeCadenceMs ? 0 : probeCadenceMs - sinceProbeStartedMs;
+    if (remainingProbeWaitMs > 0 &&
+        waitForInteractiveCadence(pwr.usbPresent, remainingProbeWaitMs)) continue;
     // A hard module deadline may have landed inside the normal 1 s / 10 s idle
     // wait. Return to the top before issuing another manual-update probe so the
     // scheduled module work runs at its intended boundary.
@@ -1199,6 +1207,7 @@ static InteractiveModeResult runInteractiveMode(
 
     LiveUpdateState next{};
     const uint32_t probeStartedAtMs = millis();
+    lastProbeStartedAtMs = probeStartedAtMs;
     if (!LiveUpdate::probe(DeviceIdentity::getToken(), next)) {
       Serial.println("LiveUpdate: interactive probe failed; staying awake");
       delay(REALTIME_FAILURE_BACKOFF_MS);
