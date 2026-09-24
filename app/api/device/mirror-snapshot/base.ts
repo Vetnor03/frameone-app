@@ -91,6 +91,26 @@ type Detail = {
   surfWaterMaxC?: number
   surfSunrise?: string
   surfSunset?: string
+  skiFreshCm?: number | null
+  skiTotalCm?: number | null
+  skiTempC?: number | null
+  skiWindMps?: number | null
+  skiWindDirDeg?: number | null
+  skiAvalancheAvailable?: boolean
+  skiAvalancheAssessed?: boolean
+  skiAvalancheLevel?: number | null
+  skiResortAvailable?: boolean
+  skiResortName?: string
+  skiResortOpen?: boolean
+  skiLiftsOpen?: number | null
+  skiLiftsTotal?: number | null
+  skiSlopesOpen?: number | null
+  skiSlopesTotal?: number | null
+  skiPowderFound?: boolean
+  skiPowderDate?: string
+  skiPowderLowCm?: number | null
+  skiPowderHighCm?: number | null
+  skiPowderMidCm?: number | null
   stockTitle?: string
   stockSymbol?: string
   stockPrice?: string
@@ -142,7 +162,7 @@ type Detail = {
 
 type UnknownRecord = Record<string, unknown>
 
-const MODULES = new Set(['assistant', 'date', 'weather', 'surf', 'reminders', 'news', 'countdown', 'soccer', 'stocks', 'groceries'])
+const MODULES = new Set(['assistant', 'date', 'weather', 'surf', 'ski', 'reminders', 'news', 'countdown', 'soccer', 'stocks', 'groceries'])
 const MIRROR_FETCH_TIMEOUT_MS = 8000
 const WEATHER_FETCH_TIMEOUT_MS = 6500
 
@@ -1630,6 +1650,64 @@ async function surfDetail(
   }
 }
 
+async function skiDetail(
+  origin: string,
+  deviceId: string,
+  deviceToken: string,
+  id: number,
+  cfg: UnknownRecord,
+  language: string
+): Promise<Detail> {
+  const label = asString(cfg.label || cfg.name, language === 'no' ? 'Ski' : 'Ski').trim() || 'Ski'
+  if (!deviceToken) return { module: 'ski', primary: label, secondary: language === 'no' ? 'Skidata utilgjengelig' : 'Ski data unavailable' }
+
+  const url = new URL('/api/device/ski-frame', origin)
+  url.searchParams.set('device_id', deviceId)
+  url.searchParams.set('id', String(id))
+  const data = asRecord(await fetchJson(url.toString(), { headers: { Authorization: `Bearer ${deviceToken}` } }))
+  const location = asRecord(data.location)
+  const current = asRecord(data.current)
+  const snow = asRecord(data.snow)
+  const avalanche = asRecord(data.avalanche)
+  const resort = asRecord(data.resort)
+  const powder = asRecord(data.next_powder_day)
+
+  const resolvedLabel = asString(location.label, label).trim() || label
+  const fresh = asNumber(snow.fresh_24h_cm)
+  const total = asNumber(snow.snow_depth_cm)
+  const danger = asNumber(avalanche.danger_level)
+  const assessed = avalanche.assessed === true && danger != null && danger > 0
+
+  return {
+    module: 'ski',
+    primary: resolvedLabel,
+    secondary: fresh == null ? undefined : `${Math.round(fresh)} cm ${language === 'no' ? 'nysnø' : 'fresh'}`,
+    tertiary: assessed
+      ? `${language === 'no' ? 'Skredfare' : 'Avalanche'} ${Math.round(danger!)}`
+      : (language === 'no' ? 'Ikke vurdert' : 'Not assessed'),
+    skiFreshCm: fresh,
+    skiTotalCm: total,
+    skiTempC: asNumber(current.temp_c),
+    skiWindMps: asNumber(current.wind_mps),
+    skiWindDirDeg: asNumber(current.wind_dir_deg),
+    skiAvalancheAvailable: avalanche.available === true,
+    skiAvalancheAssessed: assessed,
+    skiAvalancheLevel: danger,
+    skiResortAvailable: resort.available === true,
+    skiResortName: asString(resort.name).trim() || undefined,
+    skiResortOpen: resort.ski_open === true || resort.resort_open === true,
+    skiLiftsOpen: asNumber(resort.lifts_open),
+    skiLiftsTotal: asNumber(resort.lifts_total),
+    skiSlopesOpen: asNumber(resort.slopes_open),
+    skiSlopesTotal: asNumber(resort.slopes_total),
+    skiPowderFound: powder.found === true,
+    skiPowderDate: asString(powder.display_date || powder.date).trim() || undefined,
+    skiPowderLowCm: asNumber(powder.estimated_fresh_cm_low),
+    skiPowderHighCm: asNumber(powder.estimated_fresh_cm_high),
+    skiPowderMidCm: asNumber(powder.estimated_fresh_cm_mid),
+  }
+}
+
 async function soccerDetail(origin: string, cfg: UnknownRecord, language: string): Promise<Detail> {
   const teamId = asString(cfg.teamId).trim()
   const teamName = asString(cfg.teamName || cfg.team).trim()
@@ -2121,6 +2199,7 @@ export async function GET(req: Request) {
         if (parsed.base === 'date') detailsBySlot[String(slot)] = { primary: formatDate(language), secondary: language === 'no' ? 'Dato' : 'Date' }
         else if (parsed.base === 'weather') detailsBySlot[String(slot)] = await weatherDetail(cfg, language, asString(frameConfig.updated_at) || null)
         else if (parsed.base === 'surf') detailsBySlot[String(slot)] = await surfDetail(origin, cfg, bearer, language, asRecord(modules.surf_settings), asString(frameConfig.updated_at) || null)
+        else if (parsed.base === 'ski' && deviceToken) detailsBySlot[String(slot)] = await skiDetail(origin, deviceId, deviceToken, parsed.id, cfg, language)
         else if (parsed.base === 'soccer') detailsBySlot[String(slot)] = await soccerDetail(origin, cfg, language)
         else if (parsed.base === 'stocks' && deviceToken) detailsBySlot[String(slot)] = await stocksDetail(origin, deviceId, deviceToken, parsed.id, cfg)
         else if (parsed.base === 'reminders' && deviceToken) detailsBySlot[String(slot)] = await remindersDetail(origin, deviceId, deviceToken, language)
