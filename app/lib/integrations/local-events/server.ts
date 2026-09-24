@@ -99,6 +99,49 @@ export async function connectLocalEventsForFrame(userId: string, deviceId: strin
   return { ...data, importedCount: sync.importedCount, zeroEvents: sync.zeroEvents, areaPreference: sync.areaPreference }
 }
 
+export async function syncAllConnectedLocalEventsFrames(fetchImpl = fetch) {
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('user_integrations')
+    .select('user_id,device_id,encrypted_credentials')
+    .eq('provider', EDGE_OF_NORWAY_PROVIDER)
+    .eq('status', 'connected')
+  if (error) throw new Error(error.message)
+
+  const integrations = (data || []).filter((row) => typeof row.user_id === 'string' && typeof row.device_id === 'string' && row.device_id)
+  let succeeded = 0
+  let failed = 0
+  let importedCount = 0
+
+  for (const integration of integrations) {
+    const credentials = integration.encrypted_credentials as { areaPreference?: unknown } | null
+    const areaPreference = normalizeLocalEventAreaPreference(credentials?.areaPreference)
+    try {
+      const result = await syncLocalEventsForFrame(integration.user_id, integration.device_id, areaPreference, fetchImpl)
+      const now = new Date().toISOString()
+      const { error: updateError } = await supabase
+        .from('user_integrations')
+        .update({ last_sync_at: now, last_error: null, last_error_at: null, updated_at: now })
+        .eq('device_id', integration.device_id)
+        .eq('provider', EDGE_OF_NORWAY_PROVIDER)
+      if (updateError) throw new Error(updateError.message)
+      succeeded += 1
+      importedCount += result.importedCount
+    } catch (syncError) {
+      failed += 1
+      const now = new Date().toISOString()
+      const message = syncError instanceof Error ? syncError.message : 'Local Events sync failed'
+      await supabase
+        .from('user_integrations')
+        .update({ last_error: message, last_error_at: now, updated_at: now })
+        .eq('device_id', integration.device_id)
+        .eq('provider', EDGE_OF_NORWAY_PROVIDER)
+    }
+  }
+
+  return { processed: integrations.length, succeeded, failed, importedCount }
+}
+
 export async function disconnectLocalEventsForFrame(userId: string, deviceId: string) {
   await requireLocalEventsFrameMember(userId, deviceId, true)
   const supabase = getSupabaseAdmin()
