@@ -11,6 +11,7 @@ import {
 import { isTeamsMeetingVisibleAt } from './visibility'
 
 export const TEAMS_PROVIDER = 'teams'
+export const DEFAULT_TEAMS_CALENDAR_HORIZON_DAYS = 120
 const DEFAULT_TZ = 'Europe/Oslo'
 
 type TeamsOAuthState = {
@@ -138,7 +139,8 @@ export async function syncTeamsForUser(userId: string, tokenSet: TeamsTokenSet, 
   const safeTimeZone = normalizeTimeZone(timeZone)
   const credentials: TeamsStoredCredentials = { ...tokenSet, time_zone: safeTimeZone }
   const profile = await fetchMicrosoftProfile(credentials.access_token)
-  const { startIso, endIso } = calendarUtcRange(safeTimeZone, options.horizonDays)
+  const horizonDays = options.horizonDays ?? DEFAULT_TEAMS_CALENDAR_HORIZON_DAYS
+  const { startIso, endIso } = calendarUtcRange(safeTimeZone, horizonDays)
   const meetings = await fetchMicrosoftCalendarView(credentials.access_token, startIso, endIso)
   const now = new Date().toISOString()
 
